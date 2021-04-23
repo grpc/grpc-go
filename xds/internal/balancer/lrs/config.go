@@ -27,25 +27,24 @@ import (
 	"google.golang.org/grpc/xds/internal"
 )
 
-type lbConfig struct {
-	serviceconfig.LoadBalancingConfig
-	ClusterName                string
-	EdsServiceName             string
-	LrsLoadReportingServerName string
-	Locality                   *internal.LocalityID
-	ChildPolicy                *internalserviceconfig.BalancerConfig
+// LBConfig is the balancer config for lrs balancer.
+type LBConfig struct {
+	serviceconfig.LoadBalancingConfig `json:"-"`
+
+	ClusterName             string                                `json:"clusterName,omitempty"`
+	EDSServiceName          string                                `json:"edsServiceName,omitempty"`
+	LoadReportingServerName string                                `json:"lrsLoadReportingServerName,omitempty"`
+	Locality                *internal.LocalityID                  `json:"locality,omitempty"`
+	ChildPolicy             *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
-func parseConfig(c json.RawMessage) (*lbConfig, error) {
-	var cfg lbConfig
+func parseConfig(c json.RawMessage) (*LBConfig, error) {
+	var cfg LBConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, err
 	}
 	if cfg.ClusterName == "" {
 		return nil, fmt.Errorf("required ClusterName is not set in %+v", cfg)
-	}
-	if cfg.LrsLoadReportingServerName == "" {
-		return nil, fmt.Errorf("required LrsLoadReportingServerName is not set in %+v", cfg)
 	}
 	if cfg.Locality == nil {
 		return nil, fmt.Errorf("required Locality is not set in %+v", cfg)

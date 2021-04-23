@@ -6584,10 +6584,8 @@ func (s) TestDisabledIOBuffers(t *testing.T) {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
 
-	done := make(chan struct{})
 	go func() {
 		s.Serve(lis)
-		close(done)
 	}()
 	defer s.Stop()
 	dctx, dcancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -25,32 +25,33 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-type dropCategory struct {
+// DropConfig contains the category, and drop ratio.
+type DropConfig struct {
 	Category           string
 	RequestsPerMillion uint32
 }
 
-// lbConfig is the balancer config for weighted_target.
-type lbConfig struct {
-	serviceconfig.LoadBalancingConfig
+// LBConfig is the balancer config for cluster_impl balancer.
+type LBConfig struct {
+	serviceconfig.LoadBalancingConfig `json:"-"`
 
-	Cluster                    string
-	EDSServiceName             string
-	LRSLoadReportingServerName *string
-	MaxConcurrentRequests      *uint32
-	DropCategories             []dropCategory
-	ChildPolicy                *internalserviceconfig.BalancerConfig
+	Cluster                 string                                `json:"cluster,omitempty"`
+	EDSServiceName          string                                `json:"edsServiceName,omitempty"`
+	LoadReportingServerName *string                               `json:"lrsLoadReportingServerName,omitempty"`
+	MaxConcurrentRequests   *uint32                               `json:"maxConcurrentRequests,omitempty"`
+	DropCategories          []DropConfig                          `json:"dropCategories,omitempty"`
+	ChildPolicy             *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
-func parseConfig(c json.RawMessage) (*lbConfig, error) {
-	var cfg lbConfig
+func parseConfig(c json.RawMessage) (*LBConfig, error) {
+	var cfg LBConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, err
 	}
 	return &cfg, nil
 }
 
-func equalDropCategories(a, b []dropCategory) bool {
+func equalDropCategories(a, b []DropConfig) bool {
 	if len(a) != len(b) {
 		return false
 	}

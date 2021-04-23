@@ -24,6 +24,7 @@
 package priority
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -34,10 +35,12 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 )
 
-const priorityBalancerName = "priority_experimental"
+// Name is the name of the priority balancer.
+const Name = "priority_experimental"
 
 func init() {
 	balancer.Register(priorityBB{})
@@ -60,11 +63,14 @@ func (priorityBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) bal
 	go b.run()
 	b.logger.Infof("Created")
 	return b
+}
 
+func (b priorityBB) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	return parseConfig(s)
 }
 
 func (priorityBB) Name() string {
-	return priorityBalancerName
+	return Name
 }
 
 // timerWrapper wraps a timer with a boolean. So that when a race happens
@@ -102,7 +108,7 @@ type priorityBalancer struct {
 }
 
 func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	newConfig, ok := s.BalancerConfig.(*lbConfig)
+	newConfig, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}

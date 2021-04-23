@@ -193,7 +193,7 @@ func (s) TestKeepaliveServerClosesUnresponsiveClient(t *testing.T) {
 
 	// We read from the net.Conn till we get an error, which is expected when
 	// the server closes the connection as part of the keepalive logic.
-	errCh := make(chan error)
+	errCh := make(chan error, 1)
 	go func() {
 		b := make([]byte, 24)
 		for {

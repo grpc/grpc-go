@@ -76,8 +76,9 @@ type TestClientConn struct {
 	RemoveSubConnCh        chan balancer.SubConn   // the last 10 subconn removed.
 	UpdateAddressesAddrsCh chan []resolver.Address // last updated address via UpdateAddresses().
 
-	NewPickerCh chan balancer.Picker    // the last picker updated.
-	NewStateCh  chan connectivity.State // the last state.
+	NewPickerCh  chan balancer.Picker            // the last picker updated.
+	NewStateCh   chan connectivity.State         // the last state.
+	ResolveNowCh chan resolver.ResolveNowOptions // the last ResolveNow().
 
 	subConnIdx int
 }
@@ -92,8 +93,9 @@ func NewTestClientConn(t *testing.T) *TestClientConn {
 		RemoveSubConnCh:        make(chan balancer.SubConn, 10),
 		UpdateAddressesAddrsCh: make(chan []resolver.Address, 1),
 
-		NewPickerCh: make(chan balancer.Picker, 1),
-		NewStateCh:  make(chan connectivity.State, 1),
+		NewPickerCh:  make(chan balancer.Picker, 1),
+		NewStateCh:   make(chan connectivity.State, 1),
+		ResolveNowCh: make(chan resolver.ResolveNowOptions, 1),
 	}
 }
 
@@ -151,8 +153,12 @@ func (tcc *TestClientConn) UpdateState(bs balancer.State) {
 }
 
 // ResolveNow panics.
-func (tcc *TestClientConn) ResolveNow(resolver.ResolveNowOptions) {
-	panic("not implemented")
+func (tcc *TestClientConn) ResolveNow(o resolver.ResolveNowOptions) {
+	select {
+	case <-tcc.ResolveNowCh:
+	default:
+	}
+	tcc.ResolveNowCh <- o
 }
 
 // Target panics.

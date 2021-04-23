@@ -37,7 +37,8 @@ func init() {
 
 var newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
 
-const lrsBalancerName = "lrs_experimental"
+// Name is the name of the LRS balancer.
+const Name = "lrs_experimental"
 
 type lrsBB struct{}
 
@@ -60,7 +61,7 @@ func (l *lrsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balanc
 }
 
 func (l *lrsBB) Name() string {
-	return lrsBalancerName
+	return Name
 }
 
 func (l *lrsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
@@ -74,12 +75,12 @@ type lrsBalancer struct {
 	logger *grpclog.PrefixLogger
 	client *xdsClientWrapper
 
-	config *lbConfig
+	config *LBConfig
 	lb     balancer.Balancer // The sub balancer.
 }
 
 func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	newConfig, ok := s.BalancerConfig.(*lbConfig)
+	newConfig, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}
@@ -167,7 +168,7 @@ type xdsClientWrapper struct {
 	cancelLoadReport func()
 	clusterName      string
 	edsServiceName   string
-	lrsServerName    string
+	lrsServerName    *string
 	// loadWrapper is a wrapper with loadOriginal, with clusterName and
 	// edsServiceName. It's used children to report loads.
 	loadWrapper *loadstore.Wrapper
@@ -182,21 +183,21 @@ func newXDSClientWrapper(c xdsClientInterface) *xdsClientWrapper {
 
 // update checks the config and xdsclient, and decides whether it needs to
 // restart the load reporting stream.
-func (w *xdsClientWrapper) update(newConfig *lbConfig) error {
+func (w *xdsClientWrapper) update(newConfig *LBConfig) error {
 	var (
 		restartLoadReport           bool
 		updateLoadClusterAndService bool
 	)
 
 	// ClusterName is different, restart. ClusterName is from ClusterName and
-	// EdsServiceName.
+	// EDSServiceName.
 	if w.clusterName != newConfig.ClusterName {
 		updateLoadClusterAndService = true
 		w.clusterName = newConfig.ClusterName
 	}
-	if w.edsServiceName != newConfig.EdsServiceName {
+	if w.edsServiceName != newConfig.EDSServiceName {
 		updateLoadClusterAndService = true
-		w.edsServiceName = newConfig.EdsServiceName
+		w.edsServiceName = newConfig.EDSServiceName
 	}
 
 	if updateLoadClusterAndService {
@@ -211,11 +212,11 @@ func (w *xdsClientWrapper) update(newConfig *lbConfig) error {
 		w.loadWrapper.UpdateClusterAndService(w.clusterName, w.edsServiceName)
 	}
 
-	if w.lrsServerName != newConfig.LrsLoadReportingServerName {
-		// LrsLoadReportingServerName is different, load should be report to a
+	if w.lrsServerName == nil || *w.lrsServerName != newConfig.LoadReportingServerName {
+		// LoadReportingServerName is different, load should be report to a
 		// different server, restart.
 		restartLoadReport = true
-		w.lrsServerName = newConfig.LrsLoadReportingServerName
+		w.lrsServerName = &newConfig.LoadReportingServerName
 	}
 
 	if restartLoadReport {
@@ -225,7 +226,7 @@ func (w *xdsClientWrapper) update(newConfig *lbConfig) error {
 		}
 		var loadStore *load.Store
 		if w.c != nil {
-			loadStore, w.cancelLoadReport = w.c.ReportLoad(w.lrsServerName)
+			loadStore, w.cancelLoadReport = w.c.ReportLoad(*w.lrsServerName)
 		}
 		w.loadWrapper.UpdateLoadStore(loadStore)
 	}

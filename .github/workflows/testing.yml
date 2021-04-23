@@ -37,61 +37,77 @@ jobs:
     strategy:
       matrix:
         include:
-          - type: vet
-            goversion: 1.15
-          - type: race
-            goversion: 1.15
-          - type: 386
-            goversion: 1.15
-          - type: retry
-            goversion: 1.15
+          - type: vet+tests
+            goversion: 1.16
+
+          - type: tests
+            goversion: 1.16
+            testflags: -race
+
+          - type: tests
+            goversion: 1.16
+            grpcenv: GRPC_GO_RETRY=on
+
           - type: extras
+            goversion: 1.16
+
+          - type: tests
+            goversion: 1.16
+            goarch: 386
+
+          - type: tests
+            goversion: 1.16
+            goarch: arm64
+
+          - type: tests
             goversion: 1.15
+
           - type: tests
             goversion: 1.14
-          - type: tests
-            goversion: 1.13
-          - type: tests111
-            goversion: 1.11  # Keep until interop tests no longer require Go1.11
+
+          - type: tests  # Keep until interop tests no longer require Go1.11
+            goversion: 1.11
 
     steps:
       # Setup the environment.
-      - name: Setup GOARCH=386
-        if: ${{ matrix.type == '386' }}
-        run: echo "GOARCH=386" >> $GITHUB_ENV
-      - name: Setup RETRY
-        if: ${{ matrix.type == 'retry' }}
-        run: echo "GRPC_GO_RETRY=on" >> $GITHUB_ENV
+      - name: Setup GOARCH
+        if: matrix.goarch != ''
+        run: echo "GOARCH=${{ matrix.goarch }}" >> $GITHUB_ENV
+
+      - name: Setup qemu emulator
+        if: matrix.goarch == 'arm64'
+        # setup qemu-user-static emulator and register it with binfmt_misc so that aarch64 binaries
+        # are automatically executed using qemu.
+        run: docker run --rm --privileged multiarch/qemu-user-static:5.2.0-2 --reset --credential yes --persistent yes
+
+      - name: Setup GRPC environment
+        if: matrix.grpcenv != ''
+        run: echo "${{ matrix.grpcenv }}" >> $GITHUB_ENV
+
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
           go-version: ${{ matrix.goversion }}
+
       - name: Checkout repo
         uses: actions/checkout@v2
 
       # Only run vet for 'vet' runs.
       - name: Run vet.sh
-        if: ${{ matrix.type == 'vet' }}
+        if: startsWith(matrix.type, 'vet')
         run: ./vet.sh -install && ./vet.sh
 
-      # Main tests run for everything except when testing "extras", the race
-      # detector and Go1.11 (where we run a reduced set of tests).
+      # Main tests run for everything except when testing "extras"
+      # (where we run a reduced set of tests).
       - name: Run tests
-        if: ${{ matrix.type != 'extras' && matrix.type != 'race' && matrix.type != 'tests111' }}
+        if: contains(matrix.type, 'tests')
         run: |
           go version
-          go test -cpu 1,4 -timeout 7m google.golang.org/grpc/...
-
-      # Race detector tests
-      - name: Run test race
-        if: ${{ matrix.TYPE == 'race' }}
-        run: |
-          go version
-          go test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...
+          go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc/...
 
       # Non-core gRPC tests (examples, interop, etc)
       - name: Run extras tests
-        if: ${{ matrix.TYPE == 'extras' }}
+        if: matrix.type == 'extras'
         run: |
           go version
           examples/examples_test.sh
@@ -99,12 +115,3 @@ jobs:
           interop/interop_test.sh
           cd ${GITHUB_WORKSPACE}/security/advancedtls && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/advancedtls/...
           cd ${GITHUB_WORKSPACE}/security/authorization && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/authorization/...
-
-      # Reduced set of tests for Go 1.11
-      - name: Run Go1.11 tests
-        if: ${{ matrix.type == 'tests111' }}
-        run: |
-          go version
-          tests=$(find ${GITHUB_WORKSPACE} -name '*_test.go' | xargs -n1 dirname | sort -u | sed "s:^${GITHUB_WORKSPACE}:.:" | sed "s:\/$::" | grep -v ^./security | grep -v ^./credentials/sts | grep -v ^./credentials/tls/certprovider | grep -v ^./credentials/xds | grep -v ^./xds )
-          echo "Running tests for " ${tests}
-          go test -cpu 1,4 -timeout 7m ${tests}

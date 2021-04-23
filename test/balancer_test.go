@@ -37,7 +37,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/balancerload"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
 	imetadata "google.golang.org/grpc/internal/metadata"
 	"google.golang.org/grpc/internal/stubserver"
@@ -698,10 +697,7 @@ func (s) TestEmptyAddrs(t *testing.T) {
 
 	// Initialize pickfirst client
 	pfr := manual.NewBuilderWithScheme("whatever")
-	pfrnCalled := grpcsync.NewEvent()
-	pfr.ResolveNowCallback = func(resolver.ResolveNowOptions) {
-		pfrnCalled.Fire()
-	}
+
 	pfr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	pfcc, err := grpc.DialContext(ctx, pfr.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(pfr))
@@ -718,16 +714,10 @@ func (s) TestEmptyAddrs(t *testing.T) {
 
 	// Remove all addresses.
 	pfr.UpdateState(resolver.State{})
-	// Wait for a ResolveNow call on the pick first client's resolver.
-	<-pfrnCalled.Done()
 
 	// Initialize roundrobin client
 	rrr := manual.NewBuilderWithScheme("whatever")
 
-	rrrnCalled := grpcsync.NewEvent()
-	rrr.ResolveNowCallback = func(resolver.ResolveNowOptions) {
-		rrrnCalled.Fire()
-	}
 	rrr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	rrcc, err := grpc.DialContext(ctx, rrr.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(rrr),
@@ -745,8 +735,6 @@ func (s) TestEmptyAddrs(t *testing.T) {
 
 	// Remove all addresses.
 	rrr.UpdateState(resolver.State{})
-	// Wait for a ResolveNow call on the round robin client's resolver.
-	<-rrrnCalled.Done()
 
 	// Confirm several new RPCs succeed on pick first.
 	for i := 0; i < 10; i++ {

@@ -67,62 +67,6 @@ func (s) TestDialParseTargetUnknownScheme(t *testing.T) {
 	}
 }
 
-func testResolverErrorPolling(t *testing.T, badUpdate func(*manual.Resolver), goodUpdate func(*manual.Resolver), dopts ...DialOption) {
-	boIter := make(chan int)
-	resolverBackoff := func(v int) time.Duration {
-		boIter <- v
-		return 0
-	}
-
-	r := manual.NewBuilderWithScheme("whatever")
-	rn := make(chan struct{})
-	defer func() { close(rn) }()
-	r.ResolveNowCallback = func(resolver.ResolveNowOptions) { rn <- struct{}{} }
-
-	defaultDialOptions := []DialOption{
-		WithInsecure(),
-		WithResolvers(r),
-		withResolveNowBackoff(resolverBackoff),
-	}
-	cc, err := Dial(r.Scheme()+":///test.server", append(defaultDialOptions, dopts...)...)
-	if err != nil {
-		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
-	}
-	defer cc.Close()
-	badUpdate(r)
-
-	panicAfter := time.AfterFunc(5*time.Second, func() { panic("timed out polling resolver") })
-	defer panicAfter.Stop()
-
-	// Ensure ResolveNow is called, then Backoff with the right parameter, several times
-	for i := 0; i < 7; i++ {
-		<-rn
-		if v := <-boIter; v != i {
-			t.Errorf("Backoff call %v uses value %v", i, v)
-		}
-	}
-
-	// UpdateState will block if ResolveNow is being called (which blocks on
-	// rn), so call it in a goroutine.
-	goodUpdate(r)
-
-	// Wait awhile to ensure ResolveNow and Backoff stop being called when the
-	// state is OK (i.e. polling was cancelled).
-	for {
-		t := time.NewTimer(50 * time.Millisecond)
-		select {
-		case <-rn:
-			// ClientConn is still calling ResolveNow
-			<-boIter
-			time.Sleep(5 * time.Millisecond)
-			continue
-		case <-t.C:
-			// ClientConn stopped calling ResolveNow; success
-		}
-		break
-	}
-}
-
 const happyBalancerName = "happy balancer"
 
 func init() {
@@ -134,35 +78,6 @@ func init() {
 		},
 	}
 	stub.Register(happyBalancerName, bf)
-}
-
-// TestResolverErrorPolling injects resolver errors and verifies ResolveNow is
-// called with the appropriate backoff strategy being consulted between
-// ResolveNow calls.
-func (s) TestResolverErrorPolling(t *testing.T) {
-	testResolverErrorPolling(t, func(r *manual.Resolver) {
-		r.CC.ReportError(errors.New("res err"))
-	}, func(r *manual.Resolver) {
-		// UpdateState will block if ResolveNow is being called (which blocks on
-		// rn), so call it in a goroutine.
-		go r.CC.UpdateState(resolver.State{})
-	},
-		WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, happyBalancerName)))
-}
-
-// TestServiceConfigErrorPolling injects a service config error and verifies
-// ResolveNow is called with the appropriate backoff strategy being consulted
-// between ResolveNow calls.
-func (s) TestServiceConfigErrorPolling(t *testing.T) {
-	testResolverErrorPolling(t, func(r *manual.Resolver) {
-		badsc := r.CC.ParseServiceConfig("bad config")
-		r.UpdateState(resolver.State{ServiceConfig: badsc})
-	}, func(r *manual.Resolver) {
-		// UpdateState will block if ResolveNow is being called (which blocks on
-		// rn), so call it in a goroutine.
-		go r.CC.UpdateState(resolver.State{})
-	},
-		WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, happyBalancerName)))
 }
 
 // TestResolverErrorInBuild makes the resolver.Builder call into the ClientConn

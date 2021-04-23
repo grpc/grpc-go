@@ -1,3 +1,5 @@
+// +build go1.12
+
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -32,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
@@ -55,6 +58,13 @@ var (
 	}
 )
 
+func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
+	return func() balancer.SubConn {
+		scst, _ := p.Pick(balancer.PickInfo{})
+		return scst.SubConn
+	}
+}
+
 func init() {
 	newRandomWRR = testutils.NewTestWRR
 }
@@ -62,12 +72,13 @@ func init() {
 // TestDropByCategory verifies that the balancer correctly drops the picks, and
 // that the drops are reported.
 func TestDropByCategory(t *testing.T) {
+	defer client.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
-	builder := balancer.Get(clusterImplName)
+	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
@@ -81,11 +92,11 @@ func TestDropByCategory(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
-			Cluster:                    testClusterName,
-			EDSServiceName:             testServiceName,
-			LRSLoadReportingServerName: newString(testLRSServerName),
-			DropCategories: []dropCategory{{
+		BalancerConfig: &LBConfig{
+			Cluster:                 testClusterName,
+			EDSServiceName:          testServiceName,
+			LoadReportingServerName: newString(testLRSServerName),
+			DropCategories: []DropConfig{{
 				Category:           dropReason,
 				RequestsPerMillion: million * dropNumerator / dropDenominator,
 			}},
@@ -168,11 +179,11 @@ func TestDropByCategory(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
-			Cluster:                    testClusterName,
-			EDSServiceName:             testServiceName,
-			LRSLoadReportingServerName: newString(testLRSServerName),
-			DropCategories: []dropCategory{{
+		BalancerConfig: &LBConfig{
+			Cluster:                 testClusterName,
+			EDSServiceName:          testServiceName,
+			LoadReportingServerName: newString(testLRSServerName),
+			DropCategories: []DropConfig{{
 				Category:           dropReason2,
 				RequestsPerMillion: million * dropNumerator2 / dropDenominator2,
 			}},
@@ -219,12 +230,13 @@ func TestDropByCategory(t *testing.T) {
 // TestDropCircuitBreaking verifies that the balancer correctly drops the picks
 // due to circuit breaking, and that the drops are reported.
 func TestDropCircuitBreaking(t *testing.T) {
+	defer client.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
-	builder := balancer.Get(clusterImplName)
+	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
@@ -234,11 +246,11 @@ func TestDropCircuitBreaking(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
-			Cluster:                    testClusterName,
-			EDSServiceName:             testServiceName,
-			LRSLoadReportingServerName: newString(testLRSServerName),
-			MaxConcurrentRequests:      &maxRequest,
+		BalancerConfig: &LBConfig{
+			Cluster:                 testClusterName,
+			EDSServiceName:          testServiceName,
+			LoadReportingServerName: newString(testLRSServerName),
+			MaxConcurrentRequests:   &maxRequest,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
 			},
@@ -330,12 +342,13 @@ func TestDropCircuitBreaking(t *testing.T) {
 // picker after it's closed. Because picker updates are sent in the run()
 // goroutine.
 func TestPickerUpdateAfterClose(t *testing.T) {
+	defer client.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
-	builder := balancer.Get(clusterImplName)
+	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 
@@ -344,7 +357,7 @@ func TestPickerUpdateAfterClose(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
+		BalancerConfig: &LBConfig{
 			Cluster:               testClusterName,
 			EDSServiceName:        testServiceName,
 			MaxConcurrentRequests: &maxRequest,
@@ -374,12 +387,13 @@ func TestPickerUpdateAfterClose(t *testing.T) {
 // TestClusterNameInAddressAttributes covers the case that cluster name is
 // attached to the subconn address attributes.
 func TestClusterNameInAddressAttributes(t *testing.T) {
+	defer client.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
-	builder := balancer.Get(clusterImplName)
+	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
 	b := builder.Build(cc, balancer.BuildOptions{})
 	defer b.Close()
@@ -388,7 +402,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
+		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName,
 			EDSServiceName: testServiceName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
@@ -439,7 +453,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{addr2},
 		},
-		BalancerConfig: &lbConfig{
+		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName2,
 			EDSServiceName: testServiceName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
@@ -458,5 +472,88 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 	cn2, ok := internal.GetXDSHandshakeClusterName(addrs2[0].Attributes)
 	if !ok || cn2 != testClusterName2 {
 		t.Fatalf("sc is created with addr with cluster name %v, %v, want cluster name %v", cn2, ok, testClusterName2)
+	}
+}
+
+// TestReResolution verifies that when a SubConn turns transient failure,
+// re-resolution is triggered.
+func TestReResolution(t *testing.T) {
+	defer client.ClearCounterForTesting(testClusterName)
+	xdsC := fakeclient.NewClient()
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	defer func() { newXDSClient = oldNewXDSClient }()
+
+	builder := balancer.Get(Name)
+	cc := testutils.NewTestClientConn(t)
+	b := builder.Build(cc, balancer.BuildOptions{})
+	defer b.Close()
+
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: testBackendAddrs,
+		},
+		BalancerConfig: &LBConfig{
+			Cluster:        testClusterName,
+			EDSServiceName: testServiceName,
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+	}
+
+	sc1 := <-cc.NewSubConnCh
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	// This should get the connecting picker.
+	p0 := <-cc.NewPickerCh
+	for i := 0; i < 10; i++ {
+		_, err := p0.Pick(balancer.PickInfo{})
+		if err != balancer.ErrNoSubConnAvailable {
+			t.Fatalf("picker.Pick, got _,%v, want Err=%v", err, balancer.ErrNoSubConnAvailable)
+		}
+	}
+
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	// This should get the transient failure picker.
+	p1 := <-cc.NewPickerCh
+	for i := 0; i < 10; i++ {
+		_, err := p1.Pick(balancer.PickInfo{})
+		if err == nil {
+			t.Fatalf("picker.Pick, got _,%v, want not nil", err)
+		}
+	}
+
+	// The transient failure should trigger a re-resolution.
+	select {
+	case <-cc.ResolveNowCh:
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("timeout waiting for ResolveNow()")
+	}
+
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	// Test pick with one backend.
+	p2 := <-cc.NewPickerCh
+	want := []balancer.SubConn{sc1}
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	// This should get the transient failure picker.
+	p3 := <-cc.NewPickerCh
+	for i := 0; i < 10; i++ {
+		_, err := p3.Pick(balancer.PickInfo{})
+		if err == nil {
+			t.Fatalf("picker.Pick, got _,%v, want not nil", err)
+		}
+	}
+
+	// The transient failure should trigger a re-resolution.
+	select {
+	case <-cc.ResolveNowCh:
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("timeout waiting for ResolveNow()")
 	}
 }

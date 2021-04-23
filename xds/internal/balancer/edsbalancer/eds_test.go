@@ -1,3 +1,5 @@
+// +build go1.12
+
 /*
  *
  * Copyright 2019 gRPC authors.
@@ -818,7 +820,7 @@ func (s) TestBalancerConfigParsing(t *testing.T) {
 			},
 		},
 		{
-			// json with no lrs server name, LrsLoadReportingServerName should
+			// json with no lrs server name, LoadReportingServerName should
 			// be nil (not an empty string).
 			name: "no-lrs-server-name",
 			js: json.RawMessage(`
