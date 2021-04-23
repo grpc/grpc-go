@@ -168,7 +168,7 @@ type xdsClientWrapper struct {
 	cancelLoadReport func()
 	clusterName      string
 	edsServiceName   string
-	lrsServerName    string
+	lrsServerName    *string
 	// loadWrapper is a wrapper with loadOriginal, with clusterName and
 	// edsServiceName. It's used children to report loads.
 	loadWrapper *loadstore.Wrapper
@@ -212,11 +212,11 @@ func (w *xdsClientWrapper) update(newConfig *LBConfig) error {
 		w.loadWrapper.UpdateClusterAndService(w.clusterName, w.edsServiceName)
 	}
 
-	if w.lrsServerName != newConfig.LoadReportingServerName {
+	if w.lrsServerName == nil || *w.lrsServerName != newConfig.LoadReportingServerName {
 		// LoadReportingServerName is different, load should be report to a
 		// different server, restart.
 		restartLoadReport = true
-		w.lrsServerName = newConfig.LoadReportingServerName
+		w.lrsServerName = &newConfig.LoadReportingServerName
 	}
 
 	if restartLoadReport {
@@ -226,7 +226,7 @@ func (w *xdsClientWrapper) update(newConfig *LBConfig) error {
 		}
 		var loadStore *load.Store
 		if w.c != nil {
-			loadStore, w.cancelLoadReport = w.c.ReportLoad(w.lrsServerName)
+			loadStore, w.cancelLoadReport = w.c.ReportLoad(*w.lrsServerName)
 		}
 		w.loadWrapper.UpdateLoadStore(loadStore)
 	}
