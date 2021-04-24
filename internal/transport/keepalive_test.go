@@ -69,7 +69,7 @@ func (s) TestMaxConnectionIdle(t *testing.T) {
 		if !timeout.Stop() {
 			<-timeout.C
 		}
-		if reason := client.GetGoAwayReason(); reason != GoAwayNoReason {
+		if reason, _ := client.GetGoAwayReason(); reason != GoAwayNoReason {
 			t.Fatalf("GoAwayReason is %v, want %v", reason, GoAwayNoReason)
 		}
 	case <-timeout.C:
@@ -143,7 +143,7 @@ func (s) TestMaxConnectionAge(t *testing.T) {
 		if !timeout.Stop() {
 			<-timeout.C
 		}
-		if reason := client.GetGoAwayReason(); reason != GoAwayNoReason {
+		if reason, _ := client.GetGoAwayReason(); reason != GoAwayNoReason {
 			t.Fatalf("GoAwayReason is %v, want %v", reason, GoAwayNoReason)
 		}
 	case <-timeout.C:
@@ -403,7 +403,7 @@ func (s) TestKeepaliveClientFrequency(t *testing.T) {
 		if !timeout.Stop() {
 			<-timeout.C
 		}
-		if reason := client.GetGoAwayReason(); reason != GoAwayTooManyPings {
+		if reason, _ := client.GetGoAwayReason(); reason != GoAwayTooManyPings {
 			t.Fatalf("GoAwayReason is %v, want %v", reason, GoAwayTooManyPings)
 		}
 	case <-timeout.C:
@@ -448,7 +448,7 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 		if !timeout.Stop() {
 			<-timeout.C
 		}
-		if reason := client.GetGoAwayReason(); reason != GoAwayTooManyPings {
+		if reason, _ := client.GetGoAwayReason(); reason != GoAwayTooManyPings {
 			t.Fatalf("GoAwayReason is %v, want %v", reason, GoAwayTooManyPings)
 		}
 	case <-timeout.C:
@@ -498,7 +498,7 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 		if !timeout.Stop() {
 			<-timeout.C
 		}
-		if reason := client.GetGoAwayReason(); reason != GoAwayTooManyPings {
+		if reason, _ := client.GetGoAwayReason(); reason != GoAwayTooManyPings {
 			t.Fatalf("GoAwayReason is %v, want %v", reason, GoAwayTooManyPings)
 		}
 	case <-timeout.C:

@@ -115,6 +115,9 @@ type http2Client struct {
 	// goAwayReason records the http2.ErrCode and debug data received with the
 	// GoAway frame.
 	goAwayReason GoAwayReason
+	// goAwayDebugMessage contains a detailed human readable string about a
+	// GoAway frame, useful for error messages.
+	goAwayDebugMessage string
 	// A condition variable used to signal when the keepalive goroutine should
 	// go dormant. The condition for dormancy is based on the number of active
 	// streams and the `PermitWithoutStream` keepalive client parameter. And
@@ -872,6 +875,12 @@ func (t *http2Client) Close(err error) {
 	if channelz.IsOn() {
 		channelz.RemoveEntry(t.channelzID)
 	}
+	// Append info about previous goaways if there were any, since this may be important
+	// for understanding the root cause for this connection to be closed.
+	_, goAwayDebugMessage := t.GetGoAwayReason()
+	if len(goAwayDebugMessage) > 0 {
+		err = fmt.Errorf("closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
+	}
 	// Notify all active streams.
 	for _, s := range streams {
 		t.closeStream(s, err, false, http2.ErrCodeNo, status.New(codes.Unavailable, err.Error()), nil, false)
@@ -1146,7 +1155,7 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		}
 	}
 	id := f.LastStreamID
-	if id > 0 && id%2 != 1 {
+	if id > 0 && id%2 == 0 {
 		t.mu.Unlock()
 		t.Close(connectionErrorf(true, nil, "received goaway with non-zero even-numbered numbered stream id: %v", id))
 		return
@@ -1212,12 +1221,13 @@ func (t *http2Client) setGoAwayReason(f *http2.GoAwayFrame) {
 			t.goAwayReason = GoAwayTooManyPings
 		}
 	}
+	t.goAwayDebugMessage = fmt.Sprintf("code: %s, debug data: %v", f.ErrCode, string(f.DebugData()))
 }
 
-func (t *http2Client) GetGoAwayReason() GoAwayReason {
+func (t *http2Client) GetGoAwayReason() (GoAwayReason, string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.goAwayReason
+	return t.goAwayReason, t.goAwayDebugMessage
 }
 
 func (t *http2Client) handleWindowUpdate(f *http2.WindowUpdateFrame) {
