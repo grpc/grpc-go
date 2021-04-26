@@ -48,6 +48,42 @@ var (
 	backoffFunc = bs.Backoff
 )
 
+// ServingMode indicates the current mode of operation of the server.
+//
+// This API exactly mirrors the one in the public xds package. We have to
+// redefine it here to avoid a cyclic dependency.
+type ServingMode int
+
+const (
+	// ServingModeStarting indicates that the serving is starting up.
+	ServingModeStarting ServingMode = iota
+	// ServingModeServing indicates the the server contains all required xDS
+	// configuration is serving RPCs.
+	ServingModeServing
+	// ServingModeNotServing indicates that the server is not accepting new
+	// connections. Existing connections will be closed gracefully, allowing
+	// in-progress RPCs to complete. A server enters this mode when it does not
+	// contain the required xDS configuration to serve RPCs.
+	ServingModeNotServing
+)
+
+func (s ServingMode) String() string {
+	switch s {
+	case ServingModeNotServing:
+		return "not-serving"
+	case ServingModeServing:
+		return "serving"
+	default:
+		return "starting"
+	}
+}
+
+// ServingModeCallback is the callback that users can register to get notified
+// about the server's serving mode changes. The callback is invoked with the
+// address of the listener and its new mode. The err parameter is set to a
+// non-nil error if the server has transitioned into not-serving mode.
+type ServingModeCallback func(addr net.Addr, mode ServingMode, err error)
+
 func prefixLogger(p *listenerWrapper) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[xds-server-listener %p] ", p))
 }
@@ -70,6 +106,8 @@ type ListenerWrapperParams struct {
 	XDSCredsInUse bool
 	// XDSClient provides the functionality from the xdsClient required here.
 	XDSClient XDSClientInterface
+	// ModeCallback is the callback to invoke when the serving mode changes.
+	ModeCallback ServingModeCallback
 }
 
 // NewListenerWrapper creates a new listenerWrapper with params. It returns a
@@ -83,6 +121,7 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 		name:              params.ListenerResourceName,
 		xdsCredsInUse:     params.XDSCredsInUse,
 		xdsC:              params.XDSClient,
+		modeCallback:      params.ModeCallback,
 		isUnspecifiedAddr: params.Listener.Addr().(*net.TCPAddr).IP.IsUnspecified(),
 
 		closed:     grpcsync.NewEvent(),
@@ -111,12 +150,11 @@ type listenerWrapper struct {
 	net.Listener
 	logger *internalgrpclog.PrefixLogger
 
-	// TODO: Maintain serving state of this listener.
-
 	name          string
 	xdsCredsInUse bool
 	xdsC          XDSClientInterface
 	cancelWatch   func()
+	modeCallback  ServingModeCallback
 
 	// Set to true if the listener is bound to the IP_ANY address (which is
 	// "0.0.0.0" for IPv4 and "::" for IPv6).
@@ -138,11 +176,14 @@ type listenerWrapper struct {
 	// updates received in the callback if this event has fired.
 	closed *grpcsync.Event
 
-	// Filter chains received as part of the last good update. The reason for
-	// using an rw lock here is that this field will be read by all connections
-	// during their server-side handshake (in the hot path), but writes to this
-	// happen rarely (when we get a Listener resource update).
-	mu           sync.RWMutex
+	// mu guards access to the current serving mode and the filter chains. The
+	// reason for using an rw lock here is that these fields are read in
+	// Accept() for all incoming connections, but writes happen rarely (when we
+	// get a Listener resource update).
+	mu sync.RWMutex
+	// Current serving mode.
+	mode ServingMode
+	// Filter chains received as part of the last good update.
 	filterChains *xdsclient.FilterChainManager
 }
 
@@ -175,8 +216,6 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		// Reset retries after a successful Accept().
 		retries = 0
 
-		// TODO: Close connections if in "non-serving" state
-
 		// Since the net.Conn represents an incoming connection, the source and
 		// destination address can be retrieved from the local address and
 		// remote address of the net.Conn respectively.
@@ -191,6 +230,17 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		}
 
 		l.mu.RLock()
+		if l.mode == ServingModeNotServing {
+			// Close connections as soon as we accept them when we are in
+			// "not-serving" mode. Since we accept a net.Listener from the user
+			// in Serve(), we cannot close the listener when we move to
+			// "not-serving". Closing the connection immediately upon accepting
+			// is one of the other ways to implement the "not-serving" mode as
+			// outlined in gRFC A36.
+			l.mu.RUnlock()
+			conn.Close()
+			continue
+		}
 		fc, err := l.filterChains.Lookup(xdsclient.FilterChainLookupParams{
 			IsUnspecifiedListener: l.isUnspecifiedAddr,
 			DestAddr:              destAddr.IP,
@@ -236,14 +286,13 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 		return
 	}
 
-	// TODO: Handle resource-not-found errors by moving to not-serving state.
 	if err != nil {
-		// We simply log an error here and hope we get a successful update
-		// in the future. The error could be because of a timeout or an
-		// actual error, like the requested resource not found. In any case,
-		// it is fine for the server to hang indefinitely until Stop() is
-		// called.
 		l.logger.Warningf("Received error for resource %q: %+v", l.name, err)
+		if xdsclient.ErrType(err) == xdsclient.ErrorTypeResourceNotFound {
+			l.switchMode(nil, ServingModeNotServing, err)
+		}
+		// For errors which are anything other than "resource-not-found", we
+		// continue to use the old configuration.
 		return
 	}
 	l.logger.Infof("Received update for resource %q: %+v", l.name, update)
@@ -258,18 +307,26 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 	//   appropriate context to perform this check.
 	//
 	// What this means is that the xdsClient has ACKed a resource which can push
-	// the server into a "not serving" state. This is not ideal, but this is
+	// the server into a "not serving" mode. This is not ideal, but this is
 	// what we have decided to do. See gRPC A36 for more details.
 	ilc := update.InboundListenerCfg
 	if ilc.Address != l.addr || ilc.Port != l.port {
-		// TODO: Switch to "not serving" if the host:port does not match.
-		l.logger.Warningf("Received host:port (%s:%d) in Listener update does not match local listening address: (%s:%s", ilc.Address, ilc.Port, l.addr, l.port)
+		l.switchMode(nil, ServingModeNotServing, fmt.Errorf("address (%s:%s) in Listener update does not match listening address: (%s:%s)", ilc.Address, ilc.Port, l.addr, l.port))
 		return
 	}
 
-	l.mu.Lock()
-	l.filterChains = ilc.FilterChains
-	l.mu.Unlock()
+	l.switchMode(ilc.FilterChains, ServingModeServing, nil)
 	l.goodUpdate.Fire()
-	// TODO: Move to serving state on receipt of a good response.
+}
+
+func (l *listenerWrapper) switchMode(fcs *xdsclient.FilterChainManager, newMode ServingMode, err error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.filterChains = fcs
+	l.mode = newMode
+	if l.modeCallback != nil {
+		l.modeCallback(l.Listener.Addr(), newMode, err)
+	}
+	l.logger.Warningf("Listener %q entering mode: %q due to error: %v", l.Addr(), newMode, err)
 }

@@ -57,11 +57,21 @@ import (
 const (
 	defaultServerMaxReceiveMessageSize = 1024 * 1024 * 4
 	defaultServerMaxSendMessageSize    = math.MaxInt32
+
+	// Server transports are tracked in a map which is keyed on listener
+	// address. For regular gRPC traffic, connections are accepted in Serve()
+	// through a call to Accept(), and we use the actual listener address as key
+	// when we add it to the map. But for connections received through
+	// ServeHTTP(), we do not have a listener and hence use this dummy value.
+	listenerAddressForServeHTTP = "listenerAddressForServeHTTP"
 )
 
 func init() {
 	internal.GetServerCredentials = func(srv *Server) credentials.TransportCredentials {
 		return srv.opts.creds
+	}
+	internal.DrainServerTransports = func(srv *Server, addr string) {
+		srv.drainServerTransports(addr)
 	}
 }
 
@@ -107,9 +117,12 @@ type serverWorkerData struct {
 type Server struct {
 	opts serverOptions
 
-	mu       sync.Mutex // guards following
-	lis      map[net.Listener]bool
-	conns    map[transport.ServerTransport]bool
+	mu  sync.Mutex // guards following
+	lis map[net.Listener]bool
+	// conns contains all active server transports. It is a map keyed on a
+	// listener address with the value being the set of active transports
+	// belonging to that listener.
+	conns    map[string]map[transport.ServerTransport]bool
 	serve    bool
 	drain    bool
 	cv       *sync.Cond              // signaled when connections close for GracefulStop
@@ -519,7 +532,7 @@ func NewServer(opt ...ServerOption) *Server {
 	s := &Server{
 		lis:      make(map[net.Listener]bool),
 		opts:     opts,
-		conns:    make(map[transport.ServerTransport]bool),
+		conns:    make(map[string]map[transport.ServerTransport]bool),
 		services: make(map[string]*serviceInfo),
 		quit:     grpcsync.NewEvent(),
 		done:     grpcsync.NewEvent(),
@@ -778,7 +791,7 @@ func (s *Server) Serve(lis net.Listener) error {
 		// s.conns before this conn can be added.
 		s.serveWG.Add(1)
 		go func() {
-			s.handleRawConn(rawConn)
+			s.handleRawConn(lis.Addr().String(), rawConn)
 			s.serveWG.Done()
 		}()
 	}
@@ -786,7 +799,7 @@ func (s *Server) Serve(lis net.Listener) error {
 
 // handleRawConn forks a goroutine to handle a just-accepted connection that
 // has not had any I/O performed on it yet.
-func (s *Server) handleRawConn(rawConn net.Conn) {
+func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 	if s.quit.HasFired() {
 		rawConn.Close()
 		return
@@ -814,13 +827,22 @@ func (s *Server) handleRawConn(rawConn net.Conn) {
 	}
 
 	rawConn.SetDeadline(time.Time{})
-	if !s.addConn(st) {
+	if !s.addConn(lisAddr, st) {
 		return
 	}
 	go func() {
 		s.serveStreams(st)
-		s.removeConn(st)
+		s.removeConn(lisAddr, st)
 	}()
+}
+
+func (s *Server) drainServerTransports(addr string) {
+	s.mu.Lock()
+	conns := s.conns[addr]
+	for st := range conns {
+		st.Drain()
+	}
+	s.mu.Unlock()
 }
 
 // newHTTP2Transport sets up a http/2 transport (using the
@@ -924,10 +946,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if !s.addConn(st) {
+	if !s.addConn(listenerAddressForServeHTTP, st) {
 		return
 	}
-	defer s.removeConn(st)
+	defer s.removeConn(listenerAddressForServeHTTP, st)
 	s.serveStreams(st)
 }
 
@@ -955,7 +977,7 @@ func (s *Server) traceInfo(st transport.ServerTransport, stream *transport.Strea
 	return trInfo
 }
 
-func (s *Server) addConn(st transport.ServerTransport) bool {
+func (s *Server) addConn(addr string, st transport.ServerTransport) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.conns == nil {
@@ -967,15 +989,28 @@ func (s *Server) addConn(st transport.ServerTransport) bool {
 		// immediately.
 		st.Drain()
 	}
-	s.conns[st] = true
+
+	if s.conns[addr] == nil {
+		// Create a map entry if this is the first connection on this listener.
+		s.conns[addr] = make(map[transport.ServerTransport]bool)
+	}
+	s.conns[addr][st] = true
 	return true
 }
 
-func (s *Server) removeConn(st transport.ServerTransport) {
+func (s *Server) removeConn(addr string, st transport.ServerTransport) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.conns != nil {
-		delete(s.conns, st)
+
+	conns := s.conns[addr]
+	if conns != nil {
+		delete(conns, st)
+		if len(conns) == 0 {
+			// If the last connection for this address is being removed, also
+			// remove the map entry corresponding to the address. This is used
+			// in GracefulStop() when waiting for all connections to be closed.
+			delete(s.conns, addr)
+		}
 		s.cv.Broadcast()
 	}
 }
@@ -1639,7 +1674,7 @@ func (s *Server) Stop() {
 	s.mu.Lock()
 	listeners := s.lis
 	s.lis = nil
-	st := s.conns
+	conns := s.conns
 	s.conns = nil
 	// interrupt GracefulStop if Stop and GracefulStop are called concurrently.
 	s.cv.Broadcast()
@@ -1648,8 +1683,10 @@ func (s *Server) Stop() {
 	for lis := range listeners {
 		lis.Close()
 	}
-	for c := range st {
-		c.Close()
+	for _, cs := range conns {
+		for st := range cs {
+			st.Close()
+		}
 	}
 	if s.opts.numServerWorkers > 0 {
 		s.stopServerWorkers()
@@ -1686,8 +1723,10 @@ func (s *Server) GracefulStop() {
 	}
 	s.lis = nil
 	if !s.drain {
-		for st := range s.conns {
-			st.Drain()
+		for _, conns := range s.conns {
+			for st := range conns {
+				st.Drain()
+			}
 		}
 		s.drain = true
 	}
