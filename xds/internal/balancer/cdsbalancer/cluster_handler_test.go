@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -137,37 +137,41 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	if gotCluster != aggregateClusterService {
 		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, aggregateClusterService)
 	}
-	// Does this need a go behind it?
-	go func(){fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType: xdsclient.ClusterTypeAggregate,
-		ServiceName: aggregateClusterService,
-		PrioritizedClusterNames: []string{edsService, logicalDNSService},
-	}, nil)}()
-
 	// The xdsClient telling the clusterNode that the cluster type is an aggregate cluster which will cause a lot of
 	// downstream behavior. For a cluster type that isn't an aggregate, the behavior is simple. The clusterNode will
 	// simply get a successful update, which will then ping the clusterHandler which will successfully build an update
 	// to send to the CDS policy. In the aggregate cluster case, the handleResp callback must also start watches for
-	// the aggregate cluster's children.
+	// the aggregate cluster's children. The ping to the clusterHandler at the end of handleResp should be a no-op,
+	// as neither the EDS or LogicalDNS child clusters have received an update yet.
+	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
+		ClusterType: xdsclient.ClusterTypeAggregate,
+		ServiceName: aggregateClusterService,
+		PrioritizedClusterNames: []string{edsService, logicalDNSService},
+	}, nil)
 
-	// xds client should be called to start a watch for the first? child cluster, which is an EDS Service.
+	// xds client should be called to start a watch for one of the child clusters of the aggregate, which is either an
+	// EDS Service or a LogicalDNS. The construction/iteration through the map in handleResp() is nondeterministic, so
+	// might start watch for EDS first or Logical DNS first. This does not really matter in terms of the functionality
+	// of the clusterHandler.
 	gotCluster, err = fakeClient.WaitForWatchCluster(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
 	if gotCluster != edsService {
-		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, edsService)
+		if gotCluster != logicalDNSService {
+			t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want either: %v or %v", gotCluster, edsService, logicalDNSService)
+		}
 	}
 
-	// xds client should also be called to start a watch for the second child cluster, which is a Logical DNS Service.
-	ctx, ctxCancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
+	// xds client should also be called to start a watch for the second child cluster.
 	gotCluster, err = fakeClient.WaitForWatchCluster(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
-	if gotCluster != logicalDNSService {
-		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, logicalDNSService)
+	if gotCluster != edsService {
+		if gotCluster != logicalDNSService {
+			t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, logicalDNSService)
+		}
 	}
 
 	// The handleResp() call on the root aggregate cluster will ping the cluster handler to try and construct an update.
@@ -198,7 +202,7 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	case <-shouldNotHappenCtx.Done():
 	}
 
-	// Send callback for Logical DNS child cluster.
+	// Invoke callback for Logical DNS child cluster.
 
 	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
 		ClusterType: xdsclient.ClusterTypeLogicalDNS,
@@ -209,16 +213,15 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	// have received an update.  Since this cluster is an aggregate cluster comprised of two children, the returned update
 	// should be length 2, as the xds cluster resolver LB policy only cares about the full list of LogicalDNS and EDS
 	// clusters representing the base nodes of the tree of clusters.
-	chu := <-ch.updateChannel
-	if len(chu.chu) != 2 {
-		t.Fatal("Cluster Update passed to CDS should have a length of 2 as it is an aggregate cluster.")
+	select {
+	case chu := <-ch.updateChannel:
+		if len(chu.chu) != 2 {
+			t.Fatal("Cluster Update passed to CDS should have a length of 2 as it is an aggregate cluster.")
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for the cluster update to be written to the update buffer.")
 	}
-
-	// Should I also delete the root node up here? or try a shift of the root node to CDS, similar question to first test
-	// case, what should the scope of a test case be?
 }
-
-// From this aggregate cluster, branch it off into two (or three) more tests
 
 // The first set of tests represents "modify" test. These tests will switch the aggregate cluster to one child and one child with change.
 

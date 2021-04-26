@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,9 +100,11 @@ type clusterNode struct {
 
 // CreateClusterNode creates a cluster node from a given clusterName. This will also start the watch for that cluster.
 func createClusterNode(clusterName string, xdsClient xdsClientInterface, topLevelHandler *clusterHandler) *clusterNode {
+	print("|createClusterNode() called on ", clusterName, "|")
 	c := &clusterNode{
 		clusterHandler: topLevelHandler,
 	}
+	print("About to communicate with the xds client for:", clusterName, "|")
 	// Communicate with the xds client here.
 	c.cancelFunc = xdsClient.WatchCluster(clusterName, c.handleResp)
 	return c
@@ -117,7 +119,8 @@ func (c *clusterNode) delete() {
 }
 
 // Construct cluster update (potentially a list of ClusterUpdates) for a node.
-func (c *clusterNode) constructClusterUpdate() ([]xdsclient.ClusterUpdate, error) {
+func (c *clusterNode) constructClusterUpdate() ([]xdsclient.ClusterUpdate, error) { // THIS LOGIC IS WRONG
+	print("Tries constructing a cluster update for Cluster ", c.clusterUpdate.ServiceName, ". ")
 	// If the cluster has not yet received an update, the cluster update is not yet ready.
 	if !c.receivedUpdate {
 		return nil, errors.New("Tried to construct a cluster update on a cluster that has not received an update.")
@@ -125,6 +128,7 @@ func (c *clusterNode) constructClusterUpdate() ([]xdsclient.ClusterUpdate, error
 
 	// Base case - LogicalDNS or EDS. Both of these cluster types will be tied to a single ClusterUpdate.
 	if c.clusterUpdate.ClusterType != xdsclient.ClusterTypeAggregate {
+		print("Returning the cluster update for service (base node):", c.clusterUpdate.ServiceName)
 		return []xdsclient.ClusterUpdate{c.clusterUpdate}, nil
 	}
 
@@ -137,15 +141,17 @@ func (c *clusterNode) constructClusterUpdate() ([]xdsclient.ClusterUpdate, error
 		}
 		childrenUpdates = append(childrenUpdates, childUpdateList...)
 	}
-
+	print("Returning the update list for an aggregate cluster")
 	return childrenUpdates, nil
 }
 
 // handleResp handles a xds response for a particular cluster. This function also
 // handles any logic with regards to any child state that may have changed.
+// Problem statement: perhaps this logic is wrong
 func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err error) {
 	c.clusterHandler.clusterMutex.Lock()
 	defer c.clusterHandler.clusterMutex.Unlock()
+	print("SERVICE NAME:", clusterUpdate.ServiceName)
 	if err != nil { // Write this error for run() to pick up in CDS LB policy.
 		c.clusterHandler.updateChannel<-clusterHandlerUpdate{chu: nil, err: err}
 		return
@@ -165,6 +171,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	newChildren := make(map[string]struct{})
 	if clusterUpdate.ClusterType == xdsclient.ClusterTypeAggregate {
 		for _, childName := range clusterUpdate.PrioritizedClusterNames {
+			print("New children added: ", childName)
 			newChildren[childName] = struct{}{}
 		}
 	}
@@ -172,6 +179,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	for _, child := range c.children {
 		// If the child is still present in the update, then there is nothing to do for that child name in the update.
 		if _, found := newChildren[child.clusterUpdate.ServiceName]; found {
+			print("New children deleted: ", child.clusterUpdate.ServiceName)
 			delete(newChildren, child.clusterUpdate.ServiceName)
 		} else { // If the child is no longer present in the update, that cluster can be deleted.
 			delta = true
@@ -181,6 +189,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 
 	// Whatever clusters are left over here from the update are all new children, so create CDS watches for those clusters.
 	for child, _ := range newChildren {
+		print("Creating cds watch in:", child)
 		delta = true
 		c.children = append(c.children, createClusterNode(child, c.clusterHandler.xdsClient, c.clusterHandler))
 	}
