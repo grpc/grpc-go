@@ -24,6 +24,7 @@ package xds_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"path"
@@ -98,10 +99,13 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 	defer fs.Stop()
 
-	// Create certificate and key files in a temporary directory and generate
-	// certificate provider configuration for a file_watcher plugin.
-	tmpdir := createTmpDirWithFiles(t, "testServerSideXDS*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
-	cpc := e2e.DefaultFileWatcherConfig(path.Join(tmpdir, certFile), path.Join(tmpdir, keyFile), path.Join(tmpdir, rootFile))
+	// Create a directory to hold certs and key files used on the server side.
+	serverDir := createTmpDirWithFiles(t, "testServerSideServingMode*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
+
+	// Create certificate providers section of the bootstrap config.
+	cpc := map[string]json.RawMessage{
+		e2e.ServerSideCertProviderInstance: e2e.DefaultFileWatcherConfig(path.Join(serverDir, certFile), path.Join(serverDir, keyFile), path.Join(serverDir, rootFile)),
+	}
 
 	// Create a bootstrap file in a temporary directory.
 	bsCleanup, err := xdsinternal.SetupBootstrapFile(xdsinternal.BootstrapOptions{
@@ -109,7 +113,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		NodeID:                             nodeID,
 		ServerURI:                          fs.Address,
 		CertificateProviders:               cpc,
-		ServerListenerResourceNameTemplate: serverListenerResourceNameTemplate,
+		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -159,15 +163,24 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		}
 	}()
 
-	// Setup the fake management server to respond with Listener resources that
-	// we are interested in.
-	listener1 := listenerResourceWithoutSecurityConfig(t, lis1)
-	listener2 := listenerResourceWithoutSecurityConfig(t, lis2)
-	if err := fs.Update(e2e.UpdateOptions{
+	// Setup the management server to respond with server-side Listener
+	// resources for both listeners.
+	host1, port1, err := hostPortFromListener(lis1)
+	if err != nil {
+		t.Fatalf("failed to retrieve host and port of server: %v", err)
+	}
+	listener1 := e2e.DefaultServerSideListener(host1, port1, e2e.SecurityLevelNone)
+	host2, port2, err := hostPortFromListener(lis2)
+	if err != nil {
+		t.Fatalf("failed to retrieve host and port of server: %v", err)
+	}
+	listener2 := e2e.DefaultServerSideListener(host2, port2, e2e.SecurityLevelNone)
+	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener1, listener2},
-	}); err != nil {
-		t.Error(err)
+	}
+	if err := fs.Update(resources); err != nil {
+		t.Fatal(err)
 	}
 
 	// Wait for both listeners to move to "serving" mode.
