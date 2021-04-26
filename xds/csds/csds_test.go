@@ -149,7 +149,7 @@ var (
 
 func init() {
 	for i := range ldsTargets {
-		listeners[i] = e2e.DefaultListener(ldsTargets[i], rdsTargets[i])
+		listeners[i] = e2e.DefaultClientSideListener(ldsTargets[i], rdsTargets[i])
 		listenerAnys[i], _ = ptypes.MarshalAny(listeners[i])
 	}
 	for i := range rdsTargets {
@@ -157,7 +157,7 @@ func init() {
 		routeAnys[i], _ = ptypes.MarshalAny(routes[i])
 	}
 	for i := range cdsTargets {
-		clusters[i] = e2e.DefaultCluster(cdsTargets[i], edsTargets[i])
+		clusters[i] = e2e.DefaultCluster(cdsTargets[i], edsTargets[i], e2e.SecurityLevelNone)
 		clusterAnys[i], _ = ptypes.MarshalAny(clusters[i])
 	}
 	for i := range edsTargets {

@@ -36,26 +36,16 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 
-	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
-	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -68,9 +58,7 @@ const (
 	keyFile  = "key.pem"
 	rootFile = "ca.pem"
 
-	// Template for server Listener resource name.
-	serverListenerResourceNameTemplate = "grpc/server?xds.resource.listening_address=%s"
-	xdsServiceName                     = "my-service"
+	xdsServiceName = "my-service"
 )
 
 func createTmpFile(t *testing.T, src, dst string) {
@@ -165,8 +153,8 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 	// Create certificate providers section of the bootstrap config with entries
 	// for both the client and server sides.
 	cpc := map[string]json.RawMessage{
-		"server-side-certificate-provider": e2e.DefaultFileWatcherConfig(path.Join(serverDir, certFile), path.Join(serverDir, keyFile), path.Join(serverDir, rootFile)),
-		"client-side-certificate-provider": e2e.DefaultFileWatcherConfig(path.Join(clientDir, certFile), path.Join(clientDir, keyFile), path.Join(clientDir, rootFile)),
+		e2e.ServerSideCertProviderInstance: e2e.DefaultFileWatcherConfig(path.Join(serverDir, certFile), path.Join(serverDir, keyFile), path.Join(serverDir, rootFile)),
+		e2e.ClientSideCertProviderInstance: e2e.DefaultFileWatcherConfig(path.Join(clientDir, certFile), path.Join(clientDir, keyFile), path.Join(clientDir, rootFile)),
 	}
 
 	// Create a bootstrap file in a temporary directory.
@@ -175,7 +163,7 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 		NodeID:                             nodeID,
 		ServerURI:                          fs.Address,
 		CertificateProviders:               cpc,
-		ServerListenerResourceNameTemplate: serverListenerResourceNameTemplate,
+		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -225,195 +213,6 @@ func hostPortFromListener(lis net.Listener) (string, uint32, error) {
 	return host, uint32(port), nil
 }
 
-func inboundListenerResourceWithTransportSocket(lis net.Listener, ts *v3corepb.TransportSocket) (*v3listenerpb.Listener, error) {
-	host, port, err := hostPortFromListener(lis)
-	if err != nil {
-		return nil, err
-	}
-	return &v3listenerpb.Listener{
-		Name: fmt.Sprintf(serverListenerResourceNameTemplate, lis.Addr().String()),
-		Address: &v3corepb.Address{
-			Address: &v3corepb.Address_SocketAddress{
-				SocketAddress: &v3corepb.SocketAddress{
-					Address: host,
-					PortSpecifier: &v3corepb.SocketAddress_PortValue{
-						PortValue: port,
-					}}}},
-		FilterChains: []*v3listenerpb.FilterChain{
-			{
-				Name: "v4-wildcard",
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					PrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "0.0.0.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: uint32(0),
-							},
-						},
-					},
-					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
-					SourcePrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "0.0.0.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: uint32(0),
-							},
-						},
-					},
-				},
-				Filters: []*v3listenerpb.Filter{
-					{
-						Name: "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
-						},
-					},
-				},
-				TransportSocket: ts,
-			},
-			{
-				Name: "v6-wildcard",
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					PrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "::",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: uint32(0),
-							},
-						},
-					},
-					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
-					SourcePrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "::",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: uint32(0),
-							},
-						},
-					},
-				},
-				Filters: []*v3listenerpb.Filter{
-					{
-						Name: "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
-						},
-					},
-				},
-				TransportSocket: ts,
-			},
-		},
-	}, nil
-}
-
-// inboundListenerResourceWithoutSecurityConfig returns a listener resource with
-// no security configuration, and name and address fields matching the passed in
-// net.Listener.
-func inboundListenerResourceWithoutSecurityConfig(lis net.Listener) (*v3listenerpb.Listener, error) {
-	return inboundListenerResourceWithTransportSocket(lis, nil)
-}
-
-// inboundListenerResourceWithMutualTLSConfig returns a listener resource with
-// security configuration pointing to the use of the file_watcher certificate
-// provider plugin, and name and address fields matching the passed in
-// net.Listener. The security configuration returned here corresponds to the use
-// of mTLS.
-func inboundListenerResourceWithMutualTLSConfig(lis net.Listener) (*v3listenerpb.Listener, error) {
-	return inboundListenerResourceWithTransportSocket(lis, &v3corepb.TransportSocket{
-		Name: "envoy.transport_sockets.tls",
-		ConfigType: &v3corepb.TransportSocket_TypedConfig{
-			TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
-				RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-				CommonTlsContext: &v3tlspb.CommonTlsContext{
-					TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-						InstanceName: "server-side-certificate-provider",
-					},
-					ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-						ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-							InstanceName: "server-side-certificate-provider",
-						},
-					},
-				},
-			}),
-		},
-	})
-}
-
-// inboundListenerResourceWithTLSConfig returns a listener resource with
-// security configuration pointing to the use of the file_watcher certificate
-// provider plugin, and name and address fields matching the passed in
-// net.Listener. The security configuration returned here corresponds to the use
-// of TLS where the client does not present a certificate.
-func inboundListenerResourceWithTLSConfig(lis net.Listener) (*v3listenerpb.Listener, error) {
-	return inboundListenerResourceWithTransportSocket(lis, &v3corepb.TransportSocket{
-		Name: "envoy.transport_sockets.tls",
-		ConfigType: &v3corepb.TransportSocket_TypedConfig{
-			TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
-				CommonTlsContext: &v3tlspb.CommonTlsContext{
-					TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-						InstanceName: "server-side-certificate-provider",
-					},
-				},
-			}),
-		},
-	})
-}
-
-// xdsResourcesForClientSecurity creates xDS resources required on the client
-// side when security is enabled. This differs from the resources returned by
-// `e2e.DefaultClientResources` only in the cluster resource which contains the
-// security configuration. The mTLS argument controls whether the security
-// configuration specifies the use of mTLS or regular TLS.
-func xdsResourcesForClientSecurity(nodeID, host string, port uint32, mTLS bool) e2e.UpdateOptions {
-	const (
-		routeConfigName = "route"
-		clusterName     = "cluster"
-		endpointsName   = "endpoints"
-	)
-
-	tlsContext := &v3tlspb.UpstreamTlsContext{
-		CommonTlsContext: &v3tlspb.CommonTlsContext{
-			ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-				ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-					InstanceName: "client-side-certificate-provider",
-				},
-			},
-		},
-	}
-	if mTLS {
-		tlsContext.CommonTlsContext.TlsCertificateCertificateProviderInstance = &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-			InstanceName: "client-side-certificate-provider",
-		}
-	}
-
-	cluster := &v3clusterpb.Cluster{
-		Name:                 clusterName,
-		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-			EdsConfig: &v3corepb.ConfigSource{
-				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-					Ads: &v3corepb.AggregatedConfigSource{},
-				},
-			},
-			ServiceName: endpointsName,
-		},
-		LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-		TransportSocket: &v3corepb.TransportSocket{
-			Name: "envoy.transport_sockets.tls",
-			ConfigType: &v3corepb.TransportSocket_TypedConfig{
-				TypedConfig: testutils.MarshalAny(tlsContext),
-			},
-		},
-	}
-	return e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultListener(xdsServiceName, routeConfigName)},
-		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, xdsServiceName, clusterName)},
-		Clusters:  []*v3clusterpb.Cluster{cluster},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointsName, host, port)},
-	}
-}
-
 // TestServerSideXDS_Fallback is an e2e test which verifies xDS credentials
 // fallback functionality.
 //
@@ -430,24 +229,27 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 
 	// Grab the host and port of the server and create client side xDS resources
 	// corresponding to it. This contains default resources with no security
-	// configuration in the Cluster resource.
+	// configuration in the Cluster resources.
 	host, port, err := hostPortFromListener(lis)
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
 	}
-	updateOptions := e2e.DefaultClientResources(xdsServiceName, nodeID, host, port)
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: xdsServiceName,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 
 	// Create an inbound xDS listener resource for the server side that does not
 	// contain any security configuration. This should force the server-side
 	// xdsCredentials to use fallback.
-	inboundLis, err := inboundListenerResourceWithoutSecurityConfig(lis)
-	if err != nil {
-		t.Fatalf("failed to generate inbound listener resource: %v", err)
-	}
+	inboundLis := e2e.DefaultServerSideListener(host, port, e2e.SecurityLevelNone)
+	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	// Setup the management server with client and server-side resources.
-	updateOptions.Listeners = append(updateOptions.Listeners, inboundLis)
-	if err := fs.Update(updateOptions); err != nil {
+	if err := fs.Update(resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -486,16 +288,16 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 //   We verify both TLS and mTLS scenarios.
 func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 	tests := []struct {
-		name string
-		mTLS bool
+		name     string
+		secLevel e2e.SecurityLevel
 	}{
 		{
-			name: "tls",
-			mTLS: false,
+			name:     "tls",
+			secLevel: e2e.SecurityLevelTLS,
 		},
 		{
-			name: "mtls",
-			mTLS: true,
+			name:     "mtls",
+			secLevel: e2e.SecurityLevelMTLS,
 		},
 	}
 	for _, test := range tests {
@@ -513,24 +315,22 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 			// Create xDS resources to be consumed on the client side. This
 			// includes the listener, route configuration, cluster (with
 			// security configuration) and endpoint resources.
-			updateOptions := xdsResourcesForClientSecurity(nodeID, host, port, test.mTLS)
+			resources := e2e.DefaultClientResources(e2e.ResourceParams{
+				DialTarget: xdsServiceName,
+				NodeID:     nodeID,
+				Host:       host,
+				Port:       port,
+				SecLevel:   test.secLevel,
+			})
 
 			// Create an inbound xDS listener resource for the server side that
 			// contains security configuration pointing to the file watcher
 			// plugin.
-			var inboundLis *v3listenerpb.Listener
-			if test.mTLS {
-				inboundLis, err = inboundListenerResourceWithMutualTLSConfig(lis)
-			} else {
-				inboundLis, err = inboundListenerResourceWithTLSConfig(lis)
-			}
-			if err != nil {
-				t.Fatalf("failed to generate inbound listener resource: %v", err)
-			}
+			inboundLis := e2e.DefaultServerSideListener(host, port, test.secLevel)
+			resources.Listeners = append(resources.Listeners, inboundLis)
 
 			// Setup the management server with client and server resources.
-			updateOptions.Listeners = append(updateOptions.Listeners, inboundLis)
-			if err := fs.Update(updateOptions); err != nil {
+			if err := fs.Update(resources); err != nil {
 				t.Fatal(err)
 			}
 
@@ -579,19 +379,22 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
 	}
-	updateOptions := e2e.DefaultClientResources(xdsServiceName, nodeID, host, port)
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: xdsServiceName,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 
 	// Create an inbound xDS listener resource for the server side that does not
 	// contain any security configuration. This should force the xDS credentials
 	// on server to use its fallback.
-	inboundLis, err := inboundListenerResourceWithoutSecurityConfig(lis)
-	if err != nil {
-		t.Fatalf("failed to generate inbound listener resource: %v", err)
-	}
+	inboundLis := e2e.DefaultServerSideListener(host, port, e2e.SecurityLevelNone)
+	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	// Setup the management server with client and server-side resources.
-	updateOptions.Listeners = append(updateOptions.Listeners, inboundLis)
-	if err := fs.Update(updateOptions); err != nil {
+	if err := fs.Update(resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -634,13 +437,16 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 
 	// Switch server and client side resources with ones that contain required
 	// security configuration for mTLS with a file watcher certificate provider.
-	updateOptions = xdsResourcesForClientSecurity(nodeID, host, port, true)
-	inboundLis, err = inboundListenerResourceWithMutualTLSConfig(lis)
-	if err != nil {
-		t.Fatalf("failed to generate inbound listener resource: %v", err)
-	}
-	updateOptions.Listeners = append(updateOptions.Listeners, inboundLis)
-	if err := fs.Update(updateOptions); err != nil {
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: xdsServiceName,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelMTLS,
+	})
+	inboundLis = e2e.DefaultServerSideListener(host, port, e2e.SecurityLevelMTLS)
+	resources.Listeners = append(resources.Listeners, inboundLis)
+	if err := fs.Update(resources); err != nil {
 		t.Fatal(err)
 	}
 

@@ -92,7 +92,13 @@ func (s) TestClientSideXDS(t *testing.T) {
 	fs, nodeID, port, cleanup := clientSetup(t)
 	defer cleanup()
 
-	resources := e2e.DefaultClientResources("myservice", nodeID, "localhost", port)
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: "myservice",
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 	if err := fs.Update(resources); err != nil {
 		t.Fatal(err)
 	}
