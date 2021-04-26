@@ -88,16 +88,16 @@ func DefaultClientResources(params ResourceParams) UpdateOptions {
 	const endpointsName = "endpoints-" + params.DialTarget
 	return UpdateOptions{
 		NodeID:    params.NodeID,
-		Listeners: []*v3listenerpb.Listener{DefaultClientSideListener(params.DialTarget, routeConfigName)},
+		Listeners: []*v3listenerpb.Listener{DefaultClientListener(params.DialTarget, routeConfigName)},
 		Routes:    []*v3routepb.RouteConfiguration{DefaultRouteConfig(routeConfigName, params.DialTarget, clusterName)},
 		Clusters:  []*v3clusterpb.Cluster{DefaultCluster(clusterName, endpointsName, params.SecLevel)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{DefaultEndpoint(endpointsName, params.Host, params.Port)},
 	}
 }
 
-// DefaultClientSideListener returns a basic xds Listener resource to be used on
+// DefaultClientListener returns a basic xds Listener resource to be used on
 // the client side.
-func DefaultClientSideListener(target, routeName string) *v3listenerpb.Listener {
+func DefaultClientListener(target, routeName string) *v3listenerpb.Listener {
 	hcm := testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 		RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{Rds: &v3httppb.Rds{
 			ConfigSource: &v3corepb.ConfigSource{
@@ -120,9 +120,9 @@ func DefaultClientSideListener(target, routeName string) *v3listenerpb.Listener 
 	}
 }
 
-// DefaultServerSideListener returns a basic xds Listener resource to be used on
+// DefaultServerListener returns a basic xds Listener resource to be used on
 // the server side.
-func DefaultServerSideListener(host string, port uint32, secLevel SecurityLevel) *v3listenerpb.Listener {
+func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3listenerpb.Listener {
 	var tlsContext *v3tlspb.DownstreamTlsContext
 	switch secLevel {
 	case SecurityLevelNone:

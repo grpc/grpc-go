@@ -149,7 +149,7 @@ var (
 
 func init() {
 	for i := range ldsTargets {
-		listeners[i] = e2e.DefaultClientSideListener(ldsTargets[i], rdsTargets[i])
+		listeners[i] = e2e.DefaultClientListener(ldsTargets[i], rdsTargets[i])
 		listenerAnys[i], _ = ptypes.MarshalAny(listeners[i])
 	}
 	for i := range rdsTargets {

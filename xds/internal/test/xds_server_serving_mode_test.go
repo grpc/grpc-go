@@ -169,12 +169,12 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
 	}
-	listener1 := e2e.DefaultServerSideListener(host1, port1, e2e.SecurityLevelNone)
+	listener1 := e2e.DefaultServerListener(host1, port1, e2e.SecurityLevelNone)
 	host2, port2, err := hostPortFromListener(lis2)
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
 	}
-	listener2 := e2e.DefaultServerSideListener(host2, port2, e2e.SecurityLevelNone)
+	listener2 := e2e.DefaultServerListener(host2, port2, e2e.SecurityLevelNone)
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener1, listener2},
