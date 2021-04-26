@@ -27,11 +27,6 @@ import (
 
 // ServingModeCallback returns a grpc.ServerOption which allows users to
 // register a callback to get notified about serving mode changes.
-//
-// Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-// release.
 func ServingModeCallback(cb ServingModeCallbackFunc) grpc.ServerOption {
 	return &smcOption{cb: cb}
 }
@@ -58,11 +53,6 @@ type serverOptions struct {
 }
 
 // ServingMode indicates the current mode of operation of the server.
-//
-// Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-// release.
 type ServingMode = iserver.ServingMode
 
 const (
@@ -81,11 +71,6 @@ const (
 // with the address of the listener and its new mode.
 //
 // Users must not perform any blocking operations in this callback.
-//
-// Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-// release.
 type ServingModeCallbackFunc func(addr net.Addr, args ServingModeChangeArgs)
 
 // ServingModeChangeArgs wraps the arguments passed to the serving mode callback

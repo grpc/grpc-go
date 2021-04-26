@@ -79,11 +79,6 @@ type grpcServerInterface interface {
 // communication with a management server using xDS APIs. It implements the
 // grpc.ServiceRegistrar interface and can be passed to service registration
 // functions in IDL generated code.
-//
-// Experimental
-//
-// Notice: This type is EXPERIMENTAL and may be changed or removed in a
-// later release.
 type GRPCServer struct {
 	gs            grpcServerInterface
 	quit          *grpcsync.Event
@@ -101,11 +96,6 @@ type GRPCServer struct {
 // NewGRPCServer creates an xDS-enabled gRPC server using the passed in opts.
 // The underlying gRPC server has no service registered and has not started to
 // accept requests yet.
-//
-// Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-// release.
 func NewGRPCServer(opts ...grpc.ServerOption) *GRPCServer {
 	newOpts := []grpc.ServerOption{
 		grpc.ChainUnaryInterceptor(xdsUnaryInterceptor),
