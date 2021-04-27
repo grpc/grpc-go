@@ -376,6 +376,11 @@ func ChainStreamInterceptor(interceptors ...StreamServerInterceptor) ServerOptio
 
 // InTapHandle returns a ServerOption that sets the tap handle for all the server
 // transport to be created. Only one can be installed.
+//
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func InTapHandle(h tap.ServerInHandle) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		if o.inTapHandle != nil {

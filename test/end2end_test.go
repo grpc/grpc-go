@@ -3588,7 +3588,7 @@ func testTransparentRetry(t *testing.T, e env) {
 	te.tapHandle = func(ctx context.Context, _ *tap.Info) (context.Context, error) {
 		attempts++
 		if attempts < successAttempt {
-			return nil, errors.New("not now")
+			return nil, status.Errorf(codes.Unavailable, "not now")
 		}
 		return ctx, nil
 	}
