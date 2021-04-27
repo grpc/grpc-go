@@ -131,7 +131,7 @@ func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 			// the balancer isn't built, because this child can be a low
 			// priority. If necessary, it will be built when syncing priorities.
 			cb := newChildBalancer(name, b, bb)
-			cb.updateConfig(newSubConfig.Config.Config, resolver.State{
+			cb.updateConfig(newSubConfig, resolver.State{
 				Addresses:     addressesSplit[name],
 				ServiceConfig: s.ResolverState.ServiceConfig,
 				Attributes:    s.ResolverState.Attributes,
@@ -146,13 +146,13 @@ func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 		// rebuild, rebuild will happen when syncing priorities.
 		if currentChild.bb.Name() != bb.Name() {
 			currentChild.stop()
-			currentChild.bb = bb
+			currentChild.updateBuilder(bb)
 		}
 
 		// Update config and address, but note that this doesn't send the
 		// updates to child balancer (the child balancer might not be built, if
 		// it's a low priority).
-		currentChild.updateConfig(newSubConfig.Config.Config, resolver.State{
+		currentChild.updateConfig(newSubConfig, resolver.State{
 			Addresses:     addressesSplit[name],
 			ServiceConfig: s.ResolverState.ServiceConfig,
 			Attributes:    s.ResolverState.Attributes,

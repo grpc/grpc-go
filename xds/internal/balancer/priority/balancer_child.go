@@ -29,10 +29,11 @@ import (
 type childBalancer struct {
 	name   string
 	parent *priorityBalancer
-	bb     balancer.Builder
+	bb     *ignoreResolveNowBalancerBuilder
 
-	config serviceconfig.LoadBalancingConfig
-	rState resolver.State
+	ignoreReresolutionRequests bool
+	config                     serviceconfig.LoadBalancingConfig
+	rState                     resolver.State
 
 	started bool
 	state   balancer.State
@@ -44,7 +45,7 @@ func newChildBalancer(name string, parent *priorityBalancer, bb balancer.Builder
 	return &childBalancer{
 		name:    name,
 		parent:  parent,
-		bb:      bb,
+		bb:      newIgnoreResolveNowBalancerBuilder(bb, false),
 		started: false,
 		// Start with the connecting state and picker with re-pick error, so
 		// that when a priority switch causes this child picked before it's
@@ -56,10 +57,16 @@ func newChildBalancer(name string, parent *priorityBalancer, bb balancer.Builder
 	}
 }
 
+// updateBuilder updates builder for the child, but doesn't build.
+func (cb *childBalancer) updateBuilder(bb balancer.Builder) {
+	cb.bb = newIgnoreResolveNowBalancerBuilder(bb, cb.ignoreReresolutionRequests)
+}
+
 // updateConfig sets childBalancer's config and state, but doesn't send update to
 // the child balancer.
-func (cb *childBalancer) updateConfig(config serviceconfig.LoadBalancingConfig, rState resolver.State) {
-	cb.config = config
+func (cb *childBalancer) updateConfig(child *Child, rState resolver.State) {
+	cb.ignoreReresolutionRequests = child.IgnoreReresolutionRequests
+	cb.config = child.Config.Config
 	cb.rState = rState
 }
 
@@ -76,6 +83,7 @@ func (cb *childBalancer) start() {
 
 // sendUpdate sends the addresses and config to the child balancer.
 func (cb *childBalancer) sendUpdate() {
+	cb.bb.updateIgnoreResolveNow(cb.ignoreReresolutionRequests)
 	// TODO: return and aggregate the returned error in the parent.
 	err := cb.parent.bg.UpdateClientConnState(cb.name, balancer.ClientConnState{
 		ResolverState:  cb.rState,
