@@ -594,21 +594,18 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	}
 
 	// Validate and set cluster type from the response.
-	if cluster.GetType() == v3clusterpb.Cluster_EDS {
+	switch {
+	case cluster.GetType() == v3clusterpb.Cluster_EDS:
 		if cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil {
 			return ClusterUpdate{}, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
 		}
 		ret.ClusterType = ClusterTypeEDS
 		ret.EDSServiceName = cluster.GetEdsClusterConfig().GetServiceName()
 		return ret, nil
-	}
-
-	if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
+	case cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS:
 		ret.ClusterType = ClusterTypeLogicalDNS
 		return ret, nil
-	}
-
-	if cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate" {
+	case cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate":
 		clusters := &v3aggregateclusterpb.ClusterConfig{}
 		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
 			return ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -616,9 +613,9 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		ret.ClusterType = ClusterTypeAggregate
 		ret.PrioritizedClusterNames = clusters.Clusters
 		return ret, nil
+	default:
+		return ClusterUpdate{}, fmt.Errorf("unexpected cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
 	}
-
-	return ClusterUpdate{}, fmt.Errorf("unexpected cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
 }
 
 // securityConfigFromCluster extracts the relevant security configuration from
