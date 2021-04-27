@@ -1694,7 +1694,7 @@ func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
 	balancerCC.ResolveNow(resolver.ResolveNowOptions{})
 	select {
 	case <-cc.ResolveNowCh:
-	case <-time.After(time.Millisecond * 100):
+	case <-time.After(time.Second):
 		t.Fatalf("timeout waiting for ResolveNow()")
 	}
 
@@ -1776,7 +1776,7 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 	balancerCC1.ResolveNow(resolver.ResolveNowOptions{})
 	select {
 	case <-cc.ResolveNowCh:
-	case <-time.After(time.Millisecond * 100):
+	case <-time.After(time.Second):
 		t.Fatalf("timeout waiting for ResolveNow()")
 	}
 }

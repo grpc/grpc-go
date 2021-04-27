@@ -78,7 +78,7 @@ func (s) TestIgnoreResolveNowBalancerBuilder(t *testing.T) {
 	balancerCC.ResolveNow(resolver.ResolveNowOptions{})
 	select {
 	case <-cc.ResolveNowCh:
-	case <-time.After(time.Millisecond * 100):
+	case <-time.After(time.Second):
 		t.Fatalf("timeout waiting for ResolveNow()")
 	}
 
@@ -100,7 +100,7 @@ func (s) TestIgnoreResolveNowBalancerBuilder(t *testing.T) {
 	balancerCC.ResolveNow(resolver.ResolveNowOptions{})
 	select {
 	case <-cc.ResolveNowCh:
-	case <-time.After(time.Millisecond * 100):
+	case <-time.After(time.Second):
 		t.Fatalf("timeout waiting for ResolveNow()")
 	}
 }

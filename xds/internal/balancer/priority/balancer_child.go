@@ -64,9 +64,9 @@ func (cb *childBalancer) updateBuilder(bb balancer.Builder) {
 
 // updateConfig sets childBalancer's config and state, but doesn't send update to
 // the child balancer.
-func (cb *childBalancer) updateConfig(config *Child, rState resolver.State) {
-	cb.ignoreReresolutionRequests = config.IgnoreReresolutionRequests
-	cb.config = config.Config.Config
+func (cb *childBalancer) updateConfig(child *Child, rState resolver.State) {
+	cb.ignoreReresolutionRequests = child.IgnoreReresolutionRequests
+	cb.config = child.Config.Config
 	cb.rState = rState
 }
 
