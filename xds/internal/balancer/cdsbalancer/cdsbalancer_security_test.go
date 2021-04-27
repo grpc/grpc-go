@@ -640,7 +640,7 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	// registered watch should not be cancelled.
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
+	if _, err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("cluster watch cancelled for a non-resource-not-found-error")
 	}
 }
