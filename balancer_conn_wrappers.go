@@ -69,10 +69,10 @@ func (ccb *ccBalancerWrapper) watcher() {
 		select {
 		case t := <-ccb.scBuffer.Get():
 			ccb.scBuffer.Load()
+			ccb.balancerMu.Lock()
 			if ccb.done.HasFired() {
 				break
 			}
-			ccb.balancerMu.Lock()
 			su := t.(*scStateUpdate)
 			ccb.balancer.UpdateSubConnState(su.sc, balancer.SubConnState{ConnectivityState: su.state, ConnectionError: su.err})
 			ccb.balancerMu.Unlock()
@@ -80,7 +80,6 @@ func (ccb *ccBalancerWrapper) watcher() {
 		}
 
 		if ccb.done.HasFired() {
-			ccb.balancer.Close()
 			ccb.mu.Lock()
 			scs := ccb.subConns
 			ccb.subConns = nil
@@ -95,6 +94,9 @@ func (ccb *ccBalancerWrapper) watcher() {
 }
 
 func (ccb *ccBalancerWrapper) close() {
+	ccb.balancerMu.Lock()
+	defer ccb.balancerMu.Unlock()
+	ccb.balancer.Close()
 	ccb.done.Fire()
 }
 
@@ -119,13 +121,19 @@ func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s co
 func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) error {
 	ccb.balancerMu.Lock()
 	defer ccb.balancerMu.Unlock()
+	if ccb.done.HasFired() {
+		return nil
+	}
 	return ccb.balancer.UpdateClientConnState(*ccs)
 }
 
 func (ccb *ccBalancerWrapper) resolverError(err error) {
 	ccb.balancerMu.Lock()
+	defer ccb.balancerMu.Unlock()
+	if ccb.done.HasFired() {
+		return
+	}
 	ccb.balancer.ResolverError(err)
-	ccb.balancerMu.Unlock()
 }
 
 func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
