@@ -33,10 +33,10 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal/testutils"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/version"
-	anypb2 "google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -154,12 +154,9 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
 					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
 						Name: "envoy.clusters.aggregate",
-						TypedConfig: func() *anypb2.Any {
-							r, _ := anypb2.New(&v3aggregateclusterpb.ClusterConfig{
-								Clusters: []string{"a", "b", "c"},
-							})
-							return r
-						}(),
+						TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{
+							Clusters: []string{"a", "b", "c"},
+						}),
 					},
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
