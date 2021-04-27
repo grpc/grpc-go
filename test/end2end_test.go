@@ -2427,10 +2427,13 @@ type myTap struct {
 
 func (t *myTap) handle(ctx context.Context, info *tap.Info) (context.Context, error) {
 	if info != nil {
-		if info.FullMethodName == "/grpc.testing.TestService/EmptyCall" {
+		switch info.FullMethodName {
+		case "/grpc.testing.TestService/EmptyCall":
 			t.cnt++
-		} else if info.FullMethodName == "/grpc.testing.TestService/UnaryCall" {
+		case "/grpc.testing.TestService/UnaryCall":
 			return nil, fmt.Errorf("tap error")
+		case "/grpc.testing.TestService/FullDuplexCall":
+			return nil, status.Errorf(codes.FailedPrecondition, "test custom error")
 		}
 	}
 	return ctx, nil
@@ -2470,8 +2473,15 @@ func testTap(t *testing.T, e env) {
 		ResponseSize: 45,
 		Payload:      payload,
 	}
-	if _, err := tc.UnaryCall(ctx, req); status.Code(err) != codes.Unavailable {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, %s", err, codes.Unavailable)
+	if _, err := tc.UnaryCall(ctx, req); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, %s", err, codes.PermissionDenied)
+	}
+	str, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error creating stream: %v", err)
+	}
+	if _, err := str.Recv(); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("FullDuplexCall Recv() = _, %v, want _, %s", err, codes.FailedPrecondition)
 	}
 }
 
