@@ -65,6 +65,7 @@ func New() (*Client, error) {
 	// the client.
 	if singletonClient.clientImpl != nil {
 		singletonClient.refCount++
+		logger.Infof("easwars: singleton refCount is %d", singletonClient.refCount)
 		return singletonClient, nil
 	}
 
@@ -80,6 +81,7 @@ func New() (*Client, error) {
 
 	singletonClient.clientImpl = c
 	singletonClient.refCount++
+	logger.Infof("easwars: singleton refCount is %d", singletonClient.refCount)
 	return singletonClient, nil
 }
 
@@ -122,6 +124,7 @@ func (c *Client) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.refCount--
+	logger.Infof("easwars: singleton refCount is %d", singletonClient.refCount)
 	if c.refCount == 0 {
 		c.clientImpl.Close()
 		// Set clientImpl back to nil. So if New() is called after this, a new

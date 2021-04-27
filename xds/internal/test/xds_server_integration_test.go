@@ -72,7 +72,6 @@ func createTmpFile(t *testing.T, src, dst string) {
 		t.Fatalf("ioutil.WriteFile(%q) failed: %v", dst, err)
 	}
 	t.Logf("Wrote file at: %s", dst)
-	t.Logf("%s", string(data))
 }
 
 // createTempDirWithFiles creates a temporary directory under the system default

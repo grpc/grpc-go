@@ -496,7 +496,8 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 	b.updateCh.Put(&scUpdate{subConn: sc, state: state})
 }
 
-// Close closes the cdsBalancer and the underlying edsBalancer.
+// Close cancels the CDS watch, closes the child policy and closes the
+// cdsBalancer.
 func (b *cdsBalancer) Close() {
 	b.closed.Fire()
 	<-b.done.Done()
