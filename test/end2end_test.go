@@ -7125,7 +7125,7 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 				}
 				if hframe, ok := frame.(*http2.HeadersFrame); ok {
 					sid = hframe.Header().StreamID
-					if !s.refuseStream(sid) {
+					if s.refuseStream == nil || !s.refuseStream(sid) {
 						break
 					}
 					framer.WriteRSTStream(sid, http2.ErrCodeRefusedStream)
