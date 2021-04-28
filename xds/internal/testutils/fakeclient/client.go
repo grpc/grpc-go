@@ -44,10 +44,10 @@ type Client struct {
 	loadStore    *load.Store
 	bootstrapCfg *bootstrap.Config
 
-	ldsCb func(xdsclient.ListenerUpdate, error)
-	rdsCb func(xdsclient.RouteConfigUpdate, error)
+	ldsCb  func(xdsclient.ListenerUpdate, error)
+	rdsCb  func(xdsclient.RouteConfigUpdate, error)
 	cdsCbs map[string]func(xdsclient.ClusterUpdate, error)
-	edsCb func(xdsclient.EndpointsUpdate, error)
+	edsCb  func(xdsclient.EndpointsUpdate, error)
 }
 
 // WatchListener registers a LDS watch.
@@ -276,6 +276,6 @@ func NewClientWithName(name string) *Client {
 		loadReportCh: testutils.NewChannel(),
 		closeCh:      testutils.NewChannel(),
 		loadStore:    load.NewStore(),
-		cdsCbs: make(map[string]func(xdsclient.ClusterUpdate, error)),
+		cdsCbs:       make(map[string]func(xdsclient.ClusterUpdate, error)),
 	}
 }
