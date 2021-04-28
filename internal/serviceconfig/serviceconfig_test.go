@@ -148,23 +148,15 @@ func TestBalancerConfigMarshalJSON(t *testing.T) {
 				Name:   testBalancerBuilderName,
 				Config: testBalancerConfig,
 			},
-			wantJSON: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderName, testBalancerConfigJSON),
+			wantJSON: fmt.Sprintf(`[{"test-bb": {"check":true}}]`),
 		},
 		{
-			name: "first balancer not registered",
-			bc: BalancerConfig{
-				Name:   testBalancerBuilderName,
-				Config: testBalancerConfig,
-			},
-			wantJSON: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderName, testBalancerConfigJSON),
-		},
-		{
-			name: "balancer registered but builder not parser",
+			name: "OK config is nil",
 			bc: BalancerConfig{
 				Name:   testBalancerBuilderNotParserName,
-				Config: nil,
+				Config: nil, // nil should be marshalled to an empty config "{}".
 			},
-			wantJSON: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderNotParserName, "{}"),
+			wantJSON: fmt.Sprintf(`[{"test-bb-not-parser": {}}]`),
 		},
 	}
 	for _, tt := range tests {
@@ -174,8 +166,7 @@ func TestBalancerConfigMarshalJSON(t *testing.T) {
 				t.Fatalf("failed to marshal: %v", err)
 			}
 
-			str := string(b)
-			if str != tt.wantJSON {
+			if str := string(b); str != tt.wantJSON {
 				t.Fatalf("got str %q, want %q", str, tt.wantJSON)
 			}
 
