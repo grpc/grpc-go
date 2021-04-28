@@ -39,7 +39,7 @@ type clusterHandler struct {
 	// Capacity of one as the only update CDS Balancer cares about is the most recent update.
 	updateChannel chan clusterHandlerUpdate
 
-	xdsClient      xdsClientInterface
+	xdsClient xdsClientInterface
 }
 
 func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
@@ -71,7 +71,7 @@ func (ch *clusterHandler) constructClusterUpdate() {
 		case <-ch.updateChannel:
 		default:
 		}
-		ch.updateChannel<-clusterHandlerUpdate{chu: clusterUpdate, err: nil}
+		ch.updateChannel <- clusterHandlerUpdate{chu: clusterUpdate, err: nil}
 	}
 }
 
@@ -94,7 +94,6 @@ type clusterNode struct {
 	receivedUpdate bool
 
 	clusterHandler *clusterHandler
-
 }
 
 // CreateClusterNode creates a cluster node from a given clusterName. This will also start the watch for that cluster.
@@ -174,7 +173,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 		case <-c.clusterHandler.updateChannel:
 		default:
 		}
-		c.clusterHandler.updateChannel<-clusterHandlerUpdate{chu: nil, err: err}
+		c.clusterHandler.updateChannel <- clusterHandlerUpdate{chu: nil, err: err}
 		return
 	}
 
