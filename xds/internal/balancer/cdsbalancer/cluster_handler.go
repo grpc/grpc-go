@@ -274,11 +274,10 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	// ordering for the new children list. This will be a mixture of child nodes already constructed and also children
 	// that need to be created.
 
-	for child, _ := range newChildren {
+	/*for child, _ := range newChildren {
 		print("Creating cds watch in:", child)
-		delta = true
 		c.children = append(c.children, createClusterNode(child, c.clusterHandler.xdsClient, c.clusterHandler))
-	}
+	}*/
 
 	// Whatever clusters are left over here from the update are all new children, so create CDS watches for those clusters.
 	// The order of the children list matters, so use the clusterUpdate from xdsclient as the ordering, and use that logical
@@ -299,6 +298,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 		// If the child is in the newChildren map, that means that that child must be created. If not, you can just pull
 		// the pointer off the current children list (which was mapped for constant accesses).
 		if _, toBeCreated := newChildren[orderedChild]; toBeCreated {
+			print("Appending created child %v", orderedChild)
 			children = append(children, createClusterNode(orderedChild, c.clusterHandler.xdsClient, c.clusterHandler))
 		} else { // The child already exists in memory and has already had a watch started for it.
 			currentChild, _ := mapCurrentChildren[orderedChild]
