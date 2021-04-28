@@ -29,16 +29,18 @@ import (
 )
 
 type testBalancerConfigType struct {
-	externalserviceconfig.LoadBalancingConfig
+	externalserviceconfig.LoadBalancingConfig `json:"-"`
+
+	Check bool `json:"check"`
 }
 
-var testBalancerConfig = testBalancerConfigType{}
+var testBalancerConfig = testBalancerConfigType{Check: true}
 
 const (
 	testBalancerBuilderName          = "test-bb"
 	testBalancerBuilderNotParserName = "test-bb-not-parser"
 
-	testBalancerConfigJSON = `{"test-balancer-config":"true"}`
+	testBalancerConfigJSON = `{"check":true}`
 )
 
 type testBalancerBuilder struct {
@@ -129,6 +131,60 @@ func TestBalancerConfigUnmarshalJSON(t *testing.T) {
 			}
 			if !cmp.Equal(bc, tt.want) {
 				t.Errorf("diff: %v", cmp.Diff(bc, tt.want))
+			}
+		})
+	}
+}
+
+func TestBalancerConfigMarshalJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		bc       BalancerConfig
+		wantJSON string
+	}{
+		{
+			name: "OK",
+			bc: BalancerConfig{
+				Name:   testBalancerBuilderName,
+				Config: testBalancerConfig,
+			},
+			wantJSON: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderName, testBalancerConfigJSON),
+		},
+		{
+			name: "first balancer not registered",
+			bc: BalancerConfig{
+				Name:   testBalancerBuilderName,
+				Config: testBalancerConfig,
+			},
+			wantJSON: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderName, testBalancerConfigJSON),
+		},
+		{
+			name: "balancer registered but builder not parser",
+			bc: BalancerConfig{
+				Name:   testBalancerBuilderNotParserName,
+				Config: nil,
+			},
+			wantJSON: fmt.Sprintf("[{%q: %v}]", testBalancerBuilderNotParserName, "{}"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b, err := tt.bc.MarshalJSON()
+			if err != nil {
+				t.Fatalf("failed to marshal: %v", err)
+			}
+
+			str := string(b)
+			if str != tt.wantJSON {
+				t.Fatalf("got str %q, want %q", str, tt.wantJSON)
+			}
+
+			var bc BalancerConfig
+			if err := bc.UnmarshalJSON(b); err != nil {
+				t.Errorf("failed to mnmarshal: %v", err)
+			}
+			if !cmp.Equal(bc, tt.bc) {
+				t.Errorf("diff: %v", cmp.Diff(bc, tt.bc))
 			}
 		})
 	}
