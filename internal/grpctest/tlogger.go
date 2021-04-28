@@ -91,6 +91,7 @@ func (g *tLogger) log(ltype logType, depth int, format string, args ...interface
 			if g.expected(fmt.Sprintln(args...)) {
 				g.t.Log(args...)
 			} else {
+				g.t.Error("Saw error log:")
 				g.t.Error(args...)
 			}
 		case fatalLog:
@@ -106,6 +107,7 @@ func (g *tLogger) log(ltype logType, depth int, format string, args ...interface
 			if g.expected(fmt.Sprintf(format, args...)) {
 				g.t.Logf(format, args...)
 			} else {
+				g.t.Error("Saw error log:")
 				g.t.Errorf(format, args...)
 			}
 		case fatalLog:
