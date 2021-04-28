@@ -23,7 +23,7 @@ import (
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
-var errNotReceivedUpdate = errors.New("Tried to construct a cluster update on a cluster that has not received an update.")
+var errNotReceivedUpdate = errors.New("tried to construct a cluster update on a cluster that has not received an update")
 
 // clusterHandler will be given a name representing a cluster. It will then update the CDS policy
 // constantly with a list of Clusters to pass down to XdsClusterResolverLoadBalancingPolicyConfig
@@ -34,15 +34,13 @@ type clusterHandler struct {
 	root            *clusterNode
 	rootClusterName string
 
-	// A way to ping CDS Balanccer about any updates or errors to a Node in the tree.
+	// A way to ping CDS Balancer about any updates or errors to a Node in the tree.
 	// This will either get called from this handler constructing an update or from a child with an error.
 	// Capacity of one as the only update CDS Balancer cares about is the most recent update.
 	updateChannel chan clusterHandlerUpdate
 
 	xdsClient      xdsClientInterface
 }
-
-// He has something called WatchCluster which takes xdsClientInterface and also a callback.
 
 func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
 	ch.clusterMutex.Lock()
@@ -163,8 +161,9 @@ func deltaInClusterUpdateFields(clusterUpdateReceived xdsclient.ClusterUpdate, c
 	return false
 }
 
-// handleResp handles a xds response for a particular cluster. This function also
-// handles any logic with regards to any child state that may have changed.
+// handleResp handles a xds response for a particular cluster. This function also handles any logic with regards to any
+// child state that may have changed. At the end of the handleResp(), the clusterUpdate will be pinged in certain situations
+// to try and construct an update to send back to CDS.
 func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err error) {
 	c.clusterHandler.clusterMutex.Lock()
 	defer c.clusterHandler.clusterMutex.Unlock()
@@ -179,14 +178,14 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 		return
 	}
 
-	// pingClusterHandler determines whether this callback will ping the overall clusterHandler to try and construct an
+	// deletedChild helps determine whether this callback will ping the overall clusterHandler to try and construct an
 	// update to send back to CDS. This will be determined by whether there would be a change in the overall clusterUpdate
 	// for the whole tree (ex. change in clusterUpdate for current cluster or a deleted child) and also if there's even
 	// a possibility for the update to build (ex. if a child is created and a watch is started, that child hasn't received
 	// an update yet due to the mutex lock on this callback).
 	var deletedChild bool
 	// deltaInChildUpdateFields determines whether there was a delta in the clusterUpdate fields (forgetting the children).
-	// This will be used to determine whether to pingClusterHandler at the end of this callback or not.
+	// This will be used to help determine whether to pingClusterHandler at the end of this callback or not.
 	deltaInChildUpdateFields := deltaInClusterUpdateFields(clusterUpdate, c.clusterUpdate)
 
 	c.receivedUpdate = true
@@ -212,7 +211,6 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 		}
 	}
 
-
 	// Whatever clusters are left over here from the update are all new children, so create CDS watches for those clusters.
 	// The order of the children list matters, so use the clusterUpdate from xdsclient as the ordering, and use that logical
 	// ordering for the new children list. This will be a mixture of child nodes already constructed and also children
@@ -226,7 +224,6 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 			mapCurrentChildren[child.clusterUpdate.ServiceName] = child
 		}
 	}
-
 
 	for _, orderedChild := range clusterUpdate.PrioritizedClusterNames {
 		// If the child is in the newChildren map, that means that that child must be created. If not, you can just pull

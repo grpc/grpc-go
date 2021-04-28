@@ -71,9 +71,6 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		// Exactly the same, except differs with what is passed into the two entrance functions, updateRootCluster and
-		// InvokeWatchClusterCallback
-
 		t.Run(test.name, func(t *testing.T) {
 			ch, fakeClient := setupTests(t)
 			// When you first update the root cluster, it should hit the code path which will start a cluster node for that root.
@@ -105,8 +102,6 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 	}
 }
 
-
-// Table driven for EDS and LogicalDNS + update to new EDS and LogicalDNS
 // The cluster handler receives a cluster name, handler starts a watch for that cluster, xds client returns
 // that it is a Leaf Node (EDS or LogicalDNS), not a tree, so expectation that first update is written to buffer which will be
 // read by CDS LB. Then, send a new cluster update that is different, with the expectation that it is also written to the
@@ -180,7 +175,9 @@ func (s) TestSuccessCaseLeafNodeThenNewUpdate(t *testing.T) {
 }
 
 
-
+// TestUpdateRootClusterAggregateSuccess tests the case where an aggregate cluster is a root pointing to two child clusters
+// one of type EDS and the other of type LogicalDNS. This test will then send cluster updates for both the children, and
+// at the end there should be a successful clusterUpdate written to the update buffer to send back to CDS.
 func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	ch, fakeClient := setupTests(t)
 	ch.updateRootCluster(aggregateClusterService)
@@ -227,7 +224,7 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	}
 
 	// The handleResp() call on the root aggregate cluster should not ping the cluster handler to try and construct an update,
-	// as the handleResp() callback knows that when a child is created, it cannot possibily build a successful update yet.
+	// as the handleResp() callback knows that when a child is created, it cannot possibly build a successful update yet.
 	// Thus, there should be nothing in the update channel.
 
 	shouldNotHappenCtx, shouldNotHappenCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -247,7 +244,6 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 
 	// EDS child cluster will ping the Cluster Handler, to try an update, which still won't successfully build as the
 	// LogicalDNS child of the root aggregate cluster has not yet received and handled an update.
-
 	select {
 	case <-ch.updateChannel:
 		t.Fatal("Cluster Handler wrote an update to updateChannel when it shouldn't have, as each node in the full cluster tree has not yet received an update")
@@ -267,10 +263,10 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	// clusters representing the base nodes of the tree of clusters. This list should be ordered as per the cluster update.
 	select {
 	case chu := <-ch.updateChannel:
-		if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{xdsclient.ClusterUpdate{
+		if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{{
 			ClusterType: xdsclient.ClusterTypeEDS,
 			ServiceName: edsService,
-		}, xdsclient.ClusterUpdate{
+		}, {
 			ClusterType: xdsclient.ClusterTypeLogicalDNS,
 			ServiceName: logicalDNSService,
 		}}); diff != "" {
@@ -281,7 +277,9 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	}
 }
 
-// The first set of tests represents "modify" test. These tests will switch the aggregate cluster to one child and one child with change.
+// TestUpdateRootClusterAggregateThenChangeChild tests the scenario where you have an aggregate cluster with an EDS child
+// and a LogicalDNS child, then you change one of the children and send an update for the changed child. This should write
+// a new update to the update buffer to send back to CDS.
 func (s) TestUpdateRootClusterAggregateThenChangeChild(t *testing.T) {
 	// This initial code is the same as the test for the aggregate success case, except without validations. This will get
 	// this test to the point where it can change one of the children.
@@ -322,11 +320,10 @@ func (s) TestUpdateRootClusterAggregateThenChangeChild(t *testing.T) {
 		ServiceName: aggregateClusterService,
 		PrioritizedClusterNames: []string{edsService, logicalDNSService2},
 	}, nil)
-	
+
 	// The cluster update let's the aggregate cluster know that it's children are now edsService and logicalDNSService2,
 	// which implies that the aggregateCluster lost it's old logicalDNSService child. Thus, the logicalDNSService child
 	// should be deleted.
-	// Read from scaled channel (read will happen in fake xds client), should be logicalDNSService
 	clusterNameDeleted, err := fakeClient.WaitForCancelClusterWatch(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
@@ -335,10 +332,8 @@ func (s) TestUpdateRootClusterAggregateThenChangeChild(t *testing.T) {
 		t.Fatalf("xdsClient.CancelCDS called for cluster %v, want: %v", clusterNameDeleted, logicalDNSService)
 	}
 
-	// Behavior: then starts a watch for LogicalDNS2
+	// The handleResp() callback should then start a watch for logicalDNSService2.
 	clusterNameCreated, err := fakeClient.WaitForWatchCluster(ctx)
-
-	// Validation
 	if clusterNameCreated != logicalDNSService2 {
 		t.Fatalf("xdsClient.WatchCDS called for cluster %v, want: %v", clusterNameCreated, logicalDNSService2)
 	}
@@ -352,15 +347,15 @@ func (s) TestUpdateRootClusterAggregateThenChangeChild(t *testing.T) {
 	case <-shouldNotHappenCtx.Done():
 	}
 
-	// Invoke a callback for the new logicalDNSService2.
+	// Invoke a callback for the new logicalDNSService2 - this will fill out the tree with successful updates.
 	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
 		ClusterType: xdsclient.ClusterTypeLogicalDNS,
 		ServiceName: logicalDNSService2,
 	}, nil)
 
 	// Behavior: This update make every node in the tree of cluster have received an update. Thus, at the end of this callback,
-	// when you ping the clusterHandler to try and construct an update, the update should now successfully to update buffer
-	// to send back to CDS. This new update should contain the new child of LogicalDNS2.
+	// when you ping the clusterHandler to try and construct an update, the update should now successfully be written to
+	// update buffer to send back to CDS. This new update should contain the new child of LogicalDNS2.
 
 	select {
 	case chu := <-ch.updateChannel:
