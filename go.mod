@@ -15,3 +15,6 @@ require (
 	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013
 	google.golang.org/protobuf v1.25.0
 )
+
+// 1.33.0 was retracted, explanation: https://github.com/grpc/grpc-go/issues/3945
+retract v1.33.0
