@@ -61,7 +61,7 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 				ServiceName: edsService,
 			}},
 		{
-			name: "test-update-root-cluster-Logical-DNS-success",
+			name:        "test-update-root-cluster-Logical-DNS-success",
 			clusterName: logicalDNSService,
 			clusterUpdate: xdsclient.ClusterUpdate{
 				ClusterType: xdsclient.ClusterTypeLogicalDNS,
@@ -108,7 +108,7 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 func (s) TestSuccessCaseLeafNodeThenNewUpdate(t *testing.T) {
 	tests := []struct {
 		name             string
-		clusterName	     string
+		clusterName      string
 		clusterUpdate    xdsclient.ClusterUpdate
 		newClusterUpdate xdsclient.ClusterUpdate
 	}{
