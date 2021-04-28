@@ -229,7 +229,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 		if _, toBeCreated := newChildren[orderedChild]; toBeCreated {
 			children = append(children, createClusterNode(orderedChild, c.clusterHandler.xdsClient, c.clusterHandler))
 		} else { // The child already exists in memory and has already had a watch started for it.
-			currentChild, _ := mapCurrentChildren[orderedChild]
+			currentChild := mapCurrentChildren[orderedChild]
 			children = append(children, currentChild)
 		}
 	}

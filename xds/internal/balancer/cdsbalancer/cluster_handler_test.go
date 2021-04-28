@@ -331,6 +331,9 @@ func (s) TestUpdateRootClusterAggregateThenChangeChild(t *testing.T) {
 
 	// The handleResp() callback should then start a watch for logicalDNSService2.
 	clusterNameCreated, err := fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
 	if clusterNameCreated != logicalDNSService2 {
 		t.Fatalf("xdsClient.WatchCDS called for cluster %v, want: %v", clusterNameCreated, logicalDNSService2)
 	}
