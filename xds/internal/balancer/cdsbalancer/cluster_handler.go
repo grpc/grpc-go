@@ -141,7 +141,7 @@ func (c *clusterNode) constructClusterUpdate() ([]xdsclient.ClusterUpdate, error
 // received from the xdsclient vs. the clusterUpdate that was currently present for a given cluster node. This will be used to
 // help decide whether to ping the cluster handler at the end of the handleResp() callback or not.
 func deltaInClusterUpdateFields(clusterUpdateReceived xdsclient.ClusterUpdate, clusterUpdateCurrent xdsclient.ClusterUpdate) bool {
-	if clusterUpdateReceived.ServiceName != clusterUpdateCurrent.ServiceName {
+	if clusterUpdateReceived.ClusterName != clusterUpdateCurrent.ClusterName {
 		return true
 	}
 	if clusterUpdateReceived.EnableLRS != clusterUpdateCurrent.EnableLRS {
@@ -199,8 +199,8 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 
 	for _, child := range c.children {
 		// If the child is still present in the update, then there is nothing to do for that child name in the update.
-		if _, found := newChildren[child.clusterUpdate.ServiceName]; found {
-			delete(newChildren, child.clusterUpdate.ServiceName)
+		if _, found := newChildren[child.clusterUpdate.ClusterName]; found {
+			delete(newChildren, child.clusterUpdate.ClusterName)
 		} else { // If the child is no longer present in the update, that cluster can be deleted.
 			deletedChild = true
 			child.delete()
@@ -219,7 +219,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	mapCurrentChildren := make(map[string]*clusterNode)
 	if len(clusterUpdate.PrioritizedClusterNames) != 0 {
 		for _, child := range c.children {
-			mapCurrentChildren[child.clusterUpdate.ServiceName] = child
+			mapCurrentChildren[child.clusterUpdate.ClusterName] = child
 		}
 	}
 
