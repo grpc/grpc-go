@@ -65,7 +65,6 @@ func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
 
 // This function tries to construct a cluster update to send to CDS.
 func (ch *clusterHandler) constructClusterUpdate() {
-	print("ClusterHandler getting pinged to try and construct an update.")
 	// If there was an error received no op, as this simply means one of the children hasn't received an update yet.
 	if clusterUpdate, err := ch.root.constructClusterUpdate(); err == nil {
 		// For a ClusterUpdate, the only update CDS cares about is the most recent one, so opportunistically drain the
@@ -102,11 +101,9 @@ type clusterNode struct {
 
 // CreateClusterNode creates a cluster node from a given clusterName. This will also start the watch for that cluster.
 func createClusterNode(clusterName string, xdsClient xdsClientInterface, topLevelHandler *clusterHandler) *clusterNode {
-	print("|createClusterNode() called on ", clusterName, "|")
 	c := &clusterNode{
 		clusterHandler: topLevelHandler,
 	}
-	print("About to communicate with the xds client for:", clusterName, "|")
 	// Communicate with the xds client here.
 	c.cancelFunc = xdsClient.WatchCluster(clusterName, c.handleResp)
 	return c
@@ -121,8 +118,7 @@ func (c *clusterNode) delete() {
 }
 
 // Construct cluster update (potentially a list of ClusterUpdates) for a node.
-func (c *clusterNode) constructClusterUpdate() ([]xdsclient.ClusterUpdate, error) { // THIS LOGIC IS WRONG
-	print("Tries constructing a cluster update for Cluster ", c.clusterUpdate.ServiceName, ". ")
+func (c *clusterNode) constructClusterUpdate() ([]xdsclient.ClusterUpdate, error) {
 	// If the cluster has not yet received an update, the cluster update is not yet ready.
 	if !c.receivedUpdate {
 		return nil, errNotReceivedUpdate
@@ -130,7 +126,6 @@ func (c *clusterNode) constructClusterUpdate() ([]xdsclient.ClusterUpdate, error
 
 	// Base case - LogicalDNS or EDS. Both of these cluster types will be tied to a single ClusterUpdate.
 	if c.clusterUpdate.ClusterType != xdsclient.ClusterTypeAggregate {
-		print("Returning the cluster update for service (base node):", c.clusterUpdate.ServiceName)
 		return []xdsclient.ClusterUpdate{c.clusterUpdate}, nil
 	}
 
@@ -143,24 +138,7 @@ func (c *clusterNode) constructClusterUpdate() ([]xdsclient.ClusterUpdate, error
 		}
 		childrenUpdates = append(childrenUpdates, childUpdateList...)
 	}
-	print("Returning the update list for an aggregate cluster")
 	return childrenUpdates, nil
-}
-
-// DeleteChildFromChildrenList deletes the child from the list passed in. Up to caller to make sure child is actually in
-// the oldChildren list, otherwise this helper function has undefined functionality.
-// TODO: Since order matters, switch this swap to the other thing on that stack overflow response
-func deleteChildFromChildrenList(childNameToDelete string, oldChildren []*clusterNode) []*clusterNode {
-	var indexOfClusterToBeDeleted int
-	for i, cluster := range oldChildren {
-		if cluster.clusterUpdate.ServiceName == childNameToDelete {
-			indexOfClusterToBeDeleted = i
-		}
-	}
-	// Swap the child at that index to the end, then remove that child at the last index off the slice. The ordering of
-	// the children map does not matter.
-	oldChildren[len(oldChildren)-1], oldChildren[indexOfClusterToBeDeleted] = oldChildren[indexOfClusterToBeDeleted], oldChildren[len(oldChildren)-1]
-	return oldChildren[:len(oldChildren)-1]
 }
 
 // deltaInClusterUpdate determines whether there was a delta in the cluster update "fields" (meaning irrespective of children)
@@ -182,17 +160,14 @@ func deltaInClusterUpdateFields(clusterUpdateReceived xdsclient.ClusterUpdate, c
 	if clusterUpdateReceived.MaxRequests != clusterUpdateCurrent.MaxRequests {
 		return true
 	}
-	// TODO: Will the scope of this actually include the children for aggregate or not?
 	return false
 }
 
 // handleResp handles a xds response for a particular cluster. This function also
 // handles any logic with regards to any child state that may have changed.
-// Problem statement: perhaps this logic is wrong
 func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err error) {
 	c.clusterHandler.clusterMutex.Lock()
 	defer c.clusterHandler.clusterMutex.Unlock()
-	print("SERVICE NAME:", clusterUpdate.ServiceName)
 	if err != nil { // Write this error for run() to pick up in CDS LB policy.
 		// For a ClusterUpdate, the only update CDS cares about is the most recent one, so opportunistically drain the
 		// update channel before sending the new update.
@@ -204,20 +179,6 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 		return
 	}
 
-
-
-
-
-
-	/*// This variable will determine whether there was a delta with regards to this clusterupdate. If there was, at the end
-	// of the response ping ClusterHandler to send CDS Policy a new list of ClusterUpdates. However, if there was a delta in an
-	// aggregate cluster, there's no need to ping clusterHandler at the end, as the created child clusters will not have
-	// received an update yet.
-	var delta bool
-	// If this is the first update to the Cluster Node, ping ClusterHandler at the end of method to try and build a config.
-	if !c.receivedUpdate {
-		delta = true
-	} // I think VVV covers everything ^^^*/
 	// pingClusterHandler determines whether this callback will ping the overall clusterHandler to try and construct an
 	// update to send back to CDS. This will be determined by whether there would be a change in the overall clusterUpdate
 	// for the whole tree (ex. change in clusterUpdate for current cluster or a deleted child) and also if there's even
@@ -228,10 +189,6 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	// This will be used to determine whether to pingClusterHandler at the end of this callback or not.
 	deltaInChildUpdateFields := deltaInClusterUpdateFields(clusterUpdate, c.clusterUpdate)
 
-
-
-
-
 	c.receivedUpdate = true
 	c.clusterUpdate = clusterUpdate
 
@@ -239,45 +196,22 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	newChildren := make(map[string]struct{})
 	if clusterUpdate.ClusterType == xdsclient.ClusterTypeAggregate {
 		for _, childName := range clusterUpdate.PrioritizedClusterNames {
-			print("New children added: ", childName)
 			newChildren[childName] = struct{}{}
 		}
 	}
 
-	// Don't think we need: var childrenThatWereDeleted []string
 	for _, child := range c.children {
 		// If the child is still present in the update, then there is nothing to do for that child name in the update.
 		if _, found := newChildren[child.clusterUpdate.ServiceName]; found {
-			print("New children deleted: ", child.clusterUpdate.ServiceName)
 			delete(newChildren, child.clusterUpdate.ServiceName)
 		} else { // If the child is no longer present in the update, that cluster can be deleted.
 			deletedChild = true
 			child.delete()
-			// Persist name to delete later, to not update c.children while iterating through it.
-			// Don't think we need: childrenThatWereDeleted = append(childrenThatWereDeleted, child.clusterUpdate.ServiceName)
-
-
 			// There is no need to delete the pointer from the current children list. A new list of pointers will be constructed
 			// at the end of this callback to replace the list of pointers.
 		}
 	}
-	// Delete any deleted children from the cluster. The ordering doesn't matter as will be reordered in a later step.
-	/*for _, childThatWasDeleted := range childrenThatWereDeleted {
-		c.children = deleteChildFromChildrenList(childThatWasDeleted, c.children)
-	}*/
 
-
-
-
-	// Whatever clusters are left over here from the update are all new children, so create CDS watches for those clusters.
-	// The order of the children list matters, so use the clusterUpdate from xdsclient as the ordering, and use that logical
-	// ordering for the new children list. This will be a mixture of child nodes already constructed and also children
-	// that need to be created.
-
-	/*for child, _ := range newChildren {
-		print("Creating cds watch in:", child)
-		c.children = append(c.children, createClusterNode(child, c.clusterHandler.xdsClient, c.clusterHandler))
-	}*/
 
 	// Whatever clusters are left over here from the update are all new children, so create CDS watches for those clusters.
 	// The order of the children list matters, so use the clusterUpdate from xdsclient as the ordering, and use that logical
@@ -298,7 +232,6 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 		// If the child is in the newChildren map, that means that that child must be created. If not, you can just pull
 		// the pointer off the current children list (which was mapped for constant accesses).
 		if _, toBeCreated := newChildren[orderedChild]; toBeCreated {
-			print("Appending created child %v", orderedChild)
 			children = append(children, createClusterNode(orderedChild, c.clusterHandler.xdsClient, c.clusterHandler))
 		} else { // The child already exists in memory and has already had a watch started for it.
 			currentChild, _ := mapCurrentChildren[orderedChild]
@@ -326,41 +259,3 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 		c.clusterHandler.constructClusterUpdate()
 	}
 }
-
-
-
-
-/*
-func (c *clusterNode) handleRespNew(clusterUpdate xdsclient.ClusterUpdate, err error) {
-	c.clusterHandler.clusterMutex.Lock()
-	defer c.clusterHandler.clusterMutex.Unlock()
-	// Log
-	// Write this error for run() to pick up in CDS LB policy.
-	if err != nil {
-		// For a ClusterUpdate, the only update CDS cares about is the most recent one, so opportunistically drain the
-		// update channel before sending the new update.
-		select {
-		case <-c.clusterHandler.updateChannel:
-		default:
-		}
-		c.clusterHandler.updateChannel<-clusterHandlerUpdate{chu: nil, err: err}
-		return
-	}
-	// Calculate if delta - but only for a leaf node
-
-	// This variable will determine whether there was a delta with regards to this clusterUpdate. If there was, at the end
-	// of this ping ClusterHandler to send CDS Policy a new list of ClusterUpdates. However, if there was a delta in an
-	// aggregate cluster, there's no need to ping clusterHandler at the end, as the created child clusters will not have
-	// received an update yet.
-	var delta bool
-
-	// If this is the first update to the Cluster Node, ping ClusterHandler at the end of method to try and build a config.
-	if !c.receivedUpdate {
-		delta = true
-	}
-
-
-
-
-}
-*/

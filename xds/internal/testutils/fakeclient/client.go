@@ -46,9 +46,7 @@ type Client struct {
 
 	ldsCb func(xdsclient.ListenerUpdate, error)
 	rdsCb func(xdsclient.RouteConfigUpdate, error)
-
-	cdsCbs map[string]func(xdsclient.ClusterUpdate, error) // TODO: This definitely needs a Mutex lock
-
+	cdsCbs map[string]func(xdsclient.ClusterUpdate, error)
 	edsCb func(xdsclient.EndpointsUpdate, error)
 }
 
@@ -126,7 +124,6 @@ func (xdsC *Client) WatchCluster(clusterName string, callback func(xdsclient.Clu
 	// node. However, the client doesn't care about the parent child relationship between the nodes, only that it invokes
 	// the right callback for a particular cluster.
 	xdsC.cdsCbs[clusterName] = callback
-	//print("|", clusterName, " watch cluster called on|")
 	xdsC.cdsWatchCh.Send(clusterName)
 	return func() {
 		xdsC.cdsCancelCh.Send(clusterName)
@@ -140,7 +137,6 @@ func (xdsC *Client) WaitForWatchCluster(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	print("map length before waitforwatchcluster()() returns: ", len(xdsC.cdsCbs))
 	return val.(string), err
 }
 
@@ -148,25 +144,17 @@ func (xdsC *Client) WaitForWatchCluster(ctx context.Context) (string, error) {
 //
 // Not thread safe with WatchCluster. Only call this after
 // WaitForWatchCluster.
-
-// FOR SOME REASON, THIS IS GETTING CALLED TWICE with the EDS
 func (xdsC *Client) InvokeWatchClusterCallback(update xdsclient.ClusterUpdate, err error) {
 	// Keeps functionality with previous usage of this, if single callback call that callback.
-	//xdsC.cdsMutex.Lock()
-	//defer xdsC.cdsMutex.Unlock()
 	if len(xdsC.cdsCbs) == 1 {
-		print("|IF|")
 		var clusterName string
 		for cluster := range xdsC.cdsCbs {
 			clusterName = cluster
 		}
-		print(clusterName, "( if ) is getting it's callback invoked.")
 		xdsC.cdsCbs[clusterName](update, err)
 	} else {
-		//print("IN ELSE BRANCH")
 		// Have what callback you call with the update determined by the service name in the ClusterUpdate. Left up to the
 		// caller to make sure the cluster update matches with a persisted callback.
-		print(update.ServiceName, "( else ) is getting it's callback invoked.")
 		xdsC.cdsCbs[update.ServiceName](update, err)
 	}
 }
