@@ -66,7 +66,7 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 			clusterUpdate: xdsclient.ClusterUpdate{
 				ClusterType: xdsclient.ClusterTypeLogicalDNS,
 				ServiceName: logicalDNSService,
-		}},
+			}},
 	}
 
 	for _, test := range tests {
