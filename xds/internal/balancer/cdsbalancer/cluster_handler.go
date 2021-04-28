@@ -60,7 +60,6 @@ func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
 	}
 }
 
-
 // This function tries to construct a cluster update to send to CDS.
 func (ch *clusterHandler) constructClusterUpdate() {
 	// If there was an error received no op, as this simply means one of the children hasn't received an update yet.
