@@ -6425,8 +6425,6 @@ func (s) TestStatusInvalidUTF8Message(t *testing.T) {
 // will fail to marshal the status because of the invalid utf8 message. Details
 // will be dropped when sending.
 func (s) TestStatusInvalidUTF8Details(t *testing.T) {
-	grpctest.TLogger.ExpectError("transport: failed to marshal rpc status")
-
 	var (
 		origMsg = string([]byte{0xff, 0xfe, 0xfd})
 		wantMsg = "���"
