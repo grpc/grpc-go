@@ -45,9 +45,9 @@ func any(m proto.Message) *anypb.Any {
 // DefaultClientResources returns a set of resources (LDS, RDS, CDS, EDS) for a
 // client to generically connect to one server.
 func DefaultClientResources(target, nodeID, host string, port uint32) UpdateOptions {
-	const routeConfigName = "route"
-	const clusterName = "cluster"
-	const endpointsName = "endpoints"
+	routeConfigName := "route-" + target
+	clusterName := "cluster-" + target
+	endpointsName := "endpoints-" + target
 
 	return UpdateOptions{
 		NodeID:    nodeID,
