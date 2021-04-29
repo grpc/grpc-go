@@ -24,44 +24,44 @@ import (
 	"sync/atomic"
 )
 
-type servicesRequestsCounter struct {
+type clusterRequestsCounter struct {
 	mu       sync.Mutex
-	services map[string]*ServiceRequestsCounter
+	clusters map[string]*ClusterRequestsCounter
 }
 
-var src = &servicesRequestsCounter{
-	services: make(map[string]*ServiceRequestsCounter),
+var src = &clusterRequestsCounter{
+	clusters: make(map[string]*ClusterRequestsCounter),
 }
 
-// ServiceRequestsCounter is used to track the total inflight requests for a
+// ClusterRequestsCounter is used to track the total inflight requests for a
 // service with the provided name.
-type ServiceRequestsCounter struct {
-	ServiceName string
+type ClusterRequestsCounter struct {
+	ClusterName string
 	numRequests uint32
 }
 
-// GetServiceRequestsCounter returns the ServiceRequestsCounter with the
+// GetClusterRequestsCounter returns the ClusterRequestsCounter with the
 // provided serviceName. If one does not exist, it creates it.
-func GetServiceRequestsCounter(serviceName string) *ServiceRequestsCounter {
+func GetClusterRequestsCounter(clusterName string) *ClusterRequestsCounter {
 	src.mu.Lock()
 	defer src.mu.Unlock()
-	c, ok := src.services[serviceName]
+	c, ok := src.clusters[clusterName]
 	if !ok {
-		c = &ServiceRequestsCounter{ServiceName: serviceName}
-		src.services[serviceName] = c
+		c = &ClusterRequestsCounter{ClusterName: clusterName}
+		src.clusters[clusterName] = c
 	}
 	return c
 }
 
-// StartRequest starts a request for a service, incrementing its number of
+// StartRequest starts a request for a cluster, incrementing its number of
 // requests by 1. Returns an error if the max number of requests is exceeded.
-func (c *ServiceRequestsCounter) StartRequest(max uint32) error {
+func (c *ClusterRequestsCounter) StartRequest(max uint32) error {
 	// Note that during race, the limits could be exceeded. This is allowed:
 	// "Since the implementation is eventually consistent, races between threads
 	// may allow limits to be potentially exceeded."
 	// https://www.envoyproxy.io/docs/envoy/latest/intro/arch_overview/upstream/circuit_breaking#arch-overview-circuit-break.
 	if atomic.LoadUint32(&c.numRequests) >= max {
-		return fmt.Errorf("max requests %v exceeded on service %v", max, c.ServiceName)
+		return fmt.Errorf("max requests %v exceeded on service %v", max, c.ClusterName)
 	}
 	atomic.AddUint32(&c.numRequests, 1)
 	return nil
@@ -69,16 +69,16 @@ func (c *ServiceRequestsCounter) StartRequest(max uint32) error {
 
 // EndRequest ends a request for a service, decrementing its number of requests
 // by 1.
-func (c *ServiceRequestsCounter) EndRequest() {
+func (c *ClusterRequestsCounter) EndRequest() {
 	atomic.AddUint32(&c.numRequests, ^uint32(0))
 }
 
 // ClearCounterForTesting clears the counter for the service. Should be only
 // used in tests.
-func ClearCounterForTesting(serviceName string) {
+func ClearCounterForTesting(clusterName string) {
 	src.mu.Lock()
 	defer src.mu.Unlock()
-	c, ok := src.services[serviceName]
+	c, ok := src.clusters[clusterName]
 	if !ok {
 		return
 	}
@@ -90,5 +90,5 @@ func ClearCounterForTesting(serviceName string) {
 func ClearAllCountersForTesting() {
 	src.mu.Lock()
 	defer src.mu.Unlock()
-	src.services = make(map[string]*ServiceRequestsCounter)
+	src.clusters = make(map[string]*ClusterRequestsCounter)
 }

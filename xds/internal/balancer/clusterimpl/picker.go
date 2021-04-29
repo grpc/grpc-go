@@ -75,7 +75,7 @@ type dropPicker struct {
 	drops     []*dropper
 	s         balancer.State
 	loadStore loadReporter
-	counter   *xdsclient.ServiceRequestsCounter
+	counter   *xdsclient.ClusterRequestsCounter
 	countMax  uint32
 }
 
