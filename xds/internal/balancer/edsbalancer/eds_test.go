@@ -354,6 +354,7 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
 			ChildPolicy:    lbCfgA,
+			ClusterName:    testEDSClusterName,
 			EDSServiceName: testServiceName,
 		},
 	}); err != nil {
@@ -367,7 +368,7 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 	if err := edsLB.waitForChildPolicy(ctx, lbCfgA); err != nil {
 		t.Fatal(err)
 	}
-	if err := edsLB.waitForCounterUpdate(ctx, testServiceName); err != nil {
+	if err := edsLB.waitForCounterUpdate(ctx, testEDSClusterName); err != nil {
 		t.Fatal(err)
 	}
 	if err := edsLB.waitForCountMaxUpdate(ctx, nil); err != nil {
@@ -382,6 +383,7 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
 			ChildPolicy:           lbCfgB,
+			ClusterName:           testEDSClusterName,
 			EDSServiceName:        testServiceName,
 			MaxConcurrentRequests: &testCountMax,
 		},
@@ -391,7 +393,7 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 	if err := edsLB.waitForChildPolicy(ctx, lbCfgB); err != nil {
 		t.Fatal(err)
 	}
-	if err := edsLB.waitForCounterUpdate(ctx, testServiceName); err != nil {
+	if err := edsLB.waitForCounterUpdate(ctx, testEDSClusterName); err != nil {
 		// Counter is updated even though the service name didn't change. The
 		// eds_impl will compare the service names, and skip if it didn't change.
 		t.Fatal(err)
@@ -670,7 +672,7 @@ func (s) TestCounterUpdate(t *testing.T) {
 	// Update should trigger counter update with provided service name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
-			EDSServiceName:        "foobar-1",
+			ClusterName:           "foobar-1",
 			MaxConcurrentRequests: &testCountMax,
 		},
 	}); err != nil {

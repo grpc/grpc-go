@@ -219,7 +219,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 			x.logger.Warningf("failed to update xDS client: %v", err)
 		}
 
-		x.edsImpl.updateServiceRequestsConfig(cfg.EDSServiceName, cfg.MaxConcurrentRequests)
+		x.edsImpl.updateServiceRequestsConfig(cfg.ClusterName, cfg.MaxConcurrentRequests)
 
 		// We will update the edsImpl with the new child policy, if we got a
 		// different one.
