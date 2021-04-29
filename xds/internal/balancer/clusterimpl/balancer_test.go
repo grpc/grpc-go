@@ -72,7 +72,7 @@ func init() {
 // TestDropByCategory verifies that the balancer correctly drops the picks, and
 // that the drops are reported.
 func TestDropByCategory(t *testing.T) {
-	defer xdsclient.ClearCounterForTesting(testClusterName)
+	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
 	xdsC := fakeclient.NewClient()
 	defer xdsC.Close()
 
@@ -224,7 +224,7 @@ func TestDropByCategory(t *testing.T) {
 // TestDropCircuitBreaking verifies that the balancer correctly drops the picks
 // due to circuit breaking, and that the drops are reported.
 func TestDropCircuitBreaking(t *testing.T) {
-	defer xdsclient.ClearCounterForTesting(testClusterName)
+	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
 	xdsC := fakeclient.NewClient()
 	defer xdsC.Close()
 
@@ -332,7 +332,7 @@ func TestDropCircuitBreaking(t *testing.T) {
 // picker after it's closed. Because picker updates are sent in the run()
 // goroutine.
 func TestPickerUpdateAfterClose(t *testing.T) {
-	defer xdsclient.ClearCounterForTesting(testClusterName)
+	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
 	xdsC := fakeclient.NewClient()
 	defer xdsC.Close()
 
@@ -373,7 +373,7 @@ func TestPickerUpdateAfterClose(t *testing.T) {
 // TestClusterNameInAddressAttributes covers the case that cluster name is
 // attached to the subconn address attributes.
 func TestClusterNameInAddressAttributes(t *testing.T) {
-	defer xdsclient.ClearCounterForTesting(testClusterName)
+	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
 	xdsC := fakeclient.NewClient()
 	defer xdsC.Close()
 
@@ -458,7 +458,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 // TestReResolution verifies that when a SubConn turns transient failure,
 // re-resolution is triggered.
 func TestReResolution(t *testing.T) {
-	defer xdsclient.ClearCounterForTesting(testClusterName)
+	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
 	xdsC := fakeclient.NewClient()
 	defer xdsC.Close()
 

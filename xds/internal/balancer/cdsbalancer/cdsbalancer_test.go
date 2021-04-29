@@ -606,7 +606,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 
 	// Since the counter's max requests was set to 1, the first request should
 	// succeed and the second should fail.
-	counter := xdsclient.GetClusterRequestsCounter(serviceName)
+	counter := xdsclient.GetClusterRequestsCounter(serviceName, "")
 	if err := counter.StartRequest(maxRequests); err != nil {
 		t.Fatal(err)
 	}

@@ -115,6 +115,7 @@ type clusterImplBalancer struct {
 	dropCategories        []DropConfig // The categories for drops.
 	drops                 []*dropper
 	requestCounterCluster string // The cluster name for the request counter.
+	requestCounterService string // The service name for the request counter.
 	requestCounter        *xdsclient.ClusterRequestsCounter
 	requestCountMax       uint32
 	pickerUpdateCh        *buffer.Unbounded
@@ -344,9 +345,10 @@ func (b *clusterImplBalancer) handleDropAndRequestCount(newConfig *LBConfig) *dr
 
 	// Compare cluster name. And update picker if it's changed, because circuit
 	// breaking's stream counter will be different.
-	if b.requestCounterCluster != newConfig.Cluster {
+	if b.requestCounterCluster != newConfig.Cluster || b.requestCounterService != newConfig.EDSServiceName {
 		b.requestCounterCluster = newConfig.Cluster
-		b.requestCounter = xdsclient.GetClusterRequestsCounter(newConfig.Cluster)
+		b.requestCounterService = newConfig.EDSServiceName
+		b.requestCounter = xdsclient.GetClusterRequestsCounter(newConfig.Cluster, newConfig.EDSServiceName)
 		updatePicker = true
 	}
 	// Compare upper bound of stream count. And update picker if it's changed.

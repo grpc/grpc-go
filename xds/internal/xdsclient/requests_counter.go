@@ -24,31 +24,40 @@ import (
 	"sync/atomic"
 )
 
+type clusterNameAndServiceName struct {
+	clusterName, edsServcieName string
+}
+
 type clusterRequestsCounter struct {
 	mu       sync.Mutex
-	clusters map[string]*ClusterRequestsCounter
+	clusters map[clusterNameAndServiceName]*ClusterRequestsCounter
 }
 
 var src = &clusterRequestsCounter{
-	clusters: make(map[string]*ClusterRequestsCounter),
+	clusters: make(map[clusterNameAndServiceName]*ClusterRequestsCounter),
 }
 
 // ClusterRequestsCounter is used to track the total inflight requests for a
 // service with the provided name.
 type ClusterRequestsCounter struct {
-	ClusterName string
-	numRequests uint32
+	ClusterName    string
+	EDSServiceName string
+	numRequests    uint32
 }
 
 // GetClusterRequestsCounter returns the ClusterRequestsCounter with the
 // provided serviceName. If one does not exist, it creates it.
-func GetClusterRequestsCounter(clusterName string) *ClusterRequestsCounter {
+func GetClusterRequestsCounter(clusterName, edsServiceName string) *ClusterRequestsCounter {
 	src.mu.Lock()
 	defer src.mu.Unlock()
-	c, ok := src.clusters[clusterName]
+	k := clusterNameAndServiceName{
+		clusterName:    clusterName,
+		edsServcieName: edsServiceName,
+	}
+	c, ok := src.clusters[k]
 	if !ok {
 		c = &ClusterRequestsCounter{ClusterName: clusterName}
-		src.clusters[clusterName] = c
+		src.clusters[k] = c
 	}
 	return c
 }
@@ -75,10 +84,14 @@ func (c *ClusterRequestsCounter) EndRequest() {
 
 // ClearCounterForTesting clears the counter for the service. Should be only
 // used in tests.
-func ClearCounterForTesting(clusterName string) {
+func ClearCounterForTesting(clusterName, edsServiceName string) {
 	src.mu.Lock()
 	defer src.mu.Unlock()
-	c, ok := src.clusters[clusterName]
+	k := clusterNameAndServiceName{
+		clusterName:    clusterName,
+		edsServcieName: edsServiceName,
+	}
+	c, ok := src.clusters[k]
 	if !ok {
 		return
 	}
@@ -90,5 +103,5 @@ func ClearCounterForTesting(clusterName string) {
 func ClearAllCountersForTesting() {
 	src.mu.Lock()
 	defer src.mu.Unlock()
-	src.clusters = make(map[string]*ClusterRequestsCounter)
+	src.clusters = make(map[clusterNameAndServiceName]*ClusterRequestsCounter)
 }

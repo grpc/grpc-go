@@ -26,6 +26,8 @@ import (
 	"testing"
 )
 
+const testService = "test-service-name"
+
 type counterTest struct {
 	name              string
 	maxRequests       uint32
@@ -53,7 +55,7 @@ var tests = []counterTest{
 
 func resetClusterRequestsCounter() {
 	src = &clusterRequestsCounter{
-		clusters: make(map[string]*ClusterRequestsCounter),
+		clusters: make(map[clusterNameAndServiceName]*ClusterRequestsCounter),
 	}
 }
 
@@ -67,7 +69,7 @@ func testCounter(t *testing.T, test counterTest) {
 	var successes, errors uint32
 	for i := 0; i < int(test.numRequests); i++ {
 		go func() {
-			counter := GetClusterRequestsCounter(test.name)
+			counter := GetClusterRequestsCounter(test.name, testService)
 			defer requestsDone.Done()
 			err := counter.StartRequest(test.maxRequests)
 			if err == nil {
@@ -114,8 +116,8 @@ func (s) TestRequestsCounter(t *testing.T) {
 func (s) TestGetClusterRequestsCounter(t *testing.T) {
 	defer resetClusterRequestsCounter()
 	for _, test := range tests {
-		counterA := GetClusterRequestsCounter(test.name)
-		counterB := GetClusterRequestsCounter(test.name)
+		counterA := GetClusterRequestsCounter(test.name, testService)
+		counterB := GetClusterRequestsCounter(test.name, testService)
 		if counterA != counterB {
 			t.Errorf("counter %v %v != counter %v %v", counterA, *counterA, counterB, *counterB)
 		}
@@ -135,7 +137,7 @@ func (s) TestSetMaxRequestsIncreased(t *testing.T) {
 	const clusterName string = "set-max-requests-increased"
 	var initialMax uint32 = 16
 
-	counter := GetClusterRequestsCounter(clusterName)
+	counter := GetClusterRequestsCounter(clusterName, testService)
 	startRequests(t, initialMax, initialMax, counter)
 	if err := counter.StartRequest(initialMax); err == nil {
 		t.Fatal("unexpected success on start request after max met")
@@ -152,7 +154,7 @@ func (s) TestSetMaxRequestsDecreased(t *testing.T) {
 	const clusterName string = "set-max-requests-decreased"
 	var initialMax uint32 = 16
 
-	counter := GetClusterRequestsCounter(clusterName)
+	counter := GetClusterRequestsCounter(clusterName, testService)
 	startRequests(t, initialMax-1, initialMax, counter)
 
 	newMax := initialMax - 1
