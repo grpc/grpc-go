@@ -396,7 +396,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		err := t.loopy.run()
 		if err != nil {
 			if logger.V(logLevel) {
-				logger.Warningf("transport: loopyWriter.run returning. Err: %v", err)
+				logger.Infof("transport: loopyWriter.run returning. Err: %v", err)
 			}
 		}
 		// If it's a connection error, let reader goroutine handle it

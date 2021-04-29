@@ -291,7 +291,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
 		if err := t.loopy.run(); err != nil {
 			if logger.V(logLevel) {
-				logger.Errorf("transport: loopyWriter.run returning. Err: %v", err)
+				logger.Infof("transport: loopyWriter.run returning. Err: %v", err)
 			}
 		}
 		t.conn.Close()
@@ -364,7 +364,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		s.ctx, err = t.inTapHandle(s.ctx, info)
 		if err != nil {
 			if logger.V(logLevel) {
-				logger.Warningf("transport: http2Server.operateHeaders got an error from InTapHandle: %v", err)
+				logger.Infof("transport: http2Server.operateHeaders got an error from InTapHandle: %v", err)
 			}
 			t.controlBuf.put(&cleanupStream{
 				streamID: s.id,
@@ -397,7 +397,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.mu.Unlock()
 		// illegal gRPC stream id.
 		if logger.V(logLevel) {
-			logger.Errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", streamID)
+			logger.Infof("transport: http2Server.HandleStreams received an illegal stream id: %v", streamID)
 		}
 		s.cancel()
 		return true
@@ -476,7 +476,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		if err != nil {
 			if se, ok := err.(http2.StreamError); ok {
 				if logger.V(logLevel) {
-					logger.Warningf("transport: http2Server.HandleStreams encountered http2.StreamError: %v", se)
+					logger.Infof("transport: http2Server.HandleStreams encountered http2.StreamError: %v", se)
 				}
 				t.mu.Lock()
 				s := t.activeStreams[se.StreamID]
@@ -523,7 +523,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 			// TODO: Handle GoAway from the client appropriately.
 		default:
 			if logger.V(logLevel) {
-				logger.Errorf("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
+				logger.Infof("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
 			}
 		}
 	}
@@ -751,7 +751,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
 		if logger.V(logLevel) {
-			logger.Errorf("transport: Got too many pings from the client, closing the connection.")
+			logger.Info("transport: Got too many pings from the client, closing the connection.")
 		}
 		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: true})
 	}
@@ -786,7 +786,7 @@ func (t *http2Server) checkForHeaderListSize(it interface{}) bool {
 	for _, f := range hdrFrame.hf {
 		if sz += int64(f.Size()); sz > int64(*t.maxSendHeaderListSize) {
 			if logger.V(logLevel) {
-				logger.Errorf("header list size to send violates the maximum size (%d bytes) set by client", *t.maxSendHeaderListSize)
+				logger.Infof("header list size to send violates the maximum size (%d bytes) set by client", *t.maxSendHeaderListSize)
 			}
 			return false
 		}
@@ -884,7 +884,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		stBytes, err := proto.Marshal(p)
 		if err != nil {
 			// TODO: return error instead, when callers are able to handle it.
-			logger.Errorf("transport: failed to marshal rpc status: %v, error: %v", p, err)
+			logger.Warningf("transport: failed to marshal rpc status: %v, error: %v", p, err)
 		} else {
 			headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-status-details-bin", Value: encodeBinHeader(stBytes)})
 		}

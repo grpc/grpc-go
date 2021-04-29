@@ -373,7 +373,7 @@ func (d *decodeState) processHeaderField(f hpack.HeaderField) {
 		v, err := decodeMetadataHeader(f.Name, f.Value)
 		if err != nil {
 			if logger.V(logLevel) {
-				logger.Errorf("Failed to decode metadata header (%q, %q): %v", f.Name, f.Value, err)
+				logger.Infof("Failed to decode metadata header (%q, %q): %v", f.Name, f.Value, err)
 			}
 			return
 		}
