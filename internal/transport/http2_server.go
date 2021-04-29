@@ -884,7 +884,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		stBytes, err := proto.Marshal(p)
 		if err != nil {
 			// TODO: return error instead, when callers are able to handle it.
-			logger.Warningf("transport: failed to marshal rpc status: %v, error: %v", p, err)
+			logger.Errorf("transport: failed to marshal rpc status: %v, error: %v", p, err)
 		} else {
 			headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-status-details-bin", Value: encodeBinHeader(stBytes)})
 		}
