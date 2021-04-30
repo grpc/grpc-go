@@ -59,6 +59,8 @@ import (
 	_ "google.golang.org/grpc/xds/internal/resolver"  // Register the xds_resolver.
 )
 
+const defaultTestTimeout = 10 * time.Second
+
 type s struct {
 	grpctest.Tester
 }
@@ -463,18 +465,18 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		}},
 	}}
 
-	fs, nodeID, port, cleanup := clientSetup(t)
-	defer cleanup()
-	resources := e2e.DefaultClientResources("myservice", nodeID, "localhost", port)
-	hcm := new(v3httppb.HttpConnectionManager)
-	err := ptypes.UnmarshalAny(resources.Listeners[0].GetApiListener().GetApiListener(), hcm)
-	if err != nil {
-		t.Fatal(err)
-	}
-	routerFilter := hcm.HttpFilters[len(hcm.HttpFilters)-1]
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			fs, nodeID, port, cleanup := clientSetup(t)
+			defer cleanup()
+			resources := e2e.DefaultClientResources("myservice", nodeID, "localhost", port)
+			hcm := new(v3httppb.HttpConnectionManager)
+			err := ptypes.UnmarshalAny(resources.Listeners[0].GetApiListener().GetApiListener(), hcm)
+			if err != nil {
+				t.Fatal(err)
+			}
+			routerFilter := hcm.HttpFilters[len(hcm.HttpFilters)-1]
+
 			defer func() { randIntn = grpcrand.Intn; newTimer = time.NewTimer }()
 			var intnCalls []int
 			var newTimerCalls []time.Duration
@@ -506,7 +508,9 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 			}
 
 			// Create a ClientConn and run the test case.
-			cc, err := grpc.Dial("xds:///myservice", grpc.WithTransportCredentials(insecure.NewCredentials()))
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			cc, err := grpc.DialContext(ctx, "xds:///myservice", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 			if err != nil {
 				t.Fatalf("failed to dial local test server: %v", err)
 			}
@@ -516,8 +520,6 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 			count := 0
 			for _, want := range tc.want {
 				t.Run(want.name, func(t *testing.T) {
-					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-					defer cancel()
 					if want.repeat == 0 {
 						t.Fatalf("invalid repeat count")
 					}
@@ -525,7 +527,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 						intnCalls = nil
 						newTimerCalls = nil
 						ctx = metadata.NewOutgoingContext(ctx, want.md)
-						_, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
+						_, err := client.EmptyCall(ctx, &testpb.Empty{})
 						t.Logf("RPC %d: err: %v, intnCalls: %v, newTimerCalls: %v", count, err, intnCalls, newTimerCalls)
 						if status.Code(err) != want.code || !reflect.DeepEqual(intnCalls, want.randIn) || !reflect.DeepEqual(newTimerCalls, want.delays) {
 							t.Errorf("WANTED code: %v, intnCalls: %v, newTimerCalls: %v", want.code, want.randIn, want.delays)
@@ -578,16 +580,15 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	}
 
 	// Create a ClientConn
-	cc, err := grpc.Dial("xds:///myservice", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, "xds:///myservice", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 
 	client := testpb.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
 	streams := make(chan testpb.TestService_FullDuplexCallClient)
 	startStream := func() {
 		str, err := client.FullDuplexCall(ctx)
