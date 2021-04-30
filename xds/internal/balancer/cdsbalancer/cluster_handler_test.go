@@ -99,6 +99,16 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 			case <-ctx.Done():
 				t.Fatal("Timed out waiting for update from updateChannel.")
 			}
+			// Close the clusterHandler. This is meant to be called when the CDS Balancer is closed, and the call should cancel
+			// the watch for this cluster.
+			ch.close()
+			clusterNameDeleted, err := fakeClient.WaitForCancelClusterWatch(ctx)
+			if err != nil {
+				t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
+			}
+			if clusterNameDeleted != test.clusterName {
+				t.Fatalf("xdsClient.CancelCDS called for cluster %v, want: %v", clusterNameDeleted, logicalDNSService)
+			}
 		})
 	}
 }
@@ -122,8 +132,7 @@ func (s) TestSuccessCaseLeafNodeThenNewUpdate(t *testing.T) {
 			},
 			newClusterUpdate: xdsclient.ClusterUpdate{
 				ClusterType: xdsclient.ClusterTypeEDS,
-				ClusterName: edsService,
-				EnableLRS:   true,
+				ClusterName: edsService2,
 			},
 		},
 		{
@@ -135,8 +144,7 @@ func (s) TestSuccessCaseLeafNodeThenNewUpdate(t *testing.T) {
 			},
 			newClusterUpdate: xdsclient.ClusterUpdate{
 				ClusterType: xdsclient.ClusterTypeLogicalDNS,
-				ClusterName: logicalDNSService,
-				EnableLRS:   true,
+				ClusterName: logicalDNSService2,
 			},
 		},
 	}
@@ -202,24 +210,28 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 		PrioritizedClusterNames: []string{edsService, logicalDNSService},
 	}, nil)
 
-	// xds client should be called to start a watch for one of the child clusters of the aggregate, which should be an
-	// EDS Service as ordering matters.
+	// xds client should be called to start a watch for one of the child clusters of the aggregate. The order of the children
+	// in the update written to the buffer to send to CDS matters, however there is no guarantee on the order it will start the
+	// watches of the children.
 	gotCluster, err = fakeClient.WaitForWatchCluster(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
 	if gotCluster != edsService {
-		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, edsService)
+		if gotCluster != logicalDNSService {
+			t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, edsService)
+		}
 	}
 
-	// xds client should then be called to start a watch for the second child cluster, which should be of type LogicalDNS
-	// as ordering matters.
+	// xds client should then be called to start a watch for the second child cluster.
 	gotCluster, err = fakeClient.WaitForWatchCluster(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
-	if gotCluster != logicalDNSService {
-		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, logicalDNSService)
+	if gotCluster != edsService {
+		if gotCluster != logicalDNSService {
+			t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, logicalDNSService)
+		}
 	}
 
 	// The handleResp() call on the root aggregate cluster should not ping the cluster handler to try and construct an update,
