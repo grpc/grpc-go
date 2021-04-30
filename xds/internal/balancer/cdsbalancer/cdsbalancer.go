@@ -78,6 +78,7 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 		bOpts:       opts,
 		updateCh:    buffer.NewUnbounded(),
 		closed:      grpcsync.NewEvent(),
+		done:        grpcsync.NewEvent(),
 		cancelWatch: func() {}, // No-op at this point.
 		xdsHI:       xdsinternal.NewHandshakeInfo(nil, nil),
 	}
@@ -181,6 +182,7 @@ type cdsBalancer struct {
 	clusterToWatch string
 	logger         *grpclog.PrefixLogger
 	closed         *grpcsync.Event
+	done           *grpcsync.Event
 
 	// The certificate providers are cached here to that they can be closed when
 	// a new provider is to be created.
@@ -381,6 +383,16 @@ func (b *cdsBalancer) run() {
 				b.handleWatchUpdate(update)
 			}
 		case <-b.closed.Done():
+			b.cancelWatch()
+			b.cancelWatch = func() {}
+
+			if b.edsLB != nil {
+				b.edsLB.Close()
+				b.edsLB = nil
+			}
+			b.xdsClient.Close()
+			b.done.Fire()
+			b.logger.Infof("Shutdown")
 			return
 		}
 	}
@@ -481,15 +493,7 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 // Close closes the cdsBalancer and the underlying edsBalancer.
 func (b *cdsBalancer) Close() {
 	b.closed.Fire()
-	b.cancelWatch()
-	b.cancelWatch = func() {}
-
-	if b.edsLB != nil {
-		b.edsLB.Close()
-		b.edsLB = nil
-	}
-	b.xdsClient.Close()
-	b.logger.Infof("Shutdown")
+	<-b.done.Done()
 }
 
 // ccWrapper wraps the balancer.ClientConn passed to the CDS balancer at
