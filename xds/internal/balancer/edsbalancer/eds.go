@@ -167,9 +167,6 @@ func (x *edsBalancer) run() {
 			u := update.(*balancerStateWithPriority)
 			x.edsImpl.updateState(u.priority, u.s)
 		case <-x.closed.Done():
-			x.cancelWatch()
-			x.xdsClient.Close()
-			x.edsImpl.close()
 			return
 		}
 	}
@@ -379,6 +376,9 @@ func (x *edsBalancer) enqueueChildBalancerState(p priorityType, s balancer.State
 
 func (x *edsBalancer) Close() {
 	x.closed.Fire()
+	x.cancelWatch()
+	x.xdsClient.Close()
+	x.edsImpl.close()
 	x.logger.Infof("Shutdown")
 }
 

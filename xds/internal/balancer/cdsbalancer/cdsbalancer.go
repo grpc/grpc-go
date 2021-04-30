@@ -380,20 +380,7 @@ func (b *cdsBalancer) run() {
 			case *watchUpdate:
 				b.handleWatchUpdate(update)
 			}
-
-		// Close results in cancellation of the CDS watch and closing of the
-		// underlying edsBalancer and is the only way to exit this goroutine.
 		case <-b.closed.Done():
-			b.cancelWatch()
-			b.cancelWatch = func() {}
-
-			if b.edsLB != nil {
-				b.edsLB.Close()
-				b.edsLB = nil
-			}
-			b.xdsClient.Close()
-			// This is the *ONLY* point of return from this function.
-			b.logger.Infof("Shutdown")
 			return
 		}
 	}
@@ -494,6 +481,15 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 // Close closes the cdsBalancer and the underlying edsBalancer.
 func (b *cdsBalancer) Close() {
 	b.closed.Fire()
+	b.cancelWatch()
+	b.cancelWatch = func() {}
+
+	if b.edsLB != nil {
+		b.edsLB.Close()
+		b.edsLB = nil
+	}
+	b.xdsClient.Close()
+	b.logger.Infof("Shutdown")
 }
 
 // ccWrapper wraps the balancer.ClientConn passed to the CDS balancer at
