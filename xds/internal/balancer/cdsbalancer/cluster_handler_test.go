@@ -20,6 +20,7 @@ package cdsbalancer
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -164,6 +165,16 @@ func (s) TestSuccessCaseLeafNodeThenNewUpdate(t *testing.T) {
 			case <-ch.updateChannel:
 			case <-ctx.Done():
 				t.Fatal("Timed out waiting for update from updateChannel.")
+			}
+
+			// Check that sending the same cluster update does not induce a update to be written to update buffer.
+			fakeClient.InvokeWatchClusterCallback(test.clusterUpdate, nil)
+			shouldNotHappenCtx, shouldNotHappenCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+			defer shouldNotHappenCtxCancel()
+			select {
+			case <-ch.updateChannel:
+				t.Fatal("Should not have written an update to update buffer, as cluster update did not change.")
+			case <-shouldNotHappenCtx.Done():
 			}
 
 			// Above represents same thing as the simple TestSuccessCaseLeafNode, extra behavior + validation (clusterNode
@@ -463,5 +474,30 @@ func (s) TestUpdateRootClusterAggregateThenChangeRootToEDS(t *testing.T) {
 	}
 	if gotCluster != edsService2 {
 		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, edsService2)
+	}
+}
+
+// VVV tests for Menghan
+
+// TestHandleRespInvokedWithError tests that when handleResp is invoked with an error, that the error is successfully written
+// to the update buffer.
+
+func (s) TestHandleRespInvokedWithError(t *testing.T) {
+	ch, fakeClient := setupTests(t)
+	ch.updateRootCluster(edsService)
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	_, err := fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, errors.New("some error"))
+	select {
+	case chu := <-ch.updateChannel:
+		if chu.err.Error() != "some error" {
+			t.Fatalf("Did not receive the expected error, instead received: %v", chu.err.Error())
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for update from update channel.")
 	}
 }
