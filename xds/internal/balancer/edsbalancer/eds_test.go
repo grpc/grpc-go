@@ -512,6 +512,18 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	if err := edsLB.waitForEDSResponse(ctx, xdsclient.EndpointsUpdate{}); err != nil {
 		t.Fatalf("eds impl expecting empty update, got %v", err)
 	}
+
+	// An update with the same service name should not trigger a new watch.
+	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	if _, err := xdsC.WaitForWatchEDS(sCtx); err != context.DeadlineExceeded {
+		t.Fatal("got unexpected new EDS watch")
+	}
 }
 
 // TestErrorFromResolver verifies that resolver errors are handled correctly.
@@ -576,6 +588,17 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	}
 	if err := edsLB.waitForEDSResponse(ctx, xdsclient.EndpointsUpdate{}); err != nil {
 		t.Fatalf("EDS impl got unexpected EDS response: %v", err)
+	}
+
+	// An update with the same service name should trigger a new watch, because
+	// the previous watch was canceled.
+	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
+		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
 }
 
