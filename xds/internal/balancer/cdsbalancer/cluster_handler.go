@@ -80,6 +80,8 @@ func (ch *clusterHandler) close() {
 	ch.clusterMutex.Lock()
 	defer ch.clusterMutex.Unlock()
 	ch.root.delete()
+	ch.root = nil
+	ch.rootClusterName = ""
 }
 
 // This logically represents a cluster. This handles all the logic for starting and stopping
@@ -176,6 +178,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 		for _, child := range c.children {
 			child.delete()
 		}
+		c.children = nil
 		if deltaInClusterUpdateFields {
 			c.clusterHandler.constructClusterUpdate()
 		}
@@ -223,7 +226,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	// The order of the children list matters, so use the clusterUpdate from xdsclient as the ordering, and use that logical
 	// ordering for the new children list. This will be a mixture of child nodes which are all already constructed in the
 	// mapCurrentChildrenMap.
-	var children []*clusterNode
+	var children = make([]*clusterNode, 0, len(clusterUpdate.PrioritizedClusterNames))
 
 	for _, orderedChild := range clusterUpdate.PrioritizedClusterNames {
 		// The cluster's already have watches started for them in xds client, so you can use these pointers to construct
@@ -238,7 +241,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	// possibility for a full cluster update to successfully build, as those created children will not have received
 	// an update yet. However, if there was simply a child deleted, then there is a possibility that it will have a full
 	// cluster update to build and also will have a changed overall cluster update from the deleted child.
-	if (deletedChild && !createdChild) || deltaInClusterUpdateFields {
+	if deletedChild && !createdChild {
 		c.clusterHandler.constructClusterUpdate()
 	}
 }

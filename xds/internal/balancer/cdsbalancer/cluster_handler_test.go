@@ -98,7 +98,7 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 					t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
-				t.Fatal("Timed out waiting for update from updateChannel.")
+				t.Fatal("Timed out waiting for update from update channel.")
 			}
 			// Close the clusterHandler. This is meant to be called when the CDS Balancer is closed, and the call should cancel
 			// the watch for this cluster.
@@ -477,11 +477,8 @@ func (s) TestUpdateRootClusterAggregateThenChangeRootToEDS(t *testing.T) {
 	}
 }
 
-// VVV tests for Menghan
-
 // TestHandleRespInvokedWithError tests that when handleResp is invoked with an error, that the error is successfully written
 // to the update buffer.
-
 func (s) TestHandleRespInvokedWithError(t *testing.T) {
 	ch, fakeClient := setupTests(t)
 	ch.updateRootCluster(edsService)
@@ -496,6 +493,112 @@ func (s) TestHandleRespInvokedWithError(t *testing.T) {
 	case chu := <-ch.updateChannel:
 		if chu.err.Error() != "some error" {
 			t.Fatalf("Did not receive the expected error, instead received: %v", chu.err.Error())
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for update from update channel.")
+	}
+}
+
+// TestSwitchClusterNodeBetweenLeafAndAggregated tests having an existing cluster node switch between a leaf and an
+// aggregated cluster. When the cluster switches from a leaf to an aggregated cluster, it should add
+// children, and when it switches back to a leaf, it should delete those new children and also successfully write a
+// cluster update to the update buffer.
+func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
+	// Getting the test to the point where there's a root cluster which is a eds leaf.
+	ch, fakeClient := setupTests(t)
+	ch.updateRootCluster(edsService2)
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	_, err := fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
+		ClusterType: xdsclient.ClusterTypeEDS,
+		ClusterName: edsService2,
+	}, nil)
+	select {
+	case <-ch.updateChannel:
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for update from update channel.")
+	}
+	// Switch the cluster to an aggregate cluster, this should cause two new child watches to be created.
+	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
+		ClusterType:             xdsclient.ClusterTypeAggregate,
+		ClusterName:             edsService2,
+		PrioritizedClusterNames: []string{edsService, logicalDNSService},
+	}, nil)
+
+	// xds client should be called to start a watch for one of the child clusters of the aggregate. The order of the children
+	// in the update written to the buffer to send to CDS matters, however there is no guarantee on the order it will start the
+	// watches of the children.
+	gotCluster, err := fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	if gotCluster != edsService {
+		if gotCluster != logicalDNSService {
+			t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, edsService)
+		}
+	}
+
+	// xds client should then be called to start a watch for the second child cluster.
+	gotCluster, err = fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	if gotCluster != edsService {
+		if gotCluster != logicalDNSService {
+			t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, logicalDNSService)
+		}
+	}
+
+	// The handleResp() call on the root aggregate cluster should not ping the cluster handler to try and construct an update,
+	// as the handleResp() callback knows that when a child is created, it cannot possibly build a successful update yet.
+	// Thus, there should be nothing in the update channel.
+
+	shouldNotHappenCtx, shouldNotHappenCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer shouldNotHappenCtxCancel()
+
+	select {
+	case <-ch.updateChannel:
+		t.Fatal("Cluster Handler wrote an update to updateChannel when it shouldn't have, as each node in the full cluster tree has not yet received an update")
+	case <-shouldNotHappenCtx.Done():
+	}
+
+	// Switch the cluster back to an EDS Cluster. This should cause the two children to be deleted.
+	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
+		ClusterType:             xdsclient.ClusterTypeEDS,
+		ClusterName:             edsService2,
+	}, nil)
+
+	// Should delete the two children (no guarantee of ordering deleted, which is ok), then successfully write an update
+	// to the update buffer as the full cluster tree has received updates.
+	clusterNameDeleted, err := fakeClient.WaitForCancelClusterWatch(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
+	}
+	// No guarantee of ordering, so one of the children should be deleted first.
+	if clusterNameDeleted != edsService {
+		if clusterNameDeleted != logicalDNSService {
+			t.Fatalf("xdsClient.CancelCDS called for cluster %v, want either: %v or: %v", clusterNameDeleted, edsService, logicalDNSService)
+		}
+	}
+	// Then the other child should be deleted.
+	clusterNameDeleted, err = fakeClient.WaitForCancelClusterWatch(ctx)
+	if clusterNameDeleted != edsService {
+		if clusterNameDeleted != logicalDNSService {
+			t.Fatalf("xdsClient.CancelCDS called for cluster %v, want either: %v or: %v", clusterNameDeleted, edsService, logicalDNSService)
+		}
+	}
+	// Then an update should successfully be written to the update buffer.
+	select {
+	case chu := <-ch.updateChannel:
+		if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{xdsclient.ClusterUpdate{
+			ClusterType: xdsclient.ClusterTypeEDS,
+			ClusterName: edsService2,
+		}}); diff != "" {
+			t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for update from update channel.")
