@@ -568,8 +568,8 @@ func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
 
 	// Switch the cluster back to an EDS Cluster. This should cause the two children to be deleted.
 	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType:             xdsclient.ClusterTypeEDS,
-		ClusterName:             edsService2,
+		ClusterType: xdsclient.ClusterTypeEDS,
+		ClusterName: edsService2,
 	}, nil)
 
 	// Should delete the two children (no guarantee of ordering deleted, which is ok), then successfully write an update
@@ -594,7 +594,7 @@ func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
 	// Then an update should successfully be written to the update buffer.
 	select {
 	case chu := <-ch.updateChannel:
-		if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{xdsclient.ClusterUpdate{
+		if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{{
 			ClusterType: xdsclient.ClusterTypeEDS,
 			ClusterName: edsService2,
 		}}); diff != "" {
