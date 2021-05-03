@@ -60,7 +60,7 @@ var (
 	fpb1, fpb2                   *fakeProviderBuilder
 	bootstrapConfig              *bootstrap.Config
 	cdsUpdateWithGoodSecurityCfg = xdsclient.ClusterUpdate{
-		ClusterName: serviceName,
+		ServiceName: serviceName,
 		SecurityCfg: &xdsclient.SecurityConfig{
 			RootInstanceName:       "default1",
 			IdentityInstanceName:   "default2",
@@ -68,7 +68,7 @@ var (
 		},
 	}
 	cdsUpdateWithMissingSecurityCfg = xdsclient.ClusterUpdate{
-		ClusterName: serviceName,
+		ServiceName: serviceName,
 		SecurityCfg: &xdsclient.SecurityConfig{
 			RootInstanceName: "not-default",
 		},
@@ -256,7 +256,7 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
-	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
+	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -312,7 +312,7 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup. No security config is
 	// passed to the CDS balancer as part of this update.
-	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
+	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -572,7 +572,7 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	// an update which contains bad security config. So, we expect the CDS
 	// balancer to forward this error to the EDS balancer and eventually the
 	// channel needs to be put in a bad state.
-	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
+	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -678,7 +678,7 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{
-		ClusterName: serviceName,
+		ServiceName: serviceName,
 		SecurityCfg: &xdsclient.SecurityConfig{
 			RootInstanceName:       "default1",
 			SubjectAltNameMatchers: testSANMatchers,
@@ -703,7 +703,7 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 
 	// Push another update with a new security configuration.
 	cdsUpdate = xdsclient.ClusterUpdate{
-		ClusterName: serviceName,
+		ServiceName: serviceName,
 		SecurityCfg: &xdsclient.SecurityConfig{
 			RootInstanceName:       "default2",
 			SubjectAltNameMatchers: testSANMatchers,

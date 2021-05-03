@@ -571,9 +571,42 @@ func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (strin
 	return cluster.GetName(), cu, nil
 }
 
+func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, []string, error) {
+	if cluster.GetType() == v3clusterpb.Cluster_EDS {
+		if cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil {
+			return 0, "", nil, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
+		}
+		// If the Cluster message in the CDS response did not contain a
+		// serviceName, we will just use the clusterName for EDS.
+		if cluster.GetEdsClusterConfig().GetServiceName() == "" {
+			return ClusterTypeEDS, cluster.GetName(), nil, nil
+		}
+		return ClusterTypeEDS, cluster.GetEdsClusterConfig().GetServiceName(), nil, nil
+	}
+
+	if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
+		return ClusterTypeLogicalDNS, cluster.GetName(), nil, nil
+	}
+
+	if cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate" {
+		// Loop through ClusterConfig here to get cluster names.
+		clusters := &v3aggregateclusterpb.ClusterConfig{}
+		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
+			return 0, "", nil, fmt.Errorf("failed to unmarshal resource: %v", err)
+		}
+		return ClusterTypeAggregate, cluster.GetName(), clusters.Clusters, nil
+	}
+	return 0, "", nil, fmt.Errorf("unexpected cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
+}
+
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
+	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
 	if cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN {
-		return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+		return emptyUpdate, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+	}
+	clusterType, serviceName, prioritizedClusters, err := clusterTypeFromCluster(cluster)
+	if err != nil {
+		return emptyUpdate, err
 	}
 
 	// Process security configuration received from the control plane iff the
@@ -582,40 +615,18 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	if env.ClientSideSecuritySupport {
 		var err error
 		if sc, err = securityConfigFromCluster(cluster); err != nil {
-			return ClusterUpdate{}, err
+			return emptyUpdate, err
 		}
 	}
 
-	ret := ClusterUpdate{
-		ClusterName: cluster.GetName(),
-		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
-		SecurityCfg: sc,
-		MaxRequests: circuitBreakersFromCluster(cluster),
-	}
-
-	// Validate and set cluster type from the response.
-	switch {
-	case cluster.GetType() == v3clusterpb.Cluster_EDS:
-		if cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil {
-			return ClusterUpdate{}, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
-		}
-		ret.ClusterType = ClusterTypeEDS
-		ret.EDSServiceName = cluster.GetEdsClusterConfig().GetServiceName()
-		return ret, nil
-	case cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS:
-		ret.ClusterType = ClusterTypeLogicalDNS
-		return ret, nil
-	case cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate":
-		clusters := &v3aggregateclusterpb.ClusterConfig{}
-		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
-			return ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
-		}
-		ret.ClusterType = ClusterTypeAggregate
-		ret.PrioritizedClusterNames = clusters.Clusters
-		return ret, nil
-	default:
-		return ClusterUpdate{}, fmt.Errorf("unexpected cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
-	}
+	return ClusterUpdate{
+		ClusterType:             clusterType,
+		ServiceName:             serviceName,
+		EnableLRS:               cluster.GetLrsServer().GetSelf() != nil,
+		SecurityCfg:             sc,
+		MaxRequests:             circuitBreakersFromCluster(cluster),
+		PrioritizedClusterNames: prioritizedClusters,
+	}, nil
 }
 
 // securityConfigFromCluster extracts the relevant security configuration from

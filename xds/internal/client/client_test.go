@@ -185,13 +185,13 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := ClusterUpdate{ClusterName: testEDSName}
+	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
-	wantUpdate2 := ClusterUpdate{ClusterName: testEDSName + "2"}
+	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate2}, UpdateMetadata{})
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate2); err != nil {
 		t.Fatal(err)
