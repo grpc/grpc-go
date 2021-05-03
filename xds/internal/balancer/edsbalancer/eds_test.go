@@ -354,7 +354,6 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
 			ChildPolicy:    lbCfgA,
-			ClusterName:    testEDSClusterName,
 			EDSServiceName: testServiceName,
 		},
 	}); err != nil {
@@ -368,7 +367,7 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 	if err := edsLB.waitForChildPolicy(ctx, lbCfgA); err != nil {
 		t.Fatal(err)
 	}
-	if err := edsLB.waitForCounterUpdate(ctx, testEDSClusterName); err != nil {
+	if err := edsLB.waitForCounterUpdate(ctx, testServiceName); err != nil {
 		t.Fatal(err)
 	}
 	if err := edsLB.waitForCountMaxUpdate(ctx, nil); err != nil {
@@ -383,7 +382,6 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
 			ChildPolicy:           lbCfgB,
-			ClusterName:           testEDSClusterName,
 			EDSServiceName:        testServiceName,
 			MaxConcurrentRequests: &testCountMax,
 		},
@@ -393,7 +391,7 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 	if err := edsLB.waitForChildPolicy(ctx, lbCfgB); err != nil {
 		t.Fatal(err)
 	}
-	if err := edsLB.waitForCounterUpdate(ctx, testEDSClusterName); err != nil {
+	if err := edsLB.waitForCounterUpdate(ctx, testServiceName); err != nil {
 		// Counter is updated even though the service name didn't change. The
 		// eds_impl will compare the service names, and skip if it didn't change.
 		t.Fatal(err)
@@ -512,18 +510,6 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	if err := edsLB.waitForEDSResponse(ctx, xdsclient.EndpointsUpdate{}); err != nil {
 		t.Fatalf("eds impl expecting empty update, got %v", err)
 	}
-
-	// An update with the same service name should not trigger a new watch.
-	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer sCancel()
-	if _, err := xdsC.WaitForWatchEDS(sCtx); err != context.DeadlineExceeded {
-		t.Fatal("got unexpected new EDS watch")
-	}
 }
 
 // TestErrorFromResolver verifies that resolver errors are handled correctly.
@@ -589,17 +575,6 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	if err := edsLB.waitForEDSResponse(ctx, xdsclient.EndpointsUpdate{}); err != nil {
 		t.Fatalf("EDS impl got unexpected EDS response: %v", err)
 	}
-
-	// An update with the same service name should trigger a new watch, because
-	// the previous watch was canceled.
-	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
-		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
-	}
 }
 
 // Given a list of resource names, verifies that EDS requests for the same are
@@ -611,7 +586,7 @@ func verifyExpectedRequests(ctx context.Context, fc *fakeclient.Client, resource
 			if err := fc.WaitForCancelEDSWatch(ctx); err != nil {
 				return fmt.Errorf("timed out when expecting resource %q", name)
 			}
-			continue
+			return nil
 		}
 
 		resName, err := fc.WaitForWatchEDS(ctx)
@@ -640,18 +615,6 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	}
 	defer edsB.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	// If eds service name is not set, should watch for cluster name.
-	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: "cluster-1"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := verifyExpectedRequests(ctx, xdsC, "cluster-1"); err != nil {
-		t.Fatal(err)
-	}
-
 	// Update with an non-empty edsServiceName should trigger an EDS watch for
 	// the same.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
@@ -659,7 +622,9 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyExpectedRequests(ctx, xdsC, "", "foobar-1"); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := verifyExpectedRequests(ctx, xdsC, "foobar-1"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -695,7 +660,7 @@ func (s) TestCounterUpdate(t *testing.T) {
 	// Update should trigger counter update with provided service name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
-			ClusterName:           "foobar-1",
+			EDSServiceName:        "foobar-1",
 			MaxConcurrentRequests: &testCountMax,
 		},
 	}); err != nil {
@@ -729,7 +694,7 @@ func (s) TestClusterNameUpdateInAddressAttributes(t *testing.T) {
 	// Update should trigger counter update with provided service name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
-			ClusterName: "foobar-1",
+			EDSServiceName: "foobar-1",
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -748,7 +713,7 @@ func (s) TestClusterNameUpdateInAddressAttributes(t *testing.T) {
 	// Update should trigger counter update with provided service name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &EDSConfig{
-			ClusterName: "foobar-2",
+			EDSServiceName: "foobar-2",
 		},
 	}); err != nil {
 		t.Fatal(err)

@@ -375,23 +375,22 @@ const (
 // interest to the registered CDS watcher.
 type ClusterUpdate struct {
 	ClusterType ClusterType
-	// ClusterName is the clusterName being watched for through CDS.
-	ClusterName string
-	// EDSServiceName is an optional name for EDS. If it's not set, the balancer
-	// should watch ClusterName for the EDS resources.
-	EDSServiceName string
+	// ServiceName is the service name corresponding to the clusterName which
+	// is being watched for through CDS.
+	ServiceName string
 	// EnableLRS indicates whether or not load should be reported through LRS.
 	EnableLRS bool
 	// SecurityCfg contains security configuration sent by the control plane.
 	SecurityCfg *SecurityConfig
 	// MaxRequests for circuit breaking, if any (otherwise nil).
 	MaxRequests *uint32
-	// PrioritizedClusterNames is used only for cluster type aggregate. It represents
-	// a prioritized list of cluster names.
-	PrioritizedClusterNames []string
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
+
+	// PrioritizedClusterNames is used only for cluster type aggregate. It represents
+	// a prioritized list of cluster names.
+	PrioritizedClusterNames []string
 }
 
 // OverloadDropConfig contains the config to drop overloads.
