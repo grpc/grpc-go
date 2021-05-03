@@ -586,6 +586,9 @@ func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
 	}
 	// Then the other child should be deleted.
 	clusterNameDeleted, err = fakeClient.WaitForCancelClusterWatch(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
+	}
 	if clusterNameDeleted != edsService {
 		if clusterNameDeleted != logicalDNSService {
 			t.Fatalf("xdsClient.CancelCDS called for cluster %v, want either: %v or: %v", clusterNameDeleted, edsService, logicalDNSService)
