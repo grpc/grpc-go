@@ -314,12 +314,10 @@ func (x *edsBalancer) cancelWatch() {
 	x.loadReportServer = nil
 	if x.cancelLoadReport != nil {
 		x.cancelLoadReport()
-		x.cancelLoadReport = nil
 	}
+	x.edsServiceName = ""
 	if x.cancelEndpointsWatch != nil {
-		x.edsToWatch = ""
 		x.cancelEndpointsWatch()
-		x.cancelEndpointsWatch = nil
 	}
 }
 
@@ -333,7 +331,6 @@ func (x *edsBalancer) startLoadReport(loadReportServer *string) *load.Store {
 	x.loadReportServer = loadReportServer
 	if x.cancelLoadReport != nil {
 		x.cancelLoadReport()
-		x.cancelLoadReport = nil
 	}
 	if loadReportServer == nil {
 		return nil
