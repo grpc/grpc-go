@@ -59,12 +59,17 @@ func newModeTracker() *modeTracker {
 	}
 }
 
-func (mt *modeTracker) updateMode(addr net.Addr, mode xds.ServingMode) {
+func (mt *modeTracker) updateMode(ctx context.Context, addr net.Addr, mode xds.ServingMode) {
 	mt.mu.Lock()
 	defer mt.mu.Unlock()
 
 	mt.modes[addr.String()] = mode
-	mt.updateCh.Send(nil)
+	// Sometimes we could get state updates which are not expected by the test.
+	// Using `Send()` here would block in that case and cause the whole test to
+	// hang and will eventually only timeout when the `-timeout` passed to `go
+	// test` elapses. Using `SendContext()` here instead fails the test within a
+	// reasonable timeout.
+	mt.updateCh.SendContext(ctx, nil)
 }
 
 func (mt *modeTracker) getMode(addr net.Addr) xds.ServingMode {
@@ -120,10 +125,12 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Create a server option to get notified about serving mode changes.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	modeTracker := newModeTracker()
 	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
 		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
-		modeTracker.updateMode(addr, args.Mode)
+		modeTracker.updateMode(ctx, addr, args.Mode)
 	})
 
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
@@ -164,8 +171,6 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Wait for both listeners to move to "serving" mode.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := waitForModeChange(ctx, modeTracker, lis1.Addr(), xds.ServingModeServing); err != nil {
 		t.Fatal(err)
 	}
