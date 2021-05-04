@@ -51,6 +51,7 @@ func TestMain(m *testing.M) {
 const (
 	txtBytesLimit      = 255
 	defaultTestTimeout = 10 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
 type testClientConn struct {
@@ -1460,10 +1461,17 @@ func TestRateLimitedResolve(t *testing.T) {
 		// Will never fire on its own, will protect from triggering exponential backoff.
 		return time.NewTimer(time.Hour)
 	}
+	defer func(nt func(d time.Duration) *time.Timer) {
+		newTimerDNSResRate = nt
+	}(newTimerDNSResRate)
 
-	const dnsResRate = 10 * time.Millisecond
-	dc := replaceDNSResRate(dnsResRate)
-	defer dc()
+	timerChan := testutils.NewChannel()
+	newTimerDNSResRate = func(d time.Duration) *time.Timer {
+		// Will never fire on its own, allows this test to call timer immediately.
+		t := time.NewTimer(time.Hour)
+		timerChan.Send(t)
+		return t
+	}
 
 	// Create a new testResolver{} for this test because we want the exact count
 	// of the number of times the resolver was invoked.
@@ -1490,55 +1498,63 @@ func TestRateLimitedResolve(t *testing.T) {
 		t.Fatalf("delegate resolver returned unexpected type: %T\n", tr)
 	}
 
-	// Observe the time before unblocking the lookupHost call.  The 100ms rate
-	// limiting timer will begin immediately after that.  This means the next
-	// resolution could happen less than 100ms if we read the time *after*
-	// receiving from tr.ch
-	start := time.Now()
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+
 
 	// Wait for the first resolution request to be done. This happens as part
-	// of the first iteration of the for loop in watcher() because we call
-	// ResolveNow in Build.
-	<-tr.ch
-
-	// Here we start a couple of goroutines. One repeatedly calls ResolveNow()
-	// until asked to stop, and the other waits for two resolution requests to be
-	// made to our testResolver and stops the former. We measure the start and
-	// end times, and expect the duration elapsed to be in the interval
-	// {wantCalls*dnsResRate, wantCalls*dnsResRate}
-	done := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			default:
-				r.ResolveNow(resolver.ResolveNowOptions{})
-				time.Sleep(1 * time.Millisecond)
-			}
-		}
-	}()
-
-	gotCalls := 0
-	const wantCalls = 3
-	min, max := wantCalls*dnsResRate, (wantCalls+1)*dnsResRate
-	tMax := time.NewTimer(max)
-	for gotCalls != wantCalls {
-		select {
-		case <-tr.ch:
-			gotCalls++
-		case <-tMax.C:
-			t.Fatalf("Timed out waiting for %v calls after %v; got %v", wantCalls, max, gotCalls)
-		}
+	// of the first iteration of the for loop in watcher().
+	select {
+	case <-tr.ch:
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for lookup() call.")
 	}
-	close(done)
-	elapsed := time.Since(start)
 
-	if gotCalls != wantCalls {
-		t.Fatalf("resolve count mismatch for target: %q = %+v, want %+v\n", target, gotCalls, wantCalls)
+	// Call Resolve Now 100 times, shouldn't continue onto next iteration of watcher, thus shouldn't lookup again.
+	for i := 0; i <= 100; i++ {
+		r.ResolveNow(resolver.ResolveNowOptions{})
 	}
-	if elapsed < min {
-		t.Fatalf("elapsed time: %v, wanted it to be between {%v and %v}", elapsed, min, max)
+
+	shouldNotHappenCtx, shouldNotHappenCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer shouldNotHappenCtxCancel()
+
+	select {
+	case <-tr.ch:
+		t.Fatalf("Should not have looked up again as DNS Min Res Rate timer has not gone off.")
+	case <-shouldNotHappenCtx.Done():
+	}
+
+	timer, err := timerChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error receiving timer from mock NewTimer call: %v", err)
+	}
+	timerPointer := timer.(*time.Timer)
+	timerPointer.Reset(0)
+
+	// Now that DNS Min Res Rate timer has gone off, it should lookup again.
+	select {
+	case <-tr.ch:
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for lookup() call.")
+	}
+
+	// Resolve Now 1000 more times, shouldn't lookup again as DNS Min Res Rate timer has not gone off.
+	for i := 0; i < 1000; i++ {
+		r.ResolveNow(resolver.ResolveNowOptions{})
+	}
+
+	timer, err = timerChan.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error receiving timer from mock NewTimer call: %v", err)
+	}
+	timerPointer = timer.(*time.Timer)
+	timerPointer.Reset(0)
+
+	// Now that DNS Min Res Rate timer has gone off, it should lookup again.
+	select {
+	case <-tr.ch:
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for lookup() call.")
 	}
 
 	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}
