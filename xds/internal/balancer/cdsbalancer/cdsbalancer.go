@@ -78,6 +78,7 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 		bOpts:       opts,
 		updateCh:    buffer.NewUnbounded(),
 		closed:      grpcsync.NewEvent(),
+		done:        grpcsync.NewEvent(),
 		cancelWatch: func() {}, // No-op at this point.
 		xdsHI:       xdsinternal.NewHandshakeInfo(nil, nil),
 	}
@@ -181,6 +182,7 @@ type cdsBalancer struct {
 	clusterToWatch string
 	logger         *grpclog.PrefixLogger
 	closed         *grpcsync.Event
+	done           *grpcsync.Event
 
 	// The certificate providers are cached here to that they can be closed when
 	// a new provider is to be created.
@@ -380,9 +382,6 @@ func (b *cdsBalancer) run() {
 			case *watchUpdate:
 				b.handleWatchUpdate(update)
 			}
-
-		// Close results in cancellation of the CDS watch and closing of the
-		// underlying edsBalancer and is the only way to exit this goroutine.
 		case <-b.closed.Done():
 			b.cancelWatch()
 			b.cancelWatch = func() {}
@@ -392,8 +391,8 @@ func (b *cdsBalancer) run() {
 				b.edsLB = nil
 			}
 			b.xdsClient.Close()
-			// This is the *ONLY* point of return from this function.
 			b.logger.Infof("Shutdown")
+			b.done.Fire()
 			return
 		}
 	}
@@ -494,6 +493,7 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 // Close closes the cdsBalancer and the underlying edsBalancer.
 func (b *cdsBalancer) Close() {
 	b.closed.Fire()
+	<-b.done.Done()
 }
 
 // ccWrapper wraps the balancer.ClientConn passed to the CDS balancer at

@@ -65,6 +65,7 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 	x := &edsBalancer{
 		cc:                cc,
 		closed:            grpcsync.NewEvent(),
+		done:              grpcsync.NewEvent(),
 		grpcUpdate:        make(chan interface{}),
 		xdsClientUpdate:   make(chan *edsUpdate),
 		childPolicyUpdate: buffer.NewUnbounded(),
@@ -130,6 +131,7 @@ type edsBalancerImplInterface interface {
 type edsBalancer struct {
 	cc     balancer.ClientConn
 	closed *grpcsync.Event
+	done   *grpcsync.Event
 	logger *grpclog.PrefixLogger
 
 	// edsBalancer continuously monitors the channels below, and will handle
@@ -170,6 +172,8 @@ func (x *edsBalancer) run() {
 			x.cancelWatch()
 			x.xdsClient.Close()
 			x.edsImpl.close()
+			x.logger.Infof("Shutdown")
+			x.done.Fire()
 			return
 		}
 	}
@@ -379,7 +383,7 @@ func (x *edsBalancer) enqueueChildBalancerState(p priorityType, s balancer.State
 
 func (x *edsBalancer) Close() {
 	x.closed.Fire()
-	x.logger.Infof("Shutdown")
+	<-x.done.Done()
 }
 
 // equalStringPointers returns true if
