@@ -465,15 +465,8 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 
 	fs, nodeID, port, cleanup := clientSetup(t)
 	defer cleanup()
-	resources := e2e.DefaultClientResources("myservice", nodeID, "localhost", port)
-	hcm := new(v3httppb.HttpConnectionManager)
-	err := ptypes.UnmarshalAny(resources.Listeners[0].GetApiListener().GetApiListener(), hcm)
-	if err != nil {
-		t.Fatal(err)
-	}
-	routerFilter := hcm.HttpFilters[len(hcm.HttpFilters)-1]
 
-	for _, tc := range testCases {
+	for tcNum, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			defer func() { randIntn = grpcrand.Intn; newTimer = time.NewTimer }()
 			var intnCalls []int
@@ -488,6 +481,15 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 				newTimerCalls = append(newTimerCalls, d)
 				return time.NewTimer(0)
 			}
+
+			serviceName := fmt.Sprintf("myservice%d", tcNum)
+			resources := e2e.DefaultClientResources(serviceName, nodeID, "localhost", port)
+			hcm := new(v3httppb.HttpConnectionManager)
+			err := ptypes.UnmarshalAny(resources.Listeners[0].GetApiListener().GetApiListener(), hcm)
+			if err != nil {
+				t.Fatal(err)
+			}
+			routerFilter := hcm.HttpFilters[len(hcm.HttpFilters)-1]
 
 			hcm.HttpFilters = nil
 			for i, cfg := range tc.cfgs {
@@ -506,7 +508,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 			}
 
 			// Create a ClientConn and run the test case.
-			cc, err := grpc.Dial("xds:///myservice", grpc.WithTransportCredentials(insecure.NewCredentials()))
+			cc, err := grpc.Dial("xds:///"+serviceName, grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				t.Fatalf("failed to dial local test server: %v", err)
 			}
@@ -515,25 +517,23 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 			client := testpb.NewTestServiceClient(cc)
 			count := 0
 			for _, want := range tc.want {
-				t.Run(want.name, func(t *testing.T) {
-					ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-					defer cancel()
-					if want.repeat == 0 {
-						t.Fatalf("invalid repeat count")
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				if want.repeat == 0 {
+					t.Fatalf("invalid repeat count")
+				}
+				for n := 0; n < want.repeat; n++ {
+					intnCalls = nil
+					newTimerCalls = nil
+					ctx = metadata.NewOutgoingContext(ctx, want.md)
+					_, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
+					t.Logf("%v: RPC %d: err: %v, intnCalls: %v, newTimerCalls: %v", want.name, count, err, intnCalls, newTimerCalls)
+					if status.Code(err) != want.code || !reflect.DeepEqual(intnCalls, want.randIn) || !reflect.DeepEqual(newTimerCalls, want.delays) {
+						t.Fatalf("WANTED code: %v, intnCalls: %v, newTimerCalls: %v", want.code, want.randIn, want.delays)
 					}
-					for n := 0; n < want.repeat; n++ {
-						intnCalls = nil
-						newTimerCalls = nil
-						ctx = metadata.NewOutgoingContext(ctx, want.md)
-						_, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
-						t.Logf("RPC %d: err: %v, intnCalls: %v, newTimerCalls: %v", count, err, intnCalls, newTimerCalls)
-						if status.Code(err) != want.code || !reflect.DeepEqual(intnCalls, want.randIn) || !reflect.DeepEqual(newTimerCalls, want.delays) {
-							t.Errorf("WANTED code: %v, intnCalls: %v, newTimerCalls: %v", want.code, want.randIn, want.delays)
-						}
-						randOut += tc.randOutInc
-						count++
-					}
-				})
+					randOut += tc.randOutInc
+					count++
+				}
 			}
 		})
 	}
