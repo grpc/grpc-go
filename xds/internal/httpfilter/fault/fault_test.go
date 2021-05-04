@@ -161,6 +161,28 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 		randOutInc int
 		want       []subcase
 	}{{
+		name: "max faults zero",
+		cfgs: []*fpb.HTTPFault{{
+			MaxActiveFaults: wrapperspb.UInt32(0),
+			Abort: &fpb.FaultAbort{
+				Percentage: &tpb.FractionalPercent{Numerator: 100, Denominator: tpb.FractionalPercent_HUNDRED},
+				ErrorType:  &fpb.FaultAbort_GrpcStatus{GrpcStatus: uint32(codes.Aborted)},
+			},
+		}},
+		randOutInc: 5,
+		want: []subcase{{
+			code:   codes.OK,
+			repeat: 25,
+		}},
+	}, {
+		name:       "no abort or delay",
+		cfgs:       []*fpb.HTTPFault{{}},
+		randOutInc: 5,
+		want: []subcase{{
+			code:   codes.OK,
+			repeat: 25,
+		}},
+	}, {
 		name: "abort always",
 		cfgs: []*fpb.HTTPFault{{
 			Abort: &fpb.FaultAbort{
