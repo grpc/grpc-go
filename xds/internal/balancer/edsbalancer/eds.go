@@ -172,8 +172,8 @@ func (x *edsBalancer) run() {
 			x.cancelWatch()
 			x.xdsClient.Close()
 			x.edsImpl.close()
-			x.done.Fire()
 			x.logger.Infof("Shutdown")
+			x.done.Fire()
 			return
 		}
 	}

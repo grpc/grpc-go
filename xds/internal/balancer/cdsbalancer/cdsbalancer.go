@@ -391,8 +391,8 @@ func (b *cdsBalancer) run() {
 				b.edsLB = nil
 			}
 			b.xdsClient.Close()
-			b.done.Fire()
 			b.logger.Infof("Shutdown")
+			b.done.Fire()
 			return
 		}
 	}
