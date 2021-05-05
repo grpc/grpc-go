@@ -5284,6 +5284,37 @@ func (s) TestGRPCMethod(t *testing.T) {
 	}
 }
 
+func (s) TestForceServerCodec(t *testing.T) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+	codec := &countingProtoCodec{}
+	if err := ss.Start([]grpc.ServerOption{grpc.ForceServerCodec(codec)}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
+	}
+
+	unmarshalCount := atomic.LoadInt32(&codec.unmarshalCount)
+	const wantUnmarshalCount = 1
+	if unmarshalCount != wantUnmarshalCount {
+		t.Fatalf("protoCodec.unmarshalCount = %d; want %d", unmarshalCount, wantUnmarshalCount)
+	}
+	marshalCount := atomic.LoadInt32(&codec.marshalCount)
+	const wantMarshalCount = 1
+	if marshalCount != wantMarshalCount {
+		t.Fatalf("protoCodec.marshalCount = %d; want %d", marshalCount, wantMarshalCount)
+	}
+}
+
 func (s) TestUnaryProxyDoesNotForwardMetadata(t *testing.T) {
 	const mdkey = "somedata"
 
@@ -5651,6 +5682,33 @@ func (c *errCodec) Unmarshal(data []byte, v interface{}) error {
 
 func (c *errCodec) Name() string {
 	return "Fermat's near-miss."
+}
+
+type countingProtoCodec struct {
+	marshalCount   int32
+	unmarshalCount int32
+}
+
+func (p *countingProtoCodec) Marshal(v interface{}) ([]byte, error) {
+	atomic.AddInt32(&p.marshalCount, 1)
+	vv, ok := v.(proto.Message)
+	if !ok {
+		return nil, fmt.Errorf("failed to marshal, message is %T, want proto.Message", v)
+	}
+	return proto.Marshal(vv)
+}
+
+func (p *countingProtoCodec) Unmarshal(data []byte, v interface{}) error {
+	atomic.AddInt32(&p.unmarshalCount, 1)
+	vv, ok := v.(proto.Message)
+	if !ok {
+		return fmt.Errorf("failed to unmarshal, message is %T, want proto.Message", v)
+	}
+	return proto.Unmarshal(data, vv)
+}
+
+func (*countingProtoCodec) Name() string {
+	return "proto"
 }
 
 func (s) TestEncodeDoesntPanic(t *testing.T) {
