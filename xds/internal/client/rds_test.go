@@ -25,21 +25,22 @@ import (
 	"testing"
 	"time"
 
-	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	v2routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/golang/protobuf/proto"
-	anypb "github.com/golang/protobuf/ptypes/any"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	v2routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
+	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	anypb "github.com/golang/protobuf/ptypes/any"
+	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 )
 
 func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
@@ -955,6 +956,44 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 				{
 					Match: &v3routepb.RouteMatch{
 						PathSpecifier: &v3routepb.RouteMatch_ConnectMatcher_{},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "bad regex in path specifier",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: "??"}},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "tv"},
+							},
+						},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "bad regex in header specifier",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{SafeRegexMatch: &v3matcherpb.RegexMatcher{Regex: "??"}},
+							},
+						},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
 					},
 				},
 			},
