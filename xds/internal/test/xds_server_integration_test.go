@@ -430,7 +430,7 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 
 	// We don't set 'waitForReady` here since we want this call to failfast.
 	client = testpb.NewTestServiceClient(tlsCC)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Convert(err).Code() != codes.Unavailable {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
 		t.Fatal("rpc EmptyCall() succeeded when expected to fail")
 	}
 
