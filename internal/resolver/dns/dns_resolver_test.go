@@ -49,8 +49,8 @@ func TestMain(m *testing.M) {
 }
 
 const (
-	txtBytesLimit      = 255
-	defaultTestTimeout = 10 * time.Second
+	txtBytesLimit           = 255
+	defaultTestTimeout      = 10 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
@@ -107,12 +107,12 @@ type testResolver struct {
 	// A write to this channel is made when this resolver receives a resolution
 	// request. Tests can rely on reading from this channel to be notified about
 	// resolution requests instead of sleeping for a predefined period of time.
-	ch chan struct{}
+	ch *testutils.Channel
 }
 
 func (tr *testResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
 	if tr.ch != nil {
-		tr.ch <- struct{}{}
+		tr.ch.Send(struct{}{})
 	}
 	return hostLookup(host)
 }
@@ -127,8 +127,11 @@ func (*testResolver) LookupTXT(ctx context.Context, host string) ([]string, erro
 
 func replaceNetFunc(ch chan struct{}) func() {
 	oldResolver := defaultResolver
-	defaultResolver = &testResolver{ch: ch}
-
+	if ch != nil {
+		defaultResolver = &testResolver{ch: testutils.NewChannel()}
+	} else {
+		defaultResolver = &testResolver{}
+	}
 	return func() {
 		defaultResolver = oldResolver
 	}
@@ -1452,13 +1455,15 @@ func TestCustomAuthority(t *testing.T) {
 // requests. It sets the re-resolution rate to a small value and repeatedly
 // calls ResolveNow() and ensures only the expected number of resolution
 // requests are made.
+
 func TestRateLimitedResolve(t *testing.T) {
 	defer leakcheck.Check(t)
 	defer func(nt func(d time.Duration) *time.Timer) {
 		newTimer = nt
 	}(newTimer)
 	newTimer = func(d time.Duration) *time.Timer {
-		// Will never fire on its own, will protect from triggering exponential backoff.
+		// Will never fire on its own, will protect from triggering exponential
+		// backoff.
 		return time.NewTimer(time.Hour)
 	}
 	defer func(nt func(d time.Duration) *time.Timer) {
@@ -1467,7 +1472,8 @@ func TestRateLimitedResolve(t *testing.T) {
 
 	timerChan := testutils.NewChannel()
 	newTimerDNSResRate = func(d time.Duration) *time.Timer {
-		// Will never fire on its own, allows this test to call timer immediately.
+		// Will never fire on its own, allows this test to call timer
+		// immediately.
 		t := time.NewTimer(time.Hour)
 		timerChan.Send(t)
 		return t
@@ -1498,30 +1504,29 @@ func TestRateLimitedResolve(t *testing.T) {
 		t.Fatalf("delegate resolver returned unexpected type: %T\n", tr)
 	}
 
-	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer ctxCancel()
-
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
 	// Wait for the first resolution request to be done. This happens as part
 	// of the first iteration of the for loop in watcher().
-	select {
-	case <-tr.ch:
-	case <-ctx.Done():
-		t.Fatal("Timed out waiting for lookup() call.")
+	_, err = tr.ch.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Timed out waiting for lookup() call.")
 	}
 
-	// Call Resolve Now 100 times, shouldn't continue onto next iteration of watcher, thus shouldn't lookup again.
+	// Call Resolve Now 100 times, shouldn't continue onto next iteration of
+	// watcher, thus shouldn't lookup again.
 	for i := 0; i <= 100; i++ {
 		r.ResolveNow(resolver.ResolveNowOptions{})
 	}
 
-	shouldNotHappenCtx, shouldNotHappenCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-	defer shouldNotHappenCtxCancel()
+	continueCtx, continueCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer continueCancel()
 
-	select {
-	case <-tr.ch:
+	_, err = tr.ch.Receive(continueCtx)
+
+	if err == nil {
 		t.Fatalf("Should not have looked up again as DNS Min Res Rate timer has not gone off.")
-	case <-shouldNotHappenCtx.Done():
 	}
 
 	timer, err := timerChan.Receive(ctx)
@@ -1532,15 +1537,20 @@ func TestRateLimitedResolve(t *testing.T) {
 	timerPointer.Reset(0)
 
 	// Now that DNS Min Res Rate timer has gone off, it should lookup again.
-	select {
-	case <-tr.ch:
-	case <-ctx.Done():
-		t.Fatal("Timed out waiting for lookup() call.")
+	_, err = tr.ch.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Timed out waiting for lookup() call.")
 	}
 
-	// Resolve Now 1000 more times, shouldn't lookup again as DNS Min Res Rate timer has not gone off.
+	// Resolve Now 1000 more times, shouldn't lookup again as DNS Min Res Rate
+	// timer has not gone off.
 	for i := 0; i < 1000; i++ {
 		r.ResolveNow(resolver.ResolveNowOptions{})
+	}
+
+	_, err = tr.ch.Receive(continueCtx)
+	if err == nil {
+		t.Fatalf("Should not have looked up again as DNS Min Res Rate timer has not gone off.")
 	}
 
 	timer, err = timerChan.Receive(ctx)
@@ -1551,10 +1561,9 @@ func TestRateLimitedResolve(t *testing.T) {
 	timerPointer.Reset(0)
 
 	// Now that DNS Min Res Rate timer has gone off, it should lookup again.
-	select {
-	case <-tr.ch:
-	case <-ctx.Done():
-		t.Fatal("Timed out waiting for lookup() call.")
+	_, err = tr.ch.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Timed out waiting for lookup() call.")
 	}
 
 	wantAddrs := []resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}}

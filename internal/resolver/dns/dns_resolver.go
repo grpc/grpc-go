@@ -48,8 +48,10 @@ var EnableSRVLookups = false
 var logger = grpclog.Component("dns")
 
 // Globals to stub out in tests.
-var newTimer = time.NewTimer
-var newTimerDNSResRate = time.NewTimer
+var (
+	newTimer = time.NewTimer
+	newTimerDNSResRate = time.NewTimer
+)
 
 func init() {
 	resolver.Register(NewBuilder())
