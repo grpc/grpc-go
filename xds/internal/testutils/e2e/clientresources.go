@@ -83,9 +83,9 @@ type ResourceParams struct {
 // DefaultClientResources returns a set of resources (LDS, RDS, CDS, EDS) for a
 // client to generically connect to one server.
 func DefaultClientResources(params ResourceParams) UpdateOptions {
-	const routeConfigName = "route-" + params.DialTarget
-	const clusterName = "cluster-" + params.DialTarget
-	const endpointsName = "endpoints-" + params.DialTarget
+	routeConfigName := "route-" + params.DialTarget
+	clusterName := "cluster-" + params.DialTarget
+	endpointsName := "endpoints-" + params.DialTarget
 	return UpdateOptions{
 		NodeID:    params.NodeID,
 		Listeners: []*v3listenerpb.Listener{DefaultClientListener(params.DialTarget, routeConfigName)},

@@ -1026,7 +1026,6 @@ func (cc *ClientConn) ResetConnectBackoff() {
 
 // Close tears down the ClientConn and all underlying connections.
 func (cc *ClientConn) Close() error {
-	channelz.Infof(logger, cc.channelzID, "clientconn.Close() called")
 	defer cc.cancel()
 
 	cc.mu.Lock()
