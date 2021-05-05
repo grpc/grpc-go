@@ -26,6 +26,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -34,26 +35,21 @@ import (
 	"strconv"
 	"testing"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
-	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/uuid"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	xdscreds "google.golang.org/grpc/credentials/xds"
-	"google.golang.org/grpc/internal/testutils"
-	xdsinternal "google.golang.org/grpc/internal/xds"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/status"
-	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 	"google.golang.org/grpc/xds"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
+
+	xdscreds "google.golang.org/grpc/credentials/xds"
+	xdsinternal "google.golang.org/grpc/internal/xds"
+	testpb "google.golang.org/grpc/test/grpc_testing"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 )
 
 const (
@@ -62,8 +58,7 @@ const (
 	keyFile  = "key.pem"
 	rootFile = "ca.pem"
 
-	// Template for server Listener resource name.
-	serverListenerResourceNameTemplate = "grpc/server?xds.resource.listening_address=%s"
+	xdsServiceName = "my-service"
 )
 
 func createTmpFile(t *testing.T, src, dst string) {
@@ -77,7 +72,6 @@ func createTmpFile(t *testing.T, src, dst string) {
 		t.Fatalf("ioutil.WriteFile(%q) failed: %v", dst, err)
 	}
 	t.Logf("Wrote file at: %s", dst)
-	t.Logf("%s", string(data))
 }
 
 // createTempDirWithFiles creates a temporary directory under the system default
@@ -138,17 +132,29 @@ func createClientTLSCredentials(t *testing.T) credentials.TransportCredentials {
 func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, func()) {
 	t.Helper()
 
-	// Spin up a xDS management server on a local port.
+	// Turn on the env var protection for client-side security.
+	origClientSideSecurityEnvVar := env.ClientSideSecuritySupport
+	env.ClientSideSecuritySupport = true
+
+	// Spin up an xDS management server on a local port.
 	nodeID := uuid.New().String()
 	fs, err := e2e.StartManagementServer()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Create certificate and key files in a temporary directory and generate
-	// certificate provider configuration for a file_watcher plugin.
-	tmpdir := createTmpDirWithFiles(t, "testServerSideXDS*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
-	cpc := e2e.DefaultFileWatcherConfig(path.Join(tmpdir, certFile), path.Join(tmpdir, keyFile), path.Join(tmpdir, rootFile))
+	// Create a directory to hold certs and key files used on the server side.
+	serverDir := createTmpDirWithFiles(t, "testServerSideXDS*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
+
+	// Create a directory to hold certs and key files used on the client side.
+	clientDir := createTmpDirWithFiles(t, "testClientSideXDS*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/server_ca_cert.pem")
+
+	// Create certificate providers section of the bootstrap config with entries
+	// for both the client and server sides.
+	cpc := map[string]json.RawMessage{
+		e2e.ServerSideCertProviderInstance: e2e.DefaultFileWatcherConfig(path.Join(serverDir, certFile), path.Join(serverDir, keyFile), path.Join(serverDir, rootFile)),
+		e2e.ClientSideCertProviderInstance: e2e.DefaultFileWatcherConfig(path.Join(clientDir, certFile), path.Join(clientDir, keyFile), path.Join(clientDir, rootFile)),
+	}
 
 	// Create a bootstrap file in a temporary directory.
 	bootstrapCleanup, err := xdsinternal.SetupBootstrapFile(xdsinternal.BootstrapOptions{
@@ -156,7 +162,7 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 		NodeID:                             nodeID,
 		ServerURI:                          fs.Address,
 		CertificateProviders:               cpc,
-		ServerListenerResourceNameTemplate: serverListenerResourceNameTemplate,
+		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -190,181 +196,74 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 		fs.Stop()
 		bootstrapCleanup()
 		server.Stop()
+		env.ClientSideSecuritySupport = origClientSideSecurityEnvVar
 	}
 }
 
-func hostPortFromListener(t *testing.T, lis net.Listener) (string, uint32) {
-	t.Helper()
-
+func hostPortFromListener(lis net.Listener) (string, uint32, error) {
 	host, p, err := net.SplitHostPort(lis.Addr().String())
 	if err != nil {
-		t.Fatalf("net.SplitHostPort(%s) failed: %v", lis.Addr().String(), err)
+		return "", 0, fmt.Errorf("net.SplitHostPort(%s) failed: %v", lis.Addr().String(), err)
 	}
 	port, err := strconv.ParseInt(p, 10, 32)
 	if err != nil {
-		t.Fatalf("strconv.ParseInt(%s, 10, 32) failed: %v", p, err)
+		return "", 0, fmt.Errorf("strconv.ParseInt(%s, 10, 32) failed: %v", p, err)
 	}
-	return host, uint32(port)
-
+	return host, uint32(port), nil
 }
 
-// listenerResourceWithoutSecurityConfig returns a listener resource with no
-// security configuration, and name and address fields matching the passed in
-// net.Listener.
-func listenerResourceWithoutSecurityConfig(t *testing.T, lis net.Listener) *v3listenerpb.Listener {
-	host, port := hostPortFromListener(t, lis)
-	return &v3listenerpb.Listener{
-		// This needs to match the name we are querying for.
-		Name: fmt.Sprintf(serverListenerResourceNameTemplate, lis.Addr().String()),
-		Address: &v3corepb.Address{
-			Address: &v3corepb.Address_SocketAddress{
-				SocketAddress: &v3corepb.SocketAddress{
-					Address: host,
-					PortSpecifier: &v3corepb.SocketAddress_PortValue{
-						PortValue: port,
-					},
-				},
-			},
-		},
-		FilterChains: []*v3listenerpb.FilterChain{
-			{
-				Name: "filter-chain-1",
-				Filters: []*v3listenerpb.Filter{
-					{
-						Name: "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-// listenerResourceWithSecurityConfig returns a listener resource with security
-// configuration pointing to the use of the file_watcher certificate provider
-// plugin, and name and address fields matching the passed in net.Listener.
-func listenerResourceWithSecurityConfig(t *testing.T, lis net.Listener) *v3listenerpb.Listener {
-	transportSocket := &v3corepb.TransportSocket{
-		Name: "envoy.transport_sockets.tls",
-		ConfigType: &v3corepb.TransportSocket_TypedConfig{
-			TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
-				RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
-				CommonTlsContext: &v3tlspb.CommonTlsContext{
-					TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-						InstanceName: "google_cloud_private_spiffe",
-					},
-					ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-						ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-							InstanceName: "google_cloud_private_spiffe",
-						},
-					},
-				},
-			}),
-		},
-	}
-	host, port := hostPortFromListener(t, lis)
-	return &v3listenerpb.Listener{
-		// This needs to match the name we are querying for.
-		Name: fmt.Sprintf(serverListenerResourceNameTemplate, lis.Addr().String()),
-		Address: &v3corepb.Address{
-			Address: &v3corepb.Address_SocketAddress{
-				SocketAddress: &v3corepb.SocketAddress{
-					Address: host,
-					PortSpecifier: &v3corepb.SocketAddress_PortValue{
-						PortValue: port,
-					}}}},
-		FilterChains: []*v3listenerpb.FilterChain{
-			{
-				Name: "v4-wildcard",
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					PrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "0.0.0.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: uint32(0),
-							},
-						},
-					},
-					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
-					SourcePrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "0.0.0.0",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: uint32(0),
-							},
-						},
-					},
-				},
-				Filters: []*v3listenerpb.Filter{
-					{
-						Name: "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
-						},
-					},
-				},
-				TransportSocket: transportSocket,
-			},
-			{
-				Name: "v6-wildcard",
-				FilterChainMatch: &v3listenerpb.FilterChainMatch{
-					PrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "::",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: uint32(0),
-							},
-						},
-					},
-					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
-					SourcePrefixRanges: []*v3corepb.CidrRange{
-						{
-							AddressPrefix: "::",
-							PrefixLen: &wrapperspb.UInt32Value{
-								Value: uint32(0),
-							},
-						},
-					},
-				},
-				Filters: []*v3listenerpb.Filter{
-					{
-						Name: "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
-						},
-					},
-				},
-				TransportSocket: transportSocket,
-			},
-		},
-	}
-}
-
-// TestServerSideXDS_Fallback is an e2e test where xDS is enabled on the
-// server-side and xdsCredentials are configured for security. The control plane
-// does not provide any security configuration and therefore the xdsCredentials
-// uses fallback credentials, which in this case is insecure creds.
+// TestServerSideXDS_Fallback is an e2e test which verifies xDS credentials
+// fallback functionality.
+//
+// The following sequence of events happen as part of this test:
+// - An xDS-enabled gRPC server is created and xDS credentials are configured.
+// - xDS is enabled on the client by the use of the xds:/// scheme, and xDS
+//   credentials are configured.
+// - Control plane is configured to not send any security configuration to both
+//   the client and the server. This results in both of them using the
+//   configured fallback credentials (which is insecure creds in this case).
 func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	fs, nodeID, lis, cleanup := commonSetup(t)
 	defer cleanup()
 
-	// Setup the fake management server to respond with a Listener resource that
-	// does not contain any security configuration. This should force the
-	// server-side xdsCredentials to use fallback.
-	listener := listenerResourceWithoutSecurityConfig(t, lis)
-	if err := fs.Update(e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{listener},
-	}); err != nil {
-		t.Error(err)
+	// Grab the host and port of the server and create client side xDS resources
+	// corresponding to it. This contains default resources with no security
+	// configuration in the Cluster resources.
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("failed to retrieve host and port of server: %v", err)
+	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: xdsServiceName,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+
+	// Create an inbound xDS listener resource for the server side that does not
+	// contain any security configuration. This should force the server-side
+	// xdsCredentials to use fallback.
+	inboundLis := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone)
+	resources.Listeners = append(resources.Listeners, inboundLis)
+
+	// Setup the management server with client and server-side resources.
+	if err := fs.Update(resources); err != nil {
+		t.Fatal(err)
 	}
 
-	// Create a ClientConn and make a successful RPC.
+	// Create client-side xDS credentials with an insecure fallback.
+	creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{
+		FallbackCreds: insecure.NewCredentials(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn with the xds scheme and make a successful RPC.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", xdsServiceName), grpc.WithTransportCredentials(creds))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -376,39 +275,86 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	}
 }
 
-// TestServerSideXDS_FileWatcherCerts is an e2e test where xDS is enabled on the
-// server-side and xdsCredentials are configured for security. The control plane
-// sends security configuration pointing to the use of the file_watcher plugin,
-// and we verify that a client connecting with TLS creds is able to successfully
-// make an RPC.
+// TestServerSideXDS_FileWatcherCerts is an e2e test which verifies xDS
+// credentials with file watcher certificate provider.
+//
+// The following sequence of events happen as part of this test:
+// - An xDS-enabled gRPC server is created and xDS credentials are configured.
+// - xDS is enabled on the client by the use of the xds:/// scheme, and xDS
+//   credentials are configured.
+// - Control plane is configured to send security configuration to both the
+//   client and the server, pointing to the file watcher certificate provider.
+//   We verify both TLS and mTLS scenarios.
 func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
-	fs, nodeID, lis, cleanup := commonSetup(t)
-	defer cleanup()
-
-	// Setup the fake management server to respond with a Listener resource with
-	// security configuration pointing to the file watcher plugin and requiring
-	// mTLS.
-	listener := listenerResourceWithSecurityConfig(t, lis)
-	if err := fs.Update(e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{listener},
-	}); err != nil {
-		t.Error(err)
+	tests := []struct {
+		name     string
+		secLevel e2e.SecurityLevel
+	}{
+		{
+			name:     "tls",
+			secLevel: e2e.SecurityLevelTLS,
+		},
+		{
+			name:     "mtls",
+			secLevel: e2e.SecurityLevelMTLS,
+		},
 	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fs, nodeID, lis, cleanup := commonSetup(t)
+			defer cleanup()
 
-	// Create a ClientConn with TLS creds and make a successful RPC.
-	clientCreds := createClientTLSCredentials(t)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	cc, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithTransportCredentials(clientCreds))
-	if err != nil {
-		t.Fatalf("failed to dial local test server: %v", err)
-	}
-	defer cc.Close()
+			// Grab the host and port of the server and create client side xDS
+			// resources corresponding to it.
+			host, port, err := hostPortFromListener(lis)
+			if err != nil {
+				t.Fatalf("failed to retrieve host and port of server: %v", err)
+			}
 
-	client := testpb.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("rpc EmptyCall() failed: %v", err)
+			// Create xDS resources to be consumed on the client side. This
+			// includes the listener, route configuration, cluster (with
+			// security configuration) and endpoint resources.
+			resources := e2e.DefaultClientResources(e2e.ResourceParams{
+				DialTarget: xdsServiceName,
+				NodeID:     nodeID,
+				Host:       host,
+				Port:       port,
+				SecLevel:   test.secLevel,
+			})
+
+			// Create an inbound xDS listener resource for the server side that
+			// contains security configuration pointing to the file watcher
+			// plugin.
+			inboundLis := e2e.DefaultServerListener(host, port, test.secLevel)
+			resources.Listeners = append(resources.Listeners, inboundLis)
+
+			// Setup the management server with client and server resources.
+			if err := fs.Update(resources); err != nil {
+				t.Fatal(err)
+			}
+
+			// Create client-side xDS credentials with an insecure fallback.
+			creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{
+				FallbackCreds: insecure.NewCredentials(),
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Create a ClientConn with the xds scheme and make an RPC.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", xdsServiceName), grpc.WithTransportCredentials(creds))
+			if err != nil {
+				t.Fatalf("failed to dial local test server: %v", err)
+			}
+			defer cc.Close()
+
+			client := testpb.NewTestServiceClient(cc)
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+				t.Fatalf("rpc EmptyCall() failed: %v", err)
+			}
+		})
 	}
 }
 
@@ -417,50 +363,90 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 // plane initially does not any security configuration. This forces the
 // xdsCredentials to use fallback creds, which is this case is insecure creds.
 // We verify that a client connecting with TLS creds is not able to successfully
-// make an RPC. The control plan then sends a listener resource with security
+// make an RPC. The control plane then sends a listener resource with security
 // configuration pointing to the use of the file_watcher plugin and we verify
 // that the same client is now able to successfully make an RPC.
 func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	fs, nodeID, lis, cleanup := commonSetup(t)
 	defer cleanup()
 
-	// Setup the fake management server to respond with a Listener resource that
-	// does not contain any security configuration. This should force the
-	// server-side xdsCredentials to use fallback.
-	listener := listenerResourceWithoutSecurityConfig(t, lis)
-	if err := fs.Update(e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{listener},
-	}); err != nil {
-		t.Error(err)
+	// Grab the host and port of the server and create client side xDS resources
+	// corresponding to it. This contains default resources with no security
+	// configuration in the Cluster resource. This should force the xDS
+	// credentials on the client to use its fallback.
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("failed to retrieve host and port of server: %v", err)
+	}
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: xdsServiceName,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+
+	// Create an inbound xDS listener resource for the server side that does not
+	// contain any security configuration. This should force the xDS credentials
+	// on server to use its fallback.
+	inboundLis := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone)
+	resources.Listeners = append(resources.Listeners, inboundLis)
+
+	// Setup the management server with client and server-side resources.
+	if err := fs.Update(resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create client-side xDS credentials with an insecure fallback.
+	xdsCreds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{
+		FallbackCreds: insecure.NewCredentials(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn with the xds scheme and make a successful RPC.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	xdsCC, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", xdsServiceName), grpc.WithTransportCredentials(xdsCreds))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer xdsCC.Close()
+
+	client := testpb.NewTestServiceClient(xdsCC)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
 
 	// Create a ClientConn with TLS creds. This should fail since the server is
 	// using fallback credentials which in this case in insecure creds.
-	clientCreds := createClientTLSCredentials(t)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	cc, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithTransportCredentials(clientCreds))
+	tlsCreds := createClientTLSCredentials(t)
+	tlsCC, err := grpc.DialContext(ctx, lis.Addr().String(), grpc.WithTransportCredentials(tlsCreds))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
-	defer cc.Close()
+	defer tlsCC.Close()
 
 	// We don't set 'waitForReady` here since we want this call to failfast.
-	client := testpb.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Convert(err).Code() != codes.Unavailable {
+	client = testpb.NewTestServiceClient(tlsCC)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
 		t.Fatal("rpc EmptyCall() succeeded when expected to fail")
 	}
 
-	// Setup the fake management server to respond with a Listener resource with
-	// security configuration pointing to the file watcher plugin and requiring
-	// mTLS.
-	listener = listenerResourceWithSecurityConfig(t, lis)
-	if err := fs.Update(e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{listener},
-	}); err != nil {
-		t.Error(err)
+	// Switch server and client side resources with ones that contain required
+	// security configuration for mTLS with a file watcher certificate provider.
+	resources = e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: xdsServiceName,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelMTLS,
+	})
+	inboundLis = e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS)
+	resources.Listeners = append(resources.Listeners, inboundLis)
+	if err := fs.Update(resources); err != nil {
+		t.Fatal(err)
 	}
 
 	// Make another RPC with `waitForReady` set and expect this to succeed.

@@ -26,8 +26,8 @@ import (
 // DefaultFileWatcherConfig is a helper function to create a default certificate
 // provider plugin configuration. The test is expected to have setup the files
 // appropriately before this configuration is used to instantiate providers.
-func DefaultFileWatcherConfig(certPath, keyPath, caPath string) map[string]json.RawMessage {
-	cfg := fmt.Sprintf(`{
+func DefaultFileWatcherConfig(certPath, keyPath, caPath string) json.RawMessage {
+	return json.RawMessage(fmt.Sprintf(`{
 			"plugin_name": "file_watcher",
 			"config": {
 				"certificate_file": %q,
@@ -35,8 +35,5 @@ func DefaultFileWatcherConfig(certPath, keyPath, caPath string) map[string]json.
 				"ca_certificate_file": %q,
 				"refresh_interval": "600s"
 			}
-		}`, certPath, keyPath, caPath)
-	return map[string]json.RawMessage{
-		"google_cloud_private_spiffe": json.RawMessage(cfg),
-	}
+		}`, certPath, keyPath, caPath))
 }
