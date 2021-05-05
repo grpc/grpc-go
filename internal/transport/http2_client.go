@@ -30,8 +30,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
+	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
@@ -1254,77 +1256,124 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 
-	//state := &decodeState{}
-	//// Initialize isGRPC value to be !initialHeader, since if a gRPC Response-Headers has already been received, then it means that the peer is speaking gRPC and we are in gRPC mode.
-	//state.data.isGRPC = !initialHeader
-	//if h2code, err := state.decodeHeader(frame); err != nil {
-	//	t.closeStream(s, err, true, h2code, status.Convert(err), nil, endStream)
-	//	return
 	// frame.Truncated is set to true when framer detects that the current header
 	// list size hits MaxHeaderListSize limit.
 	if frame.Truncated {
 		se := status.New(codes.Internal, "peer header list size exceeded limit")
-		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+		t.closeStream(s, se.Err(), true, http2.ErrCodeFrameSize, se, nil, endStream)
 		return
 	}
 
 	// If a gRPC Response-Headers has already been received, then it means that the peer is speaking gRPC and we are in gRPC mode.
-	var mdata = make(map[string][]string)
+	var (
+		contentTypeErr string
+		grpcErr error
+		httpErr error
 
-	for _, hf := range frame.Fields {
-		v, err := decodeMetadataHeader(hf.Name, hf.Value)
-		if err != nil {
-			if logger.V(logLevel) {
-				logger.Errorf("Failed to decode metadata header (%q, %q): %v", hf.Name, hf.Value, err)
-			}
-			mdata[hf.Name] = []string{}
-			break
-		}
-		mdata[hf.Name] = append(mdata[hf.Name], v)
-	}
+		grpcMessage    string
+		rawStatusCode  *int
+		statusGen      *status.Status
+
+		httpStatus *int
+		mdata      = make(map[string][]string)
+	)
 
 	var isGRPC = !initialHeader
-	// TODO: do we want to propagate the whole content-type in the metadata,
-	// or come up with a way to just propagate the content-subtype if it was set?
-	// ie {"content-type": "application/grpc+proto"} or {"content-subtype": "proto"}
-	// in the metadata?
-	if contentTypes := mdata["content-type"]; len(contentTypes) == 1 {
-		if _, ok := grpcutil.ContentSubtype(contentTypes[0]); ok {
+	for _, hf := range frame.Fields {
+		switch hf.Name {
+		case "content-type":
+			if _, validContentType := grpcutil.ContentSubtype(hf.Value); !validContentType {
+				contentTypeErr = fmt.Sprintf("transport: received the unexpected content-type %q", hf.Value)
+				break
+			}
+			// TODO: do we want to propagate the whole content-type in the metadata,
+			// or come up with a way to just propagate the content-subtype if it was set?
+			// ie {"content-type": "application/grpc+proto"} or {"content-subtype": "proto"}
+			// in the metadata?
+			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
 			isGRPC = true
+		case "grpc-encoding":
+			s.recvCompress = hf.Value
+		case "grpc-status":
+			code, err := strconv.Atoi(hf.Value)
+			if err != nil {
+				grpcErr = status.Errorf(codes.Internal, "transport: malformed grpc-status: %v", err)
+				break
+			}
+			rawStatusCode = &code
+		case "grpc-message":
+			grpcMessage = decodeGrpcMessage(hf.Value)
+		case "grpc-status-details-bin":
+			v, err := decodeBinHeader(hf.Value)
+			if err != nil {
+				grpcErr = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
+				break
+			}
+			st := &spb.Status{}
+			if err := proto.Unmarshal(v, st); err != nil {
+				grpcErr = status.Errorf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
+				break
+			}
+			statusGen = status.FromProto(st)
+		case ":status":
+			code, err := strconv.Atoi(hf.Value)
+			if err != nil {
+				httpErr = status.Errorf(codes.Internal, "transport: malformed http-status: %v", err)
+				break
+			}
+			httpStatus = &code
+		case "grpc-tags-bin":
+			v, err := decodeBinHeader(hf.Value)
+			if err != nil {
+				grpcErr = status.Errorf(codes.Internal, "transport: malformed grpc-tags-bin: %v", err)
+				break
+			}
+			mdata[hf.Name] = append(mdata[hf.Name], string(v))
+		case "grpc-trace-bin":
+			v, err := decodeBinHeader(hf.Value)
+			if err != nil {
+				grpcErr = status.Errorf(codes.Internal, "transport: malformed grpc-trace-bin: %v", err)
+				break
+			}
+			mdata[hf.Name] = append(mdata[hf.Name], string(v))
+		default:
+			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
+				break
+			}
+			v, err := decodeMetadataHeader(hf.Name, hf.Value)
+			if err != nil {
+				if logger.V(logLevel) {
+					logger.Errorf("Failed to decode metadata header (%q, %q): %v", hf.Name, hf.Value, err)
+				}
+				break
+			}
+			mdata[hf.Name] = append(mdata[hf.Name], v)
 		}
-	}
-	if grpcEncoding := mdata["grpc-encoding"]; len(grpcEncoding) == 1 && !endStream {
-		s.recvCompress = grpcEncoding[0]
-	}
-	if grpcMessages := mdata["grpc-message"]; len(grpcMessages) == 1 {
-		mdata["grpc-message"] = []string{decodeGrpcMessage(grpcMessages[0])}
 	}
 
 	if isGRPC {
-		if tagsBin, ok := mdata["grpc-tags-bin"]; ok && len(tagsBin) == 0 {
-			se := status.New(codes.Internal, "transport: malformed grpc-tags-bin")
-			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+		if grpcErr != nil {
+			t.closeStream(s, grpcErr, true, http2.ErrCodeProtocol, status.Convert(grpcErr), nil, endStream)
 			return
 		}
-		if traceBin, ok := mdata["grpc-trace-bin"]; ok && len(traceBin) == 0 {
-			se := status.New(codes.Internal, "transport: malformed grpc-trace-bin")
-			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-			return
+		// gRPC status doesn't exist.
+		// Set rawStatusCode to be unknown and return nil error.
+		// So that, if the stream has ended this Unknown status
+		// will be propagated to the user.
+		// Otherwise, it will be ignored. In which case, status from
+		// a later trailer, that has StreamEnded flag set, is propagated.
+		if rawStatusCode == nil && statusGen == nil {
+			code := int(codes.Unknown)
+			rawStatusCode = &code
 		}
 	}
 
-	if !isGRPC {
-		var httpStatus *int
-		if httpStatuses := mdata[":status"]; len(httpStatuses) == 1 {
-			httpStatusCode, err := strconv.Atoi(httpStatuses[0])
-			if err != nil {
-				se := status.Newf(codes.Internal, "transport: malformed http-status: %v", err)
-				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-				return
-			}
-			httpStatus = &httpStatusCode
-		}
+	if httpErr != nil {
+		t.closeStream(s, httpErr, true, http2.ErrCodeProtocol, status.Convert(httpErr), nil, endStream)
+		return
+	}
 
+	if !isGRPC{
 		var code = codes.Internal // when header does not include HTTP status, return INTERNAL
 		if httpStatus != nil {
 			var ok bool
@@ -1333,19 +1382,14 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 				code = codes.Unknown
 			}
 		}
-
-		contentType := "missing"
-		if ct := mdata["content-type"]; len(ct) == 1 {
-			contentType = ct[0]
-		}
-		contentTypeErr := fmt.Sprintf("transport: received the unexpected content-type %q", contentType)
-		msg := constructHTTPErrMsg(httpStatus, contentTypeErr)
-		if err := status.Error(code, msg); err != nil {
+		if err := status.Error(code, constructHTTPErrMsg(
+			httpStatus,
+			contentTypeErr,
+		)); err != nil {
 			t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
 			return
 		}
 	}
-	delete(mdata, ":status")
 
 	isHeader := false
 	defer func() {
@@ -1378,7 +1422,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			// These values can be set without any synchronization because
 			// stream goroutine will read it only after seeing a closed
 			// headerChan which we'll close after setting this.
-			s.recvCompress = state.data.encoding
 			if len(mdata) > 0 {
 				s.header = mdata
 			}
@@ -1393,46 +1436,9 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		return
 	}
 
-	var statusGen *status.Status
-	if sg, ok := mdata["grpc-status-details-bin"]; ok {
-		if len(sg) == 0 {
-			se := status.New(codes.Internal, "transport: malformed grpc-status-details-bin")
-			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-			return
-		}
-		pbStatus := &spb.Status{}
-		if err := proto.Unmarshal([]byte(sg[0]), pbStatus); err != nil {
-			se := status.Newf(codes.Internal, "transport: malformed grpc-status-details-bin: %v", err)
-			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-			return
-		}
-		statusGen = status.FromProto(pbStatus)
-	}
 	if statusGen == nil {
-		var rawStatusMsg string
-		if rsm := mdata["grpc-message"]; len(rsm) == 1 {
-			rawStatusMsg = rsm[0]
-		}
-		// if gRPC status doesn't exist, Set rawStatusCode to be
-		// unknown and return nil error.
-		// So that, if the stream has ended this Unknown status
-		// will be propagated to the user.
-		// Otherwise, it will be ignored. In which case, status from
-		// a later trailer, that has StreamEnded flag set, is propagated.
-		rawStatusCode := int32(codes.Unknown)
-		if rsc := mdata["grpc-status"]; len(rsc) == 1 {
-			code, err := strconv.Atoi(rsc[0])
-			if err != nil {
-				se := status.Newf(codes.Internal, "transport: malformed grpc-status: %v", err)
-				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-				return
-			}
-			rawStatusCode = int32(code)
-		}
-		statusGen = status.New(codes.Code(rawStatusCode), rawStatusMsg)
+		statusGen = status.New(codes.Code(int32(*(rawStatusCode))), grpcMessage)
 	}
-	delete(mdata, "grpc-message")
-	delete(mdata, "grpc-status")
 
 	// if client received END_STREAM from server while stream was still active, send RST_STREAM
 	rst := s.getState() == streamActive

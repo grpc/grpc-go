@@ -263,21 +263,7 @@ func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) (http2.ErrCode
 // constructErrMsg constructs error message to be returned in HTTP fallback mode.
 // Format: HTTP status code and its corresponding message + content-type error message.
 func (d *decodeState) constructHTTPErrMsg() string {
-	var errMsgs []string
-
-	if d.data.httpStatus == nil {
-		errMsgs = append(errMsgs, "malformed header: missing HTTP status")
-	} else {
-		errMsgs = append(errMsgs, fmt.Sprintf("%s: HTTP status code %d", http.StatusText(*(d.data.httpStatus)), *d.data.httpStatus))
-	}
-
-	if d.data.contentTypeErr == "" {
-		errMsgs = append(errMsgs, "transport: missing content-type field")
-	} else {
-		errMsgs = append(errMsgs, d.data.contentTypeErr)
-	}
-
-	return strings.Join(errMsgs, "; ")
+	return constructHTTPErrMsg(d.data.httpStatus, d.data.contentTypeErr)
 }
 
 // constructErrMsg constructs error message to be returned in HTTP fallback mode.
