@@ -20,28 +20,23 @@
 package resolver
 
 import (
-	"context"
+	"errors"
 	"fmt"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/attributes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
-
-	xdsinternal "google.golang.org/grpc/xds/internal"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
+
+	iresolver "google.golang.org/grpc/internal/resolver"
+	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
 const xdsScheme = "xds"
 
 // For overriding in unittests.
-var (
-	newXDSClient = func(opts xdsclient.Options) (xdsClientInterface, error) {
-		return xdsclient.New(opts)
-	}
-	newXDSConfig = bootstrap.NewConfig
-)
+var newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
 
 func init() {
 	resolver.Register(&xdsResolverBuilder{})
@@ -53,41 +48,43 @@ type xdsResolverBuilder struct{}
 //
 // The xds bootstrap process is performed (and a new xds client is built) every
 // time an xds resolver is built.
-func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rbo resolver.BuildOptions) (resolver.Resolver, error) {
-	config, err := newXDSConfig()
-	if err != nil {
-		return nil, fmt.Errorf("xds: failed to read bootstrap file: %v", err)
-	}
-
+func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	r := &xdsResolver{
-		target:   t,
-		cc:       cc,
-		updateCh: make(chan suWithError, 1),
+		target:         t,
+		cc:             cc,
+		closed:         grpcsync.NewEvent(),
+		updateCh:       make(chan suWithError, 1),
+		activeClusters: make(map[string]*clusterInfo),
 	}
 	r.logger = prefixLogger((r))
 	r.logger.Infof("Creating resolver for target: %+v", t)
 
-	if config.Creds == nil {
-		// TODO: Once we start supporting a mechanism to register credential
-		// types, a failure to find the credential type mentioned in the
-		// bootstrap file should result in a failure, and not in using
-		// credentials from the parent channel (passed through the
-		// resolver.BuildOptions).
-		config.Creds = r.defaultDialCreds(config.BalancerName, rbo)
-	}
-
-	var dopts []grpc.DialOption
-	if rbo.Dialer != nil {
-		dopts = []grpc.DialOption{grpc.WithContextDialer(rbo.Dialer)}
-	}
-
-	client, err := newXDSClient(xdsclient.Options{Config: *config, DialOpts: dopts, TargetName: t.Endpoint})
+	client, err := newXDSClient()
 	if err != nil {
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
 	r.client = client
-	r.ctx, r.cancelCtx = context.WithCancel(context.Background())
-	cancelWatch := r.client.WatchService(r.target.Endpoint, r.handleServiceUpdate)
+
+	// If xds credentials were specified by the user, but bootstrap configs do
+	// not contain any certificate provider configuration, it is better to fail
+	// right now rather than failing when attempting to create certificate
+	// providers after receiving an CDS response with security configuration.
+	var creds credentials.TransportCredentials
+	switch {
+	case opts.DialCreds != nil:
+		creds = opts.DialCreds
+	case opts.CredsBundle != nil:
+		creds = opts.CredsBundle.TransportCredentials()
+	}
+	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
+		bc := client.BootstrapConfig()
+		if len(bc.CertProviderConfigs) == 0 {
+			return nil, errors.New("xds: xdsCreds specified but certificate_providers config missing in bootstrap file")
+		}
+	}
+
+	// Register a watch on the xdsClient for the user's dial target.
+	cancelWatch := watchService(r.client, r.target.Endpoint, r.handleServiceUpdate, r.logger)
 	r.logger.Infof("Watch started on resource name %v with xds-client %p", r.target.Endpoint, r.client)
 	r.cancelWatch = func() {
 		cancelWatch()
@@ -98,28 +95,6 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, rb
 	return r, nil
 }
 
-// defaultDialCreds builds a DialOption containing the credentials to be used
-// while talking to the xDS server (this is done only if the xds bootstrap
-// process does not return any credentials to use). If the parent channel
-// contains DialCreds, we use it as is. If it contains a CredsBundle, we use
-// just the transport credentials from the bundle. If we don't find any
-// credentials on the parent channel, we resort to using an insecure channel.
-func (r *xdsResolver) defaultDialCreds(balancerName string, rbo resolver.BuildOptions) grpc.DialOption {
-	switch {
-	case rbo.DialCreds != nil:
-		if err := rbo.DialCreds.OverrideServerName(balancerName); err != nil {
-			r.logger.Errorf("Failed to override server name in credentials: %v, using Insecure", err)
-			return grpc.WithInsecure()
-		}
-		return grpc.WithTransportCredentials(rbo.DialCreds)
-	case rbo.CredsBundle != nil:
-		return grpc.WithTransportCredentials(rbo.CredsBundle.TransportCredentials())
-	default:
-		r.logger.Warningf("No credentials available, using Insecure")
-		return grpc.WithInsecure()
-	}
-}
-
 // Name helps implement the resolver.Builder interface.
 func (*xdsResolverBuilder) Scheme() string {
 	return xdsScheme
@@ -128,15 +103,18 @@ func (*xdsResolverBuilder) Scheme() string {
 // xdsClientInterface contains methods from xdsClient.Client which are used by
 // the resolver. This will be faked out in unittests.
 type xdsClientInterface interface {
-	WatchService(string, func(xdsclient.ServiceUpdate, error)) func()
+	WatchListener(serviceName string, cb func(xdsclient.ListenerUpdate, error)) func()
+	WatchRouteConfig(routeName string, cb func(xdsclient.RouteConfigUpdate, error)) func()
+	BootstrapConfig() *bootstrap.Config
 	Close()
 }
 
 // suWithError wraps the ServiceUpdate and error received through a watch API
 // callback, so that it can pushed onto the update channel as a single entity.
 type suWithError struct {
-	su  xdsclient.ServiceUpdate
-	err error
+	su          serviceUpdate
+	emptyUpdate bool
+	err         error
 }
 
 // xdsResolver implements the resolver.Resolver interface.
@@ -145,10 +123,9 @@ type suWithError struct {
 // (which performs LDS/RDS queries for the same), and passes the received
 // updates to the ClientConn.
 type xdsResolver struct {
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	target    resolver.Target
-	cc        resolver.ClientConn
+	target resolver.Target
+	cc     resolver.ClientConn
+	closed *grpcsync.Event
 
 	logger *grpclog.PrefixLogger
 
@@ -160,15 +137,48 @@ type xdsResolver struct {
 	// cancelWatch is the function to cancel the watcher.
 	cancelWatch func()
 
-	// actions is a map from hash of weighted cluster, to the weighted cluster
-	// map, and it's assigned name. E.g.
-	//   "A40_B60_": {{A:40, B:60}, "A_B_", "A_B_0"}
-	//   "A30_B70_": {{A:30, B:70}, "A_B_", "A_B_1"}
-	//   "B90_C10_": {{B:90, C:10}, "B_C_", "B_C_0"}
-	actions map[string]actionWithAssignedName
-	// usedActionNameRandomNumber contains random numbers that have been used in
-	// assigned names, to avoid collision.
-	usedActionNameRandomNumber map[int64]bool
+	// activeClusters is a map from cluster name to a ref count.  Only read or
+	// written during a service update (synchronous).
+	activeClusters map[string]*clusterInfo
+
+	curConfigSelector *configSelector
+}
+
+// sendNewServiceConfig prunes active clusters, generates a new service config
+// based on the current set of active clusters, and sends an update to the
+// channel with that service config and the provided config selector.  Returns
+// false if an error occurs while generating the service config and the update
+// cannot be sent.
+func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
+	// Delete entries from r.activeClusters with zero references;
+	// otherwise serviceConfigJSON will generate a config including
+	// them.
+	r.pruneActiveClusters()
+
+	if cs == nil && len(r.activeClusters) == 0 {
+		// There are no clusters and we are sending a failing configSelector.
+		// Send an empty config, which picks pick-first, with no address, and
+		// puts the ClientConn into transient failure.
+		r.cc.UpdateState(resolver.State{ServiceConfig: r.cc.ParseServiceConfig("{}")})
+		return true
+	}
+
+	// Produce the service config.
+	sc, err := serviceConfigJSON(r.activeClusters)
+	if err != nil {
+		// JSON marshal error; should never happen.
+		r.logger.Errorf("%v", err)
+		r.cc.ReportError(err)
+		return false
+	}
+	r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, sc)
+
+	// Send the update to the ClientConn.
+	state := iresolver.SetConfigSelector(resolver.State{
+		ServiceConfig: r.cc.ParseServiceConfig(sc),
+	}, cs)
+	r.cc.UpdateState(state)
+	return true
 }
 
 // run is a long running goroutine which blocks on receiving service updates
@@ -176,36 +186,55 @@ type xdsResolver struct {
 func (r *xdsResolver) run() {
 	for {
 		select {
-		case <-r.ctx.Done():
+		case <-r.closed.Done():
+			return
 		case update := <-r.updateCh:
 			if update.err != nil {
 				r.logger.Warningf("Watch error on resource %v from xds-client %p, %v", r.target.Endpoint, r.client, update.err)
 				if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
-					// If error is resource-not-found, it means the LDS resource
-					// was removed. Send an empty service config, which picks
-					// pick-first, with no address, and puts the ClientConn into
-					// transient failure..
-					r.cc.UpdateState(resolver.State{
-						ServiceConfig: r.cc.ParseServiceConfig("{}"),
-					})
+					// If error is resource-not-found, it means the LDS
+					// resource was removed. Ultimately send an empty service
+					// config, which picks pick-first, with no address, and
+					// puts the ClientConn into transient failure.  Before we
+					// can do that, we may need to send a normal service config
+					// along with an erroring (nil) config selector.
+					r.sendNewServiceConfig(nil)
+					// Stop and dereference the active config selector, if one exists.
+					r.curConfigSelector.stop()
+					r.curConfigSelector = nil
 					continue
 				}
 				// Send error to ClientConn, and balancers, if error is not
-				// resource not found.
+				// resource not found.  No need to update resolver state if we
+				// can keep using the old config.
 				r.cc.ReportError(update.err)
 				continue
 			}
-			sc, err := r.serviceUpdateToJSON(update.su)
+			if update.emptyUpdate {
+				r.sendNewServiceConfig(r.curConfigSelector)
+				continue
+			}
+
+			// Create the config selector for this update.
+			cs, err := r.newConfigSelector(update.su)
 			if err != nil {
-				r.logger.Warningf("failed to convert update to service config: %v", err)
+				r.logger.Warningf("Error parsing update on resource %v from xds-client %p: %v", r.target.Endpoint, r.client, err)
 				r.cc.ReportError(err)
 				continue
 			}
-			r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, sc)
-			r.cc.UpdateState(resolver.State{
-				ServiceConfig: r.cc.ParseServiceConfig(sc),
-				Attributes:    attributes.New(xdsinternal.XDSClientID, r.client),
-			})
+
+			if !r.sendNewServiceConfig(cs) {
+				// JSON error creating the service config (unexpected); erase
+				// this config selector and ignore this update, continuing with
+				// the previous config selector.
+				cs.stop()
+				continue
+			}
+
+			// Decrement references to the old config selector and assign the
+			// new one as the current one.
+			r.curConfigSelector.stop()
+			r.curConfigSelector = cs
 		}
 	}
 }
@@ -213,12 +242,17 @@ func (r *xdsResolver) run() {
 // handleServiceUpdate is the callback which handles service updates. It writes
 // the received update to the update channel, which is picked by the run
 // goroutine.
-func (r *xdsResolver) handleServiceUpdate(su xdsclient.ServiceUpdate, err error) {
-	if r.ctx.Err() != nil {
+func (r *xdsResolver) handleServiceUpdate(su serviceUpdate, err error) {
+	if r.closed.HasFired() {
 		// Do not pass updates to the ClientConn once the resolver is closed.
 		return
 	}
-	r.updateCh <- suWithError{su, err}
+	// Remove any existing entry in updateCh and replace with the new one.
+	select {
+	case <-r.updateCh:
+	default:
+	}
+	r.updateCh <- suWithError{su: su, err: err}
 }
 
 // ResolveNow is a no-op at this point.
@@ -228,6 +262,6 @@ func (*xdsResolver) ResolveNow(o resolver.ResolveNowOptions) {}
 func (r *xdsResolver) Close() {
 	r.cancelWatch()
 	r.client.Close()
-	r.cancelCtx()
+	r.closed.Fire()
 	r.logger.Infof("Shutdown")
 }

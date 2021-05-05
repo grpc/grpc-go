@@ -37,10 +37,11 @@ import (
 )
 
 const (
-	fakeProvider1Name  = "fake-certificate-provider-1"
-	fakeProvider2Name  = "fake-certificate-provider-2"
-	fakeConfig         = "my fake config"
-	defaultTestTimeout = 1 * time.Second
+	fakeProvider1Name       = "fake-certificate-provider-1"
+	fakeProvider2Name       = "fake-certificate-provider-2"
+	fakeConfig              = "my fake config"
+	defaultTestTimeout      = 5 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
 var fpb1, fpb2 *fakeProviderBuilder
@@ -73,36 +74,36 @@ type fakeProviderBuilder struct {
 	providerChan *testutils.Channel
 }
 
-func (b *fakeProviderBuilder) Build(StableConfig, Options) Provider {
-	p := &fakeProvider{Distributor: NewDistributor()}
-	b.providerChan.Send(p)
-	return p
-}
-
-func (b *fakeProviderBuilder) ParseConfig(config interface{}) (StableConfig, error) {
+func (b *fakeProviderBuilder) ParseConfig(config interface{}) (*BuildableConfig, error) {
 	s, ok := config.(string)
 	if !ok {
 		return nil, fmt.Errorf("providerBuilder %s received config of type %T, want string", b.name, config)
 	}
-	return &fakeStableConfig{config: s}, nil
+	return NewBuildableConfig(b.name, []byte(s), func(BuildOptions) Provider {
+		fp := &fakeProvider{
+			Distributor: NewDistributor(),
+			config:      s,
+		}
+		b.providerChan.Send(fp)
+		return fp
+	}), nil
 }
 
 func (b *fakeProviderBuilder) Name() string {
 	return b.name
 }
 
-type fakeStableConfig struct {
-	config string
-}
-
-func (c *fakeStableConfig) Canonical() []byte {
-	return []byte(c.config)
-}
-
 // fakeProvider is an implementation of the Provider interface which provides a
 // method for tests to invoke to push new key materials.
 type fakeProvider struct {
 	*Distributor
+	config string
+}
+
+func (p *fakeProvider) Start(BuildOptions) Provider {
+	// This is practically a no-op since this provider doesn't do any work which
+	// needs to be started at this point.
+	return p
 }
 
 // newKeyMaterial allows tests to push new key material to the fake provider
@@ -166,15 +167,19 @@ func compareKeyMaterial(got, want *KeyMaterial) error {
 	return nil
 }
 
+func createProvider(t *testing.T, name, config string, opts BuildOptions) Provider {
+	t.Helper()
+	prov, err := GetProvider(name, config, opts)
+	if err != nil {
+		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", name, config, opts, err)
+	}
+	return prov
+}
+
 // TestStoreSingleProvider creates a single provider through the store and calls
 // methods on them.
 func (s) TestStoreSingleProvider(t *testing.T) {
-	// Create a Provider through the store.
-	kmOpts := Options{CertName: "default"}
-	prov, err := GetProvider(fakeProvider1Name, fakeConfig, kmOpts)
-	if err != nil {
-		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", fakeProvider1Name, fakeConfig, kmOpts, err)
-	}
+	prov := createProvider(t, fakeProvider1Name, fakeConfig, BuildOptions{CertName: "default"})
 	defer prov.Close()
 
 	// Our fakeProviderBuilder pushes newly created providers on a channel. Grab
@@ -190,7 +195,9 @@ func (s) TestStoreSingleProvider(t *testing.T) {
 	// Attempt to read from key material from the Provider returned by the
 	// store. This will fail because we have not pushed any key material into
 	// our fake provider.
-	if err := readAndVerifyKeyMaterial(ctx, prov, nil); !errors.Is(err, context.DeadlineExceeded) {
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	if err := readAndVerifyKeyMaterial(sCtx, prov, nil); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal(err)
 	}
 
@@ -198,8 +205,6 @@ func (s) TestStoreSingleProvider(t *testing.T) {
 	// and attempt to read from the Provider returned by the store.
 	testKM1 := loadKeyMaterials(t, "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
 	fakeProv.newKeyMaterial(testKM1, nil)
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := readAndVerifyKeyMaterial(ctx, prov, testKM1); err != nil {
 		t.Fatal(err)
 	}
@@ -220,18 +225,14 @@ func (s) TestStoreSingleProvider(t *testing.T) {
 func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 	// Create three readers on the same fake provider. Two of these readers use
 	// certName `foo`, while the third one uses certName `bar`.
-	optsFoo := Options{CertName: "foo"}
-	optsBar := Options{CertName: "bar"}
-	provFoo1, err := GetProvider(fakeProvider1Name, fakeConfig, optsFoo)
-	if err != nil {
-		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", fakeProvider1Name, fakeConfig, optsFoo, err)
-	}
-	defer provFoo1.Close()
-	provFoo2, err := GetProvider(fakeProvider1Name, fakeConfig, optsFoo)
-	if err != nil {
-		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", fakeProvider1Name, fakeConfig, optsFoo, err)
-	}
-	defer provFoo2.Close()
+	optsFoo := BuildOptions{CertName: "foo"}
+	provFoo1 := createProvider(t, fakeProvider1Name, fakeConfig, optsFoo)
+	provFoo2 := createProvider(t, fakeProvider1Name, fakeConfig, optsFoo)
+	defer func() {
+		provFoo1.Close()
+		provFoo2.Close()
+	}()
+
 	// Our fakeProviderBuilder pushes newly created providers on a channel.
 	// Grab the fake provider for optsFoo.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -242,11 +243,18 @@ func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 	}
 	fakeProvFoo := p.(*fakeProvider)
 
-	provBar1, err := GetProvider(fakeProvider1Name, fakeConfig, optsBar)
-	if err != nil {
-		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", fakeProvider1Name, fakeConfig, optsBar, err)
+	// Make sure only provider was created by the builder so far. The store
+	// should be able to share the providers.
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	if _, err := fpb1.providerChan.Receive(sCtx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("A second provider created when expected to be shared by the store")
 	}
+
+	optsBar := BuildOptions{CertName: "bar"}
+	provBar1 := createProvider(t, fakeProvider1Name, fakeConfig, optsBar)
 	defer provBar1.Close()
+
 	// Grab the fake provider for optsBar.
 	p, err = fpb1.providerChan.Receive(ctx)
 	if err != nil {
@@ -264,7 +272,9 @@ func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 	if err := readAndVerifyKeyMaterial(ctx, provFoo2, fooKM); err != nil {
 		t.Fatal(err)
 	}
-	if err := readAndVerifyKeyMaterial(ctx, provBar1, nil); !errors.Is(err, context.DeadlineExceeded) {
+	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	if err := readAndVerifyKeyMaterial(sCtx, provBar1, nil); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatal(err)
 	}
 
@@ -272,8 +282,6 @@ func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 	// appropriate key material.
 	barKM := loadKeyMaterials(t, "x509/server2_cert.pem", "x509/server2_key.pem", "x509/client_ca_cert.pem")
 	fakeProvBar.newKeyMaterial(barKM, nil)
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := readAndVerifyKeyMaterial(ctx, provBar1, barKM); err != nil {
 		t.Fatal(err)
 	}
@@ -290,13 +298,11 @@ func (s) TestStoreSingleProviderSameConfigDifferentOpts(t *testing.T) {
 // would take place.
 func (s) TestStoreSingleProviderDifferentConfigs(t *testing.T) {
 	// Create two providers of the same type, but with different configs.
-	opts := Options{CertName: "foo"}
+	opts := BuildOptions{CertName: "foo"}
 	cfg1 := fakeConfig + "1111"
 	cfg2 := fakeConfig + "2222"
-	prov1, err := GetProvider(fakeProvider1Name, cfg1, opts)
-	if err != nil {
-		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", fakeProvider1Name, cfg1, opts, err)
-	}
+
+	prov1 := createProvider(t, fakeProvider1Name, cfg1, opts)
 	defer prov1.Close()
 	// Our fakeProviderBuilder pushes newly created providers on a channel. Grab
 	// the fake provider from that channel.
@@ -308,10 +314,7 @@ func (s) TestStoreSingleProviderDifferentConfigs(t *testing.T) {
 	}
 	fakeProv1 := p1.(*fakeProvider)
 
-	prov2, err := GetProvider(fakeProvider1Name, cfg2, opts)
-	if err != nil {
-		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", fakeProvider1Name, cfg2, opts, err)
-	}
+	prov2 := createProvider(t, fakeProvider1Name, cfg2, opts)
 	defer prov2.Close()
 	// Grab the second provider from the channel.
 	p2, err := fpb1.providerChan.Receive(ctx)
@@ -354,11 +357,8 @@ func (s) TestStoreSingleProviderDifferentConfigs(t *testing.T) {
 // TestStoreMultipleProviders creates providers of different types and makes
 // sure closing of one does not affect the other.
 func (s) TestStoreMultipleProviders(t *testing.T) {
-	opts := Options{CertName: "foo"}
-	prov1, err := GetProvider(fakeProvider1Name, fakeConfig, opts)
-	if err != nil {
-		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", fakeProvider1Name, fakeConfig, opts, err)
-	}
+	opts := BuildOptions{CertName: "foo"}
+	prov1 := createProvider(t, fakeProvider1Name, fakeConfig, opts)
 	defer prov1.Close()
 	// Our fakeProviderBuilder pushes newly created providers on a channel. Grab
 	// the fake provider from that channel.
@@ -370,10 +370,7 @@ func (s) TestStoreMultipleProviders(t *testing.T) {
 	}
 	fakeProv1 := p1.(*fakeProvider)
 
-	prov2, err := GetProvider(fakeProvider2Name, fakeConfig, opts)
-	if err != nil {
-		t.Fatalf("GetProvider(%s, %s, %v) failed: %v", fakeProvider1Name, fakeConfig, opts, err)
-	}
+	prov2 := createProvider(t, fakeProvider2Name, fakeConfig, opts)
 	defer prov2.Close()
 	// Grab the second provider from the channel.
 	p2, err := fpb2.providerChan.Receive(ctx)

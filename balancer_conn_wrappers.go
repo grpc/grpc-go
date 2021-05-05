@@ -69,10 +69,10 @@ func (ccb *ccBalancerWrapper) watcher() {
 		select {
 		case t := <-ccb.scBuffer.Get():
 			ccb.scBuffer.Load()
+			ccb.balancerMu.Lock()
 			if ccb.done.HasFired() {
 				break
 			}
-			ccb.balancerMu.Lock()
 			su := t.(*scStateUpdate)
 			ccb.balancer.UpdateSubConnState(su.sc, balancer.SubConnState{ConnectivityState: su.state, ConnectionError: su.err})
 			ccb.balancerMu.Unlock()
@@ -80,7 +80,6 @@ func (ccb *ccBalancerWrapper) watcher() {
 		}
 
 		if ccb.done.HasFired() {
-			ccb.balancer.Close()
 			ccb.mu.Lock()
 			scs := ccb.subConns
 			ccb.subConns = nil
@@ -95,6 +94,9 @@ func (ccb *ccBalancerWrapper) watcher() {
 }
 
 func (ccb *ccBalancerWrapper) close() {
+	ccb.balancerMu.Lock()
+	defer ccb.balancerMu.Unlock()
+	ccb.balancer.Close()
 	ccb.done.Fire()
 }
 
@@ -119,13 +121,19 @@ func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s co
 func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) error {
 	ccb.balancerMu.Lock()
 	defer ccb.balancerMu.Unlock()
+	if ccb.done.HasFired() {
+		return nil
+	}
 	return ccb.balancer.UpdateClientConnState(*ccs)
 }
 
 func (ccb *ccBalancerWrapper) resolverError(err error) {
 	ccb.balancerMu.Lock()
+	defer ccb.balancerMu.Unlock()
+	if ccb.done.HasFired() {
+		return
+	}
 	ccb.balancer.ResolverError(err)
-	ccb.balancerMu.Unlock()
 }
 
 func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
@@ -163,6 +171,14 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 	ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 }
 
+func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
+	acbw, ok := sc.(*acBalancerWrapper)
+	if !ok {
+		return
+	}
+	acbw.UpdateAddresses(addrs)
+}
+
 func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
 	ccb.mu.Lock()
 	defer ccb.mu.Unlock()
@@ -197,7 +213,7 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 	acbw.mu.Lock()
 	defer acbw.mu.Unlock()
 	if len(addrs) <= 0 {
-		acbw.ac.tearDown(errConnDrain)
+		acbw.ac.cc.removeAddrConn(acbw.ac, errConnDrain)
 		return
 	}
 	if !acbw.ac.tryUpdateAddrs(addrs) {
@@ -212,7 +228,7 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 		acbw.ac.acbw = nil
 		acbw.ac.mu.Unlock()
 		acState := acbw.ac.getState()
-		acbw.ac.tearDown(errConnDrain)
+		acbw.ac.cc.removeAddrConn(acbw.ac, errConnDrain)
 
 		if acState == connectivity.Shutdown {
 			return

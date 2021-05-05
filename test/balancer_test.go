@@ -37,8 +37,9 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/balancerload"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
+	imetadata "google.golang.org/grpc/internal/metadata"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -150,7 +151,7 @@ func (s) TestCredsBundleFromBalancer(t *testing.T) {
 	te.customServerOptions = []grpc.ServerOption{
 		grpc.Creds(creds),
 	}
-	te.startServer((&testServer{}).Svc())
+	te.startServer(&testServer{})
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -179,7 +180,7 @@ func testPickExtraMetadata(t *testing.T, e env) {
 		grpc.WithBalancerName(testBalancerName),
 		grpc.WithUserAgent(testUserAgent),
 	}
-	te.startServer(testServer{security: e.security}.Svc())
+	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
 	// Set resolver to xds to trigger the extra metadata code path.
@@ -228,7 +229,7 @@ func testDoneInfo(t *testing.T, e env) {
 		grpc.WithBalancerName(testBalancerName),
 	}
 	te.userAgent = failAppUA
-	te.startServer(testServer{security: e.security}.Svc())
+	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
 	cc := te.clientConn()
@@ -300,8 +301,8 @@ func testDoneLoads(t *testing.T, e env) {
 
 	const testLoad = "test-load-,-should-be-orca"
 
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			grpc.SetTrailer(ctx, metadata.Pairs(loadMDKey, testLoad))
 			return &testpb.Empty{}, nil
 		},
@@ -311,7 +312,7 @@ func testDoneLoads(t *testing.T, e env) {
 	}
 	defer ss.Stop()
 
-	tc := testpb.NewTestServiceClient(ss.cc)
+	tc := testpb.NewTestServiceClient(ss.CC)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -498,7 +499,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	}
 
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceService(s, (&testServer{}).Svc())
+	testpb.RegisterTestServiceServer(s, &testServer{})
 	go s.Serve(lis)
 	defer s.Stop()
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
@@ -543,6 +544,76 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	}
 }
 
+// TestMetadataInAddressAttributes verifies that the metadata added to
+// address.Attributes will be sent with the RPCs.
+func (s) TestMetadataInAddressAttributes(t *testing.T) {
+	const (
+		testMDKey      = "test-md"
+		testMDValue    = "test-md-value"
+		mdBalancerName = "metadata-balancer"
+	)
+
+	// Register a stub balancer which adds metadata to the first address that it
+	// receives and then calls NewSubConn on it.
+	bf := stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			addrs := ccs.ResolverState.Addresses
+			if len(addrs) == 0 {
+				return nil
+			}
+			// Only use the first address.
+			sc, err := bd.ClientConn.NewSubConn([]resolver.Address{
+				imetadata.Set(addrs[0], metadata.Pairs(testMDKey, testMDValue)),
+			}, balancer.NewSubConnOptions{})
+			if err != nil {
+				return err
+			}
+			sc.Connect()
+			return nil
+		},
+		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
+			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: state.ConnectivityState, Picker: &aiPicker{result: balancer.PickResult{SubConn: sc}, err: state.ConnectionError}})
+		},
+	}
+	stub.Register(mdBalancerName, bf)
+	t.Logf("Registered balancer %s...", mdBalancerName)
+
+	testMDChan := make(chan []string, 1)
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			md, ok := metadata.FromIncomingContext(ctx)
+			if ok {
+				select {
+				case testMDChan <- md[testMDKey]:
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.Start(nil, grpc.WithDefaultServiceConfig(
+		fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, mdBalancerName),
+	)); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	// The RPC should succeed with the expected md.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
+	}
+	t.Log("Made an RPC which succeeded...")
+
+	// The server should receive the test metadata.
+	md1 := <-testMDChan
+	if len(md1) == 0 || md1[0] != testMDValue {
+		t.Fatalf("got md: %v, want %v", md1, []string{testMDValue})
+	}
+}
+
 // TestServersSwap creates two servers and verifies the client switches between
 // them when the name resolver reports the first and then the second.
 func (s) TestServersSwap(t *testing.T) {
@@ -556,12 +627,12 @@ func (s) TestServersSwap(t *testing.T) {
 			t.Fatalf("Error while listening. Err: %v", err)
 		}
 		s := grpc.NewServer()
-		ts := &testpb.TestServiceService{
-			UnaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		ts := &funcServer{
+			unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 				return &testpb.SimpleResponse{Username: username}, nil
 			},
 		}
-		testpb.RegisterTestServiceService(s, ts)
+		testpb.RegisterTestServiceServer(s, ts)
 		go s.Serve(lis)
 		return lis.Addr().String(), s.Stop
 	}
@@ -616,20 +687,17 @@ func (s) TestEmptyAddrs(t *testing.T) {
 	s := grpc.NewServer()
 	defer s.Stop()
 	const one = "1"
-	ts := &testpb.TestServiceService{
-		UnaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &funcServer{
+		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}
-	testpb.RegisterTestServiceService(s, ts)
+	testpb.RegisterTestServiceServer(s, ts)
 	go s.Serve(lis)
 
 	// Initialize pickfirst client
 	pfr := manual.NewBuilderWithScheme("whatever")
-	pfrnCalled := grpcsync.NewEvent()
-	pfr.ResolveNowCallback = func(resolver.ResolveNowOptions) {
-		pfrnCalled.Fire()
-	}
+
 	pfr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	pfcc, err := grpc.DialContext(ctx, pfr.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(pfr))
@@ -646,16 +714,10 @@ func (s) TestEmptyAddrs(t *testing.T) {
 
 	// Remove all addresses.
 	pfr.UpdateState(resolver.State{})
-	// Wait for a ResolveNow call on the pick first client's resolver.
-	<-pfrnCalled.Done()
 
 	// Initialize roundrobin client
 	rrr := manual.NewBuilderWithScheme("whatever")
 
-	rrrnCalled := grpcsync.NewEvent()
-	rrr.ResolveNowCallback = func(resolver.ResolveNowOptions) {
-		rrrnCalled.Fire()
-	}
 	rrr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
 	rrcc, err := grpc.DialContext(ctx, rrr.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(rrr),
@@ -673,8 +735,6 @@ func (s) TestEmptyAddrs(t *testing.T) {
 
 	// Remove all addresses.
 	rrr.UpdateState(resolver.State{})
-	// Wait for a ResolveNow call on the round robin client's resolver.
-	<-rrrnCalled.Done()
 
 	// Confirm several new RPCs succeed on pick first.
 	for i := 0; i < 10; i++ {
@@ -705,12 +765,12 @@ func (s) TestWaitForReady(t *testing.T) {
 	s := grpc.NewServer()
 	defer s.Stop()
 	const one = "1"
-	ts := &testpb.TestServiceService{
-		UnaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ts := &funcServer{
+		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Username: one}, nil
 		},
 	}
-	testpb.RegisterTestServiceService(s, ts)
+	testpb.RegisterTestServiceServer(s, ts)
 	go s.Serve(lis)
 
 	// Initialize client

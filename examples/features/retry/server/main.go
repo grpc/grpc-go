@@ -37,6 +37,7 @@ import (
 var port = flag.Int("port", 50052, "port number")
 
 type failingServer struct {
+	pb.UnimplementedEchoServer
 	mu sync.Mutex
 
 	reqCounter uint
@@ -85,7 +86,7 @@ func main() {
 		reqModulo:  4,
 	}
 
-	pb.RegisterEchoService(s, &pb.EchoService{UnaryEcho: failingservice.UnaryEcho})
+	pb.RegisterEchoServer(s, failingservice)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

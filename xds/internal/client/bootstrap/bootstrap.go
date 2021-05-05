@@ -25,7 +25,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"os"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -33,21 +32,22 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials/tls/certprovider"
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
 const (
-	// Environment variable which holds the name of the xDS bootstrap file.
-	bootstrapFileEnv = "GRPC_XDS_BOOTSTRAP"
-	// Environment variable which controls the use of xDS v3 API.
-	v3SupportEnv = "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT"
 	// The "server_features" field in the bootstrap file contains a list of
 	// features supported by the server. A value of "xds_v3" indicates that the
 	// server supports the v3 version of the xDS transport protocol.
 	serverFeaturesV3 = "xds_v3"
 
 	// Type name for Google default credentials.
-	googleDefaultCreds              = "google_default"
+	credsGoogleDefault              = "google_default"
+	credsInsecure                   = "insecure"
 	gRPCUserAgentName               = "gRPC Go"
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 )
@@ -58,10 +58,10 @@ var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 var bootstrapFileReadFunc = ioutil.ReadFile
 
 // Config provides the xDS client with several key bits of information that it
-// requires in its interaction with an xDS server. The Config is initialized
-// from the bootstrap file.
+// requires in its interaction with the management server. The Config is
+// initialized from the bootstrap file.
 type Config struct {
-	// BalancerName is the name of the xDS server to connect to.
+	// BalancerName is the name of the management server to connect to.
 	//
 	// The bootstrap file contains a list of servers (with name+creds), but we
 	// pick the first one.
@@ -76,6 +76,15 @@ type Config struct {
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
 	NodeProto proto.Message
+	// CertProviderConfigs contains a mapping from certificate provider plugin
+	// instance names to parsed buildable configs.
+	CertProviderConfigs map[string]*certprovider.BuildableConfig
+	// ServerListenerResourceNameTemplate is a template for the name of the
+	// Listener resource to subscribe to for a gRPC server. If the token `%s` is
+	// present in the string, it will be replaced with the server's listening
+	// "IP:port" (e.g., "0.0.0.0:8080", "[::]:8080"). For example, a value of
+	// "example/resource/%s" could become "example/resource/0.0.0.0:8080".
+	ServerListenerResourceNameTemplate string
 }
 
 type channelCreds struct {
@@ -84,8 +93,32 @@ type channelCreds struct {
 }
 
 type xdsServer struct {
-	ServerURI    string         `json:"server_uri"`
-	ChannelCreds []channelCreds `json:"channel_creds"`
+	ServerURI      string         `json:"server_uri"`
+	ChannelCreds   []channelCreds `json:"channel_creds"`
+	ServerFeatures []string       `json:"server_features"`
+}
+
+func bootstrapConfigFromEnvVariable() ([]byte, error) {
+	fName := env.BootstrapFileName
+	fContent := env.BootstrapFileContent
+
+	// Bootstrap file name has higher priority than bootstrap content.
+	if fName != "" {
+		// If file name is set
+		// - If file not found (or other errors), fail
+		// - Otherwise, use the content.
+		//
+		// Note that even if the content is invalid, we don't failover to the
+		// file content env variable.
+		logger.Debugf("xds: using bootstrap file with name %q", fName)
+		return bootstrapFileReadFunc(fName)
+	}
+
+	if fContent != "" {
+		return []byte(fContent), nil
+	}
+
+	return nil, fmt.Errorf("none of the bootstrap environment variables (%q or %q) defined", env.BootstrapFileNameEnv, env.BootstrapFileContentEnv)
 }
 
 // NewConfig returns a new instance of Config initialized by reading the
@@ -94,16 +127,27 @@ type xdsServer struct {
 // The format of the bootstrap file will be as follows:
 // {
 //    "xds_server": {
-//      "server_uri": <string containing URI of xds server>,
+//      "server_uri": <string containing URI of management server>,
 //      "channel_creds": [
 //        {
 //          "type": <string containing channel cred type>,
 //          "config": <JSON object containing config for the type>
 //        }
 //      ],
-//      "server_features": [ ... ]
+//      "server_features": [ ... ],
 //    },
-//    "node": <JSON form of Node proto>
+//    "node": <JSON form of Node proto>,
+//    "certificate_providers" : {
+//      "default": {
+//        "plugin_name": "default-plugin-name",
+//        "config": { default plugin config in JSON }
+//       },
+//      "foo": {
+//        "plugin_name": "foo",
+//        "config": { foo plugin config in JSON }
+//      }
+//    },
+//    "server_listener_resource_name_template": "grpc/server?xds.resource.listening_address=%s"
 // }
 //
 // Currently, we support exactly one type of credential, which is
@@ -117,21 +161,15 @@ type xdsServer struct {
 func NewConfig() (*Config, error) {
 	config := &Config{}
 
-	fName, ok := os.LookupEnv(bootstrapFileEnv)
-	if !ok {
-		return nil, fmt.Errorf("xds: Environment variable %v not defined", bootstrapFileEnv)
-	}
-	logger.Infof("Got bootstrap file location from %v environment variable: %v", bootstrapFileEnv, fName)
-
-	data, err := bootstrapFileReadFunc(fName)
+	data, err := bootstrapConfigFromEnvVariable()
 	if err != nil {
-		return nil, fmt.Errorf("xds: Failed to read bootstrap file %s with error %v", fName, err)
+		return nil, fmt.Errorf("xds: Failed to read bootstrap config: %v", err)
 	}
 	logger.Debugf("Bootstrap content: %s", data)
 
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
-		return nil, fmt.Errorf("xds: Failed to parse file %s (content %v) with error: %v", fName, string(data), err)
+		return nil, fmt.Errorf("xds: Failed to parse bootstrap config: %v", err)
 	}
 
 	serverSupportsV3 := false
@@ -156,27 +194,58 @@ func NewConfig() (*Config, error) {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 			if len(servers) < 1 {
-				return nil, fmt.Errorf("xds: bootstrap file parsing failed during bootstrap: file doesn't contain any xds server to connect to")
+				return nil, fmt.Errorf("xds: bootstrap file parsing failed during bootstrap: file doesn't contain any management server to connect to")
 			}
 			xs := servers[0]
 			config.BalancerName = xs.ServerURI
 			for _, cc := range xs.ChannelCreds {
-				if cc.Type == googleDefaultCreds {
+				// We stop at the first credential type that we support.
+				if cc.Type == credsGoogleDefault {
 					config.Creds = grpc.WithCredentialsBundle(google.NewDefaultCredentials())
-					// We stop at the first credential type that we support.
+					break
+				} else if cc.Type == credsInsecure {
+					config.Creds = grpc.WithTransportCredentials(insecure.NewCredentials())
 					break
 				}
 			}
-		case "server_features":
-			var features []string
-			if err := json.Unmarshal(v, &features); err != nil {
-				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
-			}
-			for _, f := range features {
+			for _, f := range xs.ServerFeatures {
 				switch f {
 				case serverFeaturesV3:
 					serverSupportsV3 = true
 				}
+			}
+		case "certificate_providers":
+			var providerInstances map[string]json.RawMessage
+			if err := json.Unmarshal(v, &providerInstances); err != nil {
+				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
+			}
+			configs := make(map[string]*certprovider.BuildableConfig)
+			getBuilder := internal.GetCertificateProviderBuilder.(func(string) certprovider.Builder)
+			for instance, data := range providerInstances {
+				var nameAndConfig struct {
+					PluginName string          `json:"plugin_name"`
+					Config     json.RawMessage `json:"config"`
+				}
+				if err := json.Unmarshal(data, &nameAndConfig); err != nil {
+					return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), instance, err)
+				}
+
+				name := nameAndConfig.PluginName
+				parser := getBuilder(nameAndConfig.PluginName)
+				if parser == nil {
+					// We ignore plugins that we do not know about.
+					continue
+				}
+				bc, err := parser.ParseConfig(nameAndConfig.Config)
+				if err != nil {
+					return nil, fmt.Errorf("xds: Config parsing for plugin %q failed: %v", name, err)
+				}
+				configs[instance] = bc
+			}
+			config.CertProviderConfigs = configs
+		case "server_listener_resource_name_template":
+			if err := json.Unmarshal(v, &config.ServerListenerResourceNameTemplate); err != nil {
+				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 		}
 		// Do not fail the xDS bootstrap when an unknown field is seen. This can
@@ -185,24 +254,17 @@ func NewConfig() (*Config, error) {
 	}
 
 	if config.BalancerName == "" {
-		return nil, fmt.Errorf("xds: Required field %q not found in bootstrap", "xds_servers.server_uri")
+		return nil, fmt.Errorf("xds: Required field %q not found in bootstrap %s", "xds_servers.server_uri", jsonData["xds_servers"])
+	}
+	if config.Creds == nil {
+		return nil, fmt.Errorf("xds: Required field %q doesn't contain valid value in bootstrap %s", "xds_servers.channel_creds", jsonData["xds_servers"])
 	}
 
-	// We end up using v3 transport protocol version only if the following
-	// conditions are met:
-	// 1. Server supports v3, indicated by the presence of "xds_v3" in
-	//    server_features.
-	// 2. Environment variable "GRPC_XDS_EXPERIMENTAL_V3_SUPPORT" is set to
-	//    true.
-	// The default value of the enum type "version.TransportAPI" is v2.
-	//
-	// TODO: there are multiple env variables, GRPC_XDS_BOOTSTRAP and
-	// GRPC_XDS_EXPERIMENTAL_V3_SUPPORT. Move all env variables into a separate
-	// package.
-	if v3Env := os.Getenv(v3SupportEnv); v3Env == "true" {
-		if serverSupportsV3 {
-			config.TransportAPI = version.TransportV3
-		}
+	// We end up using v3 transport protocol version only if the server supports
+	// v3, indicated by the presence of "xds_v3" in server_features. The default
+	// value of the enum type "version.TransportAPI" is v2.
+	if serverSupportsV3 {
+		config.TransportAPI = version.TransportV3
 	}
 
 	if err := config.updateNodeProto(); err != nil {

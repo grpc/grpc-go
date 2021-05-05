@@ -1,3 +1,5 @@
+// +build go1.12
+
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -37,7 +39,7 @@ func TestParseConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		js      string
-		want    *lbConfig
+		want    *LBConfig
 		wantErr bool
 	}{
 		{
@@ -45,21 +47,6 @@ func TestParseConfig(t *testing.T) {
 			js: `{
   "edsServiceName": "test-eds-service",
   "lrsLoadReportingServerName": "test-lrs-name",
-  "locality": {
-    "region": "test-region",
-    "zone": "test-zone",
-    "subZone": "test-sub-zone"
-  },
-  "childPolicy":[{"round_robin":{}}]
-}
-			`,
-			wantErr: true,
-		},
-		{
-			name: "no LRS server name",
-			js: `{
-  "clusterName": "test-cluster",
-  "edsServiceName": "test-eds-service",
   "locality": {
     "region": "test-region",
     "zone": "test-zone",
@@ -95,10 +82,10 @@ func TestParseConfig(t *testing.T) {
   "childPolicy":[{"round_robin":{}}]
 }
 			`,
-			want: &lbConfig{
-				ClusterName:                testClusterName,
-				EdsServiceName:             testServiceName,
-				LrsLoadReportingServerName: testLRSServerName,
+			want: &LBConfig{
+				ClusterName:             testClusterName,
+				EDSServiceName:          testServiceName,
+				LoadReportingServerName: testLRSServerName,
 				Locality: &xdsinternal.LocalityID{
 					Region:  "test-region",
 					Zone:    "test-zone",

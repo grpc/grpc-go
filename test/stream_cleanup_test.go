@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -35,13 +36,13 @@ func (s) TestStreamCleanup(t *testing.T) {
 	const bodySize = 2 * initialWindowSize   // Something that is not going to fit in a single window
 	const callRecvMsgSize uint = 1           // The maximum message size the client can receive
 
-	ss := &stubServer{
-		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{Payload: &testpb.Payload{
 				Body: make([]byte, bodySize),
 			}}, nil
 		},
-		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -50,10 +51,12 @@ func (s) TestStreamCleanup(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	if _, err := ss.client.UnaryCall(context.Background(), &testpb.SimpleRequest{}); status.Code(err) != codes.ResourceExhausted {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("should fail with ResourceExhausted, message's body size: %v, maximum message size the client can receive: %v", bodySize, callRecvMsgSize)
 	}
-	if _, err := ss.client.EmptyCall(context.Background(), &testpb.Empty{}); err != nil {
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("should succeed, err: %v", err)
 	}
 }
@@ -64,8 +67,8 @@ func (s) TestStreamCleanupAfterSendStatus(t *testing.T) {
 
 	serverReturnedStatus := make(chan struct{})
 
-	ss := &stubServer{
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			defer func() {
 				close(serverReturnedStatus)
 			}()
@@ -88,7 +91,7 @@ func (s) TestStreamCleanupAfterSendStatus(t *testing.T) {
 	// empty.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	stream, err := ss.client.FullDuplexCall(ctx)
+	stream, err := ss.Client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("FullDuplexCall= _, %v; want _, <nil>", err)
 	}
@@ -113,7 +116,7 @@ func (s) TestStreamCleanupAfterSendStatus(t *testing.T) {
 	gracefulStopDone := make(chan struct{})
 	go func() {
 		defer close(gracefulStopDone)
-		ss.s.GracefulStop()
+		ss.S.GracefulStop()
 	}()
 
 	// 4. Make sure the stream is not broken.

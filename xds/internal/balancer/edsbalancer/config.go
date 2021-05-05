@@ -29,8 +29,6 @@ import (
 // for EDS balancers.
 type EDSConfig struct {
 	serviceconfig.LoadBalancingConfig
-	// BalancerName represents the load balancer to use.
-	BalancerName string
 	// ChildPolicy represents the load balancing config for the child
 	// policy.
 	ChildPolicy *loadBalancingConfig
@@ -40,6 +38,15 @@ type EDSConfig struct {
 	// Name to use in EDS query.  If not present, defaults to the server
 	// name from the target URI.
 	EDSServiceName string
+	// MaxConcurrentRequests is the max number of concurrent request allowed for
+	// this service. If unset, default value 1024 is used.
+	//
+	// Note that this is not defined in the service config proto. And the reason
+	// is, we are dropping EDS and moving the features into cluster_impl. But in
+	// the mean time, to keep things working, we need to add this field. And it
+	// should be fine to add this extra field here, because EDS is only used in
+	// CDS today, so we have full control.
+	MaxConcurrentRequests *uint32
 	// LRS server to send load reports to.  If not present, load reporting
 	// will be disabled.  If set to the empty string, load reporting will
 	// be sent to the same server that we obtained CDS data from.
@@ -50,10 +57,10 @@ type EDSConfig struct {
 // and Fallbackspolicy are post-processed, and for each, the first installed
 // policy is kept.
 type edsConfigJSON struct {
-	BalancerName               string
 	ChildPolicy                []*loadBalancingConfig
 	FallbackPolicy             []*loadBalancingConfig
 	EDSServiceName             string
+	MaxConcurrentRequests      *uint32
 	LRSLoadReportingServerName *string
 }
 
@@ -66,8 +73,8 @@ func (l *EDSConfig) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	l.BalancerName = configJSON.BalancerName
 	l.EDSServiceName = configJSON.EDSServiceName
+	l.MaxConcurrentRequests = configJSON.MaxConcurrentRequests
 	l.LrsLoadReportingServerName = configJSON.LRSLoadReportingServerName
 
 	for _, lbcfg := range configJSON.ChildPolicy {

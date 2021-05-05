@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/xds/internal/client/load"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/buffer"
@@ -51,7 +52,7 @@ type VersionedClient interface {
 
 	// SendRequest constructs and sends out a DiscoveryRequest message specific
 	// to the underlying transport protocol version.
-	SendRequest(s grpc.ClientStream, resourceNames []string, rType ResourceType, version string, nonce string) error
+	SendRequest(s grpc.ClientStream, resourceNames []string, rType ResourceType, version, nonce, errMsg string) error
 
 	// RecvResponse uses the provided stream to receive a response specific to
 	// the underlying transport protocol version.
@@ -71,19 +72,21 @@ type VersionedClient interface {
 	NewLoadStatsStream(ctx context.Context, cc *grpc.ClientConn) (grpc.ClientStream, error)
 
 	// SendFirstLoadStatsRequest constructs and sends the first request on the
-	// LRS stream. This contains the node proto with appropriate metadata
-	// fields.
-	SendFirstLoadStatsRequest(s grpc.ClientStream, targetName string) error
+	// LRS stream.
+	SendFirstLoadStatsRequest(s grpc.ClientStream) error
 
 	// HandleLoadStatsResponse receives the first response from the server which
 	// contains the load reporting interval and the clusters for which the
 	// server asks the client to report load for.
-	HandleLoadStatsResponse(s grpc.ClientStream, clusterName string) (time.Duration, error)
+	//
+	// If the response sets SendAllClusters to true, the returned clusters is
+	// nil.
+	HandleLoadStatsResponse(s grpc.ClientStream) (clusters []string, _ time.Duration, _ error)
 
 	// SendLoadStatsRequest will be invoked at regular intervals to send load
 	// report with load data reported since the last time this method was
 	// invoked.
-	SendLoadStatsRequest(s grpc.ClientStream, clusterName string) error
+	SendLoadStatsRequest(s grpc.ClientStream, loads []*load.Data) error
 }
 
 // TransportHelper contains all xDS transport protocol related functionality
@@ -246,10 +249,10 @@ func (t *TransportHelper) send(ctx context.Context) {
 			t.sendCh.Load()
 
 			var (
-				target         []string
-				rType          ResourceType
-				version, nonce string
-				send           bool
+				target                 []string
+				rType                  ResourceType
+				version, nonce, errMsg string
+				send                   bool
 			)
 			switch update := u.(type) {
 			case *watchAction:
@@ -259,6 +262,7 @@ func (t *TransportHelper) send(ctx context.Context) {
 				if !send {
 					continue
 				}
+				errMsg = update.errMsg
 			}
 			if stream == nil {
 				// There's no stream yet. Skip the request. This request
@@ -267,7 +271,7 @@ func (t *TransportHelper) send(ctx context.Context) {
 				// sending response back).
 				continue
 			}
-			if err := t.vClient.SendRequest(stream, target, rType, version, nonce); err != nil {
+			if err := t.vClient.SendRequest(stream, target, rType, version, nonce, errMsg); err != nil {
 				t.logger.Warningf("ADS request for {target: %q, type: %v, version: %q, nonce: %q} failed: %v", target, rType, version, nonce, err)
 				// send failed, clear the current stream.
 				stream = nil
@@ -292,7 +296,7 @@ func (t *TransportHelper) sendExisting(stream grpc.ClientStream) bool {
 	t.nonceMap = make(map[ResourceType]string)
 
 	for rType, s := range t.watchMap {
-		if err := t.vClient.SendRequest(stream, mapToSlice(s), rType, "", ""); err != nil {
+		if err := t.vClient.SendRequest(stream, mapToSlice(s), rType, "", "", ""); err != nil {
 			t.logger.Errorf("ADS request failed: %v", err)
 			return false
 		}
@@ -321,6 +325,7 @@ func (t *TransportHelper) recv(stream grpc.ClientStream) bool {
 				rType:   rType,
 				version: "",
 				nonce:   nonce,
+				errMsg:  err.Error(),
 				stream:  stream,
 			})
 			t.logger.Warningf("Sending NACK for response type: %v, version: %v, nonce: %v, reason: %v", rType, version, nonce, err)
@@ -387,6 +392,7 @@ type ackAction struct {
 	rType   ResourceType
 	version string // NACK if version is an empty string.
 	nonce   string
+	errMsg  string // Empty unless it's a NACK.
 	// ACK/NACK are tagged with the stream it's for. When the stream is down,
 	// all the ACK/NACK for this stream will be dropped, and the version/nonce
 	// won't be updated.
@@ -440,15 +446,13 @@ func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStrea
 	return target, rType, version, nonce, send
 }
 
-// ReportLoad starts an LRS stream to report load data to the management server.
+// reportLoad starts an LRS stream to report load data to the management server.
 // It blocks until the context is cancelled.
-func (t *TransportHelper) ReportLoad(ctx context.Context, cc *grpc.ClientConn, opts LoadReportingOptions) {
+func (t *TransportHelper) reportLoad(ctx context.Context, cc *grpc.ClientConn, opts loadReportingOptions) {
 	retries := 0
 	for {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		default:
 		}
 
 		if retries != 0 {
@@ -471,23 +475,23 @@ func (t *TransportHelper) ReportLoad(ctx context.Context, cc *grpc.ClientConn, o
 		}
 		logger.Infof("lrs: created LRS stream")
 
-		if err := t.vClient.SendFirstLoadStatsRequest(stream, opts.TargetName); err != nil {
+		if err := t.vClient.SendFirstLoadStatsRequest(stream); err != nil {
 			logger.Warningf("lrs: failed to send first request: %v", err)
 			continue
 		}
 
-		interval, err := t.vClient.HandleLoadStatsResponse(stream, opts.ClusterName)
+		clusters, interval, err := t.vClient.HandleLoadStatsResponse(stream)
 		if err != nil {
 			logger.Warning(err)
 			continue
 		}
 
 		retries = 0
-		t.sendLoads(ctx, stream, opts.ClusterName, interval)
+		t.sendLoads(ctx, stream, opts.loadStore, clusters, interval)
 	}
 }
 
-func (t *TransportHelper) sendLoads(ctx context.Context, stream grpc.ClientStream, clusterName string, interval time.Duration) {
+func (t *TransportHelper) sendLoads(ctx context.Context, stream grpc.ClientStream, store *load.Store, clusterNames []string, interval time.Duration) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {
@@ -496,7 +500,7 @@ func (t *TransportHelper) sendLoads(ctx context.Context, stream grpc.ClientStrea
 		case <-ctx.Done():
 			return
 		}
-		if err := t.vClient.SendLoadStatsRequest(stream, clusterName); err != nil {
+		if err := t.vClient.SendLoadStatsRequest(stream, store.Stats(clusterNames)); err != nil {
 			logger.Warning(err)
 			return
 		}

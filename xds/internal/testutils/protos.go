@@ -18,7 +18,6 @@
 package testutils
 
 import (
-	"fmt"
 	"net"
 	"strconv"
 
@@ -59,11 +58,11 @@ type ClusterLoadAssignmentBuilder struct {
 }
 
 // NewClusterLoadAssignmentBuilder creates a ClusterLoadAssignmentBuilder.
-func NewClusterLoadAssignmentBuilder(clusterName string, dropPercents []uint32) *ClusterLoadAssignmentBuilder {
+func NewClusterLoadAssignmentBuilder(clusterName string, dropPercents map[string]uint32) *ClusterLoadAssignmentBuilder {
 	var drops []*v2xdspb.ClusterLoadAssignment_Policy_DropOverload
-	for i, d := range dropPercents {
+	for n, d := range dropPercents {
 		drops = append(drops, &v2xdspb.ClusterLoadAssignment_Policy_DropOverload{
-			Category: fmt.Sprintf("test-drop-%d", i),
+			Category: n,
 			DropPercentage: &v2typepb.FractionalPercent{
 				Numerator:   d,
 				Denominator: v2typepb.FractionalPercent_HUNDRED,

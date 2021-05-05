@@ -32,16 +32,26 @@ package main
 
 import (
 	"flag"
+	"fmt"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
-var genUnstableServerInterfaces *bool
+const version = "1.1.0"
+
+var requireUnimplemented *bool
 
 func main() {
+	showVersion := flag.Bool("version", false, "print the version and exit")
+	flag.Parse()
+	if *showVersion {
+		fmt.Printf("protoc-gen-go-grpc %v\n", version)
+		return
+	}
+
 	var flags flag.FlagSet
-	genUnstableServerInterfaces = flags.Bool("gen_unstable_server_interfaces", false, `set to generate legacy "Server" interfaces which do not guarantee backward compatibility`)
+	requireUnimplemented = flags.Bool("require_unimplemented_servers", true, "set to false to match legacy behavior")
 
 	protogen.Options{
 		ParamFunc: flags.Set,

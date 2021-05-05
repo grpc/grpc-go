@@ -32,9 +32,11 @@ import (
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
-	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
+	_ "google.golang.org/grpc/xds/googledirectpath"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
 
 const (
@@ -54,6 +56,7 @@ var (
 	defaultServiceAccount = flag.String("default_service_account", "", "Email of GCE default service account")
 	serverHost            = flag.String("server_host", "localhost", "The server host name")
 	serverPort            = flag.Int("server_port", 10000, "The server port number")
+	serviceConfigJSON     = flag.String("service_config_json", "", "Disables service config lookups and sets the provided string as the default service config.")
 	tlsServerName         = flag.String("server_host_override", "", "The server name use to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
 	testCase              = flag.String("test_case", "large_unary",
 		`Configure different test cases. Valid options are:
@@ -125,7 +128,10 @@ func main() {
 	}
 
 	resolver.SetDefaultScheme("dns")
-	serverAddr := net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
+	serverAddr := *serverHost
+	if *serverPort != 0 {
+		serverAddr = net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
+	}
 	var opts []grpc.DialOption
 	switch credsChosen {
 	case credsTLS:
@@ -182,13 +188,16 @@ func main() {
 			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewOauthAccess(interop.GetToken(*serviceAccountKeyFile, *oauthScope))))
 		}
 	}
+	if len(*serviceConfigJSON) > 0 {
+		opts = append(opts, grpc.WithDisableServiceConfig(), grpc.WithDefaultServiceConfig(*serviceConfigJSON))
+	}
 	opts = append(opts, grpc.WithBlock())
 	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {
 		logger.Fatalf("Fail to dial: %v", err)
 	}
 	defer conn.Close()
-	tc := testpb.NewTestServiceClient(conn)
+	tc := testgrpc.NewTestServiceClient(conn)
 	switch *testCase {
 	case "empty_unary":
 		interop.DoEmptyUnaryCall(tc)
@@ -272,7 +281,7 @@ func main() {
 		interop.DoUnimplementedMethod(conn)
 		logger.Infoln("UnimplementedMethod done")
 	case "unimplemented_service":
-		interop.DoUnimplementedService(testpb.NewUnimplementedServiceClient(conn))
+		interop.DoUnimplementedService(testgrpc.NewUnimplementedServiceClient(conn))
 		logger.Infoln("UnimplementedService done")
 	case "pick_first_unary":
 		interop.DoPickFirstUnary(tc)

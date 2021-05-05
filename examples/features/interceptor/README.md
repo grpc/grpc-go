@@ -76,7 +76,7 @@ user to operate on.
 
 In the example, we define a new struct `wrappedStream`, which is embedded with a
 `ClientStream`. Then, we implement (overload) the `SendMsg` and `RecvMsg`
-methods on `wrappedStream` to intercepts these two operations on the embedded
+methods on `wrappedStream` to intercept these two operations on the embedded
 `ClientStream`. In the example, we log the message type info and time info for
 interception purpose.
 
@@ -113,6 +113,6 @@ handler StreamHandler) error`.
 Refer to client-side stream interceptor section for detailed implementation
 explanation.
 
-To install the unary interceptor for a Server, configure `NewServer` with
+To install the stream interceptor for a Server, configure `NewServer` with
 `ServerOption`
 [`StreamInterceptor`](https://godoc.org/google.golang.org/grpc#StreamInterceptor).

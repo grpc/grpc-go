@@ -1,4 +1,4 @@
-// +build !appengine
+// +build !appengine,go1.14
 
 /*
  *
@@ -28,10 +28,10 @@ import (
 // buildGetCertificates returns the certificate that matches the SNI field
 // for the given ClientHelloInfo, defaulting to the first element of o.GetCertificates.
 func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
-	if o.GetCertificates == nil {
+	if o.IdentityOptions.GetIdentityCertificatesForServer == nil {
 		return nil, fmt.Errorf("function GetCertificates must be specified")
 	}
-	certificates, err := o.GetCertificates(clientHello)
+	certificates, err := o.IdentityOptions.GetIdentityCertificatesForServer(clientHello)
 	if err != nil {
 		return nil, err
 	}

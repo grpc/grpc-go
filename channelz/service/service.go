@@ -43,7 +43,7 @@ func init() {
 var logger = grpclog.Component("channelz")
 
 // RegisterChannelzServiceToServer registers the channelz service to the given server.
-func RegisterChannelzServiceToServer(s *grpc.Server) {
+func RegisterChannelzServiceToServer(s grpc.ServiceRegistrar) {
 	channelzgrpc.RegisterChannelzServer(s, newCZServer())
 }
 

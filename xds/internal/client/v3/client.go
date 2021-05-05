@@ -22,14 +22,13 @@ package v3
 import (
 	"context"
 	"fmt"
-	"sync"
-	"time"
 
 	"github.com/golang/protobuf/proto"
+	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpclog"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/version"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -43,10 +42,10 @@ func init() {
 
 var (
 	resourceTypeToURL = map[xdsclient.ResourceType]string{
-		xdsclient.ListenerResource:    version.V2ListenerURL,
-		xdsclient.RouteConfigResource: version.V2RouteConfigURL,
-		xdsclient.ClusterResource:     version.V2ClusterURL,
-		xdsclient.EndpointsResource:   version.V2EndpointsURL,
+		xdsclient.ListenerResource:    version.V3ListenerURL,
+		xdsclient.RouteConfigResource: version.V3RouteConfigURL,
+		xdsclient.ClusterResource:     version.V3ClusterURL,
+		xdsclient.EndpointsResource:   version.V3EndpointsURL,
 	}
 )
 
@@ -69,7 +68,6 @@ func newClient(cc *grpc.ClientConn, opts xdsclient.BuildOptions) (xdsclient.APIC
 		cc:        cc,
 		parent:    opts.Parent,
 		nodeProto: nodeProto,
-		loadStore: opts.LoadStore,
 		logger:    opts.Logger,
 	}
 	v3c.ctx, v3c.cancelCtx = context.WithCancel(context.Background())
@@ -88,60 +86,11 @@ type client struct {
 	ctx       context.Context
 	cancelCtx context.CancelFunc
 	parent    xdsclient.UpdateHandler
-	loadStore *load.Store
 	logger    *grpclog.PrefixLogger
 
 	// ClientConn to the xDS gRPC server. Owned by the parent xdsClient.
 	cc        *grpc.ClientConn
 	nodeProto *v3corepb.Node
-
-	mu sync.Mutex
-	// ldsResourceName is the LDS resource_name to watch. It is set to the first
-	// LDS resource_name to watch, and removed when the LDS watch is canceled.
-	//
-	// It's from the dial target of the parent ClientConn. RDS resource
-	// processing needs this to do the host matching.
-	ldsResourceName string
-	ldsWatchCount   int
-
-	lastLoadReportAt time.Time
-}
-
-// AddWatch overrides the transport helper's AddWatch to save the LDS
-// resource_name. This is required when handling an RDS response to perform host
-// matching.
-func (v3c *client) AddWatch(rType xdsclient.ResourceType, rName string) {
-	v3c.mu.Lock()
-	// Special handling for LDS, because RDS needs the LDS resource_name for
-	// response host matching.
-	if rType == xdsclient.ListenerResource {
-		// Set hostname to the first LDS resource_name, and reset it when the
-		// last LDS watch is removed. The upper level Client isn't expected to
-		// watchLDS more than once.
-		v3c.ldsWatchCount++
-		if v3c.ldsWatchCount == 1 {
-			v3c.ldsResourceName = rName
-		}
-	}
-	v3c.mu.Unlock()
-	v3c.TransportHelper.AddWatch(rType, rName)
-}
-
-func (v3c *client) RemoveWatch(rType xdsclient.ResourceType, rName string) {
-	v3c.mu.Lock()
-	// Special handling for LDS, because RDS needs the LDS resource_name for
-	// response host matching.
-	if rType == xdsclient.ListenerResource {
-		// Set hostname to the first LDS resource_name, and reset it when the
-		// last LDS watch is removed. The upper level Client isn't expected to
-		// watchLDS more than once.
-		v3c.ldsWatchCount--
-		if v3c.ldsWatchCount == 0 {
-			v3c.ldsResourceName = ""
-		}
-	}
-	v3c.mu.Unlock()
-	v3c.TransportHelper.RemoveWatch(rType, rName)
 }
 
 func (v3c *client) NewStream(ctx context.Context) (grpc.ClientStream, error) {
@@ -156,7 +105,7 @@ func (v3c *client) NewStream(ctx context.Context) (grpc.ClientStream, error) {
 // - If this is an ack, version will be the version from the response.
 // - If this is a nack, version will be the previous acked version (from
 //   versionMap). If there was no ack before, it will be empty.
-func (v3c *client) SendRequest(s grpc.ClientStream, resourceNames []string, rType xdsclient.ResourceType, version, nonce string) error {
+func (v3c *client) SendRequest(s grpc.ClientStream, resourceNames []string, rType xdsclient.ResourceType, version, nonce, errMsg string) error {
 	stream, ok := s.(adsStream)
 	if !ok {
 		return fmt.Errorf("xds: Attempt to send request on unsupported stream type: %T", s)
@@ -167,7 +116,11 @@ func (v3c *client) SendRequest(s grpc.ClientStream, resourceNames []string, rTyp
 		ResourceNames: resourceNames,
 		VersionInfo:   version,
 		ResponseNonce: nonce,
-		// TODO: populate ErrorDetails for nack.
+	}
+	if errMsg != "" {
+		req.ErrorDetail = &statuspb.Status{
+			Code: int32(codes.InvalidArgument), Message: errMsg,
+		}
 	}
 	if err := stream.Send(req); err != nil {
 		return fmt.Errorf("xds: stream.Send(%+v) failed: %v", req, err)
@@ -190,7 +143,7 @@ func (v3c *client) RecvResponse(s grpc.ClientStream) (proto.Message, error) {
 		return nil, fmt.Errorf("xds: stream.Recv() failed: %v", err)
 	}
 	v3c.logger.Infof("ADS response received, type: %v", resp.GetTypeUrl())
-	v3c.logger.Debugf("ADS response received: %v", resp)
+	v3c.logger.Debugf("ADS response received: %+v", resp)
 	return resp, nil
 }
 
@@ -228,49 +181,35 @@ func (v3c *client) HandleResponse(r proto.Message) (xdsclient.ResourceType, stri
 	return rType, resp.GetVersionInfo(), resp.GetNonce(), err
 }
 
-// handleLDSResponse processes an LDS response received from the xDS server. On
-// receipt of a good response, it also invokes the registered watcher callback.
+// handleLDSResponse processes an LDS response received from the management
+// server. On receipt of a good response, it also invokes the registered watcher
+// callback.
 func (v3c *client) handleLDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
-	update, err := xdsclient.UnmarshalListener(resp.GetResources(), v3c.logger)
-	if err != nil {
-		return err
-	}
-	v3c.parent.NewListeners(update)
-	return nil
+	update, md, err := xdsclient.UnmarshalListener(resp.GetVersionInfo(), resp.GetResources(), v3c.logger)
+	v3c.parent.NewListeners(update, md)
+	return err
 }
 
-// handleRDSResponse processes an RDS response received from the xDS server. On
-// receipt of a good response, it caches validated resources and also invokes
-// the registered watcher callback.
+// handleRDSResponse processes an RDS response received from the management
+// server. On receipt of a good response, it caches validated resources and also
+// invokes the registered watcher callback.
 func (v3c *client) handleRDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
-	v3c.mu.Lock()
-	hostname := v3c.ldsResourceName
-	v3c.mu.Unlock()
-
-	update, err := xdsclient.UnmarshalRouteConfig(resp.GetResources(), hostname, v3c.logger)
-	if err != nil {
-		return err
-	}
-	v3c.parent.NewRouteConfigs(update)
-	return nil
+	update, md, err := xdsclient.UnmarshalRouteConfig(resp.GetVersionInfo(), resp.GetResources(), v3c.logger)
+	v3c.parent.NewRouteConfigs(update, md)
+	return err
 }
 
-// handleCDSResponse processes an CDS response received from the xDS server. On
-// receipt of a good response, it also invokes the registered watcher callback.
+// handleCDSResponse processes an CDS response received from the management
+// server. On receipt of a good response, it also invokes the registered watcher
+// callback.
 func (v3c *client) handleCDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
-	update, err := xdsclient.UnmarshalCluster(resp.GetResources(), v3c.logger)
-	if err != nil {
-		return err
-	}
-	v3c.parent.NewClusters(update)
-	return nil
+	update, md, err := xdsclient.UnmarshalCluster(resp.GetVersionInfo(), resp.GetResources(), v3c.logger)
+	v3c.parent.NewClusters(update, md)
+	return err
 }
 
 func (v3c *client) handleEDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
-	update, err := xdsclient.UnmarshalEndpoints(resp.GetResources(), v3c.logger)
-	if err != nil {
-		return err
-	}
-	v3c.parent.NewEndpoints(update)
-	return nil
+	update, md, err := xdsclient.UnmarshalEndpoints(resp.GetVersionInfo(), resp.GetResources(), v3c.logger)
+	v3c.parent.NewEndpoints(update, md)
+	return err
 }

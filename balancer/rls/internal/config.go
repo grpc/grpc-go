@@ -201,7 +201,7 @@ func (*rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig,
 	if lookupService == "" {
 		return nil, fmt.Errorf("rls: empty lookup_service in service config {%+v}", string(c))
 	}
-	parsedTarget := grpcutil.ParseTarget(lookupService)
+	parsedTarget := grpcutil.ParseTarget(lookupService, false)
 	if parsedTarget.Scheme == "" {
 		parsedTarget.Scheme = resolver.GetDefaultScheme()
 	}

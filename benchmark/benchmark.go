@@ -29,10 +29,13 @@ import (
 	"net"
 
 	"google.golang.org/grpc"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var logger = grpclog.Component("benchmark")
@@ -45,8 +48,6 @@ func setPayload(p *testpb.Payload, t testpb.PayloadType, size int) {
 	body := make([]byte, size)
 	switch t {
 	case testpb.PayloadType_COMPRESSABLE:
-	case testpb.PayloadType_UNCOMPRESSABLE:
-		logger.Fatalf("PayloadType UNCOMPRESSABLE is not supported")
 	default:
 		logger.Fatalf("Unsupported payload type: %d", t)
 	}
@@ -61,14 +62,8 @@ func NewPayload(t testpb.PayloadType, size int) *testpb.Payload {
 	return p
 }
 
-type testServer struct{}
-
-func (s *testServer) Svc() *testpb.BenchmarkServiceService {
-	return &testpb.BenchmarkServiceService{
-		UnaryCall:                  s.UnaryCall,
-		StreamingCall:              s.StreamingCall,
-		UnconstrainedStreamingCall: s.UnconstrainedStreamingCall,
-	}
+type testServer struct {
+	testgrpc.UnimplementedBenchmarkServiceServer
 }
 
 func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -77,7 +72,15 @@ func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*
 	}, nil
 }
 
-func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
+// UnconstrainedStreamingHeader indicates to the StreamingCall handler that its
+// behavior should be unconstrained (constant send/receive in parallel) instead
+// of ping-pong.
+const UnconstrainedStreamingHeader = "unconstrained-streaming"
+
+func (s *testServer) StreamingCall(stream testgrpc.BenchmarkService_StreamingCallServer) error {
+	if md, ok := metadata.FromIncomingContext(stream.Context()); ok && len(md[UnconstrainedStreamingHeader]) != 0 {
+		return s.UnconstrainedStreamingCall(stream)
+	}
 	response := &testpb.SimpleResponse{
 		Payload: new(testpb.Payload),
 	}
@@ -99,7 +102,7 @@ func (s *testServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallS
 	}
 }
 
-func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_UnconstrainedStreamingCallServer) error {
+func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService_StreamingCallServer) error {
 	in := new(testpb.SimpleRequest)
 	// Receive a message to learn response type and size.
 	err := stream.RecvMsg(in)
@@ -150,15 +153,8 @@ func (s *testServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_U
 // byteBufServer is a gRPC server that sends and receives byte buffer.
 // The purpose is to benchmark the gRPC performance without protobuf serialization/deserialization overhead.
 type byteBufServer struct {
+	testgrpc.UnimplementedBenchmarkServiceServer
 	respSize int32
-}
-
-func (s *byteBufServer) Svc() *testpb.BenchmarkServiceService {
-	return &testpb.BenchmarkServiceService{
-		UnaryCall:                  s.UnaryCall,
-		StreamingCall:              s.StreamingCall,
-		UnconstrainedStreamingCall: s.UnconstrainedStreamingCall,
-	}
 }
 
 // UnaryCall is an empty function and is not used for benchmark.
@@ -167,24 +163,7 @@ func (s *byteBufServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest)
 	return &testpb.SimpleResponse{}, nil
 }
 
-func (s *byteBufServer) StreamingCall(stream testpb.BenchmarkService_StreamingCallServer) error {
-	for {
-		var in []byte
-		err := stream.(grpc.ServerStream).RecvMsg(&in)
-		if err == io.EOF {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		out := make([]byte, s.respSize)
-		if err := stream.(grpc.ServerStream).SendMsg(&out); err != nil {
-			return err
-		}
-	}
-}
-
-func (s *byteBufServer) UnconstrainedStreamingCall(stream testpb.BenchmarkService_UnconstrainedStreamingCallServer) error {
+func (s *byteBufServer) StreamingCall(stream testgrpc.BenchmarkService_StreamingCallServer) error {
 	for {
 		var in []byte
 		err := stream.(grpc.ServerStream).RecvMsg(&in)
@@ -224,13 +203,13 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) func() {
 	s := grpc.NewServer(opts...)
 	switch info.Type {
 	case "protobuf":
-		testpb.RegisterBenchmarkServiceService(s, (&testServer{}).Svc())
+		testgrpc.RegisterBenchmarkServiceServer(s, &testServer{})
 	case "bytebuf":
 		respSize, ok := info.Metadata.(int32)
 		if !ok {
 			logger.Fatalf("failed to StartServer, invalid metadata: %v, for Type: %v", info.Metadata, info.Type)
 		}
-		testpb.RegisterBenchmarkServiceService(s, (&byteBufServer{respSize: respSize}).Svc())
+		testgrpc.RegisterBenchmarkServiceServer(s, &byteBufServer{respSize: respSize})
 	default:
 		logger.Fatalf("failed to StartServer, unknown Type: %v", info.Type)
 	}
@@ -241,7 +220,7 @@ func StartServer(info ServerInfo, opts ...grpc.ServerOption) func() {
 }
 
 // DoUnaryCall performs an unary RPC with given stub and request and response sizes.
-func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) error {
+func DoUnaryCall(tc testgrpc.BenchmarkServiceClient, reqSize, respSize int) error {
 	pl := NewPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
@@ -255,7 +234,7 @@ func DoUnaryCall(tc testpb.BenchmarkServiceClient, reqSize, respSize int) error 
 }
 
 // DoStreamingRoundTrip performs a round trip for a single streaming rpc.
-func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
+func DoStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
 	pl := NewPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
@@ -276,7 +255,7 @@ func DoStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, re
 }
 
 // DoByteBufStreamingRoundTrip performs a round trip for a single streaming rpc, using a custom codec for byte buffer.
-func DoByteBufStreamingRoundTrip(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
+func DoByteBufStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
 	out := make([]byte, reqSize)
 	if err := stream.(grpc.ClientStream).SendMsg(&out); err != nil {
 		return fmt.Errorf("/BenchmarkService/StreamingCall.(ClientStream).SendMsg(_) = %v, want <nil>", err)

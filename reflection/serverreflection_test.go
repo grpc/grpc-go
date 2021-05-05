@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/golang/protobuf/proto"
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
@@ -50,6 +51,8 @@ var (
 	fdProto2ExtByte  []byte
 	fdProto2Ext2Byte []byte
 )
+
+const defaultTestTimeout = 10 * time.Second
 
 type x struct {
 	grpctest.Tester
@@ -166,13 +169,8 @@ func (x) TestAllExtensionNumbersForType(t *testing.T) {
 
 // Do end2end tests.
 
-type server struct{}
-
-func (s *server) Svc() *pb.SearchServiceService {
-	return &pb.SearchServiceService{
-		Search:          s.Search,
-		StreamingSearch: s.StreamingSearch,
-	}
+type server struct {
+	pb.UnimplementedSearchServiceServer
 }
 
 func (s *server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchResponse, error) {
@@ -200,7 +198,7 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 		t.Fatalf("failed to listen: %v", err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterSearchServiceService(s, (&server{}).Svc())
+	pb.RegisterSearchServiceServer(s, &server{})
 	pbv3.RegisterSearchServiceV3Server(s, &serverV3{})
 	// Register reflection service on s.
 	Register(s)
@@ -214,7 +212,9 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 	defer conn.Close()
 
 	c := rpb.NewServerReflectionClient(conn)
-	stream, err := c.ServerReflectionInfo(context.Background(), grpc.WaitForReady(true))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := c.ServerReflectionInfo(ctx, grpc.WaitForReady(true))
 	if err != nil {
 		t.Fatalf("cannot get ServerReflectionInfo: %v", err)
 	}

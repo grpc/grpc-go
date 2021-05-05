@@ -26,6 +26,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/http"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -306,12 +307,12 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	state := &decodeState{
 		serverSide: true,
 	}
-	if err := state.decodeHeader(frame); err != nil {
-		if se, ok := status.FromError(err); ok {
+	if h2code, err := state.decodeHeader(frame); err != nil {
+		if _, ok := status.FromError(err); ok {
 			t.controlBuf.put(&cleanupStream{
 				streamID: streamID,
 				rst:      true,
-				rstCode:  statusCodeConvTab[se.Code()],
+				rstCode:  h2code,
 				onWrite:  func() {},
 			})
 		}
@@ -402,6 +403,20 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return true
 	}
 	t.maxStreamID = streamID
+	if state.data.httpMethod != http.MethodPost {
+		t.mu.Unlock()
+		if logger.V(logLevel) {
+			logger.Warningf("transport: http2Server.operateHeaders parsed a :method field: %v which should be POST", state.data.httpMethod)
+		}
+		t.controlBuf.put(&cleanupStream{
+			streamID: streamID,
+			rst:      true,
+			rstCode:  http2.ErrCodeProtocol,
+			onWrite:  func() {},
+		})
+		s.cancel()
+		return false
+	}
 	t.activeStreams[streamID] = s
 	if len(t.activeStreams) == 1 {
 		t.idle = time.Time{}

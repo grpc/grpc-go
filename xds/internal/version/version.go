@@ -41,9 +41,11 @@ const (
 	V2EndpointsURL       = "type.googleapis.com/envoy.api.v2.ClusterLoadAssignment"
 	V2HTTPConnManagerURL = "type.googleapis.com/envoy.config.filter.network.http_connection_manager.v2.HttpConnectionManager"
 
-	V3ListenerURL        = "type.googleapis.com/envoy.config.listener.v3.Listener"
-	V3RouteConfigURL     = "type.googleapis.com/envoy.config.route.v3.RouteConfiguration"
-	V3ClusterURL         = "type.googleapis.com/envoy.config.cluster.v3.Cluster"
-	V3EndpointsURL       = "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment"
-	V3HTTPConnManagerURL = "type.googleapis.com/envoy.config.filter.network.http_connection_manager.v2.HttpConnectionManager"
+	V3ListenerURL             = "type.googleapis.com/envoy.config.listener.v3.Listener"
+	V3RouteConfigURL          = "type.googleapis.com/envoy.config.route.v3.RouteConfiguration"
+	V3ClusterURL              = "type.googleapis.com/envoy.config.cluster.v3.Cluster"
+	V3EndpointsURL            = "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment"
+	V3HTTPConnManagerURL      = "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager"
+	V3UpstreamTLSContextURL   = "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext"
+	V3DownstreamTLSContextURL = "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext"
 )

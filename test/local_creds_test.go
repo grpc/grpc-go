@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/local"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
@@ -37,15 +38,22 @@ import (
 )
 
 func testLocalCredsE2ESucceed(network, address string) error {
-	ss := &stubServer{
-		emptyCall: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			pr, ok := peer.FromContext(ctx)
 			if !ok {
 				return nil, status.Error(codes.DataLoss, "Failed to get peer from ctx")
 			}
+			type internalInfo interface {
+				GetCommonAuthInfo() credentials.CommonAuthInfo
+			}
+			var secLevel credentials.SecurityLevel
+			if info, ok := (pr.AuthInfo).(internalInfo); ok {
+				secLevel = info.GetCommonAuthInfo().SecurityLevel
+			} else {
+				return nil, status.Errorf(codes.Unauthenticated, "peer.AuthInfo does not implement GetCommonAuthInfo()")
+			}
 			// Check security level
-			info := pr.AuthInfo.(local.Info)
-			secLevel := info.CommonAuthInfo.SecurityLevel
 			switch network {
 			case "unix":
 				if secLevel != credentials.PrivacyAndIntegrity {
@@ -64,7 +72,7 @@ func testLocalCredsE2ESucceed(network, address string) error {
 	s := grpc.NewServer(sopts...)
 	defer s.Stop()
 
-	testpb.RegisterTestServiceService(s, ss.Svc())
+	testpb.RegisterTestServiceServer(s, ss)
 
 	lis, err := net.Listen(network, address)
 	if err != nil {
@@ -152,8 +160,8 @@ func spoofDialer(addr net.Addr) func(target string, t time.Duration) (net.Conn, 
 }
 
 func testLocalCredsE2EFail(dopts []grpc.DialOption) error {
-	ss := &stubServer{
-		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -162,7 +170,7 @@ func testLocalCredsE2EFail(dopts []grpc.DialOption) error {
 	s := grpc.NewServer(sopts...)
 	defer s.Stop()
 
-	testpb.RegisterTestServiceService(s, ss.Svc())
+	testpb.RegisterTestServiceServer(s, ss)
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {

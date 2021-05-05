@@ -1,3 +1,5 @@
+// +build go1.12
+
 /*
  *
  * Copyright 2019 gRPC authors.
@@ -25,7 +27,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
@@ -50,24 +51,28 @@ var (
 )
 
 // TestLoadReporting verifies that the lrs balancer starts the loadReport
-// stream when the lbConfig passed to it contains a valid value for the LRS
+// stream when the LBConfig passed to it contains a valid value for the LRS
 // server (empty string).
 func TestLoadReporting(t *testing.T) {
-	builder := balancer.Get(lrsBalancerName)
+	xdsC := fakeclient.NewClient()
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	defer func() { newXDSClient = oldNewXDSClient }()
+
+	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
 	lrsB := builder.Build(cc, balancer.BuildOptions{})
 	defer lrsB.Close()
 
-	xdsC := fakeclient.NewClient()
 	if err := lrsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
-			Addresses:  testBackendAddrs,
-			Attributes: attributes.New(xdsinternal.XDSClientID, xdsC),
+			Addresses: testBackendAddrs,
 		},
-		BalancerConfig: &lbConfig{
-			EdsServiceName:             testClusterName,
-			LrsLoadReportingServerName: testLRSServerName,
-			Locality:                   testLocality,
+		BalancerConfig: &LBConfig{
+			ClusterName:             testClusterName,
+			EDSServiceName:          testServiceName,
+			LoadReportingServerName: testLRSServerName,
+			Locality:                testLocality,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
 			},
@@ -83,8 +88,8 @@ func TestLoadReporting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
 	}
-	if got.Server != testLRSServerName || got.Cluster != testClusterName {
-		t.Fatalf("xdsClient.ReportLoad called with {%q, %q}: want {%q, %q}", got.Server, got.Cluster, testLRSServerName, testClusterName)
+	if got.Server != testLRSServerName {
+		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, testLRSServerName)
 	}
 
 	sc1 := <-cc.NewSubConnCh
@@ -115,8 +120,16 @@ func TestLoadReporting(t *testing.T) {
 	if loadStore == nil {
 		t.Fatal("loadStore is nil in xdsClient")
 	}
-	sd := loadStore.Stats()
-	localityData, ok := sd.LocalityStats[testLocality.String()]
+	sds := loadStore.Stats([]string{testClusterName})
+	if len(sds) == 0 {
+		t.Fatalf("loads for cluster %v not found in store", testClusterName)
+	}
+	sd := sds[0]
+	if sd.Cluster != testClusterName || sd.Service != testServiceName {
+		t.Fatalf("got unexpected load for %q, %q, want %q, %q", sd.Cluster, sd.Service, testClusterName, testServiceName)
+	}
+	testLocalityJSON, _ := testLocality.ToString()
+	localityData, ok := sd.LocalityStats[testLocalityJSON]
 	if !ok {
 		t.Fatalf("loads for %v not found in store", testLocality)
 	}

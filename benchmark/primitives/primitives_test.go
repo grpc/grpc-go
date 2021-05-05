@@ -399,3 +399,29 @@ func runStructTypeAssertion(b *testing.B, fer interface{}) {
 		b.Fatal("error")
 	}
 }
+
+func BenchmarkWaitGroupAddDone(b *testing.B) {
+	wg := sync.WaitGroup{}
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for ; pb.Next(); i++ {
+			wg.Add(1)
+		}
+		for ; i > 0; i-- {
+			wg.Done()
+		}
+	})
+}
+
+func BenchmarkRLockUnlock(b *testing.B) {
+	mu := sync.RWMutex{}
+	b.RunParallel(func(pb *testing.PB) {
+		i := 0
+		for ; pb.Next(); i++ {
+			mu.RLock()
+		}
+		for ; i > 0; i-- {
+			mu.RUnlock()
+		}
+	})
+}

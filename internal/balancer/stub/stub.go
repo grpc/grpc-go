@@ -46,10 +46,6 @@ type BalancerData struct {
 }
 
 type bal struct {
-	// TODO: Remove this once the legacy balancer API is removed. See
-	// https://github.com/grpc/grpc-go/pull/3431.
-	balancer.Balancer
-
 	bf BalancerFuncs
 	bd *BalancerData
 }

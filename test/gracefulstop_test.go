@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -107,8 +108,8 @@ func (s) TestGracefulStop(t *testing.T) {
 	}
 	d := func(ctx context.Context, _ string) (net.Conn, error) { return dlis.Dial(ctx) }
 
-	ss := &stubServer{
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			_, err := stream.Recv()
 			if err != nil {
 				return err
@@ -117,7 +118,7 @@ func (s) TestGracefulStop(t *testing.T) {
 		},
 	}
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceService(s, ss.Svc())
+	testpb.RegisterTestServiceServer(s, ss)
 
 	// 1. Start Server
 	wg := sync.WaitGroup{}

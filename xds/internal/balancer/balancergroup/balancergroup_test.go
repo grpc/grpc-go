@@ -1,3 +1,5 @@
+// +build go1.12
+
 /*
  * Copyright 2019 gRPC authors.
  *
@@ -38,6 +40,8 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 	"google.golang.org/grpc/xds/internal/client/load"
@@ -70,11 +74,11 @@ func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	}
 }
 
-func newTestBalancerGroup(t *testing.T, loadStore *load.Store) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
+func newTestBalancerGroup(t *testing.T, loadStore load.PerClusterReporter) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, gator, loadStore, nil)
+	bg := New(cc, balancer.BuildOptions{}, gator, loadStore, nil)
 	bg.Start()
 	return cc, gator, bg
 }
@@ -400,8 +404,12 @@ func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 }
 
 func (s) TestBalancerGroup_LoadReport(t *testing.T) {
-	loadStore := &load.Store{}
-	cc, gator, bg := newTestBalancerGroup(t, loadStore)
+	loadStore := load.NewStore()
+	const (
+		testCluster    = "test-cluster"
+		testEDSService = "test-eds-service"
+	)
+	cc, gator, bg := newTestBalancerGroup(t, loadStore.PerCluster(testCluster, testEDSService))
 
 	backendToBalancerID := make(map[balancer.SubConn]string)
 
@@ -440,7 +448,9 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 	// subConns in each group, we expect the picks to be equally split between
 	// the subConns. We do not call Done() on picks routed to sc1, so we expect
 	// these to show up as pending rpcs.
-	wantStoreData := &load.Data{
+	wantStoreData := []*load.Data{{
+		Cluster: testCluster,
+		Service: testEDSService,
 		LocalityStats: map[string]load.LocalityData{
 			testBalancerIDs[0]: {
 				RequestStats: load.RequestData{Succeeded: 10, InProgress: 10},
@@ -461,7 +471,7 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 				},
 			},
 		},
-	}
+	}}
 	for i := 0; i < 30; i++ {
 		scst, _ := p1.Pick(balancer.PickInfo{})
 		if scst.Done != nil && scst.SubConn != sc1 {
@@ -476,9 +486,9 @@ func (s) TestBalancerGroup_LoadReport(t *testing.T) {
 		}
 	}
 
-	gotStoreData := loadStore.Stats()
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.EquateApprox(0, 0.1)); diff != "" {
-		t.Errorf("store.Stats() returned unexpected diff (-want +got):\n%s", diff)
+	gotStoreData := loadStore.Stats([]string{testCluster})
+	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.EquateApprox(0, 0.1), cmpopts.IgnoreFields(load.Data{}, "ReportInterval")); diff != "" {
+		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
 	}
 }
 
@@ -495,7 +505,7 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, gator, nil, nil)
+	bg := New(cc, balancer.BuildOptions{}, gator, nil, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -584,16 +594,20 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 // whenever it gets an address update. It's expected that start() doesn't block
 // because of deadlock.
 func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
+	const balancerName = "stub-TestBalancerGroup_start_close_deadlock"
+	stub.Register(balancerName, stub.BalancerFuncs{})
+	builder := balancer.Get(balancerName)
+
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, gator, nil, nil)
+	bg := New(cc, balancer.BuildOptions{}, gator, nil, nil)
 
 	gator.Add(testBalancerIDs[0], 2)
-	bg.Add(testBalancerIDs[0], &testutils.TestConstBalancerBuilder{})
+	bg.Add(testBalancerIDs[0], builder)
 	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
 	gator.Add(testBalancerIDs[1], 1)
-	bg.Add(testBalancerIDs[1], &testutils.TestConstBalancerBuilder{})
+	bg.Add(testBalancerIDs[1], builder)
 	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
 
 	bg.Start()
@@ -689,7 +703,7 @@ func initBalancerGroupForCachingTest(t *testing.T) (*weightedaggregator.Aggregat
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, gator, nil, nil)
+	bg := New(cc, balancer.BuildOptions{}, gator, nil, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -923,5 +937,75 @@ func (s) TestBalancerGroup_locality_caching_readd_with_different_builder(t *test
 	}
 	if err := testutils.IsRoundRobin(want, subConnFromPicker(p3)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
+	}
+}
+
+// After removing a sub-balancer, it will be kept in cache. Make sure that this
+// sub-balancer's Close is called when the balancer group is closed.
+func (s) TestBalancerGroup_CloseStopsBalancerInCache(t *testing.T) {
+	const balancerName = "stub-TestBalancerGroup_check_close"
+	closed := make(chan struct{})
+	stub.Register(balancerName, stub.BalancerFuncs{Close: func(_ *stub.BalancerData) {
+		close(closed)
+	}})
+	builder := balancer.Get(balancerName)
+
+	defer replaceDefaultSubBalancerCloseTimeout(time.Second)()
+	gator, bg, _, _ := initBalancerGroupForCachingTest(t)
+
+	// Add balancer, and remove
+	gator.Add(testBalancerIDs[2], 1)
+	bg.Add(testBalancerIDs[2], builder)
+	gator.Remove(testBalancerIDs[2])
+	bg.Remove(testBalancerIDs[2])
+
+	// Immediately close balancergroup, before the cache timeout.
+	bg.Close()
+
+	// Make sure the removed child balancer is closed eventually.
+	select {
+	case <-closed:
+	case <-time.After(time.Second * 2):
+		t.Fatalf("timeout waiting for the child balancer in cache to be closed")
+	}
+}
+
+// TestBalancerGroupBuildOptions verifies that the balancer.BuildOptions passed
+// to the balancergroup at creation time is passed to child policies.
+func (s) TestBalancerGroupBuildOptions(t *testing.T) {
+	const (
+		balancerName       = "stubBalancer-TestBalancerGroupBuildOptions"
+		parent             = int64(1234)
+		userAgent          = "ua"
+		defaultTestTimeout = 1 * time.Second
+	)
+
+	// Setup the stub balancer such that we can read the build options passed to
+	// it in the UpdateClientConnState method.
+	bOpts := balancer.BuildOptions{
+		DialCreds:        insecure.NewCredentials(),
+		ChannelzParentID: parent,
+		CustomUserAgent:  userAgent,
+	}
+	stub.Register(balancerName, stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
+			if !cmp.Equal(bd.BuildOptions, bOpts) {
+				return fmt.Errorf("buildOptions in child balancer: %v, want %v", bd, bOpts)
+			}
+			return nil
+		},
+	})
+	cc := testutils.NewTestClientConn(t)
+	bg := New(cc, bOpts, nil, nil, nil)
+	bg.Start()
+
+	// Add the stub balancer build above as a child policy.
+	balancerBuilder := balancer.Get(balancerName)
+	bg.Add(testBalancerIDs[0], balancerBuilder)
+
+	// Send an empty clientConn state change. This should trigger the
+	// verification of the buildOptions being passed to the child policy.
+	if err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{}); err != nil {
+		t.Fatal(err)
 	}
 }

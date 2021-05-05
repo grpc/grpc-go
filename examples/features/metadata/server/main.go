@@ -44,7 +44,11 @@ const (
 	streamingCount  = 10
 )
 
-func unaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
+type server struct {
+	pb.UnimplementedEchoServer
+}
+
+func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	fmt.Printf("--- UnaryEcho ---\n")
 	// Create trailer in defer to record function return time.
 	defer func() {
@@ -73,7 +77,7 @@ func unaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error
 	return &pb.EchoResponse{Message: in.Message}, nil
 }
 
-func serverStreamingEcho(in *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
+func (s *server) ServerStreamingEcho(in *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoServer) error {
 	fmt.Printf("--- ServerStreamingEcho ---\n")
 	// Create trailer in defer to record function return time.
 	defer func() {
@@ -110,7 +114,7 @@ func serverStreamingEcho(in *pb.EchoRequest, stream pb.Echo_ServerStreamingEchoS
 	return nil
 }
 
-func clientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
+func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
 	fmt.Printf("--- ClientStreamingEcho ---\n")
 	// Create trailer in defer to record function return time.
 	defer func() {
@@ -150,7 +154,7 @@ func clientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) error {
 	}
 }
 
-func bidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
+func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
 	fmt.Printf("--- BidirectionalStreamingEcho ---\n")
 	// Create trailer in defer to record function return time.
 	defer func() {
@@ -201,11 +205,6 @@ func main() {
 	fmt.Printf("server listening at %v\n", lis.Addr())
 
 	s := grpc.NewServer()
-	pb.RegisterEchoService(s, &pb.EchoService{
-		UnaryEcho:                  unaryEcho,
-		ServerStreamingEcho:        serverStreamingEcho,
-		ClientStreamingEcho:        clientStreamingEcho,
-		BidirectionalStreamingEcho: bidirectionalStreamingEcho,
-	})
+	pb.RegisterEchoServer(s, &server{})
 	s.Serve(lis)
 }

@@ -21,7 +21,6 @@ package lrs
 import (
 	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/xds/internal"
 )
 
 const (
@@ -43,10 +42,10 @@ type loadReportPicker struct {
 	loadStore loadReporter
 }
 
-func newLoadReportPicker(p balancer.Picker, id internal.LocalityID, loadStore loadReporter) *loadReportPicker {
+func newLoadReportPicker(p balancer.Picker, id string, loadStore loadReporter) *loadReportPicker {
 	return &loadReportPicker{
 		p:         p,
-		locality:  id.String(),
+		locality:  id,
 		loadStore: loadStore,
 	}
 }

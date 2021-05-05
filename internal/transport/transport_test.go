@@ -481,9 +481,11 @@ func (s) TestInflightStreamClosing(t *testing.T) {
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer cancel()
 	defer server.stop()
-	defer client.Close()
+	defer client.Close(fmt.Errorf("closed manually by test"))
 
-	stream, err := client.NewStream(context.Background(), &CallHdr{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Client failed to create RPC request: %v", err)
 	}
@@ -519,14 +521,16 @@ func (s) TestClientSendAndReceive(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo.Small",
 	}
-	s1, err1 := ct.NewStream(context.Background(), callHdr)
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	s1, err1 := ct.NewStream(ctx, callHdr)
 	if err1 != nil {
 		t.Fatalf("failed to open stream: %v", err1)
 	}
 	if s1.id != 1 {
 		t.Fatalf("wrong stream id: %d", s1.id)
 	}
-	s2, err2 := ct.NewStream(context.Background(), callHdr)
+	s2, err2 := ct.NewStream(ctx, callHdr)
 	if err2 != nil {
 		t.Fatalf("failed to open stream: %v", err2)
 	}
@@ -546,7 +550,7 @@ func (s) TestClientSendAndReceive(t *testing.T) {
 	if recvErr != io.EOF {
 		t.Fatalf("Error: %v; want <EOF>", recvErr)
 	}
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()
 }
 
@@ -556,7 +560,7 @@ func (s) TestClientErrorNotify(t *testing.T) {
 	go server.stop()
 	// ct.reader should detect the error and activate ct.Error().
 	<-ct.Error()
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 }
 
 func performOneRPC(ct ClientTransport) {
@@ -564,7 +568,9 @@ func performOneRPC(ct ClientTransport) {
 		Host:   "localhost",
 		Method: "foo.Small",
 	}
-	s, err := ct.NewStream(context.Background(), callHdr)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	s, err := ct.NewStream(ctx, callHdr)
 	if err != nil {
 		return
 	}
@@ -591,7 +597,7 @@ func (s) TestClientMix(t *testing.T) {
 	}(s)
 	go func(ct ClientTransport) {
 		<-ct.Error()
-		ct.Close()
+		ct.Close(fmt.Errorf("closed manually by test"))
 	}(ct)
 	for i := 0; i < 1000; i++ {
 		time.Sleep(10 * time.Millisecond)
@@ -606,12 +612,14 @@ func (s) TestLargeMessage(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo.Large",
 	}
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			s, err := ct.NewStream(context.Background(), callHdr)
+			s, err := ct.NewStream(ctx, callHdr)
 			if err != nil {
 				t.Errorf("%v.NewStream(_, _) = _, %v, want _, <nil>", ct, err)
 			}
@@ -628,7 +636,7 @@ func (s) TestLargeMessage(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()
 }
 
@@ -645,7 +653,7 @@ func (s) TestLargeMessageWithDelayRead(t *testing.T) {
 	server, ct, cancel := setUpWithOptions(t, 0, sc, delayRead, co)
 	defer cancel()
 	defer server.stop()
-	defer ct.Close()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
 	server.mu.Lock()
 	ready := server.ready
 	server.mu.Unlock()
@@ -771,7 +779,7 @@ func (s) TestGracefulClose(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			str, err := ct.NewStream(context.Background(), &CallHdr{})
+			str, err := ct.NewStream(ctx, &CallHdr{})
 			if err == ErrConnClosing {
 				return
 			} else if err != nil {
@@ -823,7 +831,7 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 	if _, err := s.Read(make([]byte, 8)); err.Error() != expectedErr.Error() {
 		t.Fatalf("Read got %v of type %T, want %v", err, err, expectedErr)
 	}
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()
 }
 
@@ -833,13 +841,15 @@ func (s) TestMaxStreams(t *testing.T) {
 	}
 	server, ct, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer cancel()
-	defer ct.Close()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
 	defer server.stop()
 	callHdr := &CallHdr{
 		Host:   "localhost",
 		Method: "foo.Large",
 	}
-	s, err := ct.NewStream(context.Background(), callHdr)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	s, err := ct.NewStream(ctx, callHdr)
 	if err != nil {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
@@ -891,7 +901,7 @@ func (s) TestMaxStreams(t *testing.T) {
 	// Close the first stream created so that the new stream can finally be created.
 	ct.CloseStream(s, nil)
 	<-done
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	<-ct.writerDone
 	if ct.maxConcurrentStreams != 1 {
 		t.Fatalf("ct.maxConcurrentStreams: %d, want 1", ct.maxConcurrentStreams)
@@ -924,7 +934,9 @@ func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
 		server.mu.Unlock()
 		break
 	}
-	s, err := ct.NewStream(context.Background(), callHdr)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	s, err := ct.NewStream(ctx, callHdr)
 	if err != nil {
 		t.Fatalf("Failed to open stream: %v", err)
 	}
@@ -948,7 +960,7 @@ func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
 		sc.mu.Unlock()
 		break
 	}
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	select {
 	case <-ss.Context().Done():
 		if ss.Context().Err() != context.Canceled {
@@ -968,7 +980,7 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	server, client, cancel := setUpWithOptions(t, 0, &ServerConfig{}, notifyCall, connectOptions)
 	defer cancel()
 	defer server.stop()
-	defer client.Close()
+	defer client.Close(fmt.Errorf("closed manually by test"))
 
 	waitWhileTrue(t, func() (bool, error) {
 		server.mu.Lock()
@@ -988,7 +1000,9 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	notifyChan := make(chan struct{})
 	server.h.notify = notifyChan
 	server.mu.Unlock()
-	cstream1, err := client.NewStream(context.Background(), &CallHdr{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cstream1, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Client failed to create first stream. Err: %v", err)
 	}
@@ -1015,7 +1029,7 @@ func (s) TestClientConnDecoupledFromApplicationRead(t *testing.T) {
 	server.h.notify = notifyChan
 	server.mu.Unlock()
 	// Create another stream on client.
-	cstream2, err := client.NewStream(context.Background(), &CallHdr{})
+	cstream2, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Client failed to create second stream. Err: %v", err)
 	}
@@ -1055,7 +1069,7 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
 	defer cancel()
 	defer server.stop()
-	defer client.Close()
+	defer client.Close(fmt.Errorf("closed manually by test"))
 	waitWhileTrue(t, func() (bool, error) {
 		server.mu.Lock()
 		defer server.mu.Unlock()
@@ -1070,8 +1084,10 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 	for k := range server.conns {
 		st = k.(*http2Server)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	server.mu.Unlock()
-	cstream1, err := client.NewStream(context.Background(), &CallHdr{})
+	cstream1, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Failed to create 1st stream. Err: %v", err)
 	}
@@ -1080,7 +1096,7 @@ func (s) TestServerConnDecoupledFromApplicationRead(t *testing.T) {
 		t.Fatalf("Client failed to write data. Err: %v", err)
 	}
 	//Client should be able to create another stream and send data on it.
-	cstream2, err := client.NewStream(context.Background(), &CallHdr{})
+	cstream2, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Failed to create 2nd stream. Err: %v", err)
 	}
@@ -1286,8 +1302,8 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
-	defer ct.Close()
-	str, err := ct.NewStream(context.Background(), &CallHdr{})
+	defer ct.Close(fmt.Errorf("closed manually by test"))
+	str, err := ct.NewStream(connectCtx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Error while creating stream: %v", err)
 	}
@@ -1312,7 +1328,9 @@ func (s) TestEncodingRequiredStatus(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo",
 	}
-	s, err := ct.NewStream(context.Background(), callHdr)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	s, err := ct.NewStream(ctx, callHdr)
 	if err != nil {
 		return
 	}
@@ -1327,7 +1345,7 @@ func (s) TestEncodingRequiredStatus(t *testing.T) {
 	if !testutils.StatusErrEqual(s.Status().Err(), encodingTestStatus.Err()) {
 		t.Fatalf("stream with status %v, want %v", s.Status(), encodingTestStatus)
 	}
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()
 }
 
@@ -1338,7 +1356,9 @@ func (s) TestInvalidHeaderField(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo",
 	}
-	s, err := ct.NewStream(context.Background(), callHdr)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	s, err := ct.NewStream(ctx, callHdr)
 	if err != nil {
 		return
 	}
@@ -1347,7 +1367,7 @@ func (s) TestInvalidHeaderField(t *testing.T) {
 	if se, ok := status.FromError(err); !ok || se.Code() != codes.Internal || !strings.Contains(err.Error(), expectedInvalidHeaderField) {
 		t.Fatalf("Read got error %v, want error with code %s and contains %q", err, codes.Internal, expectedInvalidHeaderField)
 	}
-	ct.Close()
+	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()
 }
 
@@ -1355,8 +1375,10 @@ func (s) TestHeaderChanClosedAfterReceivingAnInvalidHeader(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, invalidHeaderField)
 	defer cancel()
 	defer server.stop()
-	defer ct.Close()
-	s, err := ct.NewStream(context.Background(), &CallHdr{Host: "localhost", Method: "foo"})
+	defer ct.Close(fmt.Errorf("closed manually by test"))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	s, err := ct.NewStream(ctx, &CallHdr{Host: "localhost", Method: "foo"})
 	if err != nil {
 		t.Fatalf("failed to create the stream")
 	}
@@ -1459,7 +1481,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	server, client, cancel := setUpWithOptions(t, 0, sc, pingpong, co)
 	defer cancel()
 	defer server.stop()
-	defer client.Close()
+	defer client.Close(fmt.Errorf("closed manually by test"))
 	waitWhileTrue(t, func() (bool, error) {
 		server.mu.Lock()
 		defer server.mu.Unlock()
@@ -1473,12 +1495,14 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	for k := range server.conns {
 		st = k.(*http2Server)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	server.mu.Unlock()
 	const numStreams = 10
 	clientStreams := make([]*Stream, numStreams)
 	for i := 0; i < numStreams; i++ {
 		var err error
-		clientStreams[i], err = client.NewStream(context.Background(), &CallHdr{})
+		clientStreams[i], err = client.NewStream(ctx, &CallHdr{})
 		if err != nil {
 			t.Fatalf("Failed to create stream. Err: %v", err)
 		}
@@ -1539,7 +1563,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	}
 	// Close down both server and client so that their internals can be read without data
 	// races.
-	client.Close()
+	client.Close(fmt.Errorf("closed manually by test"))
 	st.Close()
 	<-st.readerDone
 	<-st.writerDone
@@ -1639,6 +1663,84 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 	}
 }
 
+// If the client sends an HTTP/2 request with a :method header with a value other than POST, as specified in
+// the gRPC over HTTP/2 specification, the server should close the stream.
+func (s) TestServerWithClientSendingWrongMethod(t *testing.T) {
+	server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
+	defer server.stop()
+	// Create a client directly to not couple what you can send to API of http2_client.go.
+	mconn, err := net.Dial("tcp", server.lis.Addr().String())
+	if err != nil {
+		t.Fatalf("Client failed to dial: %v", err)
+	}
+	defer mconn.Close()
+
+	if n, err := mconn.Write(clientPreface); err != nil || n != len(clientPreface) {
+		t.Fatalf("mconn.Write(clientPreface) = %d, %v, want %d, <nil>", n, err, len(clientPreface))
+	}
+
+	framer := http2.NewFramer(mconn, mconn)
+	if err := framer.WriteSettings(); err != nil {
+		t.Fatalf("Error while writing settings: %v", err)
+	}
+
+	// success chan indicates that reader received a RSTStream from server.
+	// An error will be passed on it if any other frame is received.
+	success := testutils.NewChannel()
+
+	// Launch a reader goroutine.
+	go func() {
+		for {
+			frame, err := framer.ReadFrame()
+			if err != nil {
+				return
+			}
+			switch frame := frame.(type) {
+			case *http2.SettingsFrame:
+				// Do nothing. A settings frame is expected from server preface.
+			case *http2.RSTStreamFrame:
+				if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeProtocol {
+					// Client only created a single stream, so RST Stream should be for that single stream.
+					t.Errorf("RST stream received with streamID: %d and code %v, want streamID: 1 and code: http.ErrCodeFlowControl", frame.Header().StreamID, http2.ErrCode(frame.ErrCode))
+				}
+				// Records that client successfully received RST Stream frame.
+				success.Send(nil)
+				return
+			default:
+				// The server should send nothing but a single RST Stream frame.
+				success.Send(errors.New("The client received a frame other than RST Stream"))
+			}
+		}
+	}()
+
+	// Done with HTTP/2 setup - now create a stream with a bad method header.
+	var buf bytes.Buffer
+	henc := hpack.NewEncoder(&buf)
+	// Method is required to be POST in a gRPC call.
+	if err := henc.WriteField(hpack.HeaderField{Name: ":method", Value: "PUT"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	// Have the rest of the headers be ok and within the gRPC over HTTP/2 spec.
+	if err := henc.WriteField(hpack.HeaderField{Name: ":path", Value: "foo"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: ":authority", Value: "localhost"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+	if err := henc.WriteField(hpack.HeaderField{Name: "content-type", Value: "application/grpc"}); err != nil {
+		t.Fatalf("Error while encoding header: %v", err)
+	}
+
+	if err := framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
+		t.Fatalf("Error while writing headers: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if e, err := success.Receive(ctx); e != nil || err != nil {
+		t.Fatalf("Error in frame server should send: %v. Error receiving from channel: %v", e, err)
+	}
+}
+
 func (s) TestPingPong1B(t *testing.T) {
 	runPingPongTest(t, 1)
 }
@@ -1660,7 +1762,7 @@ func runPingPongTest(t *testing.T, msgSize int) {
 	server, client, cancel := setUp(t, 0, 0, pingpong)
 	defer cancel()
 	defer server.stop()
-	defer client.Close()
+	defer client.Close(fmt.Errorf("closed manually by test"))
 	waitWhileTrue(t, func() (bool, error) {
 		server.mu.Lock()
 		defer server.mu.Unlock()
@@ -1669,7 +1771,9 @@ func runPingPongTest(t *testing.T, msgSize int) {
 		}
 		return false, nil
 	})
-	stream, err := client.NewStream(context.Background(), &CallHdr{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Failed to create stream. Err: %v", err)
 	}
@@ -1746,9 +1850,11 @@ func (s) TestHeaderTblSize(t *testing.T) {
 
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
 	defer cancel()
-	defer ct.Close()
+	defer ct.Close(fmt.Errorf("closed manually by test"))
 	defer server.stop()
-	_, err := ct.NewStream(context.Background(), &CallHdr{})
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	_, err := ct.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("failed to open stream: %v", err)
 	}
@@ -1863,7 +1969,7 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
 	}
-	defer tr.Close()
+	defer tr.Close(fmt.Errorf("closed manually by test"))
 
 	wantAttr := attributes.New(testAttrKey, testAttrVal)
 	if gotAttr := creds.attr; !cmp.Equal(gotAttr, wantAttr, cmp.AllowUnexported(attributes.Attributes{})) {

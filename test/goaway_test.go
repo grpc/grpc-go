@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/keepalive"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -40,15 +41,15 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 	const maxConnAge = 100 * time.Millisecond
 	const testTime = maxConnAge * 10
 
-	ss := &stubServer{
-		emptyCall: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
 	}
 
 	s := grpc.NewServer(grpc.KeepaliveParams(keepalive.ServerParameters{MaxConnectionAge: maxConnAge}))
 	defer s.Stop()
-	testpb.RegisterTestServiceService(s, ss.Svc())
+	testpb.RegisterTestServiceServer(s, ss)
 
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {

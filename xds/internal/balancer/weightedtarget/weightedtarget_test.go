@@ -1,3 +1,5 @@
+// +build go1.12
+
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -103,7 +105,7 @@ func init() {
 	for i := 0; i < testBackendAddrsCount; i++ {
 		testBackendAddrStrs = append(testBackendAddrStrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
 	}
-	wtbBuilder = balancer.Get(weightedTargetName)
+	wtbBuilder = balancer.Get(Name)
 	wtbParser = wtbBuilder.(balancer.ConfigParser)
 
 	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond
@@ -214,6 +216,46 @@ func TestWeightedTarget(t *testing.T) {
 	want := []balancer.SubConn{sc2, sc3}
 	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
+	}
+
+	// Replace child policy of "cluster_1" to "round_robin".
+	config3, err := wtbParser.ParseConfig([]byte(`{"targets":{"cluster_2":{"weight":1,"childPolicy":[{"round_robin":""}]}}}`))
+	if err != nil {
+		t.Fatalf("failed to parse balancer config: %v", err)
+	}
+
+	// Send the config, and an address with hierarchy path ["cluster_1"].
+	wantAddr4 := resolver.Address{Addr: testBackendAddrStrs[0], Attributes: nil}
+	if err := wtb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{Addresses: []resolver.Address{
+			hierarchy.Set(wantAddr4, []string{"cluster_2"}),
+		}},
+		BalancerConfig: config3,
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	// Verify that a subconn is created with the address, and the hierarchy path
+	// in the address is cleared.
+	addr4 := <-cc.NewSubConnAddrsCh
+	if want := []resolver.Address{
+		hierarchy.Set(wantAddr4, []string{}),
+	}; !cmp.Equal(addr4, want, cmp.AllowUnexported(attributes.Attributes{})) {
+		t.Fatalf("got unexpected new subconn addrs: %v", cmp.Diff(addr4, want, cmp.AllowUnexported(attributes.Attributes{})))
+	}
+
+	// Send subconn state change.
+	sc4 := <-cc.NewSubConnCh
+	wtb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	wtb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+
+	// Test pick with one backend.
+	p3 := <-cc.NewPickerCh
+	for i := 0; i < 5; i++ {
+		gotSCSt, _ := p3.Pick(balancer.PickInfo{})
+		if !cmp.Equal(gotSCSt.SubConn, sc4, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			t.Fatalf("picker.Pick, got %v, want SubConn=%v", gotSCSt, sc4)
+		}
 	}
 }
 

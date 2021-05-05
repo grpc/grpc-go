@@ -16,7 +16,7 @@
  *
  */
 
-// Package fakeserver provides a fake implementation of an xDS server.
+// Package fakeserver provides a fake implementation of the management server.
 package fakeserver
 
 import (
@@ -29,6 +29,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
 
@@ -138,7 +139,7 @@ func (xdsS *Server) XDSClientConn() (*grpc.ClientConn, func(), error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultDialTimeout)
 	defer cancel()
 
-	cc, err := grpc.DialContext(ctx, xdsS.Address, grpc.WithInsecure(), grpc.WithBlock())
+	cc, err := grpc.DialContext(ctx, xdsS.Address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	if err != nil {
 		return nil, nil, fmt.Errorf("grpc.DialContext(%s) failed: %v", xdsS.Address, err)
 	}
@@ -203,10 +204,10 @@ type lrsServer struct {
 
 func (lrsS *lrsServer) StreamLoadStats(s lrsgrpc.LoadReportingService_StreamLoadStatsServer) error {
 	req, err := s.Recv()
+	lrsS.reqChan.Send(&Request{req, err})
 	if err != nil {
 		return err
 	}
-	lrsS.reqChan.Send(&Request{req, err})
 
 	select {
 	case r := <-lrsS.respChan:
@@ -222,12 +223,12 @@ func (lrsS *lrsServer) StreamLoadStats(s lrsgrpc.LoadReportingService_StreamLoad
 
 	for {
 		req, err := s.Recv()
+		lrsS.reqChan.Send(&Request{req, err})
 		if err != nil {
 			if err == io.EOF {
 				return nil
 			}
 			return err
 		}
-		lrsS.reqChan.Send(&Request{req, err})
 	}
 }

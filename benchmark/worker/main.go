@@ -33,10 +33,12 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/status"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (
@@ -75,20 +77,12 @@ func (byteBufCodec) String() string {
 // workerServer implements WorkerService rpc handlers.
 // It can create benchmarkServer or benchmarkClient on demand.
 type workerServer struct {
+	testgrpc.UnimplementedWorkerServiceServer
 	stop       chan<- bool
 	serverPort int
 }
 
-func (s *workerServer) Svc() *testpb.WorkerServiceService {
-	return &testpb.WorkerServiceService{
-		RunServer:  s.RunServer,
-		RunClient:  s.RunClient,
-		CoreCount:  s.CoreCount,
-		QuitWorker: s.QuitWorker,
-	}
-}
-
-func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) error {
+func (s *workerServer) RunServer(stream testgrpc.WorkerService_RunServerServer) error {
 	var bs *benchmarkServer
 	defer func() {
 		// Close benchmark server when stream ends.
@@ -143,7 +137,7 @@ func (s *workerServer) RunServer(stream testpb.WorkerService_RunServerServer) er
 	}
 }
 
-func (s *workerServer) RunClient(stream testpb.WorkerService_RunClientServer) error {
+func (s *workerServer) RunClient(stream testgrpc.WorkerService_RunClientServer) error {
 	var bc *benchmarkClient
 	defer func() {
 		// Shut down benchmark client when stream ends.
@@ -217,10 +211,10 @@ func main() {
 
 	s := grpc.NewServer()
 	stop := make(chan bool)
-	testpb.RegisterWorkerServiceService(s, (&workerServer{
+	testgrpc.RegisterWorkerServiceServer(s, &workerServer{
 		stop:       stop,
 		serverPort: *serverPort,
-	}).Svc())
+	})
 
 	go func() {
 		<-stop

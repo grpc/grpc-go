@@ -58,15 +58,19 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/benchmark"
 	bm "google.golang.org/grpc/benchmark"
 	"google.golang.org/grpc/benchmark/flags"
-	testpb "google.golang.org/grpc/benchmark/grpc_testing"
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"
+
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
 var (
@@ -257,7 +261,7 @@ func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Fea
 // service. The client is configured using the different options in the passed
 // 'bf'. Also returns a cleanup function to close the client and release
 // resources.
-func makeClient(bf stats.Features) (testpb.BenchmarkServiceClient, func()) {
+func makeClient(bf stats.Features) (testgrpc.BenchmarkServiceClient, func()) {
 	nw := &latency.Network{Kbps: bf.Kbps, Latency: bf.Latency, MTU: bf.MTU}
 	opts := []grpc.DialOption{}
 	sopts := []grpc.ServerOption{}
@@ -325,7 +329,7 @@ func makeClient(bf stats.Features) (testpb.BenchmarkServiceClient, func()) {
 	lis = nw.Listener(lis)
 	stopper := bm.StartServer(bm.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
 	conn := bm.NewClientConn("" /* target not used */, opts...)
-	return testpb.NewBenchmarkServiceClient(conn), func() {
+	return testgrpc.NewBenchmarkServiceClient(conn), func() {
 		conn.Close()
 		stopper()
 	}
@@ -349,7 +353,7 @@ func makeFuncUnary(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 	tc, cleanup := makeClient(bf)
 
-	streams := make([]testpb.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
+	streams := make([]testgrpc.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
 	for i := 0; i < bf.MaxConcurrentCalls; i++ {
 		stream, err := tc.StreamingCall(context.Background())
 		if err != nil {
@@ -400,14 +404,16 @@ func makeFuncUnconstrainedStream(bf stats.Features) (rpcSendFunc, rpcRecvFunc, r
 		}, cleanup
 }
 
-func setupUnconstrainedStream(bf stats.Features) ([]testpb.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, rpcCleanupFunc) {
+func setupUnconstrainedStream(bf stats.Features) ([]testgrpc.BenchmarkService_StreamingCallClient, *testpb.SimpleRequest, rpcCleanupFunc) {
 	tc, cleanup := makeClient(bf)
 
-	streams := make([]testpb.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
+	streams := make([]testgrpc.BenchmarkService_StreamingCallClient, bf.MaxConcurrentCalls)
+	md := metadata.Pairs(benchmark.UnconstrainedStreamingHeader, "1")
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
 	for i := 0; i < bf.MaxConcurrentCalls; i++ {
-		stream, err := tc.UnconstrainedStreamingCall(context.Background())
+		stream, err := tc.StreamingCall(ctx)
 		if err != nil {
-			logger.Fatalf("%v.UnconstrainedStreamingCall(_) = _, %v", tc, err)
+			logger.Fatalf("%v.StreamingCall(_) = _, %v", tc, err)
 		}
 		streams[i] = stream
 	}
@@ -424,13 +430,13 @@ func setupUnconstrainedStream(bf stats.Features) ([]testpb.BenchmarkService_Stre
 
 // Makes a UnaryCall gRPC request using the given BenchmarkServiceClient and
 // request and response sizes.
-func unaryCaller(client testpb.BenchmarkServiceClient, reqSize, respSize int) {
+func unaryCaller(client testgrpc.BenchmarkServiceClient, reqSize, respSize int) {
 	if err := bm.DoUnaryCall(client, reqSize, respSize); err != nil {
 		logger.Fatalf("DoUnaryCall failed: %v", err)
 	}
 }
 
-func streamCaller(stream testpb.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
+func streamCaller(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
 	if err := bm.DoStreamingRoundTrip(stream, reqSize, respSize); err != nil {
 		logger.Fatalf("DoStreamingRoundTrip failed: %v", err)
 	}

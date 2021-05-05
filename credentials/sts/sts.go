@@ -111,6 +111,10 @@ type Options struct {
 	ActorTokenType string // Optional.
 }
 
+func (o Options) String() string {
+	return fmt.Sprintf("%s:%s:%s:%s:%s:%s:%s:%s:%s", o.TokenExchangeServiceURI, o.Resource, o.Audience, o.Scope, o.RequestedTokenType, o.SubjectTokenPath, o.SubjectTokenType, o.ActorTokenPath, o.ActorTokenType)
+}
+
 // NewCredentials returns a new PerRPCCredentials implementation, configured
 // using opts, which performs token exchange using STS.
 func NewCredentials(opts Options) (credentials.PerRPCCredentials, error) {
@@ -147,7 +151,8 @@ type callCreds struct {
 // GetRequestMetadata returns the cached accessToken, if available and valid, or
 // fetches a new one by performing an STS token exchange.
 func (c *callCreds) GetRequestMetadata(ctx context.Context, _ ...string) (map[string]string, error) {
-	if err := credentials.CheckSecurityLevel(ctx, credentials.PrivacyAndIntegrity); err != nil {
+	ri, _ := credentials.RequestInfoFromContext(ctx)
+	if err := credentials.CheckSecurityLevel(ri.AuthInfo, credentials.PrivacyAndIntegrity); err != nil {
 		return nil, fmt.Errorf("unable to transfer STS PerRPCCredentials: %v", err)
 	}
 
@@ -213,7 +218,7 @@ func validateOptions(opts Options) error {
 		return err
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("scheme is not supported: %s. Only http(s) is supported", u.Scheme)
+		return fmt.Errorf("scheme is not supported: %q. Only http(s) is supported", u.Scheme)
 	}
 
 	if opts.SubjectTokenPath == "" {

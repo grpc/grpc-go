@@ -24,6 +24,7 @@ import (
 	"time"
 
 	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
+	"google.golang.org/grpc/xds/internal/client/load"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
@@ -31,13 +32,6 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
 )
-
-// loadReporter wraps the methods from the loadStore that are used here.
-type loadReporter interface {
-	CallStarted(locality string)
-	CallFinished(locality string, err error)
-	CallServerLoad(locality, name string, val float64)
-}
 
 // subBalancerWrapper is used to keep the configurations that will be used to start
 // the underlying balancer. It can be called to start/stop the underlying
@@ -66,6 +60,8 @@ type subBalancerWrapper struct {
 	// The static part of sub-balancer. Keeps balancerBuilders and addresses.
 	// To be used when restarting sub-balancer.
 	builder balancer.Builder
+	// Options to be passed to sub-balancer at the time of creation.
+	buildOpts balancer.BuildOptions
 	// ccState is a cache of the addresses/balancer config, so when the balancer
 	// is restarted after close, it will get the previous update. It's a pointer
 	// and is set to nil at init, so when the balancer is built for the first
@@ -100,7 +96,7 @@ func (sbc *subBalancerWrapper) updateBalancerStateWithCachedPicker() {
 }
 
 func (sbc *subBalancerWrapper) startBalancer() {
-	b := sbc.builder.Build(sbc, balancer.BuildOptions{})
+	b := sbc.builder.Build(sbc, sbc.buildOpts)
 	sbc.group.logger.Infof("Created child policy %p of type %v", b, sbc.builder.Name())
 	sbc.balancer = b
 	if sbc.ccState != nil {
@@ -185,8 +181,9 @@ func (sbc *subBalancerWrapper) stopBalancer() {
 // balancer group.
 type BalancerGroup struct {
 	cc        balancer.ClientConn
+	buildOpts balancer.BuildOptions
 	logger    *grpclog.PrefixLogger
-	loadStore loadReporter
+	loadStore load.PerClusterReporter
 
 	// stateAggregator is where the state/picker updates will be sent to. It's
 	// provided by the parent balancer, to build a picker with all the
@@ -241,9 +238,12 @@ var DefaultSubBalancerCloseTimeout = 15 * time.Minute
 
 // New creates a new BalancerGroup. Note that the BalancerGroup
 // needs to be started to work.
-func New(cc balancer.ClientConn, stateAggregator BalancerStateAggregator, loadStore loadReporter, logger *grpclog.PrefixLogger) *BalancerGroup {
+//
+// TODO(easwars): Pass an options struct instead of N args.
+func New(cc balancer.ClientConn, bOpts balancer.BuildOptions, stateAggregator BalancerStateAggregator, loadStore load.PerClusterReporter, logger *grpclog.PrefixLogger) *BalancerGroup {
 	return &BalancerGroup{
 		cc:        cc,
+		buildOpts: bOpts,
 		logger:    logger,
 		loadStore: loadStore,
 
@@ -311,6 +311,7 @@ func (bg *BalancerGroup) Add(id string, builder balancer.Builder) {
 			id:         id,
 			group:      bg,
 			builder:    builder,
+			buildOpts:  bg.buildOpts,
 		}
 		if bg.outgoingStarted {
 			// Only start the balancer if bg is started. Otherwise, we only keep the
@@ -478,6 +479,10 @@ func (bg *BalancerGroup) Close() {
 	}
 	bg.incomingMu.Unlock()
 
+	// Clear(true) runs clear function to close sub-balancers in cache. It
+	// must be called out of outgoing mutex.
+	bg.balancerCache.Clear(true)
+
 	bg.outgoingMu.Lock()
 	if bg.outgoingStarted {
 		bg.outgoingStarted = false
@@ -486,9 +491,6 @@ func (bg *BalancerGroup) Close() {
 		}
 	}
 	bg.outgoingMu.Unlock()
-	// Clear(true) runs clear function to close sub-balancers in cache. It
-	// must be called out of outgoing mutex.
-	bg.balancerCache.Clear(true)
 }
 
 const (
@@ -500,10 +502,10 @@ type loadReportPicker struct {
 	p balancer.Picker
 
 	locality  string
-	loadStore loadReporter
+	loadStore load.PerClusterReporter
 }
 
-func newLoadReportPicker(p balancer.Picker, id string, loadStore loadReporter) *loadReportPicker {
+func newLoadReportPicker(p balancer.Picker, id string, loadStore load.PerClusterReporter) *loadReportPicker {
 	return &loadReportPicker{
 		p:         p,
 		locality:  id,
