@@ -1529,6 +1529,10 @@ func TestRateLimitedResolve(t *testing.T) {
 		t.Fatalf("Should not have looked up again as DNS Min Res Rate timer has not gone off.")
 	}
 
+	// Make the DNSMinResRate timer fire immediately (by receiving it, then
+	// resetting to 0), this will unblock the resolver which is currently
+	// blocked on the DNS Min Res Rate timer going off, which will allow it to
+	// continue to the next iteration of the watcher loop.
 	timer, err := timerChan.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Error receiving timer from mock NewTimer call: %v", err)
@@ -1553,6 +1557,7 @@ func TestRateLimitedResolve(t *testing.T) {
 		t.Fatalf("Should not have looked up again as DNS Min Res Rate timer has not gone off.")
 	}
 
+	// Make the DNSMinResRate timer fire immediately again.
 	timer, err = timerChan.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Error receiving timer from mock NewTimer call: %v", err)
