@@ -1277,7 +1277,7 @@ func (s) TestClientSendsAGoAwayFrame(t *testing.T) {
 				return
 			default:
 				// The client should have sent nothing but settings and GOAWAY frame.
-				t.Fatalf("The server received a frame other than settings or GOAWAY.")
+				success.Send(errors.New("the server received a frame other than settings or GOAWAY"))
 				return
 			}
 		}
