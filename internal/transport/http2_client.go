@@ -1273,8 +1273,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		grpcStatus     *status.Status
 		statusGen      *status.Status
 		rawStatusCode  = codes.Unknown
-		httpStatus     *int
 	)
+
 	for _, hf := range frame.Fields {
 		switch hf.Name {
 		case "content-type":
@@ -1312,12 +1312,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			}
 			statusGen = status.FromProto(st)
 		case ":status":
-			code, err := strconv.Atoi(hf.Value)
-			if err != nil {
-				grpcStatus = status.New(codes.Internal, fmt.Sprintf("transport: malformed http-status: %v", err))
-				break
-			}
-			httpStatus = &code
+			// we only process :status if this is not grpc so no need to ALWAYS convert the value
+			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
 		case "grpc-tags-bin":
 			v, err := decodeBinHeader(hf.Value)
 			if err != nil {
@@ -1355,18 +1351,26 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 
 	if !isGRPC {
-		var code = codes.Internal // when header does not include HTTP status, return INTERNAL
-		if httpStatus != nil {
-			var ok bool
-			code, ok = HTTPStatusConvTab[*httpStatus]
+		c := codes.Internal // when header does not include HTTP status, return INTERNAL
+		if httpStatuses, ok := mdata[":status"]; ok && len(httpStatuses) > 0 {
+			httpStatus, err := strconv.Atoi(httpStatuses[0])
+			if err != nil {
+				se := status.New(codes.Internal, fmt.Sprintf("transport: malformed http-status: %v", err))
+				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+				return
+			}
+			c, ok = HTTPStatusConvTab[httpStatus]
 			if !ok {
-				code = codes.Unknown
+				c = codes.Unknown
 			}
 		}
-		se := status.New(code, constructHTTPErrMsg(httpStatus, contentTypeErr))
+		sc := int(c)
+		se := status.New(c, constructHTTPErrMsg(&sc, contentTypeErr))
 		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 		return
 	}
+
+	delete(mdata, ":status")
 
 	isHeader := false
 	defer func() {
