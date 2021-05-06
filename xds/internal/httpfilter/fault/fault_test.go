@@ -505,7 +505,13 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 			}
 
 			serviceName := fmt.Sprintf("myservice%d", tcNum)
-			resources := e2e.DefaultClientResources(serviceName, nodeID, "localhost", port)
+			resources := e2e.DefaultClientResources(e2e.ResourceParams{
+				DialTarget: serviceName,
+				NodeID:     nodeID,
+				Host:       "localhost",
+				Port:       port,
+				SecLevel:   e2e.SecurityLevelNone,
+			})
 			hcm := new(v3httppb.HttpConnectionManager)
 			err := ptypes.UnmarshalAny(resources.Listeners[0].GetApiListener().GetApiListener(), hcm)
 			if err != nil {
@@ -564,7 +570,13 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	fs, nodeID, port, cleanup := clientSetup(t)
 	defer cleanup()
-	resources := e2e.DefaultClientResources("myservice", nodeID, "localhost", port)
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: "myservice",
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
 	hcm := new(v3httppb.HttpConnectionManager)
 	err := ptypes.UnmarshalAny(resources.Listeners[0].GetApiListener().GetApiListener(), hcm)
 	if err != nil {

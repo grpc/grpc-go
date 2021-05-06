@@ -119,7 +119,7 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	c.identityProvider = ip
 	c.rootProvider = rp
 
-	xdsHI := xdsinternal.NewHandshakeInfo(c.identityProvider, c.rootProvider)
+	xdsHI := xdsinternal.NewHandshakeInfo(c.rootProvider, c.identityProvider)
 	xdsHI.SetRequireClientCert(secCfg.RequireClientCert)
 	return xdsHI, nil
 }

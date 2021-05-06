@@ -297,7 +297,7 @@ func (t *TransportHelper) sendExisting(stream grpc.ClientStream) bool {
 
 	for rType, s := range t.watchMap {
 		if err := t.vClient.SendRequest(stream, mapToSlice(s), rType, "", "", ""); err != nil {
-			t.logger.Errorf("ADS request failed: %v", err)
+			t.logger.Warningf("ADS request failed: %v", err)
 			return false
 		}
 	}

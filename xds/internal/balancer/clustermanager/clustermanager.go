@@ -132,6 +132,7 @@ func (b *bal) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnStat
 func (b *bal) Close() {
 	b.stateAggregator.close()
 	b.bg.Close()
+	b.logger.Infof("Shutdown")
 }
 
 const prefix = "[xds-cluster-manager-lb %p] "
