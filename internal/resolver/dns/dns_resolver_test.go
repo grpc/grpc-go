@@ -43,7 +43,7 @@ func TestMain(m *testing.M) {
 	// Set a non-zero duration only for tests which are actually testing that
 	// feature.
 	replaceDNSResRate(time.Duration(0)) // No nead to clean up since we os.Exit
-	replaceNetFunc(nil)                 // No nead to clean up since we os.Exit
+	overrideDefaultResolver(false)      // No nead to clean up since we os.Exit
 	code := m.Run()
 	os.Exit(code)
 }
@@ -125,13 +125,18 @@ func (*testResolver) LookupTXT(ctx context.Context, host string) ([]string, erro
 	return txtLookup(host)
 }
 
-func replaceNetFunc(ch chan struct{}) func() {
+// overrideDefaultResolver overrides the defaultResolver used by the code with
+// an instance of the testResolver. pushOnLookup controls whether the
+// testResolver created here pushes lookupHost events on its channel.
+func overrideDefaultResolver(pushOnLookup bool) func() {
 	oldResolver := defaultResolver
-	if ch != nil {
-		defaultResolver = &testResolver{ch: testutils.NewChannel()}
-	} else {
-		defaultResolver = &testResolver{}
+
+	var ch *testutils.Channel
+	if pushOnLookup {
+		ch = testutils.NewChannel()
 	}
+	defaultResolver = &testResolver{ch: ch}
+
 	return func() {
 		defaultResolver = oldResolver
 	}
@@ -1481,7 +1486,7 @@ func TestRateLimitedResolve(t *testing.T) {
 
 	// Create a new testResolver{} for this test because we want the exact count
 	// of the number of times the resolver was invoked.
-	nc := replaceNetFunc(make(chan struct{}))
+	nc := overrideDefaultResolver(true)
 	defer nc()
 
 	target := "foo.bar.com"
@@ -1509,8 +1514,7 @@ func TestRateLimitedResolve(t *testing.T) {
 
 	// Wait for the first resolution request to be done. This happens as part
 	// of the first iteration of the for loop in watcher().
-	_, err = tr.ch.Receive(ctx)
-	if err != nil {
+	if _, err := tr.ch.Receive(ctx); err != nil {
 		t.Fatalf("Timed out waiting for lookup() call.")
 	}
 
@@ -1523,9 +1527,7 @@ func TestRateLimitedResolve(t *testing.T) {
 	continueCtx, continueCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer continueCancel()
 
-	_, err = tr.ch.Receive(continueCtx)
-
-	if err == nil {
+	if _, err := tr.ch.Receive(continueCtx); err == nil {
 		t.Fatalf("Should not have looked up again as DNS Min Res Rate timer has not gone off.")
 	}
 
@@ -1541,8 +1543,7 @@ func TestRateLimitedResolve(t *testing.T) {
 	timerPointer.Reset(0)
 
 	// Now that DNS Min Res Rate timer has gone off, it should lookup again.
-	_, err = tr.ch.Receive(ctx)
-	if err != nil {
+	if _, err := tr.ch.Receive(ctx); err != nil {
 		t.Fatalf("Timed out waiting for lookup() call.")
 	}
 
@@ -1552,8 +1553,7 @@ func TestRateLimitedResolve(t *testing.T) {
 		r.ResolveNow(resolver.ResolveNowOptions{})
 	}
 
-	_, err = tr.ch.Receive(continueCtx)
-	if err == nil {
+	if _, err = tr.ch.Receive(continueCtx); err == nil {
 		t.Fatalf("Should not have looked up again as DNS Min Res Rate timer has not gone off.")
 	}
 
@@ -1566,8 +1566,7 @@ func TestRateLimitedResolve(t *testing.T) {
 	timerPointer.Reset(0)
 
 	// Now that DNS Min Res Rate timer has gone off, it should lookup again.
-	_, err = tr.ch.Receive(ctx)
-	if err != nil {
+	if _, err = tr.ch.Receive(ctx); err != nil {
 		t.Fatalf("Timed out waiting for lookup() call.")
 	}
 
