@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"sync"
 	"time"
 
@@ -271,7 +272,9 @@ type VirtualHost struct {
 // Route is both a specification of how to match a request as well as an
 // indication of the action to take upon match.
 type Route struct {
-	Path, Prefix, Regex *string
+	Path   *string
+	Prefix *string
+	Regex  *regexp.Regexp
 	// Indicates if prefix/path matching should be case insensitive. The default
 	// is false (case sensitive).
 	CaseInsensitive bool
@@ -304,14 +307,14 @@ type WeightedCluster struct {
 
 // HeaderMatcher represents header matchers.
 type HeaderMatcher struct {
-	Name         string      `json:"name"`
-	InvertMatch  *bool       `json:"invertMatch,omitempty"`
-	ExactMatch   *string     `json:"exactMatch,omitempty"`
-	RegexMatch   *string     `json:"regexMatch,omitempty"`
-	PrefixMatch  *string     `json:"prefixMatch,omitempty"`
-	SuffixMatch  *string     `json:"suffixMatch,omitempty"`
-	RangeMatch   *Int64Range `json:"rangeMatch,omitempty"`
-	PresentMatch *bool       `json:"presentMatch,omitempty"`
+	Name         string         `json:"name"`
+	InvertMatch  *bool          `json:"invertMatch,omitempty"`
+	ExactMatch   *string        `json:"exactMatch,omitempty"`
+	RegexMatch   *regexp.Regexp `json:"regexMatch,omitempty"`
+	PrefixMatch  *string        `json:"prefixMatch,omitempty"`
+	SuffixMatch  *string        `json:"suffixMatch,omitempty"`
+	RangeMatch   *Int64Range    `json:"rangeMatch,omitempty"`
+	PresentMatch *bool          `json:"presentMatch,omitempty"`
 }
 
 // Int64Range is a range for header range match.

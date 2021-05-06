@@ -439,11 +439,11 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 			route.Path = &pt.Path
 		case *v3routepb.RouteMatch_SafeRegex:
 			regex := pt.SafeRegex.GetRegex()
-			_, err := regexp.Compile(regex)
+			re, err := regexp.Compile(regex)
 			if err != nil {
 				return nil, fmt.Errorf("route %+v contains an invalid regex %q", r, regex)
 			}
-			route.Regex = &regex
+			route.Regex = re
 		default:
 			return nil, fmt.Errorf("route %+v has an unrecognized path specifier: %+v", r, pt)
 		}
@@ -459,11 +459,11 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 				header.ExactMatch = &ht.ExactMatch
 			case *v3routepb.HeaderMatcher_SafeRegexMatch:
 				regex := ht.SafeRegexMatch.GetRegex()
-				_, err := regexp.Compile(regex)
+				re, err := regexp.Compile(regex)
 				if err != nil {
 					return nil, fmt.Errorf("route %+v contains an invalid regex %q", r, regex)
 				}
-				header.RegexMatch = &regex
+				header.RegexMatch = re
 			case *v3routepb.HeaderMatcher_RangeMatch:
 				header.RangeMatch = &Int64Range{
 					Start: ht.RangeMatch.Start,
