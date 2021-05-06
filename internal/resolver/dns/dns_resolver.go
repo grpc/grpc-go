@@ -47,7 +47,8 @@ var EnableSRVLookups = false
 
 var logger = grpclog.Component("dns")
 
-// Globals to stub out in tests.
+// Globals to stub out in tests. TODO: Perhaps these two can be combined into a
+// single variable for testing the resolver?
 var (
 	newTimer           = time.NewTimer
 	newTimerDNSResRate = time.NewTimer
