@@ -1272,7 +1272,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		grpcMessage    string
 		grpcStatus     *status.Status
 		statusGen      *status.Status
-		rawStatusCode  *int
+		rawStatusCode  = codes.Unknown
 		httpStatus     *int
 	)
 	for _, hf := range frame.Fields {
@@ -1296,7 +1296,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 				grpcStatus = status.New(codes.Internal, fmt.Sprintf("transport: malformed grpc-status: %v", err))
 				break
 			}
-			rawStatusCode = &code
+			rawStatusCode = codes.Code(uint32(code))
 		case "grpc-message":
 			grpcMessage = decodeGrpcMessage(hf.Value)
 		case "grpc-status-details-bin":
@@ -1354,32 +1354,18 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 	}
 
-	if isGRPC {
-		// gRPC status doesn't exist.
-		// Set rawStatusCode to be unknown so that, if the stream has ended this
-		// Unknown status will be propagated to the user.
-		// Otherwise, it will be ignored. In which case, status from
-		// a later trailer, that has StreamEnded flag set, is propagated.
-		if rawStatusCode == nil && statusGen == nil {
-			code := int(codes.Unknown)
-			rawStatusCode = &code
-		}
-	} else {
+	if !isGRPC {
 		var code = codes.Internal // when header does not include HTTP status, return INTERNAL
 		if httpStatus != nil {
 			var ok bool
-			code, ok = HTTPStatusConvTab[*(httpStatus)]
+			code, ok = HTTPStatusConvTab[*httpStatus]
 			if !ok {
 				code = codes.Unknown
 			}
 		}
-		if err := status.Error(code, constructHTTPErrMsg(
-			httpStatus,
-			contentTypeErr,
-		)); err != nil {
-			t.closeStream(s, err, true, http2.ErrCodeProtocol, status.Convert(err), nil, endStream)
-			return
-		}
+		se := status.New(code, constructHTTPErrMsg(httpStatus, contentTypeErr))
+		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+		return
 	}
 
 	isHeader := false
@@ -1428,7 +1414,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 
 	if statusGen == nil {
-		statusGen = status.New(codes.Code(int32(*(rawStatusCode))), grpcMessage)
+		statusGen = status.New(rawStatusCode, grpcMessage)
 	}
 
 	// if client received END_STREAM from server while stream was still active, send RST_STREAM
