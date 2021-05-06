@@ -289,10 +289,8 @@ func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
-	defer func() {
-		cancel()
-		xdsR.Close()
-	}()
+	defer xdsR.Close()
+	defer cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -317,10 +315,8 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
-	defer func() {
-		cancel()
-		xdsR.Close()
-	}()
+	defer xdsR.Close()
+	defer cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -407,7 +403,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 		defer cancel()
 		gotState, err := tcc.stateCh.Receive(ctx)
 		if err != nil {
-			t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+			t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 		}
 		rState := gotState.(resolver.State)
 		if err := rState.ServiceConfig.Err; err != nil {
@@ -475,7 +471,7 @@ func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
 
 	gotState, err := tcc.stateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 	rState := gotState.(resolver.State)
 	if err := rState.ServiceConfig.Err; err != nil {
@@ -498,7 +494,7 @@ func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{}, suErr)
 
 	if _, err = tcc.stateCh.Receive(ctx); err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 
 	// "Finish the RPC"; this could cause a panic if the resolver doesn't
@@ -544,7 +540,7 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 
 	gotState, err := tcc.stateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 	rState := gotState.(resolver.State)
 	if err := rState.ServiceConfig.Err; err != nil {
@@ -577,7 +573,7 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{}, suErr)
 
 	if gotState, err = tcc.stateCh.Receive(ctx); err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 	rState = gotState.(resolver.State)
 	if err := rState.ServiceConfig.Err; err != nil {
@@ -602,7 +598,7 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 
 	// In the meantime, an empty ServiceConfig update should have been sent.
 	if gotState, err = tcc.stateCh.Receive(ctx); err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 	rState = gotState.(resolver.State)
 	if err := rState.ServiceConfig.Err; err != nil {
@@ -621,10 +617,8 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
-	defer func() {
-		cancel()
-		xdsR.Close()
-	}()
+	defer xdsR.Close()
+	defer cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -651,7 +645,7 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 
 	gotState, err := tcc.stateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 	rState := gotState.(resolver.State)
 	if err := rState.ServiceConfig.Err; err != nil {
@@ -684,10 +678,8 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
-	defer func() {
-		cancel()
-		xdsR.Close()
-	}()
+	defer xdsR.Close()
+	defer cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -722,7 +714,7 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 
 	gotState, err := tcc.stateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 	rState := gotState.(resolver.State)
 	if err := rState.ServiceConfig.Err; err != nil {
@@ -789,10 +781,8 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
-	defer func() {
-		cancel()
-		xdsR.Close()
-	}()
+	defer xdsR.Close()
+	defer cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -813,7 +803,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 
 	gotState, err := tcc.stateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 	rState := gotState.(resolver.State)
 	if err := rState.ServiceConfig.Err; err != nil {
@@ -872,7 +862,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	tcc.stateCh.Receive(ctx) // Ignore the first update
 	gotState, err = tcc.stateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 	rState = gotState.(resolver.State)
 	if err := rState.ServiceConfig.Err; err != nil {
@@ -910,7 +900,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	}, nil)
 	gotState, err = tcc.stateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 	rState = gotState.(resolver.State)
 	if err := rState.ServiceConfig.Err; err != nil {
@@ -939,10 +929,8 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
-	defer func() {
-		cancel()
-		xdsR.Close()
-	}()
+	defer xdsR.Close()
+	defer cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -971,7 +959,7 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	}, nil)
 	gotState, err := tcc.stateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 	rState := gotState.(resolver.State)
 	if err := rState.ServiceConfig.Err; err != nil {
@@ -995,10 +983,8 @@ func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
-	defer func() {
-		cancel()
-		xdsR.Close()
-	}()
+	defer xdsR.Close()
+	defer cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -1019,7 +1005,7 @@ func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 	defer cancel()
 	gotState, err := tcc.stateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 	rState := gotState.(resolver.State)
 	wantParsedConfig := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)("{}")
@@ -1043,10 +1029,8 @@ func (s) TestXDSResolverMultipleLDSUpdates(t *testing.T) {
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 	})
-	defer func() {
-		cancel()
-		xdsR.Close()
-	}()
+	defer xdsR.Close()
+	defer cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -1220,10 +1204,8 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 			xdsR, tcc, cancel := testSetup(t, setupOpts{
 				xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
 			})
-			defer func() {
-				cancel()
-				xdsR.Close()
-			}()
+			defer xdsR.Close()
+			defer cancel()
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
@@ -1265,7 +1247,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 
 			gotState, err := tcc.stateCh.Receive(ctx)
 			if err != nil {
-				t.Fatalf("ClientConn.UpdateState returned error: %v", err)
+				t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 			}
 			rState := gotState.(resolver.State)
 			if err := rState.ServiceConfig.Err; err != nil {
