@@ -854,7 +854,17 @@ func toRPCErr(err error) error {
 // setCallInfoCodec should only be called after CallOptions have been applied.
 func setCallInfoCodec(c *callInfo) error {
 	if c.codec != nil {
-		// codec was already set by a CallOption; use it.
+		// codec was already set by a CallOption; use it, but set the content
+		// subtype if it is not set.
+		if c.contentSubtype == "" {
+			// c.codec is a baseCodec to hide the difference between grpc.Codec and
+			// encoding.Codec (Name vs. String method name).  We only support
+			// setting content subtype from encoding.Codec to avoid a behavior
+			// change with the deprecated version.
+			if ec, ok := c.codec.(encoding.Codec); ok {
+				c.contentSubtype = strings.ToLower(ec.Name())
+			}
+		}
 		return nil
 	}
 
