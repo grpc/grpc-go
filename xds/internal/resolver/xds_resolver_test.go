@@ -850,7 +850,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 			},
 		},
 	}, nil)
-	tcc.stateCh.Receive(ctx) // Ignore the first update
+	tcc.stateCh.Receive(ctx) // Ignore the first update.
 
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
 		VirtualHosts: []*xdsclient.VirtualHost{
