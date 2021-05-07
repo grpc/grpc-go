@@ -661,7 +661,6 @@ func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
 		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, no more watches should be cancelled.", gotCluster)
 	}
 
-
 	// Then an update should successfully be written to the update buffer.
 	select {
 	case chu := <-ch.updateChannel:
