@@ -29,6 +29,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"testing"
@@ -74,20 +75,17 @@ var (
 	xdsClientNodeID  string
 )
 
-func init() {
-	// The management server is started and stopped from TestMain(), but the
-	// leakcheck runs after every individual test. So, we need to skip the
-	// goroutine which spawns the management server and is blocked on the call
-	// to `Serve()`.
-	leakcheck.RegisterIgnoreGoroutine("e2e.StartManagementServer")
-}
-
 // TestMain sets up an xDS management server, runs all tests, and stops the
 // management server.
 func TestMain(m *testing.M) {
+	// The management server is started and stopped from here, but the leakcheck
+	// runs after every individual test. So, we need to skip the goroutine which
+	// spawns the management server and is blocked on the call to `Serve()`.
+	leakcheck.RegisterIgnoreGoroutine("e2e.StartManagementServer")
+
 	cancel, err := setupManagementServer()
 	if err != nil {
-		cancel()
+		log.Printf("setupManagementServer() failed: %v", err)
 		os.Exit(1)
 	}
 
@@ -170,19 +168,21 @@ func setupManagementServer() (func(), error) {
 	var err error
 	managementServer, err = e2e.StartManagementServer()
 	if err != nil {
-		return func() {}, err
+		return nil, err
 	}
 
 	// Create a directory to hold certs and key files used on the server side.
 	serverDir, err := createTmpDirWithFiles("testServerSideXDS*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
 	if err != nil {
-		return func() { managementServer.Stop() }, err
+		managementServer.Stop()
+		return nil, err
 	}
 
 	// Create a directory to hold certs and key files used on the client side.
 	clientDir, err := createTmpDirWithFiles("testClientSideXDS*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/server_ca_cert.pem")
 	if err != nil {
-		return func() { managementServer.Stop() }, err
+		managementServer.Stop()
+		return nil, err
 	}
 
 	// Create certificate providers section of the bootstrap config with entries
@@ -202,7 +202,8 @@ func setupManagementServer() (func(), error) {
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 	})
 	if err != nil {
-		return func() { managementServer.Stop() }, err
+		managementServer.Stop()
+		return nil, err
 	}
 
 	return func() {
