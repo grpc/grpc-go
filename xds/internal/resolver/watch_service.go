@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/pretty"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
@@ -82,7 +83,7 @@ type serviceUpdateWatcher struct {
 }
 
 func (w *serviceUpdateWatcher) handleLDSResp(update xdsclient.ListenerUpdate, err error) {
-	w.logger.Infof("received LDS update: %+v, err: %v", update, err)
+	w.logger.Infof("received LDS update: %+v, err: %v", pretty.ToJSON(update), err)
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.closed {
@@ -163,7 +164,7 @@ func (w *serviceUpdateWatcher) updateVirtualHostsFromRDS(update xdsclient.RouteC
 }
 
 func (w *serviceUpdateWatcher) handleRDSResp(update xdsclient.RouteConfigUpdate, err error) {
-	w.logger.Infof("received RDS update: %+v, err: %v", update, err)
+	w.logger.Infof("received RDS update: %+v, err: %v", pretty.ToJSON(update), err)
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.closed {
