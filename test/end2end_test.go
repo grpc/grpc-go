@@ -6921,6 +6921,10 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
+				t.Errorf("unexpected error from send: %v", err)
+				return err
+			}
 			// Wait forever.
 			_, err := stream.Recv()
 			if err == nil {
@@ -6954,11 +6958,18 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 
 	client := testpb.NewTestServiceClient(cc)
 
-	// Should go on connection 1. We use a long-lived RPC because it will cause GracefulStop to send GO_AWAY, but the
-	// connection doesn't get closed until the server stops and the client receives.
+	// We make a streaming RPC and do an one-message-round-trip to make sure
+	// it's created on connection 1.
+	//
+	// We use a long-lived RPC because it will cause GracefulStop to send
+	// GO_AWAY, but the connection doesn't get closed until the server stops and
+	// the client receives the error.
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("FullDuplexCall(_) = _, %v; want _, nil", err)
+	}
+	if _, err = stream.Recv(); err != nil {
+		t.Fatalf("unexpected error from first recv: %v", err)
 	}
 
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{
@@ -6976,8 +6987,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	s1.Stop()
 
 	// Wait for client to close.
-	_, err = stream.Recv()
-	if err == nil {
+	if _, err = stream.Recv(); err == nil {
 		t.Fatal("expected the stream to die, but got a successful Recv")
 	}
 
