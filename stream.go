@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -246,6 +247,16 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		return nil, err
 	}
 
+	// Set the content subtype if it is already unset and ForceCodec is used.
+	if c.codec != nil && c.contentSubtype == "" {
+		// c.codec is a baseCodec to hide the difference between grpc.Codec and
+		// encoding.Codec (Name vs. String method name).  We only support
+		// setting content subtype from encoding.Codec to avoid a behavior
+		// change with the deprecated version.
+		if ec, ok := c.codec.(encoding.Codec); ok {
+			c.contentSubtype = strings.ToLower(ec.Name())
+		}
+	}
 	callHdr := &transport.CallHdr{
 		Host:           cc.authority,
 		Method:         method,

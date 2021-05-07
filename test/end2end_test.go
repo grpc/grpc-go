@@ -5305,6 +5305,53 @@ func (s) TestGRPCMethod(t *testing.T) {
 	}
 }
 
+// renameProtoCodec is an encoding.Codec wrapper that allows customizing the
+// Name() of another codec.
+type renameProtoCodec struct {
+	encoding.Codec
+	name string
+}
+
+func (r *renameProtoCodec) Name() string { return r.name }
+
+func (s) TestForceCodecName(t *testing.T) {
+	wantContentTypeCh := make(chan string, 1)
+	defer close(wantContentTypeCh)
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			md, ok := metadata.FromIncomingContext(ctx)
+			if !ok {
+				return nil, status.Errorf(codes.Internal, "no metadata in context")
+			}
+			if got, want := md["content-type"], <-wantContentTypeCh; len(got) != 1 || got[0] != want {
+				return nil, status.Errorf(codes.Internal, "got content-type=%q; want [%q]", got, want)
+			}
+			return &testpb.Empty{}, nil
+		},
+	}
+	protoCodec := encoding.GetCodec("proto")
+	if err := ss.Start([]grpc.ServerOption{grpc.ForceServerCodec(encoding.GetCodec("proto"))}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	codec := &renameProtoCodec{Codec: protoCodec, name: "some-test-name"}
+	wantContentTypeCh <- "application/grpc+some-test-name"
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(codec)); err != nil {
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
+	}
+
+	codec.name = "aNoTHeRNaME"
+	wantContentTypeCh <- "application/grpc+anothername"
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(codec)); err != nil {
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
+	}
+}
+
 func (s) TestForceServerCodec(t *testing.T) {
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
