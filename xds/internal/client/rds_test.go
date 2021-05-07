@@ -22,6 +22,7 @@ package client
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 	"time"
 
@@ -917,6 +918,51 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "good with regex matchers",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: "/a/"}},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								Name:                 "th",
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{SafeRegexMatch: &v3matcherpb.RegexMatcher{Regex: "tv"}},
+							},
+						},
+						RuntimeFraction: &v3corepb.RuntimeFractionalPercent{
+							DefaultValue: &v3typepb.FractionalPercent{
+								Numerator:   1,
+								Denominator: v3typepb.FractionalPercent_HUNDRED,
+							},
+						},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{
+							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+								WeightedClusters: &v3routepb.WeightedCluster{
+									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
+										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
+									},
+									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
+								}}}},
+				},
+			},
+			wantRoutes: []*Route{{
+				Regex: func() *regexp.Regexp { return regexp.MustCompile("/a/") }(),
+				Headers: []*HeaderMatcher{
+					{
+						Name:        "th",
+						InvertMatch: newBoolP(false),
+						RegexMatch:  func() *regexp.Regexp { return regexp.MustCompile("tv") }(),
+					},
+				},
+				Fraction:         newUInt32P(10000),
+				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
+			}},
+			wantErr: false,
+		},
+		{
 			name: "query is ignored",
 			routes: []*v3routepb.Route{
 				{
@@ -1102,7 +1148,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 	}
 
 	cmpOpts := []cmp.Option{
-		cmp.AllowUnexported(Route{}, HeaderMatcher{}, Int64Range{}),
+		cmp.AllowUnexported(Route{}, HeaderMatcher{}, Int64Range{}, regexp.Regexp{}),
 		cmpopts.EquateEmpty(),
 		cmp.Transformer("FilterConfig", func(fc httpfilter.FilterConfig) string {
 			return fmt.Sprint(fc)
@@ -1113,17 +1159,15 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			oldFI := env.FaultInjectionSupport
 			env.FaultInjectionSupport = !tt.disableFI
+			defer func() { env.FaultInjectionSupport = oldFI }()
 
 			got, err := routesProtoToSlice(tt.routes, nil, false)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
-				return
+				t.Fatalf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 			}
-			if !cmp.Equal(got, tt.wantRoutes, cmpOpts...) {
-				t.Errorf("routesProtoToSlice() got = %v, want %v, diff: %v", got, tt.wantRoutes, cmp.Diff(got, tt.wantRoutes, cmpOpts...))
+			if diff := cmp.Diff(got, tt.wantRoutes, cmpOpts...); diff != "" {
+				t.Fatalf("routesProtoToSlice() returned unexpected diff (-got +want):\n%s", diff)
 			}
-
-			env.FaultInjectionSupport = oldFI
 		})
 	}
 }
