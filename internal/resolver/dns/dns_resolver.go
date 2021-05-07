@@ -47,8 +47,12 @@ var EnableSRVLookups = false
 
 var logger = grpclog.Component("dns")
 
-// A global to stub out in tests.
-var newTimer = time.NewTimer
+// Globals to stub out in tests. TODO: Perhaps these two can be combined into a
+// single variable for testing the resolver?
+var (
+	newTimer           = time.NewTimer
+	newTimerDNSResRate = time.NewTimer
+)
 
 func init() {
 	resolver.Register(NewBuilder())
@@ -219,7 +223,7 @@ func (d *dnsResolver) watcher() {
 			// Success resolving, wait for the next ResolveNow. However, also wait 30 seconds at the very least
 			// to prevent constantly re-resolving.
 			backoffIndex = 1
-			timer = time.NewTimer(minDNSResRate)
+			timer = newTimerDNSResRate(minDNSResRate)
 			select {
 			case <-d.ctx.Done():
 				timer.Stop()
