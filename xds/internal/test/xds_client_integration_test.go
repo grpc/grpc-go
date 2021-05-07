@@ -23,13 +23,12 @@ package xds_test
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"testing"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 
@@ -37,34 +36,13 @@ import (
 )
 
 // clientSetup performs a bunch of steps common to all xDS client tests here:
-// - spin up an xDS management server on a local port
 // - spin up a gRPC server and register the test service on it
 // - create a local TCP listener and start serving on it
 //
 // Returns the following:
-// - the management server: tests use this to configure resources
-// - nodeID expected by the management server: this is set in the Node proto
-//   sent by the xdsClient for queries.
 // - the port the server is listening on
 // - cleanup function to be invoked by the tests when done
-func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
-	// Spin up a xDS management server on a local port.
-	nodeID := uuid.New().String()
-	fs, err := e2e.StartManagementServer()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{
-		Version:   xds.TransportV3,
-		NodeID:    nodeID,
-		ServerURI: fs.Address,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
+func clientSetup(t *testing.T) (uint32, func()) {
 	// Initialize a gRPC server and register the stubServer on it.
 	server := grpc.NewServer()
 	testpb.RegisterTestServiceServer(server, &testService{})
@@ -81,30 +59,29 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 		}
 	}()
 
-	return fs, nodeID, uint32(lis.Addr().(*net.TCPAddr).Port), func() {
-		fs.Stop()
-		bootstrapCleanup()
+	return uint32(lis.Addr().(*net.TCPAddr).Port), func() {
 		server.Stop()
 	}
 }
 
 func (s) TestClientSideXDS(t *testing.T) {
-	fs, nodeID, port, cleanup := clientSetup(t)
+	port, cleanup := clientSetup(t)
 	defer cleanup()
 
+	serviceName := xdsServiceName + "-client-side-xds"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: "myservice",
-		NodeID:     nodeID,
+		DialTarget: serviceName,
+		NodeID:     xdsClientNodeID,
 		Host:       "localhost",
 		Port:       port,
 		SecLevel:   e2e.SecurityLevelNone,
 	})
-	if err := fs.Update(resources); err != nil {
+	if err := managementServer.Update(resources); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial("xds:///myservice", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
