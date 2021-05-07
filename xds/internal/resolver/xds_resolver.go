@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 
@@ -171,11 +172,11 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 		r.cc.ReportError(err)
 		return false
 	}
-	r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, sc)
+	r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, pretty.FormatJSON(sc))
 
 	// Send the update to the ClientConn.
 	state := iresolver.SetConfigSelector(resolver.State{
-		ServiceConfig: r.cc.ParseServiceConfig(sc),
+		ServiceConfig: r.cc.ParseServiceConfig(string(sc)),
 	}, cs)
 	r.cc.UpdateState(state)
 	return true
