@@ -24,30 +24,19 @@ package xds_test
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net"
-	"os"
-	"path"
 	"strconv"
 	"testing"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/testdata"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 
 	xdscreds "google.golang.org/grpc/credentials/xds"
-	xdsinternal "google.golang.org/grpc/internal/xds"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 )
@@ -61,112 +50,16 @@ const (
 	xdsServiceName = "my-service"
 )
 
-func createTmpFile(t *testing.T, src, dst string) {
-	t.Helper()
-
-	data, err := ioutil.ReadFile(src)
-	if err != nil {
-		t.Fatalf("ioutil.ReadFile(%q) failed: %v", src, err)
-	}
-	if err := ioutil.WriteFile(dst, data, os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", dst, err)
-	}
-	t.Logf("Wrote file at: %s", dst)
-}
-
-// createTempDirWithFiles creates a temporary directory under the system default
-// tempDir with the given dirSuffix. It also reads from certSrc, keySrc and
-// rootSrc files are creates appropriate files under the newly create tempDir.
-// Returns the name of the created tempDir.
-func createTmpDirWithFiles(t *testing.T, dirSuffix, certSrc, keySrc, rootSrc string) string {
-	t.Helper()
-
-	// Create a temp directory. Passing an empty string for the first argument
-	// uses the system temp directory.
-	dir, err := ioutil.TempDir("", dirSuffix)
-	if err != nil {
-		t.Fatalf("ioutil.TempDir() failed: %v", err)
-	}
-	t.Logf("Using tmpdir: %s", dir)
-
-	createTmpFile(t, testdata.Path(certSrc), path.Join(dir, certFile))
-	createTmpFile(t, testdata.Path(keySrc), path.Join(dir, keyFile))
-	createTmpFile(t, testdata.Path(rootSrc), path.Join(dir, rootFile))
-	return dir
-}
-
-// createClientTLSCredentials creates client-side TLS transport credentials.
-func createClientTLSCredentials(t *testing.T) credentials.TransportCredentials {
-	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/client1_cert.pem"), testdata.Path("x509/client1_key.pem"))
-	if err != nil {
-		t.Fatalf("tls.LoadX509KeyPair(x509/client1_cert.pem, x509/client1_key.pem) failed: %v", err)
-	}
-	b, err := ioutil.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
-	if err != nil {
-		t.Fatalf("ioutil.ReadFile(x509/server_ca_cert.pem) failed: %v", err)
-	}
-	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(b) {
-		t.Fatal("failed to append certificates")
-	}
-	return credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{cert},
-		RootCAs:      roots,
-		ServerName:   "x.test.example.com",
-	})
-}
-
-// commonSetup performs a bunch of steps common to all xDS server tests here:
-// - spin up an xDS management server on a local port
-// - set up certificates for consumption by the file_watcher plugin
+// setupGRPCServer performs the following:
 // - spin up an xDS-enabled gRPC server, configure it with xdsCredentials and
 //   register the test service on it
 // - create a local TCP listener and start serving on it
 //
 // Returns the following:
-// - the management server: tests use this to configure resources
-// - nodeID expected by the management server: this is set in the Node proto
-//   sent by the xdsClient used on the xDS-enabled gRPC server
 // - local listener on which the xDS-enabled gRPC server is serving on
 // - cleanup function to be invoked by the tests when done
-func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, func()) {
+func setupGRPCServer(t *testing.T) (net.Listener, func()) {
 	t.Helper()
-
-	// Turn on the env var protection for client-side security.
-	origClientSideSecurityEnvVar := env.ClientSideSecuritySupport
-	env.ClientSideSecuritySupport = true
-
-	// Spin up an xDS management server on a local port.
-	nodeID := uuid.New().String()
-	fs, err := e2e.StartManagementServer()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a directory to hold certs and key files used on the server side.
-	serverDir := createTmpDirWithFiles(t, "testServerSideXDS*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
-
-	// Create a directory to hold certs and key files used on the client side.
-	clientDir := createTmpDirWithFiles(t, "testClientSideXDS*", "x509/client1_cert.pem", "x509/client1_key.pem", "x509/server_ca_cert.pem")
-
-	// Create certificate providers section of the bootstrap config with entries
-	// for both the client and server sides.
-	cpc := map[string]json.RawMessage{
-		e2e.ServerSideCertProviderInstance: e2e.DefaultFileWatcherConfig(path.Join(serverDir, certFile), path.Join(serverDir, keyFile), path.Join(serverDir, rootFile)),
-		e2e.ClientSideCertProviderInstance: e2e.DefaultFileWatcherConfig(path.Join(clientDir, certFile), path.Join(clientDir, keyFile), path.Join(clientDir, rootFile)),
-	}
-
-	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := xdsinternal.SetupBootstrapFile(xdsinternal.BootstrapOptions{
-		Version:                            xdsinternal.TransportV3,
-		NodeID:                             nodeID,
-		ServerURI:                          fs.Address,
-		CertificateProviders:               cpc,
-		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// Configure xDS credentials to be used on the server-side.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{
@@ -192,11 +85,8 @@ func commonSetup(t *testing.T) (*e2e.ManagementServer, string, net.Listener, fun
 		}
 	}()
 
-	return fs, nodeID, lis, func() {
-		fs.Stop()
-		bootstrapCleanup()
+	return lis, func() {
 		server.Stop()
-		env.ClientSideSecuritySupport = origClientSideSecurityEnvVar
 	}
 }
 
@@ -223,7 +113,7 @@ func hostPortFromListener(lis net.Listener) (string, uint32, error) {
 //   the client and the server. This results in both of them using the
 //   configured fallback credentials (which is insecure creds in this case).
 func (s) TestServerSideXDS_Fallback(t *testing.T) {
-	fs, nodeID, lis, cleanup := commonSetup(t)
+	lis, cleanup := setupGRPCServer(t)
 	defer cleanup()
 
 	// Grab the host and port of the server and create client side xDS resources
@@ -233,9 +123,10 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
 	}
+	serviceName := xdsServiceName + "-fallback"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: xdsServiceName,
-		NodeID:     nodeID,
+		DialTarget: serviceName,
+		NodeID:     xdsClientNodeID,
 		Host:       host,
 		Port:       port,
 		SecLevel:   e2e.SecurityLevelNone,
@@ -248,7 +139,7 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	// Setup the management server with client and server-side resources.
-	if err := fs.Update(resources); err != nil {
+	if err := managementServer.Update(resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -263,7 +154,7 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	// Create a ClientConn with the xds scheme and make a successful RPC.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", xdsServiceName), grpc.WithTransportCredentials(creds))
+	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -271,7 +162,7 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 
 	client := testpb.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("rpc EmptyCall() failed: %v", err)
+		t.Errorf("rpc EmptyCall() failed: %v", err)
 	}
 }
 
@@ -301,7 +192,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			fs, nodeID, lis, cleanup := commonSetup(t)
+			lis, cleanup := setupGRPCServer(t)
 			defer cleanup()
 
 			// Grab the host and port of the server and create client side xDS
@@ -314,9 +205,10 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 			// Create xDS resources to be consumed on the client side. This
 			// includes the listener, route configuration, cluster (with
 			// security configuration) and endpoint resources.
+			serviceName := xdsServiceName + "-file-watcher-certs-" + test.name
 			resources := e2e.DefaultClientResources(e2e.ResourceParams{
-				DialTarget: xdsServiceName,
-				NodeID:     nodeID,
+				DialTarget: serviceName,
+				NodeID:     xdsClientNodeID,
 				Host:       host,
 				Port:       port,
 				SecLevel:   test.secLevel,
@@ -329,7 +221,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 			resources.Listeners = append(resources.Listeners, inboundLis)
 
 			// Setup the management server with client and server resources.
-			if err := fs.Update(resources); err != nil {
+			if err := managementServer.Update(resources); err != nil {
 				t.Fatal(err)
 			}
 
@@ -344,7 +236,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 			// Create a ClientConn with the xds scheme and make an RPC.
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", xdsServiceName), grpc.WithTransportCredentials(creds))
+			cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds))
 			if err != nil {
 				t.Fatalf("failed to dial local test server: %v", err)
 			}
@@ -367,7 +259,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 // configuration pointing to the use of the file_watcher plugin and we verify
 // that the same client is now able to successfully make an RPC.
 func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
-	fs, nodeID, lis, cleanup := commonSetup(t)
+	lis, cleanup := setupGRPCServer(t)
 	defer cleanup()
 
 	// Grab the host and port of the server and create client side xDS resources
@@ -378,9 +270,10 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
 	}
+	serviceName := xdsServiceName + "-security-config-change"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: xdsServiceName,
-		NodeID:     nodeID,
+		DialTarget: serviceName,
+		NodeID:     xdsClientNodeID,
 		Host:       host,
 		Port:       port,
 		SecLevel:   e2e.SecurityLevelNone,
@@ -393,7 +286,7 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	// Setup the management server with client and server-side resources.
-	if err := fs.Update(resources); err != nil {
+	if err := managementServer.Update(resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -408,7 +301,7 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	// Create a ClientConn with the xds scheme and make a successful RPC.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	xdsCC, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", xdsServiceName), grpc.WithTransportCredentials(xdsCreds))
+	xdsCC, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(xdsCreds))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -437,15 +330,15 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	// Switch server and client side resources with ones that contain required
 	// security configuration for mTLS with a file watcher certificate provider.
 	resources = e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: xdsServiceName,
-		NodeID:     nodeID,
+		DialTarget: serviceName,
+		NodeID:     xdsClientNodeID,
 		Host:       host,
 		Port:       port,
 		SecLevel:   e2e.SecurityLevelMTLS,
 	})
 	inboundLis = e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS)
 	resources.Listeners = append(resources.Listeners, inboundLis)
-	if err := fs.Update(resources); err != nil {
+	if err := managementServer.Update(resources); err != nil {
 		t.Fatal(err)
 	}
 

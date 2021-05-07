@@ -147,7 +147,6 @@ func (s *ManagementServer) Stop() {
 		s.cancel()
 	}
 	s.gs.Stop()
-	logger.Infof("Stopped the xDS management server...")
 }
 
 // resourceSlice accepts a slice of any type of proto messages and returns a
