@@ -180,7 +180,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	// clusterUpdate fields (forgetting the children). This will be used to help
 	// determine whether to pingClusterHandler at the end of this callback or
 	// not.
-	deltaInClusterUpdateFields := clusterUpdate.ClusterName != c.clusterUpdate.ClusterName || clusterUpdate.ClusterType != c.clusterUpdate.ClusterType
+	deltaInClusterUpdateFields := clusterUpdate.ServiceName != c.clusterUpdate.ServiceName || clusterUpdate.ClusterType != c.clusterUpdate.ClusterType
 	c.receivedUpdate = true
 	c.clusterUpdate = clusterUpdate
 
@@ -223,7 +223,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	// update received, will be used to construct the new child list.
 	mapCurrentChildren := make(map[string]*clusterNode)
 	for _, child := range c.children {
-		mapCurrentChildren[child.clusterUpdate.ClusterName] = child
+		mapCurrentChildren[child.clusterUpdate.ServiceName] = child
 	}
 
 	// Add and construct any new child nodes.

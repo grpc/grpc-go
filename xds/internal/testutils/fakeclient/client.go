@@ -156,7 +156,7 @@ func (xdsC *Client) InvokeWatchClusterCallback(update xdsclient.ClusterUpdate, e
 	} else {
 		// Have what callback you call with the update determined by the service name in the ClusterUpdate. Left up to the
 		// caller to make sure the cluster update matches with a persisted callback.
-		xdsC.cdsCbs[update.ClusterName](update, err)
+		xdsC.cdsCbs[update.ServiceName](update, err)
 	}
 }
 
