@@ -100,7 +100,7 @@ func createTmpFile(src, dst string) error {
 		return fmt.Errorf("ioutil.ReadFile(%q) failed: %v", src, err)
 	}
 	if err := ioutil.WriteFile(dst, data, os.ModePerm); err != nil {
-		fmt.Errorf("ioutil.WriteFile(%q) failed: %v", dst, err)
+		return fmt.Errorf("ioutil.WriteFile(%q) failed: %v", dst, err)
 	}
 	return nil
 }
