@@ -23,7 +23,6 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"strconv"
 	"testing"
@@ -32,9 +31,6 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
-	anypb "github.com/golang/protobuf/ptypes/any"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -76,7 +72,7 @@ var listenerWithFilterChains = &v3listenerpb.Listener{
 			TransportSocket: &v3corepb.TransportSocket{
 				Name: "envoy.transport_sockets.tls",
 				ConfigType: &v3corepb.TransportSocket_TypedConfig{
-					TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+					TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
 						CommonTlsContext: &v3tlspb.CommonTlsContext{
 							TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
 								InstanceName:    "identityPluginInstance",
@@ -326,12 +322,4 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 	if _, err := errCh.Receive(ctx); err != nil {
 		t.Fatalf("error when waiting for Accept() to return the conn on filter chain match: %v", err)
 	}
-}
-
-func marshalAny(m proto.Message) *anypb.Any {
-	a, err := ptypes.MarshalAny(m)
-	if err != nil {
-		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", m, err))
-	}
-	return a
 }

@@ -25,6 +25,7 @@ import (
 	durpb "github.com/golang/protobuf/ptypes/duration"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/testutils"
 )
 
 func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
@@ -34,41 +35,32 @@ func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
 func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
 	var opts []*channelzpb.SocketOption
 	if skopts.Linger != nil {
-		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionLinger{
-			Active:   skopts.Linger.Onoff != 0,
-			Duration: convertToPtypesDuration(int64(skopts.Linger.Linger), 0),
+		opts = append(opts, &channelzpb.SocketOption{
+			Name: "SO_LINGER",
+			Additional: testutils.MarshalAny(&channelzpb.SocketOptionLinger{
+				Active:   skopts.Linger.Onoff != 0,
+				Duration: convertToPtypesDuration(int64(skopts.Linger.Linger), 0),
+			}),
 		})
-		if err == nil {
-			opts = append(opts, &channelzpb.SocketOption{
-				Name:       "SO_LINGER",
-				Additional: additional,
-			})
-		}
 	}
 	if skopts.RecvTimeout != nil {
-		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionTimeout{
-			Duration: convertToPtypesDuration(int64(skopts.RecvTimeout.Sec), int64(skopts.RecvTimeout.Usec)),
+		opts = append(opts, &channelzpb.SocketOption{
+			Name: "SO_RCVTIMEO",
+			Additional: testutils.MarshalAny(&channelzpb.SocketOptionTimeout{
+				Duration: convertToPtypesDuration(int64(skopts.RecvTimeout.Sec), int64(skopts.RecvTimeout.Usec)),
+			}),
 		})
-		if err == nil {
-			opts = append(opts, &channelzpb.SocketOption{
-				Name:       "SO_RCVTIMEO",
-				Additional: additional,
-			})
-		}
 	}
 	if skopts.SendTimeout != nil {
-		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionTimeout{
-			Duration: convertToPtypesDuration(int64(skopts.SendTimeout.Sec), int64(skopts.SendTimeout.Usec)),
+		opts = append(opts, &channelzpb.SocketOption{
+			Name: "SO_SNDTIMEO",
+			Additional: testutils.MarshalAny(&channelzpb.SocketOptionTimeout{
+				Duration: convertToPtypesDuration(int64(skopts.SendTimeout.Sec), int64(skopts.SendTimeout.Usec)),
+			}),
 		})
-		if err == nil {
-			opts = append(opts, &channelzpb.SocketOption{
-				Name:       "SO_SNDTIMEO",
-				Additional: additional,
-			})
-		}
 	}
 	if skopts.TCPInfo != nil {
-		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionTcpInfo{
+		additional := testutils.MarshalAny(&channelzpb.SocketOptionTcpInfo{
 			TcpiState:       uint32(skopts.TCPInfo.State),
 			TcpiCaState:     uint32(skopts.TCPInfo.Ca_state),
 			TcpiRetransmits: uint32(skopts.TCPInfo.Retransmits),
@@ -99,12 +91,10 @@ func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOptio
 			TcpiAdvmss:       skopts.TCPInfo.Advmss,
 			TcpiReordering:   skopts.TCPInfo.Reordering,
 		})
-		if err == nil {
-			opts = append(opts, &channelzpb.SocketOption{
-				Name:       "TCP_INFO",
-				Additional: additional,
-			})
-		}
+		opts = append(opts, &channelzpb.SocketOption{
+			Name:       "TCP_INFO",
+			Additional: additional,
+		})
 	}
 	return opts
 }

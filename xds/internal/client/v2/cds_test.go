@@ -26,8 +26,8 @@ import (
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	"github.com/golang/protobuf/ptypes"
 	anypb "github.com/golang/protobuf/ptypes/any"
+	"google.golang.org/grpc/internal/testutils"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/version"
 )
@@ -65,8 +65,8 @@ var (
 			},
 		},
 	}
-	marshaledCluster1, _ = ptypes.MarshalAny(goodCluster1)
-	goodCluster2         = &xdspb.Cluster{
+	marshaledCluster1 = testutils.MarshalAny(goodCluster1)
+	goodCluster2      = &xdspb.Cluster{
 		Name:                 goodClusterName2,
 		ClusterDiscoveryType: &xdspb.Cluster_Type{Type: xdspb.Cluster_EDS},
 		EdsClusterConfig: &xdspb.Cluster_EdsClusterConfig{
@@ -79,8 +79,8 @@ var (
 		},
 		LbPolicy: xdspb.Cluster_ROUND_ROBIN,
 	}
-	marshaledCluster2, _ = ptypes.MarshalAny(goodCluster2)
-	goodCDSResponse1     = &xdspb.DiscoveryResponse{
+	marshaledCluster2 = testutils.MarshalAny(goodCluster2)
+	goodCDSResponse1  = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			marshaledCluster1,
 		},

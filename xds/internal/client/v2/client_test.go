@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
@@ -114,30 +113,24 @@ var (
 			},
 		},
 	}
-	marshaledConnMgr1, _ = proto.Marshal(goodHTTPConnManager1)
-	goodListener1        = &xdspb.Listener{
+	marshaledConnMgr1 = testutils.MarshalAny(goodHTTPConnManager1)
+	goodListener1     = &xdspb.Listener{
 		Name: goodLDSTarget1,
 		ApiListener: &listenerpb.ApiListener{
-			ApiListener: &anypb.Any{
-				TypeUrl: httpConnManagerURL,
-				Value:   marshaledConnMgr1,
-			},
+			ApiListener: marshaledConnMgr1,
 		},
 	}
-	marshaledListener1, _ = ptypes.MarshalAny(goodListener1)
-	goodListener2         = &xdspb.Listener{
+	marshaledListener1 = testutils.MarshalAny(goodListener1)
+	goodListener2      = &xdspb.Listener{
 		Name: goodLDSTarget2,
 		ApiListener: &listenerpb.ApiListener{
-			ApiListener: &anypb.Any{
-				TypeUrl: httpConnManagerURL,
-				Value:   marshaledConnMgr1,
-			},
+			ApiListener: marshaledConnMgr1,
 		},
 	}
-	marshaledListener2, _     = ptypes.MarshalAny(goodListener2)
-	noAPIListener             = &xdspb.Listener{Name: goodLDSTarget1}
-	marshaledNoAPIListener, _ = proto.Marshal(noAPIListener)
-	badAPIListener2           = &xdspb.Listener{
+	marshaledListener2     = testutils.MarshalAny(goodListener2)
+	noAPIListener          = &xdspb.Listener{Name: goodLDSTarget1}
+	marshaledNoAPIListener = testutils.MarshalAny(noAPIListener)
+	badAPIListener2        = &xdspb.Listener{
 		Name: goodLDSTarget2,
 		ApiListener: &listenerpb.ApiListener{
 			ApiListener: &anypb.Any{
@@ -170,13 +163,8 @@ var (
 		TypeUrl: version.V2ListenerURL,
 	}
 	badResourceTypeInLDSResponse = &xdspb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: httpConnManagerURL,
-				Value:   marshaledConnMgr1,
-			},
-		},
-		TypeUrl: version.V2ListenerURL,
+		Resources: []*anypb.Any{marshaledConnMgr1},
+		TypeUrl:   version.V2ListenerURL,
 	}
 	ldsResponseWithMultipleResources = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
@@ -186,13 +174,8 @@ var (
 		TypeUrl: version.V2ListenerURL,
 	}
 	noAPIListenerLDSResponse = &xdspb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: version.V2ListenerURL,
-				Value:   marshaledNoAPIListener,
-			},
-		},
-		TypeUrl: version.V2ListenerURL,
+		Resources: []*anypb.Any{marshaledNoAPIListener},
+		TypeUrl:   version.V2ListenerURL,
 	}
 	goodBadUglyLDSResponse = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
@@ -215,19 +198,14 @@ var (
 		TypeUrl: version.V2RouteConfigURL,
 	}
 	badResourceTypeInRDSResponse = &xdspb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: httpConnManagerURL,
-				Value:   marshaledConnMgr1,
-			},
-		},
-		TypeUrl: version.V2RouteConfigURL,
+		Resources: []*anypb.Any{marshaledConnMgr1},
+		TypeUrl:   version.V2RouteConfigURL,
 	}
 	noVirtualHostsRouteConfig = &xdspb.RouteConfiguration{
 		Name: goodRouteName1,
 	}
-	marshaledNoVirtualHostsRouteConfig, _ = ptypes.MarshalAny(noVirtualHostsRouteConfig)
-	noVirtualHostsInRDSResponse           = &xdspb.DiscoveryResponse{
+	marshaledNoVirtualHostsRouteConfig = testutils.MarshalAny(noVirtualHostsRouteConfig)
+	noVirtualHostsInRDSResponse        = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			marshaledNoVirtualHostsRouteConfig,
 		},
@@ -264,8 +242,8 @@ var (
 			},
 		},
 	}
-	marshaledGoodRouteConfig1, _ = ptypes.MarshalAny(goodRouteConfig1)
-	goodRouteConfig2             = &xdspb.RouteConfiguration{
+	marshaledGoodRouteConfig1 = testutils.MarshalAny(goodRouteConfig1)
+	goodRouteConfig2          = &xdspb.RouteConfiguration{
 		Name: goodRouteName2,
 		VirtualHosts: []*routepb.VirtualHost{
 			{
@@ -296,8 +274,8 @@ var (
 			},
 		},
 	}
-	marshaledGoodRouteConfig2, _ = ptypes.MarshalAny(goodRouteConfig2)
-	goodRDSResponse1             = &xdspb.DiscoveryResponse{
+	marshaledGoodRouteConfig2 = testutils.MarshalAny(goodRouteConfig2)
+	goodRDSResponse1          = &xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
 			marshaledGoodRouteConfig1,
 		},

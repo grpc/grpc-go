@@ -30,10 +30,10 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
-	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal/testutils"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/version"
@@ -281,23 +281,16 @@ func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 		TransportSocket: &v3corepb.TransportSocket{
 			Name: "envoy.transport_sockets.tls",
 			ConfigType: &v3corepb.TransportSocket_TypedConfig{
-				TypedConfig: &anypb.Any{
-					TypeUrl: version.V3UpstreamTLSContextURL,
-					Value: func() []byte {
-						tls := &v3tlspb.UpstreamTlsContext{
-							CommonTlsContext: &v3tlspb.CommonTlsContext{
-								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-									ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-										InstanceName:    "rootInstance",
-										CertificateName: "rootCert",
-									},
-								},
+				TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+					CommonTlsContext: &v3tlspb.CommonTlsContext{
+						ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+							ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+								InstanceName:    "rootInstance",
+								CertificateName: "rootCert",
 							},
-						}
-						mtls, _ := proto.Marshal(tls)
-						return mtls
-					}(),
-				},
+						},
+					},
+				}),
 			},
 		},
 	}
@@ -427,22 +420,15 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3UpstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.UpstreamTlsContext{
-									CommonTlsContext: &v3tlspb.CommonTlsContext{
-										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
-											ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
-												Name: "foo-sds-secret",
-											},
-										},
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
+									ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
+										Name: "foo-sds-secret",
 									},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+								},
+							},
+						}),
 					},
 				},
 			},
@@ -463,16 +449,9 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3UpstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.UpstreamTlsContext{
-									CommonTlsContext: &v3tlspb.CommonTlsContext{},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{},
+						}),
 					},
 				},
 			},
@@ -493,30 +472,23 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3UpstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.UpstreamTlsContext{
-									CommonTlsContext: &v3tlspb.CommonTlsContext{
-										ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
-											CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
-												DefaultValidationContext: &v3tlspb.CertificateValidationContext{
-													MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
-														{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: ""}},
-													},
-												},
-												ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-													InstanceName:    rootPluginInstance,
-													CertificateName: rootCertName,
-												},
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+										DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+											MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+												{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: ""}},
 											},
 										},
+										ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
 									},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+								},
+							},
+						}),
 					},
 				},
 			},
@@ -537,30 +509,23 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3UpstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.UpstreamTlsContext{
-									CommonTlsContext: &v3tlspb.CommonTlsContext{
-										ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
-											CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
-												DefaultValidationContext: &v3tlspb.CertificateValidationContext{
-													MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
-														{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: ""}},
-													},
-												},
-												ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-													InstanceName:    rootPluginInstance,
-													CertificateName: rootCertName,
-												},
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+										DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+											MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+												{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: ""}},
 											},
 										},
+										ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
 									},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+								},
+							},
+						}),
 					},
 				},
 			},
@@ -581,30 +546,23 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3UpstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.UpstreamTlsContext{
-									CommonTlsContext: &v3tlspb.CommonTlsContext{
-										ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
-											CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
-												DefaultValidationContext: &v3tlspb.CertificateValidationContext{
-													MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
-														{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: ""}},
-													},
-												},
-												ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-													InstanceName:    rootPluginInstance,
-													CertificateName: rootCertName,
-												},
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+										DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+											MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+												{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: ""}},
 											},
 										},
+										ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
 									},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+								},
+							},
+						}),
 					},
 				},
 			},
@@ -625,30 +583,23 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 				TransportSocket: &v3corepb.TransportSocket{
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3UpstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.UpstreamTlsContext{
-									CommonTlsContext: &v3tlspb.CommonTlsContext{
-										ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
-											CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
-												DefaultValidationContext: &v3tlspb.CertificateValidationContext{
-													MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
-														{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: sanRegexBad}}},
-													},
-												},
-												ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-													InstanceName:    rootPluginInstance,
-													CertificateName: rootCertName,
-												},
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+										DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+											MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+												{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: sanRegexBad}}},
 											},
 										},
+										ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
 									},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+								},
+							},
+						}),
 					},
 				},
 			},
@@ -670,23 +621,16 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3UpstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.UpstreamTlsContext{
-									CommonTlsContext: &v3tlspb.CommonTlsContext{
-										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-											ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-												InstanceName:    rootPluginInstance,
-												CertificateName: rootCertName,
-											},
-										},
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+									ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+										InstanceName:    rootPluginInstance,
+										CertificateName: rootCertName,
 									},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+								},
+							},
+						}),
 					},
 				},
 			},
@@ -715,27 +659,20 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3UpstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.UpstreamTlsContext{
-									CommonTlsContext: &v3tlspb.CommonTlsContext{
-										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-											InstanceName:    identityPluginInstance,
-											CertificateName: identityCertName,
-										},
-										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-											ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-												InstanceName:    rootPluginInstance,
-												CertificateName: rootCertName,
-											},
-										},
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+									InstanceName:    identityPluginInstance,
+									CertificateName: identityCertName,
+								},
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
+									ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+										InstanceName:    rootPluginInstance,
+										CertificateName: rootCertName,
 									},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+								},
+							},
+						}),
 					},
 				},
 			},
@@ -766,41 +703,34 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: &anypb.Any{
-							TypeUrl: version.V3UpstreamTLSContextURL,
-							Value: func() []byte {
-								tls := &v3tlspb.UpstreamTlsContext{
-									CommonTlsContext: &v3tlspb.CommonTlsContext{
-										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-											InstanceName:    identityPluginInstance,
-											CertificateName: identityCertName,
-										},
-										ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
-											CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
-												DefaultValidationContext: &v3tlspb.CertificateValidationContext{
-													MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
-														{
-															MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: sanExact},
-															IgnoreCase:   true,
-														},
-														{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: sanPrefix}},
-														{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: sanSuffix}},
-														{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: sanRegexGood}}},
-														{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: sanContains}},
-													},
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+									InstanceName:    identityPluginInstance,
+									CertificateName: identityCertName,
+								},
+								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+										DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+											MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+												{
+													MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: sanExact},
+													IgnoreCase:   true,
 												},
-												ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-													InstanceName:    rootPluginInstance,
-													CertificateName: rootCertName,
-												},
+												{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: sanPrefix}},
+												{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: sanSuffix}},
+												{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: sanRegexGood}}},
+												{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: sanContains}},
 											},
 										},
+										ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
 									},
-								}
-								mtls, _ := proto.Marshal(tls)
-								return mtls
-							}(),
-						},
+								},
+							},
+						}),
 					},
 				},
 			},
@@ -845,7 +775,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		v3Service     = "v2Service"
 	)
 	var (
-		v2Cluster = &v2xdspb.Cluster{
+		v2ClusterAny = testutils.MarshalAny(&v2xdspb.Cluster{
 			Name:                 v2ClusterName,
 			ClusterDiscoveryType: &v2xdspb.Cluster_Type{Type: v2xdspb.Cluster_EDS},
 			EdsClusterConfig: &v2xdspb.Cluster_EdsClusterConfig{
@@ -862,16 +792,9 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 					Self: &v2corepb.SelfConfigSource{},
 				},
 			},
-		}
-		v2ClusterAny = &anypb.Any{
-			TypeUrl: version.V2ClusterURL,
-			Value: func() []byte {
-				mcl, _ := proto.Marshal(v2Cluster)
-				return mcl
-			}(),
-		}
+		})
 
-		v3Cluster = &v3clusterpb.Cluster{
+		v3ClusterAny = testutils.MarshalAny(&v3clusterpb.Cluster{
 			Name:                 v3ClusterName,
 			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 			EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
@@ -888,14 +811,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 					Self: &v3corepb.SelfConfigSource{},
 				},
 			},
-		}
-		v3ClusterAny = &anypb.Any{
-			TypeUrl: version.V3ClusterURL,
-			Value: func() []byte {
-				mcl, _ := proto.Marshal(v3Cluster)
-				return mcl
-			}(),
-		}
+		})
 	)
 	const testVersion = "test-version-cds"
 
@@ -940,17 +856,10 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		{
 			name: "bad cluster resource",
 			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3ClusterURL,
-					Value: func() []byte {
-						cl := &v3clusterpb.Cluster{
-							Name:                 "test",
-							ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
-						}
-						mcl, _ := proto.Marshal(cl)
-						return mcl
-					}(),
-				},
+				testutils.MarshalAny(&v3clusterpb.Cluster{
+					Name:                 "test",
+					ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
+				}),
 			},
 			wantUpdate: map[string]ClusterUpdate{"test": {}},
 			wantMD: UpdateMetadata{
@@ -1014,18 +923,11 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			name: "good and bad clusters",
 			resources: []*anypb.Any{
 				v2ClusterAny,
-				{
-					// bad cluster resource
-					TypeUrl: version.V3ClusterURL,
-					Value: func() []byte {
-						cl := &v3clusterpb.Cluster{
-							Name:                 "bad",
-							ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
-						}
-						mcl, _ := proto.Marshal(cl)
-						return mcl
-					}(),
-				},
+				// bad cluster resource
+				testutils.MarshalAny(&v3clusterpb.Cluster{
+					Name:                 "bad",
+					ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
+				}),
 				v3ClusterAny,
 			},
 			wantUpdate: map[string]ClusterUpdate{

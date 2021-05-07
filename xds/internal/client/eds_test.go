@@ -29,10 +29,10 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/version"
 )
@@ -122,23 +122,18 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 }
 
 func (s) TestUnmarshalEndpoints(t *testing.T) {
-	var v3EndpointsAny = &anypb.Any{
-		TypeUrl: version.V3EndpointsURL,
-		Value: func() []byte {
-			clab0 := newClaBuilder("test", nil)
-			clab0.addLocality("locality-1", 1, 1, []string{"addr1:314"}, &addLocalityOptions{
-				Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
-				Weight: []uint32{271},
-			})
-			clab0.addLocality("locality-2", 1, 0, []string{"addr2:159"}, &addLocalityOptions{
-				Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_DRAINING},
-				Weight: []uint32{828},
-			})
-			e := clab0.Build()
-			me, _ := proto.Marshal(e)
-			return me
-		}(),
-	}
+	var v3EndpointsAny = testutils.MarshalAny(func() *v3endpointpb.ClusterLoadAssignment {
+		clab0 := newClaBuilder("test", nil)
+		clab0.addLocality("locality-1", 1, 1, []string{"addr1:314"}, &addLocalityOptions{
+			Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
+			Weight: []uint32{271},
+		})
+		clab0.addLocality("locality-2", 1, 0, []string{"addr2:159"}, &addLocalityOptions{
+			Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_DRAINING},
+			Weight: []uint32{828},
+		})
+		return clab0.Build()
+	}())
 	const testVersion = "test-version-eds"
 
 	tests := []struct {
@@ -181,19 +176,12 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 		},
 		{
 			name: "bad endpoints resource",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3EndpointsURL,
-					Value: func() []byte {
-						clab0 := newClaBuilder("test", nil)
-						clab0.addLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
-						clab0.addLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
-						e := clab0.Build()
-						me, _ := proto.Marshal(e)
-						return me
-					}(),
-				},
-			},
+			resources: []*anypb.Any{testutils.MarshalAny(func() *v3endpointpb.ClusterLoadAssignment {
+				clab0 := newClaBuilder("test", nil)
+				clab0.addLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
+				clab0.addLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
+				return clab0.Build()
+			}())},
 			wantUpdate: map[string]EndpointsUpdate{"test": {}},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusNACKed,
@@ -246,18 +234,12 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 			name: "good and bad endpoints",
 			resources: []*anypb.Any{
 				v3EndpointsAny,
-				{
-					// bad endpoints resource
-					TypeUrl: version.V3EndpointsURL,
-					Value: func() []byte {
-						clab0 := newClaBuilder("bad", nil)
-						clab0.addLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
-						clab0.addLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
-						e := clab0.Build()
-						me, _ := proto.Marshal(e)
-						return me
-					}(),
-				},
+				testutils.MarshalAny(func() *v3endpointpb.ClusterLoadAssignment {
+					clab0 := newClaBuilder("bad", nil)
+					clab0.addLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
+					clab0.addLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
+					return clab0.Build()
+				}()),
 			},
 			wantUpdate: map[string]EndpointsUpdate{
 				"test": {
