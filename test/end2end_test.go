@@ -2507,10 +2507,13 @@ type myTap struct {
 
 func (t *myTap) handle(ctx context.Context, info *tap.Info) (context.Context, error) {
 	if info != nil {
-		if info.FullMethodName == "/grpc.testing.TestService/EmptyCall" {
+		switch info.FullMethodName {
+		case "/grpc.testing.TestService/EmptyCall":
 			t.cnt++
-		} else if info.FullMethodName == "/grpc.testing.TestService/UnaryCall" {
+		case "/grpc.testing.TestService/UnaryCall":
 			return nil, fmt.Errorf("tap error")
+		case "/grpc.testing.TestService/FullDuplexCall":
+			return nil, status.Errorf(codes.FailedPrecondition, "test custom error")
 		}
 	}
 	return ctx, nil
@@ -2550,8 +2553,15 @@ func testTap(t *testing.T, e env) {
 		ResponseSize: 45,
 		Payload:      payload,
 	}
-	if _, err := tc.UnaryCall(ctx, req); status.Code(err) != codes.Unavailable {
-		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, %s", err, codes.Unavailable)
+	if _, err := tc.UnaryCall(ctx, req); status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, %s", err, codes.PermissionDenied)
+	}
+	str, err := tc.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("Unexpected error creating stream: %v", err)
+	}
+	if _, err := str.Recv(); status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("FullDuplexCall Recv() = _, %v, want _, %s", err, codes.FailedPrecondition)
 	}
 }
 
@@ -3639,66 +3649,77 @@ func testMalformedHTTP2Metadata(t *testing.T, e env) {
 	}
 }
 
+// Tests that the client transparently retries correctly when receiving a
+// RST_STREAM with code REFUSED_STREAM.
 func (s) TestTransparentRetry(t *testing.T) {
-	for _, e := range listTestEnv() {
-		if e.name == "handler-tls" {
-			// Fails with RST_STREAM / FLOW_CONTROL_ERROR
-			continue
-		}
-		testTransparentRetry(t, e)
-	}
-}
-
-// This test makes sure RPCs are retried times when they receive a RST_STREAM
-// with the REFUSED_STREAM error code, which the InTapHandle provokes.
-func testTransparentRetry(t *testing.T, e env) {
-	te := newTest(t, e)
-	attempts := 0
-	successAttempt := 2
-	te.tapHandle = func(ctx context.Context, _ *tap.Info) (context.Context, error) {
-		attempts++
-		if attempts < successAttempt {
-			return nil, errors.New("not now")
-		}
-		return ctx, nil
-	}
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
-
-	cc := te.clientConn()
-	tsc := testpb.NewTestServiceClient(cc)
 	testCases := []struct {
-		successAttempt int
-		failFast       bool
-		errCode        codes.Code
+		failFast bool
+		errCode  codes.Code
 	}{{
-		successAttempt: 1,
+		// success attempt: 1, (stream ID 1)
 	}, {
-		successAttempt: 2,
+		// success attempt: 2, (stream IDs 3, 5)
 	}, {
-		successAttempt: 3,
-		errCode:        codes.Unavailable,
+		// no success attempt (stream IDs 7, 9)
+		errCode: codes.Unavailable,
 	}, {
-		successAttempt: 1,
-		failFast:       true,
+		// success attempt: 1 (stream ID 11),
+		failFast: true,
 	}, {
-		successAttempt: 2,
-		failFast:       true,
+		// success attempt: 2 (stream IDs 13, 15),
+		failFast: true,
 	}, {
-		successAttempt: 3,
-		failFast:       true,
-		errCode:        codes.Unavailable,
+		// no success attempt (stream IDs 17, 19)
+		failFast: true,
+		errCode:  codes.Unavailable,
 	}}
-	for _, tc := range testCases {
-		attempts = 0
-		successAttempt = tc.successAttempt
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		_, err := tsc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(!tc.failFast))
-		cancel()
-		if status.Code(err) != tc.errCode {
-			t.Errorf("%+v: tsc.EmptyCall(_, _) = _, %v, want _, Code=%v", tc, err, tc.errCode)
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen. Err: %v", err)
+	}
+	defer lis.Close()
+	server := &httpServer{
+		headerFields: [][]string{{
+			":status", "200",
+			"content-type", "application/grpc",
+			"grpc-status", "0",
+		}},
+		refuseStream: func(i uint32) bool {
+			switch i {
+			case 1, 5, 11, 15: // these stream IDs succeed
+				return false
+			}
+			return true // these are refused
+		},
+	}
+	server.start(t, lis)
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("failed to dial due to err: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	client := testpb.NewTestServiceClient(cc)
+
+	for i, tc := range testCases {
+		stream, err := client.FullDuplexCall(ctx)
+		if err != nil {
+			t.Fatalf("error creating stream due to err: %v", err)
 		}
+		code := func(err error) codes.Code {
+			if err == io.EOF {
+				return codes.OK
+			}
+			return status.Code(err)
+		}
+		if _, err := stream.Recv(); code(err) != tc.errCode {
+			t.Fatalf("%v: stream.Recv() = _, %v, want error code: %v", i, err, tc.errCode)
+		}
+
 	}
 }
 
@@ -5284,6 +5305,37 @@ func (s) TestGRPCMethod(t *testing.T) {
 	}
 }
 
+func (s) TestForceServerCodec(t *testing.T) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+	codec := &countingProtoCodec{}
+	if err := ss.Start([]grpc.ServerOption{grpc.ForceServerCodec(codec)}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
+	}
+
+	unmarshalCount := atomic.LoadInt32(&codec.unmarshalCount)
+	const wantUnmarshalCount = 1
+	if unmarshalCount != wantUnmarshalCount {
+		t.Fatalf("protoCodec.unmarshalCount = %d; want %d", unmarshalCount, wantUnmarshalCount)
+	}
+	marshalCount := atomic.LoadInt32(&codec.marshalCount)
+	const wantMarshalCount = 1
+	if marshalCount != wantMarshalCount {
+		t.Fatalf("protoCodec.marshalCount = %d; want %d", marshalCount, wantMarshalCount)
+	}
+}
+
 func (s) TestUnaryProxyDoesNotForwardMetadata(t *testing.T) {
 	const mdkey = "somedata"
 
@@ -5651,6 +5703,33 @@ func (c *errCodec) Unmarshal(data []byte, v interface{}) error {
 
 func (c *errCodec) Name() string {
 	return "Fermat's near-miss."
+}
+
+type countingProtoCodec struct {
+	marshalCount   int32
+	unmarshalCount int32
+}
+
+func (p *countingProtoCodec) Marshal(v interface{}) ([]byte, error) {
+	atomic.AddInt32(&p.marshalCount, 1)
+	vv, ok := v.(proto.Message)
+	if !ok {
+		return nil, fmt.Errorf("failed to marshal, message is %T, want proto.Message", v)
+	}
+	return proto.Marshal(vv)
+}
+
+func (p *countingProtoCodec) Unmarshal(data []byte, v interface{}) error {
+	atomic.AddInt32(&p.unmarshalCount, 1)
+	vv, ok := v.(proto.Message)
+	if !ok {
+		return fmt.Errorf("failed to unmarshal, message is %T, want proto.Message", v)
+	}
+	return proto.Unmarshal(data, vv)
+}
+
+func (*countingProtoCodec) Name() string {
+	return "proto"
 }
 
 func (s) TestEncodeDoesntPanic(t *testing.T) {
@@ -6863,6 +6942,10 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 			return &testpb.SimpleResponse{}, nil
 		},
 		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
+				t.Errorf("unexpected error from send: %v", err)
+				return err
+			}
 			// Wait forever.
 			_, err := stream.Recv()
 			if err == nil {
@@ -6896,11 +6979,18 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 
 	client := testpb.NewTestServiceClient(cc)
 
-	// Should go on connection 1. We use a long-lived RPC because it will cause GracefulStop to send GO_AWAY, but the
-	// connection doesn't get closed until the server stops and the client receives.
+	// We make a streaming RPC and do an one-message-round-trip to make sure
+	// it's created on connection 1.
+	//
+	// We use a long-lived RPC because it will cause GracefulStop to send
+	// GO_AWAY, but the connection doesn't get closed until the server stops and
+	// the client receives the error.
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
 		t.Fatalf("FullDuplexCall(_) = _, %v; want _, nil", err)
+	}
+	if _, err = stream.Recv(); err != nil {
+		t.Fatalf("unexpected error from first recv: %v", err)
 	}
 
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{
@@ -6918,8 +7008,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	s1.Stop()
 
 	// Wait for client to close.
-	_, err = stream.Recv()
-	if err == nil {
+	if _, err = stream.Recv(); err == nil {
 		t.Fatal("expected the stream to die, but got a successful Recv")
 	}
 
@@ -7123,6 +7212,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingMoreThanTwoHeaders(t *testing.T) {
 
 type httpServer struct {
 	headerFields [][]string
+	refuseStream func(uint32) bool
 }
 
 func (s *httpServer) writeHeader(framer *http2.Framer, sid uint32, headerFields []string, endStream bool) error {
@@ -7170,24 +7260,33 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 		writer.Flush() // necessary since client is expecting preface before declaring connection fully setup.
 
 		var sid uint32
-		// Read frames until a header is received.
+		// Loop until conn is closed and framer returns io.EOF
 		for {
-			frame, err := framer.ReadFrame()
-			if err != nil {
-				t.Errorf("Error at server-side while reading frame. Err: %v", err)
-				return
+			// Read frames until a header is received.
+			for {
+				frame, err := framer.ReadFrame()
+				if err != nil {
+					if err != io.EOF {
+						t.Errorf("Error at server-side while reading frame. Err: %v", err)
+					}
+					return
+				}
+				if hframe, ok := frame.(*http2.HeadersFrame); ok {
+					sid = hframe.Header().StreamID
+					if s.refuseStream == nil || !s.refuseStream(sid) {
+						break
+					}
+					framer.WriteRSTStream(sid, http2.ErrCodeRefusedStream)
+					writer.Flush()
+				}
 			}
-			if hframe, ok := frame.(*http2.HeadersFrame); ok {
-				sid = hframe.Header().StreamID
-				break
+			for i, headers := range s.headerFields {
+				if err = s.writeHeader(framer, sid, headers, i == len(s.headerFields)-1); err != nil {
+					t.Errorf("Error at server-side while writing headers. Err: %v", err)
+					return
+				}
+				writer.Flush()
 			}
-		}
-		for i, headers := range s.headerFields {
-			if err = s.writeHeader(framer, sid, headers, i == len(s.headerFields)-1); err != nil {
-				t.Errorf("Error at server-side while writing headers. Err: %v", err)
-				return
-			}
-			writer.Flush()
 		}
 	}()
 }

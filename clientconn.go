@@ -143,6 +143,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		firstResolveEvent: grpcsync.NewEvent(),
 	}
 	cc.retryThrottler.Store((*retryThrottler)(nil))
+	cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{nil})
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
 	for _, opt := range opts {

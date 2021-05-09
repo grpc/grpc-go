@@ -279,6 +279,35 @@ func CustomCodec(codec Codec) ServerOption {
 	})
 }
 
+// ForceServerCodec returns a ServerOption that sets a codec for message
+// marshaling and unmarshaling.
+//
+// This will override any lookups by content-subtype for Codecs registered
+// with RegisterCodec.
+//
+// See Content-Type on
+// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests for
+// more details. Also see the documentation on RegisterCodec and
+// CallContentSubtype for more details on the interaction between encoding.Codec
+// and content-subtype.
+//
+// This function is provided for advanced users; prefer to register codecs
+// using encoding.RegisterCodec.
+// The server will automatically use registered codecs based on the incoming
+// requests' headers. See also
+// https://github.com/grpc/grpc-go/blob/master/Documentation/encoding.md#using-a-codec.
+// Will be supported throughout 1.x.
+//
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func ForceServerCodec(codec encoding.Codec) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.codec = codec
+	})
+}
+
 // RPCCompressor returns a ServerOption that sets a compressor for outbound
 // messages.  For backward compatibility, all outbound messages will be sent
 // using this compressor, regardless of incoming message compression.  By
@@ -389,6 +418,11 @@ func ChainStreamInterceptor(interceptors ...StreamServerInterceptor) ServerOptio
 
 // InTapHandle returns a ServerOption that sets the tap handle for all the server
 // transport to be created. Only one can be installed.
+//
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func InTapHandle(h tap.ServerInHandle) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		if o.inTapHandle != nil {

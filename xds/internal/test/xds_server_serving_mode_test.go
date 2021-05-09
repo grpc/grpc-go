@@ -24,22 +24,18 @@ package xds_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net"
-	"path"
 	"sync"
 	"testing"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	"github.com/google/uuid"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/testutils"
-	xdsinternal "google.golang.org/grpc/internal/xds"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/xds"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
@@ -91,35 +87,6 @@ func (mt *modeTracker) waitForUpdate(ctx context.Context) error {
 // xDS enabled gRPC servers. It verifies that appropriate mode changes happen in
 // the server, and also verifies behavior of clientConns under these modes.
 func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
-	// Spin up a xDS management server on a local port.
-	nodeID := uuid.New().String()
-	fs, err := e2e.StartManagementServer()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer fs.Stop()
-
-	// Create a directory to hold certs and key files used on the server side.
-	serverDir := createTmpDirWithFiles(t, "testServerSideServingMode*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/client_ca_cert.pem")
-
-	// Create certificate providers section of the bootstrap config.
-	cpc := map[string]json.RawMessage{
-		e2e.ServerSideCertProviderInstance: e2e.DefaultFileWatcherConfig(path.Join(serverDir, certFile), path.Join(serverDir, keyFile), path.Join(serverDir, rootFile)),
-	}
-
-	// Create a bootstrap file in a temporary directory.
-	bsCleanup, err := xdsinternal.SetupBootstrapFile(xdsinternal.BootstrapOptions{
-		Version:                            xdsinternal.TransportV3,
-		NodeID:                             nodeID,
-		ServerURI:                          fs.Address,
-		CertificateProviders:               cpc,
-		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer bsCleanup()
-
 	// Configure xDS credentials to be used on the server-side.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{
 		FallbackCreds: insecure.NewCredentials(),
@@ -176,10 +143,10 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 	listener2 := e2e.DefaultServerListener(host2, port2, e2e.SecurityLevelNone)
 	resources := e2e.UpdateOptions{
-		NodeID:    nodeID,
+		NodeID:    xdsClientNodeID,
 		Listeners: []*v3listenerpb.Listener{listener1, listener2},
 	}
-	if err := fs.Update(resources); err != nil {
+	if err := managementServer.Update(resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -217,8 +184,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 
 	// Update the management server to remove the second listener resource. This should
 	// push the only the second listener into "not-serving" mode.
-	if err := fs.Update(e2e.UpdateOptions{
-		NodeID:    nodeID,
+	if err := managementServer.Update(e2e.UpdateOptions{
+		NodeID:    xdsClientNodeID,
 		Listeners: []*v3listenerpb.Listener{listener1},
 	}); err != nil {
 		t.Error(err)
@@ -246,8 +213,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// Update the management server to remove the first listener resource as
 	// well. This should push the first listener into "not-serving" mode. Second
 	// listener is already in "not-serving" mode.
-	if err := fs.Update(e2e.UpdateOptions{
-		NodeID:    nodeID,
+	if err := managementServer.Update(e2e.UpdateOptions{
+		NodeID:    xdsClientNodeID,
 		Listeners: []*v3listenerpb.Listener{},
 	}); err != nil {
 		t.Error(err)
@@ -279,8 +246,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Update the management server with both listener resources.
-	if err := fs.Update(e2e.UpdateOptions{
-		NodeID:    nodeID,
+	if err := managementServer.Update(e2e.UpdateOptions{
+		NodeID:    xdsClientNodeID,
 		Listeners: []*v3listenerpb.Listener{listener1, listener2},
 	}); err != nil {
 		t.Error(err)

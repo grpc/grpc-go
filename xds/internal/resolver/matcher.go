@@ -20,7 +20,6 @@ package resolver
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"google.golang.org/grpc/internal/grpcrand"
@@ -34,11 +33,7 @@ func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
 	var pathMatcher pathMatcherInterface
 	switch {
 	case r.Regex != nil:
-		re, err := regexp.Compile(*r.Regex)
-		if err != nil {
-			return nil, fmt.Errorf("failed to compile regex %q", *r.Regex)
-		}
-		pathMatcher = newPathRegexMatcher(re)
+		pathMatcher = newPathRegexMatcher(r.Regex)
 	case r.Path != nil:
 		pathMatcher = newPathExactMatcher(*r.Path, r.CaseInsensitive)
 	case r.Prefix != nil:
@@ -53,12 +48,8 @@ func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
 		switch {
 		case h.ExactMatch != nil && *h.ExactMatch != "":
 			matcherT = newHeaderExactMatcher(h.Name, *h.ExactMatch)
-		case h.RegexMatch != nil && *h.RegexMatch != "":
-			re, err := regexp.Compile(*h.RegexMatch)
-			if err != nil {
-				return nil, fmt.Errorf("failed to compile regex %q, skipping this matcher", *h.RegexMatch)
-			}
-			matcherT = newHeaderRegexMatcher(h.Name, re)
+		case h.RegexMatch != nil:
+			matcherT = newHeaderRegexMatcher(h.Name, h.RegexMatch)
 		case h.PrefixMatch != nil && *h.PrefixMatch != "":
 			matcherT = newHeaderPrefixMatcher(h.Name, *h.PrefixMatch)
 		case h.SuffixMatch != nil && *h.SuffixMatch != "":

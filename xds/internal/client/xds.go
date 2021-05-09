@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -437,7 +438,12 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 		case *v3routepb.RouteMatch_Path:
 			route.Path = &pt.Path
 		case *v3routepb.RouteMatch_SafeRegex:
-			route.Regex = &pt.SafeRegex.Regex
+			regex := pt.SafeRegex.GetRegex()
+			re, err := regexp.Compile(regex)
+			if err != nil {
+				return nil, fmt.Errorf("route %+v contains an invalid regex %q", r, regex)
+			}
+			route.Regex = re
 		default:
 			return nil, fmt.Errorf("route %+v has an unrecognized path specifier: %+v", r, pt)
 		}
@@ -452,7 +458,12 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 			case *v3routepb.HeaderMatcher_ExactMatch:
 				header.ExactMatch = &ht.ExactMatch
 			case *v3routepb.HeaderMatcher_SafeRegexMatch:
-				header.RegexMatch = &ht.SafeRegexMatch.Regex
+				regex := ht.SafeRegexMatch.GetRegex()
+				re, err := regexp.Compile(regex)
+				if err != nil {
+					return nil, fmt.Errorf("route %+v contains an invalid regex %q", r, regex)
+				}
+				header.RegexMatch = re
 			case *v3routepb.HeaderMatcher_RangeMatch:
 				header.RangeMatch = &Int64Range{
 					Start: ht.RangeMatch.Start,
