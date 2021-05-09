@@ -209,6 +209,18 @@ func decodeMetadataHeader(k, v string) (string, error) {
 	return v, nil
 }
 
+func decodeGRPCStatusDetails(rawDetails string) (*status.Status, error) {
+	v, err := decodeBinHeader(rawDetails)
+	if err != nil {
+		return nil, err
+	}
+	st := &spb.Status{}
+	if err = proto.Unmarshal(v, st); err != nil {
+		return nil, err
+	}
+	return status.FromProto(st), nil
+}
+
 func (d *decodeState) decodeHeader(frame *http2.MetaHeadersFrame) (http2.ErrCode, error) {
 	// frame.Truncated is set to true when framer detects that the current header
 	// list size hits MaxHeaderListSize limit.
