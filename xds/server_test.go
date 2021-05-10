@@ -33,9 +33,6 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
-	anypb "github.com/golang/protobuf/ptypes/any"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -672,7 +669,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 				TransportSocket: &v3corepb.TransportSocket{
 					Name: "envoy.transport_sockets.tls",
 					ConfigType: &v3corepb.TransportSocket_TypedConfig{
-						TypedConfig: marshalAny(&v3tlspb.DownstreamTlsContext{
+						TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
 							CommonTlsContext: &v3tlspb.CommonTlsContext{
 								TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
 									InstanceName:    "identityPluginInstance",
@@ -782,12 +779,4 @@ func verifyCertProviderNotCreated() error {
 		return errors.New("certificate provider created when no xDS creds were specified")
 	}
 	return nil
-}
-
-func marshalAny(m proto.Message) *anypb.Any {
-	a, err := ptypes.MarshalAny(m)
-	if err != nil {
-		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", m, err))
-	}
-	return a
 }

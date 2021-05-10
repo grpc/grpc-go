@@ -38,12 +38,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/httpfilter"
-	"google.golang.org/grpc/xds/internal/testutils"
+	xtestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -121,9 +122,9 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	testpb.RegisterTestServiceServer(server, &testService{})
 
 	// Create a local listener and pass it to Serve().
-	lis, err := testutils.LocalTCPListener()
+	lis, err := xtestutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+		t.Fatalf("xtestutils.LocalTCPListener() failed: %v", err)
 	}
 
 	go func() {
@@ -524,10 +525,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 				hcm.HttpFilters = append(hcm.HttpFilters, e2e.HTTPFilter(fmt.Sprintf("fault%d", i), cfg))
 			}
 			hcm.HttpFilters = append(hcm.HttpFilters, routerFilter)
-			hcmAny, err := ptypes.MarshalAny(hcm)
-			if err != nil {
-				t.Fatal(err)
-			}
+			hcmAny := testutils.MarshalAny(hcm)
 			resources.Listeners[0].ApiListener.ApiListener = hcmAny
 			resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
 
@@ -600,10 +598,7 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 			},
 		})},
 		hcm.HttpFilters...)
-	hcmAny, err := ptypes.MarshalAny(hcm)
-	if err != nil {
-		t.Fatal(err)
-	}
+	hcmAny := testutils.MarshalAny(hcm)
 	resources.Listeners[0].ApiListener.ApiListener = hcmAny
 	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
 

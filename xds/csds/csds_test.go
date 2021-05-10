@@ -34,10 +34,11 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/xds/internal/client"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
-	"google.golang.org/grpc/xds/internal/testutils"
+	xtestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -150,19 +151,19 @@ var (
 func init() {
 	for i := range ldsTargets {
 		listeners[i] = e2e.DefaultClientListener(ldsTargets[i], rdsTargets[i])
-		listenerAnys[i], _ = ptypes.MarshalAny(listeners[i])
+		listenerAnys[i] = testutils.MarshalAny(listeners[i])
 	}
 	for i := range rdsTargets {
 		routes[i] = e2e.DefaultRouteConfig(rdsTargets[i], ldsTargets[i], cdsTargets[i])
-		routeAnys[i], _ = ptypes.MarshalAny(routes[i])
+		routeAnys[i] = testutils.MarshalAny(routes[i])
 	}
 	for i := range cdsTargets {
 		clusters[i] = e2e.DefaultCluster(cdsTargets[i], edsTargets[i], e2e.SecurityLevelNone)
-		clusterAnys[i], _ = ptypes.MarshalAny(clusters[i])
+		clusterAnys[i] = testutils.MarshalAny(clusters[i])
 	}
 	for i := range edsTargets {
 		endpoints[i] = e2e.DefaultEndpoint(edsTargets[i], ips[i], ports[i])
-		endpointAnys[i], _ = ptypes.MarshalAny(endpoints[i])
+		endpointAnys[i] = testutils.MarshalAny(endpoints[i])
 	}
 }
 
@@ -286,9 +287,9 @@ func commonSetup(t *testing.T) (xdsClientInterfaceWithWatch, *e2e.ManagementServ
 	}
 	v3statuspbgrpc.RegisterClientStatusDiscoveryServiceServer(server, csdss)
 	// Create a local listener and pass it to Serve().
-	lis, err := testutils.LocalTCPListener()
+	lis, err := xtestutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+		t.Fatalf("xtestutils.LocalTCPListener() failed: %v", err)
 	}
 	go func() {
 		if err := server.Serve(lis); err != nil {

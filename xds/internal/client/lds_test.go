@@ -251,16 +251,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
-					ApiListener: &anypb.Any{
-						TypeUrl: version.V2ListenerURL,
-						Value: func() []byte {
-							cm := &v3httppb.HttpConnectionManager{
-								RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
-							}
-							mcm, _ := proto.Marshal(cm)
-							return mcm
-						}(),
-					},
+					ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+						RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
+					}),
 				},
 			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
@@ -558,25 +551,13 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			name: "good and bad listener resources",
 			resources: []*anypb.Any{
 				v2Lis,
-				{
-					TypeUrl: version.V3ListenerURL,
-					Value: func() []byte {
-						lis := &v3listenerpb.Listener{
-							Name: "bad",
-							ApiListener: &v3listenerpb.ApiListener{
-								ApiListener: &anypb.Any{
-									TypeUrl: version.V2ListenerURL,
-									Value: func() []byte {
-										cm := &v3httppb.HttpConnectionManager{
-											RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
-										}
-										mcm, _ := proto.Marshal(cm)
-										return mcm
-									}()}}}
-						mLis, _ := proto.Marshal(lis)
-						return mLis
-					}(),
-				},
+				testutils.MarshalAny(&v3listenerpb.Listener{
+					Name: "bad",
+					ApiListener: &v3listenerpb.ApiListener{
+						ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
+						}),
+					}}),
 				v3LisWithFilters(),
 			},
 			wantUpdate: map[string]ListenerUpdate{
