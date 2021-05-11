@@ -83,6 +83,11 @@ func TestMain(m *testing.M) {
 	// spawns the management server and is blocked on the call to `Serve()`.
 	leakcheck.RegisterIgnoreGoroutine("e2e.StartManagementServer")
 
+	// Remove this once https://github.com/envoyproxy/go-control-plane/pull/430
+	// is merged. For more information about this goroutine leak, see:
+	// https://github.com/envoyproxy/go-control-plane/issues/429.
+	leakcheck.RegisterIgnoreGoroutine("(*server).StreamHandler")
+
 	cancel, err := setupManagementServer()
 	if err != nil {
 		log.Printf("setupManagementServer() failed: %v", err)
