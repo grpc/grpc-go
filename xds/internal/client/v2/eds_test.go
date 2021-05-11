@@ -25,11 +25,11 @@ import (
 	"time"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	"github.com/golang/protobuf/ptypes"
 	anypb "github.com/golang/protobuf/ptypes/any"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/testutils"
+	xtestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -44,20 +44,14 @@ var (
 		TypeUrl: version.V2EndpointsURL,
 	}
 	badResourceTypeInEDSResponse = &v2xdspb.DiscoveryResponse{
-		Resources: []*anypb.Any{
-			{
-				TypeUrl: httpConnManagerURL,
-				Value:   marshaledConnMgr1,
-			},
-		},
-		TypeUrl: version.V2EndpointsURL,
+		Resources: []*anypb.Any{marshaledConnMgr1},
+		TypeUrl:   version.V2EndpointsURL,
 	}
 	marshaledGoodCLA1 = func() *anypb.Any {
-		clab0 := testutils.NewClusterLoadAssignmentBuilder(goodEDSName, nil)
+		clab0 := xtestutils.NewClusterLoadAssignmentBuilder(goodEDSName, nil)
 		clab0.AddLocality("locality-1", 1, 1, []string{"addr1:314"}, nil)
 		clab0.AddLocality("locality-2", 1, 0, []string{"addr2:159"}, nil)
-		a, _ := ptypes.MarshalAny(clab0.Build())
-		return a
+		return testutils.MarshalAny(clab0.Build())
 	}()
 	goodEDSResponse1 = &v2xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{
@@ -66,10 +60,9 @@ var (
 		TypeUrl: version.V2EndpointsURL,
 	}
 	marshaledGoodCLA2 = func() *anypb.Any {
-		clab0 := testutils.NewClusterLoadAssignmentBuilder("not-goodEDSName", nil)
+		clab0 := xtestutils.NewClusterLoadAssignmentBuilder("not-goodEDSName", nil)
 		clab0.AddLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
-		a, _ := ptypes.MarshalAny(clab0.Build())
-		return a
+		return testutils.MarshalAny(clab0.Build())
 	}()
 	goodEDSResponse2 = &v2xdspb.DiscoveryResponse{
 		Resources: []*anypb.Any{

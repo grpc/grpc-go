@@ -26,9 +26,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
@@ -541,17 +541,10 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 				},
 			},
 		}
-		v2RouteConfig = &anypb.Any{
-			TypeUrl: version.V2RouteConfigURL,
-			Value: func() []byte {
-				rc := &v2xdspb.RouteConfiguration{
-					Name:         v2RouteConfigName,
-					VirtualHosts: v2VirtualHost,
-				}
-				m, _ := proto.Marshal(rc)
-				return m
-			}(),
-		}
+		v2RouteConfig = testutils.MarshalAny(&v2xdspb.RouteConfiguration{
+			Name:         v2RouteConfigName,
+			VirtualHosts: v2VirtualHost,
+		})
 		v3VirtualHost = []*v3routepb.VirtualHost{
 			{
 				Domains: []string{uninterestingDomain},
@@ -580,17 +573,10 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 				},
 			},
 		}
-		v3RouteConfig = &anypb.Any{
-			TypeUrl: version.V2RouteConfigURL,
-			Value: func() []byte {
-				rc := &v3routepb.RouteConfiguration{
-					Name:         v3RouteConfigName,
-					VirtualHosts: v3VirtualHost,
-				}
-				m, _ := proto.Marshal(rc)
-				return m
-			}(),
-		}
+		v3RouteConfig = testutils.MarshalAny(&v3routepb.RouteConfiguration{
+			Name:         v3RouteConfigName,
+			VirtualHosts: v3VirtualHost,
+		})
 	)
 	const testVersion = "test-version-rds"
 
@@ -726,20 +712,13 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			name: "good and bad routeConfig resources",
 			resources: []*anypb.Any{
 				v2RouteConfig,
-				{
-					TypeUrl: version.V2RouteConfigURL,
-					Value: func() []byte {
-						rc := &v3routepb.RouteConfiguration{
-							Name: "bad",
-							VirtualHosts: []*v3routepb.VirtualHost{
-								{Domains: []string{ldsTarget},
-									Routes: []*v3routepb.Route{{
-										Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_ConnectMatcher_{}},
-									}}}}}
-						m, _ := proto.Marshal(rc)
-						return m
-					}(),
-				},
+				testutils.MarshalAny(&v3routepb.RouteConfiguration{
+					Name: "bad",
+					VirtualHosts: []*v3routepb.VirtualHost{
+						{Domains: []string{ldsTarget},
+							Routes: []*v3routepb.Route{{
+								Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_ConnectMatcher_{}},
+							}}}}}),
 				v3RouteConfig,
 			},
 			wantUpdate: map[string]RouteConfigUpdate{

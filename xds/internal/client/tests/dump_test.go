@@ -30,7 +30,6 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -39,6 +38,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/testutils"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
@@ -58,29 +58,22 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		listenersT := &v3listenerpb.Listener{
 			Name: ldsTargets[i],
 			ApiListener: &v3listenerpb.ApiListener{
-				ApiListener: func() *anypb.Any {
-					mcm, _ := ptypes.MarshalAny(&v3httppb.HttpConnectionManager{
-						RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
-							Rds: &v3httppb.Rds{
-								ConfigSource: &v3corepb.ConfigSource{
-									ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
-								},
-								RouteConfigName: routeConfigNames[i],
+				ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+					RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+						Rds: &v3httppb.Rds{
+							ConfigSource: &v3corepb.ConfigSource{
+								ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
 							},
+							RouteConfigName: routeConfigNames[i],
 						},
-						CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
-							MaxStreamDuration: durationpb.New(time.Second),
-						},
-					})
-					return mcm
-				}(),
+					},
+					CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
+						MaxStreamDuration: durationpb.New(time.Second),
+					},
+				}),
 			},
 		}
-		anyT, err := ptypes.MarshalAny(listenersT)
-		if err != nil {
-			t.Fatalf("failed to marshal proto to any: %v", err)
-		}
-		listenerRaws[ldsTargets[i]] = anyT
+		listenerRaws[ldsTargets[i]] = testutils.MarshalAny(listenersT)
 	}
 
 	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
@@ -190,11 +183,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 			},
 		}
 
-		anyT, err := ptypes.MarshalAny(routeConfigT)
-		if err != nil {
-			t.Fatalf("failed to marshal proto to any: %v", err)
-		}
-		routeRaws[rdsTargets[i]] = anyT
+		routeRaws[rdsTargets[i]] = testutils.MarshalAny(routeConfigT)
 	}
 
 	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
@@ -304,11 +293,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 			},
 		}
 
-		anyT, err := ptypes.MarshalAny(clusterT)
-		if err != nil {
-			t.Fatalf("failed to marshal proto to any: %v", err)
-		}
-		clusterRaws[cdsTargets[i]] = anyT
+		clusterRaws[cdsTargets[i]] = testutils.MarshalAny(clusterT)
 	}
 
 	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
@@ -404,11 +389,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		clab0.AddLocality(localityNames[i], 1, 1, []string{addrs[i]}, nil)
 		claT := clab0.Build()
 
-		anyT, err := ptypes.MarshalAny(claT)
-		if err != nil {
-			t.Fatalf("failed to marshal proto to any: %v", err)
-		}
-		endpointRaws[edsTargets[i]] = anyT
+		endpointRaws[edsTargets[i]] = testutils.MarshalAny(claT)
 	}
 
 	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{

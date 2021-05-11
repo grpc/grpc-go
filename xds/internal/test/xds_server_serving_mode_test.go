@@ -119,17 +119,6 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 
-	go func() {
-		if err := server.Serve(lis1); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
-	go func() {
-		if err := server.Serve(lis2); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
-
 	// Setup the management server to respond with server-side Listener
 	// resources for both listeners.
 	host1, port1, err := hostPortFromListener(lis1)
@@ -149,6 +138,17 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	if err := managementServer.Update(resources); err != nil {
 		t.Fatal(err)
 	}
+
+	go func() {
+		if err := server.Serve(lis1); err != nil {
+			t.Errorf("Serve() failed: %v", err)
+		}
+	}()
+	go func() {
+		if err := server.Serve(lis2); err != nil {
+			t.Errorf("Serve() failed: %v", err)
+		}
+	}()
 
 	// Wait for both listeners to move to "serving" mode.
 	if err := waitForModeChange(ctx, modeTracker, lis1.Addr(), xds.ServingModeServing); err != nil {
