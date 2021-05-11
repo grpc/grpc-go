@@ -1271,9 +1271,10 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		grpcMessage    string
 		statusGen      *status.Status
 
-		grpcStatus string
 		httpStatus string
 		rawStatus  string
+		// headerError is set if an error is encountered while parsing the headers
+		headerError string
 	)
 
 	for _, hf := range frame.Fields {
@@ -1292,12 +1293,11 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		case "grpc-message":
 			grpcMessage = decodeGrpcMessage(hf.Value)
 		case "grpc-status-details-bin":
-			sg, err := decodeGRPCStatusDetails(hf.Value)
+			var err error
+			statusGen, err = decodeGRPCStatusDetails(hf.Value)
 			if err != nil {
-				grpcStatus = fmt.Sprintf("transport: malformed grpc-status-details-bin: %v", err)
-				break
+				headerError = fmt.Sprintf("transport: malformed grpc-status-details-bin: %v", err)
 			}
-			statusGen = sg
 		case ":status":
 			httpStatus = hf.Value
 		default:
@@ -1306,19 +1306,11 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			}
 			v, err := decodeMetadataHeader(hf.Name, hf.Value)
 			if err != nil {
-				grpcStatus = fmt.Sprintf("transport: malformed %s: %v", hf.Name, err)
+				headerError = fmt.Sprintf("transport: malformed %s: %v", hf.Name, err)
 				logger.Warningf("Failed to decode metadata header (%q, %q): %v", hf.Name, hf.Value, err)
 				break
 			}
 			mdata[hf.Name] = append(mdata[hf.Name], v)
-		}
-
-		// Account for the fact that we can set isGRPC at any time - it's possible
-		// that we'll set isGRPC AFTER an error has occurred.
-		if isGRPC && grpcStatus != "" {
-			se := status.New(codes.Internal, grpcStatus)
-			t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-			return
 		}
 	}
 
@@ -1347,6 +1339,12 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		// Verify the HTTP response is a 200.
 		se := status.Error(code, constructHTTPErrMsg(&httpStatusCode, contentTypeErr))
 		t.closeStream(s, se, true, http2.ErrCodeProtocol, status.Convert(se), nil, endStream)
+		return
+	}
+
+	if headerError != "" {
+		se := status.New(codes.Internal, headerError)
+		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 		return
 	}
 
