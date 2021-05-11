@@ -190,7 +190,7 @@ func (cib *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState
 		return nil
 	}
 
-	cib.logger.Infof("Receive update from resolver, balancer config: %+v", pretty.ToJSON(s.BalancerConfig))
+	cib.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(s.BalancerConfig))
 	newConfig, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)

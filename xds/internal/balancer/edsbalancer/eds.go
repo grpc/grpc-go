@@ -212,7 +212,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 	case *subConnStateUpdate:
 		x.edsImpl.handleSubConnStateChange(u.sc, u.state.ConnectivityState)
 	case *balancer.ClientConnState:
-		x.logger.Infof("Receive update from resolver, balancer config: %+v", pretty.ToJSON(u.BalancerConfig))
+		x.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(u.BalancerConfig))
 		cfg, _ := u.BalancerConfig.(*EDSConfig)
 		if cfg == nil {
 			// service config parsing failed. should never happen.

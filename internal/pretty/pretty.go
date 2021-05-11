@@ -16,6 +16,7 @@
  *
  */
 
+// Package pretty defines helper functions to pretty-print structs for logging.
 package pretty
 
 import (
@@ -32,6 +33,8 @@ import (
 const jsonIndent = "  "
 
 // ToJSON marshals the input into a json string.
+//
+// If marshal fails, it falls back to fmt.Sprintf("%+v").
 func ToJSON(e interface{}) string {
 	switch ee := e.(type) {
 	case protov1.Message:
@@ -67,6 +70,8 @@ func ToJSON(e interface{}) string {
 }
 
 // FormatJSON formats the input json bytes with indentation.
+//
+// If Indent fails, it returns the unchanged input as string.
 func FormatJSON(b []byte) string {
 	var out bytes.Buffer
 	err := json.Indent(&out, b, "", jsonIndent)

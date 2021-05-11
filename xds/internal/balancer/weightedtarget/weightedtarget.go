@@ -84,7 +84,7 @@ type weightedTargetBalancer struct {
 // creates/deletes sub-balancers and sends them update. Addresses are split into
 // groups based on hierarchy path.
 func (w *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	w.logger.Infof("Receive update from resolver, balancer config: %+v", pretty.ToJSON(s.BalancerConfig))
+	w.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(s.BalancerConfig))
 	newConfig, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
