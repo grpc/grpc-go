@@ -1030,6 +1030,48 @@ func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 	}
 }
 
+// TestXDSResolverMultipleLDSUpdates tests the case where two LDS updates with
+// the same RDS name to watch are received without an RDS in between. Those LDS
+// updates shouldn't trigger service config update.
+//
+// This test case also makes sure the resolver doesn't panic.
+func (s) TestXDSResolverMultipleLDSUpdates(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+	})
+	defer func() {
+		cancel()
+		xdsR.Close()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	waitForWatchListener(ctx, t, xdsC, targetStr)
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+	defer replaceRandNumGenerator(0)()
+
+	// Send a new LDS update, with the same fields.
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	// Should NOT trigger a state update.
+	gotState, err := tcc.stateCh.Receive(ctx)
+	if err == nil {
+		t.Fatalf("ClientConn.UpdateState received %v, want timeout error", gotState)
+	}
+
+	// Send a new LDS update, with the same RDS name, but different fields.
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList}, nil)
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	gotState, err = tcc.stateCh.Receive(ctx)
+	if err == nil {
+		t.Fatalf("ClientConn.UpdateState received %v, want timeout error", gotState)
+	}
+}
+
 type filterBuilder struct {
 	httpfilter.Filter // embedded as we do not need to implement registry / parsing in this test.
 	path              *[]string
