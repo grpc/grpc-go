@@ -19,8 +19,6 @@
 package e2e
 
 import (
-	"fmt"
-
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/internal/testutils"
@@ -122,7 +120,7 @@ func DefaultClientListener(target, routeName string) *v3listenerpb.Listener {
 
 // DefaultServerListener returns a basic xds Listener resource to be used on
 // the server side.
-func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3listenerpb.Listener {
+func DefaultServerListener(name, host string, port uint32, secLevel SecurityLevel) *v3listenerpb.Listener {
 	var tlsContext *v3tlspb.DownstreamTlsContext
 	switch secLevel {
 	case SecurityLevelNone:
@@ -160,7 +158,7 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 		}
 	}
 	return &v3listenerpb.Listener{
-		Name: fmt.Sprintf(ServerListenerResourceNameTemplate, fmt.Sprintf("%s:%d", host, port)),
+		Name: name,
 		Address: &v3corepb.Address{
 			Address: &v3corepb.Address_SocketAddress{
 				SocketAddress: &v3corepb.SocketAddress{
