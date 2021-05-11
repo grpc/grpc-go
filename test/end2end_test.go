@@ -5293,7 +5293,7 @@ func (s) TestGRPCMethod(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
@@ -5314,8 +5314,10 @@ type renameProtoCodec struct {
 
 func (r *renameProtoCodec) Name() string { return r.name }
 
+// TestForceCodecName confirms that the ForceCodec call option sets the subtype
+// in the content-type header according to the Name() of the codec provided.
 func (s) TestForceCodecName(t *testing.T) {
-	wantContentTypeCh := make(chan string, 1)
+	wantContentTypeCh := make(chan []string, 1)
 	defer close(wantContentTypeCh)
 
 	ss := &stubserver.StubServer{
@@ -5324,29 +5326,29 @@ func (s) TestForceCodecName(t *testing.T) {
 			if !ok {
 				return nil, status.Errorf(codes.Internal, "no metadata in context")
 			}
-			if got, want := md["content-type"], <-wantContentTypeCh; len(got) != 1 || got[0] != want {
+			if got, want := md["content-type"], <-wantContentTypeCh; !reflect.DeepEqual(got, want) {
 				return nil, status.Errorf(codes.Internal, "got content-type=%q; want [%q]", got, want)
 			}
 			return &testpb.Empty{}, nil
 		},
 	}
-	protoCodec := encoding.GetCodec("proto")
 	if err := ss.Start([]grpc.ServerOption{grpc.ForceServerCodec(encoding.GetCodec("proto"))}); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	codec := &renameProtoCodec{Codec: protoCodec, name: "some-test-name"}
-	wantContentTypeCh <- "application/grpc+some-test-name"
+	codec := &renameProtoCodec{Codec: encoding.GetCodec("proto"), name: "some-test-name"}
+	wantContentTypeCh <- []string{"application/grpc+some-test-name"}
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(codec)); err != nil {
 		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
 	}
 
+	// Confirm the name is converted to lowercase before transmitting.
 	codec.name = "aNoTHeRNaME"
-	wantContentTypeCh <- "application/grpc+anothername"
+	wantContentTypeCh <- []string{"application/grpc+anothername"}
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.ForceCodec(codec)); err != nil {
 		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
 	}
@@ -5364,7 +5366,7 @@ func (s) TestForceServerCodec(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
