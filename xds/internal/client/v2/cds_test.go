@@ -151,7 +151,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			cdsResponse: goodCDSResponse2,
 			wantErr:     false,
 			wantUpdate: map[string]xdsclient.ClusterUpdate{
-				goodClusterName2: {ServiceName: serviceName2, Raw: marshaledCluster2},
+				goodClusterName2: {ClusterName: goodClusterName2, EDSServiceName: serviceName2, Raw: marshaledCluster2},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusACKed,
@@ -164,7 +164,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			cdsResponse: goodCDSResponse1,
 			wantErr:     false,
 			wantUpdate: map[string]xdsclient.ClusterUpdate{
-				goodClusterName1: {ServiceName: serviceName1, EnableLRS: true, Raw: marshaledCluster1},
+				goodClusterName1: {ClusterName: goodClusterName1, EDSServiceName: serviceName1, EnableLRS: true, Raw: marshaledCluster1},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusACKed,

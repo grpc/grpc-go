@@ -348,7 +348,8 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 		b.logger.Infof("Created child policy %p of type %s", b.edsLB, edsName)
 	}
 	lbCfg := &edsbalancer.EDSConfig{
-		EDSServiceName:        update.cds.ServiceName,
+		ClusterName:           update.cds.ClusterName,
+		EDSServiceName:        update.cds.EDSServiceName,
 		MaxConcurrentRequests: update.cds.MaxRequests,
 	}
 	if update.cds.EnableLRS {
