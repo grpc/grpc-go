@@ -39,6 +39,7 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc/internal/grpclog"
@@ -72,7 +73,7 @@ func unmarshalListenerResource(r *anypb.Any, logger *grpclog.PrefixLogger) (stri
 	if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
-	logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
+	logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, pretty.ToJSON(lis))
 
 	lu, err := processListener(lis, logger, v2)
 	if err != nil {
@@ -360,7 +361,7 @@ func unmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (s
 	if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
 		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
-	logger.Infof("Resource with name: %v, type: %T, contains: %v.", rc.GetName(), rc, rc)
+	logger.Infof("Resource with name: %v, type: %T, contains: %v.", rc.GetName(), rc, pretty.ToJSON(rc))
 
 	// TODO: Pass version.TransportAPI instead of relying upon the type URL
 	v2 := r.GetTypeUrl() == version.V2RouteConfigURL
@@ -572,7 +573,7 @@ func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (strin
 	if err := proto.Unmarshal(r.GetValue(), cluster); err != nil {
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
-	logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, cluster)
+	logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, pretty.ToJSON(cluster))
 	cu, err := validateClusterAndConstructClusterUpdate(cluster)
 	if err != nil {
 		return cluster.GetName(), ClusterUpdate{}, err
@@ -765,7 +766,7 @@ func unmarshalEndpointsResource(r *anypb.Any, logger *grpclog.PrefixLogger) (str
 	if err := proto.Unmarshal(r.GetValue(), cla); err != nil {
 		return "", EndpointsUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
-	logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
+	logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, pretty.ToJSON(cla))
 
 	u, err := parseEDSRespProto(cla)
 	if err != nil {

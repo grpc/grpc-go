@@ -25,6 +25,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal/pretty"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
@@ -211,7 +212,7 @@ func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
 	case *subConnStateUpdate:
 		x.edsImpl.handleSubConnStateChange(u.sc, u.state.ConnectivityState)
 	case *balancer.ClientConnState:
-		x.logger.Infof("Receive update from resolver, balancer config: %+v", u.BalancerConfig)
+		x.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(u.BalancerConfig))
 		cfg, _ := u.BalancerConfig.(*EDSConfig)
 		if cfg == nil {
 			// service config parsing failed. should never happen.
@@ -278,7 +279,7 @@ func (x *edsBalancer) startEndpointsWatch() {
 		x.cancelEndpointsWatch()
 	}
 	cancelEDSWatch := x.xdsClient.WatchEndpoints(x.edsServiceName, func(update xdsclient.EndpointsUpdate, err error) {
-		x.logger.Infof("Watch update from xds-client %p, content: %+v", x.xdsClient, update)
+		x.logger.Infof("Watch update from xds-client %p, content: %+v", x.xdsClient, pretty.ToJSON(update))
 		x.handleEDSUpdate(update, err)
 	})
 	x.logger.Infof("Watch started on resource name %v with xds-client %p", x.edsServiceName, x.xdsClient)

@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/hierarchy"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
@@ -115,7 +116,7 @@ func (b *bal) UpdateClientConnState(s balancer.ClientConnState) error {
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}
-	b.logger.Infof("update with config %+v, resolver state %+v", s.BalancerConfig, s.ResolverState)
+	b.logger.Infof("update with config %+v, resolver state %+v", pretty.ToJSON(s.BalancerConfig), s.ResolverState)
 
 	b.updateChildren(s, newConfig)
 	return nil

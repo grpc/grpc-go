@@ -76,7 +76,7 @@ func (r *xdsResolver) pruneActiveClusters() {
 // serviceConfigJSON produces a service config in JSON format representing all
 // the clusters referenced in activeClusters.  This includes clusters with zero
 // references, so they must be pruned first.
-func serviceConfigJSON(activeClusters map[string]*clusterInfo) (string, error) {
+func serviceConfigJSON(activeClusters map[string]*clusterInfo) ([]byte, error) {
 	// Generate children (all entries in activeClusters).
 	children := make(map[string]xdsChildConfig)
 	for cluster := range activeClusters {
@@ -93,9 +93,9 @@ func serviceConfigJSON(activeClusters map[string]*clusterInfo) (string, error) {
 
 	bs, err := json.Marshal(sc)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal json: %v", err)
+		return nil, fmt.Errorf("failed to marshal json: %v", err)
 	}
-	return string(bs), nil
+	return bs, nil
 }
 
 type virtualHost struct {

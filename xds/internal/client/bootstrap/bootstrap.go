@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/version"
 )
@@ -270,7 +271,7 @@ func NewConfig() (*Config, error) {
 	if err := config.updateNodeProto(); err != nil {
 		return nil, err
 	}
-	logger.Infof("Bootstrap config for creating xds-client: %+v", config)
+	logger.Infof("Bootstrap config for creating xds-client: %v", pretty.ToJSON(config))
 	return config, nil
 }
 
