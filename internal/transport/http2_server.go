@@ -1129,7 +1129,7 @@ func (t *http2Server) Close() {
 	streams := t.activeStreams
 	t.activeStreams = nil
 	t.mu.Unlock()
-	t.controlBuf.finish()
+	t.controlBuf.finish(ErrConnClosing)
 	close(t.done)
 	if err := t.conn.Close(); err != nil && logger.V(logLevel) {
 		logger.Infof("transport: error closing conn during Close: %v", err)

@@ -59,6 +59,7 @@ type http2Client struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	ctxDone    <-chan struct{} // Cache the ctx.Done() chan.
+	closeErr   error           // Reason the transport is closed. Only set if ctx is canceled.
 	userAgent  string
 	md         metadata.MD
 	conn       net.Conn // underlying communication channel
@@ -742,6 +743,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		case <-t.goAway:
 			return nil, errStreamDrain
 		case <-t.ctx.Done():
+			t.mu.Lock()
+			err := t.closeErr
+			t.mu.Unlock()
+			if err != nil {
+				return nil, err
+			}
 			return nil, ErrConnClosing
 		}
 	}
@@ -867,18 +874,19 @@ func (t *http2Client) Close(err error) {
 		// should unblock it so that the goroutine eventually exits.
 		t.kpDormancyCond.Signal()
 	}
+	// Append info about previous goaways if there were any, since this may be important
+	// for understanding the root cause for this connection to be closed.
+	goAwayDebugMessage := t.goAwayDebugMessage
+	if len(goAwayDebugMessage) > 0 {
+		err = fmt.Errorf("closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
+	}
+	t.closeErr = err
 	t.mu.Unlock()
-	t.controlBuf.finish()
+	t.controlBuf.finish(err)
 	t.cancel()
 	t.conn.Close()
 	if channelz.IsOn() {
 		channelz.RemoveEntry(t.channelzID)
-	}
-	// Append info about previous goaways if there were any, since this may be important
-	// for understanding the root cause for this connection to be closed.
-	_, goAwayDebugMessage := t.GetGoAwayReason()
-	if len(goAwayDebugMessage) > 0 {
-		err = fmt.Errorf("closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
 	}
 	// Notify all active streams.
 	for _, s := range streams {

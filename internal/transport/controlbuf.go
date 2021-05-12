@@ -411,13 +411,13 @@ func (c *controlBuffer) get(block bool) (interface{}, error) {
 	}
 }
 
-func (c *controlBuffer) finish() {
+func (c *controlBuffer) finish(err error) {
 	c.mu.Lock()
 	if c.err != nil {
 		c.mu.Unlock()
 		return
 	}
-	c.err = ErrConnClosing
+	c.err = err
 	// There may be headers for streams in the control buffer.
 	// These streams need to be cleaned out since the transport
 	// is still not aware of these yet.
