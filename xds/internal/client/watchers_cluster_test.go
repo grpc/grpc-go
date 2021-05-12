@@ -64,7 +64,7 @@ func (s) TestClusterWatch(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
+	wantUpdate := ClusterUpdate{ClusterName: testEDSName}
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
 		t.Fatal(err)
@@ -128,7 +128,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
+	wantUpdate := ClusterUpdate{ClusterName: testEDSName}
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
 	for i := 0; i < count; i++ {
 		if err := verifyClusterUpdate(ctx, clusterUpdateChs[i], wantUpdate); err != nil {
@@ -200,8 +200,8 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate1 := ClusterUpdate{ServiceName: testEDSName + "1"}
-	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
+	wantUpdate1 := ClusterUpdate{ClusterName: testEDSName + "1"}
+	wantUpdate2 := ClusterUpdate{ClusterName: testEDSName + "2"}
 	client.NewClusters(map[string]ClusterUpdate{
 		testCDSName + "1": wantUpdate1,
 		testCDSName + "2": wantUpdate2,
@@ -245,7 +245,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
+	wantUpdate := ClusterUpdate{ClusterName: testEDSName}
 	client.NewClusters(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	}, UpdateMetadata{})
@@ -345,7 +345,7 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := ClusterUpdate{ServiceName: testEDSName}
+	wantUpdate := ClusterUpdate{ClusterName: testEDSName}
 	client.NewClusters(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	}, UpdateMetadata{})
@@ -402,8 +402,8 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate1 := ClusterUpdate{ServiceName: testEDSName + "1"}
-	wantUpdate2 := ClusterUpdate{ServiceName: testEDSName + "2"}
+	wantUpdate1 := ClusterUpdate{ClusterName: testEDSName + "1"}
+	wantUpdate2 := ClusterUpdate{ClusterName: testEDSName + "2"}
 	client.NewClusters(map[string]ClusterUpdate{
 		testCDSName + "1": wantUpdate1,
 		testCDSName + "2": wantUpdate2,

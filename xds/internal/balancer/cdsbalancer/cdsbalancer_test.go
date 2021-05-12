@@ -197,7 +197,7 @@ func cdsCCS(cluster string) balancer.ClientConnState {
 // cdsBalancer to the edsBalancer.
 func edsCCS(service string, countMax *uint32, enableLRS bool) balancer.ClientConnState {
 	lbCfg := &edsbalancer.EDSConfig{
-		EDSServiceName:        service,
+		ClusterName:           service,
 		MaxConcurrentRequests: countMax,
 	}
 	if enableLRS {
@@ -354,12 +354,12 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 	}{
 		{
 			name:      "happy-case-with-lrs",
-			cdsUpdate: xdsclient.ClusterUpdate{ServiceName: serviceName, EnableLRS: true},
+			cdsUpdate: xdsclient.ClusterUpdate{ClusterName: serviceName, EnableLRS: true},
 			wantCCS:   edsCCS(serviceName, nil, true),
 		},
 		{
 			name:      "happy-case-without-lrs",
-			cdsUpdate: xdsclient.ClusterUpdate{ServiceName: serviceName},
+			cdsUpdate: xdsclient.ClusterUpdate{ClusterName: serviceName},
 			wantCCS:   edsCCS(serviceName, nil, false),
 		},
 	}
@@ -427,7 +427,7 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
-	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
+	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
@@ -512,7 +512,7 @@ func (s) TestResolverError(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
-	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
+	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
@@ -561,7 +561,7 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
-	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
+	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -596,7 +596,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	// will trigger the watch handler on the CDS balancer, which will update
 	// the service's counter with the new max requests.
 	var maxRequests uint32 = 1
-	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName, MaxRequests: &maxRequests}
+	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName, MaxRequests: &maxRequests}
 	wantCCS := edsCCS(serviceName, &maxRequests, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -629,7 +629,7 @@ func (s) TestClose(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newEDSBalancer function as part of test setup.
-	cdsUpdate := xdsclient.ClusterUpdate{ServiceName: serviceName}
+	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
