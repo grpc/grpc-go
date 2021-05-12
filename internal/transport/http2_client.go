@@ -1337,8 +1337,8 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 
 		// Verify the HTTP response is a 200.
-		se := status.Error(code, constructHTTPErrMsg(&httpStatusCode, contentTypeErr))
-		t.closeStream(s, se, true, http2.ErrCodeProtocol, status.Convert(se), nil, endStream)
+		se := status.New(code, constructHTTPErrMsg(&httpStatusCode, contentTypeErr))
+		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 		return
 	}
 
