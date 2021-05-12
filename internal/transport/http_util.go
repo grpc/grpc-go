@@ -95,43 +95,6 @@ var (
 	logger = grpclog.Component("transport")
 )
 
-type parsedHeaderData struct {
-	encoding string
-	// statusGen caches the stream status received from the trailer the server
-	// sent.  Client side only.  Do not access directly.  After all trailers are
-	// parsed, use the status method to retrieve the status.
-	statusGen *status.Status
-	// rawStatusCode and rawStatusMsg are set from the raw trailer fields and are not
-	// intended for direct access outside of parsing.
-	rawStatusCode *int
-	rawStatusMsg  string
-	httpStatus    *int
-	// Server side only fields.
-	timeoutSet bool
-	timeout    time.Duration
-	method     string
-	httpMethod string
-	// key-value metadata map from the peer.
-	mdata          map[string][]string
-	statsTags      []byte
-	statsTrace     []byte
-	contentSubtype string
-
-	// isGRPC field indicates whether the peer is speaking gRPC (otherwise HTTP).
-	//
-	// We are in gRPC mode (peer speaking gRPC) if:
-	// 	* We are client side and have already received a HEADER frame that indicates gRPC peer.
-	//  * The header contains valid  a content-type, i.e. a string starts with "application/grpc"
-	// And we should handle error specific to gRPC.
-	//
-	// Otherwise (i.e. a content-type string starts without "application/grpc", or does not exist), we
-	// are in HTTP fallback mode, and should handle error specific to HTTP.
-	isGRPC         bool
-	grpcErr        error
-	httpErr        error
-	contentTypeErr string
-}
-
 // isReservedHeader checks whether hdr belongs to HTTP2 headers
 // reserved by gRPC protocol. Any other headers are classified as the
 // user-specified metadata.
