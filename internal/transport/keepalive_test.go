@@ -346,12 +346,19 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 // responds to keepalive pings, and makes sure than a client transport stays
 // healthy without any active streams.
 func (s) TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
-	server, client, cancel := setUpWithOptions(t, 0, &ServerConfig{}, normal, ConnectOptions{
-		KeepaliveParams: keepalive.ClientParameters{
-			Time:                1 * time.Second,
-			Timeout:             1 * time.Second,
-			PermitWithoutStream: true,
-		}})
+	server, client, cancel := setUpWithOptions(t, 0,
+		&ServerConfig{
+			KeepalivePolicy: keepalive.EnforcementPolicy{
+				PermitWithoutStream: true,
+			},
+		},
+		normal,
+		ConnectOptions{
+			KeepaliveParams: keepalive.ClientParameters{
+				Time:                1 * time.Second,
+				Timeout:             1 * time.Second,
+				PermitWithoutStream: true,
+			}})
 	defer func() {
 		client.Close(fmt.Errorf("closed manually by test"))
 		server.stop()
