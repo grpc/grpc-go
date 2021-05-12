@@ -78,5 +78,5 @@ func FormatJSON(b []byte) string {
 	if err != nil {
 		return string(b)
 	}
-	return string(out.Bytes())
+	return out.String()
 }
