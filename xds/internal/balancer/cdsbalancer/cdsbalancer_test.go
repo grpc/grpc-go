@@ -399,7 +399,7 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// registered watch should not be cancelled.
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
+	if _, err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("cluster watch cancelled for a non-resource-not-found-error")
 	}
 	// The CDS balancer has not yet created an EDS balancer. So, this resolver
@@ -438,7 +438,7 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// Make sure the registered watch is not cancelled.
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
+	if _, err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("cluster watch cancelled for a non-resource-not-found-error")
 	}
 	// Make sure the error is forwarded to the EDS balancer.
@@ -453,7 +453,7 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// request cluster resource is not found. We should continue to watch it.
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
+	if _, err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("cluster watch cancelled for a resource-not-found-error")
 	}
 	// Make sure the error is forwarded to the EDS balancer.
@@ -485,7 +485,7 @@ func (s) TestResolverError(t *testing.T) {
 	// registered watch should not be cancelled.
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
+	if _, err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("cluster watch cancelled for a non-resource-not-found-error")
 	}
 	// The CDS balancer has not yet created an EDS balancer. So, this resolver
@@ -523,7 +523,7 @@ func (s) TestResolverError(t *testing.T) {
 	// Make sure the registered watch is not cancelled.
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
+	if _, err := xdsC.WaitForCancelClusterWatch(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("cluster watch cancelled for a non-resource-not-found-error")
 	}
 	// Make sure the error is forwarded to the EDS balancer.
@@ -535,7 +535,7 @@ func (s) TestResolverError(t *testing.T) {
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
 	cdsB.ResolverError(resourceErr)
 	// Make sure the registered watch is cancelled.
-	if err := xdsC.WaitForCancelClusterWatch(ctx); err != nil {
+	if _, err := xdsC.WaitForCancelClusterWatch(ctx); err != nil {
 		t.Fatalf("want watch to be canceled, watchForCancel failed: %v", err)
 	}
 	// Make sure the error is forwarded to the EDS balancer.
@@ -642,7 +642,7 @@ func (s) TestClose(t *testing.T) {
 
 	// Make sure that the cluster watch registered by the CDS balancer is
 	// cancelled.
-	if err := xdsC.WaitForCancelClusterWatch(ctx); err != nil {
+	if _, err := xdsC.WaitForCancelClusterWatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 
