@@ -780,8 +780,12 @@ func (s) TestGracefulClose(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			str, err := ct.NewStream(ctx, &CallHdr{})
-			if err == nil {
-				t.Errorf("_.NewStream(_, _) = _, %v, want _, non-nil", err)
+			if err != nil {
+				select {
+				case <-ct.ctxDone:
+				default:
+					t.Errorf("_.NewStream(_, _) = _, %v, while transport is not closed", err)
+				}
 				return
 			}
 			ct.Write(str, nil, nil, &Options{Last: true})
