@@ -333,8 +333,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		httpMethod string
 		// headerError is set if an error is encountered while parsing the headers
 		headerError bool
-		statsTrace  []byte
-		statsTags   []byte
 
 		timeoutSet bool
 		timeout    time.Duration
@@ -368,7 +366,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				headerError = true
 				return
 			}
-			statsTags = v
 			mdata[hf.Name] = append(mdata[hf.Name], string(v))
 		case "grpc-trace-bin":
 			v, err := decodeBinHeader(hf.Value)
@@ -376,7 +373,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				headerError = true
 				return
 			}
-			statsTrace = v
 			mdata[hf.Name] = append(mdata[hf.Name], string(v))
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
@@ -423,11 +419,11 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	if len(mdata) > 0 {
 		s.ctx = metadata.NewIncomingContext(s.ctx, mdata)
 	}
-	if statsTags != nil {
-		s.ctx = stats.SetIncomingTags(s.ctx, statsTags)
+	if statsTags, ok := mdata["grpc-tags-bin"]; ok && len(statsTags) > 0 {
+		s.ctx = stats.SetIncomingTags(s.ctx, []byte(statsTags[0]))
 	}
-	if statsTrace != nil {
-		s.ctx = stats.SetIncomingTrace(s.ctx, statsTrace)
+	if statsTrace, ok := mdata["grpc-trace-bin"]; ok && len(statsTrace) > 0 {
+		s.ctx = stats.SetIncomingTrace(s.ctx, []byte(statsTrace[0]))
 	}
 	t.mu.Lock()
 	if t.state != reachable {
@@ -459,7 +455,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	if httpMethod != http.MethodPost {
 		t.mu.Unlock()
 		if logger.V(logLevel) {
-			logger.Warningf("transport: http2Server.operateHeaders parsed a :method field: %v which should be POST", httpMethod)
+			logger.Infof("transport: http2Server.operateHeaders parsed a :method field: %v which should be POST", httpMethod)
 		}
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
