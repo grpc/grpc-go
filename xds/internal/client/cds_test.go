@@ -28,6 +28,7 @@ import (
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
@@ -122,6 +123,23 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 			wantUpdate: emptyUpdate,
 			wantErr:    true,
 		},
+		{
+			name: "logical-dns-multiple-localities",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_LOGICAL_DNS},
+				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
+				LoadAssignment: &v3endpointpb.ClusterLoadAssignment{
+					Endpoints: []*v3endpointpb.LocalityLbEndpoints{
+						// Invalid if there are more than localities.
+						{LbEndpoints: nil},
+						{LbEndpoints: nil},
+					},
+				},
+			},
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
+		},
 	}
 
 	for _, test := range tests {
@@ -145,8 +163,32 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_LOGICAL_DNS},
 				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
+				LoadAssignment: &v3endpointpb.ClusterLoadAssignment{
+					Endpoints: []*v3endpointpb.LocalityLbEndpoints{{
+						LbEndpoints: []*v3endpointpb.LbEndpoint{{
+							HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{
+								Endpoint: &v3endpointpb.Endpoint{
+									Address: &v3corepb.Address{
+										Address: &v3corepb.Address_SocketAddress{
+											SocketAddress: &v3corepb.SocketAddress{
+												Address: "dns_host",
+												PortSpecifier: &v3corepb.SocketAddress_PortValue{
+													PortValue: 8080,
+												},
+											},
+										},
+									},
+								},
+							},
+						}},
+					}},
+				},
 			},
-			wantUpdate: ClusterUpdate{ClusterName: clusterName, EnableLRS: false, ClusterType: ClusterTypeLogicalDNS},
+			wantUpdate: ClusterUpdate{
+				ClusterName: clusterName,
+				ClusterType: ClusterTypeLogicalDNS,
+				DNSHostName: "dns_host:8080",
+			},
 		},
 		{
 			name: "happy-case-aggregate-v3",
