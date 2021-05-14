@@ -58,6 +58,8 @@ func NewHeaderExactMatcher(key, exact string) *HeaderExactMatcher {
 	return &HeaderExactMatcher{key: key, exact: exact}
 }
 
+// Match returns whether the passed in HTTP Headers match according to the
+// HeaderExactMatcher.
 func (hem *HeaderExactMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hem.key)
 	if !ok {
@@ -82,6 +84,8 @@ func NewHeaderRegexMatcher(key string, re *regexp.Regexp) *HeaderRegexMatcher {
 	return &HeaderRegexMatcher{key: key, re: re}
 }
 
+// Match returns whether the passed in HTTP Headers match according to the
+// HeaderRegexMatcher.
 func (hrm *HeaderRegexMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hrm.key)
 	if !ok {
@@ -106,6 +110,8 @@ func NewHeaderRangeMatcher(key string, start, end int64) *HeaderRangeMatcher {
 	return &HeaderRangeMatcher{key: key, start: start, end: end}
 }
 
+// Match returns whether the passed in HTTP Headers match according to the
+// HeaderRangeMatcher.
 func (hrm *HeaderRangeMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hrm.key)
 	if !ok {
@@ -132,6 +138,8 @@ func NewHeaderPresentMatcher(key string, present bool) *HeaderPresentMatcher {
 	return &HeaderPresentMatcher{key: key, present: present}
 }
 
+// Match returns whether the passed in HTTP Headers match according to the
+// HeaderPresentMatcher.
 func (hpm *HeaderPresentMatcher) Match(md metadata.MD) bool {
 	vs, ok := mdValuesFromOutgoingCtx(md, hpm.key)
 	present := ok && len(vs) > 0
@@ -154,6 +162,8 @@ func NewHeaderPrefixMatcher(key string, prefix string) *HeaderPrefixMatcher {
 	return &HeaderPrefixMatcher{key: key, prefix: prefix}
 }
 
+// Match returns whether the passed in HTTP Headers match according to the
+// HeaderPrefixMatcher.
 func (hpm *HeaderPrefixMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hpm.key)
 	if !ok {
@@ -178,6 +188,8 @@ func NewHeaderSuffixMatcher(key string, suffix string) *HeaderSuffixMatcher {
 	return &HeaderSuffixMatcher{key: key, suffix: suffix}
 }
 
+// Match returns whether the passed in HTTP Headers match according to the
+// HeaderSuffixMatcher.
 func (hsm *HeaderSuffixMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hsm.key)
 	if !ok {
@@ -200,6 +212,8 @@ func NewInvertMatcher(m HeaderMatcherInterface) *InvertMatcher {
 	return &InvertMatcher{m: m}
 }
 
+// Match returns whether the passed in HTTP Headers match according to the
+// InvertMatcher.
 func (i *InvertMatcher) Match(md metadata.MD) bool {
 	return !i.m.Match(md)
 }
