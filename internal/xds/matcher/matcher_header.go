@@ -202,7 +202,7 @@ func (hsm *HeaderSuffixMatcher) String() string {
 	return fmt.Sprintf("headerSuffix:%v:%v", hsm.key, hsm.suffix)
 }
 
-// Invert matcher inverts the match result of the underlying header matcher.
+// InvertMatcher inverts the match result of the underlying header matcher.
 type InvertMatcher struct {
 	m HeaderMatcherInterface
 }
