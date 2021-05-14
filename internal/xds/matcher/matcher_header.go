@@ -27,6 +27,9 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// HeaderMatcherInterface is an interface for header matchers. These are
+// documented in (EnvoyProxy link here?). These matchers will match on different
+// aspects of HTTP header name/value pairs.
 type HeaderMatcherInterface interface {
 	Match(metadata.MD) bool
 	String() string
@@ -44,16 +47,18 @@ func mdValuesFromOutgoingCtx(md metadata.MD, key string) (string, bool) {
 	return strings.Join(vs, ","), true
 }
 
-type headerExactMatcher struct {
+// HeaderExactMatcher matches on an exact match of the value of the header.
+type HeaderExactMatcher struct {
 	key   string
 	exact string
 }
 
-func NewHeaderExactMatcher(key, exact string) *headerExactMatcher {
-	return &headerExactMatcher{key: key, exact: exact}
+// NewHeaderExactMatcher returns a new HeaderExactMatcher.
+func NewHeaderExactMatcher(key, exact string) *HeaderExactMatcher {
+	return &HeaderExactMatcher{key: key, exact: exact}
 }
 
-func (hem *headerExactMatcher) Match(md metadata.MD) bool {
+func (hem *HeaderExactMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hem.key)
 	if !ok {
 		return false
@@ -61,20 +66,23 @@ func (hem *headerExactMatcher) Match(md metadata.MD) bool {
 	return v == hem.exact
 }
 
-func (hem *headerExactMatcher) String() string {
+func (hem *HeaderExactMatcher) String() string {
 	return fmt.Sprintf("headerExact:%v:%v", hem.key, hem.exact)
 }
 
-type headerRegexMatcher struct {
+// HeaderRegexMatcher matches on whether the entire request header value matches
+// the regex.
+type HeaderRegexMatcher struct {
 	key string
 	re  *regexp.Regexp
 }
 
-func NewHeaderRegexMatcher(key string, re *regexp.Regexp) *headerRegexMatcher {
-	return &headerRegexMatcher{key: key, re: re}
+// NewHeaderRegexMatcher returns a new HeaderRegexMatcher.
+func NewHeaderRegexMatcher(key string, re *regexp.Regexp) *HeaderRegexMatcher {
+	return &HeaderRegexMatcher{key: key, re: re}
 }
 
-func (hrm *headerRegexMatcher) Match(md metadata.MD) bool {
+func (hrm *HeaderRegexMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hrm.key)
 	if !ok {
 		return false
@@ -82,20 +90,23 @@ func (hrm *headerRegexMatcher) Match(md metadata.MD) bool {
 	return hrm.re.MatchString(v)
 }
 
-func (hrm *headerRegexMatcher) String() string {
+func (hrm *HeaderRegexMatcher) String() string {
 	return fmt.Sprintf("headerRegex:%v:%v", hrm.key, hrm.re.String())
 }
 
-type headerRangeMatcher struct {
+// HeaderRangeMatcher matches on whether the request header value is within the range.
+// The header value must be an integer in base 10 notation.
+type HeaderRangeMatcher struct {
 	key        string
 	start, end int64 // represents [start, end).
 }
 
-func NewHeaderRangeMatcher(key string, start, end int64) *headerRangeMatcher {
-	return &headerRangeMatcher{key: key, start: start, end: end}
+// NewHeaderRangeMatcher returns a new HeaderRangeMatcher.
+func NewHeaderRangeMatcher(key string, start, end int64) *HeaderRangeMatcher {
+	return &HeaderRangeMatcher{key: key, start: start, end: end}
 }
 
-func (hrm *headerRangeMatcher) Match(md metadata.MD) bool {
+func (hrm *HeaderRangeMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hrm.key)
 	if !ok {
 		return false
@@ -106,39 +117,44 @@ func (hrm *headerRangeMatcher) Match(md metadata.MD) bool {
 	return false
 }
 
-func (hrm *headerRangeMatcher) String() string {
+func (hrm *HeaderRangeMatcher) String() string {
 	return fmt.Sprintf("headerRange:%v:[%d,%d)", hrm.key, hrm.start, hrm.end)
 }
 
-type headerPresentMatcher struct {
+// HeaderPresentMatcher will match based on whether the header is present in the whole request.
+type HeaderPresentMatcher struct {
 	key     string
 	present bool
 }
 
-func NewHeaderPresentMatcher(key string, present bool) *headerPresentMatcher {
-	return &headerPresentMatcher{key: key, present: present}
+// NewHeaderPresentMatcher returns a new HeaderPresentMatcher.
+func NewHeaderPresentMatcher(key string, present bool) *HeaderPresentMatcher {
+	return &HeaderPresentMatcher{key: key, present: present}
 }
 
-func (hpm *headerPresentMatcher) Match(md metadata.MD) bool {
+func (hpm *HeaderPresentMatcher) Match(md metadata.MD) bool {
 	vs, ok := mdValuesFromOutgoingCtx(md, hpm.key)
 	present := ok && len(vs) > 0
 	return present == hpm.present
 }
 
-func (hpm *headerPresentMatcher) String() string {
+func (hpm *HeaderPresentMatcher) String() string {
 	return fmt.Sprintf("headerPresent:%v:%v", hpm.key, hpm.present)
 }
 
-type headerPrefixMatcher struct {
+// HeaderPrefixMatcher matches on whether the prefix of the header value matches the prefix
+// passed into this struct.
+type HeaderPrefixMatcher struct {
 	key    string
 	prefix string
 }
 
-func NewHeaderPrefixMatcher(key string, prefix string) *headerPrefixMatcher {
-	return &headerPrefixMatcher{key: key, prefix: prefix}
+// NewHeaderPrefixMatcher returns a new HeaderPrefixMatcher.
+func NewHeaderPrefixMatcher(key string, prefix string) *HeaderPrefixMatcher {
+	return &HeaderPrefixMatcher{key: key, prefix: prefix}
 }
 
-func (hpm *headerPrefixMatcher) Match(md metadata.MD) bool {
+func (hpm *HeaderPrefixMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hpm.key)
 	if !ok {
 		return false
@@ -146,20 +162,23 @@ func (hpm *headerPrefixMatcher) Match(md metadata.MD) bool {
 	return strings.HasPrefix(v, hpm.prefix)
 }
 
-func (hpm *headerPrefixMatcher) String() string {
+func (hpm *HeaderPrefixMatcher) String() string {
 	return fmt.Sprintf("headerPrefix:%v:%v", hpm.key, hpm.prefix)
 }
 
-type headerSuffixMatcher struct {
+// HeaderSuffixMatcher matches on whether the suffix of the header value matches the suffix
+// passed into this struct.
+type HeaderSuffixMatcher struct {
 	key    string
 	suffix string
 }
 
-func NewHeaderSuffixMatcher(key string, suffix string) *headerSuffixMatcher {
-	return &headerSuffixMatcher{key: key, suffix: suffix}
+// NewHeaderSuffixMatcher returns a new HeaderSuffixMatcher.
+func NewHeaderSuffixMatcher(key string, suffix string) *HeaderSuffixMatcher {
+	return &HeaderSuffixMatcher{key: key, suffix: suffix}
 }
 
-func (hsm *headerSuffixMatcher) Match(md metadata.MD) bool {
+func (hsm *HeaderSuffixMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hsm.key)
 	if !ok {
 		return false
@@ -167,22 +186,24 @@ func (hsm *headerSuffixMatcher) Match(md metadata.MD) bool {
 	return strings.HasSuffix(v, hsm.suffix)
 }
 
-func (hsm *headerSuffixMatcher) String() string {
+func (hsm *HeaderSuffixMatcher) String() string {
 	return fmt.Sprintf("headerSuffix:%v:%v", hsm.key, hsm.suffix)
 }
 
-type invertMatcher struct {
+// Invert matcher inverts the match result of the underlying header matcher.
+type InvertMatcher struct {
 	m HeaderMatcherInterface
 }
 
-func NewInvertMatcher(m HeaderMatcherInterface) *invertMatcher {
-	return &invertMatcher{m: m}
+// NewInvertMatcher returns a new InvertMatcher.
+func NewInvertMatcher(m HeaderMatcherInterface) *InvertMatcher {
+	return &InvertMatcher{m: m}
 }
 
-func (i *invertMatcher) Match(md metadata.MD) bool {
+func (i *InvertMatcher) Match(md metadata.MD) bool {
 	return !i.m.Match(md)
 }
 
-func (i *invertMatcher) String() string {
+func (i *InvertMatcher) String() string {
 	return fmt.Sprintf("invert{%s}", i.m)
 }
