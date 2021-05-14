@@ -18,7 +18,7 @@
  *
  */
 
-package resolver
+package matcher
 
 import (
 	"regexp"
@@ -66,8 +66,8 @@ func TestHeaderExactMatcherMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hem := newHeaderExactMatcher(tt.key, tt.exact)
-			if got := hem.match(tt.md); got != tt.want {
+			hem := NewHeaderExactMatcher(tt.key, tt.exact)
+			if got := hem.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -112,8 +112,8 @@ func TestHeaderRegexMatcherMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hrm := newHeaderRegexMatcher(tt.key, regexp.MustCompile(tt.regexStr))
-			if got := hrm.match(tt.md); got != tt.want {
+			hrm := NewHeaderRegexMatcher(tt.key, regexp.MustCompile(tt.regexStr))
+			if got := hrm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -159,8 +159,8 @@ func TestHeaderRangeMatcherMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hrm := newHeaderRangeMatcher(tt.key, tt.start, tt.end)
-			if got := hrm.match(tt.md); got != tt.want {
+			hrm := NewHeaderRangeMatcher(tt.key, tt.start, tt.end)
+			if got := hrm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -206,8 +206,8 @@ func TestHeaderPresentMatcherMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hpm := newHeaderPresentMatcher(tt.key, tt.present)
-			if got := hpm.match(tt.md); got != tt.want {
+			hpm := NewHeaderPresentMatcher(tt.key, tt.present)
+			if got := hpm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -252,8 +252,8 @@ func TestHeaderPrefixMatcherMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hpm := newHeaderPrefixMatcher(tt.key, tt.prefix)
-			if got := hpm.match(tt.md); got != tt.want {
+			hpm := NewHeaderPrefixMatcher(tt.key, tt.prefix)
+			if got := hpm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -298,8 +298,8 @@ func TestHeaderSuffixMatcherMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hsm := newHeaderSuffixMatcher(tt.key, tt.suffix)
-			if got := hsm.match(tt.md); got != tt.want {
+			hsm := NewHeaderSuffixMatcher(tt.key, tt.suffix)
+			if got := hsm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})
@@ -309,24 +309,24 @@ func TestHeaderSuffixMatcherMatch(t *testing.T) {
 func TestInvertMatcherMatch(t *testing.T) {
 	tests := []struct {
 		name string
-		m    headerMatcherInterface
+		m    HeaderMatcherInterface
 		md   metadata.MD
 	}{
 		{
 			name: "true->false",
-			m:    newHeaderExactMatcher("th", "tv"),
+			m:    NewHeaderExactMatcher("th", "tv"),
 			md:   metadata.Pairs("th", "tv"),
 		},
 		{
 			name: "false->true",
-			m:    newHeaderExactMatcher("th", "abc"),
+			m:    NewHeaderExactMatcher("th", "abc"),
 			md:   metadata.Pairs("th", "tv"),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := newInvertMatcher(tt.m).match(tt.md)
-			want := !tt.m.match(tt.md)
+			got := NewInvertMatcher(tt.m).Match(tt.md)
+			want := !tt.m.Match(tt.md)
 			if got != want {
 				t.Errorf("match() = %v, want %v", got, want)
 			}

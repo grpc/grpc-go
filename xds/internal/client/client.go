@@ -33,7 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	"google.golang.org/grpc/internal/xds"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 
@@ -351,7 +351,7 @@ type SecurityConfig struct {
 	// - If the peer certificate contains a wildcard DNS SAN, and an `exact`
 	//   matcher is configured, a wildcard DNS match is performed instead of a
 	//   regular string comparison.
-	SubjectAltNameMatchers []xds.StringMatcher
+	SubjectAltNameMatchers []matcher.StringMatcher
 	// RequireClientCert indicates if the server handshake process expects the
 	// client to present a certificate. Set to true when performing mTLS. Used
 	// only on the server-side.

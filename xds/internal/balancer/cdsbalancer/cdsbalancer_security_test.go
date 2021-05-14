@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc/internal"
 	xdscredsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/testutils"
-	xdsinternal "google.golang.org/grpc/internal/xds"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/resolver"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
@@ -50,12 +50,12 @@ const (
 )
 
 var (
-	testSANMatchers = []xdsinternal.StringMatcher{
-		xdsinternal.StringMatcherForTesting(newStringP(testSAN), nil, nil, nil, nil, true),
-		xdsinternal.StringMatcherForTesting(nil, newStringP(testSAN), nil, nil, nil, false),
-		xdsinternal.StringMatcherForTesting(nil, nil, newStringP(testSAN), nil, nil, false),
-		xdsinternal.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(testSAN), false),
-		xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP(testSAN), nil, false),
+	testSANMatchers = []matcher.StringMatcher{
+		matcher.StringMatcherForTesting(newStringP(testSAN), nil, nil, nil, nil, true),
+		matcher.StringMatcherForTesting(nil, newStringP(testSAN), nil, nil, nil, false),
+		matcher.StringMatcherForTesting(nil, nil, newStringP(testSAN), nil, nil, false),
+		matcher.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(testSAN), false),
+		matcher.StringMatcherForTesting(nil, nil, nil, newStringP(testSAN), nil, false),
 	}
 	fpb1, fpb2                   *fakeProviderBuilder
 	bootstrapConfig              *bootstrap.Config

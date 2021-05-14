@@ -40,10 +40,10 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/httpfilter"
@@ -689,10 +689,10 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*Secu
 	switch t := common.GetValidationContextType().(type) {
 	case *v3tlspb.CommonTlsContext_CombinedValidationContext:
 		combined := common.GetCombinedValidationContext()
-		var matchers []xds.StringMatcher
+		var matchers []matcher.StringMatcher
 		if def := combined.GetDefaultValidationContext(); def != nil {
 			for _, m := range def.GetMatchSubjectAltNames() {
-				matcher, err := xds.StringMatcherFromProto(m)
+				matcher, err := matcher.StringMatcherFromProto(m)
 				if err != nil {
 					return nil, err
 				}
