@@ -42,8 +42,8 @@ configure TLS and create the server credential using
 On client side, we provide the path to the "ca_cert.pem" to configure TLS and create
 the client credential using
 [`credentials.NewClientTLSFromFile`](https://godoc.org/google.golang.org/grpc/credentials#NewClientTLSFromFile).
-Note that we override the server name with "x.test.youtube.com", as the server
-certificate is valid for *.test.youtube.com but not localhost. It is solely for
+Note that we override the server name with "x.test.example.com", as the server
+certificate is valid for *.test.example.com but not localhost. It is solely for
 the convenience of making an example.
 
 Once the credentials have been created at both sides, we can start the server
