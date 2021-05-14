@@ -26,7 +26,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/internal/xds/matcher"
 	"io/ioutil"
 	"net"
 	"strings"
@@ -39,6 +38,7 @@ import (
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
 )

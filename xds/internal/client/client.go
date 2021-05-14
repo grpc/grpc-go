@@ -24,7 +24,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/internal/xds/matcher"
 	"regexp"
 	"sync"
 	"time"
@@ -36,6 +35,7 @@ import (
 
 	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/httpfilter"
+	"google.golang.org/grpc/internal/xds/matcher"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/backoff"

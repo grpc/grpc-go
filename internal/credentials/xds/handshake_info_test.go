@@ -20,11 +20,12 @@ package xds
 
 import (
 	"crypto/x509"
-	"google.golang.org/grpc/internal/xds/matcher"
 	"net"
 	"net/url"
 	"regexp"
 	"testing"
+
+	"google.golang.org/grpc/internal/xds/matcher"
 )
 
 func TestDNSMatch(t *testing.T) {

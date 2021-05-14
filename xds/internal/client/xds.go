@@ -21,7 +21,6 @@ package client
 import (
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/internal/xds/matcher"
 	"net"
 	"regexp"
 	"strconv"
@@ -41,6 +40,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc/internal/grpclog"

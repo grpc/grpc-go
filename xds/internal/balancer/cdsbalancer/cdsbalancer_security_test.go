@@ -22,7 +22,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/internal/xds/matcher"
 	"regexp"
 	"testing"
 
@@ -35,6 +34,7 @@ import (
 	"google.golang.org/grpc/internal"
 	xdscredsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/resolver"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/client/bootstrap"
