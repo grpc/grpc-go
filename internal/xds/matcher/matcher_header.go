@@ -98,8 +98,8 @@ func (hrm *HeaderRegexMatcher) String() string {
 	return fmt.Sprintf("headerRegex:%v:%v", hrm.key, hrm.re.String())
 }
 
-// HeaderRangeMatcher matches on whether the request header value is within the range.
-// The header value must be an integer in base 10 notation.
+// HeaderRangeMatcher matches on whether the request header value is within the
+// range. The header value must be an integer in base 10 notation.
 type HeaderRangeMatcher struct {
 	key        string
 	start, end int64 // represents [start, end).
@@ -127,7 +127,8 @@ func (hrm *HeaderRangeMatcher) String() string {
 	return fmt.Sprintf("headerRange:%v:[%d,%d)", hrm.key, hrm.start, hrm.end)
 }
 
-// HeaderPresentMatcher will match based on whether the header is present in the whole request.
+// HeaderPresentMatcher will match based on whether the header is present in the
+// whole request.
 type HeaderPresentMatcher struct {
 	key     string
 	present bool
@@ -150,8 +151,8 @@ func (hpm *HeaderPresentMatcher) String() string {
 	return fmt.Sprintf("headerPresent:%v:%v", hpm.key, hpm.present)
 }
 
-// HeaderPrefixMatcher matches on whether the prefix of the header value matches the prefix
-// passed into this struct.
+// HeaderPrefixMatcher matches on whether the prefix of the header value matches
+// the prefix passed into this struct.
 type HeaderPrefixMatcher struct {
 	key    string
 	prefix string
@@ -176,8 +177,8 @@ func (hpm *HeaderPrefixMatcher) String() string {
 	return fmt.Sprintf("headerPrefix:%v:%v", hpm.key, hpm.prefix)
 }
 
-// HeaderSuffixMatcher matches on whether the suffix of the header value matches the suffix
-// passed into this struct.
+// HeaderSuffixMatcher matches on whether the suffix of the header value matches
+// the suffix passed into this struct.
 type HeaderSuffixMatcher struct {
 	key    string
 	suffix string
