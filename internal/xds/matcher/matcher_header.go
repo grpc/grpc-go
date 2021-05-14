@@ -16,7 +16,7 @@
  *
  */
 
-package resolver
+package matcher
 
 import (
 	"fmt"
@@ -27,8 +27,8 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-type headerMatcherInterface interface {
-	match(metadata.MD) bool
+type HeaderMatcherInterface interface {
+	Match(metadata.MD) bool
 	String() string
 }
 
@@ -49,11 +49,11 @@ type headerExactMatcher struct {
 	exact string
 }
 
-func newHeaderExactMatcher(key, exact string) *headerExactMatcher {
+func NewHeaderExactMatcher(key, exact string) *headerExactMatcher {
 	return &headerExactMatcher{key: key, exact: exact}
 }
 
-func (hem *headerExactMatcher) match(md metadata.MD) bool {
+func (hem *headerExactMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hem.key)
 	if !ok {
 		return false
@@ -70,11 +70,11 @@ type headerRegexMatcher struct {
 	re  *regexp.Regexp
 }
 
-func newHeaderRegexMatcher(key string, re *regexp.Regexp) *headerRegexMatcher {
+func NewHeaderRegexMatcher(key string, re *regexp.Regexp) *headerRegexMatcher {
 	return &headerRegexMatcher{key: key, re: re}
 }
 
-func (hrm *headerRegexMatcher) match(md metadata.MD) bool {
+func (hrm *headerRegexMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hrm.key)
 	if !ok {
 		return false
@@ -91,11 +91,11 @@ type headerRangeMatcher struct {
 	start, end int64 // represents [start, end).
 }
 
-func newHeaderRangeMatcher(key string, start, end int64) *headerRangeMatcher {
+func NewHeaderRangeMatcher(key string, start, end int64) *headerRangeMatcher {
 	return &headerRangeMatcher{key: key, start: start, end: end}
 }
 
-func (hrm *headerRangeMatcher) match(md metadata.MD) bool {
+func (hrm *headerRangeMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hrm.key)
 	if !ok {
 		return false
@@ -115,11 +115,11 @@ type headerPresentMatcher struct {
 	present bool
 }
 
-func newHeaderPresentMatcher(key string, present bool) *headerPresentMatcher {
+func NewHeaderPresentMatcher(key string, present bool) *headerPresentMatcher {
 	return &headerPresentMatcher{key: key, present: present}
 }
 
-func (hpm *headerPresentMatcher) match(md metadata.MD) bool {
+func (hpm *headerPresentMatcher) Match(md metadata.MD) bool {
 	vs, ok := mdValuesFromOutgoingCtx(md, hpm.key)
 	present := ok && len(vs) > 0
 	return present == hpm.present
@@ -134,11 +134,11 @@ type headerPrefixMatcher struct {
 	prefix string
 }
 
-func newHeaderPrefixMatcher(key string, prefix string) *headerPrefixMatcher {
+func NewHeaderPrefixMatcher(key string, prefix string) *headerPrefixMatcher {
 	return &headerPrefixMatcher{key: key, prefix: prefix}
 }
 
-func (hpm *headerPrefixMatcher) match(md metadata.MD) bool {
+func (hpm *headerPrefixMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hpm.key)
 	if !ok {
 		return false
@@ -155,11 +155,11 @@ type headerSuffixMatcher struct {
 	suffix string
 }
 
-func newHeaderSuffixMatcher(key string, suffix string) *headerSuffixMatcher {
+func NewHeaderSuffixMatcher(key string, suffix string) *headerSuffixMatcher {
 	return &headerSuffixMatcher{key: key, suffix: suffix}
 }
 
-func (hsm *headerSuffixMatcher) match(md metadata.MD) bool {
+func (hsm *headerSuffixMatcher) Match(md metadata.MD) bool {
 	v, ok := mdValuesFromOutgoingCtx(md, hsm.key)
 	if !ok {
 		return false
@@ -172,15 +172,15 @@ func (hsm *headerSuffixMatcher) String() string {
 }
 
 type invertMatcher struct {
-	m headerMatcherInterface
+	m HeaderMatcherInterface
 }
 
-func newInvertMatcher(m headerMatcherInterface) *invertMatcher {
+func NewInvertMatcher(m HeaderMatcherInterface) *invertMatcher {
 	return &invertMatcher{m: m}
 }
 
-func (i *invertMatcher) match(md metadata.MD) bool {
-	return !i.m.match(md)
+func (i *invertMatcher) Match(md metadata.MD) bool {
+	return !i.m.Match(md)
 }
 
 func (i *invertMatcher) String() string {

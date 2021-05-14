@@ -16,7 +16,7 @@
  *
  */
 
-package xds
+package matcher
 
 import (
 	"regexp"

@@ -18,7 +18,7 @@
 
 // Package xds contains types that need to be shared between code under
 // google.golang.org/grpc/xds/... and the rest of gRPC.
-package xds
+package matcher
 
 import (
 	"errors"

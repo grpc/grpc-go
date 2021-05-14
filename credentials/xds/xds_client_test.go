@@ -26,6 +26,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"io/ioutil"
 	"net"
 	"strings"
@@ -38,7 +39,6 @@ import (
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
 )
@@ -223,7 +223,7 @@ func newTestContextWithHandshakeInfo(parent context.Context, root, identity cert
 	// NewSubConn().
 	info := xdsinternal.NewHandshakeInfo(root, identity)
 	if sanExactMatch != "" {
-		info.SetSANMatchers([]xds.StringMatcher{xds.StringMatcherForTesting(newStringP(sanExactMatch), nil, nil, nil, nil, false)})
+		info.SetSANMatchers([]matcher.StringMatcher{matcher.StringMatcherForTesting(newStringP(sanExactMatch), nil, nil, nil, nil, false)})
 	}
 	addr := xdsinternal.SetHandshakeInfo(resolver.Address{}, info)
 
@@ -536,7 +536,7 @@ func (s) TestClientCredsProviderSwitch(t *testing.T) {
 	// use the correct trust roots.
 	root1 := makeRootProvider(t, "x509/client_ca_cert.pem")
 	handshakeInfo := xdsinternal.NewHandshakeInfo(root1, nil)
-	handshakeInfo.SetSANMatchers([]xds.StringMatcher{xds.StringMatcherForTesting(newStringP(defaultTestCertSAN), nil, nil, nil, nil, false)})
+	handshakeInfo.SetSANMatchers([]matcher.StringMatcher{matcher.StringMatcherForTesting(newStringP(defaultTestCertSAN), nil, nil, nil, nil, false)})
 
 	// We need to repeat most of what newTestContextWithHandshakeInfo() does
 	// here because we need access to the underlying HandshakeInfo so that we

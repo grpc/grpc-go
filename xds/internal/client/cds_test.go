@@ -21,6 +21,7 @@
 package client
 
 import (
+	"google.golang.org/grpc/internal/xds/matcher"
 	"regexp"
 	"testing"
 
@@ -35,7 +36,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/testutils"
-	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -764,12 +764,12 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 					RootCertName:         rootCertName,
 					IdentityInstanceName: identityPluginInstance,
 					IdentityCertName:     identityCertName,
-					SubjectAltNameMatchers: []xdsinternal.StringMatcher{
-						xdsinternal.StringMatcherForTesting(newStringP(sanExact), nil, nil, nil, nil, true),
-						xdsinternal.StringMatcherForTesting(nil, newStringP(sanPrefix), nil, nil, nil, false),
-						xdsinternal.StringMatcherForTesting(nil, nil, newStringP(sanSuffix), nil, nil, false),
-						xdsinternal.StringMatcherForTesting(nil, nil, nil, nil, sanRE, false),
-						xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
+					SubjectAltNameMatchers: []matcher.StringMatcher{
+						matcher.StringMatcherForTesting(newStringP(sanExact), nil, nil, nil, nil, true),
+						matcher.StringMatcherForTesting(nil, newStringP(sanPrefix), nil, nil, nil, false),
+						matcher.StringMatcherForTesting(nil, nil, newStringP(sanSuffix), nil, nil, false),
+						matcher.StringMatcherForTesting(nil, nil, nil, nil, sanRE, false),
+						matcher.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
 					},
 				},
 			},
