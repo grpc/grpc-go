@@ -37,11 +37,13 @@ const (
 	// and kept in variable BootstrapFileName.
 	//
 	// When both bootstrap FileName and FileContent are set, FileName is used.
-	BootstrapFileContentEnv      = "GRPC_XDS_BOOTSTRAP_CONFIG"
+	BootstrapFileContentEnv = "GRPC_XDS_BOOTSTRAP_CONFIG"
+
 	circuitBreakingSupportEnv    = "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING"
 	timeoutSupportEnv            = "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT"
 	faultInjectionSupportEnv     = "GRPC_XDS_EXPERIMENTAL_FAULT_INJECTION"
 	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
+	aggregateAndDNSSupportEnv    = "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER"
 
 	c2pResolverSupportEnv                    = "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER"
 	c2pResolverTestOnlyTrafficDirectorURIEnv = "GRPC_TEST_ONLY_GOOGLE_C2P_RESOLVER_TRAFFIC_DIRECTOR_URI"
@@ -60,6 +62,7 @@ var (
 	//
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileContent = os.Getenv(BootstrapFileContentEnv)
+
 	// CircuitBreakingSupport indicates whether circuit breaking support is
 	// enabled, which can be disabled by setting the environment variable
 	// "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING" to "false".
@@ -71,10 +74,6 @@ var (
 	// FaultInjectionSupport is used to control both fault injection and HTTP
 	// filter support.
 	FaultInjectionSupport = !strings.EqualFold(os.Getenv(faultInjectionSupportEnv), "false")
-	// C2PResolverSupport indicates whether support for C2P resolver is enabled.
-	// This can be enabled by setting the environment variable
-	// "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER" to "true".
-	C2PResolverSupport = strings.EqualFold(os.Getenv(c2pResolverSupportEnv), "true")
 	// ClientSideSecuritySupport is used to control processing of security
 	// configuration on the client-side.
 	//
@@ -82,6 +81,17 @@ var (
 	// have a brand new API on the server-side and users explicitly need to use
 	// the new API to get security integration on the server.
 	ClientSideSecuritySupport = strings.EqualFold(os.Getenv(clientSideSecuritySupportEnv), "true")
+	// AggregateAndDNSSupportEnv indicates whether processing of aggregated
+	// cluster and DNS cluster is enabled, which can be enabled by setting the
+	// environment variable
+	// "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER" to
+	// "true".
+	AggregateAndDNSSupportEnv = strings.EqualFold(os.Getenv(aggregateAndDNSSupportEnv), "true")
+
+	// C2PResolverSupport indicates whether support for C2P resolver is enabled.
+	// This can be enabled by setting the environment variable
+	// "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER" to "true".
+	C2PResolverSupport = strings.EqualFold(os.Getenv(c2pResolverSupportEnv), "true")
 	// C2PResolverTestOnlyTrafficDirectorURI is the TD URI for testing.
 	C2PResolverTestOnlyTrafficDirectorURI = os.Getenv(c2pResolverTestOnlyTrafficDirectorURIEnv)
 )
