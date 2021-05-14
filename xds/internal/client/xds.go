@@ -615,9 +615,15 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		ret.EDSServiceName = cluster.GetEdsClusterConfig().GetServiceName()
 		return ret, nil
 	case cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS:
+		if !env.AggregateAndDNSSupportEnv {
+			return ClusterUpdate{}, fmt.Errorf("unsupported cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
+		}
 		ret.ClusterType = ClusterTypeLogicalDNS
 		return ret, nil
 	case cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate":
+		if !env.AggregateAndDNSSupportEnv {
+			return ClusterUpdate{}, fmt.Errorf("unsupported cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
+		}
 		clusters := &v3aggregateclusterpb.ClusterConfig{}
 		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
 			return ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
@@ -626,7 +632,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		ret.PrioritizedClusterNames = clusters.Clusters
 		return ret, nil
 	default:
-		return ClusterUpdate{}, fmt.Errorf("unexpected cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
+		return ClusterUpdate{}, fmt.Errorf("unsupported cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
 	}
 }
 
