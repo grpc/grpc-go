@@ -32,6 +32,8 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/admin"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -175,6 +177,7 @@ var (
 	rpcTimeout      = flag.Duration("rpc_timeout", 20*time.Second, "Per RPC timeout")
 	server          = flag.String("server", "localhost:8080", "Address of server to connect to")
 	statsPort       = flag.Int("stats_port", 8081, "Port to expose peer distribution stats service")
+	secureMode      = flag.Bool("secure_mode", false, "If true, retrieve security configuration from the management server. Else, use insecure credentials.")
 
 	rpcCfgs atomic.Value
 
@@ -375,14 +378,23 @@ func main() {
 	reflection.Register(s)
 	cleanup, err := admin.Register(s)
 	if err != nil {
-		logger.Fatalf("failed to register admin: %v", err)
+		logger.Fatalf("Failed to register admin: %v", err)
 	}
 	defer cleanup()
 	go s.Serve(lis)
 
+	creds := insecure.NewCredentials()
+	if *secureMode {
+		var err error
+		creds, err = xds.NewClientCredentials(xds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
+		if err != nil {
+			logger.Fatalf("Failed to create xDS credentials: %v", err)
+		}
+	}
+
 	clients := make([]testgrpc.TestServiceClient, *numChannels)
 	for i := 0; i < *numChannels; i++ {
-		conn, err := grpc.Dial(*server, grpc.WithInsecure())
+		conn, err := grpc.Dial(*server, grpc.WithTransportCredentials(creds))
 		if err != nil {
 			logger.Fatalf("Fail to dial: %v", err)
 		}
