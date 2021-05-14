@@ -522,7 +522,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 				route.WeightedClusters[c.GetName()] = wc
 				totalWeight += w
 			}
-			if totalWeight != wcs.GetTotalWeight().GetValue() {
+			if totalWeight != 100 && (wcs.GetTotalWeight() == nil || totalWeight != wcs.GetTotalWeight().GetValue()) {
 				return nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, want %v", r, a, wcs.GetTotalWeight().GetValue(), totalWeight)
 			}
 			if totalWeight == 0 {
