@@ -522,8 +522,13 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 				route.WeightedClusters[c.GetName()] = wc
 				totalWeight += w
 			}
-			if totalWeight != 100 && (wcs.GetTotalWeight() == nil || totalWeight != wcs.GetTotalWeight().GetValue()) {
-				return nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, want %v", r, a, wcs.GetTotalWeight().GetValue(), totalWeight)
+			// default TotalWeight https://github.com/grpc/grpc-go/issues/4432
+			wantTotalWeight := uint32(100)
+			if tw := wcs.GetTotalWeight(); tw != nil {
+				wantTotalWeight = tw.GetValue()
+			}
+			if totalWeight != wantTotalWeight {
+				return nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, expected total weight from response: %v", r, a, totalWeight, wantTotalWeight)
 			}
 			if totalWeight == 0 {
 				return nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)

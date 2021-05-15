@@ -1089,8 +1089,8 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
 								WeightedClusters: &v3routepb.WeightedCluster{
 									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 0}},
-										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 0}},
+										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 20}},
+										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 30}},
 									},
 								}}}},
 				},
@@ -1139,6 +1139,31 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantRoutes: []*Route{{
 				Prefix:           newStringP("/a/"),
 				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
+			}},
+			wantErr: false,
+		},
+		{
+			name: "default totalWeight is 100 in weighted clusters action",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{
+							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+								WeightedClusters: &v3routepb.WeightedCluster{
+									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 30}},
+										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 20}},
+									},
+									TotalWeight: &wrapperspb.UInt32Value{Value: 50},
+								}}}},
+				},
+			},
+			wantRoutes: []*Route{{
+				Prefix:           newStringP("/a/"),
+				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 20}, "B": {Weight: 30}},
 			}},
 			wantErr: false,
 		},
