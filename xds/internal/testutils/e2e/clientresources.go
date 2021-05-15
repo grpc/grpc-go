@@ -20,6 +20,8 @@ package e2e
 
 import (
 	"fmt"
+	"net"
+	"strconv"
 
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/golang/protobuf/proto"
@@ -160,7 +162,7 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 		}
 	}
 	return &v3listenerpb.Listener{
-		Name: fmt.Sprintf(ServerListenerResourceNameTemplate, fmt.Sprintf("%s:%d", host, port)),
+		Name: fmt.Sprintf(ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
 		Address: &v3corepb.Address{
 			Address: &v3corepb.Address_SocketAddress{
 				SocketAddress: &v3corepb.SocketAddress{

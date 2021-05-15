@@ -39,10 +39,11 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/httpfilter"
@@ -72,7 +73,7 @@ func unmarshalListenerResource(r *anypb.Any, logger *grpclog.PrefixLogger) (stri
 	if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
-	logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, lis)
+	logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, pretty.ToJSON(lis))
 
 	lu, err := processListener(lis, logger, v2)
 	if err != nil {
@@ -360,7 +361,7 @@ func unmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (s
 	if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
 		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
-	logger.Infof("Resource with name: %v, type: %T, contains: %v.", rc.GetName(), rc, rc)
+	logger.Infof("Resource with name: %v, type: %T, contains: %v.", rc.GetName(), rc, pretty.ToJSON(rc))
 
 	// TODO: Pass version.TransportAPI instead of relying upon the type URL
 	v2 := r.GetTypeUrl() == version.V2RouteConfigURL
@@ -572,7 +573,7 @@ func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (strin
 	if err := proto.Unmarshal(r.GetValue(), cluster); err != nil {
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
-	logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, cluster)
+	logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, pretty.ToJSON(cluster))
 	cu, err := validateClusterAndConstructClusterUpdate(cluster)
 	if err != nil {
 		return cluster.GetName(), ClusterUpdate{}, err
@@ -582,42 +583,9 @@ func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (strin
 	return cluster.GetName(), cu, nil
 }
 
-func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, []string, error) {
-	if cluster.GetType() == v3clusterpb.Cluster_EDS {
-		if cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil {
-			return 0, "", nil, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
-		}
-		// If the Cluster message in the CDS response did not contain a
-		// serviceName, we will just use the clusterName for EDS.
-		if cluster.GetEdsClusterConfig().GetServiceName() == "" {
-			return ClusterTypeEDS, cluster.GetName(), nil, nil
-		}
-		return ClusterTypeEDS, cluster.GetEdsClusterConfig().GetServiceName(), nil, nil
-	}
-
-	if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
-		return ClusterTypeLogicalDNS, cluster.GetName(), nil, nil
-	}
-
-	if cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate" {
-		// Loop through ClusterConfig here to get cluster names.
-		clusters := &v3aggregateclusterpb.ClusterConfig{}
-		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
-			return 0, "", nil, fmt.Errorf("failed to unmarshal resource: %v", err)
-		}
-		return ClusterTypeAggregate, cluster.GetName(), clusters.Clusters, nil
-	}
-	return 0, "", nil, fmt.Errorf("unexpected cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
-}
-
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
-	emptyUpdate := ClusterUpdate{ServiceName: "", EnableLRS: false}
 	if cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN {
-		return emptyUpdate, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
-	}
-	clusterType, serviceName, prioritizedClusters, err := clusterTypeFromCluster(cluster)
-	if err != nil {
-		return emptyUpdate, err
+		return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
 	// Process security configuration received from the control plane iff the
@@ -626,18 +594,46 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	if env.ClientSideSecuritySupport {
 		var err error
 		if sc, err = securityConfigFromCluster(cluster); err != nil {
-			return emptyUpdate, err
+			return ClusterUpdate{}, err
 		}
 	}
 
-	return ClusterUpdate{
-		ClusterType:             clusterType,
-		ServiceName:             serviceName,
-		EnableLRS:               cluster.GetLrsServer().GetSelf() != nil,
-		SecurityCfg:             sc,
-		MaxRequests:             circuitBreakersFromCluster(cluster),
-		PrioritizedClusterNames: prioritizedClusters,
-	}, nil
+	ret := ClusterUpdate{
+		ClusterName: cluster.GetName(),
+		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
+		SecurityCfg: sc,
+		MaxRequests: circuitBreakersFromCluster(cluster),
+	}
+
+	// Validate and set cluster type from the response.
+	switch {
+	case cluster.GetType() == v3clusterpb.Cluster_EDS:
+		if cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil {
+			return ClusterUpdate{}, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
+		}
+		ret.ClusterType = ClusterTypeEDS
+		ret.EDSServiceName = cluster.GetEdsClusterConfig().GetServiceName()
+		return ret, nil
+	case cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS:
+		if !env.AggregateAndDNSSupportEnv {
+			return ClusterUpdate{}, fmt.Errorf("unsupported cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
+		}
+		ret.ClusterType = ClusterTypeLogicalDNS
+		return ret, nil
+	case cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate":
+		if !env.AggregateAndDNSSupportEnv {
+			return ClusterUpdate{}, fmt.Errorf("unsupported cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
+		}
+		clusters := &v3aggregateclusterpb.ClusterConfig{}
+		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
+			return ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
+		}
+		ret.ClusterType = ClusterTypeAggregate
+		ret.PrioritizedClusterNames = clusters.Clusters
+		return ret, nil
+	default:
+		return ClusterUpdate{}, fmt.Errorf("unsupported cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
+	}
 }
 
 // securityConfigFromCluster extracts the relevant security configuration from
@@ -699,10 +695,10 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*Secu
 	switch t := common.GetValidationContextType().(type) {
 	case *v3tlspb.CommonTlsContext_CombinedValidationContext:
 		combined := common.GetCombinedValidationContext()
-		var matchers []xds.StringMatcher
+		var matchers []matcher.StringMatcher
 		if def := combined.GetDefaultValidationContext(); def != nil {
 			for _, m := range def.GetMatchSubjectAltNames() {
-				matcher, err := xds.StringMatcherFromProto(m)
+				matcher, err := matcher.StringMatcherFromProto(m)
 				if err != nil {
 					return nil, err
 				}
@@ -765,7 +761,7 @@ func unmarshalEndpointsResource(r *anypb.Any, logger *grpclog.PrefixLogger) (str
 	if err := proto.Unmarshal(r.GetValue(), cla); err != nil {
 		return "", EndpointsUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
-	logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, cla)
+	logger.Infof("Resource with name: %v, type: %T, contains: %v", cla.GetClusterName(), cla, pretty.ToJSON(cla))
 
 	u, err := parseEDSRespProto(cla)
 	if err != nil {

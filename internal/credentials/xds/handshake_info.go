@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
-	xdsinternal "google.golang.org/grpc/internal/xds"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -66,8 +66,8 @@ type HandshakeInfo struct {
 	mu                sync.Mutex
 	rootProvider      certprovider.Provider
 	identityProvider  certprovider.Provider
-	sanMatchers       []xdsinternal.StringMatcher // Only on the client side.
-	requireClientCert bool                        // Only on server side.
+	sanMatchers       []matcher.StringMatcher // Only on the client side.
+	requireClientCert bool                    // Only on server side.
 }
 
 // SetRootCertProvider updates the root certificate provider.
@@ -85,7 +85,7 @@ func (hi *HandshakeInfo) SetIdentityCertProvider(identity certprovider.Provider)
 }
 
 // SetSANMatchers updates the list of SAN matchers.
-func (hi *HandshakeInfo) SetSANMatchers(sanMatchers []xdsinternal.StringMatcher) {
+func (hi *HandshakeInfo) SetSANMatchers(sanMatchers []matcher.StringMatcher) {
 	hi.mu.Lock()
 	hi.sanMatchers = sanMatchers
 	hi.mu.Unlock()
@@ -113,10 +113,10 @@ func (hi *HandshakeInfo) UseFallbackCreds() bool {
 
 // GetSANMatchersForTesting returns the SAN matchers stored in HandshakeInfo.
 // To be used only for testing purposes.
-func (hi *HandshakeInfo) GetSANMatchersForTesting() []xdsinternal.StringMatcher {
+func (hi *HandshakeInfo) GetSANMatchersForTesting() []matcher.StringMatcher {
 	hi.mu.Lock()
 	defer hi.mu.Unlock()
-	return append([]xdsinternal.StringMatcher{}, hi.sanMatchers...)
+	return append([]matcher.StringMatcher{}, hi.sanMatchers...)
 }
 
 // ClientSideTLSConfig constructs a tls.Config to be used in a client-side

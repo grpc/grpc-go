@@ -25,7 +25,7 @@ import (
 	"regexp"
 	"testing"
 
-	xdsinternal "google.golang.org/grpc/internal/xds"
+	"google.golang.org/grpc/internal/xds/matcher"
 )
 
 func TestDNSMatch(t *testing.T) {
@@ -143,45 +143,45 @@ func TestMatchingSANExists_FailureCases(t *testing.T) {
 
 	tests := []struct {
 		desc        string
-		sanMatchers []xdsinternal.StringMatcher
+		sanMatchers []matcher.StringMatcher
 	}{
 		{
 			desc: "exact match",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(newStringP("abcd.test.com"), nil, nil, nil, nil, false),
-				xdsinternal.StringMatcherForTesting(newStringP("http://golang"), nil, nil, nil, nil, false),
-				xdsinternal.StringMatcherForTesting(newStringP("HTTP://GOLANG.ORG"), nil, nil, nil, nil, false),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(newStringP("abcd.test.com"), nil, nil, nil, nil, false),
+				matcher.StringMatcherForTesting(newStringP("http://golang"), nil, nil, nil, nil, false),
+				matcher.StringMatcherForTesting(newStringP("HTTP://GOLANG.ORG"), nil, nil, nil, nil, false),
 			},
 		},
 		{
 			desc: "prefix match",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(nil, newStringP("i-aint-the-one"), nil, nil, nil, false),
-				xdsinternal.StringMatcherForTesting(nil, newStringP("192.168.1.1"), nil, nil, nil, false),
-				xdsinternal.StringMatcherForTesting(nil, newStringP("FOO.BAR"), nil, nil, nil, false),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(nil, newStringP("i-aint-the-one"), nil, nil, nil, false),
+				matcher.StringMatcherForTesting(nil, newStringP("192.168.1.1"), nil, nil, nil, false),
+				matcher.StringMatcherForTesting(nil, newStringP("FOO.BAR"), nil, nil, nil, false),
 			},
 		},
 		{
 			desc: "suffix match",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(nil, nil, newStringP("i-aint-the-one"), nil, nil, false),
-				xdsinternal.StringMatcherForTesting(nil, nil, newStringP("1::68"), nil, nil, false),
-				xdsinternal.StringMatcherForTesting(nil, nil, newStringP(".COM"), nil, nil, false),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(nil, nil, newStringP("i-aint-the-one"), nil, nil, false),
+				matcher.StringMatcherForTesting(nil, nil, newStringP("1::68"), nil, nil, false),
+				matcher.StringMatcherForTesting(nil, nil, newStringP(".COM"), nil, nil, false),
 			},
 		},
 		{
 			desc: "regex match",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`.*\.examples\.com`), false),
-				xdsinternal.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`192\.[0-9]{1,3}\.1\.1`), false),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`.*\.examples\.com`), false),
+				matcher.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`192\.[0-9]{1,3}\.1\.1`), false),
 			},
 		},
 		{
 			desc: "contains match",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP("i-aint-the-one"), nil, false),
-				xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP("2001:db8:1:1::68"), nil, false),
-				xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP("GRPC"), nil, false),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("i-aint-the-one"), nil, false),
+				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("2001:db8:1:1::68"), nil, false),
+				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("GRPC"), nil, false),
 			},
 		},
 	}
@@ -216,73 +216,73 @@ func TestMatchingSANExists_Success(t *testing.T) {
 
 	tests := []struct {
 		desc        string
-		sanMatchers []xdsinternal.StringMatcher
+		sanMatchers []matcher.StringMatcher
 	}{
 		{
 			desc: "no san matchers",
 		},
 		{
 			desc: "exact match dns wildcard",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(nil, newStringP("192.168.1.1"), nil, nil, nil, false),
-				xdsinternal.StringMatcherForTesting(newStringP("https://github.com/grpc/grpc-java"), nil, nil, nil, nil, false),
-				xdsinternal.StringMatcherForTesting(newStringP("abc.example.com"), nil, nil, nil, nil, false),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(nil, newStringP("192.168.1.1"), nil, nil, nil, false),
+				matcher.StringMatcherForTesting(newStringP("https://github.com/grpc/grpc-java"), nil, nil, nil, nil, false),
+				matcher.StringMatcherForTesting(newStringP("abc.example.com"), nil, nil, nil, nil, false),
 			},
 		},
 		{
 			desc: "exact match ignore case",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(newStringP("FOOBAR@EXAMPLE.COM"), nil, nil, nil, nil, true),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(newStringP("FOOBAR@EXAMPLE.COM"), nil, nil, nil, nil, true),
 			},
 		},
 		{
 			desc: "prefix match",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(nil, nil, newStringP(".co.in"), nil, nil, false),
-				xdsinternal.StringMatcherForTesting(nil, newStringP("192.168.1.1"), nil, nil, nil, false),
-				xdsinternal.StringMatcherForTesting(nil, newStringP("baz.test"), nil, nil, nil, false),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(nil, nil, newStringP(".co.in"), nil, nil, false),
+				matcher.StringMatcherForTesting(nil, newStringP("192.168.1.1"), nil, nil, nil, false),
+				matcher.StringMatcherForTesting(nil, newStringP("baz.test"), nil, nil, nil, false),
 			},
 		},
 		{
 			desc: "prefix match ignore case",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(nil, newStringP("BAZ.test"), nil, nil, nil, true),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(nil, newStringP("BAZ.test"), nil, nil, nil, true),
 			},
 		},
 		{
 			desc: "suffix  match",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`192\.[0-9]{1,3}\.1\.1`), false),
-				xdsinternal.StringMatcherForTesting(nil, nil, newStringP("192.168.1.1"), nil, nil, false),
-				xdsinternal.StringMatcherForTesting(nil, nil, newStringP("@test.com"), nil, nil, false),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`192\.[0-9]{1,3}\.1\.1`), false),
+				matcher.StringMatcherForTesting(nil, nil, newStringP("192.168.1.1"), nil, nil, false),
+				matcher.StringMatcherForTesting(nil, nil, newStringP("@test.com"), nil, nil, false),
 			},
 		},
 		{
 			desc: "suffix  match ignore case",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(nil, nil, newStringP("@test.COM"), nil, nil, true),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(nil, nil, newStringP("@test.COM"), nil, nil, true),
 			},
 		},
 		{
 			desc: "regex match",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP("https://github.com/grpc/grpc-java"), nil, false),
-				xdsinternal.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`192\.[0-9]{1,3}\.1\.1`), false),
-				xdsinternal.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`.*\.test\.com`), false),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("https://github.com/grpc/grpc-java"), nil, false),
+				matcher.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`192\.[0-9]{1,3}\.1\.1`), false),
+				matcher.StringMatcherForTesting(nil, nil, nil, nil, regexp.MustCompile(`.*\.test\.com`), false),
 			},
 		},
 		{
 			desc: "contains match",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(newStringP("https://github.com/grpc/grpc-java"), nil, nil, nil, nil, false),
-				xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP("2001:68::db8"), nil, false),
-				xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP("192.0.0"), nil, false),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(newStringP("https://github.com/grpc/grpc-java"), nil, nil, nil, nil, false),
+				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("2001:68::db8"), nil, false),
+				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("192.0.0"), nil, false),
 			},
 		},
 		{
 			desc: "contains match ignore case",
-			sanMatchers: []xdsinternal.StringMatcher{
-				xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP("GRPC"), nil, true),
+			sanMatchers: []matcher.StringMatcher{
+				matcher.StringMatcherForTesting(nil, nil, nil, newStringP("GRPC"), nil, true),
 			},
 		},
 	}

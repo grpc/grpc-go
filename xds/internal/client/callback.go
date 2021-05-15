@@ -18,6 +18,8 @@
 
 package client
 
+import "google.golang.org/grpc/internal/pretty"
+
 type watcherInfoWithUpdate struct {
 	wi     *watchInfo
 	update interface{}
@@ -104,7 +106,7 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate, metadata Up
 				wi.newUpdate(update)
 			}
 			// Sync cache.
-			c.logger.Debugf("LDS resource with name %v, value %+v added to cache", name, update)
+			c.logger.Debugf("LDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
 			c.ldsCache[name] = update
 			c.ldsMD[name] = metadata
 		}
@@ -163,7 +165,7 @@ func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate, metad
 				wi.newUpdate(update)
 			}
 			// Sync cache.
-			c.logger.Debugf("RDS resource with name %v, value %+v added to cache", name, update)
+			c.logger.Debugf("RDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
 			c.rdsCache[name] = update
 			c.rdsMD[name] = metadata
 		}
@@ -205,7 +207,7 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate, metadata Upda
 				wi.newUpdate(update)
 			}
 			// Sync cache.
-			c.logger.Debugf("CDS resource with name %v, value %+v added to cache", name, update)
+			c.logger.Debugf("CDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
 			c.cdsCache[name] = update
 			c.cdsMD[name] = metadata
 		}
@@ -264,7 +266,7 @@ func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate, metadata U
 				wi.newUpdate(update)
 			}
 			// Sync cache.
-			c.logger.Debugf("EDS resource with name %v, value %+v added to cache", name, update)
+			c.logger.Debugf("EDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
 			c.edsCache[name] = update
 			c.edsMD[name] = metadata
 		}

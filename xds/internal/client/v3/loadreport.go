@@ -26,6 +26,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal/client/load"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -57,7 +58,7 @@ func (v3c *client) SendFirstLoadStatsRequest(s grpc.ClientStream) error {
 	node.ClientFeatures = append(node.ClientFeatures, clientFeatureLRSSendAllClusters)
 
 	req := &lrspb.LoadStatsRequest{Node: node}
-	v3c.logger.Infof("lrs: sending init LoadStatsRequest: %v", req)
+	v3c.logger.Infof("lrs: sending init LoadStatsRequest: %v", pretty.ToJSON(req))
 	return stream.Send(req)
 }
 
@@ -71,7 +72,7 @@ func (v3c *client) HandleLoadStatsResponse(s grpc.ClientStream) ([]string, time.
 	if err != nil {
 		return nil, 0, fmt.Errorf("lrs: failed to receive first response: %v", err)
 	}
-	v3c.logger.Infof("lrs: received first LoadStatsResponse: %+v", resp)
+	v3c.logger.Infof("lrs: received first LoadStatsResponse: %+v", pretty.ToJSON(resp))
 
 	interval, err := ptypes.Duration(resp.GetLoadReportingInterval())
 	if err != nil {
@@ -148,6 +149,6 @@ func (v3c *client) SendLoadStatsRequest(s grpc.ClientStream, loads []*load.Data)
 	}
 
 	req := &lrspb.LoadStatsRequest{ClusterStats: clusterStats}
-	v3c.logger.Infof("lrs: sending LRS loads: %+v", req)
+	v3c.logger.Infof("lrs: sending LRS loads: %+v", pretty.ToJSON(req))
 	return stream.Send(req)
 }

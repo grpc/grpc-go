@@ -118,10 +118,6 @@ func (h *Histogram) PrintWithUnit(w io.Writer, unit float64) {
 	}
 
 	maxBucketDigitLen := len(strconv.FormatFloat(h.Buckets[len(h.Buckets)-1].LowBound, 'f', 6, 64))
-	if maxBucketDigitLen < 3 {
-		// For "inf".
-		maxBucketDigitLen = 3
-	}
 	maxCountDigitLen := len(strconv.FormatInt(h.Count, 10))
 	percentMulti := 100 / float64(h.Count)
 
@@ -131,9 +127,9 @@ func (h *Histogram) PrintWithUnit(w io.Writer, unit float64) {
 		if i+1 < len(h.Buckets) {
 			fmt.Fprintf(w, "%*f)", maxBucketDigitLen, h.Buckets[i+1].LowBound/unit)
 		} else {
-			fmt.Fprintf(w, "%*s)", maxBucketDigitLen, "inf")
+			upperBound := float64(h.opts.MinValue) + (b.LowBound-float64(h.opts.MinValue))*(1.0+h.opts.GrowthFactor)
+			fmt.Fprintf(w, "%*f)", maxBucketDigitLen, upperBound/unit)
 		}
-
 		accCount += b.Count
 		fmt.Fprintf(w, "  %*d  %5.1f%%  %5.1f%%", maxCountDigitLen, b.Count, float64(b.Count)*percentMulti, float64(accCount)*percentMulti)
 
@@ -188,6 +184,9 @@ func (h *Histogram) Add(value int64) error {
 
 func (h *Histogram) findBucket(value int64) (int, error) {
 	delta := float64(value - h.opts.MinValue)
+	if delta < 0 {
+		return 0, fmt.Errorf("no bucket for value: %d", value)
+	}
 	var b int
 	if delta >= h.opts.BaseBucketSize {
 		// b = log_{1+growthFactor} (delta / baseBucketSize) + 1

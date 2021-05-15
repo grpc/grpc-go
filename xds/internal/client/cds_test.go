@@ -28,14 +28,15 @@ import (
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/testutils"
-	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/internal/xds/env"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -45,7 +46,7 @@ const (
 	serviceName = "service"
 )
 
-var emptyUpdate = ClusterUpdate{ServiceName: "", EnableLRS: false}
+var emptyUpdate = ClusterUpdate{ClusterName: clusterName, EnableLRS: false}
 
 func (s) TestValidateCluster_Failure(t *testing.T) {
 	tests := []struct {
@@ -123,6 +124,9 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 		},
 	}
 
+	oldAggregateAndDNSSupportEnv := env.AggregateAndDNSSupportEnv
+	env.AggregateAndDNSSupportEnv = true
+	defer func() { env.CircuitBreakingSupport = oldAggregateAndDNSSupportEnv }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if update, err := validateClusterAndConstructClusterUpdate(test.cluster); err == nil {
@@ -141,24 +145,35 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		{
 			name: "happy-case-logical-dns",
 			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_LOGICAL_DNS},
 				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: ClusterUpdate{ServiceName: "", EnableLRS: false, ClusterType: ClusterTypeLogicalDNS},
+			wantUpdate: ClusterUpdate{ClusterName: clusterName, EnableLRS: false, ClusterType: ClusterTypeLogicalDNS},
 		},
 		{
 			name: "happy-case-aggregate-v3",
 			cluster: &v3clusterpb.Cluster{
+				Name: clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
-					ClusterType: &v3clusterpb.Cluster_CustomClusterType{Name: "envoy.clusters.aggregate"},
+					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
+						Name: "envoy.clusters.aggregate",
+						TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{
+							Clusters: []string{"a", "b", "c"},
+						}),
+					},
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: ClusterUpdate{ServiceName: "", EnableLRS: false, ClusterType: ClusterTypeAggregate},
+			wantUpdate: ClusterUpdate{
+				ClusterName: clusterName, EnableLRS: false, ClusterType: ClusterTypeAggregate,
+				PrioritizedClusterNames: []string{"a", "b", "c"},
+			},
 		},
 		{
 			name: "happy-case-no-service-name-no-lrs",
 			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
 					EdsConfig: &v3corepb.ConfigSource{
@@ -174,6 +189,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		{
 			name: "happy-case-no-lrs",
 			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
 					EdsConfig: &v3corepb.ConfigSource{
@@ -185,7 +201,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: ClusterUpdate{ServiceName: serviceName, EnableLRS: false},
+			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, EnableLRS: false},
 		},
 		{
 			name: "happiest-case",
@@ -207,7 +223,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: ClusterUpdate{ServiceName: serviceName, EnableLRS: true},
+			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, EnableLRS: true},
 		},
 		{
 			name: "happiest-case-with-circuitbreakers",
@@ -241,21 +257,24 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: ClusterUpdate{ServiceName: serviceName, EnableLRS: true, MaxRequests: func() *uint32 { i := uint32(512); return &i }()},
+			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, EnableLRS: true, MaxRequests: func() *uint32 { i := uint32(512); return &i }()},
 		},
 	}
 
 	origCircuitBreakingSupport := env.CircuitBreakingSupport
 	env.CircuitBreakingSupport = true
 	defer func() { env.CircuitBreakingSupport = origCircuitBreakingSupport }()
+	oldAggregateAndDNSSupportEnv := env.AggregateAndDNSSupportEnv
+	env.AggregateAndDNSSupportEnv = true
+	defer func() { env.CircuitBreakingSupport = oldAggregateAndDNSSupportEnv }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
 			if err != nil {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) failed: %v", test.cluster, err)
 			}
-			if !cmp.Equal(update, test.wantUpdate, cmpopts.EquateEmpty()) {
-				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) = %v, want: %v", test.cluster, update, test.wantUpdate)
+			if diff := cmp.Diff(update, test.wantUpdate, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) got diff: %v (-got, +want)", test.cluster, diff)
 			}
 		})
 	}
@@ -268,6 +287,7 @@ func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 	defer func() { env.ClientSideSecuritySupport = origClientSideSecurityEnvVar }()
 
 	cluster := &v3clusterpb.Cluster{
+		Name:                 clusterName,
 		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
 			EdsConfig: &v3corepb.ConfigSource{
@@ -295,8 +315,9 @@ func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 		},
 	}
 	wantUpdate := ClusterUpdate{
-		ServiceName: serviceName,
-		EnableLRS:   false,
+		ClusterName:    clusterName,
+		EDSServiceName: serviceName,
+		EnableLRS:      false,
 	}
 	gotUpdate, err := validateClusterAndConstructClusterUpdate(cluster)
 	if err != nil {
@@ -318,6 +339,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		identityCertName       = "identityCert"
 		rootPluginInstance     = "rootPluginInstance"
 		rootCertName           = "rootCert"
+		clusterName            = "cluster"
 		serviceName            = "service"
 		sanExact               = "san-exact"
 		sanPrefix              = "san-prefix"
@@ -608,6 +630,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		{
 			name: "happy-case-with-no-identity-certs",
 			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
 					EdsConfig: &v3corepb.ConfigSource{
@@ -635,8 +658,9 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ServiceName: serviceName,
-				EnableLRS:   false,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				EnableLRS:      false,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName: rootPluginInstance,
 					RootCertName:     rootCertName,
@@ -646,6 +670,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		{
 			name: "happy-case-with-validation-context-provider-instance",
 			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
 					EdsConfig: &v3corepb.ConfigSource{
@@ -677,8 +702,9 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ServiceName: serviceName,
-				EnableLRS:   false,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				EnableLRS:      false,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
@@ -690,6 +716,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		{
 			name: "happy-case-with-combined-validation-context",
 			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
 					EdsConfig: &v3corepb.ConfigSource{
@@ -735,19 +762,20 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ServiceName: serviceName,
-				EnableLRS:   false,
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				EnableLRS:      false,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
 					IdentityInstanceName: identityPluginInstance,
 					IdentityCertName:     identityCertName,
-					SubjectAltNameMatchers: []xdsinternal.StringMatcher{
-						xdsinternal.StringMatcherForTesting(newStringP(sanExact), nil, nil, nil, nil, true),
-						xdsinternal.StringMatcherForTesting(nil, newStringP(sanPrefix), nil, nil, nil, false),
-						xdsinternal.StringMatcherForTesting(nil, nil, newStringP(sanSuffix), nil, nil, false),
-						xdsinternal.StringMatcherForTesting(nil, nil, nil, nil, sanRE, false),
-						xdsinternal.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
+					SubjectAltNameMatchers: []matcher.StringMatcher{
+						matcher.StringMatcherForTesting(newStringP(sanExact), nil, nil, nil, nil, true),
+						matcher.StringMatcherForTesting(nil, newStringP(sanPrefix), nil, nil, nil, false),
+						matcher.StringMatcherForTesting(nil, nil, newStringP(sanSuffix), nil, nil, false),
+						matcher.StringMatcherForTesting(nil, nil, nil, nil, sanRE, false),
+						matcher.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
 					},
 				},
 			},
@@ -877,7 +905,8 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			resources: []*anypb.Any{v2ClusterAny},
 			wantUpdate: map[string]ClusterUpdate{
 				v2ClusterName: {
-					ServiceName: v2Service, EnableLRS: true,
+					ClusterName:    v2ClusterName,
+					EDSServiceName: v2Service, EnableLRS: true,
 					Raw: v2ClusterAny,
 				},
 			},
@@ -891,7 +920,8 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			resources: []*anypb.Any{v3ClusterAny},
 			wantUpdate: map[string]ClusterUpdate{
 				v3ClusterName: {
-					ServiceName: v3Service, EnableLRS: true,
+					ClusterName:    v3ClusterName,
+					EDSServiceName: v3Service, EnableLRS: true,
 					Raw: v3ClusterAny,
 				},
 			},
@@ -905,11 +935,13 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			resources: []*anypb.Any{v2ClusterAny, v3ClusterAny},
 			wantUpdate: map[string]ClusterUpdate{
 				v2ClusterName: {
-					ServiceName: v2Service, EnableLRS: true,
+					ClusterName:    v2ClusterName,
+					EDSServiceName: v2Service, EnableLRS: true,
 					Raw: v2ClusterAny,
 				},
 				v3ClusterName: {
-					ServiceName: v3Service, EnableLRS: true,
+					ClusterName:    v3ClusterName,
+					EDSServiceName: v3Service, EnableLRS: true,
 					Raw: v3ClusterAny,
 				},
 			},
@@ -932,11 +964,13 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 			wantUpdate: map[string]ClusterUpdate{
 				v2ClusterName: {
-					ServiceName: v2Service, EnableLRS: true,
+					ClusterName:    v2ClusterName,
+					EDSServiceName: v2Service, EnableLRS: true,
 					Raw: v2ClusterAny,
 				},
 				v3ClusterName: {
-					ServiceName: v3Service, EnableLRS: true,
+					ClusterName:    v3ClusterName,
+					EDSServiceName: v3Service, EnableLRS: true,
 					Raw: v3ClusterAny,
 				},
 				"bad": {},

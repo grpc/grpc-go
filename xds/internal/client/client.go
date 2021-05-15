@@ -33,7 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	"google.golang.org/grpc/internal/xds"
+	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 
@@ -351,7 +351,7 @@ type SecurityConfig struct {
 	// - If the peer certificate contains a wildcard DNS SAN, and an `exact`
 	//   matcher is configured, a wildcard DNS match is performed instead of a
 	//   regular string comparison.
-	SubjectAltNameMatchers []xds.StringMatcher
+	SubjectAltNameMatchers []matcher.StringMatcher
 	// RequireClientCert indicates if the server handshake process expects the
 	// client to present a certificate. Set to true when performing mTLS. Used
 	// only on the server-side.
@@ -378,22 +378,23 @@ const (
 // interest to the registered CDS watcher.
 type ClusterUpdate struct {
 	ClusterType ClusterType
-	// ServiceName is the service name corresponding to the clusterName which
-	// is being watched for through CDS.
-	ServiceName string
+	// ClusterName is the clusterName being watched for through CDS.
+	ClusterName string
+	// EDSServiceName is an optional name for EDS. If it's not set, the balancer
+	// should watch ClusterName for the EDS resources.
+	EDSServiceName string
 	// EnableLRS indicates whether or not load should be reported through LRS.
 	EnableLRS bool
 	// SecurityCfg contains security configuration sent by the control plane.
 	SecurityCfg *SecurityConfig
 	// MaxRequests for circuit breaking, if any (otherwise nil).
 	MaxRequests *uint32
-
-	// Raw is the resource from the xds response.
-	Raw *anypb.Any
-
 	// PrioritizedClusterNames is used only for cluster type aggregate. It represents
 	// a prioritized list of cluster names.
 	PrioritizedClusterNames []string
+
+	// Raw is the resource from the xds response.
+	Raw *anypb.Any
 }
 
 // OverloadDropConfig contains the config to drop overloads.

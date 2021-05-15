@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/pretty"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 	"google.golang.org/grpc/xds/internal/version"
 
@@ -125,7 +126,7 @@ func (v3c *client) SendRequest(s grpc.ClientStream, resourceNames []string, rTyp
 	if err := stream.Send(req); err != nil {
 		return fmt.Errorf("xds: stream.Send(%+v) failed: %v", req, err)
 	}
-	v3c.logger.Debugf("ADS request sent: %v", req)
+	v3c.logger.Debugf("ADS request sent: %v", pretty.ToJSON(req))
 	return nil
 }
 
@@ -143,7 +144,7 @@ func (v3c *client) RecvResponse(s grpc.ClientStream) (proto.Message, error) {
 		return nil, fmt.Errorf("xds: stream.Recv() failed: %v", err)
 	}
 	v3c.logger.Infof("ADS response received, type: %v", resp.GetTypeUrl())
-	v3c.logger.Debugf("ADS response received: %+v", resp)
+	v3c.logger.Debugf("ADS response received: %+v", pretty.ToJSON(resp))
 	return resp, nil
 }
 

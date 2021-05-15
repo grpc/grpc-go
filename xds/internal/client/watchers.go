@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"google.golang.org/grpc/internal/pretty"
 )
 
 type watchInfoState int
@@ -161,22 +163,22 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 	switch wi.rType {
 	case ListenerResource:
 		if v, ok := c.ldsCache[resourceName]; ok {
-			c.logger.Debugf("LDS resource with name %v found in cache: %+v", wi.target, v)
+			c.logger.Debugf("LDS resource with name %v found in cache: %+v", wi.target, pretty.ToJSON(v))
 			wi.newUpdate(v)
 		}
 	case RouteConfigResource:
 		if v, ok := c.rdsCache[resourceName]; ok {
-			c.logger.Debugf("RDS resource with name %v found in cache: %+v", wi.target, v)
+			c.logger.Debugf("RDS resource with name %v found in cache: %+v", wi.target, pretty.ToJSON(v))
 			wi.newUpdate(v)
 		}
 	case ClusterResource:
 		if v, ok := c.cdsCache[resourceName]; ok {
-			c.logger.Debugf("CDS resource with name %v found in cache: %+v", wi.target, v)
+			c.logger.Debugf("CDS resource with name %v found in cache: %+v", wi.target, pretty.ToJSON(v))
 			wi.newUpdate(v)
 		}
 	case EndpointsResource:
 		if v, ok := c.edsCache[resourceName]; ok {
-			c.logger.Debugf("EDS resource with name %v found in cache: %+v", wi.target, v)
+			c.logger.Debugf("EDS resource with name %v found in cache: %+v", wi.target, pretty.ToJSON(v))
 			wi.newUpdate(v)
 		}
 	}
