@@ -360,20 +360,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			if timeout, err = decodeTimeout(hf.Value); err != nil {
 				headerError = true
 			}
-		case "grpc-tags-bin":
-			v, err := decodeBinHeader(hf.Value)
-			if err != nil {
-				headerError = true
-				return
-			}
-			mdata[hf.Name] = append(mdata[hf.Name], string(v))
-		case "grpc-trace-bin":
-			v, err := decodeBinHeader(hf.Value)
-			if err != nil {
-				headerError = true
-				return
-			}
-			mdata[hf.Name] = append(mdata[hf.Name], string(v))
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
 				break
@@ -418,12 +404,12 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	// Attach the received metadata to the context.
 	if len(mdata) > 0 {
 		s.ctx = metadata.NewIncomingContext(s.ctx, mdata)
-	}
-	if statsTags, ok := mdata["grpc-tags-bin"]; ok && len(statsTags) > 0 {
-		s.ctx = stats.SetIncomingTags(s.ctx, []byte(statsTags[0]))
-	}
-	if statsTrace, ok := mdata["grpc-trace-bin"]; ok && len(statsTrace) > 0 {
-		s.ctx = stats.SetIncomingTrace(s.ctx, []byte(statsTrace[0]))
+		if statsTags := mdata["grpc-tags-bin"]; len(statsTags) > 0 {
+			s.ctx = stats.SetIncomingTags(s.ctx, []byte(statsTags[len(statsTags)-1]))
+		}
+		if statsTrace := mdata["grpc-trace-bin"]; len(statsTrace) > 0 {
+			s.ctx = stats.SetIncomingTrace(s.ctx, []byte(statsTrace[0]))
+		}
 	}
 	t.mu.Lock()
 	if t.state != reachable {
