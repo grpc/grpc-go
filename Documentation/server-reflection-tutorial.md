@@ -58,7 +58,7 @@ $ go run examples/features/reflection/server/main.go
 Open a new terminal and make sure you are in the directory where grpc_cli lives:
 
 ```sh
-$ cd <grpc-cpp-dirctory>/bins/opt
+$ cd <grpc-cpp-directory>/bins/opt
 ```
 
 ### List services
