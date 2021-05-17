@@ -17,6 +17,8 @@ v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 // (*********) gets passed around to a logical tree of matchers with and rules or rules etc.
 // This is the logical tree.
 
+// Do we need errors at every node? Should we have checks on each node (i.e. destinationPort should be within a certain range)
+
 // A policy is defined as logically matching both a permission and a principal, which are both or matchers
 
 // The matcher interface will be used by the RBAC Engine to help determine whether incoming RPC requests should
@@ -49,15 +51,23 @@ type policyMatcher struct {
 	principals *orMatcher
 }
 
-func newPolicyMatcher(policy *v3rbacpb.Policy) *policyMatcher {
+func newPolicyMatcher(policy *v3rbacpb.Policy) (*policyMatcher, error) {
+	permissionsList, err := createMatcherListFromPermissionList(policy.Permissions)
+	if err != nil {
+		return nil, err
+	}
+	principalsList, err := createMatcherListFromPrincipalList(policy.Principals)
+	if err != nil {
+		return nil, err
+	}
 	return &policyMatcher{
 		permissions: &orMatcher{
-			matchers: createMatcherListFromPermissionList(policy.Permissions),
+			matchers: permissionsList,
 		},
 		principals: &orMatcher{
-			matchers: createMatcherListFromPrincipalList(policy.Principals),
+			matchers: principalsList,
 		},
-	}
+	}, nil
 }
 
 
@@ -76,31 +86,55 @@ func (pm *policyMatcher) matches(args *EvaluateArgs) bool {
 // which is logically !permission) and returns a list of matchers which correspond to that permission. This will be called
 // in many instances throughout the initial construction of the RBAC engine from the AND and OR matchers and also from
 // the NOT matcher.
-func createMatcherListFromPermissionList(permissions []*v3rbacpb.Permission) []matcher {
+func createMatcherListFromPermissionList(permissions []*v3rbacpb.Permission) ([]matcher, error) {
 	var matcherList []matcher
 	for _, permission := range permissions {
 		switch permission.GetRule().(type) {
 		case *v3rbacpb.Permission_AndRules:
-			matcherList = append(matcherList, &andMatcher{matchers: createMatcherListFromPermissionList(permission.GetAndRules().Rules)})
+			andPermissionList, err := createMatcherListFromPermissionList(permission.GetAndRules().Rules)
+			if err != nil {
+				return nil, err
+			}
+			matcherList = append(matcherList, &andMatcher{matchers: andPermissionList})
 		case *v3rbacpb.Permission_OrRules:
+			orPermissionList, err := createMatcherListFromPermissionList(permission.GetOrRules().Rules)
+			if err != nil {
+				return nil, err
+			}
 			matcherList = append(matcherList, &orMatcher{
-				matchers: createMatcherListFromPermissionList(permission.GetOrRules().Rules),
+				matchers: orPermissionList,
 			})
 		case *v3rbacpb.Permission_Any:
 			matcherList = append(matcherList, &alwaysMatcher{})
 		case *v3rbacpb.Permission_Header:
-			matcherList = append(matcherList, newHeaderMatcher(permission.GetHeader()))
+			headerMatcher, err := newHeaderMatcher(permission.GetHeader())
+			if err != nil {
+				return nil, err
+			}
+			matcherList = append(matcherList, headerMatcher)
 		case *v3rbacpb.Permission_UrlPath:
-			matcherList = append(matcherList, newUrlPathMatcher(permission.GetUrlPath()))
+			urlPathMatcher, err := newUrlPathMatcher(permission.GetUrlPath())
+			if err != nil {
+				return nil, err
+			}
+			matcherList = append(matcherList, urlPathMatcher)
 		case *v3rbacpb.Permission_DestinationIp:
-			matcherList = append(matcherList, newDestinationIpMatcher(permission.GetDestinationIp()))
+			destinationMatcher, err := newDestinationIpMatcher(permission.GetDestinationIp())
+			if err != nil {
+				return nil, err
+			}
+			matcherList = append(matcherList, destinationMatcher)
 		case *v3rbacpb.Permission_DestinationPort:
 			matcherList = append(matcherList, newPortMatcher(permission.GetDestinationPort()))
 		case *v3rbacpb.Permission_Metadata:
 			// Not supported in gRPC RBAC currently - a permission typed as Metadata in the initial config will be a no-op.
 		case *v3rbacpb.Permission_NotRule:
+			matcherToNot, err := createMatcherListFromPermissionList([]*v3rbacpb.Permission{permission})
+			if err != nil {
+				return nil, err
+			}
 			matcherList = append(matcherList, &notMatcher{
-			matcherToNot: createMatcherListFromPermissionList([]*v3rbacpb.Permission{permission})[0],
+			matcherToNot: matcherToNot[0],
 			})
 			//matcherList = append(matcherList, newNotMatcherPermission(permission))
 		case *v3rbacpb.Permission_RequestedServerName:
@@ -108,46 +142,77 @@ func createMatcherListFromPermissionList(permissions []*v3rbacpb.Permission) []m
 			// be a no-op.
 		}
 	}
-	return matcherList
+	return matcherList, nil
 }
 
-func createMatcherListFromPrincipalList(principals []*v3rbacpb.Principal) []matcher {
+func createMatcherListFromPrincipalList(principals []*v3rbacpb.Principal) ([]matcher, error) {
 	var matcherList []matcher
 	for _, principal := range principals {
 		switch principal.GetIdentifier().(type) {
 		case *v3rbacpb.Principal_AndIds:
-			matcherList = append(matcherList, &andMatcher{matchers: createMatcherListFromPrincipalList(principal.GetAndIds().Ids)}) // Make this generic have it as matchers
+			// instead of putting that thing there, put it into an object here, and use that + error handle
+			andMatcherList, err := createMatcherListFromPrincipalList(principal.GetAndIds().Ids)
+			if err != nil {
+				return nil, err
+			}
+			matcherList = append(matcherList, &andMatcher{matchers: andMatcherList}) // Make this generic have it as matchers
 		case *v3rbacpb.Principal_OrIds:
-			matcherList = append(matcherList, &orMatcher{matchers: createMatcherListFromPrincipalList(principal.GetOrIds().Ids)})
+			orMatcherList, err := createMatcherListFromPrincipalList(principal.GetOrIds().Ids)
+			if err != nil {
+				return nil, err
+			}
+			matcherList = append(matcherList, &orMatcher{matchers: orMatcherList})
 		case *v3rbacpb.Principal_Any:
 			matcherList = append(matcherList, &alwaysMatcher{})
 		case *v3rbacpb.Principal_Authenticated_:
 			// What matcher do I put here lol? - looks like this is only new one
-			newAuthenticatedMatcher(principal.GetAuthenticated())
+			authenticatedMatcher, err := newAuthenticatedMatcher(principal.GetAuthenticated())
+			if err != nil {
+				return nil, err
+			}
+			matcherList = append(matcherList, authenticatedMatcher)
 			/*principal.GetAuthenticated().
 			matcherList = append(matcherList, &authenticatedMatcher{
 				stringMatcher: matcher2.NewStri
 			})*/
 		case *v3rbacpb.Principal_SourceIp: // This is logically distinct from destination ip and thus will need a seperate matcher type, as matches will call the peer info rather than passed in from listener.
+			// Perhaps say "No-op, deprecated, if present in config return error"
 			matcherList = append(matcherList, newSourceIpMatcher(principal.GetSourceIp())) // TODO: What to do about this deprecated field here?
 		case *v3rbacpb.Principal_DirectRemoteIp: // This is the same thing as source ip
-			matcherList = append(matcherList, newSourceIpMatcher(principal.GetDirectRemoteIp()))
+			sourceIpMatcher, err := newSourceIpMatcher(principal.GetDirectRemoteIp())
+			if err != nil {
+				return nil, err
+			}
+			matcherList = append(matcherList, sourceIpMatcher)
 		case *v3rbacpb.Principal_RemoteIp:
 			// Not supported in gRPC RBAC currently - a principal typed as Remote Ip in the initial config will be a no-op.
 		case *v3rbacpb.Principal_Header:
-			matcherList = append(matcherList, newHeaderMatcher(principal.GetHeader()))
+			// Do we need an error here?
+			headerMatcher, err := newHeaderMatcher(principal.GetHeader())
+			if err != nil {
+				return nil, err
+			}
+			matcherList = append(matcherList, headerMatcher)
 		case *v3rbacpb.Principal_UrlPath:
-			matcherList = append(matcherList, newUrlPathMatcher(principal.GetUrlPath()))
+			urlPathMatcher, err := newUrlPathMatcher(principal.GetUrlPath())
+			if err != nil {
+				return nil, err
+			}
+			matcherList = append(matcherList, urlPathMatcher)
 		case *v3rbacpb.Principal_Metadata:
 			// Not supported in gRPC RBAC currently - a principal typed as Metadata in the initial config will be a no-op.
 		case *v3rbacpb.Principal_NotId:
 			//matcherList = append(matcherList, newNotMatcherPrincipal(principal))
+			matcherToNot, err := createMatcherListFromPrincipalList([]*v3rbacpb.Principal{principal})
+			if err != nil {
+				return nil, err
+			}
 			matcherList = append(matcherList, &notMatcher{
-				matcherToNot: createMatcherListFromPrincipalList([]*v3rbacpb.Principal{principal})[0],
+				matcherToNot: matcherToNot[0],
 			})
 		}
 	}
-	return matcherList
+	return matcherList, nil
 }
 
 // orMatcher is a matcher where it successfully matches if one of it's children successfully match.
@@ -207,17 +272,12 @@ type notMatcher struct {
 	matcherToNot matcher
 }
  // Lol I forgot to get rid of these
-func newNotMatcherPermission(permission *v3rbacpb.Permission) *notMatcher {
+/*func newNotMatcherPermission(permission *v3rbacpb.Permission) *notMatcher {
 	// The Cardinality of the matcher list to the permission list will be 1 to 1.
 	matcherList := createMatcherListFromPermissionList([]*v3rbacpb.Permission{permission})
 	return &notMatcher{
 		matcherToNot: matcherList[0],
 	}
-}
-
-
-func (nm *notMatcher) matches(args *EvaluateArgs) bool {
-	return !nm.matcherToNot.matches(args)
 }
 
 func newNotMatcherPrincipal(principal *v3rbacpb.Principal) *notMatcher {
@@ -226,9 +286,11 @@ func newNotMatcherPrincipal(principal *v3rbacpb.Principal) *notMatcher {
 	return &notMatcher{
 		matcherToNot: matcherList[0],
 	}
+}*/
+
+func (nm *notMatcher) matches(args *EvaluateArgs) bool {
+	return !nm.matcherToNot.matches(args)
 }
-
-
 
 
 
@@ -251,7 +313,7 @@ type headerMatcher struct {
 	 headerMatcherInterface matcher2.HeaderMatcherInterface // NO POINTERS FOR INTERFACES
 }
 
-func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) *headerMatcher {
+func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (*headerMatcher, error) { // Do you need errors on every node?
 	// TODO: What to do about InvertMatch?
 
 	// Convert that HeaderMatcher type from function argument to the
@@ -301,7 +363,7 @@ type urlPathMatcher struct {
 	stringMatcher matcher2.StringMatcher
 }
 
-func newUrlPathMatcher(pathMatcher *v3matcherpb.PathMatcher) *urlPathMatcher {
+func newUrlPathMatcher(pathMatcher *v3matcherpb.PathMatcher) (*urlPathMatcher, error) {
 	// There's a path matcher in matcher_path.go in same directory as xds resolver.
 	// match(path string), exact, prefix, regex match
 	// This gets into string matcher branching logic, which the 6 types are defined as: exact, prefix, suffix, safe regex
@@ -309,10 +371,13 @@ func newUrlPathMatcher(pathMatcher *v3matcherpb.PathMatcher) *urlPathMatcher {
 	stringMatcher, err := matcher2.StringMatcherFromProto(pathMatcher.GetPath())
 
 	// Handle errors here.
+	if err != nil {
+		return nil, err
+	}
 
 	return &urlPathMatcher{
 		stringMatcher: stringMatcher,
-	}
+	}, nil
 }
 
 func (upm *urlPathMatcher) matches(args *EvaluateArgs) bool {
@@ -331,15 +396,17 @@ type sourceIpMatcher struct {
 
 }
 
-func newSourceIpMatcher(cidrRange *v3corepb.CidrRange) *sourceIpMatcher {
+func newSourceIpMatcher(cidrRange *v3corepb.CidrRange) (*sourceIpMatcher, error) {
 	// Convert configuration to a cidrRangeString, as Go standard library has methods that parse
 	// cidr string.
 	cidrRangeString := cidrRange.AddressPrefix + fmt.Sprint(cidrRange.PrefixLen.Value) // Does go prefer () or just calling the object within the proto object?
 	_, ipNet, err := net.ParseCIDR(cidrRangeString) // What to do about error handling? BIG QUESTION
-	// Error handling here.
+	if err != nil {
+		return nil, err
+	}
 	return &sourceIpMatcher{
 		ipNet: ipNet,
-	}
+	}, nil
 }
 
 func (sim *sourceIpMatcher) matches(args *EvaluateArgs) bool {
@@ -351,13 +418,16 @@ type destinationIpMatcher struct {
 	ipNet *net.IPNet
 }
 
-func newDestinationIpMatcher(cidrRange *v3corepb.CidrRange) *destinationIpMatcher {
+func newDestinationIpMatcher(cidrRange *v3corepb.CidrRange) (*destinationIpMatcher, error) {
 	cidrRangeString := cidrRange.AddressPrefix + fmt.Sprint(cidrRange)
 	_, ipNet, err := net.ParseCIDR(cidrRangeString) // Again, big question of error handling
 	// Error handling here.
+	if err != nil {
+		return nil, err
+	}
 	return &destinationIpMatcher{
 		ipNet :ipNet,
-	}
+	}, nil
 }
 
 func (dim *destinationIpMatcher) matches(args *EvaluateArgs) bool {
@@ -388,17 +458,20 @@ type authenticatedMatcher struct {
 	stringMatcher matcher2.StringMatcher // You could also just create this inline
 }
 
-func newAuthenticatedMatcher(authenticatedMatcherConfig *v3rbacpb.Principal_Authenticated) *authenticatedMatcher {
+func newAuthenticatedMatcher(authenticatedMatcherConfig *v3rbacpb.Principal_Authenticated) (*authenticatedMatcher, error) {
 	stringMatcher, err := matcher2.StringMatcherFromProto(authenticatedMatcherConfig.PrincipalName)
 
-	// Error handling here.
+	// Error handling here. What message to return?
+	if err != nil {
+		return nil, err
+	}
 
 	return &authenticatedMatcher{
 		stringMatcher: stringMatcher,
-	}
+	}, nil
 }
 
-func (am *authenticatedMatcher) matches(args EvaluateArgs) {
+func (am *authenticatedMatcher) matches(args *EvaluateArgs) bool {
 	// TODO: Figure out what to compare to stringMatcher
 	// The name of the principal. If set, the URI SAN or DNS SAN in that order is used from
 	// the certificate, otherwise the subject field is used. If unset, it applies to any user that is authenticated.

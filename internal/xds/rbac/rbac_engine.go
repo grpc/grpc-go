@@ -11,14 +11,14 @@ import (
 // authorizationDecision is what will be returned from the RBAC Engine
 // when it is asked to see if an rpc should be allowed or denied.
 type AuthorizationDecision struct {
-	Decision v3rbacpb.RBAC_Action
+	//Decision v3rbacpb.RBAC_Action
 	MatchingPolicyName string
 }
 
 // RBACEngine is used for making authorization decisions on an incoming
 // RPC.
 type RBACEngine struct {
-	action v3rbacpb.RBAC_Action
+	//action v3rbacpb.RBAC_Action
 	policyMatchers map[string]*policyMatcher
 }
 
@@ -26,15 +26,19 @@ type RBACEngine struct {
 // based on a policy. This policy will be used to instantiate a tree
 // of matchers that will be used to make an authorization decision on
 // an incoming RPC.
-func NewRBACEngine(policy *v3rbacpb.RBAC) *RBACEngine {
+func NewRBACEngine(policy *v3rbacpb.RBAC) (*RBACEngine, error) {
 	var policyMatchers map[string]*policyMatcher
 	for policyName, policyConfig := range policy.Policies {
-		policyMatchers[policyName] = newPolicyMatcher(policyConfig)
+		policyMatcher, err := newPolicyMatcher(policyConfig)
+		if err != nil {
+			return nil, err
+		}
+		policyMatchers[policyName] = policyMatcher
 	}
 	return &RBACEngine{
-		action: policy.Action,
+		//action: policy.Action,
 		policyMatchers: policyMatchers,
-	}
+	}, nil
 }
 
 // evaluateArgs represents the data pulled from an incoming RPC to a gRPC server.
@@ -61,12 +65,16 @@ func (r *RBACEngine) Evaluate(args *EvaluateArgs) AuthorizationDecision {
 	for policy, matcher := range r.policyMatchers {
 		if matcher.matches(args) {
 			return AuthorizationDecision{
-				Decision: r.action, // TODO: Is it okay that this is a proto field being returned rather than a type that I defined?
+				//Decision: r.action, // TODO: Is it okay that this is a proto field being returned rather than a type that I defined?
 				MatchingPolicyName: policy,
 			}
 		}
 	}
-	// What do you return if no policies match?
+	// TODO: This logic of returning an empty string assumes that the empty string is not a valid policy name. If the empty
+	// string is a valid policy name, then we should add to the data returned and have a boolean returned or not.
+	return AuthorizationDecision{
+		MatchingPolicyName: "",
+	}
 }
 
 
