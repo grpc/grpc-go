@@ -1976,3 +1976,110 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 		t.Fatalf("received attributes %v in creds, want %v", gotAttr, wantAttr)
 	}
 }
+
+func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		// input
+		metaHeaderFrame *http2.MetaHeadersFrame
+		// output
+		wantStatus *status.Status
+	}{
+		{
+			name: "valid header",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: "grpc-status", Value: "0"},
+				},
+			},
+			// no error
+			wantStatus: status.New(codes.OK, ""),
+		},
+		{
+			name: "invalid grpc status header field",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: "grpc-status", Value: "xxxx"},
+				},
+			},
+			wantStatus: status.New(
+				codes.Internal,
+				"transport: malformed grpc-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
+			),
+		},
+		{
+			name: "invalid http content type",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/json"},
+				},
+			},
+			wantStatus: status.New(
+				codes.Internal,
+				": HTTP status code 0; transport: received the unexpected content-type \"application/json\"",
+			),
+		},
+		{
+			name: "http fallback and invalid http status",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					// No content type provided then fallback into handling http error.
+					{Name: ":status", Value: "xxxx"},
+				},
+			},
+			wantStatus: status.New(
+				codes.Internal,
+				"transport: malformed http-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
+			),
+		},
+		{
+			name: "http2 frame size exceeds",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields:    nil,
+				Truncated: true,
+			},
+			wantStatus: status.New(
+				codes.Internal,
+				"peer header list size exceeded limit",
+			),
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ts := &Stream{
+				done:       make(chan struct{}),
+				headerChan: make(chan struct{}),
+				buf: &recvBuffer{
+					c:  make(chan recvMsg),
+					mu: sync.Mutex{},
+				},
+			}
+			s := &http2Client{
+				mu: sync.Mutex{},
+				activeStreams: map[uint32]*Stream{
+					0: ts,
+				},
+				controlBuf: &controlBuffer{
+					ch:   make(chan struct{}),
+					done: make(chan struct{}),
+					list: &itemList{},
+				},
+			}
+			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
+				FrameHeader: http2.FrameHeader{
+					StreamID: 0,
+					Flags:    http2.FlagHeadersEndStream,
+				},
+			}
+
+			s.operateHeaders(test.metaHeaderFrame)
+
+			got := ts.status
+			want := test.wantStatus
+			if got.Code() != want.Code() || got.Message() != want.Message() {
+				t.Fatalf("operateHeaders(%v); status = %v; want %v", test.metaHeaderFrame, got, want)
+			}
+		})
+	}
+}

@@ -23,9 +23,6 @@ import (
 	"reflect"
 	"testing"
 	"time"
-
-	"golang.org/x/net/http2"
-	"golang.org/x/net/http2/hpack"
 )
 
 func (s) TestTimeoutDecode(t *testing.T) {
@@ -186,68 +183,6 @@ func (s) TestDecodeMetadataHeader(t *testing.T) {
 		if !reflect.DeepEqual(v, test.vout) || !reflect.DeepEqual(err, test.err) {
 			t.Fatalf("decodeMetadataHeader(%q, %q) = %q, %v, want %q, %v", test.kin, test.vin, v, err, test.vout, test.err)
 		}
-	}
-}
-
-func (s) TestDecodeHeaderH2ErrCode(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		// input
-		metaHeaderFrame *http2.MetaHeadersFrame
-		serverSide      bool
-		// output
-		wantCode http2.ErrCode
-	}{
-		{
-			name: "valid header",
-			metaHeaderFrame: &http2.MetaHeadersFrame{Fields: []hpack.HeaderField{
-				{Name: "content-type", Value: "application/grpc"},
-			}},
-			wantCode: http2.ErrCodeNo,
-		},
-		{
-			name: "valid header serverSide",
-			metaHeaderFrame: &http2.MetaHeadersFrame{Fields: []hpack.HeaderField{
-				{Name: "content-type", Value: "application/grpc"},
-			}},
-			serverSide: true,
-			wantCode:   http2.ErrCodeNo,
-		},
-		{
-			name: "invalid grpc status header field",
-			metaHeaderFrame: &http2.MetaHeadersFrame{Fields: []hpack.HeaderField{
-				{Name: "content-type", Value: "application/grpc"},
-				{Name: "grpc-status", Value: "xxxx"},
-			}},
-			wantCode: http2.ErrCodeProtocol,
-		},
-		{
-			name: "invalid http content type",
-			metaHeaderFrame: &http2.MetaHeadersFrame{Fields: []hpack.HeaderField{
-				{Name: "content-type", Value: "application/json"},
-			}},
-			wantCode: http2.ErrCodeProtocol,
-		},
-		{
-			name: "http fallback and invalid http status",
-			metaHeaderFrame: &http2.MetaHeadersFrame{Fields: []hpack.HeaderField{
-				// No content type provided then fallback into handling http error.
-				{Name: ":status", Value: "xxxx"},
-			}},
-			wantCode: http2.ErrCodeProtocol,
-		},
-		{
-			name:            "http2 frame size exceeds",
-			metaHeaderFrame: &http2.MetaHeadersFrame{Fields: nil, Truncated: true},
-			wantCode:        http2.ErrCodeFrameSize,
-		},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			state := &decodeState{serverSide: test.serverSide}
-			if h2code, _ := state.decodeHeader(test.metaHeaderFrame); h2code != test.wantCode {
-				t.Fatalf("decodeState.decodeHeader(%v) = %v, want %v", test.metaHeaderFrame, h2code, test.wantCode)
-			}
-		})
 	}
 }
 

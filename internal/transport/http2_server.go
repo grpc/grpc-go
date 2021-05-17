@@ -304,37 +304,92 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 // operateHeader takes action on the decoded headers.
 func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) (fatal bool) {
 	streamID := frame.Header().StreamID
-	state := &decodeState{
-		serverSide: true,
-	}
-	if h2code, err := state.decodeHeader(frame); err != nil {
-		if _, ok := status.FromError(err); ok {
-			t.controlBuf.put(&cleanupStream{
-				streamID: streamID,
-				rst:      true,
-				rstCode:  h2code,
-				onWrite:  func() {},
-			})
-		}
+
+	// frame.Truncated is set to true when framer detects that the current header
+	// list size hits MaxHeaderListSize limit.
+	if frame.Truncated {
+		t.controlBuf.put(&cleanupStream{
+			streamID: streamID,
+			rst:      true,
+			rstCode:  http2.ErrCodeFrameSize,
+			onWrite:  func() {},
+		})
 		return false
 	}
 
 	buf := newRecvBuffer()
 	s := &Stream{
-		id:             streamID,
-		st:             t,
-		buf:            buf,
-		fc:             &inFlow{limit: uint32(t.initialWindowSize)},
-		recvCompress:   state.data.encoding,
-		method:         state.data.method,
-		contentSubtype: state.data.contentSubtype,
+		id:  streamID,
+		st:  t,
+		buf: buf,
+		fc:  &inFlow{limit: uint32(t.initialWindowSize)},
 	}
+
+	var (
+		// If a gRPC Response-Headers has already been received, then it means
+		// that the peer is speaking gRPC and we are in gRPC mode.
+		isGRPC     = false
+		mdata      = make(map[string][]string)
+		httpMethod string
+		// headerError is set if an error is encountered while parsing the headers
+		headerError bool
+
+		timeoutSet bool
+		timeout    time.Duration
+	)
+
+	for _, hf := range frame.Fields {
+		switch hf.Name {
+		case "content-type":
+			contentSubtype, validContentType := grpcutil.ContentSubtype(hf.Value)
+			if !validContentType {
+				break
+			}
+			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
+			s.contentSubtype = contentSubtype
+			isGRPC = true
+		case "grpc-encoding":
+			s.recvCompress = hf.Value
+		case ":method":
+			httpMethod = hf.Value
+		case ":path":
+			s.method = hf.Value
+		case "grpc-timeout":
+			timeoutSet = true
+			var err error
+			if timeout, err = decodeTimeout(hf.Value); err != nil {
+				headerError = true
+			}
+		default:
+			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
+				break
+			}
+			v, err := decodeMetadataHeader(hf.Name, hf.Value)
+			if err != nil {
+				headerError = true
+				logger.Warningf("Failed to decode metadata header (%q, %q): %v", hf.Name, hf.Value, err)
+				break
+			}
+			mdata[hf.Name] = append(mdata[hf.Name], v)
+		}
+	}
+
+	if !isGRPC || headerError {
+		t.controlBuf.put(&cleanupStream{
+			streamID: streamID,
+			rst:      true,
+			rstCode:  http2.ErrCodeProtocol,
+			onWrite:  func() {},
+		})
+		return false
+	}
+
 	if frame.StreamEnded() {
 		// s is just created by the caller. No lock needed.
 		s.state = streamReadDone
 	}
-	if state.data.timeoutSet {
-		s.ctx, s.cancel = context.WithTimeout(t.ctx, state.data.timeout)
+	if timeoutSet {
+		s.ctx, s.cancel = context.WithTimeout(t.ctx, timeout)
 	} else {
 		s.ctx, s.cancel = context.WithCancel(t.ctx)
 	}
@@ -347,14 +402,14 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	s.ctx = peer.NewContext(s.ctx, pr)
 	// Attach the received metadata to the context.
-	if len(state.data.mdata) > 0 {
-		s.ctx = metadata.NewIncomingContext(s.ctx, state.data.mdata)
-	}
-	if state.data.statsTags != nil {
-		s.ctx = stats.SetIncomingTags(s.ctx, state.data.statsTags)
-	}
-	if state.data.statsTrace != nil {
-		s.ctx = stats.SetIncomingTrace(s.ctx, state.data.statsTrace)
+	if len(mdata) > 0 {
+		s.ctx = metadata.NewIncomingContext(s.ctx, mdata)
+		if statsTags := mdata["grpc-tags-bin"]; len(statsTags) > 0 {
+			s.ctx = stats.SetIncomingTags(s.ctx, []byte(statsTags[len(statsTags)-1]))
+		}
+		if statsTrace := mdata["grpc-trace-bin"]; len(statsTrace) > 0 {
+			s.ctx = stats.SetIncomingTrace(s.ctx, []byte(statsTrace[len(statsTrace)-1]))
+		}
 	}
 	t.mu.Lock()
 	if t.state != reachable {
@@ -383,10 +438,10 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return true
 	}
 	t.maxStreamID = streamID
-	if state.data.httpMethod != http.MethodPost {
+	if httpMethod != http.MethodPost {
 		t.mu.Unlock()
 		if logger.V(logLevel) {
-			logger.Warningf("transport: http2Server.operateHeaders parsed a :method field: %v which should be POST", state.data.httpMethod)
+			logger.Infof("transport: http2Server.operateHeaders parsed a :method field: %v which should be POST", httpMethod)
 		}
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
@@ -399,7 +454,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	if t.inTapHandle != nil {
 		var err error
-		if s.ctx, err = t.inTapHandle(s.ctx, &tap.Info{FullMethodName: state.data.method}); err != nil {
+		if s.ctx, err = t.inTapHandle(s.ctx, &tap.Info{FullMethodName: s.method}); err != nil {
 			t.mu.Unlock()
 			if logger.V(logLevel) {
 				logger.Infof("transport: http2Server.operateHeaders got an error from InTapHandle: %v", err)
@@ -437,7 +492,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			LocalAddr:   t.localAddr,
 			Compression: s.recvCompress,
 			WireLength:  int(frame.Header().Length),
-			Header:      metadata.MD(state.data.mdata).Copy(),
+			Header:      metadata.MD(mdata).Copy(),
 		}
 		t.stats.HandleRPC(s.ctx, inHeader)
 	}
