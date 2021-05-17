@@ -37,9 +37,9 @@ import (
 // Name is the name of the weighted_target balancer.
 const Name = "weighted_target_experimental"
 
-// newRandomWRR is the WRR constructor used to pick sub-pickers from
+// NewRandomWRR is the WRR constructor used to pick sub-pickers from
 // sub-balancers. It's to be modified in tests.
-var newRandomWRR = wrr.NewRandom
+var NewRandomWRR = wrr.NewRandom
 
 func init() {
 	balancer.Register(&weightedTargetBB{})
@@ -50,7 +50,7 @@ type weightedTargetBB struct{}
 func (wt *weightedTargetBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &weightedTargetBalancer{}
 	b.logger = prefixLogger(b)
-	b.stateAggregator = weightedaggregator.New(cc, b.logger, newRandomWRR)
+	b.stateAggregator = weightedaggregator.New(cc, b.logger, NewRandomWRR)
 	b.stateAggregator.Start()
 	b.bg = balancergroup.New(cc, bOpts, b.stateAggregator, nil, b.logger)
 	b.bg.Start()

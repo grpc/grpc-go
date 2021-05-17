@@ -66,7 +66,7 @@ func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 }
 
 func init() {
-	newRandomWRR = testutils.NewTestWRR
+	NewRandomWRR = testutils.NewTestWRR
 }
 
 // TestDropByCategory verifies that the balancer correctly drops the picks, and
