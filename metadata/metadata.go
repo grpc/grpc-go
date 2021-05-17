@@ -156,9 +156,9 @@ func NewOutgoingContext(ctx context.Context, md MD) context.Context {
 // with any existing metadata in the context. Please refer to the documentation
 // of Pairs for a description of kv.
 //
-// Unlike Pairs, the keys are not turned into lowercase immediately. Users of
-// FromOutgoingContextRaw and FromOutgoingContext need to handle them
-// accordingly. Read the corresponding doc for more details.
+// Unlike Pairs, the keys are not turned into lowercase. Users of
+// FromOutgoingContext need to handle them accordingly. Read
+// FromOutgoingContext's doc for more details.
 func AppendToOutgoingContext(ctx context.Context, kv ...string) context.Context {
 	if len(kv)%2 == 1 {
 		panic(fmt.Sprintf("metadata: AppendToOutgoingContext got an odd number of input pairs for metadata: %d", len(kv)))
@@ -175,7 +175,7 @@ func AppendToOutgoingContext(ctx context.Context, kv ...string) context.Context 
 // returned MD should not be modified. Writing to it may cause races.
 // Modification should be made to copies of the returned MD.
 //
-// All keys in the return MD are lowercase.
+// All keys in the returned MD are lowercase.
 func FromIncomingContext(ctx context.Context) (MD, bool) {
 	md, ok := ctx.Value(mdIncomingKey{}).(MD)
 	if !ok {
