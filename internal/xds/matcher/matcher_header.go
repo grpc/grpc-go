@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -201,6 +201,33 @@ func (hsm *HeaderSuffixMatcher) Match(md metadata.MD) bool {
 
 func (hsm *HeaderSuffixMatcher) String() string {
 	return fmt.Sprintf("headerSuffix:%v:%v", hsm.key, hsm.suffix)
+}
+
+// HeaderContainsMatcher matches on whether the header value contains the
+// value passed into this struct. An empty contains string is not allowed,
+// use HeaderPresentMatcher instead.
+type HeaderContainsMatcher struct {
+	key      string
+	contains string
+}
+
+// NewHeaderContainsMatcher returns a new HeaderContainsMatcher.
+func NewHeaderContainsMatcher(key string, contains string) *HeaderContainsMatcher {
+	return &HeaderContainsMatcher{key: key, contains: contains}
+}
+
+// Match returns whether the passed in HTTP Headers match according to the
+// HeaderContainsMatcher.
+func (hcm *HeaderContainsMatcher) Match(md metadata.MD) bool {
+	v, ok := mdValuesFromOutgoingCtx(md, hcm.key)
+	if !ok {
+		return false
+	}
+	return strings.Contains(v, hcm.contains)
+}
+
+func (hcm *HeaderContainsMatcher) String() string {
+	return fmt.Sprintf("headerContains:%v%v", hsm.key, hsm.contains)
 }
 
 // InvertMatcher inverts the match result of the underlying header matcher.
