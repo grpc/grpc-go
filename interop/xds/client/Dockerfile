@@ -1,4 +1,4 @@
-# Copyright 2020 gRPC authors.
+# Copyright 2021 gRPC authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,18 +19,16 @@
 FROM golang:1.16-alpine as build
 
 # Make a grpc-go directory and copy the repo into it.
-RUN mkdir /go/src/grpc-go
 WORKDIR /go/src/grpc-go
 COPY . .
 
 # Build a static binary without cgo so that we can copy just the binary in the
 # final image, and can get rid of Go compiler and gRPC-Go dependencies.
-WORKDIR /go/src/grpc-go/interop/xds/client
-RUN go build -tags osusergo,netgo client.go
+RUN go build -tags osusergo,netgo interop/xds/client/client.go
 
 # Second stage of the build which copies over only the client binary and skips
 # the Go compiler and gRPC repo from the earlier stage. This significantly
 # reduces the docker image size.
 FROM alpine
-COPY --from=build /go/src/grpc-go/interop/xds/client/client .
+COPY --from=build /go/src/grpc-go/client .
 ENTRYPOINT ["./client"]
