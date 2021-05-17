@@ -28,7 +28,7 @@ import (
 	"os"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/channelz/service"
+	"google.golang.org/grpc/admin"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/health"
@@ -125,8 +125,12 @@ func main() {
 		healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 		healthpb.RegisterHealthServer(server, healthServer)
 		testgrpc.RegisterXdsUpdateHealthServiceServer(server, updateHealthService)
-		service.RegisterChannelzServiceToServer(server)
 		reflection.Register(server)
+		cleanup, err := admin.Register(server)
+		if err != nil {
+			logger.Fatalf("Failed to register admin services: %v", err)
+		}
+		defer cleanup()
 		if err := server.Serve(lis); err != nil {
 			logger.Errorf("Serve() failed: %v", err)
 		}
@@ -168,8 +172,12 @@ func main() {
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 	healthpb.RegisterHealthServer(maintenanceServer, healthServer)
 	testgrpc.RegisterXdsUpdateHealthServiceServer(maintenanceServer, updateHealthService)
-	service.RegisterChannelzServiceToServer(maintenanceServer)
 	reflection.Register(maintenanceServer)
+	cleanup, err := admin.Register(maintenanceServer)
+	if err != nil {
+		logger.Fatalf("Failed to register admin services: %v", err)
+	}
+	defer cleanup()
 	if err := maintenanceServer.Serve(maintenanceLis); err != nil {
 		logger.Errorf("maintenance server Serve() failed: %v", err)
 	}
