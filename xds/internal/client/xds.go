@@ -616,37 +616,11 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		return ret, nil
 	case cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS:
 		ret.ClusterType = ClusterTypeLogicalDNS
-		loadAssignment := cluster.GetLoadAssignment()
-		if loadAssignment == nil {
-			return ClusterUpdate{}, fmt.Errorf("load_assignment not present for LOGICAL_DNS cluster")
+		dnsHN, err := dnsHostNameFromCluster(cluster)
+		if err != nil {
+			return ClusterUpdate{}, err
 		}
-		if len(loadAssignment.GetEndpoints()) != 1 {
-			return ClusterUpdate{}, fmt.Errorf("load_assignment for LOGICAL_DNS cluster must have exactly one locality, got: %+v", loadAssignment)
-		}
-		endpoints := loadAssignment.GetEndpoints()[0].GetLbEndpoints()
-		if len(endpoints) != 1 {
-			return ClusterUpdate{}, fmt.Errorf("locality for LOGICAL_DNS cluster must have exactly one endpoint, got: %+v", endpoints)
-		}
-		endpoint := endpoints[0].GetEndpoint()
-		if endpoint == nil {
-			return ClusterUpdate{}, fmt.Errorf("endpoint for LOGICAL_DNS cluster not set")
-		}
-		socketAddr := endpoint.GetAddress().GetSocketAddress()
-		if socketAddr == nil {
-			return ClusterUpdate{}, fmt.Errorf("socket address for endpoint for LOGICAL_DNS cluster not set")
-		}
-		if socketAddr.GetResolverName() != "" {
-			return ClusterUpdate{}, fmt.Errorf("socket address for endpoint for LOGICAL_DNS cluster not set has unexpected custom resolver name: %v", socketAddr.GetResolverName())
-		}
-		host := socketAddr.GetAddress()
-		if host == "" {
-			return ClusterUpdate{}, fmt.Errorf("host for endpoint for LOGICAL_DNS cluster not set")
-		}
-		port := socketAddr.GetPortValue()
-		if port == 0 {
-			return ClusterUpdate{}, fmt.Errorf("port for endpoint for LOGICAL_DNS cluster not set")
-		}
-		ret.DNSHostName = net.JoinHostPort(host, strconv.Itoa(int(port)))
+		ret.DNSHostName = dnsHN
 		return ret, nil
 	case cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate":
 		clusters := &v3aggregateclusterpb.ClusterConfig{}
@@ -659,6 +633,45 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	default:
 		return ClusterUpdate{}, fmt.Errorf("unexpected cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
 	}
+}
+
+// dnsHostNameFromCluster extracts the DNS host name from the cluster's load
+// assignment.
+//
+// There should be exactly one locality, with one endpoint, whose address
+// contains the address and port.
+func dnsHostNameFromCluster(cluster *v3clusterpb.Cluster) (string, error) {
+	loadAssignment := cluster.GetLoadAssignment()
+	if loadAssignment == nil {
+		return "", fmt.Errorf("load_assignment not present for LOGICAL_DNS cluster")
+	}
+	if len(loadAssignment.GetEndpoints()) != 1 {
+		return "", fmt.Errorf("load_assignment for LOGICAL_DNS cluster must have exactly one locality, got: %+v", loadAssignment)
+	}
+	endpoints := loadAssignment.GetEndpoints()[0].GetLbEndpoints()
+	if len(endpoints) != 1 {
+		return "", fmt.Errorf("locality for LOGICAL_DNS cluster must have exactly one endpoint, got: %+v", endpoints)
+	}
+	endpoint := endpoints[0].GetEndpoint()
+	if endpoint == nil {
+		return "", fmt.Errorf("endpoint for LOGICAL_DNS cluster not set")
+	}
+	socketAddr := endpoint.GetAddress().GetSocketAddress()
+	if socketAddr == nil {
+		return "", fmt.Errorf("socket address for endpoint for LOGICAL_DNS cluster not set")
+	}
+	if socketAddr.GetResolverName() != "" {
+		return "", fmt.Errorf("socket address for endpoint for LOGICAL_DNS cluster not set has unexpected custom resolver name: %v", socketAddr.GetResolverName())
+	}
+	host := socketAddr.GetAddress()
+	if host == "" {
+		return "", fmt.Errorf("host for endpoint for LOGICAL_DNS cluster not set")
+	}
+	port := socketAddr.GetPortValue()
+	if port == 0 {
+		return "", fmt.Errorf("port for endpoint for LOGICAL_DNS cluster not set")
+	}
+	return net.JoinHostPort(host, strconv.Itoa(int(port))), nil
 }
 
 // securityConfigFromCluster extracts the relevant security configuration from

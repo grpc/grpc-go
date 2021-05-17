@@ -131,7 +131,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 				LbPolicy:             v3clusterpb.Cluster_ROUND_ROBIN,
 				LoadAssignment: &v3endpointpb.ClusterLoadAssignment{
 					Endpoints: []*v3endpointpb.LocalityLbEndpoints{
-						// Invalid if there are more than localities.
+						// Invalid if there are more than one locality.
 						{LbEndpoints: nil},
 						{LbEndpoints: nil},
 					},
