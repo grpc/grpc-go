@@ -408,7 +408,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			s.ctx = stats.SetIncomingTags(s.ctx, []byte(statsTags[len(statsTags)-1]))
 		}
 		if statsTrace := mdata["grpc-trace-bin"]; len(statsTrace) > 0 {
-			s.ctx = stats.SetIncomingTrace(s.ctx, []byte(statsTrace[0]))
+			s.ctx = stats.SetIncomingTrace(s.ctx, []byte(statsTrace[len(statsTrace)-1]))
 		}
 	}
 	t.mu.Lock()
