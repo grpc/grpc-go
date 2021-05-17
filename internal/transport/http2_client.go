@@ -59,7 +59,6 @@ type http2Client struct {
 	ctx        context.Context
 	cancel     context.CancelFunc
 	ctxDone    <-chan struct{} // Cache the ctx.Done() chan.
-	closeErr   error           // Reason the transport is closed. Only set if ctx is canceled.
 	userAgent  string
 	md         metadata.MD
 	conn       net.Conn // underlying communication channel
@@ -110,6 +109,7 @@ type http2Client struct {
 
 	mu            sync.Mutex // guard the following variables
 	state         transportState
+	closeErr      error // Reason the transport is closed. Only set if ctx is canceled.
 	activeStreams map[uint32]*Stream
 	// prevGoAway ID records the Last-Stream-ID in the previous GOAway frame.
 	prevGoAwayID uint32

@@ -781,6 +781,12 @@ func (s) TestGracefulClose(t *testing.T) {
 			defer wg.Done()
 			str, err := ct.NewStream(ctx, &CallHdr{})
 			if err != nil {
+				// The NewStream calls race with closing of the transport (after
+				// the last stream is closed).
+				// - if it is after the transport is closed (case <-ct.ctxDone),
+				//   we don't care about the error.
+				// - if it's before the transport is closed (default), we want
+				//   the NewStream call to succeed.
 				select {
 				case <-ct.ctxDone:
 				default:
