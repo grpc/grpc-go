@@ -28,8 +28,11 @@ import (
 )
 
 var (
-	errAllPrioritiesRemoved    = errors.New("no locality is provided, all priorities are removed")
-	defaultPriorityInitTimeout = 10 * time.Second
+	errAllPrioritiesRemoved = errors.New("no locality is provided, all priorities are removed")
+	// DefaultPriorityInitTimeout is the timeout after which if a priority is
+	// not READY, the next will be started. It's exported to be overridden by
+	// tests.
+	DefaultPriorityInitTimeout = 10 * time.Second
 )
 
 // syncPriority handles priority after a config update. It makes sure the
@@ -162,7 +165,7 @@ func (b *priorityBalancer) switchToChild(child *childBalancer, priority int) {
 		// to check the stopped boolean.
 		timerW := &timerWrapper{}
 		b.priorityInitTimer = timerW
-		timerW.timer = time.AfterFunc(defaultPriorityInitTimeout, func() {
+		timerW.timer = time.AfterFunc(DefaultPriorityInitTimeout, func() {
 			b.mu.Lock()
 			defer b.mu.Unlock()
 			if timerW.stopped {
