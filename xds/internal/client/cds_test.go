@@ -144,7 +144,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 
 	oldAggregateAndDNSSupportEnv := env.AggregateAndDNSSupportEnv
 	env.AggregateAndDNSSupportEnv = true
-	defer func() { env.CircuitBreakingSupport = oldAggregateAndDNSSupportEnv }()
+	defer func() { env.AggregateAndDNSSupportEnv = oldAggregateAndDNSSupportEnv }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if update, err := validateClusterAndConstructClusterUpdate(test.cluster); err == nil {
@@ -308,7 +308,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	defer func() { env.CircuitBreakingSupport = origCircuitBreakingSupport }()
 	oldAggregateAndDNSSupportEnv := env.AggregateAndDNSSupportEnv
 	env.AggregateAndDNSSupportEnv = true
-	defer func() { env.CircuitBreakingSupport = oldAggregateAndDNSSupportEnv }()
+	defer func() { env.AggregateAndDNSSupportEnv = oldAggregateAndDNSSupportEnv }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
