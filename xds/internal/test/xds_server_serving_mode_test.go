@@ -183,7 +183,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Update the management server to remove the second listener resource. This
-	// should push the only the second listener into "not-serving" mode.
+	// should push only the second listener into "not-serving" mode.
 	if err := managementServer.Update(e2e.UpdateOptions{
 		NodeID:    xdsClientNodeID,
 		Listeners: []*v3listenerpb.Listener{listener1},
