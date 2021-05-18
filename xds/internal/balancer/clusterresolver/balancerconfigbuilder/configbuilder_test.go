@@ -39,9 +39,6 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
-
-	_ "google.golang.org/grpc/xds/internal/balancer/clustermanager" // Register the xds_cluster_manager balancer
-	_ "google.golang.org/grpc/xds/internal/balancer/weightedtarget" // Register the weighted_target balancer
 )
 
 const (
