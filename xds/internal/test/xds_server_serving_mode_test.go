@@ -182,8 +182,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
 
-	// Update the management server to remove the second listener resource. This should
-	// push the only the second listener into "not-serving" mode.
+	// Update the management server to remove the second listener resource. This
+	// should push only the second listener into "not-serving" mode.
 	if err := managementServer.Update(e2e.UpdateOptions{
 		NodeID:    xdsClientNodeID,
 		Listeners: []*v3listenerpb.Listener{listener1},
@@ -240,8 +240,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// short timeout since we expect this to fail.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	_, err = grpc.DialContext(sCtx, lis1.Addr().String(), grpc.WithBlock(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err == nil {
+	if _, err := grpc.DialContext(sCtx, lis1.Addr().String(), grpc.WithBlock(), grpc.WithTransportCredentials(insecure.NewCredentials())); err == nil {
 		t.Fatal("successfully created clientConn to a server in \"not-serving\" state")
 	}
 
