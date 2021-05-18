@@ -1130,7 +1130,9 @@ func (t *http2Server) Close() {
 	t.mu.Unlock()
 	t.controlBuf.finish()
 	close(t.done)
-	t.conn.Close()
+	if err := t.conn.Close(); err != nil && logger.V(logLevel) {
+		logger.Infof("transport: error closing conn during Close: %v", err)
+	}
 	if channelz.IsOn() {
 		channelz.RemoveEntry(t.channelzID)
 	}
