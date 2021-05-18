@@ -389,6 +389,9 @@ type ClusterUpdate struct {
 	SecurityCfg *SecurityConfig
 	// MaxRequests for circuit breaking, if any (otherwise nil).
 	MaxRequests *uint32
+	// DNSHostName is used only for cluster type DNS. It's the DNS name to
+	// resolve in "host:port" form
+	DNSHostName string
 	// PrioritizedClusterNames is used only for cluster type aggregate. It represents
 	// a prioritized list of cluster names.
 	PrioritizedClusterNames []string
