@@ -399,11 +399,9 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 				logger.Errorf("transport: loopyWriter.run returning. Err: %v", err)
 			}
 		}
-		// If it's a connection error, let reader goroutine handle it
-		// since there might be data in the buffers.
-		if _, ok := err.(net.Error); !ok {
-			t.conn.Close()
-		}
+		// Do not close the transport.  Let reader goroutine handle it since
+		// there might be data in the buffers.
+		t.conn.Close()
 		close(t.writerDone)
 	}()
 	return t, nil

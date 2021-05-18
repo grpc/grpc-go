@@ -102,11 +102,11 @@ type http2Server struct {
 
 	mu sync.Mutex // guard the following
 
-	// drainChan is initialized when drain(...) is called the first time.
+	// drainChan is initialized when Drain() is called the first time.
 	// After which the server writes out the first GoAway(with ID 2^31-1) frame.
 	// Then an independent goroutine will be launched to later send the second GoAway.
 	// During this time we don't want to write another first GoAway(with ID 2^31 -1) frame.
-	// Thus call to drain(...) will be a no-op if drainChan is already initialized since draining is
+	// Thus call to Drain() will be a no-op if drainChan is already initialized since draining is
 	// already underway.
 	drainChan     chan struct{}
 	state         transportState
@@ -1059,12 +1059,12 @@ func (t *http2Server) keepalive() {
 			if val <= 0 {
 				// The connection has been idle for a duration of keepalive.MaxConnectionIdle or more.
 				// Gracefully close the connection.
-				t.drain(http2.ErrCodeNo, []byte{})
+				t.Drain()
 				return
 			}
 			idleTimer.Reset(val)
 		case <-ageTimer.C:
-			t.drain(http2.ErrCodeNo, []byte{})
+			t.Drain()
 			ageTimer.Reset(t.kp.MaxConnectionAgeGrace)
 			select {
 			case <-ageTimer.C:
@@ -1118,11 +1118,11 @@ func (t *http2Server) keepalive() {
 // Close starts shutting down the http2Server transport.
 // TODO(zhaoq): Now the destruction is not blocked on any pending streams. This
 // could cause some resource issue. Revisit this later.
-func (t *http2Server) Close() error {
+func (t *http2Server) Close() {
 	t.mu.Lock()
 	if t.state == closing {
 		t.mu.Unlock()
-		return errors.New("transport: Close() was already called")
+		return
 	}
 	t.state = closing
 	streams := t.activeStreams
@@ -1130,7 +1130,9 @@ func (t *http2Server) Close() error {
 	t.mu.Unlock()
 	t.controlBuf.finish()
 	close(t.done)
-	err := t.conn.Close()
+	if err := t.conn.Close(); err != nil && logger.V(logLevel) {
+		logger.Infof("transport: error closing conn during Close: %v", err)
+	}
 	if channelz.IsOn() {
 		channelz.RemoveEntry(t.channelzID)
 	}
@@ -1142,7 +1144,6 @@ func (t *http2Server) Close() error {
 		connEnd := &stats.ConnEnd{}
 		t.stats.HandleConn(t.ctx, connEnd)
 	}
-	return err
 }
 
 // deleteStream deletes the stream s from transport's active streams.
@@ -1207,17 +1208,13 @@ func (t *http2Server) RemoteAddr() net.Addr {
 }
 
 func (t *http2Server) Drain() {
-	t.drain(http2.ErrCodeNo, []byte{})
-}
-
-func (t *http2Server) drain(code http2.ErrCode, debugData []byte) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.drainChan != nil {
 		return
 	}
 	t.drainChan = make(chan struct{})
-	t.controlBuf.put(&goAway{code: code, debugData: debugData, headsUp: true})
+	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte{}, headsUp: true})
 }
 
 var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
