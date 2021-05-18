@@ -595,6 +595,10 @@ func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, 
 		return ClusterTypeEDS, cluster.GetEdsClusterConfig().GetServiceName(), nil, nil
 	}
 
+	if !env.AggregateAndDNSSupportEnv {
+		return 0, "", nil, fmt.Errorf("unsupported cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
+	}
+
 	if cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS {
 		return ClusterTypeLogicalDNS, cluster.GetName(), nil, nil
 	}
@@ -607,7 +611,7 @@ func clusterTypeFromCluster(cluster *v3clusterpb.Cluster) (ClusterType, string, 
 		}
 		return ClusterTypeAggregate, cluster.GetName(), clusters.Clusters, nil
 	}
-	return 0, "", nil, fmt.Errorf("unexpected cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
+	return 0, "", nil, fmt.Errorf("unsupported cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
 }
 
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
