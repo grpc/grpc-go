@@ -1,30 +1,35 @@
 version: 2
 mergeable:
   - when: pull_request.*
-    # This validator requires either the "no release notes" label OR the
-    # "RELNOTES.md" file to be considered successful.  However, validators
-    # "pass" in mergeable only if all checks pass.  So it is implemented in
-    # reverse.
-    #
-    # I.e.: !(!no_relnotes && !RELNOTES.md) ==> no_relnotes || RELNOTES.md
-    #
-    # If both validators pass, then it is considered a failure, and if either
-    # fails, it is considered a success.
     validate:
       - do: label
-        must_exclude:
+        must_include:
           regex: '^no release notes$'
       - do: changeset
         must_exclude:
           regex: '^RELNOTES.md$'
-    pass:
+    fail:
       - do: checks
-        status: 'failure'  # fail on pass
+        status: 'failure'
         payload:
           title: 'Need RELNOTES.md or "no release notes" label'
           summary: 'Need RELNOTES.md or "no release notes" label'
       - do: assign
         assignees: [ '@author' ]
+
+  - when: pull_request.*
+    validate:
+      - do: label
+        must_exclude:
+          regex: '^no release notes$'
+      - do: changeset
+        must_include:
+          regex: '^RELNOTES.md$'
     fail:
       - do: checks
-        status: 'success' # pass on fail
+        status: 'failure'
+        payload:
+          title: 'Need RELNOTES.md or "no release notes" label'
+          summary: 'Need RELNOTES.md or "no release notes" label'
+      - do: assign
+        assignees: [ '@author' ]
