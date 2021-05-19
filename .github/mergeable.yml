@@ -6,7 +6,7 @@ mergeable:
     # "pass" in mergeable only if all checks pass.  So it is implemented in
     # reverse.
     #
-    # I.e.: !(!no_relnotes && !release_milestone) ==> no_relnotes || release_milestone
+    # I.e.: !(!no_relnotes && !RELNOTES.md) ==> no_relnotes || RELNOTES.md
     #
     # If both validators pass, then it is considered a failure, and if either
     # fails, it is considered a success.
