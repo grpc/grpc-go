@@ -102,7 +102,7 @@ func (s) TestSuccessCaseAnyMatch(t *testing.T) {
 	if matchingPolicyName.MatchingPolicyName != "anyone" {
 		t.Fatalf("Any incoming RPC should have matched policies with anyone policy.")
 	}
-	matchingPolicyName := rbacEngine.Evaluate(&EvaluateArgs{
+	matchingPolicyName = rbacEngine.Evaluate(&EvaluateArgs{
 		DestinationPort: 100,
 	})
 	if matchingPolicyName.MatchingPolicyName != "anyone" {
@@ -159,6 +159,7 @@ func (s) TestSuccessCaseEnvoyExample(t *testing.T) {
 		t.Fatalf("Error constructing RBAC Engine: %v", err)
 	}
 	// Validate that the RBAC Engine successfully created itself properly
+	// ^^ I don't think you actually need this step, as I think that this can be implictly tested from asking the engine for a matching policy name.
 
 	// Success case here (where success means it successfully matched one of the Envoy policies)
 
@@ -166,4 +167,115 @@ func (s) TestSuccessCaseEnvoyExample(t *testing.T) {
 
 	// Not Successful here (meaning didn't match one of the Envoy policies
 	rbacEngine.Evaluate( /*Something here that isn't logically successful and doesn't match to either service admin or product viewer*/ )
+}
+
+// Table driven test here with variables config (struct literal)
+func (s) TestRBACEngine_Success(t *testing.T) {
+	tests := []struct {
+		name                   string
+		rbacConfig             *v3rbacpb.RBAC
+		rbacQueries            []struct {
+			evaluateArgs           *EvaluateArgs
+			wantMatchingPolicyName string
+		}
+	}{
+		// TestSuccessCaseAnyMatch tests that an RBAC Engine instantiated with a config with
+		// a policy with any rules for both permissions and principals that it always matches.
+		{name: "TestSuccessCaseAnyMatch",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"anyone": {
+						Permissions: []*v3rbacpb.Permission{
+							{
+								Rule: &v3rbacpb.Permission_Any{
+									Any: true,
+								},
+							},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{
+								Identifier: &v3rbacpb.Principal_Any{Any: true},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: // Any incoming RPC should match with the policy
+				[]struct {
+					evaluateArgs           *EvaluateArgs
+					wantMatchingPolicyName string
+				}{
+					{evaluateArgs: &EvaluateArgs{
+						FullMethod: "some method",
+					},
+						wantMatchingPolicyName: "anyone"},
+					{evaluateArgs: &EvaluateArgs{
+						DestinationPort: 100,
+					},
+					wantMatchingPolicyName: "anyone"},
+				},
+			},
+		// TestSuccessCaseEnvoyExample is a test based on the example provided in the EnvoyProxy docs.
+		{name: "TestSuccessCaseEnvoyExample",
+			rbacConfig: &v3rbacpb.RBAC{
+				// Taking what's in Envoy, and filling out this proto
+				// Envoy: service-admin, product-viewer
+				// Policies is map[string]*Policy
+				Policies: map[string]*v3rbacpb.Policy{
+					"service-admin": &v3rbacpb.Policy{
+						Permissions: []*v3rbacpb.Permission{
+							{
+								Rule: &v3rbacpb.Permission_Any{Any: true},
+							},
+						},
+						Principals: []*v3rbacpb.Principal{
+							// Two authenticated principals here
+							{
+								Identifier: &v3rbacpb.Principal_Authenticated{PrincipalName: "cluster.local/ns/default/sa/admin"}, // This is a string matcher
+							},
+						},
+					},
+					"product-viewer": &v3rbacpb.Policy{
+						Permissions: []*v3rbacpb.Permission{
+							{
+								Rule: &v3rbacpb.Permission_Any{Any: true},
+							},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{
+								Identifier: &v3rbacpb.Principal_Any{Any: true},
+							},
+						},
+					},
+				},
+			},
+			evaluateArgs: ,
+		wantMatchingPolicyName: "service-admin"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rbacEngine, err := NewRBACEngine(test.rbacConfig)
+			if err != nil {
+				t.Fatalf("Error constructing RBAC Engine: %v", err)
+			}
+			matchingPolicyName := rbacEngine.Evaluate(test.evaluateArgs)
+			// TODO: Should this be authorization decision? Should we even have the authorization decision type?
+			if matchingPolicyName.MatchingPolicyName != test.wantMatchingPolicyName {
+				t.Fatalf("Got matching policy name: %v, want matching policy name: %v", matchingPolicyName.MatchingPolicyName, test.wantMatchingPolicyName)
+			}
+		})
+	}
+}
+
+func (s) TestRBACEngine_Failure(t *testing.T) {
+	tests := []struct {
+		name         string
+		rbacConfig   v3rbacpb.RBAC
+		evaluateArgs EvaluateArgs
+	}{}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+
+		})
+	}
 }
