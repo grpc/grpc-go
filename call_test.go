@@ -160,7 +160,7 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32) {
 		config := &transport.ServerConfig{
 			MaxStreams: maxStreams,
 		}
-		st, err := transport.NewServerTransport("http2", conn, config)
+		st, err := transport.NewServerTransport(conn, config)
 		if err != nil {
 			continue
 		}

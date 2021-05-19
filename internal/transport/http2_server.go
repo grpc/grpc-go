@@ -125,9 +125,14 @@ type http2Server struct {
 	connectionID uint64
 }
 
-// newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
-// returned if something goes wrong.
-func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
+// NewServerTransport creates a http2 transport with conn and configuration
+// options from config.
+//
+// It returns a non-nil transport and a nil error on success. On failure, it
+// returns a non-nil transport and a nil-error. For a special case where the
+// underlying conn gets closed before the client preface could be read, it
+// returns a nil transport and a nil error.
+func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
 	writeBufSize := config.WriteBufferSize
 	readBufSize := config.ReadBufferSize
 	maxHeaderListSize := defaultServerMaxHeaderListSize
