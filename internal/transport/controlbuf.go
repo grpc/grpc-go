@@ -433,11 +433,11 @@ func (c *controlBuffer) finish() {
 	// In case throttle() is currently in flight, it needs to be unblocked.
 	// Otherwise, the transport may not close, since the transport is closed by
 	// the reader encountering the connection error.
-	ch, _ := c.trfChan.Load().(*chan struct{})
+	ch, _ := c.trfChan.Load().(chan struct{})
 	if ch != nil {
-		close(*ch)
+		close(ch)
 	}
-	c.trfChan.Store((*chan struct{})(nil))
+	c.trfChan.Store((chan struct{})(nil))
 	c.mu.Unlock()
 }
 
