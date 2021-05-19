@@ -522,7 +522,8 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 				route.WeightedClusters[c.GetName()] = wc
 				totalWeight += w
 			}
-			// default TotalWeight https://github.com/grpc/grpc-go/issues/4432
+			// envoy xds doc
+			// default TotalWeight https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto.html#envoy-v3-api-field-config-route-v3-weightedcluster-total-weight
 			wantTotalWeight := uint32(100)
 			if tw := wcs.GetTotalWeight(); tw != nil {
 				wantTotalWeight = tw.GetValue()
