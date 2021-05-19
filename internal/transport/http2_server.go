@@ -295,6 +295,7 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 			}
 		}
 		t.conn.Close()
+		t.controlBuf.finish()
 		close(t.writerDone)
 	}()
 	go t.keepalive()

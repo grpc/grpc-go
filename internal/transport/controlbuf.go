@@ -406,7 +406,6 @@ func (c *controlBuffer) get(block bool) (interface{}, error) {
 		select {
 		case <-c.ch:
 		case <-c.done:
-			c.finish()
 			return nil, ErrConnClosing
 		}
 	}
@@ -431,6 +430,14 @@ func (c *controlBuffer) finish() {
 			hdr.onOrphaned(ErrConnClosing)
 		}
 	}
+	// In case throttle() is currently in flight, it needs to be unblocked.
+	// Otherwise, the transport may not close, since the transport is closed by
+	// the reader encountering the connection error.
+	ch, _ := c.trfChan.Load().(chan struct{})
+	if ch != nil {
+		close(ch)
+	}
+	c.trfChan.Store((chan struct{})(nil))
 	c.mu.Unlock()
 }
 
