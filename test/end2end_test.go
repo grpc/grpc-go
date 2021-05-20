@@ -2248,50 +2248,37 @@ func testPreloaderClientSend(t *testing.T, e env) {
 	}
 }
 
-// preparedMsgSendServer is a TestServiceServer whose
-// StreamingOutputCall makes a SendMsg calls using PreparedMsg,
-// sending prepared messaged with payload "0".
-// TestPreloaderSenderSend verifies it is being sent correctly.
-//
-// All other TestServiceServer methods crash if called.
-type preparedMsgSendServer struct {
-	testpb.TestServiceServer
-}
-
-func (s preparedMsgSendServer) StreamingOutputCall(args *testpb.StreamingOutputCallRequest, stream testpb.TestService_StreamingOutputCallServer) error {
-	preparedMsg := &grpc.PreparedMsg{}
-	err := preparedMsg.Encode(stream, &testpb.StreamingOutputCallResponse{
-		Payload: &testpb.Payload{
-			Body: []byte{'0'},
-		},
-	})
-	if err != nil {
-		return err
-	}
-	stream.SendMsg(preparedMsg)
-	return nil
-}
-
 func (s) TestPreloaderSenderSend(t *testing.T) {
-	for _, e := range listTestEnv() {
-		testPreloaderSenderSend(t, e)
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			for i := 0; i < 10; i++ {
+				preparedMsg := &grpc.PreparedMsg{}
+				err := preparedMsg.Encode(stream, &testpb.StreamingOutputCallResponse{
+					Payload: &testpb.Payload{
+						Body: []byte{'0' + uint8(i)},
+					},
+				})
+				if err != nil {
+					return err
+				}
+				stream.SendMsg(preparedMsg)
+			}
+			return nil
+		},
 	}
-}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
 
-func testPreloaderSenderSend(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.startServer(preparedMsgSendServer{})
-	defer te.tearDown()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-
-	req := &testpb.StreamingOutputCallRequest{}
-	stream, err := tc.StreamingOutputCall(context.Background(), req)
+	stream, err := ss.Client.FullDuplexCall(ctx)
 	if err != nil {
-		t.Errorf("%v.StreamingOutputCall(_) = _, %v, want <nil>", tc, err)
-		return
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
 	}
+
 	var ngot int
 	var buf bytes.Buffer
 	for {
@@ -2308,10 +2295,10 @@ func testPreloaderSenderSend(t *testing.T, e env) {
 		}
 		buf.Write(reply.GetPayload().GetBody())
 	}
-	if want := 1; ngot != want {
+	if want := 10; ngot != want {
 		t.Errorf("Got %d replies, want %d", ngot, want)
 	}
-	if got, want := buf.String(), "0"; got != want {
+	if got, want := buf.String(), "0,1,2,3,4,5,6,7,8,9"; got != want {
 		t.Errorf("Got replies %q; want %q", got, want)
 	}
 }
