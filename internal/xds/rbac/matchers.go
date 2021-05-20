@@ -165,7 +165,9 @@ func createMatcherListFromPrincipalList(principals []*v3rbacpb.Principal) ([]mat
 			matcherList = append(matcherList, authenticatedMatcher) // Do this inline?
 		case *v3rbacpb.Principal_SourceIp: // This is logically distinct from destination ip and thus will need a seperate matcher type, as matches will call the peer info rather than passed in from listener.
 			// Perhaps say "No-op, deprecated, if present in config return error"
-			matcherList = append(matcherList, newSourceIpMatcher(principal.GetSourceIp())) // TODO: What to do about this deprecated field here?
+			// matcherList = append(matcherList, newSourceIpMatcher(principal.GetSourceIp())) // TODO: What to do about this deprecated field here?
+			// The source ip principal identifier is deprecated. Thus, a principal typed as a source ip in the identifier
+			// will be a no-op.
 		case *v3rbacpb.Principal_DirectRemoteIp: // This is the same thing as source ip
 			sourceIpMatcher, err := newSourceIpMatcher(principal.GetDirectRemoteIp())
 			if err != nil {
@@ -391,10 +393,5 @@ func newAuthenticatedMatcher(authenticatedMatcherConfig *v3rbacpb.Principal_Auth
 }
 
 func (am *authenticatedMatcher) matches(args *EvaluateArgs) bool {
-	// TODO: Figure out what to compare to stringMatcher
-	// The name of the principal. If set, the URI SAN or DNS SAN in that order is used from
-	// the certificate, otherwise the subject field is used. If unset, it applies to any user that is authenticated.
-	args.PeerInfo.AuthInfo
-	args.PeerInfo.AuthInfo.AuthType()
-
+	return am.stringMatcher.Match(args.PrincipalName)
 }

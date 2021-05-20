@@ -29,14 +29,12 @@ import (
 // authorizationDecision is what will be returned from the RBAC Engine
 // when it is asked to see if an rpc matches a policy.
 type AuthorizationDecision struct {
-	//Decision v3rbacpb.RBAC_Action
 	MatchingPolicyName string
 }
 
 // RBACEngine is used for making authorization decisions on an incoming
 // RPC.
 type RBACEngine struct {
-	//action v3rbacpb.RBAC_Action
 	policyMatchers map[string]*policyMatcher
 }
 
@@ -54,7 +52,6 @@ func NewRBACEngine(policy *v3rbacpb.RBAC) (*RBACEngine, error) {
 		policyMatchers[policyName] = policyMatcher
 	}
 	return &RBACEngine{
-		//action: policy.Action,
 		policyMatchers: policyMatchers,
 	}, nil
 }
@@ -68,6 +65,9 @@ type EvaluateArgs struct {
 	FullMethod      string
 	DestinationPort uint32
 	DestinationAddr net.Addr
+	// PrincipalName is the name of the downstream principal. If set, the URI SAN or DNS SAN in that order is used from
+	// the certificate, otherwise the subject field is used. If unset, it applies to any user that is authenticated.
+	PrincipalName string
 }
 
 // Evaluate will be called after the RBAC Engine is instantiated. This will
@@ -76,7 +76,6 @@ func (r *RBACEngine) Evaluate(args *EvaluateArgs) AuthorizationDecision {
 	for policy, matcher := range r.policyMatchers {
 		if matcher.matches(args) {
 			return AuthorizationDecision{
-				//Decision: r.action,
 				MatchingPolicyName: policy,
 			}
 		}

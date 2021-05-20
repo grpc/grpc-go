@@ -227,7 +227,7 @@ func (hcm *HeaderContainsMatcher) Match(md metadata.MD) bool {
 }
 
 func (hcm *HeaderContainsMatcher) String() string {
-	return fmt.Sprintf("headerContains:%v%v", hsm.key, hsm.contains)
+	return fmt.Sprintf("headerContains:%v%v", hcm.key, hcm.contains)
 }
 
 // InvertMatcher inverts the match result of the underlying header matcher.

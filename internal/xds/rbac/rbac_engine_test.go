@@ -134,10 +134,10 @@ func (s) TestRBACEngine(t *testing.T) {
 						},
 						Principals: []*v3rbacpb.Principal{
 							{
-								Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: "cluster.local/ns/default/sa/admin"}}, // This is a string matcher
+								Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &envoy_type_matcher_v3.StringMatcher{MatchPattern: &envoy_type_matcher_v3.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/admin"}}}},
 							},
 							{
-								Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: "cluster.local/ns/default/sa/superuser"}}, // This is a string matcher
+								Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &envoy_type_matcher_v3.StringMatcher{MatchPattern: &envoy_type_matcher_v3.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/superuser"}}}},
 							},
 						},
 					},
@@ -173,22 +173,33 @@ func (s) TestRBACEngine(t *testing.T) {
 			}{
 				// This incoming RPC Call should match with the service admin policy.
 				{evaluateArgs: &EvaluateArgs{
-					FullMethod: "some method",
+					FullMethod:    "some method",
+					PrincipalName: "cluster.local/ns/default/sa/admin",
 				},
-					wantMatchingPolicyName: "anyone"},
+					wantMatchingPolicyName: "service-admin"},
 				// This incoming RPC Call should match with the product viewer policy.
 				{evaluateArgs: &EvaluateArgs{
-					DestinationPort: 100,
+					DestinationPort: 80,
+					MD: map[string][]string{
+						":method": {"GET"},
+						":path":   {"/products"},
+					},
 				},
-					wantMatchingPolicyName: "anyone"},
-				// These two incoming RPC calls should not match any policy -
+					wantMatchingPolicyName: "product-viewer"},
+				// These incoming RPC calls should not match any policy -
 				// represented by an empty matching policy name being returned.
 				{evaluateArgs: &EvaluateArgs{
 					DestinationPort: 100,
 				},
 					wantMatchingPolicyName: ""},
 				{evaluateArgs: &EvaluateArgs{
-					DestinationPort: 100,
+					FullMethod:      "get-product-list",
+					DestinationPort: 8080,
+				},
+					wantMatchingPolicyName: ""},
+				{evaluateArgs: &EvaluateArgs{
+					PrincipalName:   "localhost",
+					DestinationPort: 8080,
 				},
 					wantMatchingPolicyName: ""},
 			},
@@ -208,10 +219,10 @@ func (s) TestRBACEngine(t *testing.T) {
 				// The matchingPolicyName returned will be empty in the case of no matching policy.
 				// Thus, matchingPolicyName can also be used to test the "error" condition of no
 				// matching policies.
-				matchingPolicyName := rbacEngine.Evaluate(queryToRBACEngine.evaluateArgs)
-				// TODO: Should this be "authorization decision"? Should we even have the authorization decision type?
-				if matchingPolicyName.MatchingPolicyName != queryToRBACEngine.wantMatchingPolicyName {
-					t.Fatalf("Got matching policy name: %v, want matching policy name: %v", matchingPolicyName.MatchingPolicyName, test.wantMatchingPolicyName)
+				authorizationDecision := rbacEngine.Evaluate(queryToRBACEngine.evaluateArgs)
+				// TODO: Should we even have the authorization decision type?
+				if authorizationDecision.MatchingPolicyName != queryToRBACEngine.wantMatchingPolicyName {
+					t.Fatalf("Got matching policy name: %v, want matching policy name: %v", authorizationDecision.MatchingPolicyName, queryToRBACEngine.wantMatchingPolicyName)
 				}
 			}
 		})
