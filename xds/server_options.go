@@ -25,31 +25,20 @@ import (
 	iserver "google.golang.org/grpc/xds/internal/server"
 )
 
+type serverOptions struct {
+	modeCallback      ServingModeCallbackFunc
+	bootstrapContents []byte
+}
+
+type serverOption struct {
+	grpc.EmptyServerOption
+	apply func(*serverOptions)
+}
+
 // ServingModeCallback returns a grpc.ServerOption which allows users to
 // register a callback to get notified about serving mode changes.
 func ServingModeCallback(cb ServingModeCallbackFunc) grpc.ServerOption {
-	return &smcOption{cb: cb}
-}
-
-type serverOption interface {
-	applyServerOption(*serverOptions)
-}
-
-// smcOption is a server option containing a callback to be invoked when the
-// serving mode changes.
-type smcOption struct {
-	// Embedding the empty server option makes it safe to pass it to
-	// grpc.NewServer().
-	grpc.EmptyServerOption
-	cb ServingModeCallbackFunc
-}
-
-func (s *smcOption) applyServerOption(o *serverOptions) {
-	o.modeCallback = s.cb
-}
-
-type serverOptions struct {
-	modeCallback ServingModeCallbackFunc
+	return &serverOption{apply: func(o *serverOptions) { o.modeCallback = cb }}
 }
 
 // ServingMode indicates the current mode of operation of the server.
@@ -81,4 +70,16 @@ type ServingModeChangeArgs struct {
 	// Err is set to a non-nil error if the server has transitioned into
 	// not-serving mode.
 	Err error
+}
+
+// BootstrapContentsForTesting returns a grpc.ServerOption which allows users
+// to inject a bootstrap configuration used by only this server, instead of the
+// global configuration from the environment variables.
+//
+// Testing Only
+//
+// This function should ONLY be used for testing and may not work with some
+// other features, including the CSDS service.
+func BootstrapContentsForTesting(contents []byte) grpc.ServerOption {
+	return &serverOption{apply: func(o *serverOptions) { o.bootstrapContents = contents }}
 }

@@ -59,7 +59,7 @@ var (
 		// not deal with subConns.
 		return builder.Build(cc, opts), nil
 	}
-	newXDSClient  = func() (xdsClientInterface, error) { return xdsclient.New() }
+	newXDSClient  func() (xdsClientInterface, error)
 	buildProvider = buildProviderFunc
 )
 
@@ -86,12 +86,15 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 	b.logger = prefixLogger((b))
 	b.logger.Infof("Created")
 
-	client, err := newXDSClient()
-	if err != nil {
-		b.logger.Errorf("failed to create xds-client: %v", err)
-		return nil
+	if newXDSClient != nil {
+		// For tests
+		client, err := newXDSClient()
+		if err != nil {
+			b.logger.Errorf("failed to create xds-client: %v", err)
+			return nil
+		}
+		b.xdsClient = client
 	}
-	b.xdsClient = client
 
 	var creds credentials.TransportCredentials
 	switch {
@@ -359,7 +362,12 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 		lbCfg.LrsLoadReportingServerName = new(string)
 
 	}
+	resolverState := resolver.State{}
+	if c, ok := b.xdsClient.(*xdsclient.Client); ok {
+		resolverState = xdsclient.SetClient(resolverState, c)
+	}
 	ccState := balancer.ClientConnState{
+		ResolverState:  resolverState,
 		BalancerConfig: lbCfg,
 	}
 	if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
@@ -397,7 +405,9 @@ func (b *cdsBalancer) run() {
 				b.edsLB.Close()
 				b.edsLB = nil
 			}
-			b.xdsClient.Close()
+			if newXDSClient != nil {
+				b.xdsClient.Close()
+			}
 			if b.cachedRoot != nil {
 				b.cachedRoot.Close()
 			}
@@ -466,6 +476,14 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	if b.closed.HasFired() {
 		b.logger.Warningf("xds: received ClientConnState {%+v} after cdsBalancer was closed", state)
 		return errBalancerClosed
+	}
+
+	if b.xdsClient == nil {
+		c := xdsclient.FromResolverState(state.ResolverState)
+		if c == nil {
+			return balancer.ErrBadResolverState
+		}
+		b.xdsClient = c
 	}
 
 	b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(state.BalancerConfig))

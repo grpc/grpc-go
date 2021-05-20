@@ -105,7 +105,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	})
 
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
-	server := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt)
+	server := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	defer server.Stop()
 	testpb.RegisterTestServiceServer(server, &testService{})
 
