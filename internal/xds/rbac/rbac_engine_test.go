@@ -20,8 +20,8 @@ import (
 	"testing"
 
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
-	v3envoyconfigroute "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3envoytypematcher "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"google.golang.org/grpc/internal/grpctest"
 )
 
@@ -93,7 +93,7 @@ func (s) TestRBACEngine(t *testing.T) {
 					"localhost-fan": {
 						Permissions: []*v3rbacpb.Permission{
 							{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 8080}},
-							{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3envoytypematcher.PathMatcher{Rule: &v3envoytypematcher.PathMatcher_Path{Path: &v3envoytypematcher.StringMatcher{MatchPattern: &v3envoytypematcher.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
+							{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
 						},
 						Principals: []*v3rbacpb.Principal{
 							{
@@ -138,10 +138,10 @@ func (s) TestRBACEngine(t *testing.T) {
 						},
 						Principals: []*v3rbacpb.Principal{
 							{
-								Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3envoytypematcher.StringMatcher{MatchPattern: &v3envoytypematcher.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/admin"}}}},
+								Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/admin"}}}},
 							},
 							{
-								Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3envoytypematcher.StringMatcher{MatchPattern: &v3envoytypematcher.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/superuser"}}}},
+								Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/superuser"}}}},
 							},
 						},
 					},
@@ -150,8 +150,8 @@ func (s) TestRBACEngine(t *testing.T) {
 							{
 								Rule: &v3rbacpb.Permission_AndRules{AndRules: &v3rbacpb.Permission_Set{
 									Rules: []*v3rbacpb.Permission{
-										{Rule: &v3rbacpb.Permission_Header{Header: &v3envoyconfigroute.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3envoyconfigroute.HeaderMatcher_ExactMatch{ExactMatch: "GET"}}}},
-										{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3envoytypematcher.PathMatcher{Rule: &v3envoytypematcher.PathMatcher_Path{Path: &v3envoytypematcher.StringMatcher{MatchPattern: &v3envoytypematcher.StringMatcher_Prefix{Prefix: "/products"}}}}}},
+										{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "GET"}}}},
+										{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "/products"}}}}}},
 										{Rule: &v3rbacpb.Permission_OrRules{OrRules: &v3rbacpb.Permission_Set{
 											Rules: []*v3rbacpb.Permission{
 												{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 80}},
