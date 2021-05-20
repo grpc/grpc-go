@@ -203,6 +203,33 @@ func (hsm *HeaderSuffixMatcher) String() string {
 	return fmt.Sprintf("headerSuffix:%v:%v", hsm.key, hsm.suffix)
 }
 
+// HeaderContainsMatcher matches on whether the header value contains the
+// value passed into this struct. An empty contains string is not allowed,
+// use HeaderPresentMatcher instead.
+type HeaderContainsMatcher struct {
+	key      string
+	contains string
+}
+
+// NewHeaderContainsMatcher returns a new HeaderContainsMatcher.
+func NewHeaderContainsMatcher(key string, contains string) *HeaderContainsMatcher {
+	return &HeaderContainsMatcher{key: key, contains: contains}
+}
+
+// Match returns whether the passed in HTTP Headers match according to the
+// HeaderContainsMatcher.
+func (hcm *HeaderContainsMatcher) Match(md metadata.MD) bool {
+	v, ok := mdValuesFromOutgoingCtx(md, hcm.key)
+	if !ok {
+		return false
+	}
+	return strings.Contains(v, hcm.contains)
+}
+
+func (hcm *HeaderContainsMatcher) String() string {
+	return fmt.Sprintf("headerContains:%v%v", hcm.key, hcm.contains)
+}
+
 // InvertMatcher inverts the match result of the underlying header matcher.
 type InvertMatcher struct {
 	m HeaderMatcherInterface
