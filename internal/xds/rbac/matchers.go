@@ -30,11 +30,13 @@ import (
 
 // TODO: Do we need errors at every node? Should we have checks on each node (i.e. destinationPort should be within a certain range)
 
-// The matcher interface will be used by the RBAC Engine to help determine whether incoming RPC requests should
-// be allowed or denied. There will be many types of matchers, each instantiated with part of the policy used to
-// instantiate the RBAC Engine. These constructed matchers will form a logical tree of matchers, which data about
-// any incoming RPC's will be passed through the tree to help make a decision about whether the RPC should be allowed
-// or not.
+// The matcher interface will be used by the RBAC Engine to help determine
+// whether incoming RPC requests should be allowed or denied. There will be many
+// types of matchers, each instantiated with part of the policy used to
+// instantiate the RBAC Engine. These constructed matchers will form a logical
+// tree of matchers, which data about any incoming RPC's will be passed through
+// the tree to help make a decision about whether the RPC should be allowed or
+// not.
 type matcher interface {
 	matches(args *EvaluateArgs) bool
 }
@@ -42,11 +44,10 @@ type matcher interface {
 // policyMatcher helps determine whether an incoming RPC call matches a policy.
 // A policy is a logical role (e.g. Service Admin), which is comprised of
 // permissions and principals. A principal is an identity (or identities) for a
-// downstream subject which are assigned the policy (role), and a permission is an
-// action(s) that a principal(s) can take. A policy matches if both a permission
-// and a principal match, which will be determined by the child or permissions and
-// principal matchers.
-
+// downstream subject which are assigned the policy (role), and a permission is
+// an action(s) that a principal(s) can take. A policy matches if both a
+// permission and a principal match, which will be determined by the child or
+// permissions and principal matchers.
 type policyMatcher struct {
 	permissions *orMatcher
 	principals  *orMatcher
@@ -72,15 +73,18 @@ func newPolicyMatcher(policy *v3rbacpb.Policy) (*policyMatcher, error) {
 }
 
 func (pm *policyMatcher) matches(args *EvaluateArgs) bool {
-	// Due to a policy matching iff one of the permissions match the action taking place and one of the principals
-	// match the peer, you can simply delegate the data about the incoming RPC to the child permission and principal or matchers.
+	// Due to a policy matching iff one of the permissions match the action
+	// taking place and one of the principals match the peer, you can simply
+	// delegate the data about the incoming RPC to the child permission and
+	// principal or matchers.
 	return pm.permissions.matches(args) && pm.principals.matches(args)
 }
 
-// createMatcherListFromPermissionList takes a list of permissions (can also be a single permission, e.g. from a not matcher
-// which is logically !permission) and returns a list of matchers which correspond to that permission. This will be called
-// in many instances throughout the initial construction of the RBAC engine from the AND and OR matchers and also from
-// the NOT matcher.
+// createMatcherListFromPermissionList takes a list of permissions (can also be
+// a single permission, e.g. from a not matcher which is logically !permission)
+// and returns a list of matchers which correspond to that permission. This will
+// be called in many instances throughout the initial construction of the RBAC
+// engine from the AND and OR matchers and also from the NOT matcher.
 func createMatcherListFromPermissionList(permissions []*v3rbacpb.Permission) ([]matcher, error) {
 	var matcherList []matcher
 	for _, permission := range permissions {
@@ -122,7 +126,8 @@ func createMatcherListFromPermissionList(permissions []*v3rbacpb.Permission) ([]
 		case *v3rbacpb.Permission_DestinationPort:
 			matcherList = append(matcherList, newPortMatcher(permission.GetDestinationPort()))
 		case *v3rbacpb.Permission_Metadata:
-			// Not supported in gRPC RBAC currently - a permission typed as Metadata in the initial config will be a no-op.
+			// Not supported in gRPC RBAC currently - a permission typed as
+			// Metadata in the initial config will be a no-op.
 		case *v3rbacpb.Permission_NotRule:
 			matcherToNot, err := createMatcherListFromPermissionList([]*v3rbacpb.Permission{permission})
 			if err != nil {
@@ -132,8 +137,8 @@ func createMatcherListFromPermissionList(permissions []*v3rbacpb.Permission) ([]
 				matcherToNot: matcherToNot[0],
 			})
 		case *v3rbacpb.Permission_RequestedServerName:
-			// Not supported in gRPC RBAC currently - a permission typed as requested server name in the initial config will
-			// be a no-op.
+			// Not supported in gRPC RBAC currently - a permission typed as
+			// requested server name in the initial config will be a no-op.
 		}
 	}
 	return matcherList, nil
@@ -148,7 +153,7 @@ func createMatcherListFromPrincipalList(principals []*v3rbacpb.Principal) ([]mat
 			if err != nil {
 				return nil, err
 			}
-			matcherList = append(matcherList, &andMatcher{matchers: andMatcherList}) // Make this generic have it as matchers
+			matcherList = append(matcherList, &andMatcher{matchers: andMatcherList})
 		case *v3rbacpb.Principal_OrIds:
 			orMatcherList, err := createMatcherListFromPrincipalList(principal.GetOrIds().Ids)
 			if err != nil {
@@ -162,20 +167,21 @@ func createMatcherListFromPrincipalList(principals []*v3rbacpb.Principal) ([]mat
 			if err != nil {
 				return nil, err
 			}
-			matcherList = append(matcherList, authenticatedMatcher) // Do this inline?
-		case *v3rbacpb.Principal_SourceIp: // This is logically distinct from destination ip and thus will need a seperate matcher type, as matches will call the peer info rather than passed in from listener.
-			// Perhaps say "No-op, deprecated, if present in config return error"
-			// matcherList = append(matcherList, newSourceIpMatcher(principal.GetSourceIp())) // TODO: What to do about this deprecated field here?
-			// The source ip principal identifier is deprecated. Thus, a principal typed as a source ip in the identifier
-			// will be a no-op.
-		case *v3rbacpb.Principal_DirectRemoteIp: // This is the same thing as source ip
+			matcherList = append(matcherList, authenticatedMatcher)
+		case *v3rbacpb.Principal_SourceIp:
+			// The source ip principal identifier is deprecated. Thus, a
+			// principal typed as a source ip in the identifier will be a no-op.
+			// The config should use DirectRemoteIp instead.
+		// DirectRemoteIp represents the same thing as SourceIp.
+		case *v3rbacpb.Principal_DirectRemoteIp:
 			sourceIpMatcher, err := newSourceIpMatcher(principal.GetDirectRemoteIp())
 			if err != nil {
 				return nil, err
 			}
 			matcherList = append(matcherList, sourceIpMatcher)
 		case *v3rbacpb.Principal_RemoteIp:
-			// Not supported in gRPC RBAC currently - a principal typed as Remote Ip in the initial config will be a no-op.
+			// Not supported in gRPC RBAC currently - a principal typed as
+			// Remote Ip in the initial config will be a no-op.
 		case *v3rbacpb.Principal_Header:
 			// Do we need an error here?
 			headerMatcher, err := newHeaderMatcher(principal.GetHeader())
@@ -190,7 +196,8 @@ func createMatcherListFromPrincipalList(principals []*v3rbacpb.Principal) ([]mat
 			}
 			matcherList = append(matcherList, urlPathMatcher)
 		case *v3rbacpb.Principal_Metadata:
-			// Not supported in gRPC RBAC currently - a principal typed as Metadata in the initial config will be a no-op.
+			// Not supported in gRPC RBAC currently - a principal typed as
+			// Metadata in the initial config will be a no-op.
 		case *v3rbacpb.Principal_NotId:
 			matcherToNot, err := createMatcherListFromPrincipalList([]*v3rbacpb.Principal{principal})
 			if err != nil {
@@ -204,16 +211,16 @@ func createMatcherListFromPrincipalList(principals []*v3rbacpb.Principal) ([]mat
 	return matcherList, nil
 }
 
-// orMatcher is a matcher where it successfully matches if one of it's children successfully match.
-// It also logically represents a principal or permission, but can also be it's own entity further down
-// the tree of matchers.
+// orMatcher is a matcher where it successfully matches if one of it's children
+// successfully match. It also logically represents a principal or permission,
+// but can also be it's own entity further down the tree of matchers.
 type orMatcher struct {
 	matchers []matcher
 }
 
 func (om *orMatcher) matches(args *EvaluateArgs) bool {
-	// Range through child matchers and pass in rbacData, and only one child matcher has to match to be
-	// logically successful.
+	// Range through child matchers and pass in rbacData, and only one child
+	// matcher has to match to be logically successful.
 	for _, matcher := range om.matchers {
 		if matcher.matches(args) {
 			return true
@@ -236,7 +243,8 @@ func (am *andMatcher) matches(args *EvaluateArgs) bool {
 	return true
 }
 
-// alwaysMatcher is a matcher that will always match. This logically represents an any rule for a permission or a principal.
+// alwaysMatcher is a matcher that will always match. This logically represents
+// an any rule for a permission or a principal.
 type alwaysMatcher struct {
 }
 
@@ -258,8 +266,8 @@ type headerMatcher struct {
 	headerMatcherInterface matcher2.HeaderMatcherInterface
 }
 
-// TODO: Do you need errors on every node? Especially this one, where it doesn't seem like error conditions can even arise?
-// If so, find any error conditions that could arise and add return them.
+// TODO: Do you need errors on every node? Especially this one, where it doesn't
+// seem like error conditions can even arise?
 func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (*headerMatcher, error) {
 	var headerMatcherInterface matcher2.HeaderMatcherInterface
 	switch headerMatcherConfig.HeaderMatchSpecifier.(type) {
@@ -288,16 +296,18 @@ func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (
 }
 
 func (hm *headerMatcher) matches(args *EvaluateArgs) bool {
+	print("Trying to match on headers the result (true or false): %v", hm.headerMatcherInterface.Match(args.MD))
 	return hm.headerMatcherInterface.Match(args.MD)
 }
 
-// urlPathMatcher matches on the URL Path of the incoming RPC. In gRPC, this logically maps
-// to the full method name the RPC is calling on the server side.
+// urlPathMatcher matches on the URL Path of the incoming RPC. In gRPC, this
+// logically maps to the full method name the RPC is calling on the server side.
 type urlPathMatcher struct {
 	stringMatcher matcher2.StringMatcher
 }
 
 func newUrlPathMatcher(pathMatcher *v3matcherpb.PathMatcher) (*urlPathMatcher, error) {
+	// This string matcher does become prefix match
 	stringMatcher, err := matcher2.StringMatcherFromProto(pathMatcher.GetPath())
 	if err != nil {
 		return nil, err
@@ -308,6 +318,7 @@ func newUrlPathMatcher(pathMatcher *v3matcherpb.PathMatcher) (*urlPathMatcher, e
 }
 
 func (upm *urlPathMatcher) matches(args *EvaluateArgs) bool {
+	print("Trying to match on path the result (true or false): %v", upm.stringMatcher.Match(args.FullMethod))
 	return upm.stringMatcher.Match(args.FullMethod)
 }
 
@@ -316,7 +327,6 @@ func (upm *urlPathMatcher) matches(args *EvaluateArgs) bool {
 // come from different parts of the data about incoming RPC's passed in.
 // Matching a CIDR Range means to determine whether the IP Address falls within
 // the CIDR Range or not.
-
 type sourceIpMatcher struct {
 	// ipNet represents the CidrRange that this matcher was configured with.
 	// This is what will source and destination IP's will be matched against.
@@ -324,8 +334,9 @@ type sourceIpMatcher struct {
 }
 
 func newSourceIpMatcher(cidrRange *v3corepb.CidrRange) (*sourceIpMatcher, error) {
-	// Convert configuration to a cidrRangeString, as Go standard library has methods that parse
-	// cidr string.
+	// Convert configuration to a cidrRangeString, as Go standard library has
+	// methods that parse cidr string.
+
 	cidrRangeString := cidrRange.AddressPrefix + fmt.Sprint(cidrRange.PrefixLen.Value)
 	_, ipNet, err := net.ParseCIDR(cidrRangeString)
 	if err != nil {
@@ -359,8 +370,8 @@ func (dim *destinationIpMatcher) matches(args *EvaluateArgs) bool {
 	return dim.ipNet.Contains(net.IP(args.DestinationAddr.String()))
 }
 
-// portMatcher matches on whether the destination port of the RPC
-// matches the destination port this matcher was instantiated with
+// portMatcher matches on whether the destination port of the RPC matches the
+// destination port this matcher was instantiated with.
 type portMatcher struct {
 	destinationPort uint32
 }
@@ -372,12 +383,14 @@ func newPortMatcher(destinationPort uint32) *portMatcher {
 }
 
 func (pm *portMatcher) matches(args *EvaluateArgs) bool {
+	print("Trying to match on port, result: %v", args.DestinationPort == pm.destinationPort)
 	return args.DestinationPort == pm.destinationPort
 }
 
-// authenticatedMatcher matches on the name of the Principal. If set, the URI SAN or DNS SAN in that order
-// is used from the certificate, otherwise the subject field is used. If unset, it applies to any user
-// that is authenticated.
+// authenticatedMatcher matches on the name of the Principal. If set, the URI
+// SAN or DNS SAN in that order is used from the certificate, otherwise the
+// subject field is used. If unset, it applies to any user that is
+// authenticated.
 type authenticatedMatcher struct {
 	stringMatcher matcher2.StringMatcher
 }

@@ -33,9 +33,10 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// *** LITERALLY JUST HAVE THIS COMPILE THAT'S IT LOL ***
-
-// Table driven test here with variables config (struct literal)
+// TestRBACEngine tests the RBAC Engine by configuring the engine in different
+// scenarios. After configuring the engine in a certain way, this test pings the
+// engine with different kinds of data representing incoming RPC's, and verifies
+// that it works as expected.
 func (s) TestRBACEngine(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -45,9 +46,10 @@ func (s) TestRBACEngine(t *testing.T) {
 			wantMatchingPolicyName string
 		}
 	}{
-		// TestSuccessCaseAnyMatch tests an RBAC Engine instantiated with a config with
-		// a policy with any rules for both permissions and principals, meaning that any data about incoming
-		// RPC's that the RBAC Engine is queried with should match that policy.
+		// TestSuccessCaseAnyMatch tests an RBAC Engine instantiated with a
+		// config with a policy with any rules for both permissions and
+		// principals, meaning that any data about incoming RPC's that the RBAC
+		// Engine is queried with should match that policy.
 		{name: "TestSuccessCaseAnyMatch",
 			rbacConfig: &v3rbacpb.RBAC{
 				Policies: map[string]*v3rbacpb.Policy{
@@ -82,9 +84,9 @@ func (s) TestRBACEngine(t *testing.T) {
 					wantMatchingPolicyName: "anyone"},
 			},
 		},
-		// TestSuccessCaseSimplePolicy is a test that tests a simple policy
-		// that only allows an rpc to proceed if the rpc is calling a certain
-		// path and port.
+		// TestSuccessCaseSimplePolicy is a test that tests a simple policy that
+		// only allows an rpc to proceed if the rpc is calling a certain path
+		// and port.
 		{name: "TestSuccessCaseSimplePolicy",
 			rbacConfig: &v3rbacpb.RBAC{
 				Policies: map[string]*v3rbacpb.Policy{
@@ -120,9 +122,11 @@ func (s) TestRBACEngine(t *testing.T) {
 					wantMatchingPolicyName: ""},
 			},
 		},
-		// TestSuccessCaseEnvoyExample is a test based on the example provided in the EnvoyProxy docs.
-		// The RBAC Config contains two policies, service admin and product viewer, that provides an example
-		// of a real RBAC Config that might be configured for a given for a given backend service.
+		// TestSuccessCaseEnvoyExample is a test based on the example provided
+		// in the EnvoyProxy docs. The RBAC Config contains two policies,
+		// service admin and product viewer, that provides an example of a real
+		// RBAC Config that might be configured for a given for a given backend
+		// service.
 		{name: "TestSuccessCaseEnvoyExample",
 			rbacConfig: &v3rbacpb.RBAC{
 				Policies: map[string]*v3rbacpb.Policy{
@@ -171,19 +175,21 @@ func (s) TestRBACEngine(t *testing.T) {
 				evaluateArgs           *EvaluateArgs
 				wantMatchingPolicyName string
 			}{
-				// This incoming RPC Call should match with the service admin policy.
+				// This incoming RPC Call should match with the service admin
+				// policy.
 				{evaluateArgs: &EvaluateArgs{
 					FullMethod:    "some method",
 					PrincipalName: "cluster.local/ns/default/sa/admin",
 				},
 					wantMatchingPolicyName: "service-admin"},
-				// This incoming RPC Call should match with the product viewer policy.
+				// This incoming RPC Call should match with the product
+				// viewer policy.
 				{evaluateArgs: &EvaluateArgs{
 					DestinationPort: 80,
 					MD: map[string][]string{
 						":method": {"GET"},
-						":path":   {"/products"},
 					},
+					FullMethod: "/products",
 				},
 					wantMatchingPolicyName: "product-viewer"},
 				// These incoming RPC calls should not match any policy -
@@ -207,20 +213,19 @@ func (s) TestRBACEngine(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// Instantiate the rbacEngine with different configurations that interesting to test
-			// and to query.
+			// Instantiate the rbacEngine with different configurations that
+			// interesting to test and to query.
 			rbacEngine, err := NewRBACEngine(test.rbacConfig)
 			if err != nil {
 				t.Fatalf("Error constructing RBAC Engine: %v", err)
 			}
-			// Query that created RBAC Engine with different args to see if the RBAC Engine configured a certain way
-			// works as intended.
+			// Query that created RBAC Engine with different args to see if the
+			// RBAC Engine configured a certain way works as intended.
 			for _, queryToRBACEngine := range test.rbacQueries {
-				// The matchingPolicyName returned will be empty in the case of no matching policy.
-				// Thus, matchingPolicyName can also be used to test the "error" condition of no
-				// matching policies.
+				// The matchingPolicyName returned will be empty in the case of
+				// no matching policy. Thus, matchingPolicyName can also be used
+				// to test the "error" condition of no matching policies.
 				authorizationDecision := rbacEngine.Evaluate(queryToRBACEngine.evaluateArgs)
-				// TODO: Should we even have the authorization decision type?
 				if authorizationDecision.MatchingPolicyName != queryToRBACEngine.wantMatchingPolicyName {
 					t.Fatalf("Got matching policy name: %v, want matching policy name: %v", authorizationDecision.MatchingPolicyName, queryToRBACEngine.wantMatchingPolicyName)
 				}
