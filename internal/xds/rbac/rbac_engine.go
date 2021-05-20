@@ -43,7 +43,7 @@ type RBACEngine struct {
 // of matchers that will be used to make an authorization decision on
 // an incoming RPC.
 func NewRBACEngine(policy *v3rbacpb.RBAC) (*RBACEngine, error) {
-	var policyMatchers map[string]*policyMatcher
+	policyMatchers := make(map[string]*policyMatcher)
 	for policyName, policyConfig := range policy.Policies {
 		policyMatcher, err := newPolicyMatcher(policyConfig)
 		if err != nil {

@@ -112,7 +112,7 @@ func (s) TestRBACEngine(t *testing.T) {
 					},
 					DestinationPort: 8080,
 				},
-					wantMatchingPolicyName: "anyone"},
+					wantMatchingPolicyName: "localhost-fan"},
 				// This RPC shouldn't match with the local host fan policy.
 				{evaluateArgs: &EvaluateArgs{
 					DestinationPort: 100,
