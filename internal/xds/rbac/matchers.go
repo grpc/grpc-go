@@ -112,13 +112,13 @@ func createMatcherListFromPermissionList(permissions []*v3rbacpb.Permission) ([]
 			}
 			matcherList = append(matcherList, headerMatcher)
 		case *v3rbacpb.Permission_UrlPath:
-			urlPathMatcher, err := newUrlPathMatcher(permission.GetUrlPath())
+			urlPathMatcher, err := newURLPathMatcher(permission.GetUrlPath())
 			if err != nil {
 				return nil, err
 			}
 			matcherList = append(matcherList, urlPathMatcher)
 		case *v3rbacpb.Permission_DestinationIp:
-			destinationMatcher, err := newDestinationIpMatcher(permission.GetDestinationIp())
+			destinationMatcher, err := newDestinationIPMatcher(permission.GetDestinationIp())
 			if err != nil {
 				return nil, err
 			}
@@ -174,11 +174,11 @@ func createMatcherListFromPrincipalList(principals []*v3rbacpb.Principal) ([]mat
 			// The config should use DirectRemoteIp instead.
 		// DirectRemoteIp represents the same thing as SourceIp.
 		case *v3rbacpb.Principal_DirectRemoteIp:
-			sourceIpMatcher, err := newSourceIpMatcher(principal.GetDirectRemoteIp())
+			sourceIPMatcher, err := newSourceIPMatcher(principal.GetDirectRemoteIp())
 			if err != nil {
 				return nil, err
 			}
-			matcherList = append(matcherList, sourceIpMatcher)
+			matcherList = append(matcherList, sourceIPMatcher)
 		case *v3rbacpb.Principal_RemoteIp:
 			// Not supported in gRPC RBAC currently - a principal typed as
 			// Remote Ip in the initial config will be a no-op.
@@ -190,7 +190,7 @@ func createMatcherListFromPrincipalList(principals []*v3rbacpb.Principal) ([]mat
 			}
 			matcherList = append(matcherList, headerMatcher)
 		case *v3rbacpb.Principal_UrlPath:
-			urlPathMatcher, err := newUrlPathMatcher(principal.GetUrlPath())
+			urlPathMatcher, err := newURLPathMatcher(principal.GetUrlPath())
 			if err != nil {
 				return nil, err
 			}
@@ -296,7 +296,6 @@ func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (
 }
 
 func (hm *headerMatcher) matches(args *EvaluateArgs) bool {
-	print("Trying to match on headers the result (true or false): %v", hm.headerMatcherInterface.Match(args.MD))
 	return hm.headerMatcherInterface.Match(args.MD)
 }
 
@@ -306,7 +305,7 @@ type urlPathMatcher struct {
 	stringMatcher matcher2.StringMatcher
 }
 
-func newUrlPathMatcher(pathMatcher *v3matcherpb.PathMatcher) (*urlPathMatcher, error) {
+func newURLPathMatcher(pathMatcher *v3matcherpb.PathMatcher) (*urlPathMatcher, error) {
 	// This string matcher does become prefix match
 	stringMatcher, err := matcher2.StringMatcherFromProto(pathMatcher.GetPath())
 	if err != nil {
@@ -318,22 +317,21 @@ func newUrlPathMatcher(pathMatcher *v3matcherpb.PathMatcher) (*urlPathMatcher, e
 }
 
 func (upm *urlPathMatcher) matches(args *EvaluateArgs) bool {
-	print("Trying to match on path the result (true or false): %v", upm.stringMatcher.Match(args.FullMethod))
 	return upm.stringMatcher.Match(args.FullMethod)
 }
 
-// sourceIpMatcher and destinationIpMatcher both are matchers that match against
+// sourceIPMatcher and destinationIPMatcher both are matchers that match against
 // a CIDR Range. Two different matchers are needed as the source and ip address
 // come from different parts of the data about incoming RPC's passed in.
 // Matching a CIDR Range means to determine whether the IP Address falls within
 // the CIDR Range or not.
-type sourceIpMatcher struct {
+type sourceIPMatcher struct {
 	// ipNet represents the CidrRange that this matcher was configured with.
 	// This is what will source and destination IP's will be matched against.
 	ipNet *net.IPNet
 }
 
-func newSourceIpMatcher(cidrRange *v3corepb.CidrRange) (*sourceIpMatcher, error) {
+func newSourceIPMatcher(cidrRange *v3corepb.CidrRange) (*sourceIPMatcher, error) {
 	// Convert configuration to a cidrRangeString, as Go standard library has
 	// methods that parse cidr string.
 
@@ -342,31 +340,31 @@ func newSourceIpMatcher(cidrRange *v3corepb.CidrRange) (*sourceIpMatcher, error)
 	if err != nil {
 		return nil, err
 	}
-	return &sourceIpMatcher{
+	return &sourceIPMatcher{
 		ipNet: ipNet,
 	}, nil
 }
 
-func (sim *sourceIpMatcher) matches(args *EvaluateArgs) bool {
+func (sim *sourceIPMatcher) matches(args *EvaluateArgs) bool {
 	return sim.ipNet.Contains(net.IP(args.PeerInfo.Addr.String()))
 }
 
-type destinationIpMatcher struct {
+type destinationIPMatcher struct {
 	ipNet *net.IPNet
 }
 
-func newDestinationIpMatcher(cidrRange *v3corepb.CidrRange) (*destinationIpMatcher, error) {
+func newDestinationIPMatcher(cidrRange *v3corepb.CidrRange) (*destinationIPMatcher, error) {
 	cidrRangeString := cidrRange.AddressPrefix + fmt.Sprint(cidrRange)
 	_, ipNet, err := net.ParseCIDR(cidrRangeString)
 	if err != nil {
 		return nil, err
 	}
-	return &destinationIpMatcher{
+	return &destinationIPMatcher{
 		ipNet: ipNet,
 	}, nil
 }
 
-func (dim *destinationIpMatcher) matches(args *EvaluateArgs) bool {
+func (dim *destinationIPMatcher) matches(args *EvaluateArgs) bool {
 	return dim.ipNet.Contains(net.IP(args.DestinationAddr.String()))
 }
 
@@ -383,7 +381,6 @@ func newPortMatcher(destinationPort uint32) *portMatcher {
 }
 
 func (pm *portMatcher) matches(args *EvaluateArgs) bool {
-	print("Trying to match on port, result: %v", args.DestinationPort == pm.destinationPort)
 	return args.DestinationPort == pm.destinationPort
 }
 

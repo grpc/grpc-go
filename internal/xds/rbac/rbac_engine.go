@@ -27,21 +27,21 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
-// authorizationDecision is what will be returned from the RBAC Engine when it
+// AuthorizationDecision is what will be returned from the RBAC Engine when it
 // is asked to see if an rpc matches a policy.
 type AuthorizationDecision struct {
 	MatchingPolicyName string
 }
 
-// RBACEngine is used for making authorization decisions on an incoming RPC.
-type RBACEngine struct {
+// Engine is used for making authorization decisions on an incoming RPC.
+type Engine struct {
 	policyMatchers map[string]*policyMatcher
 }
 
-// NewRBACEngine will be used in order to create a Rbac Engine based on a
+// NewEngine will be used in order to create a Rbac Engine based on a
 // policy. This policy will be used to instantiate a tree of matchers that will
 // be used to make an authorization decision on an incoming RPC.
-func NewRBACEngine(policy *v3rbacpb.RBAC) (*RBACEngine, error) {
+func NewEngine(policy *v3rbacpb.RBAC) (*Engine, error) {
 	policyMatchers := make(map[string]*policyMatcher)
 	for policyName, policyConfig := range policy.Policies {
 		policyMatcher, err := newPolicyMatcher(policyConfig)
@@ -50,7 +50,7 @@ func NewRBACEngine(policy *v3rbacpb.RBAC) (*RBACEngine, error) {
 		}
 		policyMatchers[policyName] = policyMatcher
 	}
-	return &RBACEngine{
+	return &Engine{
 		policyMatchers: policyMatchers,
 	}, nil
 }
@@ -73,7 +73,7 @@ type EvaluateArgs struct {
 
 // Evaluate will be called after the RBAC Engine is instantiated. This will see
 // if an incoming RPC matches with a policy or not.
-func (r *RBACEngine) Evaluate(args *EvaluateArgs) AuthorizationDecision {
+func (r *Engine) Evaluate(args *EvaluateArgs) AuthorizationDecision {
 	for policy, matcher := range r.policyMatchers {
 		if matcher.matches(args) {
 			return AuthorizationDecision{

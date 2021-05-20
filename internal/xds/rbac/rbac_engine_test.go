@@ -215,7 +215,7 @@ func (s) TestRBACEngine(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Instantiate the rbacEngine with different configurations that
 			// interesting to test and to query.
-			rbacEngine, err := NewRBACEngine(test.rbacConfig)
+			rbacEngine, err := NewEngine(test.rbacConfig)
 			if err != nil {
 				t.Fatalf("Error constructing RBAC Engine: %v", err)
 			}
