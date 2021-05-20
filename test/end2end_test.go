@@ -6292,6 +6292,23 @@ func testServiceConfigMaxMsgSizeTD(t *testing.T, e env) {
 	}
 }
 
+// TestMalformedStreamMethod starts a test server and sends an RPC with a
+// malformed method name. The server should respond with an UNIMPLEMENTED status
+// code in this case.
+func (s) TestMalformedStreamMethod(t *testing.T) {
+	const testMethod = "a-method-name-without-any-slashes"
+	te := newTest(t, tcpClearRREnv)
+	te.startServer(nil)
+	defer te.tearDown()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	err := te.clientConn().Invoke(ctx, testMethod, nil, nil)
+	if gotCode := status.Code(err); gotCode != codes.Unimplemented {
+		t.Fatalf("Invoke with method %q, got code %s, want %s", testMethod, gotCode, codes.Unimplemented)
+	}
+}
+
 func (s) TestMethodFromServerStream(t *testing.T) {
 	const testMethod = "/package.service/method"
 	e := tcpClearRREnv
