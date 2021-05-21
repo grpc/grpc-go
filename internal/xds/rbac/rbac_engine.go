@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-// Package rbac contains a RBAC Engine and it's associated matchers to match
-// policies, which will be used to make Authorization decisions on incoming
-// RPC's.
+// Package rbac provides service-level and method-level access control for a
+// service.
 package rbac
 
 import (
@@ -28,41 +27,47 @@ import (
 )
 
 // AuthorizationDecision is what will be returned from the RBAC Engine when it
-// is asked to see if an rpc matches a policy.
+// is asked to see if an incoming RPC matches a policy.
 type AuthorizationDecision struct {
 	MatchingPolicyName string
 }
 
-// Engine is used for making authorization decisions on an incoming RPC.
+// Engine is used for making authorization decisions on incoming RPCs.
 type Engine struct {
-	policyMatchers map[string]*policyMatcher
+	policies map[string]*policyMatcher
 }
 
-// NewEngine will be used in order to create a Rbac Engine based on a
-// policy. This policy will be used to instantiate a tree of matchers that will
-// be used to make an authorization decision on an incoming RPC.
+// NewEngine creates an RBAC Engine based on the contents of policy. If the
+// config is invalid (and fails to build underlying tree of matchers), NewEngine
+// will return an error. This created RBAC Engine will not persist the action
+// present in the policy, and will leave up to caller to handle the action that
+// is attached to the config.
 func NewEngine(policy *v3rbacpb.RBAC) (*Engine, error) {
-	policyMatchers := make(map[string]*policyMatcher)
-	for policyName, policyConfig := range policy.Policies {
-		policyMatcher, err := newPolicyMatcher(policyConfig)
+	policies := make(map[string]*policyMatcher)
+	for name, config := range policy.Policies {
+		matcher, err := newPolicyMatcher(config)
 		if err != nil {
 			return nil, err
 		}
-		policyMatchers[policyName] = policyMatcher
+		policies[name] = matcher
 	}
-	return &Engine{
-		policyMatchers: policyMatchers,
-	}, nil
+	return &Engine{policies: policies}, nil
 }
 
 // EvaluateArgs represents the data pulled from an incoming RPC to a gRPC
 // server. This data will be used by the RBAC Engine to see if it matches a
 // policy this RBAC Engine was configured with or not.
 type EvaluateArgs struct {
-	MD              metadata.MD
-	PeerInfo        *peer.Peer
-	FullMethod      string
+	// MD is the HTTP Headers that are present in the incoming RPC.
+	MD metadata.MD
+	// PeerInfo is information about the downstream peer.
+	PeerInfo *peer.Peer
+	// FullMethod is the method name being called on the upstream service.
+	FullMethod string
+	// DestinationPort is the port that the RPC is being sent to on the
+	// server.
 	DestinationPort uint32
+	// DestinationAddr is the address that the RPC is being sent to.
 	DestinationAddr net.Addr
 	// PrincipalName is the name of the downstream principal. If set, the URI
 	// SAN or DNS SAN in that order is used from the certificate, otherwise the
@@ -71,10 +76,10 @@ type EvaluateArgs struct {
 	PrincipalName string
 }
 
-// Evaluate will be called after the RBAC Engine is instantiated. This will see
-// if an incoming RPC matches with a policy or not.
+// Evaluate will be called to determine if an incoming RPC matches with a
+// policy.
 func (r *Engine) Evaluate(args *EvaluateArgs) AuthorizationDecision {
-	for policy, matcher := range r.policyMatchers {
+	for policy, matcher := range r.policies {
 		if matcher.matches(args) {
 			return AuthorizationDecision{
 				MatchingPolicyName: policy,
@@ -85,7 +90,5 @@ func (r *Engine) Evaluate(args *EvaluateArgs) AuthorizationDecision {
 	// string is not a valid policy name. If the empty string is a valid policy
 	// name, then we should add to the data returned and have a boolean returned
 	// or not.
-	return AuthorizationDecision{
-		MatchingPolicyName: "",
-	}
+	return AuthorizationDecision{MatchingPolicyName: ""}
 }

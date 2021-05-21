@@ -204,14 +204,16 @@ func (hsm *HeaderSuffixMatcher) String() string {
 }
 
 // HeaderContainsMatcher matches on whether the header value contains the
-// value passed into this struct. An empty contains string is not allowed,
-// use HeaderPresentMatcher instead.
+// value passed into this struct.
 type HeaderContainsMatcher struct {
 	key      string
 	contains string
 }
 
-// NewHeaderContainsMatcher returns a new HeaderContainsMatcher.
+// NewHeaderContainsMatcher returns a new HeaderContainsMatcher. The key
+// represents the HTTP Header key, and contains string represents what the
+// HeaderContainsMatcher matches the value of the key on. An empty contains
+// string is not allowed, use HeaderPresentMatcher instead.
 func NewHeaderContainsMatcher(key string, contains string) *HeaderContainsMatcher {
 	return &HeaderContainsMatcher{key: key, contains: contains}
 }
