@@ -7245,7 +7245,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 				"grpc-status", "0",
 				"grpc-status-details-bin", "????",
 			},
-			errCode: codes.Internal,
+			errCode: codes.Unimplemented,
 		},
 	} {
 		doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer)

@@ -1991,6 +1991,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
 					{Name: "grpc-status", Value: "0"},
+					{Name: ":status", Value: "200"},
 				},
 			},
 			// no error
@@ -2002,6 +2003,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
 					{Name: "grpc-status", Value: "xxxx"},
+					{Name: ":status", Value: "200"},
 				},
 			},
 			wantStatus: status.New(
