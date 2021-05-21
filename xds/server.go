@@ -33,16 +33,16 @@ import (
 	"google.golang.org/grpc/internal/buffer"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/server"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const serverPrefix = "[xds-server %p] "
 
 var (
 	// These new functions will be overridden in unit tests.
-	newXDSClient = func() (xdsClientInterface, error) {
+	newXDSClient = func() (xdsClient, error) {
 		return xdsclient.New()
 	}
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface {
@@ -58,9 +58,9 @@ func prefixLogger(p *GRPCServer) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(serverPrefix, p))
 }
 
-// xdsClientInterface contains methods from xdsClient.Client which are used by
+// xdsClient contains methods from xdsClient.Client which are used by
 // the server. This is useful for overriding in unit tests.
-type xdsClientInterface interface {
+type xdsClient interface {
 	WatchListener(string, func(xdsclient.ListenerUpdate, error)) func()
 	BootstrapConfig() *bootstrap.Config
 	Close()
@@ -89,8 +89,8 @@ type GRPCServer struct {
 	// clientMu is used only in initXDSClient(), which is called at the
 	// beginning of Serve(), where we have to decide if we have to create a
 	// client or use an existing one.
-	clientMu sync.Mutex
-	xdsC     xdsClientInterface
+	clientMu  sync.Mutex
+	xdsClient xdsClient
 }
 
 // NewGRPCServer creates an xDS-enabled gRPC server using the passed in opts.
@@ -150,13 +150,13 @@ func (s *GRPCServer) initXDSClient() error {
 	s.clientMu.Lock()
 	defer s.clientMu.Unlock()
 
-	if s.xdsC != nil {
+	if s.xdsClient != nil {
 		return nil
 	}
 
 	newXDSClient := newXDSClient
 	if s.opts.bootstrapContents != nil {
-		newXDSClient = func() (xdsClientInterface, error) {
+		newXDSClient = func() (xdsClient, error) {
 			return xdsclient.NewClientWithBootstrapContents(s.opts.bootstrapContents)
 		}
 	}
@@ -164,7 +164,7 @@ func (s *GRPCServer) initXDSClient() error {
 	if err != nil {
 		return fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
-	s.xdsC = client
+	s.xdsClient = client
 	s.logger.Infof("Created an xdsClient")
 	return nil
 }
@@ -187,7 +187,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	if err := s.initXDSClient(); err != nil {
 		return err
 	}
-	cfg := s.xdsC.BootstrapConfig()
+	cfg := s.xdsClient.BootstrapConfig()
 	if cfg == nil {
 		return errors.New("bootstrap configuration is empty")
 	}
@@ -227,7 +227,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 		Listener:             lis,
 		ListenerResourceName: name,
 		XDSCredsInUse:        s.xdsCredsInUse,
-		XDSClient:            s.xdsC,
+		XDSClient:            s.xdsClient,
 		ModeCallback: func(addr net.Addr, mode server.ServingMode, err error) {
 			modeUpdateCh.Put(&modeChangeArgs{
 				addr: addr,
@@ -298,8 +298,8 @@ func (s *GRPCServer) handleServingModeChanges(updateCh *buffer.Unbounded) {
 func (s *GRPCServer) Stop() {
 	s.quit.Fire()
 	s.gs.Stop()
-	if s.xdsC != nil {
-		s.xdsC.Close()
+	if s.xdsClient != nil {
+		s.xdsClient.Close()
 	}
 }
 
@@ -309,8 +309,8 @@ func (s *GRPCServer) Stop() {
 func (s *GRPCServer) GracefulStop() {
 	s.quit.Fire()
 	s.gs.GracefulStop()
-	if s.xdsC != nil {
-		s.xdsC.Close()
+	if s.xdsClient != nil {
+		s.xdsClient.Close()
 	}
 }
 

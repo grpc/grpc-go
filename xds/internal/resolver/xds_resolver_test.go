@@ -44,13 +44,12 @@ import (
 	"google.golang.org/grpc/status"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
-	"google.golang.org/grpc/xds/internal/client"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const (
@@ -115,19 +114,19 @@ func newTestClientConn() *testClientConn {
 func (s) TestResolverBuilder(t *testing.T) {
 	tests := []struct {
 		name          string
-		xdsClientFunc func() (xdsClientInterface, error)
+		xdsClientFunc func() (xdsClient, error)
 		wantErr       bool
 	}{
 		{
 			name: "simple-good",
-			xdsClientFunc: func() (xdsClientInterface, error) {
+			xdsClientFunc: func() (xdsClient, error) {
 				return fakeclient.NewClient(), nil
 			},
 			wantErr: false,
 		},
 		{
 			name: "newXDSClient-throws-error",
-			xdsClientFunc: func() (xdsClientInterface, error) {
+			xdsClientFunc: func() (xdsClient, error) {
 				return nil, errors.New("newXDSClient-throws-error")
 			},
 			wantErr: true,
@@ -168,7 +167,7 @@ func (s) TestResolverBuilder_xdsCredsBootstrapMismatch(t *testing.T) {
 	// Fake out the xdsClient creation process by providing a fake, which does
 	// not have any certificate provider configuration.
 	oldClientMaker := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) {
+	newXDSClient = func() (xdsClient, error) {
 		fc := fakeclient.NewClient()
 		fc.SetBootstrapConfig(&bootstrap.Config{})
 		return fc, nil
@@ -195,7 +194,7 @@ func (s) TestResolverBuilder_xdsCredsBootstrapMismatch(t *testing.T) {
 }
 
 type setupOpts struct {
-	xdsClientFunc func() (xdsClientInterface, error)
+	xdsClientFunc func() (xdsClient, error)
 }
 
 func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, func()) {
@@ -255,7 +254,7 @@ func waitForWatchRouteConfig(ctx context.Context, t *testing.T, xdsC *fakeclient
 func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
 	})
 	defer cancel()
 
@@ -272,7 +271,7 @@ func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -287,7 +286,7 @@ func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -313,7 +312,7 @@ func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
 func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -331,7 +330,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 		wantClusters map[string]bool
 	}{
 		{
-			routes: []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
+			routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			wantJSON: `{"loadBalancingConfig":[{
     "xds_cluster_manager_experimental":{
       "children":{
@@ -343,7 +342,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			wantClusters: map[string]bool{"test-cluster-1": true},
 		},
 		{
-			routes: []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
+			routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
 				"cluster_1": {Weight: 75},
 				"cluster_2": {Weight: 25},
 			}}},
@@ -367,7 +366,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			wantClusters: map[string]bool{"cluster_1": true, "cluster_2": true},
 		},
 		{
-			routes: []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
+			routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
 				"cluster_1": {Weight: 75},
 				"cluster_2": {Weight: 25},
 			}}},
@@ -447,7 +446,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
 	})
 	defer cancel()
 	defer xdsR.Close()
@@ -464,7 +463,7 @@ func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -507,7 +506,7 @@ func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
 func (s) TestXDSResolverRemovedResource(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
 	})
 	defer cancel()
 	defer xdsR.Close()
@@ -524,7 +523,7 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -615,7 +614,7 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 func (s) TestXDSResolverWRR(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -635,7 +634,7 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes: []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
+				Routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
 					"A": {Weight: 5},
 					"B": {Weight: 10},
 				}}},
@@ -676,7 +675,7 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 	defer func(old bool) { env.TimeoutSupport = old }(env.TimeoutSupport)
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -696,7 +695,7 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes: []*client.Route{{
+				Routes: []*xdsclient.Route{{
 					Prefix:            newStringP("/foo"),
 					WeightedClusters:  map[string]xdsclient.WeightedCluster{"A": {Weight: 1}},
 					MaxStreamDuration: newDurationP(5 * time.Second),
@@ -779,7 +778,7 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -796,7 +795,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -846,7 +845,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"NEW": {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"NEW": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -856,7 +855,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"NEW": {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"NEW": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -895,7 +894,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"NEW": {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"NEW": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -928,7 +927,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -954,7 +953,7 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -982,7 +981,7 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -1028,7 +1027,7 @@ func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 func (s) TestXDSResolverMultipleLDSUpdates(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
 	})
 	defer xdsR.Close()
 	defer cancel()
@@ -1203,7 +1202,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			xdsC := fakeclient.NewClient()
 			xdsR, tcc, cancel := testSetup(t, setupOpts{
-				xdsClientFunc: func() (xdsClientInterface, error) { return xdsC, nil },
+				xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
 			})
 			defer xdsR.Close()
 			defer cancel()
@@ -1229,7 +1228,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 				VirtualHosts: []*xdsclient.VirtualHost{
 					{
 						Domains: []string{targetStr},
-						Routes: []*client.Route{{
+						Routes: []*xdsclient.Route{{
 							Prefix: newStringP("1"), WeightedClusters: map[string]xdsclient.WeightedCluster{
 								"A": {Weight: 1},
 								"B": {Weight: 1},

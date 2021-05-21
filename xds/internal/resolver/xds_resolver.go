@@ -28,10 +28,10 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 
 	iresolver "google.golang.org/grpc/internal/resolver"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
 const xdsScheme = "xds"
@@ -41,26 +41,26 @@ const xdsScheme = "xds"
 // the same time.
 func NewBuilder(config []byte) (resolver.Builder, error) {
 	return &xdsResolverBuilder{
-		newXDSClient: func() (xdsClientInterface, error) {
+		newXDSClient: func() (xdsClient, error) {
 			return xdsclient.NewClientWithBootstrapContents(config)
 		},
 	}, nil
 }
 
 // For overriding in unittests.
-var newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
+var newXDSClient = func() (xdsClient, error) { return xdsclient.New() }
 
 func init() {
 	resolver.Register(&xdsResolverBuilder{})
 }
 
 type xdsResolverBuilder struct {
-	newXDSClient func() (xdsClientInterface, error)
+	newXDSClient func() (xdsClient, error)
 }
 
 // Build helps implement the resolver.Builder interface.
 //
-// The xds bootstrap process is performed (and a new xds client is built) every
+// The xds bootstrap process is performed (and a new xds xdsClient is built) every
 // time an xds resolver is built.
 func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	r := &xdsResolver{
@@ -78,11 +78,11 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, op
 		newXDSClient = b.newXDSClient
 	}
 
-	client, err := newXDSClient()
+	xdsClient, err := newXDSClient()
 	if err != nil {
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
-	r.client = client
+	r.xdsClient = xdsClient
 
 	// If xds credentials were specified by the user, but bootstrap configs do
 	// not contain any certificate provider configuration, it is better to fail
@@ -96,18 +96,18 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, op
 		creds = opts.CredsBundle.TransportCredentials()
 	}
 	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
-		bc := client.BootstrapConfig()
+		bc := xdsClient.BootstrapConfig()
 		if len(bc.CertProviderConfigs) == 0 {
 			return nil, errors.New("xds: xdsCreds specified but certificate_providers config missing in bootstrap file")
 		}
 	}
 
 	// Register a watch on the xdsClient for the user's dial target.
-	cancelWatch := watchService(r.client, r.target.Endpoint, r.handleServiceUpdate, r.logger)
-	r.logger.Infof("Watch started on resource name %v with xds-client %p", r.target.Endpoint, r.client)
+	cancelWatch := watchService(r.xdsClient, r.target.Endpoint, r.handleServiceUpdate, r.logger)
+	r.logger.Infof("Watch started on resource name %v with xds-client %p", r.target.Endpoint, r.xdsClient)
 	r.cancelWatch = func() {
 		cancelWatch()
-		r.logger.Infof("Watch cancel on resource name %v with xds-client %p", r.target.Endpoint, r.client)
+		r.logger.Infof("Watch cancel on resource name %v with xds-client %p", r.target.Endpoint, r.xdsClient)
 	}
 
 	go r.run()
@@ -119,9 +119,9 @@ func (*xdsResolverBuilder) Scheme() string {
 	return xdsScheme
 }
 
-// xdsClientInterface contains methods from xdsClient.Client which are used by
+// xdsClient contains methods from xdsClient.XdsClient which are used by
 // the resolver. This will be faked out in unittests.
-type xdsClientInterface interface {
+type xdsClient interface {
 	WatchListener(serviceName string, cb func(xdsclient.ListenerUpdate, error)) func()
 	WatchRouteConfig(routeName string, cb func(xdsclient.RouteConfigUpdate, error)) func()
 	BootstrapConfig() *bootstrap.Config
@@ -149,7 +149,7 @@ type xdsResolver struct {
 	logger *grpclog.PrefixLogger
 
 	// The underlying xdsClient which performs all xDS requests and responses.
-	client xdsClientInterface
+	xdsClient xdsClient
 	// A channel for the watch API callback to write service updates on to. The
 	// updates are read by the run goroutine and passed on to the ClientConn.
 	updateCh chan suWithError
@@ -190,7 +190,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 		r.cc.ReportError(err)
 		return false
 	}
-	r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.client, pretty.FormatJSON(sc))
+	r.logger.Infof("Received update on resource %v from xds-client %p, generated service config: %v", r.target.Endpoint, r.xdsClient, pretty.FormatJSON(sc))
 
 	// Send the update to the ClientConn.
 	state := iresolver.SetConfigSelector(resolver.State{
@@ -198,9 +198,9 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 	}, cs)
 
 	// Include the xds client for the LB policies to use.  For unit tests,
-	// r.client may not be a full *xdsclient.Client, but it will always be in
-	// production.
-	if c, ok := r.client.(*xdsclient.Client); ok {
+	// r.xdsClient may not be a full *xdsclient.Client, but it will always be
+	// in production.
+	if c, ok := r.xdsClient.(*xdsclient.Client); ok {
 		state = xdsclient.SetClient(state, c)
 	}
 	r.cc.UpdateState(state)
@@ -216,7 +216,7 @@ func (r *xdsResolver) run() {
 			return
 		case update := <-r.updateCh:
 			if update.err != nil {
-				r.logger.Warningf("Watch error on resource %v from xds-client %p, %v", r.target.Endpoint, r.client, update.err)
+				r.logger.Warningf("Watch error on resource %v from xds-client %p, %v", r.target.Endpoint, r.xdsClient, update.err)
 				if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
 					// If error is resource-not-found, it means the LDS
 					// resource was removed. Ultimately send an empty service
@@ -244,7 +244,7 @@ func (r *xdsResolver) run() {
 			// Create the config selector for this update.
 			cs, err := r.newConfigSelector(update.su)
 			if err != nil {
-				r.logger.Warningf("Error parsing update on resource %v from xds-client %p: %v", r.target.Endpoint, r.client, err)
+				r.logger.Warningf("Error parsing update on resource %v from xds-client %p: %v", r.target.Endpoint, r.xdsClient, err)
 				r.cc.ReportError(err)
 				continue
 			}
@@ -287,7 +287,7 @@ func (*xdsResolver) ResolveNow(o resolver.ResolveNowOptions) {}
 // Close closes the resolver, and also closes the underlying xdsClient.
 func (r *xdsResolver) Close() {
 	r.cancelWatch()
-	r.client.Close()
+	r.xdsClient.Close()
 	r.closed.Fire()
 	r.logger.Infof("Shutdown")
 }

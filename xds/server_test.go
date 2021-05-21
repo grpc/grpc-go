@@ -39,10 +39,10 @@ import (
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const (
@@ -247,7 +247,7 @@ func (p *fakeProvider) Close() {
 func setupOverrides() (*fakeGRPCServer, *testutils.Channel, func()) {
 	clientCh := testutils.NewChannel()
 	origNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) {
+	newXDSClient = func() (xdsClient, error) {
 		c := fakeclient.NewClient()
 		c.SetBootstrapConfig(&bootstrap.Config{
 			BalancerName:                       "dummyBalancer",
@@ -277,7 +277,7 @@ func setupOverrides() (*fakeGRPCServer, *testutils.Channel, func()) {
 func setupOverridesForXDSCreds(includeCertProviderCfg bool) (*testutils.Channel, func()) {
 	clientCh := testutils.NewChannel()
 	origNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) {
+	newXDSClient = func() (xdsClient, error) {
 		c := fakeclient.NewClient()
 		bc := &bootstrap.Config{
 			BalancerName:                       "dummyBalancer",
@@ -544,7 +544,7 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 			// xdsClient with the specified bootstrap configuration.
 			clientCh := testutils.NewChannel()
 			origNewXDSClient := newXDSClient
-			newXDSClient = func() (xdsClientInterface, error) {
+			newXDSClient = func() (xdsClient, error) {
 				c := fakeclient.NewClient()
 				c.SetBootstrapConfig(test.bootstrapConfig)
 				clientCh.Send(c)
@@ -587,7 +587,7 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 // verifies that Server() exits with a non-nil error.
 func (s) TestServeNewClientFailure(t *testing.T) {
 	origNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) {
+	newXDSClient = func() (xdsClient, error) {
 		return nil, errors.New("xdsClient creation failed")
 	}
 	defer func() { newXDSClient = origNewXDSClient }()

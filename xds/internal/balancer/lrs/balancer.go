@@ -28,22 +28,22 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/loadstore"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
 func init() {
-	balancer.Register(&lrsBB{})
+	balancer.Register(lrsBB{})
 }
 
-var newXDSClient func() (xdsClientInterface, error)
+var newXDSClient func() (xdsClient, error)
 
 // Name is the name of the LRS balancer.
 const Name = "lrs_experimental"
 
 type lrsBB struct{}
 
-func (l *lrsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (lrsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &lrsBalancer{
 		cc:        cc,
 		buildOpts: opts,
@@ -58,17 +58,17 @@ func (l *lrsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balanc
 			b.logger.Errorf("failed to create xds-client: %v", err)
 			return nil
 		}
-		b.client = newXDSClientWrapper(client)
+		b.xdsClient = newXDSClientWrapper(client)
 	}
 
 	return b
 }
 
-func (l *lrsBB) Name() string {
+func (lrsBB) Name() string {
 	return Name
 }
 
-func (l *lrsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (lrsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return parseConfig(c)
 }
 
@@ -76,8 +76,8 @@ type lrsBalancer struct {
 	cc        balancer.ClientConn
 	buildOpts balancer.BuildOptions
 
-	logger *grpclog.PrefixLogger
-	client *xdsClientWrapper
+	logger    *grpclog.PrefixLogger
+	xdsClient *xdsClientWrapper
 
 	config *LBConfig
 	lb     balancer.Balancer // The sub balancer.
@@ -90,18 +90,18 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}
 
-	if b.client == nil {
+	if b.xdsClient == nil {
 		c := xdsclient.FromResolverState(s.ResolverState)
 		if c == nil {
 			return balancer.ErrBadResolverState
 		}
-		b.client = newXDSClientWrapper(c)
+		b.xdsClient = newXDSClientWrapper(c)
 	}
 
 	// Update load reporting config or xds client. This needs to be done before
 	// updating the child policy because we need the loadStore from the updated
 	// client to be passed to the ccWrapper.
-	if err := b.client.update(newConfig); err != nil {
+	if err := b.xdsClient.update(newConfig); err != nil {
 		return err
 	}
 
@@ -118,7 +118,7 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal LocalityID: %#v", newConfig.Locality)
 		}
-		ccWrapper := newCCWrapper(b.cc, b.client.loadStore(), lidJSON)
+		ccWrapper := newCCWrapper(b.cc, b.xdsClient.loadStore(), lidJSON)
 		b.lb = bb.Build(ccWrapper, b.buildOpts)
 	}
 	b.config = newConfig
@@ -147,7 +147,7 @@ func (b *lrsBalancer) Close() {
 		b.lb.Close()
 		b.lb = nil
 	}
-	b.client.close()
+	b.xdsClient.close()
 }
 
 type ccWrapper struct {
@@ -169,15 +169,14 @@ func (ccw *ccWrapper) UpdateState(s balancer.State) {
 	ccw.ClientConn.UpdateState(s)
 }
 
-// xdsClientInterface contains only the xds_client methods needed by LRS
+// xdsClient contains only the xds_client methods needed by LRS
 // balancer. It's defined so we can override xdsclient in tests.
-type xdsClientInterface interface {
+type xdsClient interface {
 	ReportLoad(server string) (*load.Store, func())
-	Close()
 }
 
 type xdsClientWrapper struct {
-	c                xdsClientInterface
+	c                xdsClient
 	cancelLoadReport func()
 	clusterName      string
 	edsServiceName   string
@@ -187,7 +186,7 @@ type xdsClientWrapper struct {
 	loadWrapper *loadstore.Wrapper
 }
 
-func newXDSClientWrapper(c xdsClientInterface) *xdsClientWrapper {
+func newXDSClientWrapper(c xdsClient) *xdsClientWrapper {
 	return &xdsClientWrapper{
 		c:           c,
 		loadWrapper: loadstore.NewWrapper(),
@@ -255,8 +254,5 @@ func (w *xdsClientWrapper) close() {
 	if w.cancelLoadReport != nil {
 		w.cancelLoadReport()
 		w.cancelLoadReport = nil
-	}
-	if newXDSClient != nil {
-		w.c.Close()
 	}
 }

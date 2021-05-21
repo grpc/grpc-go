@@ -20,7 +20,7 @@ import (
 	"errors"
 	"sync"
 
-	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
 var errNotReceivedUpdate = errors.New("tried to construct a cluster update on a cluster that has not received an update")
@@ -40,7 +40,7 @@ type clusterHandler struct {
 	// CDS Balancer cares about is the most recent update.
 	updateChannel chan clusterHandlerUpdate
 
-	xdsClient xdsClientInterface
+	xdsClient xdsClient
 }
 
 func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
@@ -112,7 +112,7 @@ type clusterNode struct {
 
 // CreateClusterNode creates a cluster node from a given clusterName. This will
 // also start the watch for that cluster.
-func createClusterNode(clusterName string, xdsClient xdsClientInterface, topLevelHandler *clusterHandler) *clusterNode {
+func createClusterNode(clusterName string, xdsClient xdsClient, topLevelHandler *clusterHandler) *clusterNode {
 	c := &clusterNode{
 		clusterHandler: topLevelHandler,
 	}

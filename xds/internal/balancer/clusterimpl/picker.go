@@ -24,8 +24,8 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
 // NewRandomWRR is used when calculating drops. It's exported so that tests can
@@ -75,7 +75,7 @@ type dropPicker struct {
 	drops     []*dropper
 	s         balancer.State
 	loadStore loadReporter
-	counter   *client.ServiceRequestsCounter
+	counter   *xdsclient.ServiceRequestsCounter
 	countMax  uint32
 }
 

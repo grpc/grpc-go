@@ -37,10 +37,9 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
-	"google.golang.org/grpc/xds/internal/client"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
 const (
@@ -215,7 +214,7 @@ func setup(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *x
 
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
 
 	builder := balancer.Get(cdsName)
 	if builder == nil {
@@ -606,7 +605,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 
 	// Since the counter's max requests was set to 1, the first request should
 	// succeed and the second should fail.
-	counter := client.GetServiceRequestsCounter(serviceName)
+	counter := xdsclient.GetServiceRequestsCounter(serviceName)
 	if err := counter.StartRequest(maxRequests); err != nil {
 		t.Fatal(err)
 	}

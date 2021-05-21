@@ -38,10 +38,9 @@ import (
 	"google.golang.org/grpc/internal/xds/env"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
-	"google.golang.org/grpc/xds/internal/client"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
 var (
@@ -835,7 +834,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	)
 	var maxRequestsTemp uint32 = cbMaxRequests
 	edsb.updateServiceRequestsConfig(testServiceName, &maxRequestsTemp)
-	defer client.ClearCounterForTesting(testServiceName)
+	defer xdsclient.ClearCounterForTesting(testServiceName)
 
 	backendToBalancerID := make(map[balancer.SubConn]xdsinternal.LocalityID)
 

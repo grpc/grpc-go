@@ -35,8 +35,8 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const (
@@ -59,7 +59,7 @@ var (
 		// not deal with subConns.
 		return builder.Build(cc, opts), nil
 	}
-	newXDSClient  func() (xdsClientInterface, error)
+	newXDSClient  func() (xdsClient, error)
 	buildProvider = buildProviderFunc
 )
 
@@ -72,6 +72,8 @@ func init() {
 // It also implements the balancer.ConfigParser interface to help parse the
 // JSON service config, to be passed to the cdsBalancer.
 type cdsBB struct{}
+
+var _ balancer.ConfigParser = cdsBB{}
 
 // Build creates a new CDS balancer with the ClientConn.
 func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
@@ -138,12 +140,11 @@ func (cdsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, 
 	return &cfg, nil
 }
 
-// xdsClientInterface contains methods from xdsClient.Client which are used by
-// the cdsBalancer. This will be faked out in unittests.
-type xdsClientInterface interface {
+// xdsClient contains methods from xdsclient.Client which are used by the
+// cdsBalancer. This will be faked out in unittests.
+type xdsClient interface {
 	WatchCluster(string, func(xdsclient.ClusterUpdate, error)) func()
 	BootstrapConfig() *bootstrap.Config
-	Close()
 }
 
 // ccUpdate wraps a clientConn update received from gRPC (pushed from the
@@ -185,7 +186,7 @@ type cdsBalancer struct {
 	ccw            *ccWrapper            // ClientConn interface passed to child LB.
 	bOpts          balancer.BuildOptions // BuildOptions passed to child LB.
 	updateCh       *buffer.Unbounded     // Channel for gRPC and xdsClient updates.
-	xdsClient      xdsClientInterface    // xDS client to watch Cluster resource.
+	xdsClient      xdsClient             // xDS client to watch Cluster resource.
 	cancelWatch    func()                // Cluster watch cancel func.
 	edsLB          balancer.Balancer     // EDS child policy.
 	clusterToWatch string
@@ -407,9 +408,6 @@ func (b *cdsBalancer) run() {
 			if b.edsLB != nil {
 				b.edsLB.Close()
 				b.edsLB = nil
-			}
-			if newXDSClient != nil {
-				b.xdsClient.Close()
 			}
 			if b.cachedRoot != nil {
 				b.cachedRoot.Close()
