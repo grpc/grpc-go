@@ -44,6 +44,7 @@ type ccBalancerWrapper struct {
 	balancerMu sync.Mutex // synchronizes calls to the balancer
 	balancer   balancer.Balancer
 	scBuffer   *buffer.Unbounded
+	closed     *grpcsync.Event
 	done       *grpcsync.Event
 
 	mu       sync.Mutex
@@ -54,6 +55,7 @@ func newCCBalancerWrapper(cc *ClientConn, b balancer.Builder, bopts balancer.Bui
 	ccb := &ccBalancerWrapper{
 		cc:       cc,
 		scBuffer: buffer.NewUnbounded(),
+		closed:   grpcsync.NewEvent(),
 		done:     grpcsync.NewEvent(),
 		subConns: make(map[*acBalancerWrapper]struct{}),
 	}
@@ -69,33 +71,40 @@ func (ccb *ccBalancerWrapper) watcher() {
 		select {
 		case t := <-ccb.scBuffer.Get():
 			ccb.scBuffer.Load()
-			if ccb.done.HasFired() {
+			if ccb.closed.HasFired() {
 				break
 			}
 			ccb.balancerMu.Lock()
 			su := t.(*scStateUpdate)
 			ccb.balancer.UpdateSubConnState(su.sc, balancer.SubConnState{ConnectivityState: su.state, ConnectionError: su.err})
 			ccb.balancerMu.Unlock()
-		case <-ccb.done.Done():
+		case <-ccb.closed.Done():
 		}
 
-		if ccb.done.HasFired() {
+		if ccb.closed.HasFired() {
+			ccb.balancerMu.Lock()
 			ccb.balancer.Close()
+			ccb.balancerMu.Unlock()
 			ccb.mu.Lock()
 			scs := ccb.subConns
 			ccb.subConns = nil
 			ccb.mu.Unlock()
+			ccb.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: nil})
+			ccb.done.Fire()
+			// Fire done before removing the addr conns.  We can safely unblock
+			// ccb.close and allow the removeAddrConns to happen
+			// asynchronously.
 			for acbw := range scs {
 				ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 			}
-			ccb.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: nil})
 			return
 		}
 	}
 }
 
 func (ccb *ccBalancerWrapper) close() {
-	ccb.done.Fire()
+	ccb.closed.Fire()
+	<-ccb.done.Done()
 }
 
 func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State, err error) {

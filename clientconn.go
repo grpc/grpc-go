@@ -1046,11 +1046,11 @@ func (cc *ClientConn) Close() error {
 
 	cc.blockingpicker.close()
 
-	if rWrapper != nil {
-		rWrapper.close()
-	}
 	if bWrapper != nil {
 		bWrapper.close()
+	}
+	if rWrapper != nil {
+		rWrapper.close()
 	}
 
 	for ac := range conns {
