@@ -7217,7 +7217,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 	}
 }
 
-// Testing non-Trailers-only Trailers (delievered in second HEADERS frame)
+// Testing non-Trailers-only Trailers (delivered in second HEADERS frame)
 func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 	for _, test := range []struct {
 		responseHeader []string
@@ -7246,6 +7246,18 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 				"grpc-status-details-bin", "????",
 			},
 			errCode: codes.Unimplemented,
+		},
+		{
+			responseHeader: []string{
+				":status", "200",
+				"content-type", "application/grpc",
+			},
+			trailer: []string{
+				// malformed grpc-status-details-bin field
+				"grpc-status", "0",
+				"grpc-status-details-bin", "????",
+			},
+			errCode: codes.Internal,
 		},
 	} {
 		doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer)
