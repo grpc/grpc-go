@@ -1521,6 +1521,8 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		}
 	}
 
+	ss.ctx = newContextWithRPCInfo(ss.ctx, false, ss.codec, ss.cp, ss.comp)
+
 	if trInfo != nil {
 		trInfo.tr.LazyLog(&trInfo.firstLine, false)
 	}
