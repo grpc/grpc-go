@@ -17,6 +17,7 @@
 package rbac
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"regexp"
@@ -25,20 +26,19 @@ import (
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3route_componentspb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
-	matcher "google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/internal/xds/matcher"
 )
 
 // TODO: Do we need errors at every node? Should we have checks on each node (i.e. destinationPort should be within a certain range)
 
 // The rbacMatcher interface will be used by the RBAC Engine to help determine
-// whether incoming RPC requests should be allowed or denied. There will be many
-// types of matchers, each instantiated with part of the policy used to
-// instantiate the RBAC Engine. These constructed matchers will form a logical
-// tree of matchers, which data about any incoming RPC's will be passed through
-// the tree to help make a decision about whether the RPC should be allowed or
-// not.
+// whether incoming RPC requests match a policy or not. There will be many types
+// of matchers, each instantiated with part of the policy used to instantiate
+// the RBAC Engine. These constructed matchers will form a logical tree of
+// matchers, which data about any incoming RPC's will be passed through the tree
+// to help make a decision about whether the RPC matches a policy or not.
 type rbacMatcher interface {
-	matches(args *EvaluateArgs) bool
+	matches(data *RPCData) bool
 }
 
 // policyMatcher helps determine whether an incoming RPC call matches a policy.
@@ -63,20 +63,16 @@ func newPolicyMatcher(policy *v3rbacpb.Policy) (*policyMatcher, error) {
 		return nil, err
 	}
 	return &policyMatcher{
-		permissions: &orMatcher{
-			matchers: permissions,
-		},
-		principals: &orMatcher{
-			matchers: principals,
-		},
+		permissions: &orMatcher{matchers: permissions},
+		principals: &orMatcher{matchers: principals},
 	}, nil
 }
 
-func (pm *policyMatcher) matches(args *EvaluateArgs) bool {
+func (pm *policyMatcher) matches(data *RPCData) bool {
 	// A policy matches if and only if at least one of its permissions match the
 	// action taking place AND at least one if its principals match the
 	// downstream peer.
-	return pm.permissions.matches(args) && pm.principals.matches(args)
+	return pm.permissions.matches(data) && pm.principals.matches(data)
 }
 
 // matchersFromPermissions takes a list of permissions (can also be
@@ -216,11 +212,11 @@ type orMatcher struct {
 	matchers []rbacMatcher
 }
 
-func (om *orMatcher) matches(args *EvaluateArgs) bool {
-	// Range through child matchers and pass in rbacData, and only one child
-	// rbacMatcher has to match to be logically successful.
+func (om *orMatcher) matches(data *RPCData) bool {
+	// Range through child matchers and pass in data about incoming RPC, and
+	// only one child rbacMatcher has to match to be logically successful.
 	for _, matcher := range om.matchers {
-		if matcher.matches(args) {
+		if matcher.matches(data) {
 			return true
 		}
 	}
@@ -232,9 +228,9 @@ type andMatcher struct {
 	matchers []rbacMatcher
 }
 
-func (am *andMatcher) matches(args *EvaluateArgs) bool {
+func (am *andMatcher) matches(data *RPCData) bool {
 	for _, matcher := range am.matchers {
-		if !matcher.matches(args) {
+		if !matcher.matches(data) {
 			return false
 		}
 	}
@@ -246,7 +242,7 @@ func (am *andMatcher) matches(args *EvaluateArgs) bool {
 type alwaysMatcher struct {
 }
 
-func (am *alwaysMatcher) matches(args *EvaluateArgs) bool {
+func (am *alwaysMatcher) matches(data *RPCData) bool {
 	return true
 }
 
@@ -255,46 +251,44 @@ type notMatcher struct {
 	matcherToNot rbacMatcher
 }
 
-func (nm *notMatcher) matches(args *EvaluateArgs) bool {
-	return !nm.matcherToNot.matches(args)
+func (nm *notMatcher) matches(data *RPCData) bool {
+	return !nm.matcherToNot.matches(data)
 }
 
 // headerMatcher is a rbacMatcher that matches on incoming HTTP Headers present in the incoming RPC.
 type headerMatcher struct {
-	headerMatcherInterface matcher.HeaderMatcherInterface
+	matcher matcher.HeaderMatcherInterface
 }
 
-// TODO: Do you need errors on every node? Especially this one, where it doesn't
-// seem like error conditions can even arise?
 func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (*headerMatcher, error) {
-	var headerMatcherInterface matcher.HeaderMatcherInterface
+	var m matcher.HeaderMatcherInterface
 	switch headerMatcherConfig.HeaderMatchSpecifier.(type) {
 	case *v3route_componentspb.HeaderMatcher_ExactMatch:
-		headerMatcherInterface = matcher.NewHeaderExactMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetExactMatch())
+		m = matcher.NewHeaderExactMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetExactMatch())
 	case *v3route_componentspb.HeaderMatcher_SafeRegexMatch:
 		// What to do about panic logic?
-		headerMatcherInterface = matcher.NewHeaderRegexMatcher(headerMatcherConfig.Name, regexp.MustCompile(headerMatcherConfig.GetSafeRegexMatch().Regex))
+		m = matcher.NewHeaderRegexMatcher(headerMatcherConfig.Name, regexp.MustCompile(headerMatcherConfig.GetSafeRegexMatch().Regex))
 	case *v3route_componentspb.HeaderMatcher_RangeMatch:
-		headerMatcherInterface = matcher.NewHeaderRangeMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetRangeMatch().Start, headerMatcherConfig.GetRangeMatch().End)
+		m = matcher.NewHeaderRangeMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetRangeMatch().Start, headerMatcherConfig.GetRangeMatch().End)
 	case *v3route_componentspb.HeaderMatcher_PresentMatch:
-		headerMatcherInterface = matcher.NewHeaderPresentMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetPresentMatch())
+		m = matcher.NewHeaderPresentMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetPresentMatch())
 	case *v3route_componentspb.HeaderMatcher_PrefixMatch:
-		headerMatcherInterface = matcher.NewHeaderPrefixMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetPrefixMatch())
+		m = matcher.NewHeaderPrefixMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetPrefixMatch())
 	case *v3route_componentspb.HeaderMatcher_SuffixMatch:
-		headerMatcherInterface = matcher.NewHeaderSuffixMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetSuffixMatch())
+		m = matcher.NewHeaderSuffixMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetSuffixMatch())
 	case *v3route_componentspb.HeaderMatcher_ContainsMatch:
-		headerMatcherInterface = matcher.NewHeaderContainsMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetContainsMatch())
+		m = matcher.NewHeaderContainsMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetContainsMatch())
+	default:
+		return nil, errors.New("unknown header matcher type")
 	}
 	if headerMatcherConfig.InvertMatch {
-		headerMatcherInterface = matcher.NewInvertMatcher(headerMatcherInterface)
+		m = matcher.NewInvertMatcher(m)
 	}
-	return &headerMatcher{
-		headerMatcherInterface: headerMatcherInterface,
-	}, nil
+	return &headerMatcher{matcher: m}, nil
 }
 
-func (hm *headerMatcher) matches(args *EvaluateArgs) bool {
-	return hm.headerMatcherInterface.Match(args.MD)
+func (hm *headerMatcher) matches(data *RPCData) bool {
+	return hm.matcher.Match(data.MD)
 }
 
 // urlPathMatcher matches on the URL Path of the incoming RPC. In gRPC, this
@@ -304,18 +298,15 @@ type urlPathMatcher struct {
 }
 
 func newURLPathMatcher(pathMatcher *v3matcherpb.PathMatcher) (*urlPathMatcher, error) {
-	// This string rbacMatcher does become prefix match
 	stringMatcher, err := matcher.StringMatcherFromProto(pathMatcher.GetPath())
 	if err != nil {
 		return nil, err
 	}
-	return &urlPathMatcher{
-		stringMatcher: stringMatcher,
-	}, nil
+	return &urlPathMatcher{stringMatcher: stringMatcher}, nil
 }
 
-func (upm *urlPathMatcher) matches(args *EvaluateArgs) bool {
-	return upm.stringMatcher.Match(args.FullMethod)
+func (upm *urlPathMatcher) matches(data *RPCData) bool {
+	return upm.stringMatcher.Match(data.FullMethod)
 }
 
 // sourceIPMatcher and destinationIPMatcher both are matchers that match against
@@ -337,13 +328,11 @@ func newSourceIPMatcher(cidrRange *v3corepb.CidrRange) (*sourceIPMatcher, error)
 	if err != nil {
 		return nil, err
 	}
-	return &sourceIPMatcher{
-		ipNet: ipNet,
-	}, nil
+	return &sourceIPMatcher{ipNet: ipNet}, nil
 }
 
-func (sim *sourceIPMatcher) matches(args *EvaluateArgs) bool {
-	return sim.ipNet.Contains(net.IP(args.PeerInfo.Addr.String()))
+func (sim *sourceIPMatcher) matches(data *RPCData) bool {
+	return sim.ipNet.Contains(net.IP(data.PeerInfo.Addr.String()))
 }
 
 type destinationIPMatcher struct {
@@ -356,13 +345,11 @@ func newDestinationIPMatcher(cidrRange *v3corepb.CidrRange) (*destinationIPMatch
 	if err != nil {
 		return nil, err
 	}
-	return &destinationIPMatcher{
-		ipNet: ipNet,
-	}, nil
+	return &destinationIPMatcher{ipNet: ipNet}, nil
 }
 
-func (dim *destinationIPMatcher) matches(args *EvaluateArgs) bool {
-	return dim.ipNet.Contains(net.IP(args.DestinationAddr.String()))
+func (dim *destinationIPMatcher) matches(data *RPCData) bool {
+	return dim.ipNet.Contains(net.IP(data.DestinationAddr.String()))
 }
 
 // portMatcher matches on whether the destination port of the RPC matches the
@@ -372,13 +359,11 @@ type portMatcher struct {
 }
 
 func newPortMatcher(destinationPort uint32) *portMatcher {
-	return &portMatcher{
-		destinationPort: destinationPort,
-	}
+	return &portMatcher{destinationPort: destinationPort}
 }
 
-func (pm *portMatcher) matches(args *EvaluateArgs) bool {
-	return args.DestinationPort == pm.destinationPort
+func (pm *portMatcher) matches(data *RPCData) bool {
+	return data.DestinationPort == pm.destinationPort
 }
 
 // authenticatedMatcher matches on the name of the Principal. If set, the URI
@@ -394,11 +379,9 @@ func newAuthenticatedMatcher(authenticatedMatcherConfig *v3rbacpb.Principal_Auth
 	if err != nil {
 		return nil, err
 	}
-	return &authenticatedMatcher{
-		stringMatcher: stringMatcher,
-	}, nil
+	return &authenticatedMatcher{stringMatcher: stringMatcher}, nil
 }
 
-func (am *authenticatedMatcher) matches(args *EvaluateArgs) bool {
-	return am.stringMatcher.Match(args.PrincipalName)
+func (am *authenticatedMatcher) matches(data *RPCData) bool {
+	return am.stringMatcher.Match(data.PrincipalName)
 }

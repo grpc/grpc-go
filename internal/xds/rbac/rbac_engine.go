@@ -26,13 +26,7 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
-// AuthorizationDecision is what will be returned from the RBAC Engine when it
-// is asked to see if an incoming RPC matches a policy.
-type AuthorizationDecision struct {
-	MatchingPolicyName string
-}
-
-// Engine is used for making authorization decisions on incoming RPCs.
+// Engine is used for matching incoming RPCs to policies.
 type Engine struct {
 	policies map[string]*policyMatcher
 }
@@ -54,10 +48,9 @@ func NewEngine(policy *v3rbacpb.RBAC) (*Engine, error) {
 	return &Engine{policies: policies}, nil
 }
 
-// EvaluateArgs represents the data pulled from an incoming RPC to a gRPC
-// server. This data will be used by the RBAC Engine to see if it matches a
-// policy this RBAC Engine was configured with or not.
-type EvaluateArgs struct {
+// RPCData wraps data pulled from an incoming RPC that the RBAC engine needs to
+// find a matching policy.
+type RPCData struct {
 	// MD is the HTTP Headers that are present in the incoming RPC.
 	MD metadata.MD
 	// PeerInfo is information about the downstream peer.
@@ -76,19 +69,17 @@ type EvaluateArgs struct {
 	PrincipalName string
 }
 
-// Evaluate will be called to determine if an incoming RPC matches with a
-// policy.
-func (r *Engine) Evaluate(args *EvaluateArgs) AuthorizationDecision {
+// FindMatchingPolicy determines if an incoming RPC matches a policy. On a
+// successful match, it returns the name of the matching policy.
+func (r *Engine) FindMatchingPolicy(data *RPCData) string {
 	for policy, matcher := range r.policies {
-		if matcher.matches(args) {
-			return AuthorizationDecision{
-				MatchingPolicyName: policy,
-			}
+		if matcher.matches(data) {
+			return policy
 		}
 	}
 	// TODO: This logic of returning an empty string assumes that the empty
 	// string is not a valid policy name. If the empty string is a valid policy
 	// name, then we should add to the data returned and have a boolean returned
 	// or not.
-	return AuthorizationDecision{MatchingPolicyName: ""}
+	return ""
 }
