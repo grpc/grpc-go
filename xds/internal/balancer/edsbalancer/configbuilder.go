@@ -21,7 +21,7 @@ package edsbalancer
 import (
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfigbuilder"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfig"
 	xdsclient "google.golang.org/grpc/xds/internal/client"
 )
 
@@ -32,14 +32,14 @@ func buildPriorityConfigJSON(edsResp xdsclient.EndpointsUpdate, c *EDSConfig) ([
 	if c.ChildPolicy != nil {
 		childConfig = &internalserviceconfig.BalancerConfig{Name: c.ChildPolicy.Name}
 	}
-	return balancerconfigbuilder.BuildPriorityConfigMarshalled(
-		[]balancerconfigbuilder.PriorityConfig{
+	return balancerconfig.BuildPriorityConfigJSON(
+		[]balancerconfig.PriorityConfig{
 			{
-				Mechanism: balancerconfigbuilder.DiscoveryMechanism{
+				Mechanism: balancerconfig.DiscoveryMechanism{
 					Cluster:                 c.ClusterName,
 					LoadReportingServerName: c.LrsLoadReportingServerName,
 					MaxConcurrentRequests:   c.MaxConcurrentRequests,
-					Type:                    balancerconfigbuilder.DiscoveryMechanismTypeEDS,
+					Type:                    balancerconfig.DiscoveryMechanismTypeEDS,
 					EDSServiceName:          c.EDSServiceName,
 				},
 				EDSResp: edsResp,

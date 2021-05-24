@@ -16,7 +16,7 @@
  *
  */
 
-package balancerconfigbuilder
+package balancerconfig
 
 import (
 	"bytes"
@@ -124,7 +124,7 @@ func TestBuildPriorityConfigMarshalled(t *testing.T) {
 		testDropOverMillion = 1
 	)
 
-	gotConfig, _, err := BuildPriorityConfigMarshalled([]PriorityConfig{
+	gotConfig, _, err := BuildPriorityConfigJSON([]PriorityConfig{
 		{
 			Mechanism: DiscoveryMechanism{
 				Cluster:                 testClusterName,

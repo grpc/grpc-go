@@ -16,7 +16,7 @@
  *
  */
 
-package balancerconfigbuilder
+package balancerconfig
 
 import (
 	"bytes"

@@ -16,8 +16,8 @@
  *
  */
 
-// Package balancerconfigbuilder contains utility functions to build balancer
-// config. The built config will generate a tree of balancers with priority,
+// Package balancerconfig contains utility functions to build balancer config.
+// The built config will generate a tree of balancers with priority,
 // cluster_impl, weighted_target, lrs, and roundrobin.
 //
 // This is in a subpackage of cluster_resolver so that it can be used by the EDS
@@ -26,7 +26,7 @@
 // and unexport them.
 //
 // TODO: move and unexport. Read above.
-package balancerconfigbuilder
+package balancerconfig
 
 import (
 	"encoding/json"
@@ -62,7 +62,7 @@ type PriorityConfig struct {
 	Addresses []string
 }
 
-// BuildPriorityConfigMarshalled builds balancer config for the passed in
+// BuildPriorityConfigJSON builds balancer config for the passed in
 // priorities.
 //
 // The built tree of balancers (see test for the output struct).
@@ -94,7 +94,7 @@ type PriorityConfig struct {
 //
 // TODO: support setting locality picking policy, and add a parameter for
 // locality picking policy.
-func BuildPriorityConfigMarshalled(priorities []PriorityConfig, endpointPickingPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Address, error) {
+func BuildPriorityConfigJSON(priorities []PriorityConfig, endpointPickingPolicy *internalserviceconfig.BalancerConfig) ([]byte, []resolver.Address, error) {
 	pc, addrs := buildPriorityConfig(priorities, endpointPickingPolicy)
 	ret, err := json.Marshal(pc)
 	if err != nil {
