@@ -27,7 +27,7 @@ import (
 
 const million = 1000000
 
-func buildPriorityConfigMarshalled(edsResp xdsclient.EndpointsUpdate, c *EDSConfig) ([]byte, []resolver.Address) {
+func buildPriorityConfigJSON(edsResp xdsclient.EndpointsUpdate, c *EDSConfig) ([]byte, []resolver.Address, error) {
 	var childConfig *internalserviceconfig.BalancerConfig
 	if c.ChildPolicy != nil {
 		childConfig = &internalserviceconfig.BalancerConfig{Name: c.ChildPolicy.Name}

@@ -39,9 +39,9 @@ const (
 // MarshalJSON marshals a DiscoveryMechanismType to a quoted json string.
 //
 // This is necessary to handle enum (as strings) from JSON.
-func (t DiscoveryMechanismType) MarshalJSON() ([]byte, error) {
+func (t *DiscoveryMechanismType) MarshalJSON() ([]byte, error) {
 	buffer := bytes.NewBufferString(`"`)
-	switch t {
+	switch *t {
 	case DiscoveryMechanismTypeEDS:
 		buffer.WriteString("EDS")
 	case DiscoveryMechanismTypeLogicalDNS:

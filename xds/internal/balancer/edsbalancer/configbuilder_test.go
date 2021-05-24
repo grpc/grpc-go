@@ -109,7 +109,7 @@ func TestBuildPriorityConfigMarshalled(t *testing.T) {
 		testDropOverMillion = 1
 	)
 	for _, lrsServer := range []*string{newString(testLRSServer), newString(""), nil} {
-		got, _ := buildPriorityConfigMarshalled(xdsclient.EndpointsUpdate{
+		got, _, err := buildPriorityConfigJSON(xdsclient.EndpointsUpdate{
 			Drops: []xdsclient.OverloadDropConfig{{
 				Category:    testDropCategory,
 				Numerator:   testDropOverMillion,
@@ -144,8 +144,11 @@ func TestBuildPriorityConfigMarshalled(t *testing.T) {
 				LrsLoadReportingServerName: lrsServer,
 			},
 		)
+		if err != nil {
+			t.Fatalf("unexpected error when building priority config: %v", err)
+		}
 		priorityB := balancer.Get(priority.Name)
-		_, err := priorityB.(balancer.ConfigParser).ParseConfig(got)
+		_, err = priorityB.(balancer.ConfigParser).ParseConfig(got)
 		if err != nil {
 			t.Fatalf("%v", err)
 		}

@@ -124,7 +124,7 @@ func TestBuildPriorityConfigMarshalled(t *testing.T) {
 		testDropOverMillion = 1
 	)
 
-	gotConfig, _ := BuildPriorityConfigMarshalled([]PriorityConfig{
+	gotConfig, _, err := BuildPriorityConfigMarshalled([]PriorityConfig{
 		{
 			Mechanism: DiscoveryMechanism{
 				Cluster:                 testClusterName,
@@ -156,6 +156,9 @@ func TestBuildPriorityConfigMarshalled(t *testing.T) {
 			Addresses: testAddressStrs[4],
 		},
 	}, nil)
+	if err != nil {
+		t.Fatalf("unexpected error when building priority config: %v", err)
+	}
 
 	var prettyGot bytes.Buffer
 	if err := json.Indent(&prettyGot, gotConfig, ">>> ", "  "); err != nil {
@@ -165,7 +168,7 @@ func TestBuildPriorityConfigMarshalled(t *testing.T) {
 	t.Log(prettyGot.String())
 
 	priorityB := balancer.Get(priority.Name)
-	_, err := priorityB.(balancer.ConfigParser).ParseConfig(gotConfig)
+	_, err = priorityB.(balancer.ConfigParser).ParseConfig(gotConfig)
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
