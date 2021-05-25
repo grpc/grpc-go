@@ -146,7 +146,7 @@ test_driver_pip_install() {
       echo "Found python virtual environment directory: ${venv_dir}"
     else
       echo "Creating python virtual environment: ${venv_dir}"
-      "python${PYTHON_VERSION} -m venv ${venv_dir}"
+      "python${PYTHON_VERSION}" -m venv "${venv_dir}"
     fi
     # Intentional: No need to check python venv activate script.
     # shellcheck source=/dev/null
@@ -360,4 +360,3 @@ local_setup_test_driver() {
   readonly TEST_XML_OUTPUT_DIR="${TEST_DRIVER_FULL_DIR}/out"
   mkdir -p "${TEST_XML_OUTPUT_DIR}"
 }
-
