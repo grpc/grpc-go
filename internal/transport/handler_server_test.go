@@ -62,7 +62,6 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				ProtoMajor: 2,
 				Method:     "GET",
 				Header:     http.Header{},
-				RequestURI: "/",
 			},
 			wantErr: "invalid gRPC request method",
 		},
@@ -74,7 +73,6 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				Header: http.Header{
 					"Content-Type": {"application/foo"},
 				},
-				RequestURI: "/service/foo.bar",
 			},
 			wantErr: "invalid gRPC request content-type",
 		},
@@ -86,7 +84,6 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				Header: http.Header{
 					"Content-Type": {"application/grpc"},
 				},
-				RequestURI: "/service/foo.bar",
 			},
 			modrw: func(w http.ResponseWriter) http.ResponseWriter {
 				// Return w without its Flush method
@@ -109,7 +106,6 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				URL: &url.URL{
 					Path: "/service/foo.bar",
 				},
-				RequestURI: "/service/foo.bar",
 			},
 			check: func(t *serverHandlerTransport, tt *testCase) error {
 				if t.req != tt.req {
@@ -133,7 +129,6 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				URL: &url.URL{
 					Path: "/service/foo.bar",
 				},
-				RequestURI: "/service/foo.bar",
 			},
 			check: func(t *serverHandlerTransport, tt *testCase) error {
 				if !t.timeoutSet {
@@ -157,7 +152,6 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				URL: &url.URL{
 					Path: "/service/foo.bar",
 				},
-				RequestURI: "/service/foo.bar",
 			},
 			wantErr: `rpc error: code = Internal desc = malformed time-out: transport: timeout unit is not recognized: "tomorrow"`,
 		},
@@ -175,7 +169,6 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				URL: &url.URL{
 					Path: "/service/foo.bar",
 				},
-				RequestURI: "/service/foo.bar",
 			},
 			check: func(ht *serverHandlerTransport, tt *testCase) error {
 				want := metadata.MD{
@@ -247,8 +240,7 @@ func newHandleStreamTest(t *testing.T) *handleStreamTest {
 		URL: &url.URL{
 			Path: "/service/foo.bar",
 		},
-		RequestURI: "/service/foo.bar",
-		Body:       bodyr,
+		Body: bodyr,
 	}
 	rw := newTestHandlerResponseWriter().(testHandlerResponseWriter)
 	ht, err := NewServerHandlerTransport(rw, req, nil)
@@ -359,8 +351,7 @@ func (s) TestHandlerTransport_HandleStreams_Timeout(t *testing.T) {
 		URL: &url.URL{
 			Path: "/service/foo.bar",
 		},
-		RequestURI: "/service/foo.bar",
-		Body:       bodyr,
+		Body: bodyr,
 	}
 	rw := newTestHandlerResponseWriter().(testHandlerResponseWriter)
 	ht, err := NewServerHandlerTransport(rw, req, nil)
