@@ -33,8 +33,6 @@
 package xds
 
 import (
-	"fmt"
-
 	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"google.golang.org/grpc"
 	internaladmin "google.golang.org/grpc/internal/admin"
@@ -70,7 +68,11 @@ func init() {
 
 		csdss, err := csds.NewClientStatusDiscoveryServer()
 		if err != nil {
-			return nil, fmt.Errorf("failed to create csds server: %v", err)
+			// This can happen if the xds package is imported (by a dependency)
+			// but is not used. This will fail due to missing xDS bootstrap
+			// config. But we don't want to fail the top level admin package.
+			logger.Warningf("failed to create csds server, CSDS will not be registered: %v")
+			return nil, nil
 		}
 		v3statusgrpc.RegisterClientStatusDiscoveryServiceServer(grpcServer, csdss)
 		return csdss.Close, nil
