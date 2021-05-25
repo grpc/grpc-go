@@ -20,7 +20,7 @@ jobs:
         days-before-close: 7
         only-labels: 'Status: Requires Reporter Clarification'
         stale-issue-label: 'stale'
-        stale-pr-label: 'no-pr-activity'
+        stale-pr-label: 'stale'
         operations-per-run: 1
         stale-issue-message: >
           This issue is labeled as requiring an update from the reporter, and no update has been received
