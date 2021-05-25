@@ -9,6 +9,12 @@ on:
   schedule:
     - cron: '24 20 * * 3'
 
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: read
+  actions: read
+
 jobs:
   analyze:
     name: Analyze
