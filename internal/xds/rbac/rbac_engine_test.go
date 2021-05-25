@@ -37,12 +37,12 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-type addr struct{
+type addr struct {
 	ipAddress string
 }
 
-func (addr) Network() string { return "" }
-func (a *addr) String() string  { return a.ipAddress }
+func (addr) Network() string   { return "" }
+func (a *addr) String() string { return a.ipAddress }
 
 // TestRBACEngineConstruction tests the construction of the RBAC Engine. Due to
 // some types of RBAC configuration being logically wrong and returning an error
@@ -51,8 +51,8 @@ func (a *addr) String() string  { return a.ipAddress }
 // raise errors.
 func (s) TestRBACEngineConstruction(t *testing.T) {
 	tests := []struct {
-		name string
-		rbacConfig *v3rbacpb.RBAC
+		name                  string
+		rbacConfig            *v3rbacpb.RBAC
 		successfullyConstruct bool
 	}{
 		{
@@ -61,14 +61,10 @@ func (s) TestRBACEngineConstruction(t *testing.T) {
 				Policies: map[string]*v3rbacpb.Policy{
 					"anyone": {
 						Permissions: []*v3rbacpb.Permission{
-							{
-								Rule: &v3rbacpb.Permission_Any{Any: true},
-							},
+							{Rule: &v3rbacpb.Permission_Any{Any: true}},
 						},
 						Principals: []*v3rbacpb.Principal{
-							{
-								Identifier: &v3rbacpb.Principal_Any{Any: true},
-							},
+							{Identifier: &v3rbacpb.Principal_Any{Any: true}},
 						},
 					},
 				},
@@ -85,9 +81,7 @@ func (s) TestRBACEngineConstruction(t *testing.T) {
 							{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
 						},
 						Principals: []*v3rbacpb.Principal{
-							{
-								Identifier: &v3rbacpb.Principal_Any{Any: true},
-							},
+							{Identifier: &v3rbacpb.Principal_Any{Any: true}},
 						},
 					},
 				},
@@ -110,24 +104,22 @@ func (s) TestRBACEngineConstruction(t *testing.T) {
 					"product-viewer": {
 						Permissions: []*v3rbacpb.Permission{
 							{Rule: &v3rbacpb.Permission_AndRules{AndRules: &v3rbacpb.Permission_Set{
-									Rules: []*v3rbacpb.Permission{
-										{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "GET"}}}},
-										{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "/products"}}}}}},
-										{Rule: &v3rbacpb.Permission_OrRules{OrRules: &v3rbacpb.Permission_Set{
-											Rules: []*v3rbacpb.Permission{
-												{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 80}},
-												{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 443}},
-											},
-										}}},
-									},
+								Rules: []*v3rbacpb.Permission{
+									{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "GET"}}}},
+									{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "/products"}}}}}},
+									{Rule: &v3rbacpb.Permission_OrRules{OrRules: &v3rbacpb.Permission_Set{
+										Rules: []*v3rbacpb.Permission{
+											{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 80}},
+											{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 443}},
+										},
+									}}},
 								},
+							},
 							},
 							},
 						},
 						Principals: []*v3rbacpb.Principal{
-							{
-								Identifier: &v3rbacpb.Principal_Any{Any: true},
-							},
+							{Identifier: &v3rbacpb.Principal_Any{Any: true}},
 						},
 					},
 				},
@@ -156,7 +148,7 @@ func (s) TestRBACEngineConstruction(t *testing.T) {
 				Policies: map[string]*v3rbacpb.Policy{
 					"certain-source-ip": {
 						Permissions: []*v3rbacpb.Permission{
-							{Rule: &v3rbacpb.Permission_Any{Any: true},},
+							{Rule: &v3rbacpb.Permission_Any{Any: true}},
 						},
 						Principals: []*v3rbacpb.Principal{
 							{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "not a correct address", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
@@ -172,7 +164,7 @@ func (s) TestRBACEngineConstruction(t *testing.T) {
 				Policies: map[string]*v3rbacpb.Policy{
 					"certain-destination-ip": {
 						Permissions: []*v3rbacpb.Permission{
-							{Rule: &v3rbacpb.Permission_DestinationIp{DestinationIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}},},
+							{Rule: &v3rbacpb.Permission_DestinationIp{DestinationIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
 						},
 						Principals: []*v3rbacpb.Principal{
 							{Identifier: &v3rbacpb.Principal_Any{Any: true}},
@@ -271,7 +263,7 @@ func (s) TestRBACEngineConstruction(t *testing.T) {
 									{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{SafeRegexMatch: &v3matcherpb.RegexMatcher{Regex: "GET"}}}}},
 									{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_RangeMatch{RangeMatch: &v3typepb.Int64Range{
 										Start: 0,
-										End: 64,
+										End:   64,
 									}}}}},
 									{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PresentMatch{PresentMatch: true}}}},
 									{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "GET"}}}},
@@ -365,7 +357,7 @@ func (s) TestRBACEngine(t *testing.T) {
 							{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
 						},
 						Principals: []*v3rbacpb.Principal{
-							{Identifier: &v3rbacpb.Principal_Any{Any: true},},
+							{Identifier: &v3rbacpb.Principal_Any{Any: true}},
 						},
 					},
 				},
