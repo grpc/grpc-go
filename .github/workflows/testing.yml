@@ -8,7 +8,7 @@ on:
     - cron: 0 0 * * * # daily at 00:00
 
 permissions:
-  checks: write
+  contents: read
 
 # Always force the use of Go modules
 env:

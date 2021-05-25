@@ -10,7 +10,9 @@ on:
     - cron: '24 20 * * 3'
 
 permissions:
-  checks: write
+  contents: read
+  security-events: write
+  pull-requests: read
 
 jobs:
   analyze:
