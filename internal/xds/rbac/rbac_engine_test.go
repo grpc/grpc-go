@@ -19,10 +19,14 @@ package rbac
 import (
 	"testing"
 
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
+	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/peer"
 )
 
 type s struct {
@@ -31,6 +35,275 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
+}
+
+type addr struct{
+	ipAddress string
+}
+
+func (addr) Network() string { return "" }
+func (a *addr) String() string  { return a.ipAddress }
+
+// TestRBACEngineConstruction tests the construction of the RBAC Engine. Due to
+// some types of RBAC configuration being logically wrong and returning an error
+// rather than successfully constructing the RBAC Engine, this test tests both
+// RBAC Configurations deemed successful and also RBAC Configurations that will
+// raise errors.
+func (s) TestRBACEngineConstruction(t *testing.T) {
+	tests := []struct {
+		name string
+		rbacConfig *v3rbacpb.RBAC
+		successfullyConstruct bool
+	}{
+		{
+			name: "TestSuccessCaseAnyMatch",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"anyone": {
+						Permissions: []*v3rbacpb.Permission{
+							{
+								Rule: &v3rbacpb.Permission_Any{Any: true},
+							},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{
+								Identifier: &v3rbacpb.Principal_Any{Any: true},
+							},
+						},
+					},
+				},
+			},
+			successfullyConstruct: true,
+		},
+		{
+			name: "TestSuccessCaseSimplePolicy",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"localhost-fan": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 8080}},
+							{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{
+								Identifier: &v3rbacpb.Principal_Any{Any: true},
+							},
+						},
+					},
+				},
+			},
+			successfullyConstruct: true,
+		},
+		{
+			name: "TestSuccessCaseEnvoyExample",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"service-admin": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_Any{Any: true}},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/admin"}}}}},
+							{Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/superuser"}}}}},
+						},
+					},
+					"product-viewer": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_AndRules{AndRules: &v3rbacpb.Permission_Set{
+									Rules: []*v3rbacpb.Permission{
+										{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "GET"}}}},
+										{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "/products"}}}}}},
+										{Rule: &v3rbacpb.Permission_OrRules{OrRules: &v3rbacpb.Permission_Set{
+											Rules: []*v3rbacpb.Permission{
+												{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 80}},
+												{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 443}},
+											},
+										}}},
+									},
+								},
+							},
+							},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{
+								Identifier: &v3rbacpb.Principal_Any{Any: true},
+							},
+						},
+					},
+				},
+			},
+			successfullyConstruct: true,
+		},
+		{
+			name: "TestSourceIpMatcherSuccess",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"certain-source-ip": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_Any{Any: true}},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+						},
+					},
+				},
+			},
+			successfullyConstruct: true,
+		},
+		{
+			name: "TestSourceIpMatcherFailure",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"certain-source-ip": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_Any{Any: true},},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "not a correct address", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+						},
+					},
+				},
+			},
+			successfullyConstruct: false,
+		},
+		{
+			name: "TestDestinationIpMatcherSuccess",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"certain-destination-ip": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_DestinationIp{DestinationIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}},},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+						},
+					},
+				},
+			},
+			successfullyConstruct: true,
+		},
+		{
+			name: "TestDestinationIpMatcherFailure",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"certain-destination-ip": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_DestinationIp{DestinationIp: &v3corepb.CidrRange{AddressPrefix: "not a correct address", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+						},
+					},
+				},
+			},
+			successfullyConstruct: false,
+		},
+		{
+			name: "TestMatcherToNotPolicy",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"not-secret-content": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_NotRule{NotRule: &v3rbacpb.Permission{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "/secret-content"}}}}}}}},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+						},
+					},
+				},
+			},
+			successfullyConstruct: true,
+		},
+		{
+			name: "TestMatcherToNotPrincipal",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"not-from-certain-ip": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_Any{Any: true}},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{Identifier: &v3rbacpb.Principal_NotId{NotId: &v3rbacpb.Principal{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}}}},
+						},
+					},
+				},
+			},
+			successfullyConstruct: true,
+		},
+		{
+			name: "TestPrincipalProductViewer",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"product-viewer": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_Any{Any: true}},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{
+								Identifier: &v3rbacpb.Principal_AndIds{AndIds: &v3rbacpb.Principal_Set{Ids: []*v3rbacpb.Principal{
+									{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "GET"}}}},
+									{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
+										Ids: []*v3rbacpb.Principal{
+											{Identifier: &v3rbacpb.Principal_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "/books"}}}}}},
+											{Identifier: &v3rbacpb.Principal_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "/cars"}}}}}},
+										},
+									}}},
+								}}},
+							},
+						},
+					},
+				},
+			},
+			successfullyConstruct: true,
+		},
+		{
+			name: "TestCertainHeaders",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"certain-headers": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_Any{Any: true}},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{
+								Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{Ids: []*v3rbacpb.Principal{
+									{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "GET"}}}},
+									{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{SafeRegexMatch: &v3matcherpb.RegexMatcher{Regex: "GET"}}}}},
+									{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_RangeMatch{RangeMatch: &v3typepb.Int64Range{
+										Start: 0,
+										End: 64,
+									}}}}},
+									{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PresentMatch{PresentMatch: true}}}},
+									{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "GET"}}}},
+									{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{SuffixMatch: "GET"}}}},
+									{Identifier: &v3rbacpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ContainsMatch{ContainsMatch: "GET"}}}},
+								}}},
+							},
+						},
+					},
+				},
+			},
+			successfullyConstruct: true,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewEngine(test.rbacConfig)
+			if test.successfullyConstruct {
+				// If the config is supposed to successfully construct, then
+				// there should be no error raised.
+				if err != nil {
+					t.Fatalf("RBAC Engine should have successfully constructed and not returned an error")
+				}
+			} else {
+				// If the config has a logical problem, then there should be an
+				// error returned.
+				if err == nil {
+					t.Fatalf("RBAC Engine should not have constructed and there should have been an error returned")
+				}
+			}
+		})
+	}
 }
 
 // TestRBACEngine tests the RBAC Engine by configuring the engine in different
@@ -50,21 +323,16 @@ func (s) TestRBACEngine(t *testing.T) {
 		// config with a policy with any rules for both permissions and
 		// principals, meaning that any data about incoming RPC's that the RBAC
 		// Engine is queried with should match that policy.
-		{name: "TestSuccessCaseAnyMatch",
+		{
+			name: "TestSuccessCaseAnyMatch",
 			rbacConfig: &v3rbacpb.RBAC{
 				Policies: map[string]*v3rbacpb.Policy{
 					"anyone": {
 						Permissions: []*v3rbacpb.Permission{
-							{
-								Rule: &v3rbacpb.Permission_Any{
-									Any: true,
-								},
-							},
+							{Rule: &v3rbacpb.Permission_Any{Any: true}},
 						},
 						Principals: []*v3rbacpb.Principal{
-							{
-								Identifier: &v3rbacpb.Principal_Any{Any: true},
-							},
+							{Identifier: &v3rbacpb.Principal_Any{Any: true}},
 						},
 					},
 				},
@@ -87,7 +355,8 @@ func (s) TestRBACEngine(t *testing.T) {
 		// TestSuccessCaseSimplePolicy is a test that tests a simple policy that
 		// only allows an rpc to proceed if the rpc is calling a certain path
 		// and port.
-		{name: "TestSuccessCaseSimplePolicy",
+		{
+			name: "TestSuccessCaseSimplePolicy",
 			rbacConfig: &v3rbacpb.RBAC{
 				Policies: map[string]*v3rbacpb.Policy{
 					"localhost-fan": {
@@ -96,9 +365,7 @@ func (s) TestRBACEngine(t *testing.T) {
 							{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
 						},
 						Principals: []*v3rbacpb.Principal{
-							{
-								Identifier: &v3rbacpb.Principal_Any{Any: true},
-							},
+							{Identifier: &v3rbacpb.Principal_Any{Any: true},},
 						},
 					},
 				},
@@ -127,22 +394,17 @@ func (s) TestRBACEngine(t *testing.T) {
 		// service admin and product viewer, that provides an example of a real
 		// RBAC Config that might be configured for a given for a given backend
 		// service.
-		{name: "TestSuccessCaseEnvoyExample",
+		{
+			name: "TestSuccessCaseEnvoyExample",
 			rbacConfig: &v3rbacpb.RBAC{
 				Policies: map[string]*v3rbacpb.Policy{
 					"service-admin": {
 						Permissions: []*v3rbacpb.Permission{
-							{
-								Rule: &v3rbacpb.Permission_Any{Any: true},
-							},
+							{Rule: &v3rbacpb.Permission_Any{Any: true}},
 						},
 						Principals: []*v3rbacpb.Principal{
-							{
-								Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/admin"}}}},
-							},
-							{
-								Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/superuser"}}}},
-							},
+							{Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/admin"}}}}},
+							{Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/superuser"}}}}},
 						},
 					},
 					"product-viewer": {
@@ -164,9 +426,7 @@ func (s) TestRBACEngine(t *testing.T) {
 							},
 						},
 						Principals: []*v3rbacpb.Principal{
-							{
-								Identifier: &v3rbacpb.Principal_Any{Any: true},
-							},
+							{Identifier: &v3rbacpb.Principal_Any{Any: true}},
 						},
 					},
 				},
@@ -208,6 +468,116 @@ func (s) TestRBACEngine(t *testing.T) {
 					DestinationPort: 8080,
 				},
 					wantMatchingPolicyName: ""},
+			},
+		},
+		{
+			name: "TestNotMatcher",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"not-secret-content": {
+						Permissions: []*v3rbacpb.Permission{
+							{
+								Rule: &v3rbacpb.Permission_NotRule{
+									NotRule: &v3rbacpb.Permission{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "/secret-content"}}}}}},
+								},
+							},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				evaluateArgs           *RPCData
+				wantMatchingPolicyName string
+			}{
+				// This incoming RPC Call should match with the not-secret-content policy.
+				{
+					evaluateArgs: &RPCData{
+						FullMethod: "/regular-content",
+					},
+					wantMatchingPolicyName: "not-secret-content",
+				},
+				// This incoming RPC Call shouldn't match with the not-secret-content policy.
+				{
+					evaluateArgs: &RPCData{
+						FullMethod: "/secret-content",
+					},
+					wantMatchingPolicyName: "",
+				},
+			},
+		},
+		{
+			name: "TestSourceIpMatcher",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"certain-source-ip": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_Any{Any: true}},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				evaluateArgs           *RPCData
+				wantMatchingPolicyName string
+			}{
+				// This incoming RPC Call should match with the certain-source-ip policy.
+				{
+					evaluateArgs: &RPCData{
+						PeerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantMatchingPolicyName: "certain-source-ip",
+				},
+				// This incoming RPC Call shouldn't match with the certain-source-ip policy.
+				{
+					evaluateArgs: &RPCData{
+						PeerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "10.0.0.0"},
+						},
+					},
+					wantMatchingPolicyName: "",
+				},
+			},
+		},
+		{
+			name: "TestDestinationIpMatcher",
+			rbacConfig: &v3rbacpb.RBAC{
+				Policies: map[string]*v3rbacpb.Policy{
+					"certain-destination-ip": {
+						Permissions: []*v3rbacpb.Permission{
+							{Rule: &v3rbacpb.Permission_DestinationIp{DestinationIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+						},
+						Principals: []*v3rbacpb.Principal{
+							{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				evaluateArgs           *RPCData
+				wantMatchingPolicyName string
+			}{
+				// This incoming RPC Call should match with the certain-destination-ip policy.
+				{
+					evaluateArgs: &RPCData{
+						DestinationAddr: &addr{ipAddress: "0.0.0.10"},
+					},
+					wantMatchingPolicyName: "certain-destination-ip",
+				},
+				// This incoming RPC Call shouldn't match with the certain-destination-ip policy.
+				{
+					evaluateArgs: &RPCData{
+						DestinationAddr: &addr{ipAddress: "10.0.0.0"},
+					},
+					wantMatchingPolicyName: "",
+				},
 			},
 		},
 	}

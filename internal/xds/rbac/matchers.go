@@ -121,7 +121,7 @@ func matchersFromPermissions(permissions []*v3rbacpb.Permission) ([]rbacMatcher,
 		case *v3rbacpb.Permission_DestinationPort:
 			matchers = append(matchers, newPortMatcher(permission.GetDestinationPort()))
 		case *v3rbacpb.Permission_NotRule:
-			mList, err := matchersFromPermissions([]*v3rbacpb.Permission{permission})
+			mList, err := matchersFromPermissions([]*v3rbacpb.Permission{{Rule: permission.GetNotRule().Rule}})
 			if err != nil {
 				return nil, err
 			}
@@ -183,7 +183,7 @@ func matchersFromPrincipals(principals []*v3rbacpb.Principal) ([]rbacMatcher, er
 			}
 			matchers = append(matchers, m)
 		case *v3rbacpb.Principal_NotId:
-			mList, err := matchersFromPrincipals([]*v3rbacpb.Principal{principal})
+			mList, err := matchersFromPrincipals([]*v3rbacpb.Principal{{Identifier: principal.GetNotId().Identifier}})
 			if err != nil {
 				return nil, err
 			}
@@ -332,7 +332,7 @@ func newSourceIPMatcher(cidrRange *v3corepb.CidrRange) (*sourceIPMatcher, error)
 }
 
 func (sim *sourceIPMatcher) matches(data *RPCData) bool {
-	return sim.ipNet.Contains(net.IP(data.PeerInfo.Addr.String()))
+	return sim.ipNet.Contains(net.IP(net.ParseIP(data.PeerInfo.Addr.String())))
 }
 
 type destinationIPMatcher struct {
@@ -340,7 +340,7 @@ type destinationIPMatcher struct {
 }
 
 func newDestinationIPMatcher(cidrRange *v3corepb.CidrRange) (*destinationIPMatcher, error) {
-	cidrRangeString := cidrRange.AddressPrefix + fmt.Sprint(cidrRange)
+	cidrRangeString := fmt.Sprintf("%s/%d", cidrRange.AddressPrefix, cidrRange.PrefixLen.Value)
 	_, ipNet, err := net.ParseCIDR(cidrRangeString)
 	if err != nil {
 		return nil, err
@@ -349,7 +349,7 @@ func newDestinationIPMatcher(cidrRange *v3corepb.CidrRange) (*destinationIPMatch
 }
 
 func (dim *destinationIPMatcher) matches(data *RPCData) bool {
-	return dim.ipNet.Contains(net.IP(data.DestinationAddr.String()))
+	return dim.ipNet.Contains(net.IP(net.ParseIP(data.DestinationAddr.String())))
 }
 
 // portMatcher matches on whether the destination port of the RPC matches the
