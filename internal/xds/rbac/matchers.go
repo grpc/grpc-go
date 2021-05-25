@@ -64,7 +64,7 @@ func newPolicyMatcher(policy *v3rbacpb.Policy) (*policyMatcher, error) {
 	}
 	return &policyMatcher{
 		permissions: &orMatcher{matchers: permissions},
-		principals: &orMatcher{matchers: principals},
+		principals:  &orMatcher{matchers: principals},
 	}, nil
 }
 
