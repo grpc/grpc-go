@@ -309,6 +309,7 @@ func (s) TestRBACEngine(t *testing.T) {
 		rbacQueries []struct {
 			evaluateArgs           *RPCData
 			wantMatchingPolicyName string
+			matchingPolicyFound    bool
 		}
 	}{
 		// TestSuccessCaseAnyMatch tests an RBAC Engine instantiated with a
@@ -333,15 +334,20 @@ func (s) TestRBACEngine(t *testing.T) {
 			[]struct {
 				evaluateArgs           *RPCData
 				wantMatchingPolicyName string
+				matchingPolicyFound    bool
 			}{
 				{evaluateArgs: &RPCData{
 					FullMethod: "some method",
 				},
-					wantMatchingPolicyName: "anyone"},
+					wantMatchingPolicyName: "anyone",
+					matchingPolicyFound:    true,
+				},
 				{evaluateArgs: &RPCData{
 					DestinationPort: 100,
 				},
-					wantMatchingPolicyName: "anyone"},
+					wantMatchingPolicyName: "anyone",
+					matchingPolicyFound:    true,
+				},
 			},
 		},
 		// TestSuccessCaseSimplePolicy is a test that tests a simple policy that
@@ -365,6 +371,7 @@ func (s) TestRBACEngine(t *testing.T) {
 			rbacQueries: []struct {
 				evaluateArgs           *RPCData
 				wantMatchingPolicyName string
+				matchingPolicyFound    bool
 			}{
 				// This RPC should match with the local host fan policy.
 				{evaluateArgs: &RPCData{
@@ -373,12 +380,14 @@ func (s) TestRBACEngine(t *testing.T) {
 					},
 					DestinationPort: 8080,
 				},
-					wantMatchingPolicyName: "localhost-fan"},
+					wantMatchingPolicyName: "localhost-fan",
+					matchingPolicyFound:    true},
 				// This RPC shouldn't match with the local host fan policy.
 				{evaluateArgs: &RPCData{
 					DestinationPort: 100,
 				},
-					wantMatchingPolicyName: ""},
+					wantMatchingPolicyName: "",
+					matchingPolicyFound:    false},
 			},
 		},
 		// TestSuccessCaseEnvoyExample is a test based on the example provided
@@ -426,6 +435,7 @@ func (s) TestRBACEngine(t *testing.T) {
 			rbacQueries: []struct {
 				evaluateArgs           *RPCData
 				wantMatchingPolicyName string
+				matchingPolicyFound    bool
 			}{
 				// This incoming RPC Call should match with the service admin
 				// policy.
@@ -433,7 +443,8 @@ func (s) TestRBACEngine(t *testing.T) {
 					FullMethod:    "some method",
 					PrincipalName: "cluster.local/ns/default/sa/admin",
 				},
-					wantMatchingPolicyName: "service-admin"},
+					wantMatchingPolicyName: "service-admin",
+					matchingPolicyFound:    true},
 				// This incoming RPC Call should match with the product
 				// viewer policy.
 				{evaluateArgs: &RPCData{
@@ -443,23 +454,28 @@ func (s) TestRBACEngine(t *testing.T) {
 					},
 					FullMethod: "/products",
 				},
-					wantMatchingPolicyName: "product-viewer"},
+					wantMatchingPolicyName: "product-viewer",
+					matchingPolicyFound:    true},
 				// These incoming RPC calls should not match any policy -
-				// represented by an empty matching policy name being returned.
+				// represented by an empty matching policy name and false being
+				// returned.
 				{evaluateArgs: &RPCData{
 					DestinationPort: 100,
 				},
-					wantMatchingPolicyName: ""},
+					wantMatchingPolicyName: "",
+					matchingPolicyFound:    false},
 				{evaluateArgs: &RPCData{
 					FullMethod:      "get-product-list",
 					DestinationPort: 8080,
 				},
-					wantMatchingPolicyName: ""},
+					wantMatchingPolicyName: "",
+					matchingPolicyFound:    false},
 				{evaluateArgs: &RPCData{
 					PrincipalName:   "localhost",
 					DestinationPort: 8080,
 				},
-					wantMatchingPolicyName: ""},
+					wantMatchingPolicyName: "",
+					matchingPolicyFound:    false},
 			},
 		},
 		{
@@ -483,6 +499,7 @@ func (s) TestRBACEngine(t *testing.T) {
 			rbacQueries: []struct {
 				evaluateArgs           *RPCData
 				wantMatchingPolicyName string
+				matchingPolicyFound    bool
 			}{
 				// This incoming RPC Call should match with the not-secret-content policy.
 				{
@@ -490,6 +507,7 @@ func (s) TestRBACEngine(t *testing.T) {
 						FullMethod: "/regular-content",
 					},
 					wantMatchingPolicyName: "not-secret-content",
+					matchingPolicyFound:    true,
 				},
 				// This incoming RPC Call shouldn't match with the not-secret-content policy.
 				{
@@ -497,6 +515,7 @@ func (s) TestRBACEngine(t *testing.T) {
 						FullMethod: "/secret-content",
 					},
 					wantMatchingPolicyName: "",
+					matchingPolicyFound:    false,
 				},
 			},
 		},
@@ -517,6 +536,7 @@ func (s) TestRBACEngine(t *testing.T) {
 			rbacQueries: []struct {
 				evaluateArgs           *RPCData
 				wantMatchingPolicyName string
+				matchingPolicyFound    bool
 			}{
 				// This incoming RPC Call should match with the certain-source-ip policy.
 				{
@@ -526,6 +546,7 @@ func (s) TestRBACEngine(t *testing.T) {
 						},
 					},
 					wantMatchingPolicyName: "certain-source-ip",
+					matchingPolicyFound:    true,
 				},
 				// This incoming RPC Call shouldn't match with the certain-source-ip policy.
 				{
@@ -535,6 +556,7 @@ func (s) TestRBACEngine(t *testing.T) {
 						},
 					},
 					wantMatchingPolicyName: "",
+					matchingPolicyFound:    false,
 				},
 			},
 		},
@@ -555,6 +577,7 @@ func (s) TestRBACEngine(t *testing.T) {
 			rbacQueries: []struct {
 				evaluateArgs           *RPCData
 				wantMatchingPolicyName string
+				matchingPolicyFound    bool
 			}{
 				// This incoming RPC Call should match with the certain-destination-ip policy.
 				{
@@ -562,6 +585,7 @@ func (s) TestRBACEngine(t *testing.T) {
 						DestinationAddr: &addr{ipAddress: "0.0.0.10"},
 					},
 					wantMatchingPolicyName: "certain-destination-ip",
+					matchingPolicyFound:    true,
 				},
 				// This incoming RPC Call shouldn't match with the certain-destination-ip policy.
 				{
@@ -569,6 +593,7 @@ func (s) TestRBACEngine(t *testing.T) {
 						DestinationAddr: &addr{ipAddress: "10.0.0.0"},
 					},
 					wantMatchingPolicyName: "",
+					matchingPolicyFound:    false,
 				},
 			},
 		},
@@ -587,7 +612,10 @@ func (s) TestRBACEngine(t *testing.T) {
 				// The matchingPolicyName returned will be empty in the case of
 				// no matching policy. Thus, matchingPolicyName can also be used
 				// to test the "error" condition of no matching policies.
-				matchingPolicyName := rbacEngine.FindMatchingPolicy(queryToRBACEngine.evaluateArgs)
+				matchingPolicyName, matchingPolicyFound := rbacEngine.FindMatchingPolicy(queryToRBACEngine.evaluateArgs)
+				if matchingPolicyFound != queryToRBACEngine.matchingPolicyFound {
+					t.Fatalf("Got matchingPolicyFound bool: %v, want matchingPolicyFound: %v", matchingPolicyFound, queryToRBACEngine.matchingPolicyFound)
+				}
 				if matchingPolicyName != queryToRBACEngine.wantMatchingPolicyName {
 					t.Fatalf("Got matching policy name: %v, want matching policy name: %v", matchingPolicyName, queryToRBACEngine.wantMatchingPolicyName)
 				}

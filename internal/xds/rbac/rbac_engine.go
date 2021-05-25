@@ -70,16 +70,13 @@ type RPCData struct {
 }
 
 // FindMatchingPolicy determines if an incoming RPC matches a policy. On a
-// successful match, it returns the name of the matching policy.
-func (r *Engine) FindMatchingPolicy(data *RPCData) string {
+// successful match, it returns the name of the matching policy and a true
+// boolean to specify that there was a matching policy found.
+func (r *Engine) FindMatchingPolicy(data *RPCData) (string, bool) {
 	for policy, matcher := range r.policies {
-		if matcher.matches(data) {
-			return policy
+		if matcher.match(data) {
+			return policy, true
 		}
 	}
-	// TODO: This logic of returning an empty string assumes that the empty
-	// string is not a valid policy name. If the empty string is a valid policy
-	// name, then we should add to the data returned and have a boolean returned
-	// or not.
-	return ""
+	return "", false
 }
