@@ -2047,6 +2047,25 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				"peer header list size exceeded limit",
 			),
 		},
+		{
+			name: "bad status in grpc mode",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+					{Name: "grpc-status", Value: "0"},
+					{Name: ":status", Value: "504"},
+				},
+				HeadersFrame: &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: 0,
+					},
+				},
+			},
+			wantStatus: status.New(
+				codes.Unavailable,
+				"Gateway Timeout: HTTP status code 504; transport: missing content-type field",
+			),
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			ts := &Stream{
@@ -2068,11 +2087,13 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					list: &itemList{},
 				},
 			}
-			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
-				FrameHeader: http2.FrameHeader{
-					StreamID: 0,
-					Flags:    http2.FlagHeadersEndStream,
-				},
+			if test.metaHeaderFrame.HeadersFrame == nil {
+				test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: 0,
+						Flags:    http2.FlagHeadersEndStream,
+					},
+				}
 			}
 
 			s.operateHeaders(test.metaHeaderFrame)
