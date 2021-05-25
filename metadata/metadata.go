@@ -171,9 +171,7 @@ func AppendToOutgoingContext(ctx context.Context, kv ...string) context.Context 
 	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md.md, added: added})
 }
 
-// FromIncomingContext returns the incoming metadata in ctx if it exists. The
-// returned MD should not be modified. Writing to it may cause races.
-// Modification should be made to copies of the returned MD.
+// FromIncomingContext returns the incoming metadata in ctx if it exists.
 //
 // All keys in the returned MD are lowercase.
 func FromIncomingContext(ctx context.Context) (MD, bool) {
@@ -193,8 +191,6 @@ func FromIncomingContext(ctx context.Context) (MD, bool) {
 }
 
 // FromOutgoingContextRaw returns the un-merged, intermediary contents of rawMD.
-// The returned MD should not be modified. Writing to it may cause races.
-// Modification should be made to copies of the returned MD.
 //
 // Remember to perform strings.ToLower on the keys, for both the returned MD (MD
 // is a map, there's no guarantee it's created using our helper functions) and
@@ -212,9 +208,7 @@ func FromOutgoingContextRaw(ctx context.Context) (MD, [][]string, bool) {
 	return raw.md, raw.added, true
 }
 
-// FromOutgoingContext returns the outgoing metadata in ctx if it exists. The
-// returned MD should not be modified. Writing to it may cause races.
-// Modification should be made to copies of the returned MD.
+// FromOutgoingContext returns the outgoing metadata in ctx if it exists.
 //
 // All keys in the return MD are lowercase.
 func FromOutgoingContext(ctx context.Context) (MD, bool) {
