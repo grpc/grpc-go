@@ -403,7 +403,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		// Do not close the transport.  Let reader goroutine handle it since
 		// there might be data in the buffers.
 		t.conn.Close()
-		t.controlBuf.finish()
+		t.controlBuf.finish(ErrConnClosing)
 		close(t.writerDone)
 	}()
 	return t, nil

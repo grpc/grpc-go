@@ -289,13 +289,14 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	go func() {
 		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst)
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
-		if err := t.loopy.run(); err != nil {
+		err := t.loopy.run()
+		if err != nil {
 			if logger.V(logLevel) {
 				logger.Errorf("transport: loopyWriter.run returning. Err: %v", err)
 			}
 		}
 		t.conn.Close()
-		t.controlBuf.finish()
+		t.controlBuf.finish(ErrConnClosing)
 		close(t.writerDone)
 	}()
 	go t.keepalive()
