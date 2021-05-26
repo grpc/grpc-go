@@ -379,7 +379,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
 			rst:      true,
-			rstCode:  http2.ErrCodeProtocol,
+			rstCode:  http2.ErrCodeInternal,
 			onWrite:  func() {},
 		})
 		return false
