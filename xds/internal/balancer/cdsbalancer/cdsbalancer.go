@@ -363,6 +363,9 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 
 	}
 	resolverState := resolver.State{}
+	// Include the xds client for the child LB policies to use.  For unit
+	// tests, b.xdsClient may not be a full *xdsclient.Client, but it will
+	// always be in production.
 	if c, ok := b.xdsClient.(*xdsclient.Client); ok {
 		resolverState = xdsclient.SetClient(resolverState, c)
 	}
