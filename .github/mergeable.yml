@@ -7,7 +7,15 @@ mergeable:
           regex: '^Type:'
       - do: description
         must_include:
-          regex: 'RELEASE NOTES:'
+          # Allow:
+          # RELEASE NOTES: none (case insensitive)
+          #
+          # RELEASE NOTES: N/A (case insensitive)
+          #
+          # RELEASE NOTES:
+          # * <text>
+          regex: '^RELEASE NOTES:\s*([Nn][Oo][Nn][Ee]|[Nn]/[Aa]|\n(\*|-)\s*.+)$'
+          regex_flag: 'm'
       - do: milestone
         must_include:
           regex: 'Release$'
