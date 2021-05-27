@@ -2020,7 +2020,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			},
 			wantStatus: status.New(
 				codes.Internal,
-				": HTTP status code 0; transport: received the unexpected content-type \"application/json\"",
+				"transport: received the unexpected content-type \"application/json\"",
 			),
 		},
 		{
@@ -2063,7 +2063,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			},
 			wantStatus: status.New(
 				codes.Unavailable,
-				"Gateway Timeout: HTTP status code 504; transport: missing content-type field",
+				"unexpected HTTP status code received from server: 504 (Gateway Timeout)",
 			),
 		},
 	} {

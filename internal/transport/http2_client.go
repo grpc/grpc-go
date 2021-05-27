@@ -1316,7 +1316,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	if !isGRPC || (httpStatus != "200" && !endStream) {
 		var (
 			code           = codes.Internal // when header does not include HTTP status, return INTERNAL
-			httpStatusCode int
+			httpStatusCode *int
 		)
 
 		if httpStatus != "" {
@@ -1326,17 +1326,18 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 				return
 			}
-			httpStatusCode = int(c)
+			statusCode := int(c)
+			httpStatusCode = &statusCode
 
 			var ok bool
-			code, ok = HTTPStatusConvTab[httpStatusCode]
+			code, ok = HTTPStatusConvTab[statusCode]
 			if !ok {
 				code = codes.Unknown
 			}
 		}
 
 		// Verify the HTTP response is a 200.
-		se := status.New(code, constructHTTPErrMsg(&httpStatusCode, contentTypeErr))
+		se := status.New(code, constructHTTPErrMsg(httpStatusCode, contentTypeErr))
 		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 		return
 	}
