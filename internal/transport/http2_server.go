@@ -375,12 +375,35 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		}
 	}
 
-	if !isGRPC || headerError {
+	if frame.StreamEnded() && !isGRPC || headerError {
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
 			rst:      true,
-			rstCode:  http2.ErrCodeInternal,
+			rstCode:  http2.ErrCodeNo,
 			onWrite:  func() {},
+		})
+		return false
+	}
+
+	if !isGRPC {
+		t.controlBuf.put(&headerFrame{
+			streamID: streamID,
+			hf: []hpack.HeaderField{
+				{Name: ":status", Value: "415"},
+			},
+			endStream: true,
+		})
+		return false
+	}
+
+	if headerError {
+		t.controlBuf.put(&headerFrame{
+			streamID: streamID,
+			hf: []hpack.HeaderField{
+				{Name: "content-type", Value: "application/grpc"},
+				{Name: "grpc-status", Value: codes.Internal.String()},
+			},
+			endStream: true,
 		})
 		return false
 	}
