@@ -177,8 +177,9 @@ func decodeGRPCStatusDetails(rawDetails string) (*status.Status, error) {
 // Format: HTTP status code and its corresponding message + content-type error message.
 func constructHTTPErrMsg(httpStatus *int, contentTypeErr string) string {
 	var errMsgs []string
-
-	if httpStatus != nil {
+	if httpStatus == nil {
+		errMsgs = append(errMsgs, "malformed header: missing HTTP status")
+	} else {
 		errMsgs = append(errMsgs, fmt.Sprintf(
 			"unexpected HTTP status code received from server: %d (%s)",
 			*httpStatus,

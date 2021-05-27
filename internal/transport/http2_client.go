@@ -1266,7 +1266,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		// that the peer is speaking gRPC and we are in gRPC mode.
 		isGRPC         = !initialHeader
 		mdata          = make(map[string][]string)
-		contentTypeErr string
+		contentTypeErr = "missing content-type"
 		grpcMessage    string
 		statusGen      *status.Status
 
@@ -1283,6 +1283,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 				contentTypeErr = fmt.Sprintf("transport: received the unexpected content-type %q", hf.Value)
 				break
 			}
+			contentTypeErr = ""
 			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
 			isGRPC = true
 		case "grpc-encoding":

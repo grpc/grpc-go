@@ -1998,6 +1998,20 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			wantStatus: status.New(codes.OK, ""),
 		},
 		{
+			name: "missing content-type header",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "grpc-status", Value: "0"},
+					{Name: ":status", Value: "200"},
+				},
+			},
+			// no error
+			wantStatus: status.New(
+				codes.Unknown,
+				"unexpected HTTP status code received from server: 200 (OK); missing content-type",
+			),
+		},
+		{
 			name: "invalid grpc status header field",
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
@@ -2020,7 +2034,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			},
 			wantStatus: status.New(
 				codes.Internal,
-				"transport: received the unexpected content-type \"application/json\"",
+				"malformed header: missing HTTP status; transport: received the unexpected content-type \"application/json\"",
 			),
 		},
 		{
