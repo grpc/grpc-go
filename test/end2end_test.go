@@ -7254,7 +7254,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 				":status", "403",
 				"content-type", "application/grpc",
 			},
-			errCode: codes.Unknown,
+			errCode: codes.PermissionDenied,
 		},
 		{
 			// malformed grpc-status.
@@ -7263,7 +7263,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 				"content-type", "application/grpc",
 				"grpc-status", "abc",
 			},
-			errCode: codes.Internal,
+			errCode: codes.Unavailable,
 		},
 		{
 			// Malformed grpc-tags-bin field.
@@ -7273,7 +7273,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 				"grpc-status", "0",
 				"grpc-tags-bin", "???",
 			},
-			errCode: codes.Internal,
+			errCode: codes.Unavailable,
 		},
 		{
 			// gRPC status error.
@@ -7282,7 +7282,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 				"content-type", "application/grpc",
 				"grpc-status", "3",
 			},
-			errCode: codes.InvalidArgument,
+			errCode: codes.Unavailable,
 		},
 	} {
 		doHTTPHeaderTest(t, test.errCode, test.header)
@@ -7305,7 +7305,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 				// trailer missing grpc-status
 				":status", "502",
 			},
-			errCode: codes.Unknown,
+			errCode: codes.Unavailable,
 		},
 		{
 			responseHeader: []string{

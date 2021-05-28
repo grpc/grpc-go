@@ -2008,7 +2008,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			// no error
 			wantStatus: status.New(
 				codes.Unknown,
-				"unexpected HTTP status code received from server: 200 (OK); missing content-type",
+				"missing content-type",
 			),
 		},
 		{
@@ -2034,7 +2034,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			},
 			wantStatus: status.New(
 				codes.Internal,
-				"malformed header: missing HTTP status; transport: received the unexpected content-type \"application/json\"",
+				"transport: received unexpected content-type \"application/json\"",
 			),
 		},
 		{
@@ -2115,6 +2115,10 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			got := ts.status
 			want := test.wantStatus
 			if got.Code() != want.Code() || got.Message() != want.Message() {
+				t.Logf("got: %s", got.Message())
+				t.Logf("got: %d", got.Code())
+				t.Logf("want: %s", want.Message())
+				t.Logf("want: %d", want.Code())
 				t.Fatalf("operateHeaders(%v); status = %v; want %v", test.metaHeaderFrame, got, want)
 			}
 		})
