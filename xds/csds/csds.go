@@ -25,7 +25,6 @@ package csds
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"time"
 
@@ -76,11 +75,12 @@ type ClientStatusDiscoveryServer struct {
 func NewClientStatusDiscoveryServer() (*ClientStatusDiscoveryServer, error) {
 	xdsC, err := newXDSClient()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create xds client: %v", err)
+		logger.Warningf("failed to create xds client: %v", err)
+		// Return an explicit nil here, otherwise the nil returned from
+		// client.New() is a typed nil (type *Client, not the interface).
+		return &ClientStatusDiscoveryServer{}, nil
 	}
-	return &ClientStatusDiscoveryServer{
-		xdsClient: xdsC,
-	}, nil
+	return &ClientStatusDiscoveryServer{xdsClient: xdsC}, nil
 }
 
 // StreamClientStatus implementations interface ClientStatusDiscoveryServiceServer.
@@ -113,6 +113,9 @@ func (s *ClientStatusDiscoveryServer) FetchClientStatus(_ context.Context, req *
 //
 // If it returns an error, the error is a status error.
 func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statuspb.ClientStatusRequest) (*v3statuspb.ClientStatusResponse, error) {
+	if s.xdsClient == nil {
+		return &v3statuspb.ClientStatusResponse{}, nil
+	}
 	// Field NodeMatchers is unsupported, by design
 	// https://github.com/grpc/proposal/blob/master/A40-csds-support.md#detail-node-matching.
 	if len(req.NodeMatchers) != 0 {
@@ -137,7 +140,9 @@ func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statusp
 
 // Close cleans up the resources.
 func (s *ClientStatusDiscoveryServer) Close() {
-	s.xdsClient.Close()
+	if s.xdsClient != nil {
+		s.xdsClient.Close()
+	}
 }
 
 // nodeProtoToV3 converts the given proto into a v3.Node. n is from bootstrap
