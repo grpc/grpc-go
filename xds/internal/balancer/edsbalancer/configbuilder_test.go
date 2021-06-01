@@ -39,10 +39,7 @@ const (
 
 var (
 	testLocalityIDs []internal.LocalityID
-	testAddressStrs [][]string
 	testEndpoints   [][]xdsclient.Endpoint
-
-	testLocalitiesP0, testLocalitiesP1 []xdsclient.Locality
 )
 
 func init() {
@@ -60,46 +57,16 @@ func init() {
 				HealthStatus: xdsclient.EndpointHealthStatusHealthy,
 			})
 		}
-		testAddressStrs = append(testAddressStrs, addrs)
 		testEndpoints = append(testEndpoints, ends)
-	}
-
-	testLocalitiesP0 = []xdsclient.Locality{
-		{
-			Endpoints: testEndpoints[0],
-			ID:        testLocalityIDs[0],
-			Weight:    20,
-			Priority:  0,
-		},
-		{
-			Endpoints: testEndpoints[1],
-			ID:        testLocalityIDs[1],
-			Weight:    80,
-			Priority:  0,
-		},
-	}
-	testLocalitiesP1 = []xdsclient.Locality{
-		{
-			Endpoints: testEndpoints[2],
-			ID:        testLocalityIDs[2],
-			Weight:    20,
-			Priority:  1,
-		},
-		{
-			Endpoints: testEndpoints[3],
-			ID:        testLocalityIDs[3],
-			Weight:    80,
-			Priority:  1,
-		},
 	}
 }
 
-// TestBuildPriorityConfigMarshalled is a sanity check that the generated config
-// bytes are valid (can be parsed back to a config struct).
+// TestBuildPriorityConfigJSON is a sanity check that the generated config bytes
+// are valid (can be parsed back to a config struct).
 //
 // The correctness is covered by the unmarshalled version
 // TestBuildPriorityConfig.
-func TestBuildPriorityConfigMarshalled(t *testing.T) {
+func TestBuildPriorityConfigJSON(t *testing.T) {
 	const (
 		testClusterName     = "cluster-name-for-watch"
 		testEDSServiceName  = "service-name-from-parent"
@@ -145,12 +112,11 @@ func TestBuildPriorityConfigMarshalled(t *testing.T) {
 			},
 		)
 		if err != nil {
-			t.Fatalf("unexpected error when building priority config: %v", err)
+			t.Fatalf("buildPriorityConfigJSON(...) failed: %v", err)
 		}
 		priorityB := balancer.Get(priority.Name)
-		_, err = priorityB.(balancer.ConfigParser).ParseConfig(got)
-		if err != nil {
-			t.Fatalf("%v", err)
+		if _, err = priorityB.(balancer.ConfigParser).ParseConfig(got); err != nil {
+			t.Fatalf("ParseConfig(%+v) failed: %v", got, err)
 		}
 	}
 }

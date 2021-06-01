@@ -111,10 +111,9 @@ func init() {
 	}
 }
 
-// TestBuildPriorityConfigMarshalled is a sanity check that the built balancer
-// config can be parsed. The behavior test is covered by
-// TestBuildPriorityConfig.
-func TestBuildPriorityConfigMarshalled(t *testing.T) {
+// TestBuildPriorityConfigJSON is a sanity check that the built balancer config
+// can be parsed. The behavior test is covered by TestBuildPriorityConfig.
+func TestBuildPriorityConfigJSON(t *testing.T) {
 	const (
 		testClusterName     = "cluster-name-for-watch"
 		testEDSServiceName  = "service-name-from-parent"
@@ -157,20 +156,19 @@ func TestBuildPriorityConfigMarshalled(t *testing.T) {
 		},
 	}, nil)
 	if err != nil {
-		t.Fatalf("unexpected error when building priority config: %v", err)
+		t.Fatalf("buildPriorityConfigJSON(...) failed: %v", err)
 	}
 
 	var prettyGot bytes.Buffer
 	if err := json.Indent(&prettyGot, gotConfig, ">>> ", "  "); err != nil {
-		t.Fatalf("%v", err)
+		t.Fatalf("json.Indent() failed: %v", err)
 	}
 	// Print the indented json if this test fails.
 	t.Log(prettyGot.String())
 
 	priorityB := balancer.Get(priority.Name)
-	_, err = priorityB.(balancer.ConfigParser).ParseConfig(gotConfig)
-	if err != nil {
-		t.Fatalf("%v", err)
+	if _, err = priorityB.(balancer.ConfigParser).ParseConfig(gotConfig); err != nil {
+		t.Fatalf("ParseConfig(%+v) failed: %v", gotConfig, err)
 	}
 }
 

@@ -98,8 +98,7 @@ func BuildPriorityConfigJSON(priorities []PriorityConfig, endpointPickingPolicy 
 	pc, addrs := buildPriorityConfig(priorities, endpointPickingPolicy)
 	ret, err := json.Marshal(pc)
 	if err != nil {
-		logger.Warningf("failed to marshal built priority config struct into json: %v", err)
-		return nil, nil, nil
+		return nil, nil, fmt.Errorf("failed to marshal built priority config struct into json: %v", err)
 	}
 	return ret, addrs, nil
 }
@@ -116,10 +115,7 @@ func buildPriorityConfig(priorities []PriorityConfig, endpointPickingPolicy *int
 			retConfig.Priorities = append(retConfig.Priorities, names...)
 			for n, c := range configs {
 				retConfig.Children[n] = &priority.Child{
-					Config: &internalserviceconfig.BalancerConfig{
-						Name:   clusterimpl.Name,
-						Config: c,
-					},
+					Config: &internalserviceconfig.BalancerConfig{Name: clusterimpl.Name, Config: c},
 					// Ignore all re-resolution from EDS children.
 					IgnoreReresolutionRequests: true,
 				}
@@ -129,10 +125,9 @@ func buildPriorityConfig(priorities []PriorityConfig, endpointPickingPolicy *int
 			name, config, addrs := buildClusterImplConfigForDNS(i, p.Addresses)
 			retConfig.Priorities = append(retConfig.Priorities, name)
 			retConfig.Children[name] = &priority.Child{
-				Config: &internalserviceconfig.BalancerConfig{
-					Name:   clusterimpl.Name,
-					Config: config,
-				},
+				Config: &internalserviceconfig.BalancerConfig{Name: clusterimpl.Name, Config: config},
+				// Not ignore re-resolution from DNS children, they will trigger
+				// DNS to re-resolve.
 				IgnoreReresolutionRequests: false,
 			}
 			retAddrs = append(retAddrs, addrs...)
@@ -149,11 +144,7 @@ func buildClusterImplConfigForDNS(parentPriority int, addrStrs []string) (string
 	for _, addrStr := range addrStrs {
 		retAddrs = append(retAddrs, hierarchy.Set(resolver.Address{Addr: addrStr}, []string{pName}))
 	}
-	return pName, &clusterimpl.LBConfig{
-		ChildPolicy: &internalserviceconfig.BalancerConfig{
-			Name: childPolicy,
-		},
-	}, retAddrs
+	return pName, &clusterimpl.LBConfig{ChildPolicy: &internalserviceconfig.BalancerConfig{Name: childPolicy}}, retAddrs
 }
 
 // buildClusterImplConfigForEDS returns a list of cluster_impl configs, one for
@@ -173,9 +164,7 @@ func buildClusterImplConfigForEDS(parentPriority int, edsResp xdsclient.Endpoint
 	)
 
 	if endpointPickingPolicy == nil {
-		endpointPickingPolicy = &internalserviceconfig.BalancerConfig{
-			Name: roundrobin.Name,
-		}
+		endpointPickingPolicy = &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}
 	}
 
 	drops := make([]clusterimpl.DropConfig, 0, len(edsResp.Drops))
@@ -194,12 +183,9 @@ func buildClusterImplConfigForEDS(parentPriority int, edsResp xdsclient.Endpoint
 		retNames = append(retNames, pName)
 		wtConfig, addrs := localitiesToWeightedTarget(priorityLocalities, pName, endpointPickingPolicy, mechanism.LoadReportingServerName, mechanism.Cluster, mechanism.EDSServiceName)
 		retConfigs[pName] = &clusterimpl.LBConfig{
-			Cluster:        mechanism.Cluster,
-			EDSServiceName: mechanism.EDSServiceName,
-			ChildPolicy: &internalserviceconfig.BalancerConfig{
-				Name:   weightedtarget.Name,
-				Config: wtConfig,
-			},
+			Cluster:                 mechanism.Cluster,
+			EDSServiceName:          mechanism.EDSServiceName,
+			ChildPolicy:             &internalserviceconfig.BalancerConfig{Name: weightedtarget.Name, Config: wtConfig},
 			LoadReportingServerName: mechanism.LoadReportingServerName,
 			MaxConcurrentRequests:   mechanism.MaxConcurrentRequests,
 			DropCategories:          drops,
@@ -288,10 +274,7 @@ func localitiesToWeightedTarget(localities []xdsclient.Locality, priorityName st
 				},
 			}
 		}
-		weightedTargets[localityStr] = weightedtarget.Target{
-			Weight:      locality.Weight,
-			ChildPolicy: child,
-		}
+		weightedTargets[localityStr] = weightedtarget.Target{Weight: locality.Weight, ChildPolicy: child}
 
 		for _, endpoint := range locality.Endpoints {
 			// Filter out all "unhealthy" endpoints (unknown and healthy are
@@ -301,9 +284,7 @@ func localitiesToWeightedTarget(localities []xdsclient.Locality, priorityName st
 				continue
 			}
 
-			addr := resolver.Address{
-				Addr: endpoint.Address,
-			}
+			addr := resolver.Address{Addr: endpoint.Address}
 			if childPolicy.Name == weightedroundrobin.Name && endpoint.Weight != 0 {
 				ai := weightedroundrobin.AddrInfo{Weight: endpoint.Weight}
 				addr = weightedroundrobin.SetAddrInfo(addr, ai)
@@ -312,7 +293,5 @@ func localitiesToWeightedTarget(localities []xdsclient.Locality, priorityName st
 			addrs = append(addrs, addr)
 		}
 	}
-	return &weightedtarget.LBConfig{
-		Targets: weightedTargets,
-	}, addrs
+	return &weightedtarget.LBConfig{Targets: weightedTargets}, addrs
 }
