@@ -60,6 +60,16 @@ var (
 	testEndpoints   [][]xdsclient.Endpoint
 
 	testLocalitiesP0, testLocalitiesP1 []xdsclient.Locality
+
+	addrCmpOpts = cmp.Options{
+		cmp.AllowUnexported(attributes.Attributes{}),
+		cmp.Transformer("SortAddrs", func(in []resolver.Address) []resolver.Address {
+			out := append([]resolver.Address(nil), in...) // Copy input to avoid mutating it
+			sort.Slice(out, func(i, j int) bool {
+				return out[i].Addr < out[j].Addr
+			})
+			return out
+		})}
 )
 
 func init() {
@@ -114,15 +124,6 @@ func init() {
 // TestBuildPriorityConfigJSON is a sanity check that the built balancer config
 // can be parsed. The behavior test is covered by TestBuildPriorityConfig.
 func TestBuildPriorityConfigJSON(t *testing.T) {
-	const (
-		testClusterName     = "cluster-name-for-watch"
-		testEDSServiceName  = "service-name-from-parent"
-		testLRSServer       = "lrs-addr-from-config"
-		testMaxReq          = 314
-		testDropCategory    = "test-drops"
-		testDropOverMillion = 1
-	)
-
 	gotConfig, _, err := BuildPriorityConfigJSON([]PriorityConfig{
 		{
 			Mechanism: DiscoveryMechanism{
@@ -336,18 +337,9 @@ func TestBuildPriorityConfig(t *testing.T) {
 	}
 
 	if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
-		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
+		t.Errorf("buildPriorityConfig() diff (-got +want) %v", diff)
 	}
-	if diff := cmp.Diff(gotAddrs, wantAddrs,
-		cmp.AllowUnexported(attributes.Attributes{}),
-		cmp.Transformer("SortAddrs", func(in []resolver.Address) []resolver.Address {
-			out := append([]resolver.Address(nil), in...) // Copy input to avoid mutating it
-			sort.Slice(out, func(i, j int) bool {
-				return out[i].Addr < out[j].Addr
-			})
-			return out
-		}),
-	); diff != "" {
+	if diff := cmp.Diff(gotAddrs, wantAddrs, addrCmpOpts); diff != "" {
 		t.Errorf("buildPriorityConfig() diff (-got +want) %v", diff)
 	}
 }
@@ -371,16 +363,7 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 	if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
 		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
 	}
-	if diff := cmp.Diff(gotAddrs, wantAddrs,
-		cmp.AllowUnexported(attributes.Attributes{}),
-		cmp.Transformer("SortAddrs", func(in []resolver.Address) []resolver.Address {
-			out := append([]resolver.Address(nil), in...) // Copy input to avoid mutating it
-			sort.Slice(out, func(i, j int) bool {
-				return out[i].Addr < out[j].Addr
-			})
-			return out
-		}),
-	); diff != "" {
+	if diff := cmp.Diff(gotAddrs, wantAddrs, addrCmpOpts); diff != "" {
 		t.Errorf("buildClusterImplConfigForDNS() diff (-got +want) %v", diff)
 	}
 }
@@ -543,16 +526,7 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 	if diff := cmp.Diff(gotConfigs, wantConfigs); diff != "" {
 		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
 	}
-	if diff := cmp.Diff(gotAddrs, wantAddrs,
-		cmp.AllowUnexported(attributes.Attributes{}),
-		cmp.Transformer("SortAddrs", func(in []resolver.Address) []resolver.Address {
-			out := append([]resolver.Address(nil), in...) // Copy input to avoid mutating it
-			sort.Slice(out, func(i, j int) bool {
-				return out[i].Addr < out[j].Addr
-			})
-			return out
-		}),
-	); diff != "" {
+	if diff := cmp.Diff(gotAddrs, wantAddrs, addrCmpOpts); diff != "" {
 		t.Errorf("buildClusterImplConfigForEDS() diff (-got +want) %v", diff)
 	}
 
