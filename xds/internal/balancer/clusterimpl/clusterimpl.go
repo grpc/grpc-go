@@ -52,7 +52,7 @@ func init() {
 	balancer.Register(clusterImplBB{})
 }
 
-var newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
+var newXDSClient func() (xdsClientInterface, error)
 
 type clusterImplBB struct{}
 
@@ -61,18 +61,22 @@ func (clusterImplBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) 
 		ClientConn:      cc,
 		bOpts:           bOpts,
 		closed:          grpcsync.NewEvent(),
+		done:            grpcsync.NewEvent(),
 		loadWrapper:     loadstore.NewWrapper(),
 		pickerUpdateCh:  buffer.NewUnbounded(),
 		requestCountMax: defaultRequestCountMax,
 	}
 	b.logger = prefixLogger(b)
 
-	client, err := newXDSClient()
-	if err != nil {
-		b.logger.Errorf("failed to create xds-client: %v", err)
-		return nil
+	if newXDSClient != nil {
+		// For tests
+		client, err := newXDSClient()
+		if err != nil {
+			b.logger.Errorf("failed to create xds-client: %v", err)
+			return nil
+		}
+		b.xdsC = client
 	}
-	b.xdsC = client
 	go b.run()
 
 	b.logger.Infof("Created")
@@ -107,6 +111,7 @@ type clusterImplBalancer struct {
 	// synchronized with Close().
 	mu     sync.Mutex
 	closed *grpcsync.Event
+	done   *grpcsync.Event
 
 	bOpts  balancer.BuildOptions
 	logger *grpclog.PrefixLogger
@@ -202,6 +207,14 @@ func (cib *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState
 	bb := balancer.Get(newConfig.ChildPolicy.Name)
 	if bb == nil {
 		return fmt.Errorf("balancer %q not registered", newConfig.ChildPolicy.Name)
+	}
+
+	if cib.xdsC == nil {
+		c := xdsclient.FromResolverState(s.ResolverState)
+		if c == nil {
+			return balancer.ErrBadResolverState
+		}
+		cib.xdsC = c
 	}
 
 	// Update load reporting config. This needs to be done before updating the
@@ -315,7 +328,10 @@ func (cib *clusterImplBalancer) Close() {
 		cib.childLB.Close()
 		cib.childLB = nil
 	}
-	cib.xdsC.Close()
+	if newXDSClient != nil {
+		cib.xdsC.Close()
+	}
+	<-cib.done.Done()
 	cib.logger.Infof("Shutdown")
 }
 
@@ -363,6 +379,7 @@ type dropConfigs struct {
 }
 
 func (cib *clusterImplBalancer) run() {
+	defer cib.done.Fire()
 	for {
 		select {
 		case update := <-cib.pickerUpdateCh.Get():

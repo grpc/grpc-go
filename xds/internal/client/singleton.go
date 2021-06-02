@@ -19,6 +19,8 @@
 package client
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -92,8 +94,8 @@ func New() (*Client, error) {
 // singleton. The following calls will return the singleton xds client without
 // checking or using the config.
 //
-// This function is internal only, for c2p resolver to use. DO NOT use this
-// elsewhere. Use New() instead.
+// This function is internal only, for c2p resolver and testing to use. DO NOT
+// use this elsewhere. Use New() instead.
 func NewWithConfig(config *bootstrap.Config) (*Client, error) {
 	singletonClient.mu.Lock()
 	defer singletonClient.mu.Unlock()
@@ -141,3 +143,49 @@ func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout time.D
 	}
 	return &Client{clientImpl: cl, refCount: 1}, nil
 }
+
+// NewClientWithBootstrapContents returns an xds client for this config,
+// separate from the global singleton.  This should be used for testing
+// purposes only.
+func NewClientWithBootstrapContents(contents []byte) (*Client, error) {
+	// Normalize the contents
+	buf := bytes.Buffer{}
+	err := json.Indent(&buf, contents, "", "")
+	if err != nil {
+		return nil, fmt.Errorf("xds: error normalizing JSON: %v", err)
+	}
+	contents = bytes.TrimSpace(buf.Bytes())
+
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+	if c := clients[string(contents)]; c != nil {
+		c.mu.Lock()
+		// Since we don't remove the *Client from the map when it is closed, we
+		// need to recreate the impl if the ref count dropped to zero.
+		if c.refCount > 0 {
+			c.refCount++
+			c.mu.Unlock()
+			return c, nil
+		}
+		c.mu.Unlock()
+	}
+
+	bcfg, err := bootstrap.NewConfigFromContents(contents)
+	if err != nil {
+		return nil, fmt.Errorf("xds: error with bootstrap config: %v", err)
+	}
+
+	cImpl, err := newWithConfig(bcfg, defaultWatchExpiryTimeout)
+	if err != nil {
+		return nil, err
+	}
+
+	c := &Client{clientImpl: cImpl, refCount: 1}
+	clients[string(contents)] = c
+	return c, nil
+}
+
+var (
+	clients   = map[string]*Client{}
+	clientsMu sync.Mutex
+)

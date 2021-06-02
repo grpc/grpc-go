@@ -46,8 +46,6 @@ const (
 	certFile = "cert.pem"
 	keyFile  = "key.pem"
 	rootFile = "ca.pem"
-
-	xdsServiceName = "my-service"
 )
 
 // setupGRPCServer performs the following:
@@ -70,7 +68,7 @@ func setupGRPCServer(t *testing.T) (net.Listener, func()) {
 	}
 
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
-	server := xds.NewGRPCServer(grpc.Creds(creds))
+	server := xds.NewGRPCServer(grpc.Creds(creds), xds.BootstrapContentsForTesting(bootstrapContents))
 	testpb.RegisterTestServiceServer(server, &testService{})
 
 	// Create a local listener and pass it to Serve().
@@ -123,7 +121,7 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
 	}
-	serviceName := xdsServiceName + "-fallback"
+	const serviceName = "my-service-fallback"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     xdsClientNodeID,
@@ -154,7 +152,7 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	// Create a ClientConn with the xds scheme and make a successful RPC.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds))
+	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolverBuilder))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -205,7 +203,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 			// Create xDS resources to be consumed on the client side. This
 			// includes the listener, route configuration, cluster (with
 			// security configuration) and endpoint resources.
-			serviceName := xdsServiceName + "-file-watcher-certs-" + test.name
+			serviceName := "my-service-file-watcher-certs-" + test.name
 			resources := e2e.DefaultClientResources(e2e.ResourceParams{
 				DialTarget: serviceName,
 				NodeID:     xdsClientNodeID,
@@ -236,7 +234,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 			// Create a ClientConn with the xds scheme and make an RPC.
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds))
+			cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(xdsResolverBuilder))
 			if err != nil {
 				t.Fatalf("failed to dial local test server: %v", err)
 			}
@@ -270,7 +268,7 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve host and port of server: %v", err)
 	}
-	serviceName := xdsServiceName + "-security-config-change"
+	const serviceName = "my-service-security-config-change"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     xdsClientNodeID,
@@ -301,7 +299,7 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	// Create a ClientConn with the xds scheme and make a successful RPC.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	xdsCC, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(xdsCreds))
+	xdsCC, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(xdsCreds), grpc.WithResolvers(xdsResolverBuilder))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

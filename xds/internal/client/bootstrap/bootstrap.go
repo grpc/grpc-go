@@ -160,13 +160,19 @@ func bootstrapConfigFromEnvVariable() ([]byte, error) {
 // fields left unspecified, in which case the caller should use some sane
 // defaults.
 func NewConfig() (*Config, error) {
-	config := &Config{}
-
 	data, err := bootstrapConfigFromEnvVariable()
 	if err != nil {
 		return nil, fmt.Errorf("xds: Failed to read bootstrap config: %v", err)
 	}
 	logger.Debugf("Bootstrap content: %s", data)
+	return NewConfigFromContents(data)
+}
+
+// NewConfigFromContents returns a new Config using the specified bootstrap
+// file contents instead of reading the environment variable.  This is only
+// suitable for testing purposes.
+func NewConfigFromContents(data []byte) (*Config, error) {
+	config := &Config{}
 
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
