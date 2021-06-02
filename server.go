@@ -844,10 +844,16 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 		// ErrConnDispatched means that the connection was dispatched away from
 		// gRPC; those connections should be left open.
 		if err != credentials.ErrConnDispatched {
-			s.mu.Lock()
-			s.errorf("ServerHandshake(%q) failed: %v", rawConn.RemoteAddr(), err)
-			s.mu.Unlock()
-			channelz.Warningf(logger, s.channelzID, "grpc: Server.Serve failed to complete security handshake from %q: %v", rawConn.RemoteAddr(), err)
+			// In deployments where a gRPC server runs behind a cloud load
+			// balancer which performs regular TCP level health checks, the
+			// connection is closed immediately by the latter. Skipping the
+			// error here will help reduce log clutter.
+			if err != io.EOF {
+				s.mu.Lock()
+				s.errorf("ServerHandshake(%q) failed: %v", rawConn.RemoteAddr(), err)
+				s.mu.Unlock()
+				channelz.Warningf(logger, s.channelzID, "grpc: Server.Serve failed to complete security handshake from %q: %v", rawConn.RemoteAddr(), err)
+			}
 			rawConn.Close()
 		}
 		rawConn.SetDeadline(time.Time{})
