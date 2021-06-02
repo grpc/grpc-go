@@ -86,6 +86,8 @@ func (ccb *ccBalancerWrapper) watcher() {
 					ccb.cc.removeAddrConn(u.getAddrConn(), errConnDrain)
 				}
 				ccb.mu.Unlock()
+			default:
+				logger.Errorf("ccBalancerWrapper.watcher: unknown update %+v, type %T", t, t)
 			}
 		case <-ccb.closed.Done():
 		}

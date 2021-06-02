@@ -571,7 +571,7 @@ func (s) TestSwitchBalancerOldRemoveSubConn(t *testing.T) {
 		close(done)
 	}()
 	select {
-	case <-time.After(time.Second):
+	case <-time.After(defaultTestTimeout):
 		t.Fatalf("timeout waiting for updateResolverState to finish")
 	case <-done:
 	}
