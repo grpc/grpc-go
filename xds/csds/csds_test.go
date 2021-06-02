@@ -37,7 +37,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	xtestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
@@ -276,9 +275,7 @@ func commonSetup(t *testing.T) (xdsClientInterfaceWithWatch, *e2e.ManagementServ
 		t.Fatalf("failed to create xds client: %v", err)
 	}
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) {
-		return xdsC, nil
-	}
+	newXDSClient = func() xdsClientInterface { return xdsC }
 
 	// Initialize an gRPC server and register CSDS on it.
 	server := grpc.NewServer()
@@ -636,24 +633,9 @@ func protoToJSON(p proto.Message) string {
 	return ret
 }
 
-type errorXDSClient struct{}
-
-func (t errorXDSClient) DumpLDS() (string, map[string]client.UpdateWithMD) { panic("implement me") }
-func (t errorXDSClient) DumpRDS() (string, map[string]client.UpdateWithMD) { panic("implement me") }
-func (t errorXDSClient) DumpCDS() (string, map[string]client.UpdateWithMD) { panic("implement me") }
-func (t errorXDSClient) DumpEDS() (string, map[string]client.UpdateWithMD) { panic("implement me") }
-func (t errorXDSClient) BootstrapConfig() *bootstrap.Config                { panic("implement me") }
-func (t errorXDSClient) Close()                                            { panic("implement me") }
-
-func newErrorXDSClient() (*errorXDSClient, error) {
-	return nil, fmt.Errorf("typed nil")
-}
-
 func TestCSDSNoXDSClient(t *testing.T) {
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) {
-		return newErrorXDSClient()
-	}
+	newXDSClient = func() xdsClientInterface { return nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
 	// Initialize an gRPC server and register CSDS on it.
