@@ -45,13 +45,9 @@ var (
 func init() {
 	for i := 0; i < localityCount; i++ {
 		testLocalityIDs = append(testLocalityIDs, internal.LocalityID{Zone: fmt.Sprintf("test-zone-%d", i)})
-		var (
-			addrs []string
-			ends  []xdsclient.Endpoint
-		)
+		var ends []xdsclient.Endpoint
 		for j := 0; j < addressPerLocality; j++ {
 			addr := fmt.Sprintf("addr-%d-%d", i, j)
-			addrs = append(addrs, addr)
 			ends = append(ends, xdsclient.Endpoint{
 				Address:      addr,
 				HealthStatus: xdsclient.EndpointHealthStatusHealthy,

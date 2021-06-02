@@ -22,8 +22,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-
-	"google.golang.org/grpc/grpclog"
 )
 
 // DiscoveryMechanismType is the type of discovery mechanism.
@@ -95,5 +93,3 @@ type DiscoveryMechanism struct {
 	// watch.
 	EDSServiceName string `json:"edsServiceName,omitempty"`
 }
-
-var logger = grpclog.Component("xds")
