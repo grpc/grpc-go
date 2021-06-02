@@ -532,12 +532,6 @@ type ServerConfig struct {
 	HeaderTableSize       *uint32
 }
 
-// NewServerTransport creates a ServerTransport with conn or non-nil error
-// if it fails.
-func NewServerTransport(protocol string, conn net.Conn, config *ServerConfig) (ServerTransport, error) {
-	return newHTTP2Server(conn, config)
-}
-
 // ConnectOptions covers all relevant options for communicating with the server.
 type ConnectOptions struct {
 	// UserAgent is the application user agent.

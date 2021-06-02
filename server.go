@@ -844,10 +844,16 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 		// ErrConnDispatched means that the connection was dispatched away from
 		// gRPC; those connections should be left open.
 		if err != credentials.ErrConnDispatched {
-			s.mu.Lock()
-			s.errorf("ServerHandshake(%q) failed: %v", rawConn.RemoteAddr(), err)
-			s.mu.Unlock()
-			channelz.Warningf(logger, s.channelzID, "grpc: Server.Serve failed to complete security handshake from %q: %v", rawConn.RemoteAddr(), err)
+			// In deployments where a gRPC server runs behind a cloud load
+			// balancer which performs regular TCP level health checks, the
+			// connection is closed immediately by the latter. Skipping the
+			// error here will help reduce log clutter.
+			if err != io.EOF {
+				s.mu.Lock()
+				s.errorf("ServerHandshake(%q) failed: %v", rawConn.RemoteAddr(), err)
+				s.mu.Unlock()
+				channelz.Warningf(logger, s.channelzID, "grpc: Server.Serve failed to complete security handshake from %q: %v", rawConn.RemoteAddr(), err)
+			}
 			rawConn.Close()
 		}
 		rawConn.SetDeadline(time.Time{})
@@ -897,7 +903,7 @@ func (s *Server) newHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) tr
 		MaxHeaderListSize:     s.opts.maxHeaderListSize,
 		HeaderTableSize:       s.opts.headerTableSize,
 	}
-	st, err := transport.NewServerTransport("http2", c, config)
+	st, err := transport.NewServerTransport(c, config)
 	if err != nil {
 		s.mu.Lock()
 		s.errorf("NewServerTransport(%q) failed: %v", c.RemoteAddr(), err)
