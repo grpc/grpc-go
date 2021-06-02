@@ -240,8 +240,7 @@ func newFakeEDSBalancer(cc balancer.ClientConn) edsBalancerImplInterface {
 
 type fakeSubConn struct{}
 
-func (*fakeSubConn) UpdateAddresses([]resolver.Address) { panic("implement me") }
-func (*fakeSubConn) Connect()                           { panic("implement me") }
+func (*fakeSubConn) Connect() { panic("implement me") }
 
 // waitForNewEDSLB makes sure that a new edsLB is created by the top-level
 // edsBalancer.

@@ -40,8 +40,6 @@ func (c *testClientConn) UpdateState(balancer.State) {}
 
 type testSubConn struct{}
 
-func (sc *testSubConn) UpdateAddresses(addresses []resolver.Address) {}
-
 func (sc *testSubConn) Connect() {}
 
 // testPickBuilder creates balancer.Picker for test.

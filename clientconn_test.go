@@ -1011,7 +1011,7 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 	}
 	client.mu.Unlock()
 
-	ac.acbw.UpdateAddresses(addrsList)
+	ac.acbw.updateAddresses(addrsList)
 
 	// We've called tryUpdateAddrs - now let's make server2 close the
 	// connection and check that it goes back to server1 instead of continuing

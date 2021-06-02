@@ -94,17 +94,6 @@ func Get(name string) Builder {
 // testing, the new implementation should embed this interface. This allows
 // gRPC to add new methods to this interface.
 type SubConn interface {
-	// UpdateAddresses updates the addresses used in this SubConn.
-	// gRPC checks if currently-connected address is still in the new list.
-	// If it's in the list, the connection will be kept.
-	// If it's not in the list, the connection will gracefully closed, and
-	// a new connection will be created.
-	//
-	// This will trigger a state transition for the SubConn.
-	//
-	// Deprecated: This method is now part of the ClientConn interface and will
-	// eventually be removed from here.
-	UpdateAddresses([]resolver.Address)
 	// Connect starts the connecting for this SubConn.
 	Connect()
 }

@@ -1082,7 +1082,7 @@ type addrConn struct {
 
 	cc     *ClientConn
 	dopts  dialOptions
-	acbw   balancer.SubConn
+	acbw   *acBalancerWrapper
 	scopts balancer.NewSubConnOptions
 
 	// transport is set when there's a viable transport (note: ac state may not be READY as LB channel

@@ -177,7 +177,7 @@ func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resol
 	if !ok {
 		return
 	}
-	acbw.UpdateAddresses(addrs)
+	acbw.updateAddresses(addrs)
 }
 
 func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
@@ -210,7 +210,7 @@ type acBalancerWrapper struct {
 	ac *addrConn
 }
 
-func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
+func (acbw *acBalancerWrapper) updateAddresses(addrs []resolver.Address) {
 	acbw.mu.Lock()
 	defer acbw.mu.Unlock()
 	if len(addrs) <= 0 {
@@ -237,7 +237,7 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 
 		ac, err := cc.newAddrConn(addrs, opts)
 		if err != nil {
-			channelz.Warningf(logger, acbw.ac.channelzID, "acBalancerWrapper: UpdateAddresses: failed to newAddrConn: %v", err)
+			channelz.Warningf(logger, acbw.ac.channelzID, "acBalancerWrapper: updateAddresses: failed to newAddrConn: %v", err)
 			return
 		}
 		acbw.ac = ac
