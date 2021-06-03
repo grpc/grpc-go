@@ -74,9 +74,7 @@ func init() {
 func TestDropByCategory(t *testing.T) {
 	defer xdsclient.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
-	defer func() { newXDSClient = oldNewXDSClient }()
+	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
@@ -89,9 +87,7 @@ func TestDropByCategory(t *testing.T) {
 		dropDenominator = 2
 	)
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Addresses: testBackendAddrs,
-		},
+		ResolverState: client.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:                 testClusterName,
 			EDSServiceName:          testServiceName,
@@ -176,9 +172,7 @@ func TestDropByCategory(t *testing.T) {
 		dropDenominator2 = 4
 	)
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Addresses: testBackendAddrs,
-		},
+		ResolverState: client.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:                 testClusterName,
 			EDSServiceName:          testServiceName,
@@ -232,9 +226,7 @@ func TestDropByCategory(t *testing.T) {
 func TestDropCircuitBreaking(t *testing.T) {
 	defer xdsclient.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
-	defer func() { newXDSClient = oldNewXDSClient }()
+	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
@@ -243,9 +235,7 @@ func TestDropCircuitBreaking(t *testing.T) {
 
 	var maxRequest uint32 = 50
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Addresses: testBackendAddrs,
-		},
+		ResolverState: client.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:                 testClusterName,
 			EDSServiceName:          testServiceName,
@@ -344,9 +334,7 @@ func TestDropCircuitBreaking(t *testing.T) {
 func TestPickerUpdateAfterClose(t *testing.T) {
 	defer xdsclient.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
-	defer func() { newXDSClient = oldNewXDSClient }()
+	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
@@ -354,9 +342,7 @@ func TestPickerUpdateAfterClose(t *testing.T) {
 
 	var maxRequest uint32 = 50
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Addresses: testBackendAddrs,
-		},
+		ResolverState: client.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:               testClusterName,
 			EDSServiceName:        testServiceName,
@@ -389,9 +375,7 @@ func TestPickerUpdateAfterClose(t *testing.T) {
 func TestClusterNameInAddressAttributes(t *testing.T) {
 	defer xdsclient.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
-	defer func() { newXDSClient = oldNewXDSClient }()
+	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
@@ -399,9 +383,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 	defer b.Close()
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Addresses: testBackendAddrs,
-		},
+		ResolverState: client.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName,
 			EDSServiceName: testServiceName,
@@ -450,9 +432,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 	const testClusterName2 = "test-cluster-2"
 	var addr2 = resolver.Address{Addr: "2.2.2.2"}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Addresses: []resolver.Address{addr2},
-		},
+		ResolverState: client.SetClient(resolver.State{Addresses: []resolver.Address{addr2}}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName2,
 			EDSServiceName: testServiceName,
@@ -480,9 +460,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 func TestReResolution(t *testing.T) {
 	defer xdsclient.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
-	defer func() { newXDSClient = oldNewXDSClient }()
+	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
@@ -490,9 +468,7 @@ func TestReResolution(t *testing.T) {
 	defer b.Close()
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Addresses: testBackendAddrs,
-		},
+		ResolverState: client.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName,
 			EDSServiceName: testServiceName,
