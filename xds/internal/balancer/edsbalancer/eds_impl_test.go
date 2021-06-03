@@ -816,7 +816,7 @@ func (s) TestEDS_LoadReport(t *testing.T) {
 	env.CircuitBreakingSupport = true
 	defer func() { env.CircuitBreakingSupport = origCircuitBreakingSupport }()
 
-	// We create an xdsClientWrapper with a dummy xdsClientInterface which only
+	// We create an xdsClientWrapper with a dummy xdsClient which only
 	// implements the LoadStore() method to return the underlying load.Store to
 	// be used.
 	loadStore := load.NewStore()

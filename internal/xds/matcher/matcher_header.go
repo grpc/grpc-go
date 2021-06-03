@@ -27,10 +27,10 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// HeaderMatcherInterface is an interface for header matchers. These are
+// HeaderMatcher is an interface for header matchers. These are
 // documented in (EnvoyProxy link here?). These matchers will match on different
 // aspects of HTTP header name/value pairs.
-type HeaderMatcherInterface interface {
+type HeaderMatcher interface {
 	Match(metadata.MD) bool
 	String() string
 }
@@ -234,11 +234,11 @@ func (hcm *HeaderContainsMatcher) String() string {
 
 // InvertMatcher inverts the match result of the underlying header matcher.
 type InvertMatcher struct {
-	m HeaderMatcherInterface
+	m HeaderMatcher
 }
 
 // NewInvertMatcher returns a new InvertMatcher.
-func NewInvertMatcher(m HeaderMatcherInterface) *InvertMatcher {
+func NewInvertMatcher(m HeaderMatcher) *InvertMatcher {
 	return &InvertMatcher{m: m}
 }
 

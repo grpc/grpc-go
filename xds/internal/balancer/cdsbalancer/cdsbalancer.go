@@ -59,7 +59,7 @@ var (
 		// not deal with subConns.
 		return builder.Build(cc, opts), nil
 	}
-	newXDSClient  func() (xdsClientInterface, error)
+	newXDSClient  func() (xdsClient, error)
 	buildProvider = buildProviderFunc
 )
 
@@ -138,9 +138,9 @@ func (cdsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, 
 	return &cfg, nil
 }
 
-// xdsClientInterface contains methods from xdsClient.Client which are used by
+// xdsClient contains methods from xdsClient.Client which are used by
 // the cdsBalancer. This will be faked out in unittests.
-type xdsClientInterface interface {
+type xdsClient interface {
 	WatchCluster(string, func(xdsclient.ClusterUpdate, error)) func()
 	BootstrapConfig() *bootstrap.Config
 	Close()
@@ -185,7 +185,7 @@ type cdsBalancer struct {
 	ccw            *ccWrapper            // ClientConn interface passed to child LB.
 	bOpts          balancer.BuildOptions // BuildOptions passed to child LB.
 	updateCh       *buffer.Unbounded     // Channel for gRPC and xdsClient updates.
-	xdsClient      xdsClientInterface    // xDS client to watch Cluster resource.
+	xdsClient      xdsClient             // xDS client to watch Cluster resource.
 	cancelWatch    func()                // Cluster watch cancel func.
 	edsLB          balancer.Balancer     // EDS child policy.
 	clusterToWatch string

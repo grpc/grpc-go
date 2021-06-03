@@ -52,7 +52,7 @@ func init() {
 	balancer.Register(clusterImplBB{})
 }
 
-var newXDSClient func() (xdsClientInterface, error)
+var newXDSClient func() (xdsClient, error)
 
 type clusterImplBB struct{}
 
@@ -91,9 +91,9 @@ func (clusterImplBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancing
 	return parseConfig(c)
 }
 
-// xdsClientInterface contains only the xds_client methods needed by LRS
+// xdsClient contains only the xds_client methods needed by LRS
 // balancer. It's defined so we can override xdsclient in tests.
-type xdsClientInterface interface {
+type xdsClient interface {
 	ReportLoad(server string) (*load.Store, func())
 	Close()
 }
@@ -115,7 +115,7 @@ type clusterImplBalancer struct {
 
 	bOpts  balancer.BuildOptions
 	logger *grpclog.PrefixLogger
-	xdsC   xdsClientInterface
+	xdsC   xdsClient
 
 	config           *LBConfig
 	childLB          balancer.Balancer

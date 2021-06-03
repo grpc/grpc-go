@@ -156,7 +156,7 @@ func (fc *fakeConn) Close() error {
 func newListenerWrapper(t *testing.T) (*listenerWrapper, <-chan struct{}, *fakeclient.Client, *fakeListener, func()) {
 	t.Helper()
 
-	// Create a listener wrapper with a fake listener and fake xdsClient and
+	// Create a listener wrapper with a fake listener and fake XDSClient and
 	// verify that it extracts the host and port from the passed in listener.
 	lis := &fakeListener{
 		acceptCh: make(chan connAndErr, 1),

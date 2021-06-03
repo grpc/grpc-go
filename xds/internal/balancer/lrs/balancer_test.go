@@ -56,7 +56,7 @@ var (
 func TestLoadReporting(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
 	builder := balancer.Get(Name)

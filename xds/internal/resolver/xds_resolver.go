@@ -41,21 +41,21 @@ const xdsScheme = "xds"
 // the same time.
 func NewBuilder(config []byte) (resolver.Builder, error) {
 	return &xdsResolverBuilder{
-		newXDSClient: func() (xdsClientInterface, error) {
+		newXDSClient: func() (xdsClient, error) {
 			return xdsclient.NewClientWithBootstrapContents(config)
 		},
 	}, nil
 }
 
 // For overriding in unittests.
-var newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
+var newXDSClient = func() (xdsClient, error) { return xdsclient.New() }
 
 func init() {
 	resolver.Register(&xdsResolverBuilder{})
 }
 
 type xdsResolverBuilder struct {
-	newXDSClient func() (xdsClientInterface, error)
+	newXDSClient func() (xdsClient, error)
 }
 
 // Build helps implement the resolver.Builder interface.
@@ -119,9 +119,9 @@ func (*xdsResolverBuilder) Scheme() string {
 	return xdsScheme
 }
 
-// xdsClientInterface contains methods from xdsClient.Client which are used by
+// xdsClient contains methods from xdsClient.Client which are used by
 // the resolver. This will be faked out in unittests.
-type xdsClientInterface interface {
+type xdsClient interface {
 	WatchListener(serviceName string, cb func(xdsclient.ListenerUpdate, error)) func()
 	WatchRouteConfig(routeName string, cb func(xdsclient.RouteConfigUpdate, error)) func()
 	BootstrapConfig() *bootstrap.Config
@@ -149,7 +149,7 @@ type xdsResolver struct {
 	logger *grpclog.PrefixLogger
 
 	// The underlying xdsClient which performs all xDS requests and responses.
-	client xdsClientInterface
+	client xdsClient
 	// A channel for the watch API callback to write service updates on to. The
 	// updates are read by the run goroutine and passed on to the ClientConn.
 	updateCh chan suWithError
