@@ -22,6 +22,7 @@ package fakeclient
 import (
 	"context"
 
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -49,6 +50,8 @@ type Client struct {
 	rdsCb  func(xdsclient.RouteConfigUpdate, error)
 	cdsCbs map[string]func(xdsclient.ClusterUpdate, error)
 	edsCb  func(xdsclient.EndpointsUpdate, error)
+
+	Closed *grpcsync.Event // fired when Close is called.
 }
 
 // WatchListener registers a LDS watch.
@@ -228,16 +231,9 @@ func (xdsC *Client) WaitForReportLoad(ctx context.Context) (ReportLoadArgs, erro
 	return val.(ReportLoadArgs), err
 }
 
-// Close closes the xds client.
+// Close fires xdsC.Closed, indicating it was called.
 func (xdsC *Client) Close() {
-	xdsC.closeCh.Send(nil)
-}
-
-// WaitForClose waits for Close to be invoked on this client and returns
-// context.DeadlineExceeded otherwise.
-func (xdsC *Client) WaitForClose(ctx context.Context) error {
-	_, err := xdsC.closeCh.Receive(ctx)
-	return err
+	xdsC.Closed.Fire()
 }
 
 // BootstrapConfig returns the bootstrap config.
@@ -278,5 +274,6 @@ func NewClientWithName(name string) *Client {
 		closeCh:      testutils.NewChannel(),
 		loadStore:    load.NewStore(),
 		cdsCbs:       make(map[string]func(xdsclient.ClusterUpdate, error)),
+		Closed:       grpcsync.NewEvent(),
 	}
 }
