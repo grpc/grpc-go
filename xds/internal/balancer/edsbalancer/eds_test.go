@@ -255,8 +255,6 @@ func waitForNewEDSLB(ctx context.Context, ch *testutils.Channel) (*fakeEDSBalanc
 // cleanup.
 func setup(edsLBCh *testutils.Channel) (*fakeclient.Client, func()) {
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
 
 	origNewEDSBalancer := newEDSBalancer
 	newEDSBalancer = func(cc balancer.ClientConn, _ balancer.BuildOptions, _ func(priorityType, balancer.State), _ load.PerClusterReporter, _ *grpclog.PrefixLogger) edsBalancerImplInterface {
@@ -266,7 +264,7 @@ func setup(edsLBCh *testutils.Channel) (*fakeclient.Client, func()) {
 	}
 	return xdsC, func() {
 		newEDSBalancer = origNewEDSBalancer
-		newXDSClient = oldNewXDSClient
+		xdsC.Close()
 	}
 }
 
@@ -348,6 +346,7 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 		Config: json.RawMessage("{}"),
 	}
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{
 			ChildPolicy:    lbCfgA,
 			ClusterName:    testEDSClusterName,
@@ -377,6 +376,7 @@ func (s) TestConfigChildPolicyUpdate(t *testing.T) {
 		Config: json.RawMessage("{}"),
 	}
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{
 			ChildPolicy:           lbCfgB,
 			ClusterName:           testEDSClusterName,
@@ -421,6 +421,7 @@ func (s) TestSubConnStateChange(t *testing.T) {
 	}
 
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
 	}); err != nil {
 		t.Fatalf("edsB.UpdateClientConnState() failed: %v", err)
@@ -467,6 +468,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	}
 
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
 	}); err != nil {
 		t.Fatal(err)
@@ -511,6 +513,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 
 	// An update with the same service name should not trigger a new watch.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
 	}); err != nil {
 		t.Fatal(err)
@@ -549,6 +552,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	}
 
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
 	}); err != nil {
 		t.Fatal(err)
@@ -589,6 +593,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	// An update with the same service name should trigger a new watch, because
 	// the previous watch was canceled.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
 	}); err != nil {
 		t.Fatal(err)
@@ -640,6 +645,7 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	defer cancel()
 	// If eds service name is not set, should watch for cluster name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{ClusterName: "cluster-1"},
 	}); err != nil {
 		t.Fatal(err)
@@ -651,6 +657,7 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	// Update with an non-empty edsServiceName should trigger an EDS watch for
 	// the same.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{EDSServiceName: "foobar-1"},
 	}); err != nil {
 		t.Fatal(err)
@@ -664,6 +671,7 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	// registered watch will be cancelled, which will result in an EDS request
 	// with no resource names being sent to the server.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{EDSServiceName: "foobar-2"},
 	}); err != nil {
 		t.Fatal(err)
@@ -677,7 +685,7 @@ func (s) TestClientWatchEDS(t *testing.T) {
 // service name from an update's config.
 func (s) TestCounterUpdate(t *testing.T) {
 	edsLBCh := testutils.NewChannel()
-	_, cleanup := setup(edsLBCh)
+	xdsC, cleanup := setup(edsLBCh)
 	defer cleanup()
 
 	builder := balancer.Get(edsName)
@@ -690,6 +698,7 @@ func (s) TestCounterUpdate(t *testing.T) {
 	var testCountMax uint32 = 100
 	// Update should trigger counter update with provided service name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{
 			ClusterName:           "foobar-1",
 			MaxConcurrentRequests: &testCountMax,
@@ -724,6 +733,7 @@ func (s) TestClusterNameUpdateInAddressAttributes(t *testing.T) {
 
 	// Update should trigger counter update with provided service name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{
 			ClusterName: "foobar-1",
 		},
@@ -743,6 +753,7 @@ func (s) TestClusterNameUpdateInAddressAttributes(t *testing.T) {
 
 	// Update should trigger counter update with provided service name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{
 			ClusterName: "foobar-2",
 		},
