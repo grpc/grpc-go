@@ -37,9 +37,8 @@ import (
 	xdsi "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
-	"google.golang.org/grpc/xds/internal/client"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
 // TODO: make this a environment variable?
@@ -102,7 +101,7 @@ type edsBalancerImpl struct {
 	dropConfig             []xdsclient.OverloadDropConfig
 	drops                  []*dropper
 	innerState             balancer.State // The state of the picker without drop support.
-	serviceRequestsCounter *client.ServiceRequestsCounter
+	serviceRequestsCounter *xdsclient.ServiceRequestsCounter
 	serviceRequestCountMax uint32
 
 	clusterNameMu sync.Mutex
@@ -425,7 +424,7 @@ func (edsImpl *edsBalancerImpl) updateServiceRequestsConfig(serviceName string, 
 	edsImpl.pickerMu.Lock()
 	var updatePicker bool
 	if edsImpl.serviceRequestsCounter == nil || edsImpl.serviceRequestsCounter.ServiceName != serviceName {
-		edsImpl.serviceRequestsCounter = client.GetServiceRequestsCounter(serviceName)
+		edsImpl.serviceRequestsCounter = xdsclient.GetServiceRequestsCounter(serviceName)
 		updatePicker = true
 	}
 
@@ -540,11 +539,11 @@ type dropPicker struct {
 	drops     []*dropper
 	p         balancer.Picker
 	loadStore load.PerClusterReporter
-	counter   *client.ServiceRequestsCounter
+	counter   *xdsclient.ServiceRequestsCounter
 	countMax  uint32
 }
 
-func newDropPicker(p balancer.Picker, drops []*dropper, loadStore load.PerClusterReporter, counter *client.ServiceRequestsCounter, countMax uint32) *dropPicker {
+func newDropPicker(p balancer.Picker, drops []*dropper, loadStore load.PerClusterReporter, counter *xdsclient.ServiceRequestsCounter, countMax uint32) *dropPicker {
 	return &dropPicker{
 		drops:     drops,
 		p:         p,

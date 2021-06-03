@@ -37,21 +37,21 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	_ "google.golang.org/grpc/xds/internal/client/v2" // Register v2 xds_client.
-	_ "google.golang.org/grpc/xds/internal/client/v3" // Register v3 xds_client.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // Register v2 xds_client.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/v3" // Register v3 xds_client.
 )
 
 // xdsClientInterface contains methods from xdsClient.Client which are used by
 // the server. This is useful for overriding in unit tests.
 type xdsClientInterface interface {
-	DumpLDS() (string, map[string]client.UpdateWithMD)
-	DumpRDS() (string, map[string]client.UpdateWithMD)
-	DumpCDS() (string, map[string]client.UpdateWithMD)
-	DumpEDS() (string, map[string]client.UpdateWithMD)
+	DumpLDS() (string, map[string]xdsclient.UpdateWithMD)
+	DumpRDS() (string, map[string]xdsclient.UpdateWithMD)
+	DumpCDS() (string, map[string]xdsclient.UpdateWithMD)
+	DumpEDS() (string, map[string]xdsclient.UpdateWithMD)
 	BootstrapConfig() *bootstrap.Config
 	Close()
 }
@@ -59,7 +59,7 @@ type xdsClientInterface interface {
 var (
 	logger       = grpclog.Component("xds")
 	newXDSClient = func() xdsClientInterface {
-		c, err := client.New()
+		c, err := xdsclient.New()
 		if err != nil {
 			// If err is not nil, c is a typed nil (of type *xdsclient.Client).
 			// If c is returned and assigned to the xdsClient field in the CSDS
@@ -111,7 +111,7 @@ func (s *ClientStatusDiscoveryServer) FetchClientStatus(_ context.Context, req *
 }
 
 // buildClientStatusRespForReq fetches the status from the client, and returns
-// the response to be sent back to client.
+// the response to be sent back to xdsclient.
 //
 // If it returns an error, the error is a status error.
 func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statuspb.ClientStatusRequest) (*v3statuspb.ClientStatusResponse, error) {
@@ -303,17 +303,17 @@ func (s *ClientStatusDiscoveryServer) buildEDSPerXDSConfig() *v3statuspb.PerXdsC
 	}
 }
 
-func serviceStatusToProto(serviceStatus client.ServiceStatus) v3adminpb.ClientResourceStatus {
+func serviceStatusToProto(serviceStatus xdsclient.ServiceStatus) v3adminpb.ClientResourceStatus {
 	switch serviceStatus {
-	case client.ServiceStatusUnknown:
+	case xdsclient.ServiceStatusUnknown:
 		return v3adminpb.ClientResourceStatus_UNKNOWN
-	case client.ServiceStatusRequested:
+	case xdsclient.ServiceStatusRequested:
 		return v3adminpb.ClientResourceStatus_REQUESTED
-	case client.ServiceStatusNotExist:
+	case xdsclient.ServiceStatusNotExist:
 		return v3adminpb.ClientResourceStatus_DOES_NOT_EXIST
-	case client.ServiceStatusACKed:
+	case xdsclient.ServiceStatusACKed:
 		return v3adminpb.ClientResourceStatus_ACKED
-	case client.ServiceStatusNACKed:
+	case xdsclient.ServiceStatusNACKed:
 		return v3adminpb.ClientResourceStatus_NACKED
 	default:
 		return v3adminpb.ClientResourceStatus_UNKNOWN
