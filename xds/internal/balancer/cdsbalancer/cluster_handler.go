@@ -40,7 +40,7 @@ type clusterHandler struct {
 	// CDS Balancer cares about is the most recent update.
 	updateChannel chan clusterHandlerUpdate
 
-	xdsClient xdsClient
+	xdsClient xdsclient.Interface
 }
 
 func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
@@ -112,7 +112,7 @@ type clusterNode struct {
 
 // CreateClusterNode creates a cluster node from a given clusterName. This will
 // also start the watch for that cluster.
-func createClusterNode(clusterName string, xdsClient xdsClient, topLevelHandler *clusterHandler) *clusterNode {
+func createClusterNode(clusterName string, xdsClient xdsclient.Interface, topLevelHandler *clusterHandler) *clusterNode {
 	c := &clusterNode{
 		clusterHandler: topLevelHandler,
 	}
