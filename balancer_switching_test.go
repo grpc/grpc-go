@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
@@ -528,6 +529,51 @@ func (s) TestSwitchBalancerGRPCLBWithGRPCLBNotRegistered(t *testing.T) {
 	cc.updateResolverState(resolver.State{ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "round_robin"}`), Addresses: addrs}, nil)
 	if err := checkRoundRobin(cc, servers[1:]); err != nil {
 		t.Fatalf("check roundrobin returned non-nil error: %v", err)
+	}
+}
+
+const inlineRemoveSubConnBalancerName = "test-inline-remove-subconn-balancer"
+
+func init() {
+	stub.Register(inlineRemoveSubConnBalancerName, stub.BalancerFuncs{
+		Close: func(data *stub.BalancerData) {
+			data.ClientConn.RemoveSubConn(&acBalancerWrapper{})
+		},
+	})
+}
+
+// Test that when switching to balancers, the old balancer calls RemoveSubConn
+// in Close.
+//
+// This test is to make sure this close doesn't cause a deadlock.
+func (s) TestSwitchBalancerOldRemoveSubConn(t *testing.T) {
+	r := manual.NewBuilderWithScheme("whatever")
+	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
+	if err != nil {
+		t.Fatalf("failed to dial: %v", err)
+	}
+	defer cc.Close()
+	cc.updateResolverState(resolver.State{ServiceConfig: parseCfg(r, fmt.Sprintf(`{"loadBalancingPolicy": "%v"}`, inlineRemoveSubConnBalancerName))}, nil)
+	// This service config update will switch balancer from
+	// "test-inline-remove-subconn-balancer" to "pick_first". The test balancer
+	// will be closed, which will call cc.RemoveSubConn() inline (this
+	// RemoveSubConn is not required by the API, but some balancers might do
+	// it).
+	//
+	// This is to make sure the cc.RemoveSubConn() from Close() doesn't cause a
+	// deadlock (e.g. trying to grab a mutex while it's already locked).
+	//
+	// Do it in a goroutine so this test will fail with a helpful message
+	// (though the goroutine will still leak).
+	done := make(chan struct{})
+	go func() {
+		cc.updateResolverState(resolver.State{ServiceConfig: parseCfg(r, `{"loadBalancingPolicy": "pick_first"}`)}, nil)
+		close(done)
+	}()
+	select {
+	case <-time.After(defaultTestTimeout):
+		t.Fatalf("timeout waiting for updateResolverState to finish")
+	case <-done:
 	}
 }
 
