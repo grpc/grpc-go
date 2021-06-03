@@ -94,7 +94,7 @@ func (md MD) Copy() MD {
 
 // Get obtains the values for a given key.
 //
-// All keys are converted to lowercase.
+// k is converted to lowercase before searching in md.
 func (md MD) Get(k string) []string {
 	k = strings.ToLower(k)
 	return md[k]
@@ -102,7 +102,7 @@ func (md MD) Get(k string) []string {
 
 // Set sets the value of a given key with a slice of values.
 //
-// All keys are converted to lowercase.
+// k is converted to lowercase before storing in md.
 func (md MD) Set(k string, vals ...string) {
 	if len(vals) == 0 {
 		return
@@ -114,7 +114,7 @@ func (md MD) Set(k string, vals ...string) {
 // Append adds the values to key k, not overwriting what was already stored at
 // that key.
 //
-// All keys are converted to lowercase.
+// k is converted to lowercase before storing in md.
 func (md MD) Append(k string, vals ...string) {
 	if len(vals) == 0 {
 		return
@@ -155,10 +155,6 @@ func NewOutgoingContext(ctx context.Context, md MD) context.Context {
 // AppendToOutgoingContext returns a new context with the provided kv merged
 // with any existing metadata in the context. Please refer to the documentation
 // of Pairs for a description of kv.
-//
-// Unlike Pairs, the keys are not turned into lowercase. Users of
-// FromOutgoingContext need to handle them accordingly. Read
-// FromOutgoingContext's doc for more details.
 func AppendToOutgoingContext(ctx context.Context, kv ...string) context.Context {
 	if len(kv)%2 == 1 {
 		panic(fmt.Sprintf("metadata: AppendToOutgoingContext got an odd number of input pairs for metadata: %d", len(kv)))
@@ -210,7 +206,7 @@ func FromOutgoingContextRaw(ctx context.Context) (MD, [][]string, bool) {
 
 // FromOutgoingContext returns the outgoing metadata in ctx if it exists.
 //
-// All keys in the return MD are lowercase.
+// All keys in the returned MD are lowercase.
 func FromOutgoingContext(ctx context.Context) (MD, bool) {
 	raw, ok := ctx.Value(mdOutgoingKey{}).(rawMD)
 	if !ok {
