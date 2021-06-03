@@ -43,10 +43,10 @@ import (
 
 	_ "google.golang.org/grpc/credentials/tls/certprovider/pemfile" // Register the file watcher certificate provider plugin.
 	_ "google.golang.org/grpc/xds/internal/balancer"                // Register the balancers.
-	_ "google.golang.org/grpc/xds/internal/client/v2"               // Register the v2 xDS API client.
-	_ "google.golang.org/grpc/xds/internal/client/v3"               // Register the v3 xDS API client.
 	_ "google.golang.org/grpc/xds/internal/httpfilter/fault"        // Register the fault injection filter.
 	xdsresolver "google.golang.org/grpc/xds/internal/resolver"      // Register the xds_resolver.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/v2"            // Register the v2 xDS API client.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/v3"            // Register the v3 xDS API client.
 )
 
 func init() {

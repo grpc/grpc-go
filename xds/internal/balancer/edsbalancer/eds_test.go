@@ -41,11 +41,11 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
 
-	_ "google.golang.org/grpc/xds/internal/client/v2" // V2 client registration.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // V2 client registration.
 )
 
 const (
