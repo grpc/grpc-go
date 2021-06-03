@@ -25,7 +25,6 @@ package csds
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"time"
 
@@ -59,14 +58,23 @@ type xdsClientInterface interface {
 
 var (
 	logger       = grpclog.Component("xds")
-	newXDSClient = func() (xdsClientInterface, error) {
-		return client.New()
+	newXDSClient = func() xdsClientInterface {
+		c, err := client.New()
+		if err != nil {
+			// If err is not nil, c is a typed nil (of type *xdsclient.Client).
+			// If c is returned and assigned to the xdsClient field in the CSDS
+			// server, the nil checks in the handlers will not handle it
+			// properly.
+			logger.Warningf("failed to create xds client: %v", err)
+			return nil
+		}
+		return c
 	}
 )
 
 // ClientStatusDiscoveryServer implementations interface ClientStatusDiscoveryServiceServer.
 type ClientStatusDiscoveryServer struct {
-	// xdsClient will always be the same in practise. But we keep a copy in each
+	// xdsClient will always be the same in practice. But we keep a copy in each
 	// server instance for testing.
 	xdsClient xdsClientInterface
 }
@@ -74,13 +82,7 @@ type ClientStatusDiscoveryServer struct {
 // NewClientStatusDiscoveryServer returns an implementation of the CSDS server that can be
 // registered on a gRPC server.
 func NewClientStatusDiscoveryServer() (*ClientStatusDiscoveryServer, error) {
-	xdsC, err := newXDSClient()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create xds client: %v", err)
-	}
-	return &ClientStatusDiscoveryServer{
-		xdsClient: xdsC,
-	}, nil
+	return &ClientStatusDiscoveryServer{xdsClient: newXDSClient()}, nil
 }
 
 // StreamClientStatus implementations interface ClientStatusDiscoveryServiceServer.
@@ -113,6 +115,9 @@ func (s *ClientStatusDiscoveryServer) FetchClientStatus(_ context.Context, req *
 //
 // If it returns an error, the error is a status error.
 func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statuspb.ClientStatusRequest) (*v3statuspb.ClientStatusResponse, error) {
+	if s.xdsClient == nil {
+		return &v3statuspb.ClientStatusResponse{}, nil
+	}
 	// Field NodeMatchers is unsupported, by design
 	// https://github.com/grpc/proposal/blob/master/A40-csds-support.md#detail-node-matching.
 	if len(req.NodeMatchers) != 0 {
@@ -137,7 +142,9 @@ func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statusp
 
 // Close cleans up the resources.
 func (s *ClientStatusDiscoveryServer) Close() {
-	s.xdsClient.Close()
+	if s.xdsClient != nil {
+		s.xdsClient.Close()
+	}
 }
 
 // nodeProtoToV3 converts the given proto into a v3.Node. n is from bootstrap
