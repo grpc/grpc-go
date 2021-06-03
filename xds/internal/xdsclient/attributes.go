@@ -17,20 +17,34 @@
 
 package xdsclient
 
-import "google.golang.org/grpc/resolver"
+import (
+	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/client/load"
+)
 
 type clientKeyType string
 
 const clientKey = clientKeyType("grpc.xds.internal.client.Client")
 
+// Interface contains a subset of the *Client methods that are needed by the
+// balancers.
+type Interface interface {
+	WatchCluster(string, func(ClusterUpdate, error)) func()
+	WatchEndpoints(clusterName string, edsCb func(EndpointsUpdate, error)) (cancel func())
+	BootstrapConfig() *bootstrap.Config
+	ReportLoad(server string) (*load.Store, func())
+	Close()
+}
+
 // FromResolverState returns the Client from state, or nil if not present.
-func FromResolverState(state resolver.State) *Client {
-	cs, _ := state.Attributes.Value(clientKey).(*Client)
+func FromResolverState(state resolver.State) Interface {
+	cs, _ := state.Attributes.Value(clientKey).(Interface)
 	return cs
 }
 
 // SetClient sets c in state and returns the new state.
-func SetClient(state resolver.State, c *Client) resolver.State {
+func SetClient(state resolver.State, c Interface) resolver.State {
 	state.Attributes = state.Attributes.WithValues(clientKey, c)
 	return state
 }
