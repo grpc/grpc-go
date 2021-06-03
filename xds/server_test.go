@@ -86,6 +86,10 @@ func (f *fakeGRPCServer) GracefulStop() {
 	f.gracefulStopCh.Send(nil)
 }
 
+func (f *fakeGRPCServer) GetServiceInfo() map[string]grpc.ServiceInfo {
+	panic("implement me")
+}
+
 func newFakeGRPCServer() *fakeGRPCServer {
 	return &fakeGRPCServer{
 		done:              make(chan struct{}),

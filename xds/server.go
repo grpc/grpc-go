@@ -73,6 +73,7 @@ type grpcServerInterface interface {
 	Serve(net.Listener) error
 	Stop()
 	GracefulStop()
+	GetServiceInfo() map[string]grpc.ServiceInfo
 }
 
 // GRPCServer wraps a gRPC server and provides server-side xDS functionality, by
@@ -143,6 +144,12 @@ func handleServerOptions(opts []grpc.ServerOption) *serverOptions {
 // before invoking Serve.
 func (s *GRPCServer) RegisterService(sd *grpc.ServiceDesc, ss interface{}) {
 	s.gs.RegisterService(sd, ss)
+}
+
+// GetServiceInfo returns a map from service names to ServiceInfo.
+// Service names include the package names, in the form of <package>.<service>.
+func (s *GRPCServer) GetServiceInfo() map[string]grpc.ServiceInfo {
+	return s.gs.GetServiceInfo()
 }
 
 // initXDSClient creates a new xdsClient if there is no existing one available.
