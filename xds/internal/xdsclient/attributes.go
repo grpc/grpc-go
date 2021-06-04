@@ -30,6 +30,7 @@ const clientKey = clientKeyType("grpc.xds.internal.client.Client")
 // Interface contains a subset of the *Client methods that are needed by the
 // balancers.
 type Interface interface {
+	WatchListener(string, func(ListenerUpdate, error)) func()
 	WatchCluster(string, func(ClusterUpdate, error)) func()
 	WatchEndpoints(clusterName string, edsCb func(EndpointsUpdate, error)) (cancel func())
 	BootstrapConfig() *bootstrap.Config
