@@ -194,7 +194,7 @@ func TestBuildXDS(t *testing.T) {
 			}
 
 			wantNode := &v3corepb.Node{
-				Id:                   "C2P",
+				Id:                   id,
 				Metadata:             nil,
 				Locality:             &v3corepb.Locality{Zone: testZone},
 				UserAgentName:        gRPCUserAgentName,

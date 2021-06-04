@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/googlecloud"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/xds" // To register xds resolvers and balancers.
@@ -152,13 +153,15 @@ var ipv6EnabledMetadata = &structpb.Struct{
 	},
 }
 
+var id = fmt.Sprintf("C2P-%d", grpcrand.Int())
+
 // newNode makes a copy of defaultNode, and populate it's Metadata and
 // Locality fields.
 func newNode(zone string, ipv6Capable bool) *v3corepb.Node {
 	ret := &v3corepb.Node{
 		// Not all required fields are set in defaultNote. Metadata will be set
 		// if ipv6 is enabled. Locality will be set to the value from metadata.
-		Id:                   "C2P",
+		Id:                   id,
 		UserAgentName:        gRPCUserAgentName,
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
 		ClientFeatures:       []string{clientFeatureNoOverprovisioning},

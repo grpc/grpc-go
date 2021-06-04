@@ -31,6 +31,14 @@ var (
 	mu sync.Mutex
 )
 
+// Int implements rand.Int on the grpcrand global source.
+func Int() int {
+	mu.Lock()
+	res := r.Int()
+	mu.Unlock()
+	return res
+}
+
 // Int63n implements rand.Int63n on the grpcrand global source.
 func Int63n(n int64) int64 {
 	mu.Lock()
