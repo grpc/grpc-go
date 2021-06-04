@@ -95,7 +95,7 @@ type clusterImplBalancer struct {
 
 	bOpts     balancer.BuildOptions
 	logger    *grpclog.PrefixLogger
-	xdsClient xdsclient.Interface
+	xdsClient xdsclient.XDSClient
 
 	config           *LBConfig
 	childLB          balancer.Balancer

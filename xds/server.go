@@ -41,7 +41,7 @@ const serverPrefix = "[xds-server %p] "
 
 var (
 	// These new functions will be overridden in unit tests.
-	newXDSClient = func() (xdsclient.Interface, error) {
+	newXDSClient = func() (xdsclient.XDSClient, error) {
 		return xdsclient.New()
 	}
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer {
@@ -81,7 +81,7 @@ type GRPCServer struct {
 	// beginning of Serve(), where we have to decide if we have to create a
 	// client or use an existing one.
 	clientMu sync.Mutex
-	xdsC     xdsclient.Interface
+	xdsC     xdsclient.XDSClient
 }
 
 // NewGRPCServer creates an xDS-enabled gRPC server using the passed in opts.
@@ -147,7 +147,7 @@ func (s *GRPCServer) initXDSClient() error {
 
 	newXDSClient := newXDSClient
 	if s.opts.bootstrapContents != nil {
-		newXDSClient = func() (xdsclient.Interface, error) {
+		newXDSClient = func() (xdsclient.XDSClient, error) {
 			return xdsclient.NewClientWithBootstrapContents(s.opts.bootstrapContents)
 		}
 	}

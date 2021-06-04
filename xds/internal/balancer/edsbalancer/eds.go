@@ -124,7 +124,7 @@ type edsBalancer struct {
 	xdsClientUpdate   chan *edsUpdate
 	childPolicyUpdate *buffer.Unbounded
 
-	xdsClient   xdsclient.Interface
+	xdsClient   xdsclient.XDSClient
 	loadWrapper *loadstore.Wrapper
 	config      *EDSConfig // may change when passed a different service config
 	edsImpl     edsBalancerImplInterface

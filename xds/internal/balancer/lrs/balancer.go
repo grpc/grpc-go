@@ -157,7 +157,7 @@ func (ccw *ccWrapper) UpdateState(s balancer.State) {
 }
 
 type xdsClientWrapper struct {
-	c                xdsclient.Interface
+	c                xdsclient.XDSClient
 	cancelLoadReport func()
 	clusterName      string
 	edsServiceName   string
@@ -167,7 +167,7 @@ type xdsClientWrapper struct {
 	loadWrapper *loadstore.Wrapper
 }
 
-func newXDSClientWrapper(c xdsclient.Interface) *xdsClientWrapper {
+func newXDSClientWrapper(c xdsclient.XDSClient) *xdsClientWrapper {
 	return &xdsClientWrapper{
 		c:           c,
 		loadWrapper: loadstore.NewWrapper(),

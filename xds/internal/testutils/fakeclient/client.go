@@ -32,7 +32,7 @@ import (
 // Client is a fake implementation of an xds client. It exposes a bunch of
 // channels to signal the occurrence of various events.
 type Client struct {
-	xdsclient.Interface
+	xdsclient.XDSClient
 
 	name         string
 	ldsWatchCh   *testutils.Channel

@@ -28,7 +28,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
@@ -129,7 +128,10 @@ func (tb *testEDSBalancer) waitForClientConnUpdate(ctx context.Context, wantCCS 
 		return err
 	}
 	gotCCS := ccs.(balancer.ClientConnState)
-	if !cmp.Equal(gotCCS, wantCCS, cmpopts.IgnoreUnexported(attributes.Attributes{})) {
+	if xdsclient.FromResolverState(gotCCS.ResolverState) == nil {
+		return fmt.Errorf("want resolver state with XDSClient attached, got nil")
+	}
+	if !cmp.Equal(gotCCS, wantCCS, cmpopts.IgnoreFields(resolver.State{}, "Attributes")) {
 		return fmt.Errorf("received ClientConnState: %+v, want %+v", gotCCS, wantCCS)
 	}
 	return nil
@@ -173,7 +175,7 @@ func (tb *testEDSBalancer) waitForClose(ctx context.Context) error {
 
 // cdsCCS is a helper function to construct a good update passed from the
 // xdsResolver to the cdsBalancer.
-func cdsCCS(cluster string, xdsC xdsclient.Interface) balancer.ClientConnState {
+func cdsCCS(cluster string, xdsC xdsclient.XDSClient) balancer.ClientConnState {
 	const cdsLBConfig = `{
       "loadBalancingConfig":[
         {

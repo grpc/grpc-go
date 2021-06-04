@@ -27,9 +27,10 @@ type clientKeyType string
 
 const clientKey = clientKeyType("grpc.xds.internal.client.Client")
 
-// Interface contains a subset of the *Client methods that are needed by the
-// balancers.
-type Interface interface {
+// XDSClient is a full fledged gRPC client which queries a set of discovery APIs
+// (collectively termed as xDS) on a remote management server, to discover
+// various dynamic resources.
+type XDSClient interface {
 	WatchListener(string, func(ListenerUpdate, error)) func()
 	WatchRouteConfig(string, func(RouteConfigUpdate, error)) func()
 	WatchCluster(string, func(ClusterUpdate, error)) func()
@@ -46,13 +47,13 @@ type Interface interface {
 }
 
 // FromResolverState returns the Client from state, or nil if not present.
-func FromResolverState(state resolver.State) Interface {
-	cs, _ := state.Attributes.Value(clientKey).(Interface)
+func FromResolverState(state resolver.State) XDSClient {
+	cs, _ := state.Attributes.Value(clientKey).(XDSClient)
 	return cs
 }
 
 // SetClient sets c in state and returns the new state.
-func SetClient(state resolver.State, c Interface) resolver.State {
+func SetClient(state resolver.State, c XDSClient) resolver.State {
 	state.Attributes = state.Attributes.WithValues(clientKey, c)
 	return state
 }

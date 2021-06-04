@@ -267,7 +267,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
-	clientImpl := client.clientImpl
+	clientImpl := client.(*clientRefCounted).clientImpl
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	c, err := apiClientCh.Receive(ctx)
@@ -285,10 +285,10 @@ func (s) TestClientNewSingleton(t *testing.T) {
 			client.Close()
 			t.Fatalf("%d-th call to New() failed with error: %v", i, terr)
 		}
-		if tc.clientImpl != clientImpl {
+		if tc.(*clientRefCounted).clientImpl != clientImpl {
 			client.Close()
 			tc.Close()
-			t.Fatalf("%d-th call to New() got a different client %p, want %p", i, tc.clientImpl, clientImpl)
+			t.Fatalf("%d-th call to New() got a different client %p, want %p", i, tc.(*clientRefCounted).clientImpl, clientImpl)
 		}
 
 		sctx, scancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -339,8 +339,8 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	if client2 != client {
 		t.Fatalf("New() after Close() should return the same client wrapper, got different %p, %p", client2, client)
 	}
-	if client2.clientImpl == clientImpl {
-		t.Fatalf("New() after Close() should return different client implementation, got the same %p", client2.clientImpl)
+	if client2.(*clientRefCounted).clientImpl == clientImpl {
+		t.Fatalf("New() after Close() should return different client implementation, got the same %p", client2.(*clientRefCounted).clientImpl)
 	}
 	if apiClient2 == apiClient {
 		t.Fatalf("New() after Close() should return different API client, got the same %p", apiClient2)

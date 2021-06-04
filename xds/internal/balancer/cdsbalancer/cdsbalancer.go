@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
@@ -163,13 +164,15 @@ type cdsBalancer struct {
 	ccw            *ccWrapper            // ClientConn interface passed to child LB.
 	bOpts          balancer.BuildOptions // BuildOptions passed to child LB.
 	updateCh       *buffer.Unbounded     // Channel for gRPC and xdsClient updates.
-	xdsClient      xdsclient.Interface   // xDS client to watch Cluster resource.
 	cancelWatch    func()                // Cluster watch cancel func.
 	edsLB          balancer.Balancer     // EDS child policy.
 	clusterToWatch string
 	logger         *grpclog.PrefixLogger
 	closed         *grpcsync.Event
 	done           *grpcsync.Event
+
+	xdsClient          xdsclient.XDSClient    // xDS client to watch Cluster resource.
+	attrsWithXDSClient *attributes.Attributes // Attributes with XDSClient attached, to pass on to the children.
 
 	// The certificate providers are cached here to that they can be closed when
 	// a new provider is to be created.
@@ -340,15 +343,8 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 		lbCfg.LrsLoadReportingServerName = new(string)
 
 	}
-	resolverState := resolver.State{}
-	// Include the xds client for the child LB policies to use.  For unit
-	// tests, b.xdsClient may not be a full *xdsclient.Client, but it will
-	// always be in production.
-	if c, ok := b.xdsClient.(*xdsclient.Client); ok {
-		resolverState = xdsclient.SetClient(resolverState, c)
-	}
 	ccState := balancer.ClientConnState{
-		ResolverState:  resolverState,
+		ResolverState:  resolver.State{Attributes: b.attrsWithXDSClient},
 		BalancerConfig: lbCfg,
 	}
 	if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
@@ -462,6 +458,7 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 			return balancer.ErrBadResolverState
 		}
 		b.xdsClient = c
+		b.attrsWithXDSClient = state.ResolverState.Attributes
 	}
 
 	b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(state.BalancerConfig))

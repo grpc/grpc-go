@@ -46,7 +46,7 @@ import (
 
 var (
 	logger       = grpclog.Component("xds")
-	newXDSClient = func() xdsclient.Interface {
+	newXDSClient = func() xdsclient.XDSClient {
 		// FIXME: this is no longer necessary.
 		c, err := xdsclient.New()
 		if err != nil {
@@ -65,7 +65,7 @@ var (
 type ClientStatusDiscoveryServer struct {
 	// xdsClient will always be the same in practice. But we keep a copy in each
 	// server instance for testing.
-	xdsClient xdsclient.Interface
+	xdsClient xdsclient.XDSClient
 }
 
 // NewClientStatusDiscoveryServer returns an implementation of the CSDS server that can be

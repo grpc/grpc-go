@@ -131,7 +131,7 @@ func TestBuildNotOnGCE(t *testing.T) {
 }
 
 type testXDSClient struct {
-	xdsclient.Interface
+	xdsclient.XDSClient
 	closed chan struct{}
 }
 
@@ -179,7 +179,7 @@ func TestBuildXDS(t *testing.T) {
 
 			configCh := make(chan *bootstrap.Config, 1)
 			oldNewClient := newClientWithConfig
-			newClientWithConfig = func(config *bootstrap.Config) (xdsclient.Interface, error) {
+			newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, error) {
 				configCh <- config
 				return tXDSClient, nil
 			}
