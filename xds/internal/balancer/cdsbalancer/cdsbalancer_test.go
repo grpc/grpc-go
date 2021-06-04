@@ -129,7 +129,7 @@ func (tb *testEDSBalancer) waitForClientConnUpdate(ctx context.Context, wantCCS 
 	}
 	gotCCS := ccs.(balancer.ClientConnState)
 	if xdsclient.FromResolverState(gotCCS.ResolverState) == nil {
-		return fmt.Errorf("want resolver state with XDSClient attached, got nil")
+		return fmt.Errorf("want resolver state with XDSClient attached, got one without")
 	}
 	if !cmp.Equal(gotCCS, wantCCS, cmpopts.IgnoreFields(resolver.State{}, "Attributes")) {
 		return fmt.Errorf("received ClientConnState: %+v, want %+v", gotCCS, wantCCS)
