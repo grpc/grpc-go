@@ -64,17 +64,16 @@ var (
 )
 
 func init() {
-	balancer.Register(cdsBB{})
+	balancer.Register(bb{})
 }
 
-// cdsBB (short for cdsBalancerBuilder) implements the balancer.Builder
-// interface to help build a cdsBalancer.
+// bb implements the balancer.Builder interface to help build a cdsBalancer.
 // It also implements the balancer.ConfigParser interface to help parse the
 // JSON service config, to be passed to the cdsBalancer.
-type cdsBB struct{}
+type bb struct{}
 
 // Build creates a new CDS balancer with the ClientConn.
-func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &cdsBalancer{
 		bOpts:       opts,
 		updateCh:    buffer.NewUnbounded(),
@@ -117,7 +116,7 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 }
 
 // Name returns the name of balancers built by this builder.
-func (cdsBB) Name() string {
+func (bb) Name() string {
 	return cdsName
 }
 
@@ -130,7 +129,7 @@ type lbConfig struct {
 
 // ParseConfig parses the JSON load balancer config provided into an
 // internal form or returns an error if the config is invalid.
-func (cdsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	var cfg lbConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, fmt.Errorf("xds: unable to unmarshal lbconfig: %s, error: %v", string(c), err)

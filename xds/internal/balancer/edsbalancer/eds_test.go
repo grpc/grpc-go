@@ -70,10 +70,6 @@ var (
 	}
 )
 
-func init() {
-	balancer.Register(&edsBalancerBuilder{})
-}
-
 func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	return func() balancer.SubConn {
 		scst, _ := p.Pick(balancer.PickInfo{})
@@ -890,8 +886,7 @@ func (s) TestBalancerConfigParsing(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := &edsBalancerBuilder{}
-			got, err := b.ParseConfig(tt.js)
+			got, err := bb{}.ParseConfig(tt.js)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("edsBalancerBuilder.ParseConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
