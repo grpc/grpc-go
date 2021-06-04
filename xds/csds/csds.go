@@ -38,27 +38,16 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // Register v2 xds_client.
 	_ "google.golang.org/grpc/xds/internal/xdsclient/v3" // Register v3 xds_client.
 )
 
-// xdsClient contains methods from xdsClient.Client which are used by
-// the server. This is useful for overriding in unit tests.
-type xdsClient interface {
-	DumpLDS() (string, map[string]xdsclient.UpdateWithMD)
-	DumpRDS() (string, map[string]xdsclient.UpdateWithMD)
-	DumpCDS() (string, map[string]xdsclient.UpdateWithMD)
-	DumpEDS() (string, map[string]xdsclient.UpdateWithMD)
-	BootstrapConfig() *bootstrap.Config
-	Close()
-}
-
 var (
 	logger       = grpclog.Component("xds")
-	newXDSClient = func() xdsClient {
+	newXDSClient = func() xdsclient.Interface {
+		// FIXME: this is no longer necessary.
 		c, err := xdsclient.New()
 		if err != nil {
 			// If err is not nil, c is a typed nil (of type *xdsclient.Client).
@@ -76,7 +65,7 @@ var (
 type ClientStatusDiscoveryServer struct {
 	// xdsClient will always be the same in practice. But we keep a copy in each
 	// server instance for testing.
-	xdsClient xdsClient
+	xdsClient xdsclient.Interface
 }
 
 // NewClientStatusDiscoveryServer returns an implementation of the CSDS server that can be

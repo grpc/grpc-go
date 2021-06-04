@@ -31,10 +31,17 @@ const clientKey = clientKeyType("grpc.xds.internal.client.Client")
 // balancers.
 type Interface interface {
 	WatchListener(string, func(ListenerUpdate, error)) func()
+	WatchRouteConfig(string, func(RouteConfigUpdate, error)) func()
 	WatchCluster(string, func(ClusterUpdate, error)) func()
 	WatchEndpoints(clusterName string, edsCb func(EndpointsUpdate, error)) (cancel func())
-	BootstrapConfig() *bootstrap.Config
 	ReportLoad(server string) (*load.Store, func())
+
+	DumpLDS() (string, map[string]UpdateWithMD)
+	DumpRDS() (string, map[string]UpdateWithMD)
+	DumpCDS() (string, map[string]UpdateWithMD)
+	DumpEDS() (string, map[string]UpdateWithMD)
+
+	BootstrapConfig() *bootstrap.Config
 	Close()
 }
 
