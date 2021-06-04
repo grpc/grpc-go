@@ -62,15 +62,11 @@ const (
 	dnsName, xdsName = "dns", "xds"
 )
 
-type xdsClient interface {
-	Close()
-}
-
 // For overriding in unittests.
 var (
 	onGCE = googlecloud.OnGCE
 
-	newClientWithConfig = func(config *bootstrap.Config) (xdsClient, error) {
+	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.Interface, error) {
 		return xdsclient.NewWithConfig(config)
 	}
 
@@ -139,7 +135,7 @@ func (c2pResolverBuilder) Scheme() string {
 
 type c2pResolver struct {
 	resolver.Resolver
-	client xdsClient
+	client xdsclient.Interface
 }
 
 func (r *c2pResolver) Close() {
