@@ -33,9 +33,9 @@ import (
 	"google.golang.org/grpc/internal/buffer"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/server"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const serverPrefix = "[xds-server %p] "
@@ -131,8 +131,8 @@ func NewGRPCServer(opts ...grpc.ServerOption) *GRPCServer {
 func handleServerOptions(opts []grpc.ServerOption) *serverOptions {
 	so := &serverOptions{}
 	for _, opt := range opts {
-		if o, ok := opt.(serverOption); ok {
-			o.applyServerOption(so)
+		if o, ok := opt.(*serverOption); ok {
+			o.apply(so)
 		}
 	}
 	return so
@@ -154,6 +154,12 @@ func (s *GRPCServer) initXDSClient() error {
 		return nil
 	}
 
+	newXDSClient := newXDSClient
+	if s.opts.bootstrapContents != nil {
+		newXDSClient = func() (xdsClientInterface, error) {
+			return xdsclient.NewClientWithBootstrapContents(s.opts.bootstrapContents)
+		}
+	}
 	client, err := newXDSClient()
 	if err != nil {
 		return fmt.Errorf("xds: failed to create xds-client: %v", err)
@@ -181,7 +187,6 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	if err := s.initXDSClient(); err != nil {
 		return err
 	}
-
 	cfg := s.xdsC.BootstrapConfig()
 	if cfg == nil {
 		return errors.New("bootstrap configuration is empty")

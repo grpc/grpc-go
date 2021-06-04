@@ -28,15 +28,15 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/loadstore"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
 func init() {
 	balancer.Register(&lrsBB{})
 }
 
-var newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
+var newXDSClient func() (xdsClientInterface, error)
 
 // Name is the name of the LRS balancer.
 const Name = "lrs_experimental"
@@ -51,12 +51,15 @@ func (l *lrsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balanc
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
 
-	client, err := newXDSClient()
-	if err != nil {
-		b.logger.Errorf("failed to create xds-client: %v", err)
-		return nil
+	if newXDSClient != nil {
+		// For tests
+		client, err := newXDSClient()
+		if err != nil {
+			b.logger.Errorf("failed to create xds-client: %v", err)
+			return nil
+		}
+		b.client = newXDSClientWrapper(client)
 	}
-	b.client = newXDSClientWrapper(client)
 
 	return b
 }
@@ -85,6 +88,14 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	newConfig, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
+	}
+
+	if b.client == nil {
+		c := xdsclient.FromResolverState(s.ResolverState)
+		if c == nil {
+			return balancer.ErrBadResolverState
+		}
+		b.client = newXDSClientWrapper(c)
 	}
 
 	// Update load reporting config or xds client. This needs to be done before
@@ -245,5 +256,7 @@ func (w *xdsClientWrapper) close() {
 		w.cancelLoadReport()
 		w.cancelLoadReport = nil
 	}
-	w.c.Close()
+	if newXDSClient != nil {
+		w.c.Close()
+	}
 }

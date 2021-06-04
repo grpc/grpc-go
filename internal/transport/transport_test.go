@@ -323,7 +323,7 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		if err != nil {
 			return
 		}
-		transport, err := NewServerTransport("http2", conn, serverConfig)
+		transport, err := NewServerTransport(conn, serverConfig)
 		if err != nil {
 			return
 		}

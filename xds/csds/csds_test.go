@@ -36,10 +36,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds"
-	"google.golang.org/grpc/xds/internal/client"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	xtestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -60,10 +60,10 @@ const (
 )
 
 type xdsClientInterfaceWithWatch interface {
-	WatchListener(string, func(client.ListenerUpdate, error)) func()
-	WatchRouteConfig(string, func(client.RouteConfigUpdate, error)) func()
-	WatchCluster(string, func(client.ClusterUpdate, error)) func()
-	WatchEndpoints(string, func(client.EndpointsUpdate, error)) func()
+	WatchListener(string, func(xdsclient.ListenerUpdate, error)) func()
+	WatchRouteConfig(string, func(xdsclient.RouteConfigUpdate, error)) func()
+	WatchCluster(string, func(xdsclient.ClusterUpdate, error)) func()
+	WatchEndpoints(string, func(xdsclient.EndpointsUpdate, error)) func()
 }
 
 var cmpOpts = cmp.Options{
@@ -174,16 +174,16 @@ func TestCSDS(t *testing.T) {
 	defer cleanup()
 
 	for _, target := range ldsTargets {
-		xdsC.WatchListener(target, func(client.ListenerUpdate, error) {})
+		xdsC.WatchListener(target, func(xdsclient.ListenerUpdate, error) {})
 	}
 	for _, target := range rdsTargets {
-		xdsC.WatchRouteConfig(target, func(client.RouteConfigUpdate, error) {})
+		xdsC.WatchRouteConfig(target, func(xdsclient.RouteConfigUpdate, error) {})
 	}
 	for _, target := range cdsTargets {
-		xdsC.WatchCluster(target, func(client.ClusterUpdate, error) {})
+		xdsC.WatchCluster(target, func(xdsclient.ClusterUpdate, error) {})
 	}
 	for _, target := range edsTargets {
-		xdsC.WatchEndpoints(target, func(client.EndpointsUpdate, error) {})
+		xdsC.WatchEndpoints(target, func(xdsclient.EndpointsUpdate, error) {})
 	}
 
 	for i := 0; i < retryCount; i++ {
@@ -270,14 +270,12 @@ func commonSetup(t *testing.T) (xdsClientInterfaceWithWatch, *e2e.ManagementServ
 		t.Fatal(err)
 	}
 	// Create xds_client.
-	xdsC, err := client.New()
+	xdsC, err := xdsclient.New()
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) {
-		return xdsC, nil
-	}
+	newXDSClient = func() xdsClientInterface { return xdsC }
 
 	// Initialize an gRPC server and register CSDS on it.
 	server := grpc.NewServer()
@@ -633,6 +631,58 @@ func protoToJSON(p proto.Message) string {
 	}
 	ret, _ := mm.MarshalToString(p)
 	return ret
+}
+
+func TestCSDSNoXDSClient(t *testing.T) {
+	oldNewXDSClient := newXDSClient
+	newXDSClient = func() xdsClientInterface { return nil }
+	defer func() { newXDSClient = oldNewXDSClient }()
+
+	// Initialize an gRPC server and register CSDS on it.
+	server := grpc.NewServer()
+	csdss, err := NewClientStatusDiscoveryServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer csdss.Close()
+	v3statuspbgrpc.RegisterClientStatusDiscoveryServiceServer(server, csdss)
+	// Create a local listener and pass it to Serve().
+	lis, err := xtestutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("xtestutils.LocalTCPListener() failed: %v", err)
+	}
+	go func() {
+		if err := server.Serve(lis); err != nil {
+			t.Errorf("Serve() failed: %v", err)
+		}
+	}()
+	defer server.Stop()
+
+	// Create CSDS client.
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	if err != nil {
+		t.Fatalf("cannot connect to server: %v", err)
+	}
+	defer conn.Close()
+	c := v3statuspbgrpc.NewClientStatusDiscoveryServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := c.StreamClientStatus(ctx, grpc.WaitForReady(true))
+	if err != nil {
+		t.Fatalf("cannot get ServerReflectionInfo: %v", err)
+	}
+
+	if err := stream.Send(&v3statuspb.ClientStatusRequest{Node: nil}); err != nil {
+		t.Fatalf("failed to send: %v", err)
+	}
+	r, err := stream.Recv()
+	if err != nil {
+		// io.EOF is not ok.
+		t.Fatalf("failed to recv response: %v", err)
+	}
+	if n := len(r.Config); n != 0 {
+		t.Fatalf("got %d configs, want 0: %v", n, proto.MarshalTextString(r))
+	}
 }
 
 func Test_nodeProtoToV3(t *testing.T) {

@@ -44,13 +44,12 @@ import (
 	"google.golang.org/grpc/status"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
-	"google.golang.org/grpc/xds/internal/client"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const (
@@ -272,7 +271,7 @@ func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -331,7 +330,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 		wantClusters map[string]bool
 	}{
 		{
-			routes: []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
+			routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			wantJSON: `{"loadBalancingConfig":[{
     "xds_cluster_manager_experimental":{
       "children":{
@@ -343,7 +342,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			wantClusters: map[string]bool{"test-cluster-1": true},
 		},
 		{
-			routes: []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
+			routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
 				"cluster_1": {Weight: 75},
 				"cluster_2": {Weight: 25},
 			}}},
@@ -367,7 +366,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			wantClusters: map[string]bool{"cluster_1": true, "cluster_2": true},
 		},
 		{
-			routes: []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
+			routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
 				"cluster_1": {Weight: 75},
 				"cluster_2": {Weight: 25},
 			}}},
@@ -464,7 +463,7 @@ func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -524,7 +523,7 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -635,7 +634,7 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes: []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
+				Routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
 					"A": {Weight: 5},
 					"B": {Weight: 10},
 				}}},
@@ -696,7 +695,7 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes: []*client.Route{{
+				Routes: []*xdsclient.Route{{
 					Prefix:            newStringP("/foo"),
 					WeightedClusters:  map[string]xdsclient.WeightedCluster{"A": {Weight: 1}},
 					MaxStreamDuration: newDurationP(5 * time.Second),
@@ -796,7 +795,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -846,7 +845,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"NEW": {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"NEW": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -856,7 +855,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"NEW": {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"NEW": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -895,7 +894,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"NEW": {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{"NEW": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -954,7 +953,7 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*client.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
+				Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{cluster: {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -1229,7 +1228,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 				VirtualHosts: []*xdsclient.VirtualHost{
 					{
 						Domains: []string{targetStr},
-						Routes: []*client.Route{{
+						Routes: []*xdsclient.Route{{
 							Prefix: newStringP("1"), WeightedClusters: map[string]xdsclient.WeightedCluster{
 								"A": {Weight: 1},
 								"B": {Weight: 1},

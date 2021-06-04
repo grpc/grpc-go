@@ -25,7 +25,6 @@ package csds
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"time"
 
@@ -38,35 +37,44 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	_ "google.golang.org/grpc/xds/internal/client/v2" // Register v2 xds_client.
-	_ "google.golang.org/grpc/xds/internal/client/v3" // Register v3 xds_client.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // Register v2 xds_client.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/v3" // Register v3 xds_client.
 )
 
 // xdsClientInterface contains methods from xdsClient.Client which are used by
 // the server. This is useful for overriding in unit tests.
 type xdsClientInterface interface {
-	DumpLDS() (string, map[string]client.UpdateWithMD)
-	DumpRDS() (string, map[string]client.UpdateWithMD)
-	DumpCDS() (string, map[string]client.UpdateWithMD)
-	DumpEDS() (string, map[string]client.UpdateWithMD)
+	DumpLDS() (string, map[string]xdsclient.UpdateWithMD)
+	DumpRDS() (string, map[string]xdsclient.UpdateWithMD)
+	DumpCDS() (string, map[string]xdsclient.UpdateWithMD)
+	DumpEDS() (string, map[string]xdsclient.UpdateWithMD)
 	BootstrapConfig() *bootstrap.Config
 	Close()
 }
 
 var (
 	logger       = grpclog.Component("xds")
-	newXDSClient = func() (xdsClientInterface, error) {
-		return client.New()
+	newXDSClient = func() xdsClientInterface {
+		c, err := xdsclient.New()
+		if err != nil {
+			// If err is not nil, c is a typed nil (of type *xdsclient.Client).
+			// If c is returned and assigned to the xdsClient field in the CSDS
+			// server, the nil checks in the handlers will not handle it
+			// properly.
+			logger.Warningf("failed to create xds client: %v", err)
+			return nil
+		}
+		return c
 	}
 )
 
 // ClientStatusDiscoveryServer implementations interface ClientStatusDiscoveryServiceServer.
 type ClientStatusDiscoveryServer struct {
-	// xdsClient will always be the same in practise. But we keep a copy in each
+	// xdsClient will always be the same in practice. But we keep a copy in each
 	// server instance for testing.
 	xdsClient xdsClientInterface
 }
@@ -74,13 +82,7 @@ type ClientStatusDiscoveryServer struct {
 // NewClientStatusDiscoveryServer returns an implementation of the CSDS server that can be
 // registered on a gRPC server.
 func NewClientStatusDiscoveryServer() (*ClientStatusDiscoveryServer, error) {
-	xdsC, err := newXDSClient()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create xds client: %v", err)
-	}
-	return &ClientStatusDiscoveryServer{
-		xdsClient: xdsC,
-	}, nil
+	return &ClientStatusDiscoveryServer{xdsClient: newXDSClient()}, nil
 }
 
 // StreamClientStatus implementations interface ClientStatusDiscoveryServiceServer.
@@ -109,10 +111,13 @@ func (s *ClientStatusDiscoveryServer) FetchClientStatus(_ context.Context, req *
 }
 
 // buildClientStatusRespForReq fetches the status from the client, and returns
-// the response to be sent back to client.
+// the response to be sent back to xdsclient.
 //
 // If it returns an error, the error is a status error.
 func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statuspb.ClientStatusRequest) (*v3statuspb.ClientStatusResponse, error) {
+	if s.xdsClient == nil {
+		return &v3statuspb.ClientStatusResponse{}, nil
+	}
 	// Field NodeMatchers is unsupported, by design
 	// https://github.com/grpc/proposal/blob/master/A40-csds-support.md#detail-node-matching.
 	if len(req.NodeMatchers) != 0 {
@@ -137,7 +142,9 @@ func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statusp
 
 // Close cleans up the resources.
 func (s *ClientStatusDiscoveryServer) Close() {
-	s.xdsClient.Close()
+	if s.xdsClient != nil {
+		s.xdsClient.Close()
+	}
 }
 
 // nodeProtoToV3 converts the given proto into a v3.Node. n is from bootstrap
@@ -296,17 +303,17 @@ func (s *ClientStatusDiscoveryServer) buildEDSPerXDSConfig() *v3statuspb.PerXdsC
 	}
 }
 
-func serviceStatusToProto(serviceStatus client.ServiceStatus) v3adminpb.ClientResourceStatus {
+func serviceStatusToProto(serviceStatus xdsclient.ServiceStatus) v3adminpb.ClientResourceStatus {
 	switch serviceStatus {
-	case client.ServiceStatusUnknown:
+	case xdsclient.ServiceStatusUnknown:
 		return v3adminpb.ClientResourceStatus_UNKNOWN
-	case client.ServiceStatusRequested:
+	case xdsclient.ServiceStatusRequested:
 		return v3adminpb.ClientResourceStatus_REQUESTED
-	case client.ServiceStatusNotExist:
+	case xdsclient.ServiceStatusNotExist:
 		return v3adminpb.ClientResourceStatus_DOES_NOT_EXIST
-	case client.ServiceStatusACKed:
+	case xdsclient.ServiceStatusACKed:
 		return v3adminpb.ClientResourceStatus_ACKED
-	case client.ServiceStatusNACKed:
+	case xdsclient.ServiceStatusNACKed:
 		return v3adminpb.ClientResourceStatus_NACKED
 	default:
 		return v3adminpb.ClientResourceStatus_UNKNOWN

@@ -24,7 +24,7 @@ import (
 	"time"
 
 	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
-	"google.golang.org/grpc/xds/internal/client/load"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"

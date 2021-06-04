@@ -35,8 +35,8 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/serviceconfig"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
 const edsName = "eds_experimental"
@@ -53,7 +53,7 @@ var (
 	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions, enqueueState func(priorityType, balancer.State), lw load.PerClusterReporter, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
 		return newEDSBalancerImpl(cc, opts, enqueueState, lw, logger)
 	}
-	newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
+	newXDSClient func() (xdsClientInterface, error)
 )
 
 func init() {
@@ -76,13 +76,16 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 	}
 	x.logger = prefixLogger(x)
 
-	client, err := newXDSClient()
-	if err != nil {
-		x.logger.Errorf("xds: failed to create xds-client: %v", err)
-		return nil
+	if newXDSClient != nil {
+		// For tests
+		client, err := newXDSClient()
+		if err != nil {
+			x.logger.Errorf("xds: failed to create xds-client: %v", err)
+			return nil
+		}
+		x.xdsClient = client
 	}
 
-	x.xdsClient = client
 	x.edsImpl = newEDSBalancer(x.cc, opts, x.enqueueChildBalancerState, x.loadWrapper, x.logger)
 	x.logger.Infof("Created")
 	go x.run()
@@ -172,7 +175,9 @@ func (x *edsBalancer) run() {
 			x.edsImpl.updateState(u.priority, u.s)
 		case <-x.closed.Done():
 			x.cancelWatch()
-			x.xdsClient.Close()
+			if newXDSClient != nil {
+				x.xdsClient.Close()
+			}
 			x.edsImpl.close()
 			x.logger.Infof("Shutdown")
 			x.done.Fire()
@@ -380,6 +385,14 @@ func (x *edsBalancer) ResolverError(err error) {
 }
 
 func (x *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+	if x.xdsClient == nil {
+		c := xdsclient.FromResolverState(s.ResolverState)
+		if c == nil {
+			return balancer.ErrBadResolverState
+		}
+		x.xdsClient = c
+	}
+
 	select {
 	case x.grpcUpdate <- &s:
 	case <-x.closed.Done():
