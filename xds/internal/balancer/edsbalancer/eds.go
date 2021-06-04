@@ -41,9 +41,9 @@ import (
 
 const edsName = "eds_experimental"
 
-// xdsClientInterface contains only the xds_client methods needed by EDS
+// xdsClient contains only the xds_client methods needed by EDS
 // balancer. It's defined so we can override xdsclient.New function in tests.
-type xdsClientInterface interface {
+type xdsClient interface {
 	WatchEndpoints(clusterName string, edsCb func(xdsclient.EndpointsUpdate, error)) (cancel func())
 	ReportLoad(server string) (loadStore *load.Store, cancel func())
 	Close()
@@ -53,7 +53,7 @@ var (
 	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions, enqueueState func(priorityType, balancer.State), lw load.PerClusterReporter, logger *grpclog.PrefixLogger) edsBalancerImplInterface {
 		return newEDSBalancerImpl(cc, opts, enqueueState, lw, logger)
 	}
-	newXDSClient func() (xdsClientInterface, error)
+	newXDSClient func() (xdsClient, error)
 )
 
 func init() {
@@ -145,7 +145,7 @@ type edsBalancer struct {
 	xdsClientUpdate   chan *edsUpdate
 	childPolicyUpdate *buffer.Unbounded
 
-	xdsClient   xdsClientInterface
+	xdsClient   xdsClient
 	loadWrapper *loadstore.Wrapper
 	config      *EDSConfig // may change when passed a different service config
 	edsImpl     edsBalancerImplInterface

@@ -102,7 +102,7 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 
 	cpc := c.parent.xdsC.BootstrapConfig().CertProviderConfigs
 	// Identity provider name is mandatory on the server-side, and this is
-	// enforced when the resource is received at the xdsClient layer.
+	// enforced when the resource is received at the XDSClient layer.
 	secCfg := c.filterChain.SecurityCfg
 	ip, err := buildProviderFunc(cpc, secCfg.IdentityInstanceName, secCfg.IdentityCertName, true, false)
 	if err != nil {

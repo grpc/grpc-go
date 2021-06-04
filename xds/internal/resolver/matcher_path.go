@@ -23,7 +23,7 @@ import (
 	"strings"
 )
 
-type pathMatcherInterface interface {
+type pathMatcher interface {
 	match(path string) bool
 	String() string
 }

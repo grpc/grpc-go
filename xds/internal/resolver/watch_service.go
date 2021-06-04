@@ -54,7 +54,7 @@ type ldsConfig struct {
 // Note that during race (e.g. an xDS response is received while the user is
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
-func watchService(c xdsClientInterface, serviceName string, cb func(serviceUpdate, error), logger *grpclog.PrefixLogger) (cancel func()) {
+func watchService(c xdsClient, serviceName string, cb func(serviceUpdate, error), logger *grpclog.PrefixLogger) (cancel func()) {
 	w := &serviceUpdateWatcher{
 		logger:      logger,
 		c:           c,
@@ -70,7 +70,7 @@ func watchService(c xdsClientInterface, serviceName string, cb func(serviceUpdat
 // callback at the right time.
 type serviceUpdateWatcher struct {
 	logger      *grpclog.PrefixLogger
-	c           xdsClientInterface
+	c           xdsClient
 	serviceName string
 	ldsCancel   func()
 	serviceCb   func(serviceUpdate, error)

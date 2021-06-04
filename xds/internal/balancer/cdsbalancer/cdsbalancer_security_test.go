@@ -136,7 +136,7 @@ func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDS
 
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
 
 	builder := balancer.Get(cdsName)
 	if builder == nil {

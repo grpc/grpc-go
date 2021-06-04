@@ -251,11 +251,11 @@ func (nm *notMatcher) match(data *RPCData) bool {
 // headerMatcher is a matcher that matches on incoming HTTP Headers present
 // in the incoming RPC. headerMatcher implements the matcher interface.
 type headerMatcher struct {
-	matcher internalmatcher.HeaderMatcherInterface
+	matcher internalmatcher.HeaderMatcher
 }
 
 func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (*headerMatcher, error) {
-	var m internalmatcher.HeaderMatcherInterface
+	var m internalmatcher.HeaderMatcher
 	switch headerMatcherConfig.HeaderMatchSpecifier.(type) {
 	case *v3route_componentspb.HeaderMatcher_ExactMatch:
 		m = internalmatcher.NewHeaderExactMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetExactMatch())
