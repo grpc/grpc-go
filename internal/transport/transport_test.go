@@ -2005,10 +2005,9 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					{Name: ":status", Value: "200"},
 				},
 			},
-			// no error
 			wantStatus: status.New(
 				codes.Unknown,
-				"missing content-type",
+				"malformed header: missing HTTP content-type",
 			),
 		},
 		{
@@ -2115,11 +2114,13 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			got := ts.status
 			want := test.wantStatus
 			if got.Code() != want.Code() || got.Message() != want.Message() {
-				t.Logf("got: %s", got.Message())
-				t.Logf("got: %d", got.Code())
-				t.Logf("want: %s", want.Message())
-				t.Logf("want: %d", want.Code())
-				t.Fatalf("operateHeaders(%v); status = %v; want %v", test.metaHeaderFrame, got, want)
+				t.Fatalf("operateHeaders(%v); status = \ngot - code: %d message: %s\nwant - code: %d message: %s",
+					test.metaHeaderFrame,
+					got.Code(),
+					got.Message(),
+					want.Code(),
+					want.Message(),
+				)
 			}
 		})
 	}
