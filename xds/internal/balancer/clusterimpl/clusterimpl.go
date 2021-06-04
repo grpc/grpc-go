@@ -75,7 +75,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 			b.logger.Errorf("failed to create xds-client: %v", err)
 			return nil
 		}
-		b.xdsC = client
+		b.xdsClient = client
 	}
 	go b.run()
 
@@ -113,9 +113,9 @@ type clusterImplBalancer struct {
 	closed *grpcsync.Event
 	done   *grpcsync.Event
 
-	bOpts  balancer.BuildOptions
-	logger *grpclog.PrefixLogger
-	xdsC   xdsClient
+	bOpts     balancer.BuildOptions
+	logger    *grpclog.PrefixLogger
+	xdsClient xdsClient
 
 	config           *LBConfig
 	childLB          balancer.Balancer
@@ -180,8 +180,8 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 			b.cancelLoadReport = nil
 		}
 		var loadStore *load.Store
-		if b.xdsC != nil {
-			loadStore, b.cancelLoadReport = b.xdsC.ReportLoad(b.lrsServerName)
+		if b.xdsClient != nil {
+			loadStore, b.cancelLoadReport = b.xdsClient.ReportLoad(b.lrsServerName)
 		}
 		b.loadWrapper.UpdateLoadStore(loadStore)
 	}
@@ -209,12 +209,12 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		return fmt.Errorf("balancer %q not registered", newConfig.ChildPolicy.Name)
 	}
 
-	if b.xdsC == nil {
+	if b.xdsClient == nil {
 		c := xdsclient.FromResolverState(s.ResolverState)
 		if c == nil {
 			return balancer.ErrBadResolverState
 		}
-		b.xdsC = c
+		b.xdsClient = c
 	}
 
 	// Update load reporting config. This needs to be done before updating the
@@ -329,7 +329,7 @@ func (b *clusterImplBalancer) Close() {
 		b.childLB = nil
 	}
 	if newXDSClient != nil {
-		b.xdsC.Close()
+		b.xdsClient.Close()
 	}
 	<-b.done.Done()
 	b.logger.Infof("Shutdown")

@@ -58,7 +58,7 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 			b.logger.Errorf("failed to create xds-client: %v", err)
 			return nil
 		}
-		b.client = newXDSClientWrapper(client)
+		b.xdsClient = newXDSClientWrapper(client)
 	}
 
 	return b
@@ -76,8 +76,8 @@ type lrsBalancer struct {
 	cc        balancer.ClientConn
 	buildOpts balancer.BuildOptions
 
-	logger *grpclog.PrefixLogger
-	client *xdsClientWrapper
+	logger    *grpclog.PrefixLogger
+	xdsClient *xdsClientWrapper
 
 	config *LBConfig
 	lb     balancer.Balancer // The sub balancer.
@@ -90,18 +90,18 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}
 
-	if b.client == nil {
+	if b.xdsClient == nil {
 		c := xdsclient.FromResolverState(s.ResolverState)
 		if c == nil {
 			return balancer.ErrBadResolverState
 		}
-		b.client = newXDSClientWrapper(c)
+		b.xdsClient = newXDSClientWrapper(c)
 	}
 
 	// Update load reporting config or xds client. This needs to be done before
 	// updating the child policy because we need the loadStore from the updated
 	// client to be passed to the ccWrapper.
-	if err := b.client.update(newConfig); err != nil {
+	if err := b.xdsClient.update(newConfig); err != nil {
 		return err
 	}
 
@@ -118,7 +118,7 @@ func (b *lrsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 		if err != nil {
 			return fmt.Errorf("failed to marshal LocalityID: %#v", newConfig.Locality)
 		}
-		ccWrapper := newCCWrapper(b.cc, b.client.loadStore(), lidJSON)
+		ccWrapper := newCCWrapper(b.cc, b.xdsClient.loadStore(), lidJSON)
 		b.lb = bb.Build(ccWrapper, b.buildOpts)
 	}
 	b.config = newConfig
@@ -147,7 +147,7 @@ func (b *lrsBalancer) Close() {
 		b.lb.Close()
 		b.lb = nil
 	}
-	b.client.close()
+	b.xdsClient.close()
 }
 
 type ccWrapper struct {
