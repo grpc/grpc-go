@@ -57,13 +57,12 @@ var (
 )
 
 func init() {
-	balancer.Register(&edsBalancerBuilder{})
+	balancer.Register(bb{})
 }
 
-type edsBalancerBuilder struct{}
+type bb struct{}
 
-// Build helps implement the balancer.Builder interface.
-func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	x := &edsBalancer{
 		cc:                cc,
 		closed:            grpcsync.NewEvent(),
@@ -92,11 +91,11 @@ func (b *edsBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOp
 	return x
 }
 
-func (b *edsBalancerBuilder) Name() string {
+func (bb) Name() string {
 	return edsName
 }
 
-func (b *edsBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	var cfg EDSConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal balancer config %s into EDSConfig, error: %v", string(c), err)
@@ -162,25 +161,25 @@ type edsBalancer struct {
 // updates from grpc, xdsClient and load balancer. It synchronizes the
 // operations that happen inside edsBalancer. It exits when edsBalancer is
 // closed.
-func (x *edsBalancer) run() {
+func (b *edsBalancer) run() {
 	for {
 		select {
-		case update := <-x.grpcUpdate:
-			x.handleGRPCUpdate(update)
-		case update := <-x.xdsClientUpdate:
-			x.handleXDSClientUpdate(update)
-		case update := <-x.childPolicyUpdate.Get():
-			x.childPolicyUpdate.Load()
+		case update := <-b.grpcUpdate:
+			b.handleGRPCUpdate(update)
+		case update := <-b.xdsClientUpdate:
+			b.handleXDSClientUpdate(update)
+		case update := <-b.childPolicyUpdate.Get():
+			b.childPolicyUpdate.Load()
 			u := update.(*balancerStateWithPriority)
-			x.edsImpl.updateState(u.priority, u.s)
-		case <-x.closed.Done():
-			x.cancelWatch()
+			b.edsImpl.updateState(u.priority, u.s)
+		case <-b.closed.Done():
+			b.cancelWatch()
 			if newXDSClient != nil {
-				x.xdsClient.Close()
+				b.xdsClient.Close()
 			}
-			x.edsImpl.close()
-			x.logger.Infof("Shutdown")
-			x.done.Fire()
+			b.edsImpl.close()
+			b.logger.Infof("Shutdown")
+			b.done.Fire()
 			return
 		}
 	}
@@ -199,68 +198,68 @@ func (x *edsBalancer) run() {
 // watcher should keep watching.
 // In both cases, the sub-balancers will be closed, and the future picks will
 // fail.
-func (x *edsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
-	x.logger.Warningf("Received error: %v", err)
+func (b *edsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
+	b.logger.Warningf("Received error: %v", err)
 	if xdsclient.ErrType(err) == xdsclient.ErrorTypeResourceNotFound {
 		if fromParent {
 			// This is an error from the parent ClientConn (can be the parent
 			// CDS balancer), and is a resource-not-found error. This means the
 			// resource (can be either LDS or CDS) was removed. Stop the EDS
 			// watch.
-			x.cancelWatch()
+			b.cancelWatch()
 		}
-		x.edsImpl.handleEDSResponse(xdsclient.EndpointsUpdate{})
+		b.edsImpl.handleEDSResponse(xdsclient.EndpointsUpdate{})
 	}
 }
 
-func (x *edsBalancer) handleGRPCUpdate(update interface{}) {
+func (b *edsBalancer) handleGRPCUpdate(update interface{}) {
 	switch u := update.(type) {
 	case *subConnStateUpdate:
-		x.edsImpl.handleSubConnStateChange(u.sc, u.state.ConnectivityState)
+		b.edsImpl.handleSubConnStateChange(u.sc, u.state.ConnectivityState)
 	case *balancer.ClientConnState:
-		x.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(u.BalancerConfig))
+		b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(u.BalancerConfig))
 		cfg, _ := u.BalancerConfig.(*EDSConfig)
 		if cfg == nil {
 			// service config parsing failed. should never happen.
 			return
 		}
 
-		if err := x.handleServiceConfigUpdate(cfg); err != nil {
-			x.logger.Warningf("failed to update xDS client: %v", err)
+		if err := b.handleServiceConfigUpdate(cfg); err != nil {
+			b.logger.Warningf("failed to update xDS client: %v", err)
 		}
 
-		x.edsImpl.updateServiceRequestsConfig(cfg.ClusterName, cfg.MaxConcurrentRequests)
+		b.edsImpl.updateServiceRequestsConfig(cfg.ClusterName, cfg.MaxConcurrentRequests)
 
 		// We will update the edsImpl with the new child policy, if we got a
 		// different one.
-		if !cmp.Equal(cfg.ChildPolicy, x.config.ChildPolicy, cmpopts.EquateEmpty()) {
+		if !cmp.Equal(cfg.ChildPolicy, b.config.ChildPolicy, cmpopts.EquateEmpty()) {
 			if cfg.ChildPolicy != nil {
-				x.edsImpl.handleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
+				b.edsImpl.handleChildPolicy(cfg.ChildPolicy.Name, cfg.ChildPolicy.Config)
 			} else {
-				x.edsImpl.handleChildPolicy(roundrobin.Name, nil)
+				b.edsImpl.handleChildPolicy(roundrobin.Name, nil)
 			}
 		}
-		x.config = cfg
+		b.config = cfg
 	case error:
-		x.handleErrorFromUpdate(u, true)
+		b.handleErrorFromUpdate(u, true)
 	default:
 		// unreachable path
-		x.logger.Errorf("wrong update type: %T", update)
+		b.logger.Errorf("wrong update type: %T", update)
 	}
 }
 
 // handleServiceConfigUpdate applies the service config update, watching a new
 // EDS service name and restarting LRS stream, as required.
-func (x *edsBalancer) handleServiceConfigUpdate(config *EDSConfig) error {
+func (b *edsBalancer) handleServiceConfigUpdate(config *EDSConfig) error {
 	var updateLoadClusterAndService bool
-	if x.clusterName != config.ClusterName {
+	if b.clusterName != config.ClusterName {
 		updateLoadClusterAndService = true
-		x.clusterName = config.ClusterName
-		x.edsImpl.updateClusterName(x.clusterName)
+		b.clusterName = config.ClusterName
+		b.edsImpl.updateClusterName(b.clusterName)
 	}
-	if x.edsServiceName != config.EDSServiceName {
+	if b.edsServiceName != config.EDSServiceName {
 		updateLoadClusterAndService = true
-		x.edsServiceName = config.EDSServiceName
+		b.edsServiceName = config.EDSServiceName
 	}
 
 	// If EDSServiceName is set, use it to watch EDS. Otherwise, use the cluster
@@ -270,14 +269,14 @@ func (x *edsBalancer) handleServiceConfigUpdate(config *EDSConfig) error {
 		newEDSToWatch = config.ClusterName
 	}
 	var restartEDSWatch bool
-	if x.edsToWatch != newEDSToWatch {
+	if b.edsToWatch != newEDSToWatch {
 		restartEDSWatch = true
-		x.edsToWatch = newEDSToWatch
+		b.edsToWatch = newEDSToWatch
 	}
 
 	// Restart EDS watch when the eds name has changed.
 	if restartEDSWatch {
-		x.startEndpointsWatch()
+		b.startEndpointsWatch()
 	}
 
 	if updateLoadClusterAndService {
@@ -288,13 +287,13 @@ func (x *edsBalancer) handleServiceConfigUpdate(config *EDSConfig) error {
 		//
 		// This is OK for now, because we don't actually expect edsServiceName
 		// to change. Fix this (a bigger change) will happen later.
-		x.loadWrapper.UpdateClusterAndService(x.clusterName, x.edsServiceName)
+		b.loadWrapper.UpdateClusterAndService(b.clusterName, b.edsServiceName)
 	}
 
 	// Restart load reporting when the loadReportServer name has changed.
-	if !equalStringPointers(x.loadReportServer, config.LrsLoadReportingServerName) {
-		loadStore := x.startLoadReport(config.LrsLoadReportingServerName)
-		x.loadWrapper.UpdateLoadStore(loadStore)
+	if !equalStringPointers(b.loadReportServer, config.LrsLoadReportingServerName) {
+		loadStore := b.startLoadReport(config.LrsLoadReportingServerName)
+		b.loadWrapper.UpdateLoadStore(loadStore)
 	}
 
 	return nil
@@ -304,32 +303,32 @@ func (x *edsBalancer) handleServiceConfigUpdate(config *EDSConfig) error {
 //
 // This usually means load report needs to be restarted, but this function does
 // NOT do that. Caller needs to call startLoadReport separately.
-func (x *edsBalancer) startEndpointsWatch() {
-	if x.cancelEndpointsWatch != nil {
-		x.cancelEndpointsWatch()
+func (b *edsBalancer) startEndpointsWatch() {
+	if b.cancelEndpointsWatch != nil {
+		b.cancelEndpointsWatch()
 	}
-	edsToWatch := x.edsToWatch
-	cancelEDSWatch := x.xdsClient.WatchEndpoints(edsToWatch, func(update xdsclient.EndpointsUpdate, err error) {
-		x.logger.Infof("Watch update from xds-client %p, content: %+v", x.xdsClient, pretty.ToJSON(update))
-		x.handleEDSUpdate(update, err)
+	edsToWatch := b.edsToWatch
+	cancelEDSWatch := b.xdsClient.WatchEndpoints(edsToWatch, func(update xdsclient.EndpointsUpdate, err error) {
+		b.logger.Infof("Watch update from xds-client %p, content: %+v", b.xdsClient, pretty.ToJSON(update))
+		b.handleEDSUpdate(update, err)
 	})
-	x.logger.Infof("Watch started on resource name %v with xds-client %p", edsToWatch, x.xdsClient)
-	x.cancelEndpointsWatch = func() {
+	b.logger.Infof("Watch started on resource name %v with xds-client %p", edsToWatch, b.xdsClient)
+	b.cancelEndpointsWatch = func() {
 		cancelEDSWatch()
-		x.logger.Infof("Watch cancelled on resource name %v with xds-client %p", edsToWatch, x.xdsClient)
+		b.logger.Infof("Watch cancelled on resource name %v with xds-client %p", edsToWatch, b.xdsClient)
 	}
 }
 
-func (x *edsBalancer) cancelWatch() {
-	x.loadReportServer = nil
-	if x.cancelLoadReport != nil {
-		x.cancelLoadReport()
-		x.cancelLoadReport = nil
+func (b *edsBalancer) cancelWatch() {
+	b.loadReportServer = nil
+	if b.cancelLoadReport != nil {
+		b.cancelLoadReport()
+		b.cancelLoadReport = nil
 	}
-	if x.cancelEndpointsWatch != nil {
-		x.edsToWatch = ""
-		x.cancelEndpointsWatch()
-		x.cancelEndpointsWatch = nil
+	if b.cancelEndpointsWatch != nil {
+		b.edsToWatch = ""
+		b.cancelEndpointsWatch()
+		b.cancelEndpointsWatch = nil
 	}
 }
 
@@ -339,26 +338,26 @@ func (x *edsBalancer) cancelWatch() {
 // Caller can cal this when the loadReportServer name changes, but
 // edsServiceName doesn't (so we only need to restart load reporting, not EDS
 // watch).
-func (x *edsBalancer) startLoadReport(loadReportServer *string) *load.Store {
-	x.loadReportServer = loadReportServer
-	if x.cancelLoadReport != nil {
-		x.cancelLoadReport()
-		x.cancelLoadReport = nil
+func (b *edsBalancer) startLoadReport(loadReportServer *string) *load.Store {
+	b.loadReportServer = loadReportServer
+	if b.cancelLoadReport != nil {
+		b.cancelLoadReport()
+		b.cancelLoadReport = nil
 	}
 	if loadReportServer == nil {
 		return nil
 	}
-	ls, cancel := x.xdsClient.ReportLoad(*loadReportServer)
-	x.cancelLoadReport = cancel
+	ls, cancel := b.xdsClient.ReportLoad(*loadReportServer)
+	b.cancelLoadReport = cancel
 	return ls
 }
 
-func (x *edsBalancer) handleXDSClientUpdate(update *edsUpdate) {
+func (b *edsBalancer) handleXDSClientUpdate(update *edsUpdate) {
 	if err := update.err; err != nil {
-		x.handleErrorFromUpdate(err, false)
+		b.handleErrorFromUpdate(err, false)
 		return
 	}
-	x.edsImpl.handleEDSResponse(update.resp)
+	b.edsImpl.handleEDSResponse(update.resp)
 }
 
 type subConnStateUpdate struct {
@@ -366,36 +365,36 @@ type subConnStateUpdate struct {
 	state balancer.SubConnState
 }
 
-func (x *edsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+func (b *edsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	update := &subConnStateUpdate{
 		sc:    sc,
 		state: state,
 	}
 	select {
-	case x.grpcUpdate <- update:
-	case <-x.closed.Done():
+	case b.grpcUpdate <- update:
+	case <-b.closed.Done():
 	}
 }
 
-func (x *edsBalancer) ResolverError(err error) {
+func (b *edsBalancer) ResolverError(err error) {
 	select {
-	case x.grpcUpdate <- err:
-	case <-x.closed.Done():
+	case b.grpcUpdate <- err:
+	case <-b.closed.Done():
 	}
 }
 
-func (x *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	if x.xdsClient == nil {
+func (b *edsBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+	if b.xdsClient == nil {
 		c := xdsclient.FromResolverState(s.ResolverState)
 		if c == nil {
 			return balancer.ErrBadResolverState
 		}
-		x.xdsClient = c
+		b.xdsClient = c
 	}
 
 	select {
-	case x.grpcUpdate <- &s:
-	case <-x.closed.Done():
+	case b.grpcUpdate <- &s:
+	case <-b.closed.Done():
 	}
 	return nil
 }
@@ -405,10 +404,10 @@ type edsUpdate struct {
 	err  error
 }
 
-func (x *edsBalancer) handleEDSUpdate(resp xdsclient.EndpointsUpdate, err error) {
+func (b *edsBalancer) handleEDSUpdate(resp xdsclient.EndpointsUpdate, err error) {
 	select {
-	case x.xdsClientUpdate <- &edsUpdate{resp: resp, err: err}:
-	case <-x.closed.Done():
+	case b.xdsClientUpdate <- &edsUpdate{resp: resp, err: err}:
+	case <-b.closed.Done():
 	}
 }
 
@@ -417,16 +416,16 @@ type balancerStateWithPriority struct {
 	s        balancer.State
 }
 
-func (x *edsBalancer) enqueueChildBalancerState(p priorityType, s balancer.State) {
-	x.childPolicyUpdate.Put(&balancerStateWithPriority{
+func (b *edsBalancer) enqueueChildBalancerState(p priorityType, s balancer.State) {
+	b.childPolicyUpdate.Put(&balancerStateWithPriority{
 		priority: p,
 		s:        s,
 	})
 }
 
-func (x *edsBalancer) Close() {
-	x.closed.Fire()
-	<-x.done.Done()
+func (b *edsBalancer) Close() {
+	b.closed.Fire()
+	<-b.done.Done()
 }
 
 // equalStringPointers returns true if

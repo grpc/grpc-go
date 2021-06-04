@@ -33,7 +33,7 @@ import (
 )
 
 func init() {
-	balancer.Register(&lrsBB{})
+	balancer.Register(bb{})
 }
 
 var newXDSClient func() (xdsClient, error)
@@ -41,9 +41,9 @@ var newXDSClient func() (xdsClient, error)
 // Name is the name of the LRS balancer.
 const Name = "lrs_experimental"
 
-type lrsBB struct{}
+type bb struct{}
 
-func (l *lrsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &lrsBalancer{
 		cc:        cc,
 		buildOpts: opts,
@@ -64,11 +64,11 @@ func (l *lrsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balanc
 	return b
 }
 
-func (l *lrsBB) Name() string {
+func (bb) Name() string {
 	return Name
 }
 
-func (l *lrsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return parseConfig(c)
 }
 

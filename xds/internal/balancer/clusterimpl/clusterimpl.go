@@ -49,14 +49,14 @@ const (
 )
 
 func init() {
-	balancer.Register(clusterImplBB{})
+	balancer.Register(bb{})
 }
 
 var newXDSClient func() (xdsClient, error)
 
-type clusterImplBB struct{}
+type bb struct{}
 
-func (clusterImplBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &clusterImplBalancer{
 		ClientConn:      cc,
 		bOpts:           bOpts,
@@ -83,11 +83,11 @@ func (clusterImplBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) 
 	return b
 }
 
-func (clusterImplBB) Name() string {
+func (bb) Name() string {
 	return Name
 }
 
-func (clusterImplBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return parseConfig(c)
 }
 
@@ -139,20 +139,20 @@ type clusterImplBalancer struct {
 
 // updateLoadStore checks the config for load store, and decides whether it
 // needs to restart the load reporting stream.
-func (cib *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
+func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 	var updateLoadClusterAndService bool
 
 	// ClusterName is different, restart. ClusterName is from ClusterName and
 	// EDSServiceName.
-	clusterName := cib.getClusterName()
+	clusterName := b.getClusterName()
 	if clusterName != newConfig.Cluster {
 		updateLoadClusterAndService = true
-		cib.setClusterName(newConfig.Cluster)
+		b.setClusterName(newConfig.Cluster)
 		clusterName = newConfig.Cluster
 	}
-	if cib.edsServiceName != newConfig.EDSServiceName {
+	if b.edsServiceName != newConfig.EDSServiceName {
 		updateLoadClusterAndService = true
-		cib.edsServiceName = newConfig.EDSServiceName
+		b.edsServiceName = newConfig.EDSServiceName
 	}
 	if updateLoadClusterAndService {
 		// This updates the clusterName and serviceName that will be reported
@@ -163,7 +163,7 @@ func (cib *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 		// On the other hand, this will almost never happen. Each LRS policy
 		// shouldn't get updated config. The parent should do a graceful switch
 		// when the clusterName or serviceName is changed.
-		cib.loadWrapper.UpdateClusterAndService(clusterName, cib.edsServiceName)
+		b.loadWrapper.UpdateClusterAndService(clusterName, b.edsServiceName)
 	}
 
 	// Check if it's necessary to restart load report.
@@ -171,31 +171,31 @@ func (cib *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 	if newConfig.LoadReportingServerName != nil {
 		newLRSServerName = *newConfig.LoadReportingServerName
 	}
-	if cib.lrsServerName != newLRSServerName {
+	if b.lrsServerName != newLRSServerName {
 		// LoadReportingServerName is different, load should be report to a
 		// different server, restart.
-		cib.lrsServerName = newLRSServerName
-		if cib.cancelLoadReport != nil {
-			cib.cancelLoadReport()
-			cib.cancelLoadReport = nil
+		b.lrsServerName = newLRSServerName
+		if b.cancelLoadReport != nil {
+			b.cancelLoadReport()
+			b.cancelLoadReport = nil
 		}
 		var loadStore *load.Store
-		if cib.xdsC != nil {
-			loadStore, cib.cancelLoadReport = cib.xdsC.ReportLoad(cib.lrsServerName)
+		if b.xdsC != nil {
+			loadStore, b.cancelLoadReport = b.xdsC.ReportLoad(b.lrsServerName)
 		}
-		cib.loadWrapper.UpdateLoadStore(loadStore)
+		b.loadWrapper.UpdateLoadStore(loadStore)
 	}
 
 	return nil
 }
 
-func (cib *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	if cib.closed.HasFired() {
-		cib.logger.Warningf("xds: received ClientConnState {%+v} after clusterImplBalancer was closed", s)
+func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+	if b.closed.HasFired() {
+		b.logger.Warningf("xds: received ClientConnState {%+v} after clusterImplBalancer was closed", s)
 		return nil
 	}
 
-	cib.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(s.BalancerConfig))
+	b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(s.BalancerConfig))
 	newConfig, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
@@ -209,36 +209,36 @@ func (cib *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState
 		return fmt.Errorf("balancer %q not registered", newConfig.ChildPolicy.Name)
 	}
 
-	if cib.xdsC == nil {
+	if b.xdsC == nil {
 		c := xdsclient.FromResolverState(s.ResolverState)
 		if c == nil {
 			return balancer.ErrBadResolverState
 		}
-		cib.xdsC = c
+		b.xdsC = c
 	}
 
 	// Update load reporting config. This needs to be done before updating the
 	// child policy because we need the loadStore from the updated client to be
 	// passed to the ccWrapper, so that the next picker from the child policy
 	// will pick up the new loadStore.
-	if err := cib.updateLoadStore(newConfig); err != nil {
+	if err := b.updateLoadStore(newConfig); err != nil {
 		return err
 	}
 
 	// Compare new drop config. And update picker if it's changed.
 	var updatePicker bool
-	if cib.config == nil || !equalDropCategories(cib.config.DropCategories, newConfig.DropCategories) {
-		cib.drops = make([]*dropper, 0, len(newConfig.DropCategories))
+	if b.config == nil || !equalDropCategories(b.config.DropCategories, newConfig.DropCategories) {
+		b.drops = make([]*dropper, 0, len(newConfig.DropCategories))
 		for _, c := range newConfig.DropCategories {
-			cib.drops = append(cib.drops, newDropper(c))
+			b.drops = append(b.drops, newDropper(c))
 		}
 		updatePicker = true
 	}
 
 	// Compare cluster name. And update picker if it's changed, because circuit
 	// breaking's stream counter will be different.
-	if cib.config == nil || cib.config.Cluster != newConfig.Cluster {
-		cib.requestCounter = xdsclient.GetServiceRequestsCounter(newConfig.Cluster)
+	if b.config == nil || b.config.Cluster != newConfig.Cluster {
+		b.requestCounter = xdsclient.GetServiceRequestsCounter(newConfig.Cluster)
 		updatePicker = true
 	}
 	// Compare upper bound of stream count. And update picker if it's changed.
@@ -247,29 +247,29 @@ func (cib *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState
 	if newConfig.MaxConcurrentRequests != nil {
 		newRequestCountMax = *newConfig.MaxConcurrentRequests
 	}
-	if cib.requestCountMax != newRequestCountMax {
-		cib.requestCountMax = newRequestCountMax
+	if b.requestCountMax != newRequestCountMax {
+		b.requestCountMax = newRequestCountMax
 		updatePicker = true
 	}
 
 	if updatePicker {
-		cib.pickerUpdateCh.Put(&dropConfigs{
-			drops:           cib.drops,
-			requestCounter:  cib.requestCounter,
-			requestCountMax: cib.requestCountMax,
+		b.pickerUpdateCh.Put(&dropConfigs{
+			drops:           b.drops,
+			requestCounter:  b.requestCounter,
+			requestCountMax: b.requestCountMax,
 		})
 	}
 
 	// If child policy is a different type, recreate the sub-balancer.
-	if cib.config == nil || cib.config.ChildPolicy.Name != newConfig.ChildPolicy.Name {
-		if cib.childLB != nil {
-			cib.childLB.Close()
+	if b.config == nil || b.config.ChildPolicy.Name != newConfig.ChildPolicy.Name {
+		if b.childLB != nil {
+			b.childLB.Close()
 		}
-		cib.childLB = bb.Build(cib, cib.bOpts)
+		b.childLB = bb.Build(b, b.bOpts)
 	}
-	cib.config = newConfig
+	b.config = newConfig
 
-	if cib.childLB == nil {
+	if b.childLB == nil {
 		// This is not an expected situation, and should be super rare in
 		// practice.
 		//
@@ -280,26 +280,26 @@ func (cib *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState
 	}
 
 	// Addresses and sub-balancer config are sent to sub-balancer.
-	return cib.childLB.UpdateClientConnState(balancer.ClientConnState{
+	return b.childLB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  s.ResolverState,
-		BalancerConfig: cib.config.ChildPolicy.Config,
+		BalancerConfig: b.config.ChildPolicy.Config,
 	})
 }
 
-func (cib *clusterImplBalancer) ResolverError(err error) {
-	if cib.closed.HasFired() {
-		cib.logger.Warningf("xds: received resolver error {%+v} after clusterImplBalancer was closed", err)
+func (b *clusterImplBalancer) ResolverError(err error) {
+	if b.closed.HasFired() {
+		b.logger.Warningf("xds: received resolver error {%+v} after clusterImplBalancer was closed", err)
 		return
 	}
 
-	if cib.childLB != nil {
-		cib.childLB.ResolverError(err)
+	if b.childLB != nil {
+		b.childLB.ResolverError(err)
 	}
 }
 
-func (cib *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
-	if cib.closed.HasFired() {
-		cib.logger.Warningf("xds: received subconn state change {%+v, %+v} after clusterImplBalancer was closed", sc, s)
+func (b *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
+	if b.closed.HasFired() {
+		b.logger.Warningf("xds: received subconn state change {%+v, %+v} after clusterImplBalancer was closed", sc, s)
 		return
 	}
 
@@ -311,65 +311,65 @@ func (cib *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balanc
 	// knows). The parent priority policy is configured to ignore re-resolution
 	// signal from the EDS children.
 	if s.ConnectivityState == connectivity.TransientFailure {
-		cib.ClientConn.ResolveNow(resolver.ResolveNowOptions{})
+		b.ClientConn.ResolveNow(resolver.ResolveNowOptions{})
 	}
 
-	if cib.childLB != nil {
-		cib.childLB.UpdateSubConnState(sc, s)
+	if b.childLB != nil {
+		b.childLB.UpdateSubConnState(sc, s)
 	}
 }
 
-func (cib *clusterImplBalancer) Close() {
-	cib.mu.Lock()
-	cib.closed.Fire()
-	cib.mu.Unlock()
+func (b *clusterImplBalancer) Close() {
+	b.mu.Lock()
+	b.closed.Fire()
+	b.mu.Unlock()
 
-	if cib.childLB != nil {
-		cib.childLB.Close()
-		cib.childLB = nil
+	if b.childLB != nil {
+		b.childLB.Close()
+		b.childLB = nil
 	}
 	if newXDSClient != nil {
-		cib.xdsC.Close()
+		b.xdsC.Close()
 	}
-	<-cib.done.Done()
-	cib.logger.Infof("Shutdown")
+	<-b.done.Done()
+	b.logger.Infof("Shutdown")
 }
 
 // Override methods to accept updates from the child LB.
 
-func (cib *clusterImplBalancer) UpdateState(state balancer.State) {
+func (b *clusterImplBalancer) UpdateState(state balancer.State) {
 	// Instead of updating parent ClientConn inline, send state to run().
-	cib.pickerUpdateCh.Put(state)
+	b.pickerUpdateCh.Put(state)
 }
 
-func (cib *clusterImplBalancer) setClusterName(n string) {
-	cib.clusterNameMu.Lock()
-	defer cib.clusterNameMu.Unlock()
-	cib.clusterName = n
+func (b *clusterImplBalancer) setClusterName(n string) {
+	b.clusterNameMu.Lock()
+	defer b.clusterNameMu.Unlock()
+	b.clusterName = n
 }
 
-func (cib *clusterImplBalancer) getClusterName() string {
-	cib.clusterNameMu.Lock()
-	defer cib.clusterNameMu.Unlock()
-	return cib.clusterName
+func (b *clusterImplBalancer) getClusterName() string {
+	b.clusterNameMu.Lock()
+	defer b.clusterNameMu.Unlock()
+	return b.clusterName
 }
 
-func (cib *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	clusterName := cib.getClusterName()
+func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	clusterName := b.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
 		newAddrs[i] = internal.SetXDSHandshakeClusterName(addr, clusterName)
 	}
-	return cib.ClientConn.NewSubConn(newAddrs, opts)
+	return b.ClientConn.NewSubConn(newAddrs, opts)
 }
 
-func (cib *clusterImplBalancer) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
-	clusterName := cib.getClusterName()
+func (b *clusterImplBalancer) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
+	clusterName := b.getClusterName()
 	newAddrs := make([]resolver.Address, len(addrs))
 	for i, addr := range addrs {
 		newAddrs[i] = internal.SetXDSHandshakeClusterName(addr, clusterName)
 	}
-	cib.ClientConn.UpdateAddresses(sc, newAddrs)
+	b.ClientConn.UpdateAddresses(sc, newAddrs)
 }
 
 type dropConfigs struct {
@@ -378,40 +378,40 @@ type dropConfigs struct {
 	requestCountMax uint32
 }
 
-func (cib *clusterImplBalancer) run() {
-	defer cib.done.Fire()
+func (b *clusterImplBalancer) run() {
+	defer b.done.Fire()
 	for {
 		select {
-		case update := <-cib.pickerUpdateCh.Get():
-			cib.pickerUpdateCh.Load()
-			cib.mu.Lock()
-			if cib.closed.HasFired() {
-				cib.mu.Unlock()
+		case update := <-b.pickerUpdateCh.Get():
+			b.pickerUpdateCh.Load()
+			b.mu.Lock()
+			if b.closed.HasFired() {
+				b.mu.Unlock()
 				return
 			}
 			switch u := update.(type) {
 			case balancer.State:
-				cib.childState = u
-				cib.ClientConn.UpdateState(balancer.State{
-					ConnectivityState: cib.childState.ConnectivityState,
-					Picker: newDropPicker(cib.childState, &dropConfigs{
-						drops:           cib.drops,
-						requestCounter:  cib.requestCounter,
-						requestCountMax: cib.requestCountMax,
-					}, cib.loadWrapper),
+				b.childState = u
+				b.ClientConn.UpdateState(balancer.State{
+					ConnectivityState: b.childState.ConnectivityState,
+					Picker: newDropPicker(b.childState, &dropConfigs{
+						drops:           b.drops,
+						requestCounter:  b.requestCounter,
+						requestCountMax: b.requestCountMax,
+					}, b.loadWrapper),
 				})
 			case *dropConfigs:
-				cib.drops = u.drops
-				cib.requestCounter = u.requestCounter
-				if cib.childState.Picker != nil {
-					cib.ClientConn.UpdateState(balancer.State{
-						ConnectivityState: cib.childState.ConnectivityState,
-						Picker:            newDropPicker(cib.childState, u, cib.loadWrapper),
+				b.drops = u.drops
+				b.requestCounter = u.requestCounter
+				if b.childState.Picker != nil {
+					b.ClientConn.UpdateState(balancer.State{
+						ConnectivityState: b.childState.ConnectivityState,
+						Picker:            newDropPicker(b.childState, u, b.loadWrapper),
 					})
 				}
 			}
-			cib.mu.Unlock()
-		case <-cib.closed.Done():
+			b.mu.Unlock()
+		case <-b.closed.Done():
 			return
 		}
 	}
