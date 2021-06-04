@@ -93,9 +93,9 @@ type clusterImplBalancer struct {
 	closed *grpcsync.Event
 	done   *grpcsync.Event
 
-	bOpts  balancer.BuildOptions
-	logger *grpclog.PrefixLogger
-	xdsC   xdsclient.Interface
+	bOpts     balancer.BuildOptions
+	logger    *grpclog.PrefixLogger
+	xdsClient xdsclient.Interface
 
 	config           *LBConfig
 	childLB          balancer.Balancer

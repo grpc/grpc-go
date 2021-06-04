@@ -87,7 +87,7 @@ func TestDropByCategory(t *testing.T) {
 		dropDenominator = 2
 	)
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: client.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:                 testClusterName,
 			EDSServiceName:          testServiceName,
@@ -172,7 +172,7 @@ func TestDropByCategory(t *testing.T) {
 		dropDenominator2 = 4
 	)
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: client.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:                 testClusterName,
 			EDSServiceName:          testServiceName,
@@ -235,7 +235,7 @@ func TestDropCircuitBreaking(t *testing.T) {
 
 	var maxRequest uint32 = 50
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: client.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:                 testClusterName,
 			EDSServiceName:          testServiceName,
@@ -342,7 +342,7 @@ func TestPickerUpdateAfterClose(t *testing.T) {
 
 	var maxRequest uint32 = 50
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: client.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:               testClusterName,
 			EDSServiceName:        testServiceName,
@@ -383,7 +383,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 	defer b.Close()
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: client.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName,
 			EDSServiceName: testServiceName,
@@ -432,7 +432,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 	const testClusterName2 = "test-cluster-2"
 	var addr2 = resolver.Address{Addr: "2.2.2.2"}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: client.SetClient(resolver.State{Addresses: []resolver.Address{addr2}}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: []resolver.Address{addr2}}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName2,
 			EDSServiceName: testServiceName,
@@ -468,7 +468,7 @@ func TestReResolution(t *testing.T) {
 	defer b.Close()
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: client.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			Cluster:        testClusterName,
 			EDSServiceName: testServiceName,
