@@ -47,13 +47,8 @@ import (
 var (
 	logger       = grpclog.Component("xds")
 	newXDSClient = func() xdsclient.XDSClient {
-		// FIXME: this is no longer necessary.
 		c, err := xdsclient.New()
 		if err != nil {
-			// If err is not nil, c is a typed nil (of type *xdsclient.Client).
-			// If c is returned and assigned to the xdsClient field in the CSDS
-			// server, the nil checks in the handlers will not handle it
-			// properly.
 			logger.Warningf("failed to create xds client: %v", err)
 			return nil
 		}
