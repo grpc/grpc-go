@@ -177,7 +177,7 @@ func TestBuildXDS(t *testing.T) {
 
 			configCh := make(chan *bootstrap.Config, 1)
 			oldNewClient := newClientWithConfig
-			newClientWithConfig = func(config *bootstrap.Config) (xdsClientInterface, error) {
+			newClientWithConfig = func(config *bootstrap.Config) (xdsClient, error) {
 				configCh <- config
 				return tXDSClient, nil
 			}

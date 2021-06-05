@@ -75,7 +75,7 @@ func TestDropByCategory(t *testing.T) {
 	defer xdsclient.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
 	builder := balancer.Get(Name)
@@ -233,7 +233,7 @@ func TestDropCircuitBreaking(t *testing.T) {
 	defer xdsclient.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
 	builder := balancer.Get(Name)
@@ -345,7 +345,7 @@ func TestPickerUpdateAfterClose(t *testing.T) {
 	defer xdsclient.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
 	builder := balancer.Get(Name)
@@ -390,7 +390,7 @@ func TestClusterNameInAddressAttributes(t *testing.T) {
 	defer xdsclient.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
 	builder := balancer.Get(Name)
@@ -481,7 +481,7 @@ func TestReResolution(t *testing.T) {
 	defer xdsclient.ClearCounterForTesting(testClusterName)
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
 	builder := balancer.Get(Name)

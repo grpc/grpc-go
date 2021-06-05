@@ -36,12 +36,12 @@ import (
 const balancerName = "xds_cluster_manager_experimental"
 
 func init() {
-	balancer.Register(builder{})
+	balancer.Register(bb{})
 }
 
-type builder struct{}
+type bb struct{}
 
-func (builder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &bal{}
 	b.logger = prefixLogger(b)
 	b.stateAggregator = newBalancerStateAggregator(cc, b.logger)
@@ -52,11 +52,11 @@ func (builder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balance
 	return b
 }
 
-func (builder) Name() string {
+func (bb) Name() string {
 	return balancerName
 }
 
-func (builder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return parseConfig(c)
 }
 
