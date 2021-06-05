@@ -500,6 +500,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 
 		route.WeightedClusters = make(map[string]WeightedCluster)
 		action := r.GetRoute()
+		route.HashPolicies = hashPoliciesProtoToSlice(action.HashPolicy)
 		switch a := action.GetClusterSpecifier().(type) {
 		case *v3routepb.RouteAction_Cluster:
 			route.WeightedClusters[a.Cluster] = WeightedCluster{Weight: 1}
@@ -559,6 +560,33 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 		routesRet = append(routesRet, &route)
 	}
 	return routesRet, nil
+}
+
+func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy) []*HashPolicy {
+	var hashPoliciesRet []*HashPolicy
+	for _, p := range policies {
+		var policy HashPolicy
+		policy.Terminal = p.Terminal
+		switch p.GetPolicySpecifier().(type) {
+		case *v3routepb.RouteAction_HashPolicy_Header_:
+			policy.HashPolicyType = HashPolicyTypeHeader
+			policy.HeaderName = p.GetHeader().HeaderName
+			policy.Regex = p.GetHeader().GetRegexRewrite().GetPattern().Regex
+			policy.RegexSubstitution = p.GetHeader().GetRegexRewrite().Substitution
+		// ConnectionProperties in Envoy specifies to hash the source ip
+		// address. In grpc, this is logically equivalent to hashing the
+		// channel pointer.
+		case *v3routepb.RouteAction_HashPolicy_ConnectionProperties_:
+			policy.HashPolicyType = HashPolicyTypeChannelID
+		default:
+			// In the case where the hash policy action isn't to hash the header
+			// or the unique identifier of the channel, ignore the field in the
+			// update and treat as a no-op.
+		}
+
+		hashPoliciesRet = append(hashPoliciesRet, &policy)
+	}
+	return hashPoliciesRet
 }
 
 // UnmarshalCluster processes resources received in an CDS response, validates
