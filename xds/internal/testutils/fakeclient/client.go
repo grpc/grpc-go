@@ -42,7 +42,6 @@ type Client struct {
 	cdsCancelCh  *testutils.Channel
 	edsCancelCh  *testutils.Channel
 	loadReportCh *testutils.Channel
-	closeCh      *testutils.Channel
 	loadStore    *load.Store
 	bootstrapCfg *bootstrap.Config
 
@@ -271,7 +270,6 @@ func NewClientWithName(name string) *Client {
 		cdsCancelCh:  testutils.NewChannelWithSize(10),
 		edsCancelCh:  testutils.NewChannel(),
 		loadReportCh: testutils.NewChannel(),
-		closeCh:      testutils.NewChannel(),
 		loadStore:    load.NewStore(),
 		cdsCbs:       make(map[string]func(xdsclient.ClusterUpdate, error)),
 		Closed:       grpcsync.NewEvent(),
