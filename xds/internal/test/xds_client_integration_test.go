@@ -68,7 +68,7 @@ func (s) TestClientSideXDS(t *testing.T) {
 	port, cleanup := clientSetup(t)
 	defer cleanup()
 
-	serviceName := xdsServiceName + "-client-side-xds"
+	const serviceName = "my-service-client-side-xds"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     xdsClientNodeID,
@@ -81,7 +81,7 @@ func (s) TestClientSideXDS(t *testing.T) {
 	}
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolverBuilder))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

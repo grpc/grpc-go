@@ -309,7 +309,7 @@ func TestHeaderSuffixMatcherMatch(t *testing.T) {
 func TestInvertMatcherMatch(t *testing.T) {
 	tests := []struct {
 		name string
-		m    HeaderMatcherInterface
+		m    HeaderMatcher
 		md   metadata.MD
 	}{
 		{

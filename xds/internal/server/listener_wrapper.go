@@ -31,8 +31,8 @@ import (
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 var (
@@ -88,9 +88,9 @@ func prefixLogger(p *listenerWrapper) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[xds-server-listener %p] ", p))
 }
 
-// XDSClientInterface wraps the methods on the xdsClient which are required by
+// XDSClient wraps the methods on the XDSClient which are required by
 // the listenerWrapper.
-type XDSClientInterface interface {
+type XDSClient interface {
 	WatchListener(string, func(xdsclient.ListenerUpdate, error)) func()
 	BootstrapConfig() *bootstrap.Config
 }
@@ -104,8 +104,8 @@ type ListenerWrapperParams struct {
 	// XDSCredsInUse specifies whether or not the user expressed interest to
 	// receive security configuration from the control plane.
 	XDSCredsInUse bool
-	// XDSClient provides the functionality from the xdsClient required here.
-	XDSClient XDSClientInterface
+	// XDSClient provides the functionality from the XDSClient required here.
+	XDSClient XDSClient
 	// ModeCallback is the callback to invoke when the serving mode changes.
 	ModeCallback ServingModeCallback
 }
@@ -152,7 +152,7 @@ type listenerWrapper struct {
 
 	name          string
 	xdsCredsInUse bool
-	xdsC          XDSClientInterface
+	xdsC          XDSClient
 	cancelWatch   func()
 	modeCallback  ServingModeCallback
 
@@ -168,7 +168,7 @@ type listenerWrapper struct {
 	// instead of a vanilla channel simplifies the update handler as it need not
 	// keep track of whether the received update is the first one or not.
 	goodUpdate *grpcsync.Event
-	// A small race exists in the xdsClient code between the receipt of an xDS
+	// A small race exists in the XDSClient code between the receipt of an xDS
 	// response and the user cancelling the associated watch. In this window,
 	// the registered callback may be invoked after the watch is canceled, and
 	// the user is expected to work around this. This event signifies that the
@@ -299,14 +299,14 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 
 	// Make sure that the socket address on the received Listener resource
 	// matches the address of the net.Listener passed to us by the user. This
-	// check is done here instead of at the xdsClient layer because of the
+	// check is done here instead of at the XDSClient layer because of the
 	// following couple of reasons:
-	// - xdsClient cannot know the listening address of every listener in the
+	// - XDSClient cannot know the listening address of every listener in the
 	//   system, and hence cannot perform this check.
 	// - this is a very context-dependent check and only the server has the
 	//   appropriate context to perform this check.
 	//
-	// What this means is that the xdsClient has ACKed a resource which can push
+	// What this means is that the XDSClient has ACKed a resource which can push
 	// the server into a "not serving" mode. This is not ideal, but this is
 	// what we have decided to do. See gRPC A36 for more details.
 	ilc := update.InboundListenerCfg

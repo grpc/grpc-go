@@ -125,9 +125,14 @@ type http2Server struct {
 	connectionID uint64
 }
 
-// newHTTP2Server constructs a ServerTransport based on HTTP2. ConnectionError is
-// returned if something goes wrong.
-func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
+// NewServerTransport creates a http2 transport with conn and configuration
+// options from config.
+//
+// It returns a non-nil transport and a nil error on success. On failure, it
+// returns a non-nil transport and a nil-error. For a special case where the
+// underlying conn gets closed before the client preface could be read, it
+// returns a nil transport and a nil error.
+func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
 	writeBufSize := config.WriteBufferSize
 	readBufSize := config.ReadBufferSize
 	maxHeaderListSize := defaultServerMaxHeaderListSize
@@ -266,6 +271,13 @@ func newHTTP2Server(conn net.Conn, config *ServerConfig) (_ ServerTransport, err
 	// Check the validity of client preface.
 	preface := make([]byte, len(clientPreface))
 	if _, err := io.ReadFull(t.conn, preface); err != nil {
+		// In deployments where a gRPC server runs behind a cloud load balancer
+		// which performs regular TCP level health checks, the connection is
+		// closed immediately by the latter. Skipping the error here will help
+		// reduce log clutter.
+		if err == io.EOF {
+			return nil, nil
+		}
 		return nil, connectionErrorf(false, err, "transport: http2Server.HandleStreams failed to receive the preface from client: %v", err)
 	}
 	if !bytes.Equal(preface, clientPreface) {

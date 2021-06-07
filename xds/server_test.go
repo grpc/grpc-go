@@ -39,10 +39,10 @@ import (
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const (
@@ -133,7 +133,7 @@ func (s) TestNewServer(t *testing.T) {
 			wantServerOpts := len(test.serverOpts) + 2
 
 			origNewGRPCServer := newGRPCServer
-			newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface {
+			newGRPCServer = func(opts ...grpc.ServerOption) grpcServer {
 				if got := len(opts); got != wantServerOpts {
 					t.Fatalf("%d ServerOptions passed to grpc.Server, want %d", got, wantServerOpts)
 				}
@@ -161,7 +161,7 @@ func (s) TestRegisterService(t *testing.T) {
 	fs := newFakeGRPCServer()
 
 	origNewGRPCServer := newGRPCServer
-	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface { return fs }
+	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer { return fs }
 	defer func() { newGRPCServer = origNewGRPCServer }()
 
 	s := NewGRPCServer()
@@ -247,7 +247,7 @@ func (p *fakeProvider) Close() {
 func setupOverrides() (*fakeGRPCServer, *testutils.Channel, func()) {
 	clientCh := testutils.NewChannel()
 	origNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) {
+	newXDSClient = func() (xdsClient, error) {
 		c := fakeclient.NewClient()
 		c.SetBootstrapConfig(&bootstrap.Config{
 			BalancerName:                       "dummyBalancer",
@@ -262,7 +262,7 @@ func setupOverrides() (*fakeGRPCServer, *testutils.Channel, func()) {
 
 	fs := newFakeGRPCServer()
 	origNewGRPCServer := newGRPCServer
-	newGRPCServer = func(opts ...grpc.ServerOption) grpcServerInterface { return fs }
+	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer { return fs }
 
 	return fs, clientCh, func() {
 		newXDSClient = origNewXDSClient
@@ -277,7 +277,7 @@ func setupOverrides() (*fakeGRPCServer, *testutils.Channel, func()) {
 func setupOverridesForXDSCreds(includeCertProviderCfg bool) (*testutils.Channel, func()) {
 	clientCh := testutils.NewChannel()
 	origNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) {
+	newXDSClient = func() (xdsClient, error) {
 		c := fakeclient.NewClient()
 		bc := &bootstrap.Config{
 			BalancerName:                       "dummyBalancer",
@@ -544,7 +544,7 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 			// xdsClient with the specified bootstrap configuration.
 			clientCh := testutils.NewChannel()
 			origNewXDSClient := newXDSClient
-			newXDSClient = func() (xdsClientInterface, error) {
+			newXDSClient = func() (xdsClient, error) {
 				c := fakeclient.NewClient()
 				c.SetBootstrapConfig(test.bootstrapConfig)
 				clientCh.Send(c)
@@ -587,7 +587,7 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 // verifies that Server() exits with a non-nil error.
 func (s) TestServeNewClientFailure(t *testing.T) {
 	origNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) {
+	newXDSClient = func() (xdsClient, error) {
 		return nil, errors.New("xdsClient creation failed")
 	}
 	defer func() { newXDSClient = origNewXDSClient }()

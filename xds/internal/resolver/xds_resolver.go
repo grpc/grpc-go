@@ -28,22 +28,35 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 
 	iresolver "google.golang.org/grpc/internal/resolver"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
 const xdsScheme = "xds"
 
+// NewBuilder creates a new xds resolver builder using a specific xds bootstrap
+// config, so tests can use multiple xds clients in different ClientConns at
+// the same time.
+func NewBuilder(config []byte) (resolver.Builder, error) {
+	return &xdsResolverBuilder{
+		newXDSClient: func() (xdsClient, error) {
+			return xdsclient.NewClientWithBootstrapContents(config)
+		},
+	}, nil
+}
+
 // For overriding in unittests.
-var newXDSClient = func() (xdsClientInterface, error) { return xdsclient.New() }
+var newXDSClient = func() (xdsClient, error) { return xdsclient.New() }
 
 func init() {
 	resolver.Register(&xdsResolverBuilder{})
 }
 
-type xdsResolverBuilder struct{}
+type xdsResolverBuilder struct {
+	newXDSClient func() (xdsClient, error)
+}
 
 // Build helps implement the resolver.Builder interface.
 //
@@ -59,6 +72,11 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, op
 	}
 	r.logger = prefixLogger((r))
 	r.logger.Infof("Creating resolver for target: %+v", t)
+
+	newXDSClient := newXDSClient
+	if b.newXDSClient != nil {
+		newXDSClient = b.newXDSClient
+	}
 
 	client, err := newXDSClient()
 	if err != nil {
@@ -101,9 +119,9 @@ func (*xdsResolverBuilder) Scheme() string {
 	return xdsScheme
 }
 
-// xdsClientInterface contains methods from xdsClient.Client which are used by
+// xdsClient contains methods from xdsClient.Client which are used by
 // the resolver. This will be faked out in unittests.
-type xdsClientInterface interface {
+type xdsClient interface {
 	WatchListener(serviceName string, cb func(xdsclient.ListenerUpdate, error)) func()
 	WatchRouteConfig(routeName string, cb func(xdsclient.RouteConfigUpdate, error)) func()
 	BootstrapConfig() *bootstrap.Config
@@ -131,7 +149,7 @@ type xdsResolver struct {
 	logger *grpclog.PrefixLogger
 
 	// The underlying xdsClient which performs all xDS requests and responses.
-	client xdsClientInterface
+	client xdsClient
 	// A channel for the watch API callback to write service updates on to. The
 	// updates are read by the run goroutine and passed on to the ClientConn.
 	updateCh chan suWithError
@@ -178,6 +196,13 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 	state := iresolver.SetConfigSelector(resolver.State{
 		ServiceConfig: r.cc.ParseServiceConfig(string(sc)),
 	}, cs)
+
+	// Include the xds client for the LB policies to use.  For unit tests,
+	// r.client may not be a full *xdsclient.Client, but it will always be in
+	// production.
+	if c, ok := r.client.(*xdsclient.Client); ok {
+		state = xdsclient.SetClient(state, c)
+	}
 	r.cc.UpdateState(state)
 	return true
 }

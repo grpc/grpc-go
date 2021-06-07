@@ -27,25 +27,25 @@ import (
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
 func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
-	var pathMatcher pathMatcherInterface
+	var pm pathMatcher
 	switch {
 	case r.Regex != nil:
-		pathMatcher = newPathRegexMatcher(r.Regex)
+		pm = newPathRegexMatcher(r.Regex)
 	case r.Path != nil:
-		pathMatcher = newPathExactMatcher(*r.Path, r.CaseInsensitive)
+		pm = newPathExactMatcher(*r.Path, r.CaseInsensitive)
 	case r.Prefix != nil:
-		pathMatcher = newPathPrefixMatcher(*r.Prefix, r.CaseInsensitive)
+		pm = newPathPrefixMatcher(*r.Prefix, r.CaseInsensitive)
 	default:
 		return nil, fmt.Errorf("illegal route: missing path_matcher")
 	}
 
-	var headerMatchers []matcher.HeaderMatcherInterface
+	var headerMatchers []matcher.HeaderMatcher
 	for _, h := range r.Headers {
-		var matcherT matcher.HeaderMatcherInterface
+		var matcherT matcher.HeaderMatcher
 		switch {
 		case h.ExactMatch != nil && *h.ExactMatch != "":
 			matcherT = matcher.NewHeaderExactMatcher(h.Name, *h.ExactMatch)
@@ -72,17 +72,17 @@ func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
 	if r.Fraction != nil {
 		fractionMatcher = newFractionMatcher(*r.Fraction)
 	}
-	return newCompositeMatcher(pathMatcher, headerMatchers, fractionMatcher), nil
+	return newCompositeMatcher(pm, headerMatchers, fractionMatcher), nil
 }
 
 // compositeMatcher.match returns true if all matchers return true.
 type compositeMatcher struct {
-	pm  pathMatcherInterface
-	hms []matcher.HeaderMatcherInterface
+	pm  pathMatcher
+	hms []matcher.HeaderMatcher
 	fm  *fractionMatcher
 }
 
-func newCompositeMatcher(pm pathMatcherInterface, hms []matcher.HeaderMatcherInterface, fm *fractionMatcher) *compositeMatcher {
+func newCompositeMatcher(pm pathMatcher, hms []matcher.HeaderMatcher, fm *fractionMatcher) *compositeMatcher {
 	return &compositeMatcher{pm: pm, hms: hms, fm: fm}
 }
 

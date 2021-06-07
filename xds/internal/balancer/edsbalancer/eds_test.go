@@ -41,11 +41,11 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/load"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
 
-	_ "google.golang.org/grpc/xds/internal/client/v2" // V2 client registration.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // V2 client registration.
 )
 
 const (
@@ -69,10 +69,6 @@ var (
 		},
 	}
 )
-
-func init() {
-	balancer.Register(&edsBalancerBuilder{})
-}
 
 func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	return func() balancer.SubConn {
@@ -260,7 +256,7 @@ func waitForNewEDSLB(ctx context.Context, ch *testutils.Channel) (*fakeEDSBalanc
 func setup(edsLBCh *testutils.Channel) (*fakeclient.Client, func()) {
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
 
 	origNewEDSBalancer := newEDSBalancer
 	newEDSBalancer = func(cc balancer.ClientConn, _ balancer.BuildOptions, _ func(priorityType, balancer.State), _ load.PerClusterReporter, _ *grpclog.PrefixLogger) edsBalancerImplInterface {
@@ -890,8 +886,7 @@ func (s) TestBalancerConfigParsing(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := &edsBalancerBuilder{}
-			got, err := b.ParseConfig(tt.js)
+			got, err := bb{}.ParseConfig(tt.js)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("edsBalancerBuilder.ParseConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}

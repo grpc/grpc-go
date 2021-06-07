@@ -32,15 +32,15 @@ import "google.golang.org/grpc/balancer"
 const xdsName = "xds_experimental"
 
 func init() {
-	balancer.Register(&xdsBalancerBuilder{})
+	balancer.Register(xdsBalancerBuilder{})
 }
 
 // xdsBalancerBuilder register edsBalancerBuilder (now with name
 // "eds_experimental") under the old name "xds_experimental".
 type xdsBalancerBuilder struct {
-	edsBalancerBuilder
+	bb
 }
 
-func (b *xdsBalancerBuilder) Name() string {
+func (xdsBalancerBuilder) Name() string {
 	return xdsName
 }

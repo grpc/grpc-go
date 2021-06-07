@@ -44,12 +44,12 @@ import (
 const Name = "priority_experimental"
 
 func init() {
-	balancer.Register(priorityBB{})
+	balancer.Register(bb{})
 }
 
-type priorityBB struct{}
+type bb struct{}
 
-func (priorityBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
+func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &priorityBalancer{
 		cc:                       cc,
 		done:                     grpcsync.NewEvent(),
@@ -66,11 +66,11 @@ func (priorityBB) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) bal
 	return b
 }
 
-func (b priorityBB) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (b bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return parseConfig(s)
 }
 
-func (priorityBB) Name() string {
+func (bb) Name() string {
 	return Name
 }
 

@@ -38,9 +38,9 @@ import (
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/xds" // To register xds resolvers and balancers.
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -61,7 +61,7 @@ const (
 	dnsName, xdsName = "dns", "xds"
 )
 
-type xdsClientInterface interface {
+type xdsClient interface {
 	Close()
 }
 
@@ -69,7 +69,7 @@ type xdsClientInterface interface {
 var (
 	onGCE = googlecloud.OnGCE
 
-	newClientWithConfig = func(config *bootstrap.Config) (xdsClientInterface, error) {
+	newClientWithConfig = func(config *bootstrap.Config) (xdsClient, error) {
 		return xdsclient.NewWithConfig(config)
 	}
 
@@ -138,7 +138,7 @@ func (c2pResolverBuilder) Scheme() string {
 
 type c2pResolver struct {
 	resolver.Resolver
-	client xdsClientInterface
+	client xdsClient
 }
 
 func (r *c2pResolver) Close() {

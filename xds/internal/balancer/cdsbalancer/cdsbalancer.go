@@ -35,8 +35,8 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const (
@@ -59,22 +59,21 @@ var (
 		// not deal with subConns.
 		return builder.Build(cc, opts), nil
 	}
-	newXDSClient  = func() (xdsClientInterface, error) { return xdsclient.New() }
+	newXDSClient  func() (xdsClient, error)
 	buildProvider = buildProviderFunc
 )
 
 func init() {
-	balancer.Register(cdsBB{})
+	balancer.Register(bb{})
 }
 
-// cdsBB (short for cdsBalancerBuilder) implements the balancer.Builder
-// interface to help build a cdsBalancer.
+// bb implements the balancer.Builder interface to help build a cdsBalancer.
 // It also implements the balancer.ConfigParser interface to help parse the
 // JSON service config, to be passed to the cdsBalancer.
-type cdsBB struct{}
+type bb struct{}
 
 // Build creates a new CDS balancer with the ClientConn.
-func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &cdsBalancer{
 		bOpts:       opts,
 		updateCh:    buffer.NewUnbounded(),
@@ -86,12 +85,15 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 	b.logger = prefixLogger((b))
 	b.logger.Infof("Created")
 
-	client, err := newXDSClient()
-	if err != nil {
-		b.logger.Errorf("failed to create xds-client: %v", err)
-		return nil
+	if newXDSClient != nil {
+		// For tests
+		client, err := newXDSClient()
+		if err != nil {
+			b.logger.Errorf("failed to create xds-client: %v", err)
+			return nil
+		}
+		b.xdsClient = client
 	}
-	b.xdsClient = client
 
 	var creds credentials.TransportCredentials
 	switch {
@@ -114,7 +116,7 @@ func (cdsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 }
 
 // Name returns the name of balancers built by this builder.
-func (cdsBB) Name() string {
+func (bb) Name() string {
 	return cdsName
 }
 
@@ -127,7 +129,7 @@ type lbConfig struct {
 
 // ParseConfig parses the JSON load balancer config provided into an
 // internal form or returns an error if the config is invalid.
-func (cdsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	var cfg lbConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, fmt.Errorf("xds: unable to unmarshal lbconfig: %s, error: %v", string(c), err)
@@ -135,9 +137,9 @@ func (cdsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, 
 	return &cfg, nil
 }
 
-// xdsClientInterface contains methods from xdsClient.Client which are used by
+// xdsClient contains methods from xdsClient.Client which are used by
 // the cdsBalancer. This will be faked out in unittests.
-type xdsClientInterface interface {
+type xdsClient interface {
 	WatchCluster(string, func(xdsclient.ClusterUpdate, error)) func()
 	BootstrapConfig() *bootstrap.Config
 	Close()
@@ -182,7 +184,7 @@ type cdsBalancer struct {
 	ccw            *ccWrapper            // ClientConn interface passed to child LB.
 	bOpts          balancer.BuildOptions // BuildOptions passed to child LB.
 	updateCh       *buffer.Unbounded     // Channel for gRPC and xdsClient updates.
-	xdsClient      xdsClientInterface    // xDS client to watch Cluster resource.
+	xdsClient      xdsClient             // xDS client to watch Cluster resource.
 	cancelWatch    func()                // Cluster watch cancel func.
 	edsLB          balancer.Balancer     // EDS child policy.
 	clusterToWatch string
@@ -359,7 +361,15 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 		lbCfg.LrsLoadReportingServerName = new(string)
 
 	}
+	resolverState := resolver.State{}
+	// Include the xds client for the child LB policies to use.  For unit
+	// tests, b.xdsClient may not be a full *xdsclient.Client, but it will
+	// always be in production.
+	if c, ok := b.xdsClient.(*xdsclient.Client); ok {
+		resolverState = xdsclient.SetClient(resolverState, c)
+	}
 	ccState := balancer.ClientConnState{
+		ResolverState:  resolverState,
 		BalancerConfig: lbCfg,
 	}
 	if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
@@ -397,7 +407,9 @@ func (b *cdsBalancer) run() {
 				b.edsLB.Close()
 				b.edsLB = nil
 			}
-			b.xdsClient.Close()
+			if newXDSClient != nil {
+				b.xdsClient.Close()
+			}
 			if b.cachedRoot != nil {
 				b.cachedRoot.Close()
 			}
@@ -466,6 +478,14 @@ func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) erro
 	if b.closed.HasFired() {
 		b.logger.Warningf("xds: received ClientConnState {%+v} after cdsBalancer was closed", state)
 		return errBalancerClosed
+	}
+
+	if b.xdsClient == nil {
+		c := xdsclient.FromResolverState(state.ResolverState)
+		if c == nil {
+			return balancer.ErrBadResolverState
+		}
+		b.xdsClient = c
 	}
 
 	b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(state.BalancerConfig))

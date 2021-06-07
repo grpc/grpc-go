@@ -36,10 +36,10 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/resolver"
-	xdsclient "google.golang.org/grpc/xds/internal/client"
-	"google.golang.org/grpc/xds/internal/client/bootstrap"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const (
@@ -136,7 +136,7 @@ func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDS
 
 	xdsC := fakeclient.NewClient()
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClientInterface, error) { return xdsC, nil }
+	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
 
 	builder := balancer.Get(cdsName)
 	if builder == nil {
