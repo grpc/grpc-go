@@ -2114,13 +2114,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			got := ts.status
 			want := test.wantStatus
 			if got.Code() != want.Code() || got.Message() != want.Message() {
-				t.Fatalf("operateHeaders(%v); status = \ngot - code: %d message: %s\nwant - code: %d message: %s",
-					test.metaHeaderFrame,
-					got.Code(),
-					got.Message(),
-					want.Code(),
-					want.Message(),
-				)
+				t.Fatalf("operateHeaders(%v); status = \ngot: %s\nwant: %s", test.metaHeaderFrame, got, want)
 			}
 		})
 	}
