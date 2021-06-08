@@ -52,8 +52,6 @@ func init() {
 	balancer.Register(bb{})
 }
 
-var newXDSClient func() (xdsClient, error)
-
 type bb struct{}
 
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
@@ -67,18 +65,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		requestCountMax: defaultRequestCountMax,
 	}
 	b.logger = prefixLogger(b)
-
-	if newXDSClient != nil {
-		// For tests
-		client, err := newXDSClient()
-		if err != nil {
-			b.logger.Errorf("failed to create xds-client: %v", err)
-			return nil
-		}
-		b.xdsClient = client
-	}
 	go b.run()
-
 	b.logger.Infof("Created")
 	return b
 }
@@ -89,13 +76,6 @@ func (bb) Name() string {
 
 func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	return parseConfig(c)
-}
-
-// xdsClient contains only the xds_client methods needed by LRS
-// balancer. It's defined so we can override xdsclient in tests.
-type xdsClient interface {
-	ReportLoad(server string) (*load.Store, func())
-	Close()
 }
 
 type clusterImplBalancer struct {
@@ -115,7 +95,7 @@ type clusterImplBalancer struct {
 
 	bOpts     balancer.BuildOptions
 	logger    *grpclog.PrefixLogger
-	xdsClient xdsClient
+	xdsClient xdsclient.XDSClient
 
 	config           *LBConfig
 	childLB          balancer.Balancer
@@ -327,9 +307,6 @@ func (b *clusterImplBalancer) Close() {
 	if b.childLB != nil {
 		b.childLB.Close()
 		b.childLB = nil
-	}
-	if newXDSClient != nil {
-		b.xdsClient.Close()
 	}
 	<-b.done.Done()
 	b.logger.Infof("Shutdown")

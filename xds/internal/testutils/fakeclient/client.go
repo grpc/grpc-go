@@ -32,6 +32,11 @@ import (
 // Client is a fake implementation of an xds client. It exposes a bunch of
 // channels to signal the occurrence of various events.
 type Client struct {
+	// Embed XDSClient so this fake client implements the interface, but it's
+	// never set (it's always nil). This may cause nil panic since not all the
+	// methods are implemented.
+	xdsclient.XDSClient
+
 	name         string
 	ldsWatchCh   *testutils.Channel
 	rdsWatchCh   *testutils.Channel

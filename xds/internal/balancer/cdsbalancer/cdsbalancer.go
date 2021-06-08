@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const (
@@ -59,7 +58,6 @@ var (
 		// not deal with subConns.
 		return builder.Build(cc, opts), nil
 	}
-	newXDSClient  func() (xdsClient, error)
 	buildProvider = buildProviderFunc
 )
 
@@ -84,17 +82,6 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	}
 	b.logger = prefixLogger((b))
 	b.logger.Infof("Created")
-
-	if newXDSClient != nil {
-		// For tests
-		client, err := newXDSClient()
-		if err != nil {
-			b.logger.Errorf("failed to create xds-client: %v", err)
-			return nil
-		}
-		b.xdsClient = client
-	}
-
 	var creds credentials.TransportCredentials
 	switch {
 	case opts.DialCreds != nil:
@@ -137,14 +124,6 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 	return &cfg, nil
 }
 
-// xdsClient contains methods from xdsClient.Client which are used by
-// the cdsBalancer. This will be faked out in unittests.
-type xdsClient interface {
-	WatchCluster(string, func(xdsclient.ClusterUpdate, error)) func()
-	BootstrapConfig() *bootstrap.Config
-	Close()
-}
-
 // ccUpdate wraps a clientConn update received from gRPC (pushed from the
 // xdsResolver). A valid clusterName causes the cdsBalancer to register a CDS
 // watcher with the xdsClient, while a non-nil error causes it to cancel the
@@ -184,7 +163,7 @@ type cdsBalancer struct {
 	ccw            *ccWrapper            // ClientConn interface passed to child LB.
 	bOpts          balancer.BuildOptions // BuildOptions passed to child LB.
 	updateCh       *buffer.Unbounded     // Channel for gRPC and xdsClient updates.
-	xdsClient      xdsClient             // xDS client to watch Cluster resource.
+	xdsClient      xdsclient.XDSClient   // xDS client to watch Cluster resource.
 	cancelWatch    func()                // Cluster watch cancel func.
 	edsLB          balancer.Balancer     // EDS child policy.
 	clusterToWatch string
@@ -361,15 +340,8 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 		lbCfg.LrsLoadReportingServerName = new(string)
 
 	}
-	resolverState := resolver.State{}
-	// Include the xds client for the child LB policies to use.  For unit
-	// tests, b.xdsClient may not be a full *xdsclient.Client, but it will
-	// always be in production.
-	if c, ok := b.xdsClient.(*xdsclient.Client); ok {
-		resolverState = xdsclient.SetClient(resolverState, c)
-	}
 	ccState := balancer.ClientConnState{
-		ResolverState:  resolverState,
+		ResolverState:  xdsclient.SetClient(resolver.State{}, b.xdsClient),
 		BalancerConfig: lbCfg,
 	}
 	if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
@@ -406,9 +378,6 @@ func (b *cdsBalancer) run() {
 			if b.edsLB != nil {
 				b.edsLB.Close()
 				b.edsLB = nil
-			}
-			if newXDSClient != nil {
-				b.xdsClient.Close()
 			}
 			if b.cachedRoot != nil {
 				b.cachedRoot.Close()

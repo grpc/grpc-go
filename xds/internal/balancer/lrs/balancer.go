@@ -36,8 +36,6 @@ func init() {
 	balancer.Register(bb{})
 }
 
-var newXDSClient func() (xdsClient, error)
-
 // Name is the name of the LRS balancer.
 const Name = "lrs_experimental"
 
@@ -50,17 +48,6 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	}
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
-
-	if newXDSClient != nil {
-		// For tests
-		client, err := newXDSClient()
-		if err != nil {
-			b.logger.Errorf("failed to create xds-client: %v", err)
-			return nil
-		}
-		b.xdsClient = newXDSClientWrapper(client)
-	}
-
 	return b
 }
 
@@ -169,15 +156,8 @@ func (ccw *ccWrapper) UpdateState(s balancer.State) {
 	ccw.ClientConn.UpdateState(s)
 }
 
-// xdsClient contains only the xds_client methods needed by LRS
-// balancer. It's defined so we can override xdsclient in tests.
-type xdsClient interface {
-	ReportLoad(server string) (*load.Store, func())
-	Close()
-}
-
 type xdsClientWrapper struct {
-	c                xdsClient
+	c                xdsclient.XDSClient
 	cancelLoadReport func()
 	clusterName      string
 	edsServiceName   string
@@ -187,7 +167,7 @@ type xdsClientWrapper struct {
 	loadWrapper *loadstore.Wrapper
 }
 
-func newXDSClientWrapper(c xdsClient) *xdsClientWrapper {
+func newXDSClientWrapper(c xdsclient.XDSClient) *xdsClientWrapper {
 	return &xdsClientWrapper{
 		c:           c,
 		loadWrapper: loadstore.NewWrapper(),
@@ -255,8 +235,5 @@ func (w *xdsClientWrapper) close() {
 	if w.cancelLoadReport != nil {
 		w.cancelLoadReport()
 		w.cancelLoadReport = nil
-	}
-	if newXDSClient != nil {
-		w.c.Close()
 	}
 }

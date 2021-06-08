@@ -133,11 +133,7 @@ func (p *fakeProvider) Close() {
 // xDSCredentials.
 func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
 	t.Helper()
-
 	xdsC := fakeclient.NewClient()
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
-
 	builder := balancer.Get(cdsName)
 	if builder == nil {
 		t.Fatalf("balancer.Get(%q) returned nil", cdsName)
@@ -164,7 +160,7 @@ func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDS
 	}
 
 	// Push a ClientConnState update to the CDS balancer with a cluster name.
-	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName)); err != nil {
+	if err := cdsB.UpdateClientConnState(cdsCCS(clusterName, xdsC)); err != nil {
 		t.Fatalf("cdsBalancer.UpdateClientConnState failed with error: %v", err)
 	}
 
@@ -181,8 +177,8 @@ func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDS
 	}
 
 	return xdsC, cdsB.(*cdsBalancer), edsB, tcc, func() {
-		newXDSClient = oldNewXDSClient
 		newEDSBalancer = oldEDSBalancerBuilder
+		xdsC.Close()
 	}
 }
 

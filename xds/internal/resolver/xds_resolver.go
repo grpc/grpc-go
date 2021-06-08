@@ -27,10 +27,8 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-
 	iresolver "google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
@@ -41,21 +39,21 @@ const xdsScheme = "xds"
 // the same time.
 func NewBuilder(config []byte) (resolver.Builder, error) {
 	return &xdsResolverBuilder{
-		newXDSClient: func() (xdsClient, error) {
+		newXDSClient: func() (xdsclient.XDSClient, error) {
 			return xdsclient.NewClientWithBootstrapContents(config)
 		},
 	}, nil
 }
 
 // For overriding in unittests.
-var newXDSClient = func() (xdsClient, error) { return xdsclient.New() }
+var newXDSClient = func() (xdsclient.XDSClient, error) { return xdsclient.New() }
 
 func init() {
 	resolver.Register(&xdsResolverBuilder{})
 }
 
 type xdsResolverBuilder struct {
-	newXDSClient func() (xdsClient, error)
+	newXDSClient func() (xdsclient.XDSClient, error)
 }
 
 // Build helps implement the resolver.Builder interface.
@@ -119,15 +117,6 @@ func (*xdsResolverBuilder) Scheme() string {
 	return xdsScheme
 }
 
-// xdsClient contains methods from xdsClient.Client which are used by
-// the resolver. This will be faked out in unittests.
-type xdsClient interface {
-	WatchListener(serviceName string, cb func(xdsclient.ListenerUpdate, error)) func()
-	WatchRouteConfig(routeName string, cb func(xdsclient.RouteConfigUpdate, error)) func()
-	BootstrapConfig() *bootstrap.Config
-	Close()
-}
-
 // suWithError wraps the ServiceUpdate and error received through a watch API
 // callback, so that it can pushed onto the update channel as a single entity.
 type suWithError struct {
@@ -149,7 +138,7 @@ type xdsResolver struct {
 	logger *grpclog.PrefixLogger
 
 	// The underlying xdsClient which performs all xDS requests and responses.
-	client xdsClient
+	client xdsclient.XDSClient
 	// A channel for the watch API callback to write service updates on to. The
 	// updates are read by the run goroutine and passed on to the ClientConn.
 	updateCh chan suWithError
@@ -196,14 +185,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 	state := iresolver.SetConfigSelector(resolver.State{
 		ServiceConfig: r.cc.ParseServiceConfig(string(sc)),
 	}, cs)
-
-	// Include the xds client for the LB policies to use.  For unit tests,
-	// r.client may not be a full *xdsclient.Client, but it will always be in
-	// production.
-	if c, ok := r.client.(*xdsclient.Client); ok {
-		state = xdsclient.SetClient(state, c)
-	}
-	r.cc.UpdateState(state)
+	r.cc.UpdateState(xdsclient.SetClient(state, r.client))
 	return true
 }
 

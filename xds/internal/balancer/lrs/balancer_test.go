@@ -35,6 +35,7 @@ import (
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
 const defaultTestTimeout = 1 * time.Second
@@ -55,9 +56,7 @@ var (
 // server (empty string).
 func TestLoadReporting(t *testing.T) {
 	xdsC := fakeclient.NewClient()
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsClient, error) { return xdsC, nil }
-	defer func() { newXDSClient = oldNewXDSClient }()
+	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
@@ -65,9 +64,7 @@ func TestLoadReporting(t *testing.T) {
 	defer lrsB.Close()
 
 	if err := lrsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Addresses: testBackendAddrs,
-		},
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
 			ClusterName:             testClusterName,
 			EDSServiceName:          testServiceName,

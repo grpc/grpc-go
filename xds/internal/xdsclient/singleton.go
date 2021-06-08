@@ -32,18 +32,14 @@ const defaultWatchExpiryTimeout = 15 * time.Second
 
 // This is the Client returned by New(). It contains one client implementation,
 // and maintains the refcount.
-var singletonClient = &Client{}
+var singletonClient = &clientRefCounted{}
 
 // To override in tests.
 var bootstrapNewConfig = bootstrap.NewConfig
 
-// Client is a full fledged gRPC client which queries a set of discovery APIs
-// (collectively termed as xDS) on a remote management server, to discover
-// various dynamic resources.
-//
-// The xds client is a singleton. It will be shared by the xds resolver and
+// clientRefCounted is ref-counted, and to be shared by the xds resolver and
 // balancer implementations, across multiple ClientConns and Servers.
-type Client struct {
+type clientRefCounted struct {
 	*clientImpl
 
 	// This mu protects all the fields, including the embedded clientImpl above.
@@ -60,7 +56,18 @@ type Client struct {
 // Note that the first invocation of New() or NewWithConfig() sets the client
 // singleton. The following calls will return the singleton xds client without
 // checking or using the config.
-func New() (*Client, error) {
+func New() (XDSClient, error) {
+	// This cannot just return newRefCounted(), because in error cases, the
+	// returned nil is a typed nil (*clientRefCounted), which may cause nil
+	// checks fail.
+	c, err := newRefCounted()
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func newRefCounted() (*clientRefCounted, error) {
 	singletonClient.mu.Lock()
 	defer singletonClient.mu.Unlock()
 	// If the client implementation was created, increment ref count and return
@@ -96,7 +103,7 @@ func New() (*Client, error) {
 //
 // This function is internal only, for c2p resolver and testing to use. DO NOT
 // use this elsewhere. Use New() instead.
-func NewWithConfig(config *bootstrap.Config) (*Client, error) {
+func NewWithConfig(config *bootstrap.Config) (XDSClient, error) {
 	singletonClient.mu.Lock()
 	defer singletonClient.mu.Unlock()
 	// If the client implementation was created, increment ref count and return
@@ -120,7 +127,7 @@ func NewWithConfig(config *bootstrap.Config) (*Client, error) {
 // Close closes the client. It does ref count of the xds client implementation,
 // and closes the gRPC connection to the management server when ref count
 // reaches 0.
-func (c *Client) Close() {
+func (c *clientRefCounted) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.refCount--
@@ -136,18 +143,18 @@ func (c *Client) Close() {
 //
 // Note that this function doesn't set the singleton, so that the testing states
 // don't leak.
-func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout time.Duration) (*Client, error) {
+func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout time.Duration) (XDSClient, error) {
 	cl, err := newWithConfig(config, watchExpiryTimeout)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{clientImpl: cl, refCount: 1}, nil
+	return &clientRefCounted{clientImpl: cl, refCount: 1}, nil
 }
 
 // NewClientWithBootstrapContents returns an xds client for this config,
 // separate from the global singleton.  This should be used for testing
 // purposes only.
-func NewClientWithBootstrapContents(contents []byte) (*Client, error) {
+func NewClientWithBootstrapContents(contents []byte) (XDSClient, error) {
 	// Normalize the contents
 	buf := bytes.Buffer{}
 	err := json.Indent(&buf, contents, "", "")
@@ -180,12 +187,12 @@ func NewClientWithBootstrapContents(contents []byte) (*Client, error) {
 		return nil, err
 	}
 
-	c := &Client{clientImpl: cImpl, refCount: 1}
+	c := &clientRefCounted{clientImpl: cImpl, refCount: 1}
 	clients[string(contents)] = c
 	return c, nil
 }
 
 var (
-	clients   = map[string]*Client{}
+	clients   = map[string]*clientRefCounted{}
 	clientsMu sync.Mutex
 )
