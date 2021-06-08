@@ -1278,7 +1278,10 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			return fmt.Sprint(fc)
 		}),
 	}
-
+	
+	oldRingHashSupport := env.RingHashSupport
+	env.RingHashSupport = true
+	defer func() { env.RingHashSupport = oldRingHashSupport }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			oldFI := env.FaultInjectionSupport
@@ -1395,6 +1398,9 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 		},
 	}
 
+	oldRingHashSupport := env.RingHashSupport
+	env.RingHashSupport = true
+	defer func() { env.RingHashSupport = oldRingHashSupport }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := hashPoliciesProtoToSlice(tt.hashPolicies)

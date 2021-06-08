@@ -40,6 +40,7 @@ const (
 	BootstrapFileContentEnv = "GRPC_XDS_BOOTSTRAP_CONFIG"
 
 	circuitBreakingSupportEnv    = "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING"
+	ringHashSupportEnv           = "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH"
 	timeoutSupportEnv            = "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT"
 	faultInjectionSupportEnv     = "GRPC_XDS_EXPERIMENTAL_FAULT_INJECTION"
 	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
@@ -67,6 +68,10 @@ var (
 	// enabled, which can be disabled by setting the environment variable
 	// "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING" to "false".
 	CircuitBreakingSupport = !strings.EqualFold(os.Getenv(circuitBreakingSupportEnv), "false")
+	// RingHashSupport indicates whether ring hash support is enabled, which can
+	// be disabled by setting the environment variable
+	// "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH" to "false".
+	RingHashSupport = !strings.EqualFold(os.Getenv(ringHashSupportEnv), "false")
 	// TimeoutSupport indicates whether support for max_stream_duration in
 	// route actions is enabled.  This can be disabled by setting the
 	// environment variable "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT" to "false".

@@ -571,6 +571,10 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy) ([]*HashPolicy, error) {
 	var hashPoliciesRet []*HashPolicy
 	for _, p := range policies {
+		// Hash Policies are only applicable for a Ring Hash LB.
+		if !env.RingHashSupport {
+			return nil, errors.New("hash policies are only applicable for ring hash lb policy")
+		}
 		var policy HashPolicy
 		policy.Terminal = p.Terminal
 		switch p.GetPolicySpecifier().(type) {
