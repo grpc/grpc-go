@@ -345,7 +345,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		mdata      = make(map[string][]string)
 		httpMethod string
 		// headerError is set if an error is encountered while parsing the headers
-		headerError bool
+		headerError error
 
 		timeoutSet bool
 		timeout    time.Duration
@@ -371,7 +371,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			timeoutSet = true
 			var err error
 			if timeout, err = decodeTimeout(hf.Value); err != nil {
-				headerError = true
+				headerError = err
 			}
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
@@ -379,22 +379,12 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			}
 			v, err := decodeMetadataHeader(hf.Name, hf.Value)
 			if err != nil {
-				headerError = true
+				headerError = err
 				logger.Warningf("Failed to decode metadata header (%q, %q): %v", hf.Name, hf.Value, err)
 				break
 			}
 			mdata[hf.Name] = append(mdata[hf.Name], v)
 		}
-	}
-
-	if frame.StreamEnded() && !isGRPC || headerError {
-		t.controlBuf.put(&cleanupStream{
-			streamID: streamID,
-			rst:      true,
-			rstCode:  http2.ErrCodeNo,
-			onWrite:  func() {},
-		})
-		return false
 	}
 
 	if !isGRPC {
@@ -408,15 +398,13 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return false
 	}
 
-	if headerError {
-		t.controlBuf.put(&headerFrame{
-			streamID: streamID,
-			hf: []hpack.HeaderField{
-				{Name: "content-type", Value: "application/grpc"},
-				{Name: "grpc-status", Value: codes.Internal.String()},
-			},
-			endStream: true,
-		})
+	if headerError != nil {
+		if err := t.WriteStatus(
+			s,
+			status.Newf(codes.Internal, "transport: http2Server.operateHeaders failed parse headers: %v", headerError),
+		); err != nil && logger.V(logLevel) {
+			logger.Errorf("transport: http2Server.operateHeaders failed to write status %v", err)
+		}
 		return false
 	}
 
