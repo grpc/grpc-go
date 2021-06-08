@@ -1278,7 +1278,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			return fmt.Sprint(fc)
 		}),
 	}
-	
 	oldRingHashSupport := env.RingHashSupport
 	env.RingHashSupport = true
 	defer func() { env.RingHashSupport = oldRingHashSupport }()
@@ -1304,7 +1303,7 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 		name             string
 		hashPolicies     []*v3routepb.RouteAction_HashPolicy
 		wantHashPolicies []*HashPolicy
-		wantErr bool
+		wantErr          bool
 	}{
 		// header-hash-policy tests a basic hash policy that specifies to hash a
 		// certain header.
