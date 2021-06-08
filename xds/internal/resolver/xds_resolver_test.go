@@ -281,6 +281,20 @@ func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	}
 }
 
+// TestXDSResolverCloseClosesXDSClient tests that the XDS resolver's Close
+// method closes the XDS client.
+func (s) TestXDSResolverCloseClosesXDSClient(t *testing.T) {
+	xdsC := fakeclient.NewClient()
+	xdsR, _, cancel := testSetup(t, setupOpts{
+		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
+	})
+	defer cancel()
+	xdsR.Close()
+	if !xdsC.Closed.HasFired() {
+		t.Fatalf("xds client not closed by xds resolver Close method")
+	}
+}
+
 // TestXDSResolverBadServiceUpdate tests the case the xdsClient returns a bad
 // service update.
 func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
