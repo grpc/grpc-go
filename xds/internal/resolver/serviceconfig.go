@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -165,7 +164,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 
 	config := &iresolver.RPCConfig{
 		// Communicate to the LB policy the chosen cluster.
-		Context: clustermanager.SetPickedClusterAndRequestHash(rpcInfo.Context, cluster.name, cs.generateHash(rpcInfo, rt.hashPolicies)),
+		Context: SetPickedClusterAndRequestHash(rpcInfo.Context, cluster.name, cs.generateHash(rpcInfo, rt.hashPolicies)),
 		OnCommitted: func() {
 			// When the RPC is committed, the cluster is no longer required.
 			// Decrease its ref.
@@ -186,6 +185,50 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	return config, nil
+}
+
+func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies []*xdsclient.HashPolicy) uint64 {
+	var hash uint64
+	var generatedHash bool
+	for _, policy := range hashPolicies {
+		var policyHash uint64
+		var generatedPolicyHash bool
+		switch policy.HashPolicyType {
+		case xdsclient.HashPolicyTypeHeader:
+			if value := rpcInfo.Context.Value(policy.HeaderName); value != nil {
+				// newValue := policy.Regex.ReplaceAllString(fmt.Sprintf("%v", value), policy.RegexSubstitution)
+				// policyHash = xxhash.Sum64String(newValue)
+				generatedHash = true
+			}
+			// If header isn't present, no-op.
+		case xdsclient.HashPolicyTypeChannelID:
+			// Hash the ClientConn pointer which logically uniquely
+			// identifies the client.
+			// policyHash = xxhash.Sum64(*(*[]byte)(unsafe.Pointer(&cs.r.cc)))
+			generatedHash = true
+		}
+
+		// Deterministically combine the hash policies. Rotating prevents
+		// duplicate hash policies from cancelling each other out and preserves
+		// the 64 bits of entropy.
+		if generatedPolicyHash {
+			hash = bits.RotateLeft64(hash, 1)
+			hash = hash ^ policyHash
+		}
+
+		// If terminal policy and a hash has already been generated, ignore the
+		// rest of the policies and use that hash already generated.
+		if policy.Terminal && generatedHash {
+			break
+		}
+	}
+
+	if generatedHash {
+		return hash
+	}
+	// If no generated hash return a random long. In the grand scheme of things
+	// this logically will map to choosing a random backend to route request to.
+	return rand.Uint64()
 }
 
 func (cs *configSelector) newInterceptor(rt *route, cluster *routeCluster) (iresolver.ClientInterceptor, error) {
@@ -251,50 +294,6 @@ func (cs *configSelector) stop() {
 
 // A global for testing.
 var newWRR = wrr.NewRandom
-
-func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies []*xdsclient.HashPolicy) uint64 {
-	var hash uint64
-	var generatedHash bool
-	for _, policy := range hashPolicies {
-		var policyHash uint64
-		var generatedPolicyHash bool
-		switch policy.HashPolicyType {
-		case xdsclient.HashPolicyTypeHeader:
-			if value := rpcInfo.Context.Value(policy.HeaderName); value != nil {
-				// newValue := policy.Regex.ReplaceAllString(fmt.Sprintf("%v", value), policy.RegexSubstitution)
-				// policyHash = xxhash.Sum64String(newValue)
-				generatedHash = true
-			}
-			// If header isn't present, no-op.
-		case xdsclient.HashPolicyTypeChannelID:
-			// Hash the ClientConn pointer which logically uniquely
-			// identifies the client.
-			// policyHash = xxhash.Sum64(*(*[]byte)(unsafe.Pointer(&cs.r.cc)))
-			generatedHash = true
-		}
-
-		// Deterministically combine the hash policies. Rotating prevents
-		// duplicate hash policies from cancelling each other out and preserves
-		// the 64 bits of entropy.
-		if generatedPolicyHash {
-			hash = bits.RotateLeft64(hash, 1)
-			hash = hash ^ policyHash
-		}
-
-		// If terminal policy and a hash has already been generated, ignore the
-		// rest of the policies and use that hash already generated.
-		if policy.Terminal && generatedHash {
-			break
-		}
-	}
-
-	if generatedHash {
-		return hash
-	}
-	// If no generated hash return a random long. In the grand scheme of things
-	// this logically will map to choosing a random backend to route request to.
-	return rand.Uint64()
-}
 
 // newConfigSelector creates the config selector for su; may add entries to
 // r.activeClusters for previously-unseen clusters.
@@ -370,4 +369,34 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 		}
 	}
 	return newStream(ctx, func() {})
+}
+
+type clusterKey struct{}
+
+func GetPickedCluster(ctx context.Context) string {
+	return ctx.Value(clusterKey{}).(clusterInfoForLB).clusterName
+}
+
+func GetRequestHash(ctx context.Context) uint64 {
+	return ctx.Value(clusterKey{}).(clusterInfoForLB).requestHash
+}
+
+// GetPickedClusterForTesting returns the cluster in the context; to be used
+// for testing only.
+func GetPickedClusterForTesting(ctx context.Context) string {
+	return GetPickedCluster(ctx)
+}
+
+type clusterInfoForLB struct {
+	clusterName string
+	requestHash uint64
+}
+
+// SetPickedClusterAndRequestHash adds the selected cluster to the context for the
+// xds_cluster_manager LB policy to pick.
+func SetPickedClusterAndRequestHash(ctx context.Context, cluster string, requestHash uint64) context.Context {
+	return context.WithValue(ctx, clusterKey{}, clusterInfoForLB{
+		clusterName: cluster,
+		requestHash: requestHash,
+	})
 }

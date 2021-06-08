@@ -19,11 +19,10 @@
 package clustermanager
 
 import (
-	"context"
-
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal/resolver"
 )
 
 // pickerGroup contains a list of pickers. If the picker isn't ready, the pick
@@ -43,39 +42,9 @@ func newPickerGroup(idToPickerState map[string]*subBalancerState) *pickerGroup {
 }
 
 func (pg *pickerGroup) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	cluster := getPickedCluster(info.Ctx)
+	cluster := resolver.GetPickedCluster(info.Ctx)
 	if p := pg.pickers[cluster]; p != nil {
 		return p.Pick(info)
 	}
 	return balancer.PickResult{}, status.Errorf(codes.Unavailable, "unknown cluster selected for RPC: %q", cluster)
-}
-
-type clusterKey struct{}
-
-func getPickedCluster(ctx context.Context) string {
-	return ctx.Value(clusterKey{}).(clusterInfo).clusterName
-}
-
-func getRequestHash(ctx context.Context) uint64 {
-	return ctx.Value(clusterKey{}).(clusterInfo).requestHash
-}
-
-// GetPickedClusterForTesting returns the cluster in the context; to be used
-// for testing only.
-func GetPickedClusterForTesting(ctx context.Context) string {
-	return getPickedCluster(ctx)
-}
-
-type clusterInfo struct {
-	clusterName string
-	requestHash uint64
-}
-
-// SetPickedClusterAndRequestHash adds the selected cluster to the context for the
-// xds_cluster_manager LB policy to pick.
-func SetPickedClusterAndRequestHash(ctx context.Context, cluster string, requestHash uint64) context.Context {
-	return context.WithValue(ctx, clusterKey{}, clusterInfo{
-		clusterName: cluster,
-		requestHash: requestHash,
-	})
 }
