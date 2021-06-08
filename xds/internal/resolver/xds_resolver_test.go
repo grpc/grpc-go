@@ -286,7 +286,7 @@ func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 func (s) TestXDSResolverCloseClosesXDSClient(t *testing.T) {
 	xdsC := fakeclient.NewClient()
 	xdsR, _, cancel := testSetup(t, setupOpts{
-		xdsClientFunc: func() (xdsClient, error) { return xdsC, nil },
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
 	})
 	defer cancel()
 	xdsR.Close()
