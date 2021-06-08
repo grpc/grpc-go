@@ -57,6 +57,17 @@ type clientRefCounted struct {
 // singleton. The following calls will return the singleton xds client without
 // checking or using the config.
 func New() (XDSClient, error) {
+	// This cannot just return newRefCounted(), because in error cases, the
+	// returned nil is a typed nil (*clientRefCounted), which may cause nil
+	// checks fail.
+	c, err := newRefCounted()
+	if err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+func newRefCounted() (*clientRefCounted, error) {
 	singletonClient.mu.Lock()
 	defer singletonClient.mu.Unlock()
 	// If the client implementation was created, increment ref count and return

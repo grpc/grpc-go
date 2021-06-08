@@ -263,11 +263,11 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	defer cleanup()
 
 	// The first New(). Should create a Client and a new APIClient.
-	client, err := New()
+	client, err := newRefCounted()
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
-	clientImpl := client.(*clientRefCounted).clientImpl
+	clientImpl := client.clientImpl
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	c, err := apiClientCh.Receive(ctx)
@@ -280,15 +280,15 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	// and should not create new API client.
 	const count = 9
 	for i := 0; i < count; i++ {
-		tc, terr := New()
+		tc, terr := newRefCounted()
 		if terr != nil {
 			client.Close()
 			t.Fatalf("%d-th call to New() failed with error: %v", i, terr)
 		}
-		if tc.(*clientRefCounted).clientImpl != clientImpl {
+		if tc.clientImpl != clientImpl {
 			client.Close()
 			tc.Close()
-			t.Fatalf("%d-th call to New() got a different client %p, want %p", i, tc.(*clientRefCounted).clientImpl, clientImpl)
+			t.Fatalf("%d-th call to New() got a different client %p, want %p", i, tc.clientImpl, clientImpl)
 		}
 
 		sctx, scancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -324,7 +324,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 
 	// Call New() again after the previous Client is actually closed. Should
 	// create a Client and a new APIClient.
-	client2, err2 := New()
+	client2, err2 := newRefCounted()
 	if err2 != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -339,8 +339,8 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	if client2 != client {
 		t.Fatalf("New() after Close() should return the same client wrapper, got different %p, %p", client2, client)
 	}
-	if client2.(*clientRefCounted).clientImpl == clientImpl {
-		t.Fatalf("New() after Close() should return different client implementation, got the same %p", client2.(*clientRefCounted).clientImpl)
+	if client2.clientImpl == clientImpl {
+		t.Fatalf("New() after Close() should return different client implementation, got the same %p", client2.clientImpl)
 	}
 	if apiClient2 == apiClient {
 		t.Fatalf("New() after Close() should return different API client, got the same %p", apiClient2)
