@@ -22,6 +22,7 @@ package clusterimpl
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -34,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
+	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -158,6 +160,9 @@ func TestDropByCategory(t *testing.T) {
 		Service:    testServiceName,
 		TotalDrops: dropCount,
 		Drops:      map[string]uint64{dropReason: dropCount},
+		LocalityStats: map[string]load.LocalityData{
+			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{Succeeded: rpcCount - dropCount}},
+		},
 	}}
 
 	gotStatsData0 := loadStore.Stats([]string{testClusterName})
@@ -213,6 +218,9 @@ func TestDropByCategory(t *testing.T) {
 		Service:    testServiceName,
 		TotalDrops: dropCount2,
 		Drops:      map[string]uint64{dropReason2: dropCount2},
+		LocalityStats: map[string]load.LocalityData{
+			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{Succeeded: rpcCount - dropCount2}},
+		},
 	}}
 
 	gotStatsData1 := loadStore.Stats([]string{testClusterName})
@@ -320,6 +328,9 @@ func TestDropCircuitBreaking(t *testing.T) {
 		Cluster:    testClusterName,
 		Service:    testServiceName,
 		TotalDrops: uint64(maxRequest),
+		LocalityStats: map[string]load.LocalityData{
+			assertString(xdsinternal.LocalityID{}.ToString): {RequestStats: load.RequestData{Succeeded: uint64(rpcCount - maxRequest + 50)}},
+		},
 	}}
 
 	gotStatsData0 := loadStore.Stats([]string{testClusterName})
@@ -532,4 +543,118 @@ func TestReResolution(t *testing.T) {
 	case <-time.After(defaultTestTimeout):
 		t.Fatalf("timeout waiting for ResolveNow()")
 	}
+}
+
+func TestLoadReporting(t *testing.T) {
+	var testLocality = xdsinternal.LocalityID{
+		Region:  "test-region",
+		Zone:    "test-zone",
+		SubZone: "test-sub-zone",
+	}
+
+	xdsC := fakeclient.NewClient()
+	defer xdsC.Close()
+
+	builder := balancer.Get(Name)
+	cc := testutils.NewTestClientConn(t)
+	b := builder.Build(cc, balancer.BuildOptions{})
+	defer b.Close()
+
+	addrs := make([]resolver.Address, len(testBackendAddrs))
+	for i, a := range testBackendAddrs {
+		addrs[i] = xdsinternal.SetLocalityID(a, testLocality)
+	}
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
+		BalancerConfig: &LBConfig{
+			Cluster:                 testClusterName,
+			EDSServiceName:          testServiceName,
+			LoadReportingServerName: newString(testLRSServerName),
+			// Locality:                testLocality,
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	got, err := xdsC.WaitForReportLoad(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
+	}
+	if got.Server != testLRSServerName {
+		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, testLRSServerName)
+	}
+
+	sc1 := <-cc.NewSubConnCh
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	// This should get the connecting picker.
+	p0 := <-cc.NewPickerCh
+	for i := 0; i < 10; i++ {
+		_, err := p0.Pick(balancer.PickInfo{})
+		if err != balancer.ErrNoSubConnAvailable {
+			t.Fatalf("picker.Pick, got _,%v, want Err=%v", err, balancer.ErrNoSubConnAvailable)
+		}
+	}
+
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	// Test pick with one backend.
+	p1 := <-cc.NewPickerCh
+	const successCount = 5
+	for i := 0; i < successCount; i++ {
+		gotSCSt, err := p1.Pick(balancer.PickInfo{})
+		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			t.Fatalf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
+		}
+		gotSCSt.Done(balancer.DoneInfo{})
+	}
+	const errorCount = 5
+	for i := 0; i < errorCount; i++ {
+		gotSCSt, err := p1.Pick(balancer.PickInfo{})
+		if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			t.Fatalf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
+		}
+		gotSCSt.Done(balancer.DoneInfo{Err: fmt.Errorf("error")})
+	}
+
+	// Dump load data from the store and compare with expected counts.
+	loadStore := xdsC.LoadStore()
+	if loadStore == nil {
+		t.Fatal("loadStore is nil in xdsClient")
+	}
+	sds := loadStore.Stats([]string{testClusterName})
+	if len(sds) == 0 {
+		t.Fatalf("loads for cluster %v not found in store", testClusterName)
+	}
+	sd := sds[0]
+	if sd.Cluster != testClusterName || sd.Service != testServiceName {
+		t.Fatalf("got unexpected load for %q, %q, want %q, %q", sd.Cluster, sd.Service, testClusterName, testServiceName)
+	}
+	testLocalityJSON, _ := testLocality.ToString()
+	localityData, ok := sd.LocalityStats[testLocalityJSON]
+	if !ok {
+		t.Fatalf("loads for %v not found in store", testLocality)
+	}
+	reqStats := localityData.RequestStats
+	if reqStats.Succeeded != successCount {
+		t.Errorf("got succeeded %v, want %v", reqStats.Succeeded, successCount)
+	}
+	if reqStats.Errored != errorCount {
+		t.Errorf("got errord %v, want %v", reqStats.Errored, errorCount)
+	}
+	if reqStats.InProgress != 0 {
+		t.Errorf("got inProgress %v, want %v", reqStats.InProgress, 0)
+	}
+}
+
+func assertString(f func() (string, error)) string {
+	s, err := f()
+	if err != nil {
+		panic(err.Error())
+	}
+	return s
 }
