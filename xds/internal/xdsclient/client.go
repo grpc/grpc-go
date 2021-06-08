@@ -287,7 +287,7 @@ type HashPolicy struct {
 	Terminal       bool
 	// Fields used for type HEADER.
 	HeaderName        string
-	Regex             string
+	Regex             *regexp.Regexp
 	RegexSubstitution string
 }
 

@@ -499,8 +499,14 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 		}
 
 		route.WeightedClusters = make(map[string]WeightedCluster)
+
 		action := r.GetRoute()
-		route.HashPolicies = hashPoliciesProtoToSlice(action.HashPolicy)
+		hp, err := hashPoliciesProtoToSlice(action.HashPolicy)
+		if err != nil {
+			return nil, err
+		}
+		route.HashPolicies = hp
+
 		switch a := action.GetClusterSpecifier().(type) {
 		case *v3routepb.RouteAction_Cluster:
 			route.WeightedClusters[a.Cluster] = WeightedCluster{Weight: 1}
@@ -562,7 +568,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 	return routesRet, nil
 }
 
-func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy) []*HashPolicy {
+func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy) ([]*HashPolicy, error) {
 	var hashPoliciesRet []*HashPolicy
 	for _, p := range policies {
 		var policy HashPolicy
@@ -571,22 +577,25 @@ func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy) []*H
 		case *v3routepb.RouteAction_HashPolicy_Header_:
 			policy.HashPolicyType = HashPolicyTypeHeader
 			policy.HeaderName = p.GetHeader().HeaderName
-			policy.Regex = p.GetHeader().GetRegexRewrite().GetPattern().Regex
+			regex := p.GetHeader().GetRegexRewrite().GetPattern().Regex
+			re, err := regexp.Compile(regex)
+			if err != nil {
+				return nil, fmt.Errorf("hash policy %+v contains an invalid regex %q", p, regex)
+			}
+			policy.Regex = re
 			policy.RegexSubstitution = p.GetHeader().GetRegexRewrite().Substitution
-		// ConnectionProperties in Envoy specifies to hash the source ip
-		// address. In grpc, this is logically equivalent to hashing the
-		// channel pointer.
-		case *v3routepb.RouteAction_HashPolicy_ConnectionProperties_:
+		case *v3routepb.RouteAction_HashPolicy_FilterState_:
+			if p.GetFilterState().GetKey() != "io.grpc.channel_id" {
+				return nil, fmt.Errorf("hash policy %+v contains an invalid key for filter state policy %q", p, p.GetFilterState().GetKey())
+			}
 			policy.HashPolicyType = HashPolicyTypeChannelID
 		default:
-			// In the case where the hash policy action isn't to hash the header
-			// or the unique identifier of the channel, ignore the field in the
-			// update and treat as a no-op.
+			return nil, fmt.Errorf("hash policy %v is an unsupported hash policy", p)
 		}
 
 		hashPoliciesRet = append(hashPoliciesRet, &policy)
 	}
-	return hashPoliciesRet
+	return hashPoliciesRet, nil
 }
 
 // UnmarshalCluster processes resources received in an CDS response, validates

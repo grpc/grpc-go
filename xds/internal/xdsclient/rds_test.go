@@ -1200,7 +1200,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
 								}},
 							HashPolicy: []*v3routepb.RouteAction_HashPolicy{
-								{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_ConnectionProperties_{}},
+								{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{FilterState: &v3routepb.RouteAction_HashPolicy_FilterState{Key: "io.grpc.channel_id"}}},
 							},
 						}},
 				},
@@ -1301,6 +1301,7 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 		name             string
 		hashPolicies     []*v3routepb.RouteAction_HashPolicy
 		wantHashPolicies []*HashPolicy
+		wantErr bool
 	}{
 		// header-hash-policy tests a basic hash policy that specifies to hash a
 		// certain header.
@@ -1323,7 +1324,7 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 				{
 					HashPolicyType:    HashPolicyTypeHeader,
 					HeaderName:        ":path",
-					Regex:             "/products",
+					Regex:             func() *regexp.Regexp { return regexp.MustCompile("/products") }(),
 					RegexSubstitution: "/products",
 				},
 			},
@@ -1333,20 +1334,29 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 		{
 			name: "channel-id-hash-policy",
 			hashPolicies: []*v3routepb.RouteAction_HashPolicy{
-				{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_ConnectionProperties_{}},
+				{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{FilterState: &v3routepb.RouteAction_HashPolicy_FilterState{Key: "io.grpc.channel_id"}}},
 			},
 			wantHashPolicies: []*HashPolicy{
 				{HashPolicyType: HashPolicyTypeChannelID},
 			},
 		},
+		// unsupported-filter-state-key tests that an unsupported key in the
+		// filter state hash policy raises an error.
+		{
+			name: "wrong-filter-state-key",
+			hashPolicies: []*v3routepb.RouteAction_HashPolicy{
+				{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{FilterState: &v3routepb.RouteAction_HashPolicy_FilterState{Key: "unsupported key"}}},
+			},
+			wantErr: true,
+		},
 		// no-op-hash-policy tests that hash policies that are not supported by
-		// grpc currently are ignored.
+		// grpc raise an error.
 		{
 			name: "no-op-hash-policy",
 			hashPolicies: []*v3routepb.RouteAction_HashPolicy{
 				{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{}},
 			},
-			wantHashPolicies: []*HashPolicy{{}},
+			wantErr: true,
 		},
 		// header-and-channel-id-hash-policy test that a list of header and
 		// channel id hash policies are successfully converted to an internal
@@ -1366,7 +1376,7 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 					},
 				},
 				{
-					PolicySpecifier: &v3routepb.RouteAction_HashPolicy_ConnectionProperties_{},
+					PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{FilterState: &v3routepb.RouteAction_HashPolicy_FilterState{Key: "io.grpc.channel_id"}},
 					Terminal:        true,
 				},
 			},
@@ -1374,7 +1384,7 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 				{
 					HashPolicyType:    HashPolicyTypeHeader,
 					HeaderName:        ":path",
-					Regex:             "/products",
+					Regex:             func() *regexp.Regexp { return regexp.MustCompile("/products") }(),
 					RegexSubstitution: "/products",
 				},
 				{
@@ -1387,8 +1397,11 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := hashPoliciesProtoToSlice(tt.hashPolicies)
-			if diff := cmp.Diff(got, tt.wantHashPolicies); diff != "" {
+			got, err := hashPoliciesProtoToSlice(tt.hashPolicies)
+			if err != nil && !tt.wantErr {
+				t.Fatalf("Error returned when no error desired.")
+			}
+			if diff := cmp.Diff(got, tt.wantHashPolicies, cmp.AllowUnexported(regexp.Regexp{})); diff != "" {
 				t.Fatalf("hashPoliciesProtoToSlice returned returned unexpected diff (-got +want):\n%s", diff)
 			}
 		})
