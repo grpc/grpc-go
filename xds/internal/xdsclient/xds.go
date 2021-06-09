@@ -178,7 +178,7 @@ func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool) (httpfilter.Fi
 }
 
 func processHTTPFilterOverrides(cfgs map[string]*anypb.Any) (map[string]httpfilter.FilterConfig, error) {
-	if !env.FaultInjectionSupport || len(cfgs) == 0 {
+	if len(cfgs) == 0 {
 		return nil, nil
 	}
 	m := make(map[string]httpfilter.FilterConfig)
@@ -207,10 +207,6 @@ func processHTTPFilterOverrides(cfgs map[string]*anypb.Any) (map[string]httpfilt
 }
 
 func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilter, error) {
-	if !env.FaultInjectionSupport {
-		return nil, nil
-	}
-
 	ret := make([]HTTPFilter, 0, len(filters))
 	seenNames := make(map[string]bool, len(filters))
 	for _, filter := range filters {
@@ -776,9 +772,6 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*Secu
 // the received cluster resource. Returns nil if no CircuitBreakers or no
 // Thresholds in CircuitBreakers.
 func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) *uint32 {
-	if !env.CircuitBreakingSupport {
-		return nil
-	}
 	for _, threshold := range cluster.GetCircuitBreakers().GetThresholds() {
 		if threshold.GetPriority() != v3corepb.RoutingPriority_DEFAULT {
 			continue

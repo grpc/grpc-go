@@ -28,7 +28,6 @@ import (
 	"google.golang.org/grpc/codes"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/wrr"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/httpfilter"
@@ -179,7 +178,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		Interceptor: interceptor,
 	}
 
-	if env.TimeoutSupport && rt.maxStreamDuration != 0 {
+	if rt.maxStreamDuration != 0 {
 		config.MethodConfig.Timeout = &rt.maxStreamDuration
 	}
 

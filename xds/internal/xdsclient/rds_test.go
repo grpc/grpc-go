@@ -29,7 +29,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -88,7 +87,6 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		rc         *v3routepb.RouteConfiguration
 		wantUpdate RouteConfigUpdate
 		wantError  bool
-		disableFI  bool // disable fault injection
 	}{
 		{
 			name: "default-route-match-field-is-nil",
@@ -474,19 +472,10 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("unknown.custom.filter")}),
 			wantUpdate: goodUpdateWithFilterConfigs(nil),
 		},
-		{
-			name:       "good-route-config-with-http-err-filter-config-fi-disabled",
-			disableFI:  true,
-			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
-			wantUpdate: goodUpdateWithFilterConfigs(nil),
-		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			oldFI := env.FaultInjectionSupport
-			env.FaultInjectionSupport = !test.disableFI
-
 			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil, false)
 			if (gotError != nil) != test.wantError ||
 				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),
@@ -494,8 +483,6 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 						return fmt.Sprint(fc)
 					})) {
 				t.Errorf("generateRDSUpdateFromRouteConfiguration(%+v, %v) returned unexpected, diff (-want +got):\\n%s", test.rc, ldsTarget, cmp.Diff(test.wantUpdate, gotUpdate, cmpopts.EquateEmpty()))
-
-				env.FaultInjectionSupport = oldFI
 			}
 		})
 	}
@@ -815,7 +802,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 		routes     []*v3routepb.Route
 		wantRoutes []*Route
 		wantErr    bool
-		disableFI  bool // disable fault injection
 	}{
 		{
 			name: "no path",
@@ -1183,12 +1169,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
 		},
 		{
-			name:       "with custom HTTP filter config, FI disabled",
-			disableFI:  true,
-			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": customFilterConfig}),
-			wantRoutes: goodUpdateWithFilterConfigs(nil),
-		},
-		{
 			name:    "with erroring custom HTTP filter config",
 			routes:  goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
 			wantErr: true,
@@ -1197,12 +1177,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			name:    "with optional erroring custom HTTP filter config",
 			routes:  goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("err.custom.filter")}),
 			wantErr: true,
-		},
-		{
-			name:       "with erroring custom HTTP filter config, FI disabled",
-			disableFI:  true,
-			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
-			wantRoutes: goodUpdateWithFilterConfigs(nil),
 		},
 		{
 			name:    "with unknown custom HTTP filter config",
@@ -1226,10 +1200,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			oldFI := env.FaultInjectionSupport
-			env.FaultInjectionSupport = !tt.disableFI
-			defer func() { env.FaultInjectionSupport = oldFI }()
-
 			got, err := routesProtoToSlice(tt.routes, nil, false)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
