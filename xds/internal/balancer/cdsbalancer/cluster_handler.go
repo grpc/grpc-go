@@ -115,7 +115,6 @@ func (ch *clusterHandler) close() {
 	}
 	ch.root.delete()
 	ch.root = nil
-	ch.rootClusterName = ""
 }
 
 // This logically represents a cluster. This handles all the logic for starting

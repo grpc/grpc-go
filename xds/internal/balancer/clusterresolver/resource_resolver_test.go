@@ -62,14 +62,14 @@ func (s) TestResourceResolverOneEDSResource(t *testing.T) {
 	}{
 		{name: "watch EDS",
 			clusterName: testClusterName,
-			edsName:     testServiceName,
-			wantName:    testServiceName,
+			edsName:     testEDSServcie,
+			wantName:    testEDSServcie,
 			edsUpdate:   testEDSUpdates[0],
 			want: []balancerconfig.PriorityConfig{{
 				Mechanism: balancerconfig.DiscoveryMechanism{
 					Type:           balancerconfig.DiscoveryMechanismTypeEDS,
 					Cluster:        testClusterName,
-					EDSServiceName: testServiceName,
+					EDSServiceName: testEDSServcie,
 				},
 				EDSResp: testEDSUpdates[0],
 			}},
@@ -123,7 +123,7 @@ func (s) TestResourceResolverOneEDSResource(t *testing.T) {
 				t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
 			}
 			if edsNameCanceled != test.wantName {
-				t.Fatalf("xdsClient.CancelEDS called for %v, want: %v", edsNameCanceled, testServiceName)
+				t.Fatalf("xdsClient.CancelEDS called for %v, want: %v", edsNameCanceled, testEDSServcie)
 			}
 		})
 	}
@@ -224,7 +224,7 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{{
 		Type:           balancerconfig.DiscoveryMechanismTypeEDS,
 		Cluster:        testClusterName,
-		EDSServiceName: testServiceName,
+		EDSServiceName: testEDSServcie,
 	}})
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -232,8 +232,8 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
-	if gotEDSName1 != testServiceName {
-		t.Fatalf("xdsClient.WatchEDS called for cluster: %v, want: %v", gotEDSName1, testServiceName)
+	if gotEDSName1 != testEDSServcie {
+		t.Fatalf("xdsClient.WatchEDS called for cluster: %v, want: %v", gotEDSName1, testEDSServcie)
 	}
 
 	// Invoke callback, should get an update.
@@ -244,7 +244,7 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 			Mechanism: balancerconfig.DiscoveryMechanism{
 				Type:           balancerconfig.DiscoveryMechanismTypeEDS,
 				Cluster:        testClusterName,
-				EDSServiceName: testServiceName,
+				EDSServiceName: testEDSServcie,
 			},
 			EDSResp: testEDSUpdates[0],
 		}}); diff != "" {
@@ -264,7 +264,7 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 		t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
 	}
 	if edsNameCanceled1 != gotEDSName1 {
-		t.Fatalf("xdsClient.CancelEDS called for %v, want: %v", edsNameCanceled1, testServiceName)
+		t.Fatalf("xdsClient.CancelEDS called for %v, want: %v", edsNameCanceled1, testEDSServcie)
 	}
 	gotEDSName2, err := fakeClient.WaitForWatchEDS(ctx)
 	if err != nil {
