@@ -22,6 +22,7 @@ package fakeclient
 import (
 	"context"
 
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -31,6 +32,11 @@ import (
 // Client is a fake implementation of an xds client. It exposes a bunch of
 // channels to signal the occurrence of various events.
 type Client struct {
+	// Embed XDSClient so this fake client implements the interface, but it's
+	// never set (it's always nil). This may cause nil panic since not all the
+	// methods are implemented.
+	xdsclient.XDSClient
+
 	name         string
 	ldsWatchCh   *testutils.Channel
 	rdsWatchCh   *testutils.Channel
@@ -41,7 +47,6 @@ type Client struct {
 	cdsCancelCh  *testutils.Channel
 	edsCancelCh  *testutils.Channel
 	loadReportCh *testutils.Channel
-	closeCh      *testutils.Channel
 	loadStore    *load.Store
 	bootstrapCfg *bootstrap.Config
 
@@ -49,6 +54,8 @@ type Client struct {
 	rdsCb  func(xdsclient.RouteConfigUpdate, error)
 	cdsCbs map[string]func(xdsclient.ClusterUpdate, error)
 	edsCb  func(xdsclient.EndpointsUpdate, error)
+
+	Closed *grpcsync.Event // fired when Close is called.
 }
 
 // WatchListener registers a LDS watch.
@@ -228,16 +235,9 @@ func (xdsC *Client) WaitForReportLoad(ctx context.Context) (ReportLoadArgs, erro
 	return val.(ReportLoadArgs), err
 }
 
-// Close closes the xds client.
+// Close fires xdsC.Closed, indicating it was called.
 func (xdsC *Client) Close() {
-	xdsC.closeCh.Send(nil)
-}
-
-// WaitForClose waits for Close to be invoked on this client and returns
-// context.DeadlineExceeded otherwise.
-func (xdsC *Client) WaitForClose(ctx context.Context) error {
-	_, err := xdsC.closeCh.Receive(ctx)
-	return err
+	xdsC.Closed.Fire()
 }
 
 // BootstrapConfig returns the bootstrap config.
@@ -275,8 +275,8 @@ func NewClientWithName(name string) *Client {
 		cdsCancelCh:  testutils.NewChannelWithSize(10),
 		edsCancelCh:  testutils.NewChannel(),
 		loadReportCh: testutils.NewChannel(),
-		closeCh:      testutils.NewChannel(),
 		loadStore:    load.NewStore(),
 		cdsCbs:       make(map[string]func(xdsclient.ClusterUpdate, error)),
+		Closed:       grpcsync.NewEvent(),
 	}
 }

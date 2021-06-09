@@ -579,7 +579,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 
 // BootstrapConfig returns the configuration read from the bootstrap file.
 // Callers must treat the return value as read-only.
-func (c *Client) BootstrapConfig() *bootstrap.Config {
+func (c *clientRefCounted) BootstrapConfig() *bootstrap.Config {
 	return c.config
 }
 
