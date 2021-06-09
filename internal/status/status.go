@@ -152,7 +152,7 @@ func (e *Error) Error() string {
 
 // GRPCStatus returns the Status represented by se.
 func (e *Error) GRPCStatus() *Status {
-	return FromProto(e.s.s)
+	return e.s
 }
 
 // Is implements future error.Is functionality.
