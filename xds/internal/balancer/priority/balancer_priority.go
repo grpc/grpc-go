@@ -28,7 +28,8 @@ import (
 )
 
 var (
-	errAllPrioritiesRemoved = errors.New("no locality is provided, all priorities are removed")
+	// ErrAllPrioritiesRemoved is returned by the picker when there's no priority available.
+	ErrAllPrioritiesRemoved = errors.New("no priority is provided, all priorities are removed")
 	// DefaultPriorityInitTimeout is the timeout after which if a priority is
 	// not READY, the next will be started. It's exported to be overridden by
 	// tests.
@@ -73,7 +74,7 @@ func (b *priorityBalancer) syncPriority() {
 		b.stopPriorityInitTimer()
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: connectivity.TransientFailure,
-			Picker:            base.NewErrPicker(errAllPrioritiesRemoved),
+			Picker:            base.NewErrPicker(ErrAllPrioritiesRemoved),
 		})
 		return
 	}

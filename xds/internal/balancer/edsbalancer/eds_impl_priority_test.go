@@ -511,7 +511,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	// time.Sleep(time.Second)
 
 	// Test pick return TransientFailure.
-	if err := testErrPickerFromCh(cc.NewPickerCh, errAllPrioritiesRemoved); err != nil {
+	if err := testErrPickerFromCh(cc.NewPickerCh, priority.ErrAllPrioritiesRemoved); err != nil {
 		t.Fatal(err)
 	}
 

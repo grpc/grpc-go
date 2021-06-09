@@ -20,7 +20,6 @@ package edsbalancer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"testing"
@@ -35,13 +34,12 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
+	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
-
-var errAllPrioritiesRemoved = errors.New("no locality is provided, all priorities are removed")
 
 var (
 	testClusterNames  = []string{"test-cluster-1", "test-cluster-2"}
@@ -405,7 +403,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	// The first update is an empty update.
 	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
 	// Pick should fail with transient failure, and all priority removed error.
-	if err := testErrPickerFromCh(cc.NewPickerCh, errAllPrioritiesRemoved); err != nil {
+	if err := testErrPickerFromCh(cc.NewPickerCh, priority.ErrAllPrioritiesRemoved); err != nil {
 		t.Fatal(err)
 	}
 
@@ -425,7 +423,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 
 	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
 	// Pick should fail with transient failure, and all priority removed error.
-	if err := testErrPickerFromCh(cc.NewPickerCh, errAllPrioritiesRemoved); err != nil {
+	if err := testErrPickerFromCh(cc.NewPickerCh, priority.ErrAllPrioritiesRemoved); err != nil {
 		t.Fatal(err)
 	}
 

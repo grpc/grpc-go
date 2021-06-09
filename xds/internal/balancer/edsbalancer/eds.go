@@ -118,10 +118,10 @@ type scUpdate struct {
 //
 // It currently has only an edsBalancer. Later, we may add fallback.
 type edsBalancer struct {
-	cc         balancer.ClientConn   // ClientConn interface passed to child LB.
-	bOpts      balancer.BuildOptions // BuildOptions passed to child LB.
-	updateCh   *buffer.Unbounded     // Channel for gRPC and xdsClient updates.
-	edsWatcher *edsWatcher           // EDS watcher to watch EDS resource.
+	cc         balancer.ClientConn
+	bOpts      balancer.BuildOptions
+	updateCh   *buffer.Unbounded // Channel for updates from gRPC.
+	edsWatcher *edsWatcher
 	logger     *grpclog.PrefixLogger
 	closed     *grpcsync.Event
 	done       *grpcsync.Event
@@ -154,7 +154,6 @@ func (b *edsBalancer) handleClientConnUpdate(update *ccUpdate) {
 	cfg, _ := update.state.BalancerConfig.(*EDSConfig)
 	if cfg == nil {
 		b.logger.Warningf("xds: unexpected LoadBalancingConfig type: %T", update.state.BalancerConfig)
-		// service config parsing failed. should never happen.
 		return
 	}
 
@@ -209,15 +208,11 @@ func (b *edsBalancer) updateChildConfig() error {
 
 	childCfgBytes, addrs, err := buildPriorityConfigJSON(b.edsResp, b.config)
 	if err != nil {
-		err := fmt.Errorf("failed to build priority balancer config: %v", err)
-		b.logger.Warningf("%v", err)
-		return err
+		return fmt.Errorf("failed to build priority balancer config: %v", err)
 	}
 	childCfg, err := b.priorityConfigParser.ParseConfig(childCfgBytes)
 	if err != nil {
-		err = fmt.Errorf("failed to parse generated priority balancer config, this should never happen because the config is generated: %v", err)
-		b.logger.Warningf("%v", err)
-		return err
+		return fmt.Errorf("failed to parse generated priority balancer config, this should never happen because the config is generated: %v", err)
 	}
 	b.logger.Infof("build balancer config: %v", pretty.ToJSON(childCfg))
 	return b.child.UpdateClientConnState(balancer.ClientConnState{
@@ -285,8 +280,8 @@ func (b *edsBalancer) run() {
 		case u := <-b.edsWatcher.updateChannel:
 			b.handleWatchUpdate(u)
 
-		// Close results in cancellation of the CDS watch and closing of the
-		// underlying edsBalancer and is the only way to exit this goroutine.
+		// Close results in cancellation of the EDS watch and closing of the
+		// underlying child policy and is the only way to exit this goroutine.
 		case <-b.closed.Done():
 			b.edsWatcher.stopWatch()
 

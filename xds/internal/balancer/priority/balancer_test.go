@@ -828,8 +828,8 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 	// Test pick return TransientFailure.
 	pFail := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		if _, err := pFail.Pick(balancer.PickInfo{}); err != errAllPrioritiesRemoved {
-			t.Fatalf("want pick error %v, got %v", errAllPrioritiesRemoved, err)
+		if _, err := pFail.Pick(balancer.PickInfo{}); err != ErrAllPrioritiesRemoved {
+			t.Fatalf("want pick error %v, got %v", ErrAllPrioritiesRemoved, err)
 		}
 	}
 
@@ -1436,8 +1436,8 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 
 	pFail := <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		if _, err := pFail.Pick(balancer.PickInfo{}); err != errAllPrioritiesRemoved {
-			t.Fatalf("want pick error %v, got %v", errAllPrioritiesRemoved, err)
+		if _, err := pFail.Pick(balancer.PickInfo{}); err != ErrAllPrioritiesRemoved {
+			t.Fatalf("want pick error %v, got %v", ErrAllPrioritiesRemoved, err)
 		}
 	}
 

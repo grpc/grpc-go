@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	scpb "google.golang.org/grpc/internal/proto/grpc_service_config"
 	"google.golang.org/grpc/internal/testutils"
-	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal"
@@ -76,22 +75,6 @@ type s struct {
 	grpctest.Tester
 
 	cleanup func()
-}
-
-func (ss s) Setup(t *testing.T) {
-	ss.Tester.Setup(t)
-	// FIXME: delete this!!!
-	// Set up xds bootstrap file with an invalid ServerURI. We just need the
-	// file so that the child policies (cluster_impl and LRS) won't fail due to
-	// xds_client init error.
-	bootstrapCleanup, err := xdsinternal.SetupBootstrapFile(xdsinternal.BootstrapOptions{
-		Version:   xdsinternal.TransportV2,
-		ServerURI: "does.not.matter",
-	})
-	if err != nil {
-		t.Fatalf("failed to setup xds bootstrap file: %v", err)
-	}
-	ss.cleanup = bootstrapCleanup
 }
 
 func (ss s) Teardown(t *testing.T) {

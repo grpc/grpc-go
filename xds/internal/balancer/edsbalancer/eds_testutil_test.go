@@ -131,7 +131,7 @@ func testPickerFromCh(ch chan balancer.Picker, f func(balancer.Picker) error) er
 	for {
 		select {
 		case p = <-ch:
-		case <-time.After(time.Second):
+		case <-time.After(defaultTestTimeout):
 			return fmt.Errorf("timeout waiting for picker with expected behavior, error from previous picker: %v", err)
 		}
 
@@ -180,13 +180,3 @@ func testErrPickerFromCh(ch chan balancer.Picker, want error) error {
 		return nil
 	})
 }
-
-/*
-   if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1, sc2}); err != nil {
-       t.Fatal(err)
-   }
-
-   if err := testErrPickerFromCh(cc.NewPickerCh, testutils.ErrTestConstPicker); err != nil {
-       t.Fatal(err)
-   }
-*/

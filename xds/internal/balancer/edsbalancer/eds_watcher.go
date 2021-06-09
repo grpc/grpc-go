@@ -61,7 +61,6 @@ func (ew *edsWatcher) updateConfig(config *EDSConfig) {
 		ew.edsCancel()
 	}
 	cancelEDSWatch := ew.parent.xdsClient.WatchEndpoints(newEDSToWatch, func(update xdsclient.EndpointsUpdate, err error) {
-		// eb.updateCh.Put(&watchUpdate{eds: update, err: err})
 		select {
 		case <-ew.updateChannel:
 		default:
