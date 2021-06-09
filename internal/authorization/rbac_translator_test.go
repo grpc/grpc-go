@@ -21,6 +21,9 @@ package authz
 import (
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/testing/protocmp"
+
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
@@ -52,14 +55,10 @@ func TestTranslatePolicy(t *testing.T) {
 						{
 							"name": "allow_policy_1",
 							"source": {
-								"principals":[
-								"*"
-								]
+								"principals":["*"]
 							},
 							"request": {
-								"paths": [
-								"path-foo*"
-								]
+								"paths": ["path-foo*"]
 							}
 						},
 						{
@@ -166,6 +165,7 @@ func TestTranslatePolicy(t *testing.T) {
 			}},
 		},
 		"parsing json failed": {
+			authzPolicy:     `{[}]`,
 			wantErr:         "failed to parse authorization policy",
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
@@ -183,14 +183,14 @@ func TestTranslatePolicy(t *testing.T) {
 			wantAllowPolicy: nil,
 		},
 		"missing allow rules field": {
-			authzPolicy:     `{"name": "policy_abc"}`,
+			authzPolicy:     `{"name": "authz-foo"}`,
 			wantErr:         "\"allow_rules\" is not present",
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
 		"invalid rules type": {
 			authzPolicy: `{
-				"name": "policy_abc",
+				"name": "authz-foo",
 				"allow_rules": {}
 			}`,
 			wantErr:         "\"allow_rules\" rules is not an array",
@@ -199,7 +199,7 @@ func TestTranslatePolicy(t *testing.T) {
 		},
 		"missing rule name field": {
 			authzPolicy: `{
-				"name": "policy_abc",
+				"name": "authz-foo",
 				"allow_rules": [{}]
 			}`,
 			wantErr:         "\"allow_rules\" 0: \"name\" is not present",
@@ -208,7 +208,7 @@ func TestTranslatePolicy(t *testing.T) {
 		},
 		"invalid rule name type": {
 			authzPolicy: `{
-				"name": "policy_abc",
+				"name": "authz-foo",
 				"allow_rules": [{"name": 123}]
 			}`,
 			wantErr:         "\"allow_rules\" 0: \"name\" 123 is not a string",
@@ -242,7 +242,7 @@ func TestTranslatePolicy(t *testing.T) {
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
-		"missing headers key": {
+		"missing header key": {
 			authzPolicy: `{
 				"name": "authz",
 				"allow_rules": [{"name": "allow_policy_1", "request": {"headers":[{}]}}]
@@ -251,7 +251,7 @@ func TestTranslatePolicy(t *testing.T) {
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
-		"invalid headers key type": {
+		"invalid header key type": {
 			authzPolicy: `{
 				"name": "authz",
 				"allow_rules": [{"name": "allow_policy_1", "request": {"headers":[{"key":123}]}}]
@@ -281,9 +281,9 @@ func TestTranslatePolicy(t *testing.T) {
 		"invalid header value type": {
 			authzPolicy: `{
 				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "request": {"headers":[{"key":"key-a", "values":[123]}]}}]
+				"allow_rules": [{"name": "allow_policy_1", "request": {"headers":[{"key":"key-a", "values":["foo", 123]}]}}]
 			}`,
-			wantErr:         "\"allow_rules\" 0: \"headers\" 0: \"values\" 0: 123 is not a string",
+			wantErr:         "\"allow_rules\" 0: \"headers\" 0: \"values\" 1: 123 is not a string",
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
@@ -326,9 +326,9 @@ func TestTranslatePolicy(t *testing.T) {
 		"invalid principal type": {
 			authzPolicy: `{
 				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "source": {"principals":[123]}}]
+				"allow_rules": [{"name": "allow_policy_1", "source": {"principals":["foo", 123]}}]
 			}`,
-			wantErr:         "\"allow_rules\" 0: \"principals\" 0: 123 is not a string",
+			wantErr:         "\"allow_rules\" 0: \"principals\" 1: 123 is not a string",
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
@@ -338,15 +338,15 @@ func TestTranslatePolicy(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gotDenyPolicy, gotAllowPolicy, gotErr := translatePolicy(test.authzPolicy)
 			if gotErr != nil && gotErr.Error() != test.wantErr {
-				t.Fatalf("translatePolicy%v\nerror want:%v\ngot:%v", test.authzPolicy, test.wantErr, gotErr)
+				t.Fatalf("translatePolicy%v\nunexpected error\nwant:%v\ngot:%v", test.authzPolicy, test.wantErr, gotErr)
 			}
-			if gotDenyPolicy.String() != test.wantDenyPolicy.String() {
-				t.Fatalf("translatePolicy%v\nunexpected deny policy\nwant:\n%s\ngot:\n%s",
-					test.authzPolicy, test.wantDenyPolicy.String(), gotDenyPolicy.String())
+			if diff := cmp.Diff(gotDenyPolicy, test.wantDenyPolicy, protocmp.Transform()); diff != "" {
+				t.Fatalf("translatePolicy%v\nunexpected deny policy\nwant:\n%v\ngot:\n%v",
+					test.authzPolicy, test.wantDenyPolicy, gotDenyPolicy)
 			}
-			if gotAllowPolicy.String() != test.wantAllowPolicy.String() {
-				t.Fatalf("translatePolicy%v\nunexpected allow policy\nwant:\n%s\ngot:\n%s",
-					test.authzPolicy, test.wantAllowPolicy.String(), gotAllowPolicy.String())
+			if diff := cmp.Diff(gotAllowPolicy, test.wantAllowPolicy, protocmp.Transform()); diff != "" {
+				t.Fatalf("translatePolicy%v\nunexpected allow policy\nwant:\n%v\ngot:\n%v",
+					test.authzPolicy, test.wantAllowPolicy, gotAllowPolicy)
 			}
 		})
 	}
