@@ -69,9 +69,9 @@ var (
 	// "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING" to "false".
 	CircuitBreakingSupport = !strings.EqualFold(os.Getenv(circuitBreakingSupportEnv), "false")
 	// RingHashSupport indicates whether ring hash support is enabled, which can
-	// be disabled by setting the environment variable
-	// "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH" to "false".
-	RingHashSupport = !strings.EqualFold(os.Getenv(ringHashSupportEnv), "false")
+	// be enabled by setting the environment variable
+	// "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH" to "true".
+	RingHashSupport = strings.EqualFold(os.Getenv(ringHashSupportEnv), "true")
 	// TimeoutSupport indicates whether support for max_stream_duration in
 	// route actions is enabled.  This can be disabled by setting the
 	// environment variable "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT" to "false".

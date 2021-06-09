@@ -501,11 +501,15 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 		route.WeightedClusters = make(map[string]WeightedCluster)
 
 		action := r.GetRoute()
-		hp, err := hashPoliciesProtoToSlice(action.HashPolicy)
-		if err != nil {
-			return nil, err
+
+		// Hash Policies are only applicable for a Ring Hash LB.
+		if env.RingHashSupport {
+			hp, err := hashPoliciesProtoToSlice(action.HashPolicy)
+			if err != nil {
+				return nil, err
+			}
+			route.HashPolicies = hp
 		}
-		route.HashPolicies = hp
 
 		switch a := action.GetClusterSpecifier().(type) {
 		case *v3routepb.RouteAction_Cluster:
@@ -571,30 +575,25 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy) ([]*HashPolicy, error) {
 	var hashPoliciesRet []*HashPolicy
 	for _, p := range policies {
-		// Hash Policies are only applicable for a Ring Hash LB.
-		if !env.RingHashSupport {
-			return nil, errors.New("hash policies are only applicable for ring hash lb policy")
-		}
-		var policy HashPolicy
-		policy.Terminal = p.Terminal
+		policy := HashPolicy{Terminal: p.Terminal}
 		switch p.GetPolicySpecifier().(type) {
 		case *v3routepb.RouteAction_HashPolicy_Header_:
 			policy.HashPolicyType = HashPolicyTypeHeader
-			policy.HeaderName = p.GetHeader().HeaderName
-			regex := p.GetHeader().GetRegexRewrite().GetPattern().Regex
+			policy.HeaderName = p.GetHeader().GetHeaderName()
+			regex := p.GetHeader().GetRegexRewrite().GetPattern().GetRegex()
 			re, err := regexp.Compile(regex)
 			if err != nil {
 				return nil, fmt.Errorf("hash policy %+v contains an invalid regex %q", p, regex)
 			}
 			policy.Regex = re
-			policy.RegexSubstitution = p.GetHeader().GetRegexRewrite().Substitution
+			policy.RegexSubstitution = p.GetHeader().GetRegexRewrite().GetSubstitution()
 		case *v3routepb.RouteAction_HashPolicy_FilterState_:
 			if p.GetFilterState().GetKey() != "io.grpc.channel_id" {
 				return nil, fmt.Errorf("hash policy %+v contains an invalid key for filter state policy %q", p, p.GetFilterState().GetKey())
 			}
 			policy.HashPolicyType = HashPolicyTypeChannelID
 		default:
-			return nil, fmt.Errorf("hash policy %v is an unsupported hash policy", p)
+			return nil, fmt.Errorf("hash policy %T is an unsupported hash policy", p.GetPolicySpecifier())
 		}
 
 		hashPoliciesRet = append(hashPoliciesRet, &policy)
