@@ -95,4 +95,7 @@ type DiscoveryMechanism struct {
 	// This is used for EDS watch if set. If unset, Cluster is used for EDS
 	// watch.
 	EDSServiceName string `json:"edsServiceName,omitempty"`
+	// DNSHostname is the DNS name to resolve in "host:port" form. For type
+	// LOGICAL_DNS only.
+	DNSHostname string `json:"dnsHostname,omitempty"`
 }

@@ -231,7 +231,7 @@ func (s) TestSubConnStateChange(t *testing.T) {
 	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
-	xdsC.InvokeWatchEDSCallback(defaultEndpointsUpdate, nil)
+	xdsC.InvokeWatchEDSCallback("", defaultEndpointsUpdate, nil)
 	edsLB, err := waitForNewChildLB(ctx, edsLBCh)
 	if err != nil {
 		t.Fatal(err)
@@ -276,7 +276,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback("", xdsclient.EndpointsUpdate{}, nil)
 	edsLB, err := waitForNewChildLB(ctx, edsLBCh)
 	if err != nil {
 		t.Fatal(err)
@@ -286,11 +286,11 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	}
 
 	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, connectionErr)
+	xdsC.InvokeWatchEDSCallback("", xdsclient.EndpointsUpdate{}, connectionErr)
 
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if err := xdsC.WaitForCancelEDSWatch(sCtx); err != context.DeadlineExceeded {
+	if _, err := xdsC.WaitForCancelEDSWatch(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 
@@ -304,13 +304,13 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	}
 
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "clusterResolverBalancer resource not found error")
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, resourceErr)
+	xdsC.InvokeWatchEDSCallback("", xdsclient.EndpointsUpdate{}, resourceErr)
 	// Even if error is resource not found, watch shouldn't be canceled, because
 	// this is an EDS resource removed (and xds client actually never sends this
 	// error, but we still handles it).
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if err := xdsC.WaitForCancelEDSWatch(sCtx); err != context.DeadlineExceeded {
+	if _, err := xdsC.WaitForCancelEDSWatch(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 	if err := edsLB.waitForClientConnStateChange(sCtx); err != context.DeadlineExceeded {
@@ -365,7 +365,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
-	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback("", xdsclient.EndpointsUpdate{}, nil)
 	edsLB, err := waitForNewChildLB(ctx, edsLBCh)
 	if err != nil {
 		t.Fatal(err)
@@ -379,7 +379,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if err := xdsC.WaitForCancelEDSWatch(sCtx); err != context.DeadlineExceeded {
+	if _, err := xdsC.WaitForCancelEDSWatch(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
 
@@ -394,7 +394,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "clusterResolverBalancer resource not found error")
 	edsB.ResolverError(resourceErr)
-	if err := xdsC.WaitForCancelEDSWatch(ctx); err != nil {
+	if _, err := xdsC.WaitForCancelEDSWatch(ctx); err != nil {
 		t.Fatalf("want watch to be canceled, waitForCancel failed: %v", err)
 	}
 	if err := edsLB.waitForClientConnStateChange(sCtx); err != context.DeadlineExceeded {
@@ -423,7 +423,7 @@ func verifyExpectedRequests(ctx context.Context, fc *fakeclient.Client, resource
 	for _, name := range resourceNames {
 		if name == "" {
 			// ResourceName empty string indicates a cancel.
-			if err := fc.WaitForCancelEDSWatch(ctx); err != nil {
+			if _, err := fc.WaitForCancelEDSWatch(ctx); err != nil {
 				return fmt.Errorf("timed out when expecting resource %q", name)
 			}
 			continue
