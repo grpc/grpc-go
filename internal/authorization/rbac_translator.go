@@ -333,7 +333,7 @@ func parseRulesArray(rules interface{}, prefixName string) (map[string]*v3rbacpb
 func translatePolicy(policy string) (*v3rbacpb.RBAC, *v3rbacpb.RBAC, error) {
 	var jsonData map[string]interface{}
 	if err := json.Unmarshal([]byte(policy), &jsonData); err != nil {
-		return nil, nil, fmt.Errorf("Failed to parse authorization policy")
+		return nil, nil, fmt.Errorf("failed to parse authorization policy")
 	}
 	prefixName, found := jsonData["name"]
 	if !found {

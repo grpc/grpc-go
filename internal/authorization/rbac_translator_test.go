@@ -166,7 +166,7 @@ func TestTranslatePolicy(t *testing.T) {
 			}},
 		},
 		"parsing json failed": {
-			wantErr:         "Failed to parse authorization policy",
+			wantErr:         "failed to parse authorization policy",
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
