@@ -16,7 +16,7 @@
  *
  */
 
-package edsbalancer
+package clusterresolver
 
 import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -34,7 +34,7 @@ type watchUpdate struct {
 // edsWatcher takes an EDS balancer config, and use the xds_client to watch EDS
 // updates. The EDS updates are passed back to the balancer via a channel.
 type edsWatcher struct {
-	parent *edsBalancer
+	parent *clusterResolverBalancer
 
 	updateChannel chan *watchUpdate
 

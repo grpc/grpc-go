@@ -34,7 +34,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
@@ -314,7 +314,7 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 	// is updated to cluster_resolver, which has the fallback functionality, we
 	// will fix this to handle all the clusters in list.
 	cds := update.chu[0]
-	lbCfg := &edsbalancer.EDSConfig{
+	lbCfg := &clusterresolver.EDSConfig{
 		ClusterName:           cds.ClusterName,
 		EDSServiceName:        cds.EDSServiceName,
 		MaxConcurrentRequests: cds.MaxRequests,
