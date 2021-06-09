@@ -31,9 +31,11 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfig"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget"
 	"google.golang.org/grpc/xds/internal/testutils"
@@ -59,11 +61,11 @@ func init() {
 	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond * 100
 }
 
-func setupTestEDS(t *testing.T, initChild *loadBalancingConfig) (balancer.Balancer, *testutils.TestClientConn, *fakeclient.Client, func()) {
+func setupTestEDS(t *testing.T, initChild *internalserviceconfig.BalancerConfig) (balancer.Balancer, *testutils.TestClientConn, *fakeclient.Client, func()) {
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
 	cc := testutils.NewTestClientConn(t)
 	builder := balancer.Get(Name)
-	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
+	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
 	if edsb == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
@@ -71,9 +73,12 @@ func setupTestEDS(t *testing.T, initChild *loadBalancingConfig) (balancer.Balanc
 	defer cancel()
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{
-			ClusterName: testClusterName,
-			ChildPolicy: initChild,
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+				Cluster: testClusterName,
+				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: initChild,
 		},
 	}); err != nil {
 		edsb.Close()
@@ -462,10 +467,17 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	stub.Register(balancerName, stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, s balancer.ClientConnState) error {
-			if len(s.ResolverState.Addresses) == 0 {
-				return nil
+			m, _ := bd.Data.(map[string]bool)
+			if m == nil {
+				m = make(map[string]bool)
+				bd.Data = m
 			}
-			bd.ClientConn.NewSubConn(s.ResolverState.Addresses, balancer.NewSubConnOptions{})
+			for _, addr := range s.ResolverState.Addresses {
+				if !m[addr.Addr] {
+					m[addr.Addr] = true
+					bd.ClientConn.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{})
+				}
+			}
 			return nil
 		},
 		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
@@ -477,8 +489,23 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	})
 
 	t.Logf("initialize with sub-balancer: stub-balancer")
-	edsb, cc, xdsC, cleanup := setupTestEDS(t, &loadBalancingConfig{Name: balancerName})
+	edsb, cc, xdsC, cleanup := setupTestEDS(t, &internalserviceconfig.BalancerConfig{Name: balancerName})
 	defer cleanup()
+
+	t.Logf("update sub-balancer to stub-balancer")
+	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+				Cluster: testClusterName,
+				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
+				Name: balancerName,
+			},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
 
 	// Two localities, each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
@@ -497,10 +524,19 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	t.Logf("update sub-balancer to round-robin")
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName, ChildPolicy: &loadBalancingConfig{Name: roundrobin.Name}},
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+				Cluster: testClusterName,
+				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
+
 	for i := 0; i < 2; i++ {
 		<-cc.RemoveSubConnCh
 	}
@@ -518,10 +554,19 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	t.Logf("update sub-balancer to stub-balancer")
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName, ChildPolicy: &loadBalancingConfig{Name: balancerName}},
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+				Cluster: testClusterName,
+				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
+				Name: balancerName,
+			},
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
+
 	for i := 0; i < 2; i++ {
 		scToRemove := <-cc.RemoveSubConnCh
 		if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) &&
@@ -542,10 +587,19 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 
 	t.Logf("update sub-balancer to round-robin")
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName, ChildPolicy: &loadBalancingConfig{Name: roundrobin.Name}},
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+				Cluster: testClusterName,
+				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
 	}); err != nil {
 		t.Fatal(err)
 	}
+
 	for i := 0; i < 2; i++ {
 		<-cc.RemoveSubConnCh
 	}
@@ -568,14 +622,20 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 
 	var maxRequests uint32 = 50
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{
-			ChildPolicy:           &loadBalancingConfig{Name: roundrobin.Name},
-			ClusterName:           testClusterName,
-			MaxConcurrentRequests: &maxRequests,
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+				Cluster:               testClusterName,
+				MaxConcurrentRequests: &maxRequests,
+				Type:                  balancerconfig.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
 		},
 	}); err != nil {
 		t.Fatal(err)
 	}
+
 	// One locality with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
@@ -628,14 +688,20 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	// update afterwards). Make sure the new picker uses the new configs.
 	var maxRequests2 uint32 = 10
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{
-			ChildPolicy:           &loadBalancingConfig{Name: roundrobin.Name},
-			ClusterName:           testClusterName,
-			MaxConcurrentRequests: &maxRequests2,
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+				Cluster:               testClusterName,
+				MaxConcurrentRequests: &maxRequests2,
+				Type:                  balancerconfig.DiscoveryMechanismTypeEDS,
+			}},
+			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
 		},
 	}); err != nil {
 		t.Fatal(err)
 	}
+
 	// Picks with drops.
 	dones = []func(){}
 	p2 := <-cc.NewPickerCh

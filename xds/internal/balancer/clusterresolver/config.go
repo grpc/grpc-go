@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2019 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,110 +19,44 @@ package clusterresolver
 
 import (
 	"encoding/json"
-	"fmt"
 
-	"google.golang.org/grpc/balancer"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfig"
 )
 
-// EDSConfig represents the loadBalancingConfig section of the service config
-// for EDS balancers.
-type EDSConfig struct {
-	serviceconfig.LoadBalancingConfig
-	// ChildPolicy represents the load balancing config for the child
-	// policy.
-	ChildPolicy *loadBalancingConfig
-	// FallBackPolicy represents the load balancing config for the
-	// fallback.
-	FallBackPolicy *loadBalancingConfig
-	// ClusterName is the cluster name.
-	ClusterName string
-	// EDSServiceName is the name to use in EDS query. If not set, use
-	// ClusterName.
-	EDSServiceName string
-	// MaxConcurrentRequests is the max number of concurrent request allowed for
-	// this service. If unset, default value 1024 is used.
+// LBConfig is the config for cluster resolver balancer.
+type LBConfig struct {
+	serviceconfig.LoadBalancingConfig `json:"-"`
+	// DiscoveryMechanisms is an ordered list of discovery mechanisms.
 	//
-	// Note that this is not defined in the service config proto. And the reason
-	// is, we are dropping EDS and moving the features into cluster_impl. But in
-	// the mean time, to keep things working, we need to add this field. And it
-	// should be fine to add this extra field here, because EDS is only used in
-	// CDS today, so we have full control.
-	MaxConcurrentRequests *uint32
-	// LRS server to send load reports to.  If not present, load reporting
-	// will be disabled.  If set to the empty string, load reporting will
-	// be sent to the same server that we obtained CDS data from.
-	LrsLoadReportingServerName *string
+	// Must have at least one element. Results from each discovery mechanism are
+	// concatenated together in successive priorities.
+	DiscoveryMechanisms []balancerconfig.DiscoveryMechanism `json:"discoveryMechanisms,omitempty"`
+
+	// LocalityPickingPolicy is policy for locality picking.
+	//
+	// This policy's config is expected to be in the format used by the
+	// weighted_target policy.  Note that the config should include an empty
+	// value for the "targets" field; that empty value will be replaced by one
+	// that is dynamically generated based on the EDS data. Optional; defaults
+	// to "weighted_target".
+	LocalityPickingPolicy *internalserviceconfig.BalancerConfig `json:"localityPickingPolicy,omitempty"`
+
+	// EndpointPickingPolicy is policy for endpoint picking.
+	//
+	// This will be configured as the policy for each child in the
+	// locality-policy's config. Optional; defaults to "round_robin".
+	EndpointPickingPolicy *internalserviceconfig.BalancerConfig `json:"endpointPickingPolicy,omitempty"`
+
+	// FIXME: read and warn if endpoint is not roundrobin or locality is not
+	// weightedtarget.
 }
 
-// edsConfigJSON is the intermediate unmarshal result of EDSConfig. ChildPolicy
-// and Fallbackspolicy are post-processed, and for each, the first installed
-// policy is kept.
-type edsConfigJSON struct {
-	ChildPolicy                []*loadBalancingConfig
-	FallbackPolicy             []*loadBalancingConfig
-	ClusterName                string
-	EDSServiceName             string
-	MaxConcurrentRequests      *uint32
-	LRSLoadReportingServerName *string
-}
-
-// UnmarshalJSON parses the JSON-encoded byte slice in data and stores it in l.
-// When unmarshalling, we iterate through the childPolicy/fallbackPolicy lists
-// and select the first LB policy which has been registered.
-func (l *EDSConfig) UnmarshalJSON(data []byte) error {
-	var configJSON edsConfigJSON
-	if err := json.Unmarshal(data, &configJSON); err != nil {
-		return err
+func parseConfig(c json.RawMessage) (*LBConfig, error) {
+	var cfg LBConfig
+	if err := json.Unmarshal(c, &cfg); err != nil {
+		return nil, err
 	}
-
-	l.ClusterName = configJSON.ClusterName
-	l.EDSServiceName = configJSON.EDSServiceName
-	l.MaxConcurrentRequests = configJSON.MaxConcurrentRequests
-	l.LrsLoadReportingServerName = configJSON.LRSLoadReportingServerName
-
-	for _, lbcfg := range configJSON.ChildPolicy {
-		if balancer.Get(lbcfg.Name) != nil {
-			l.ChildPolicy = lbcfg
-			break
-		}
-	}
-
-	for _, lbcfg := range configJSON.FallbackPolicy {
-		if balancer.Get(lbcfg.Name) != nil {
-			l.FallBackPolicy = lbcfg
-			break
-		}
-	}
-	return nil
-}
-
-// MarshalJSON returns a JSON encoding of l.
-func (l *EDSConfig) MarshalJSON() ([]byte, error) {
-	return nil, fmt.Errorf("EDSConfig.MarshalJSON() is unimplemented")
-}
-
-// loadBalancingConfig represents a single load balancing config,
-// stored in JSON format.
-type loadBalancingConfig struct {
-	Name   string
-	Config json.RawMessage
-}
-
-// MarshalJSON returns a JSON encoding of l.
-func (l *loadBalancingConfig) MarshalJSON() ([]byte, error) {
-	return nil, fmt.Errorf("loadBalancingConfig.MarshalJSON() is unimplemented")
-}
-
-// UnmarshalJSON parses the JSON-encoded byte slice in data and stores it in l.
-func (l *loadBalancingConfig) UnmarshalJSON(data []byte) error {
-	var cfg map[string]json.RawMessage
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return err
-	}
-	for name, config := range cfg {
-		l.Name = name
-		l.Config = config
-	}
-	return nil
+	return &cfg, nil
 }
