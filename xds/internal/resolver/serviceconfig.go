@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"google.golang.org/grpc/internal/grpcrand"
 	"math/bits"
 	"strings"
 	"sync/atomic"
@@ -31,6 +30,7 @@ import (
 	"github.com/cespare/xxhash"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/grpcrand"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/internal/xds/env"
