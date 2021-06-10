@@ -395,5 +395,3 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 	}
 	return newStream(ctx, func() {})
 }
-
-type clusterKey struct{}
