@@ -222,14 +222,6 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 			policyHash = xxhash.Sum64String(joinedValues)
 			generatedHash = true
 			generatedPolicyHash = true
-
-			/*if value := rpcInfo.Context.Value(policy.HeaderName); value != nil {
-				// newValue := policy.Regex.ReplaceAllString(fmt.Sprintf("%v", value), policy.RegexSubstitution)
-				// policyHash = xxhash.Sum64String(newValue)
-				generatedHash = true
-				generatedPolicyHash = true
-			}*/
-			// If header isn't present, no-op.
 		case xdsclient.HashPolicyTypeChannelID:
 			// Hash the ClientConn pointer which logically uniquely
 			// identifies the client.

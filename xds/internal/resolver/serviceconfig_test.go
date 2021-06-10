@@ -23,14 +23,15 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"testing"
+
 	"github.com/cespare/xxhash"
 	"github.com/google/go-cmp/cmp"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/metadata"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"regexp"
-	"testing"
 )
 
 func (s) TestPruneActiveClusters(t *testing.T) {
@@ -80,28 +81,12 @@ func (s) TestGenerateRequestHashHeaders(t *testing.T) {
 	}
 }
 
-/*type testClientConnServiceConfig struct {
-	resolver.ClientConn
-}
-
-func (t *testClientConnServiceConfig) UpdateState(s resolver.State) error {
-	return nil
-}
-
-func (t *testClientConnServiceConfig) ReportError(err error) {
-
-}
-
-func (t *testClientConnServiceConfig) ParseServiceConfig(jsonSC string) *serviceconfig.ParseResult {
-	return internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(jsonSC)
-}*/
-
 // TestGenerateHashChannelID tests generating request hashes for hash policies that specify
 // to hash something that uniquely identifies the ClientConn (the pointer).
 func (s) TestGenerateRequestHashChannelID(t *testing.T) {
 	cs := &configSelector{
 		r: &xdsResolver{
-			cc: &testClientConn{}, // The pointer to this will be hashed.
+			cc: &testClientConn{},
 		},
 	}
 
