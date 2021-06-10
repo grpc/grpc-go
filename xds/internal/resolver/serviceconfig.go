@@ -36,6 +36,8 @@ import (
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -173,9 +175,12 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		requestHash = cs.generateHash(rpcInfo, rt.hashPolicies)
 	}
 
+	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
+	lbCtx = ringhash.SetRequestHash(lbCtx, requestHash)
+
 	config := &iresolver.RPCConfig{
 		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.
-		Context: setPickedClusterAndRequestHash(rpcInfo.Context, cluster.name, requestHash),
+		Context: lbCtx,
 		OnCommitted: func() {
 			// When the RPC is committed, the cluster is no longer required.
 			// Decrease its ref.
@@ -392,38 +397,3 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 }
 
 type clusterKey struct{}
-
-// GetPickedCluster returns the cluster name from the ctx for the picked
-// cluster.
-func GetPickedCluster(ctx context.Context) string {
-	info, ok := ctx.Value(clusterKey{}).(clusterInfoForLB)
-	if !ok {
-		return ""
-	}
-	return info.clusterName
-}
-
-// GetRequestHash returns the requestHash from the context.
-func GetRequestHash(ctx context.Context) uint64 {
-	return ctx.Value(clusterKey{}).(clusterInfoForLB).requestHash
-}
-
-type clusterInfoForLB struct {
-	clusterName string
-	requestHash uint64
-}
-
-// setPickedClusterAndRequestHash adds the selected cluster to the context for
-// the xds_cluster_manager LB policy to pick. It also adds a request hash for
-// Ring Hash Load Balancing.
-func setPickedClusterAndRequestHash(ctx context.Context, cluster string, requestHash uint64) context.Context {
-	return context.WithValue(ctx, clusterKey{}, clusterInfoForLB{
-		clusterName: cluster,
-		requestHash: requestHash,
-	})
-}
-
-// SetPickedClusterAndRequestHashForTesting is used for testing only.
-func SetPickedClusterAndRequestHashForTesting(ctx context.Context, cluster string, requestHash uint64) context.Context {
-	return setPickedClusterAndRequestHash(ctx, cluster, requestHash)
-}
