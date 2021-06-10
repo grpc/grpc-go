@@ -24,13 +24,16 @@ import (
 	"fmt"
 	"math/bits"
 	"math/rand"
+	"strings"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"google.golang.org/grpc/codes"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/internal/xds/env"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
@@ -163,9 +166,15 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		return nil, err
 	}
 
+	// Request Hashes are only applicable for a Ring Hash LB.
+	var requestHash uint64
+	if env.RingHashSupport {
+		requestHash = cs.generateHash(rpcInfo, rt.hashPolicies)
+	}
+
 	config := &iresolver.RPCConfig{
-		// Communicate to the LB policy the chosen cluster.
-		Context: SetPickedClusterAndRequestHash(rpcInfo.Context, cluster.name, cs.generateHash(rpcInfo, rt.hashPolicies)),
+		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.
+		Context: setPickedClusterAndRequestHash(rpcInfo.Context, cluster.name, requestHash),
 		OnCommitted: func() {
 			// When the RPC is committed, the cluster is no longer required.
 			// Decrease its ref.
@@ -196,17 +205,34 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 		var generatedPolicyHash bool
 		switch policy.HashPolicyType {
 		case xdsclient.HashPolicyTypeHeader:
-			if value := rpcInfo.Context.Value(policy.HeaderName); value != nil {
+			md, ok := metadata.FromIncomingContext(rpcInfo.Context)
+			if !ok {
+				continue
+			}
+			values := md.Get(policy.HeaderName)
+			// If the header isn't present, no-op.
+			if len(values) == 0 {
+				continue
+			}
+			joinedValues := strings.Join(values, ",")
+			joinedValues = policy.Regex.ReplaceAllString(fmt.Sprintf("%v", joinedValues), policy.RegexSubstitution)
+			policyHash = xxhash.Sum64String(joinedValues)
+			generatedHash = true
+			generatedPolicyHash = true
+
+			/*if value := rpcInfo.Context.Value(policy.HeaderName); value != nil {
 				// newValue := policy.Regex.ReplaceAllString(fmt.Sprintf("%v", value), policy.RegexSubstitution)
 				// policyHash = xxhash.Sum64String(newValue)
 				generatedHash = true
-			}
+				generatedPolicyHash = true
+			}*/
 			// If header isn't present, no-op.
 		case xdsclient.HashPolicyTypeChannelID:
 			// Hash the ClientConn pointer which logically uniquely
 			// identifies the client.
-			// policyHash = xxhash.Sum64(*(*[]byte)(unsafe.Pointer(&cs.r.cc)))
+			policyHash = xxhash.Sum64(*(*[]byte)(unsafe.Pointer(&cs.r.cc)))
 			generatedHash = true
+			generatedPolicyHash = true
 		}
 
 		// Deterministically combine the hash policies. Rotating prevents
