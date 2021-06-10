@@ -22,19 +22,15 @@ package resolver
 
 import (
 	"context"
-	"google.golang.org/grpc/internal"
+	"fmt"
+	"github.com/cespare/xxhash"
+	"github.com/google/go-cmp/cmp"
 	iresolver "google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/serviceconfig"
+	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"regexp"
 	"testing"
-	"unsafe"
-
-	"github.com/google/go-cmp/cmp"
-	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 )
 
 func (s) TestPruneActiveClusters(t *testing.T) {
@@ -60,7 +56,7 @@ func (s) TestGenerateRequestHashHeaders(t *testing.T) {
 	cs := &configSelector{}
 
 	rpcInfo := iresolver.RPCInfo{
-		Context: metadata.AppendToOutgoingContext(context.Background(), ":path", "/products"),
+		Context: metadata.NewIncomingContext(context.Background(), metadata.Pairs(":path", "/products")),
 		Method:  "/some-method",
 	}
 
@@ -84,19 +80,19 @@ func (s) TestGenerateRequestHashHeaders(t *testing.T) {
 	}
 }
 
-/*type testClientConn struct {
+/*type testClientConnServiceConfig struct {
 	resolver.ClientConn
 }
 
-func (t *testClientConn) UpdateState(s resolver.State) error {
+func (t *testClientConnServiceConfig) UpdateState(s resolver.State) error {
 	return nil
 }
 
-func (t *testClientConn) ReportError(err error) {
+func (t *testClientConnServiceConfig) ReportError(err error) {
 
 }
 
-func (t *testClientConn) ParseServiceConfig(jsonSC string) *serviceconfig.ParseResult {
+func (t *testClientConnServiceConfig) ParseServiceConfig(jsonSC string) *serviceconfig.ParseResult {
 	return internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(jsonSC)
 }*/
 
@@ -105,11 +101,11 @@ func (t *testClientConn) ParseServiceConfig(jsonSC string) *serviceconfig.ParseR
 func (s) TestGenerateRequestHashChannelID(t *testing.T) {
 	cs := &configSelector{
 		r: &xdsResolver{
-			cc: testClientConn{}, // The pointer to this will be hashed.
+			cc: &testClientConn{}, // The pointer to this will be hashed.
 		},
 	}
 
-	requestHashWant := xxhash.Sum64(*(*[]byte)(unsafe.Pointer(&cs.r.cc)))
+	requestHashWant := xxhash.Sum64String(fmt.Sprintf("%p", &cs.r.cc))
 
 	hashPolicies := []*xdsclient.HashPolicy{
 		{

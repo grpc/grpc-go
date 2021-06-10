@@ -22,12 +22,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/cespare/xxhash"
 	"math/bits"
 	"math/rand"
 	"strings"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"google.golang.org/grpc/codes"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -205,10 +205,12 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 		var generatedPolicyHash bool
 		switch policy.HashPolicyType {
 		case xdsclient.HashPolicyTypeHeader:
+			print("hash policy type header")
 			md, ok := metadata.FromIncomingContext(rpcInfo.Context)
 			if !ok {
 				continue
 			}
+			print("pulled md from context")
 			values := md.Get(policy.HeaderName)
 			// If the header isn't present, no-op.
 			if len(values) == 0 {
@@ -216,6 +218,7 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 			}
 			joinedValues := strings.Join(values, ",")
 			joinedValues = policy.Regex.ReplaceAllString(fmt.Sprintf("%v", joinedValues), policy.RegexSubstitution)
+			print(joinedValues)
 			policyHash = xxhash.Sum64String(joinedValues)
 			generatedHash = true
 			generatedPolicyHash = true
@@ -230,7 +233,7 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 		case xdsclient.HashPolicyTypeChannelID:
 			// Hash the ClientConn pointer which logically uniquely
 			// identifies the client.
-			policyHash = xxhash.Sum64(*(*[]byte)(unsafe.Pointer(&cs.r.cc)))
+			policyHash = xxhash.Sum64String(fmt.Sprintf("%p", &cs.r.cc))
 			generatedHash = true
 			generatedPolicyHash = true
 		}
