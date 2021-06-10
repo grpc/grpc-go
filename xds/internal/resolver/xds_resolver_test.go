@@ -38,7 +38,6 @@ import (
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/wrr"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
@@ -686,7 +685,6 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 }
 
 func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
-	defer func(old bool) { env.TimeoutSupport = old }(env.TimeoutSupport)
 	xdsC := fakeclient.NewClient()
 	xdsR, tcc, cancel := testSetup(t, setupOpts{
 		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
@@ -740,35 +738,25 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 	}
 
 	testCases := []struct {
-		name           string
-		method         string
-		timeoutSupport bool
-		want           *time.Duration
+		name   string
+		method string
+		want   *time.Duration
 	}{{
-		name:           "RDS setting",
-		method:         "/foo/method",
-		timeoutSupport: true,
-		want:           newDurationP(5 * time.Second),
+		name:   "RDS setting",
+		method: "/foo/method",
+		want:   newDurationP(5 * time.Second),
 	}, {
-		name:           "timeout support disabled",
-		method:         "/foo/method",
-		timeoutSupport: false,
-		want:           nil,
+		name:   "explicit zero in RDS; ignore LDS",
+		method: "/bar/method",
+		want:   nil,
 	}, {
-		name:           "explicit zero in RDS; ignore LDS",
-		method:         "/bar/method",
-		timeoutSupport: true,
-		want:           nil,
-	}, {
-		name:           "no config in RDS; fallback to LDS",
-		method:         "/baz/method",
-		timeoutSupport: true,
-		want:           newDurationP(time.Second),
+		name:   "no config in RDS; fallback to LDS",
+		method: "/baz/method",
+		want:   newDurationP(time.Second),
 	}}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			env.TimeoutSupport = tc.timeoutSupport
 			req := iresolver.RPCInfo{
 				Method:  tc.method,
 				Context: context.Background(),

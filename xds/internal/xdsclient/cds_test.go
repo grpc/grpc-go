@@ -303,9 +303,6 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		},
 	}
 
-	origCircuitBreakingSupport := env.CircuitBreakingSupport
-	env.CircuitBreakingSupport = true
-	defer func() { env.CircuitBreakingSupport = origCircuitBreakingSupport }()
 	oldAggregateAndDNSSupportEnv := env.AggregateAndDNSSupportEnv
 	env.AggregateAndDNSSupportEnv = true
 	defer func() { env.AggregateAndDNSSupportEnv = oldAggregateAndDNSSupportEnv }()

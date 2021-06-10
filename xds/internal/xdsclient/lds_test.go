@@ -34,7 +34,6 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
 
@@ -186,7 +185,6 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		wantUpdate map[string]ListenerUpdate
 		wantMD     UpdateMetadata
 		wantErr    bool
-		disableFI  bool // disable fault injection
 	}{
 		{
 			name:      "non-listener resource",
@@ -359,18 +357,6 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:      "v3 with custom filter, fault injection disabled",
-			resources: []*anypb.Any{v3LisWithFilters(customFilter)},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters(customFilter)},
-			},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusACKed,
-				Version: testVersion,
-			},
-			disableFI: true,
-		},
-		{
 			name:       "v3 with two filters with same name",
 			resources:  []*anypb.Any{v3LisWithFilters(customFilter, customFilter)},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
@@ -478,22 +464,6 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:      "v3 with error filter, fault injection disabled",
-			resources: []*anypb.Any{v3LisWithFilters(errFilter)},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
-					RouteConfigName:   v3RouteConfigName,
-					MaxStreamDuration: time.Second,
-					Raw:               v3LisWithFilters(errFilter),
-				},
-			},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusACKed,
-				Version: testVersion,
-			},
-			disableFI: true,
-		},
-		{
 			name:      "v2 listener resource",
 			resources: []*anypb.Any{v2Lis},
 			wantUpdate: map[string]ListenerUpdate{
@@ -572,9 +542,6 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			oldFI := env.FaultInjectionSupport
-			env.FaultInjectionSupport = !test.disableFI
-
 			update, md, err := UnmarshalListener(testVersion, test.resources, nil)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("UnmarshalListener(), got err: %v, wantErr: %v", err, test.wantErr)
@@ -585,7 +552,6 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreDetails); diff != "" {
 				t.Errorf("got unexpected metadata, diff (-got +want): %v", diff)
 			}
-			env.FaultInjectionSupport = oldFI
 		})
 	}
 }
@@ -1287,10 +1253,6 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			oldFI := env.FaultInjectionSupport
-			env.FaultInjectionSupport = true
-			defer func() { env.FaultInjectionSupport = oldFI }()
-
 			gotUpdate, md, err := UnmarshalListener(testVersion, test.resources, nil)
 			if (err != nil) != (test.wantErr != "") {
 				t.Fatalf("UnmarshalListener(), got err: %v, wantErr: %v", err, test.wantErr)

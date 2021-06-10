@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/balancer/stub"
-	"google.golang.org/grpc/internal/xds/env"
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/testutils"
@@ -575,10 +574,6 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 }
 
 func (s) TestEDS_CircuitBreaking(t *testing.T) {
-	origCircuitBreakingSupport := env.CircuitBreakingSupport
-	env.CircuitBreakingSupport = true
-	defer func() { env.CircuitBreakingSupport = origCircuitBreakingSupport }()
-
 	cc := testutils.NewTestClientConn(t)
 	edsb := newEDSBalancerImpl(cc, balancer.BuildOptions{}, nil, nil, nil)
 	edsb.enqueueChildBalancerStateUpdate = edsb.updateState
@@ -812,10 +807,6 @@ func (s) TestDropPicker(t *testing.T) {
 }
 
 func (s) TestEDS_LoadReport(t *testing.T) {
-	origCircuitBreakingSupport := env.CircuitBreakingSupport
-	env.CircuitBreakingSupport = true
-	defer func() { env.CircuitBreakingSupport = origCircuitBreakingSupport }()
-
 	// We create an xdsClientWrapper with a dummy xdsClient which only
 	// implements the LoadStore() method to return the underlying load.Store to
 	// be used.

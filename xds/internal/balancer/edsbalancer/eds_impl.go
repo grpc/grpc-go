@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
 	xdsi "google.golang.org/grpc/xds/internal"
@@ -418,9 +417,6 @@ func (edsImpl *edsBalancerImpl) handleSubConnStateChange(sc balancer.SubConn, s 
 
 // updateServiceRequestsConfig handles changes to the circuit breaking configuration.
 func (edsImpl *edsBalancerImpl) updateServiceRequestsConfig(serviceName string, max *uint32) {
-	if !env.CircuitBreakingSupport {
-		return
-	}
 	edsImpl.pickerMu.Lock()
 	var updatePicker bool
 	if edsImpl.serviceRequestsCounter == nil || edsImpl.serviceRequestsCounter.ServiceName != serviceName {

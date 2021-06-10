@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpcrand"
 	iresolver "google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/httpfilter"
@@ -63,9 +62,7 @@ var statusMap = map[int]codes.Code{
 }
 
 func init() {
-	if env.FaultInjectionSupport {
-		httpfilter.Register(builder{})
-	}
+	httpfilter.Register(builder{})
 }
 
 type builder struct {
