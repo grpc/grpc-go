@@ -393,6 +393,8 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 
 type clusterKey struct{}
 
+// GetPickedCluster returns the cluster name from the ctx for the picked
+// cluster.
 func GetPickedCluster(ctx context.Context) string {
 	info, ok := ctx.Value(clusterKey{}).(clusterInfoForLB)
 	if !ok {
@@ -401,6 +403,7 @@ func GetPickedCluster(ctx context.Context) string {
 	return info.clusterName
 }
 
+// GetRequestHash returns the requestHash from the context.
 func GetRequestHash(ctx context.Context) uint64 {
 	return ctx.Value(clusterKey{}).(clusterInfoForLB).requestHash
 }
