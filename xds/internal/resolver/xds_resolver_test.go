@@ -42,7 +42,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
-	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
@@ -444,7 +443,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
 			}
-			cluster := clustermanager.GetPickedClusterForTesting(res.Context)
+			cluster := GetPickedCluster(res.Context)
 			pickedClusters[cluster] = true
 			res.OnCommitted()
 		}
@@ -675,7 +674,7 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
 		}
-		picks[clustermanager.GetPickedClusterForTesting(res.Context)]++
+		picks[GetPickedCluster(res.Context)]++
 		res.OnCommitted()
 	}
 	want := map[string]int{"A": 10, "B": 20}
@@ -835,7 +834,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
 	}
-	cluster := clustermanager.GetPickedClusterForTesting(res.Context)
+	cluster := GetPickedCluster(res.Context)
 	if cluster != "test-cluster-1" {
 		t.Fatalf("")
 	}
@@ -1337,3 +1336,5 @@ func replaceRandNumGenerator(start int64) func() {
 func newDurationP(d time.Duration) *time.Duration {
 	return &d
 }
+
+// Task list: fix breaking test, I think we should just add a table driven test for request hash utility function - once Menghan responds

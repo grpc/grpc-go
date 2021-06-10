@@ -39,6 +39,7 @@ const (
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileContentEnv = "GRPC_XDS_BOOTSTRAP_CONFIG"
 
+	ringHashSupportEnv           = "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH"
 	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
 	aggregateAndDNSSupportEnv    = "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER"
 
@@ -59,6 +60,11 @@ var (
 	//
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileContent = os.Getenv(BootstrapFileContentEnv)
+
+	// RingHashSupport indicates whether ring hash support is enabled, which can
+	// be enabled by setting the environment variable
+	// "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH" to "true".
+	RingHashSupport = strings.EqualFold(os.Getenv(ringHashSupportEnv), "true")
 
 	// ClientSideSecuritySupport is used to control processing of security
 	// configuration on the client-side.
