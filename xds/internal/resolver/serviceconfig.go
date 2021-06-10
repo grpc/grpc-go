@@ -28,6 +28,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/cespare/xxhash"
+
 	"google.golang.org/grpc/codes"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/wrr"
@@ -37,8 +39,6 @@ import (
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-
-	"github.com/cespare/xxhash"
 )
 
 const (
