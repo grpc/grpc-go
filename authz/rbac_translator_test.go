@@ -164,36 +164,21 @@ func TestTranslatePolicy(t *testing.T) {
 				},
 			}},
 		},
-		"parsing json failed": {
-			authzPolicy:     `{[}]`,
-			wantErr:         "failed to parse authorization policy",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
 		"missing name field": {
 			authzPolicy:     `{}`,
 			wantErr:         "\"name\" is not present",
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
-		"invalid name type": {
+		"invalid field type": {
 			authzPolicy:     `{"name": 123}`,
-			wantErr:         "\"name\" 123 is not a string",
+			wantErr:         "failed to parse authorization policy",
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
 		"missing allow rules field": {
 			authzPolicy:     `{"name": "authz-foo"}`,
 			wantErr:         "\"allow_rules\" is not present",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
-		"invalid rules type": {
-			authzPolicy: `{
-				"name": "authz-foo",
-				"allow_rules": {}
-			}`,
-			wantErr:         "\"allow_rules\" rules is not an array",
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
@@ -206,42 +191,6 @@ func TestTranslatePolicy(t *testing.T) {
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
-		"invalid rule name type": {
-			authzPolicy: `{
-				"name": "authz-foo",
-				"allow_rules": [{"name": 123}]
-			}`,
-			wantErr:         "\"allow_rules\" 0: \"name\" 123 is not a string",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
-		"invalid request type": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "request": []}]
-			}`,
-			wantErr:         "\"allow_rules\" 0: \"request\" is not an object",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
-		"invalid headers type": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "request": {"headers":{}}}]
-			}`,
-			wantErr:         "\"allow_rules\" 0: \"headers\" is not an array",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
-		"empty headers": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "request": {"headers":[]}}]
-			}`,
-			wantErr:         "\"allow_rules\" 0: \"headers\" is empty",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
 		"missing header key": {
 			authzPolicy: `{
 				"name": "authz",
@@ -251,84 +200,12 @@ func TestTranslatePolicy(t *testing.T) {
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
-		"invalid header key type": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "request": {"headers":[{"key":123}]}}]
-			}`,
-			wantErr:         "\"allow_rules\" 0: \"headers\" 0: \"key\" 123 is not a string",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
 		"missing header values": {
 			authzPolicy: `{
 				"name": "authz",
 				"allow_rules": [{"name": "allow_policy_1", "request": {"headers":[{"key":"key-a"}]}}]
 			}`,
 			wantErr:         "\"allow_rules\" 0: \"headers\" 0: \"values\" is not present",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
-		"invalid header values type": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "request": {"headers":[{"key":"key-a", "values":{}}]}}]
-			}`,
-			wantErr:         "\"allow_rules\" 0: \"headers\" 0: \"values\" is not an array",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
-		"invalid header value type": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "request": {"headers":[{"key":"key-a", "values":["foo", 123]}]}}]
-			}`,
-			wantErr:         "\"allow_rules\" 0: \"headers\" 0: \"values\" 1: 123 is not a string",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
-		"invalid paths type": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "request": {"paths":{}}}]
-			}`,
-			wantErr:         "\"allow_rules\" 0: \"paths\" is not an array",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
-		"invalid path type": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "request": {"paths":[123]}}]
-			}`,
-			wantErr:         "\"allow_rules\" 0: \"paths\" 0: 123 is not a string",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
-		"invalid source type": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "source": []}]
-			}`,
-			wantErr:         "\"allow_rules\" 0: \"source\" is not an object",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
-		"invalid principals type": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "source": {"principals":{}}}]
-			}`,
-			wantErr:         "\"allow_rules\" 0: \"principals\" is not an array",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
-		},
-		"invalid principal type": {
-			authzPolicy: `{
-				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "source": {"principals":["foo", 123]}}]
-			}`,
-			wantErr:         "\"allow_rules\" 0: \"principals\" 1: 123 is not a string",
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
