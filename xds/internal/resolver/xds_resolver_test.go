@@ -1336,5 +1336,3 @@ func replaceRandNumGenerator(start int64) func() {
 func newDurationP(d time.Duration) *time.Duration {
 	return &d
 }
-
-// Task list: fix breaking test, I think we should just add a table driven test for request hash utility function - once Menghan responds
