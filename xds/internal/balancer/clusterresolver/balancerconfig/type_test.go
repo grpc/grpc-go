@@ -44,13 +44,8 @@ func TestDiscoveryMechanismTypeMarshalJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := json.Marshal(tt.typ)
-			if err != nil {
-				t.Errorf("DiscoveryMechanismTypeEDS.MarshalJSON() error = %v, wantErr %v", err, false)
-				return
-			}
-			if gotS := string(got); gotS != tt.want {
-				t.Errorf("DiscoveryMechanismTypeEDS.MarshalJSON() got %q, want %q", gotS, tt.want)
+			if got, err := json.Marshal(tt.typ); err != nil || string(got) != tt.want {
+				t.Fatalf("DiscoveryMechanismTypeEDS.MarshalJSON() = (%v, %v), want (%s, nil)", string(got), err, tt.want)
 			}
 		})
 	}
@@ -83,11 +78,10 @@ func TestDiscoveryMechanismTypeUnmarshalJSON(t *testing.T) {
 			var got DiscoveryMechanismType
 			err := json.Unmarshal([]byte(tt.js), &got)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)
-				return
+				t.Fatalf("DiscoveryMechanismTypeEDS.UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(got, tt.want); diff != "" {
-				t.Errorf("parseConfig() got unexpected output, diff (-got +want): %v", diff)
+				t.Fatalf("DiscoveryMechanismTypeEDS.UnmarshalJSON() got unexpected output, diff (-got +want): %v", diff)
 			}
 		})
 	}
