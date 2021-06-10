@@ -1144,7 +1144,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		if sh != nil {
 			beginTime := time.Now()
 			statsBegin = &stats.Begin{
-				BeginTime: beginTime,
+				BeginTime:      beginTime,
+				IsClientStream: false,
+				IsServerStream: false,
 			}
 			sh.HandleRPC(stream.Context(), statsBegin)
 		}
@@ -1424,7 +1426,9 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	if sh != nil {
 		beginTime := time.Now()
 		statsBegin = &stats.Begin{
-			BeginTime: beginTime,
+			BeginTime:      beginTime,
+			IsClientStream: sd.ClientStreams,
+			IsServerStream: sd.ServerStreams,
 		}
 		sh.HandleRPC(stream.Context(), statsBegin)
 	}
