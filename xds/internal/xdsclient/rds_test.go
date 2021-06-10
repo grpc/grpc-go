@@ -1343,22 +1343,20 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 			},
 		},
 		// unsupported-filter-state-key tests that an unsupported key in the
-		// filter state hash policy raises an error.
+		// filter state hash policy are treated as a no-op.
 		{
 			name: "wrong-filter-state-key",
 			hashPolicies: []*v3routepb.RouteAction_HashPolicy{
 				{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{FilterState: &v3routepb.RouteAction_HashPolicy_FilterState{Key: "unsupported key"}}},
 			},
-			wantErr: true,
 		},
 		// no-op-hash-policy tests that hash policies that are not supported by
-		// grpc raise an error.
+		// grpc are treated as a no-op.
 		{
 			name: "no-op-hash-policy",
 			hashPolicies: []*v3routepb.RouteAction_HashPolicy{
 				{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{}},
 			},
-			wantErr: true,
 		},
 		// header-and-channel-id-hash-policy test that a list of header and
 		// channel id hash policies are successfully converted to an internal
@@ -1402,12 +1400,12 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 	defer func() { env.RingHashSupport = oldRingHashSupport }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := hashPoliciesProtoToSlice(tt.hashPolicies)
-			if err != nil && !tt.wantErr {
-				t.Fatalf("Error returned when no error desired.")
+			got, err := hashPoliciesProtoToSlice(tt.hashPolicies, nil)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("hashPoliciesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(got, tt.wantHashPolicies, cmp.AllowUnexported(regexp.Regexp{})); diff != "" {
-				t.Fatalf("hashPoliciesProtoToSlice returned returned unexpected diff (-got +want):\n%s", diff)
+				t.Fatalf("hashPoliciesProtoToSlice() returned unexpected diff (-got +want):\n%s", diff)
 			}
 		})
 	}

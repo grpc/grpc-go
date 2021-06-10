@@ -499,12 +499,11 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 		}
 
 		route.WeightedClusters = make(map[string]WeightedCluster)
-
 		action := r.GetRoute()
 
 		// Hash Policies are only applicable for a Ring Hash LB.
 		if env.RingHashSupport {
-			hp, err := hashPoliciesProtoToSlice(action.HashPolicy)
+			hp, err := hashPoliciesProtoToSlice(action.HashPolicy, logger)
 			if err != nil {
 				return nil, err
 			}
@@ -572,7 +571,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 	return routesRet, nil
 }
 
-func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy) ([]*HashPolicy, error) {
+func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy, logger *grpclog.PrefixLogger) ([]*HashPolicy, error) {
 	var hashPoliciesRet []*HashPolicy
 	for _, p := range policies {
 		policy := HashPolicy{Terminal: p.Terminal}
@@ -589,11 +588,13 @@ func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy) ([]*
 			policy.RegexSubstitution = p.GetHeader().GetRegexRewrite().GetSubstitution()
 		case *v3routepb.RouteAction_HashPolicy_FilterState_:
 			if p.GetFilterState().GetKey() != "io.grpc.channel_id" {
-				return nil, fmt.Errorf("hash policy %+v contains an invalid key for filter state policy %q", p, p.GetFilterState().GetKey())
+				logger.Infof("hash policy %+v contains an invalid key for filter state policy %q", p, p.GetFilterState().GetKey())
+				continue
 			}
 			policy.HashPolicyType = HashPolicyTypeChannelID
 		default:
-			return nil, fmt.Errorf("hash policy %T is an unsupported hash policy", p.GetPolicySpecifier())
+			logger.Infof("hash policy %T is an unsupported hash policy", p.GetPolicySpecifier())
+			continue
 		}
 
 		hashPoliciesRet = append(hashPoliciesRet, &policy)
