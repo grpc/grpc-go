@@ -206,12 +206,10 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 		var generatedPolicyHash bool
 		switch policy.HashPolicyType {
 		case xdsclient.HashPolicyTypeHeader:
-			print("hash policy type header")
 			md, ok := metadata.FromIncomingContext(rpcInfo.Context)
 			if !ok {
 				continue
 			}
-			print("pulled md from context")
 			values := md.Get(policy.HeaderName)
 			// If the header isn't present, no-op.
 			if len(values) == 0 {
@@ -219,7 +217,6 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 			}
 			joinedValues := strings.Join(values, ",")
 			joinedValues = policy.Regex.ReplaceAllString(fmt.Sprintf("%v", joinedValues), policy.RegexSubstitution)
-			print(joinedValues)
 			policyHash = xxhash.Sum64String(joinedValues)
 			generatedHash = true
 			generatedPolicyHash = true
