@@ -132,6 +132,8 @@ func testPickerFromCh(ch chan balancer.Picker, f func(balancer.Picker) error) er
 		select {
 		case p = <-ch:
 		case <-time.After(defaultTestTimeout):
+			// TODO: this function should take a context, and use the context
+			// here, instead of making a new timer.
 			return fmt.Errorf("timeout waiting for picker with expected behavior, error from previous picker: %v", err)
 		}
 
