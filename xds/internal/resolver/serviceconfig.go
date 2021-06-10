@@ -24,7 +24,6 @@ import (
 	"fmt"
 	"google.golang.org/grpc/internal/grpcrand"
 	"math/bits"
-	"math/rand"
 	"strings"
 	"sync/atomic"
 	"time"
