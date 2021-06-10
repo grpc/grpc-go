@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/grpc/internal/grpcrand"
 	"math/bits"
 	"math/rand"
 	"strings"
@@ -248,7 +249,7 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 	}
 	// If no generated hash return a random long. In the grand scheme of things
 	// this logically will map to choosing a random backend to route request to.
-	return rand.Uint64()
+	return uint64(grpcrand.Float64())
 }
 
 func (cs *configSelector) newInterceptor(rt *route, cluster *routeCluster) (iresolver.ClientInterceptor, error) {
