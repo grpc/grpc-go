@@ -22,6 +22,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/bits"
+	"math/rand"
+	"sync/atomic"
+	"time"
+
 	"google.golang.org/grpc/codes"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/wrr"
@@ -30,10 +35,6 @@ import (
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"math/bits"
-	"math/rand"
-	"sync/atomic"
-	"time"
 )
 
 const (
@@ -374,17 +375,15 @@ func (il *interceptorList) NewStream(ctx context.Context, ri iresolver.RPCInfo, 
 type clusterKey struct{}
 
 func GetPickedCluster(ctx context.Context) string {
-	return ctx.Value(clusterKey{}).(clusterInfoForLB).clusterName
+	info, ok := ctx.Value(clusterKey{}).(clusterInfoForLB)
+	if !ok {
+		return ""
+	}
+	return info.clusterName
 }
 
 func GetRequestHash(ctx context.Context) uint64 {
 	return ctx.Value(clusterKey{}).(clusterInfoForLB).requestHash
-}
-
-// GetPickedClusterForTesting returns the cluster in the context; to be used
-// for testing only.
-func GetPickedClusterForTesting(ctx context.Context) string {
-	return GetPickedCluster(ctx)
 }
 
 type clusterInfoForLB struct {
@@ -392,11 +391,17 @@ type clusterInfoForLB struct {
 	requestHash uint64
 }
 
-// SetPickedClusterAndRequestHash adds the selected cluster to the context for the
-// xds_cluster_manager LB policy to pick.
-func SetPickedClusterAndRequestHash(ctx context.Context, cluster string, requestHash uint64) context.Context {
+// setPickedClusterAndRequestHash adds the selected cluster to the context for
+// the xds_cluster_manager LB policy to pick. It also adds a request hash for
+// Ring Hash Load Balancing.
+func setPickedClusterAndRequestHash(ctx context.Context, cluster string, requestHash uint64) context.Context {
 	return context.WithValue(ctx, clusterKey{}, clusterInfoForLB{
 		clusterName: cluster,
 		requestHash: requestHash,
 	})
+}
+
+// SetPickedClusterAndRequestHashForTesting is used for testing only.
+func SetPickedClusterAndRequestHashForTesting(ctx context.Context, cluster string, requestHash uint64) context.Context {
+	return setPickedClusterAndRequestHash(ctx, cluster, requestHash)
 }

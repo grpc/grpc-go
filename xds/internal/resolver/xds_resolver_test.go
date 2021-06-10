@@ -430,7 +430,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
 			}
-			cluster := GetPickedClusterForTesting(res.Context)
+			cluster := GetPickedCluster(res.Context)
 			pickedClusters[cluster] = true
 			res.OnCommitted()
 		}
@@ -661,7 +661,7 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
 		}
-		picks[GetPickedClusterForTesting(res.Context)]++
+		picks[GetPickedCluster(res.Context)]++
 		res.OnCommitted()
 	}
 	want := map[string]int{"A": 10, "B": 20}
@@ -832,7 +832,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
 	}
-	cluster := GetPickedClusterForTesting(res.Context)
+	cluster := GetPickedCluster(res.Context)
 	if cluster != "test-cluster-1" {
 		t.Fatalf("")
 	}
@@ -1334,3 +1334,5 @@ func replaceRandNumGenerator(start int64) func() {
 func newDurationP(d time.Duration) *time.Duration {
 	return &d
 }
+
+// Task list: fix breaking test, I think we should just add a table driven test for request hash utility function - once Menghan responds
