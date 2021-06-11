@@ -19,6 +19,7 @@
 package authz
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -172,7 +173,7 @@ func TestTranslatePolicy(t *testing.T) {
 		},
 		"invalid field type": {
 			authzPolicy:     `{"name": 123}`,
-			wantErr:         "failed to parse authorization policy",
+			wantErr:         "failed to unmarshal policy",
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
@@ -214,7 +215,7 @@ func TestTranslatePolicy(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			gotDenyPolicy, gotAllowPolicy, gotErr := translatePolicy(test.authzPolicy)
-			if gotErr != nil && gotErr.Error() != test.wantErr {
+			if gotErr != nil && !strings.HasPrefix(gotErr.Error(), test.wantErr) {
 				t.Fatalf("translatePolicy%v\nunexpected error\nwant:%v\ngot:%v", test.authzPolicy, test.wantErr, gotErr)
 			}
 			if diff := cmp.Diff(gotDenyPolicy, test.wantDenyPolicy, protocmp.Transform()); diff != "" {
