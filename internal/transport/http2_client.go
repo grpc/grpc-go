@@ -241,7 +241,28 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		// and passed to the credential handshaker. This makes it possible for
 		// address specific arbitrary data to reach the credential handshaker.
 		connectCtx = icredentials.NewClientHandshakeInfoContext(connectCtx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
-		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, conn)
+		// Pull WithCorrectParams Dial Option here, where you get the "connection timeout specified by the user"
+		// This will default to 20 seconds if not present. Set the deadline on the connection before handshaking on client.
+		// Needs regular line as writes, clear deadline on old conn, theoritically
+		// switches conn, newConn, but clear original connection ON SAME CONN PASSED IN
+		// Will encrpyt, will return a wrapped conn, so need to set back deadline on original reference
+		// connectCtx has the deadline, deadline gets longer and longer with subsequent attempts
+		// deadline comes in from connect params, has a min connect params, but you want backoff
+		// backoff will extend, in that case use connectCtx, so we can use connectCtx
+		// do it for all handshakers
+		// can ignore ok, as will get a zero value for time as zero value is unlimited data
+
+		// Can ignore the boolean as the deadline will return the zero value, which will make
+		// the conn not timeout on I/O operations.
+		deadline, _ := connectCtx.Deadline()
+		// Pull the deadline from the connectCtx, which will be used for timeouts
+		// in the authentication protocol handshake.
+		conn.SetDeadline(deadline)
+		newConn, authInfo, err := transportCreds.ClientHandshake(connectCtx, addr.ServerName, conn)
+		// After authentication handshake, take away the deadline set on the connection.
+		conn.SetDeadline(time.Time{})
+		conn = newConn
+
 		if err != nil {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
