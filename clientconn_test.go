@@ -735,16 +735,15 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 		cc.mu.RLock()
 		v := cc.mkp.Time
+		cc.mu.RUnlock()
 		if v == 20*time.Second {
 			// Success
-			cc.mu.RUnlock()
 			return
 		}
 		if ctx.Err() != nil {
 			// Timeout
 			t.Fatalf("cc.dopts.copts.Keepalive.Time = %v , want 20s", v)
 		}
-		cc.mu.RUnlock()
 	}
 }
 
