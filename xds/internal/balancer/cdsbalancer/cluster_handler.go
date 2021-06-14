@@ -226,8 +226,13 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 			child.delete()
 		}
 		c.children = nil
-		// Always send an update, the child policies know how to deal with
-		// duplicate updates.
+		// This is an update in the one leaf node, should try to send an update
+		// to the parent CDS balancer.
+		//
+		// Note that this update might be a duplicate from the previous one.
+		// Because the update contains not only the cluster name to watch, but
+		// also the extra fields (e.g. security config). There's no good way to
+		// compare all the fields.
 		c.clusterHandler.constructClusterUpdate()
 		return
 	}

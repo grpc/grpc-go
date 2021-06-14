@@ -306,6 +306,13 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 	if len(update.chu) == 0 {
 		b.logger.Infof("got update with 0 cluster updates, should never happen. There should be at least one cluster")
 	}
+	// TODO: this function is currently only handling the cluster with higher
+	// priority. This should work in most cases (e.g. if the cluster is not a
+	// aggregated cluster, or if the higher priority cluster works fine so
+	// there's no need to fallback). This quick fix is to unblock the testing
+	// work before the full fallback support is complete. Once the EDS balancer
+	// is updated to cluster_resolver, which has the fallback functionality, we
+	// will fix this to handle all the clusters in list.
 	cds := update.chu[0]
 	lbCfg := &edsbalancer.EDSConfig{
 		ClusterName:           cds.ClusterName,
