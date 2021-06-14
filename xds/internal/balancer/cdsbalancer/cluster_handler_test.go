@@ -40,7 +40,13 @@ const (
 // xds client.
 func setupTests(t *testing.T) (*clusterHandler, *fakeclient.Client) {
 	xdsC := fakeclient.NewClient()
-	ch := newClusterHandler(&cdsBalancer{xdsClient: xdsC})
+	ch := &clusterHandler{
+		xdsClient: xdsC,
+		// This is will be how the update channel is created in cds. It will be
+		// a separate channel to the buffer.Unbounded. This channel will also be
+		// read from to test any cluster updates.
+		updateChannel: make(chan clusterHandlerUpdate, 1),
+	}
 	return ch, xdsC
 }
 
@@ -170,15 +176,15 @@ func (s) TestSuccessCaseLeafNodeThenNewUpdate(t *testing.T) {
 				t.Fatal("Timed out waiting for update from updateChannel.")
 			}
 
-			// Check that sending the same cluster update also induces an update
-			// to be written to update buffer.
+			// Check that sending the same cluster update does not induce a
+			// update to be written to update buffer.
 			fakeClient.InvokeWatchClusterCallback(test.clusterUpdate, nil)
 			shouldNotHappenCtx, shouldNotHappenCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 			defer shouldNotHappenCtxCancel()
 			select {
 			case <-ch.updateChannel:
+				t.Fatal("Should not have written an update to update buffer, as cluster update did not change.")
 			case <-shouldNotHappenCtx.Done():
-				t.Fatal("Timed out waiting for update from updateChannel.")
 			}
 
 			// Above represents same thing as the simple

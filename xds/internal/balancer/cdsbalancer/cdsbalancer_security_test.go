@@ -153,8 +153,8 @@ func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDS
 	// Override the creation of the EDS balancer to return a fake EDS balancer
 	// implementation.
 	edsB := newTestEDSBalancer()
-	oldEDSBalancerBuilder := newChildBalancer
-	newChildBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
+	oldEDSBalancerBuilder := newEDSBalancer
+	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
 		edsB.parentCC = cc
 		return edsB, nil
 	}
@@ -177,7 +177,7 @@ func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDS
 	}
 
 	return xdsC, cdsB.(*cdsBalancer), edsB, tcc, func() {
-		newChildBalancer = oldEDSBalancerBuilder
+		newEDSBalancer = oldEDSBalancerBuilder
 		xdsC.Close()
 	}
 }
@@ -251,7 +251,7 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	// will trigger the watch handler on the CDS balancer, which will attempt to
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
-	// newChildBalancer function as part of test setup.
+	// newEDSBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -306,7 +306,7 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	// will trigger the watch handler on the CDS balancer, which will attempt to
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
-	// newChildBalancer function as part of test setup. No security config is
+	// newEDSBalancer function as part of test setup. No security config is
 	// passed to the CDS balancer as part of this update.
 	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false)
@@ -464,7 +464,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	// will trigger the watch handler on the CDS balancer, which will attempt to
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
-	// newChildBalancer function as part of test setup.
+	// newEDSBalancer function as part of test setup.
 	wantCCS := edsCCS(serviceName, nil, false)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
@@ -498,7 +498,7 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 	// will trigger the watch handler on the CDS balancer, which will attempt to
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
-	// newChildBalancer function as part of test setup.
+	// newEDSBalancer function as part of test setup.
 	wantCCS := edsCCS(serviceName, nil, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -551,7 +551,7 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	// will trigger the watch handler on the CDS balancer, which will attempt to
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
-	// newChildBalancer function as part of test setup.
+	// newEDSBalancer function as part of test setup.
 	wantCCS := edsCCS(serviceName, nil, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -601,7 +601,7 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	// will trigger the watch handler on the CDS balancer, which will attempt to
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
-	// newChildBalancer function as part of test setup.
+	// newEDSBalancer function as part of test setup.
 	wantCCS := edsCCS(serviceName, nil, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -672,7 +672,7 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 	// will trigger the watch handler on the CDS balancer, which will attempt to
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
-	// newChildBalancer function as part of test setup.
+	// newEDSBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{
 		ClusterName: serviceName,
 		SecurityCfg: &xdsclient.SecurityConfig{
