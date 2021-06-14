@@ -58,3 +58,9 @@ func Float64() float64 {
 	defer mu.Unlock()
 	return r.Float64()
 }
+
+func Uint64() uint64 {
+	mu.Lock()
+	defer mu.Unlock()
+	return r.Uint64()
+}

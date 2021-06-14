@@ -28,7 +28,6 @@ import (
 	"time"
 
 	"github.com/cespare/xxhash"
-
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpcrand"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -169,14 +168,11 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		return nil, err
 	}
 
-	// Request Hashes are only applicable for a Ring Hash LB.
-	var requestHash uint64
-	if env.RingHashSupport {
-		requestHash = cs.generateHash(rpcInfo, rt.hashPolicies)
-	}
-
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
-	lbCtx = ringhash.SetRequestHash(lbCtx, requestHash)
+	// Request Hashes are only applicable for a Ring Hash LB.
+	if env.RingHashSupport {
+		lbCtx = ringhash.SetRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
+	}
 
 	config := &iresolver.RPCConfig{
 		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.
@@ -221,7 +217,7 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 				continue
 			}
 			joinedValues := strings.Join(values, ",")
-			joinedValues = policy.Regex.ReplaceAllString(fmt.Sprintf("%v", joinedValues), policy.RegexSubstitution)
+			joinedValues = policy.Regex.ReplaceAllString(joinedValues, policy.RegexSubstitution)
 			policyHash = xxhash.Sum64String(joinedValues)
 			generatedHash = true
 			generatedPolicyHash = true
@@ -253,7 +249,7 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 	}
 	// If no generated hash return a random long. In the grand scheme of things
 	// this logically will map to choosing a random backend to route request to.
-	return uint64(grpcrand.Float64())
+	return grpcrand.Uint64()
 }
 
 func (cs *configSelector) newInterceptor(rt *route, cluster *routeCluster) (iresolver.ClientInterceptor, error) {

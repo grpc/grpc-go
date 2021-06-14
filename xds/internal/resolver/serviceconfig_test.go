@@ -61,20 +61,18 @@ func (s) TestGenerateRequestHashHeaders(t *testing.T) {
 		Method:  "/some-method",
 	}
 
-	hashPolicies := []*xdsclient.HashPolicy{
-		{
-			HashPolicyType:    xdsclient.HashPolicyTypeHeader,
-			HeaderName:        ":path",
-			Regex:             func() *regexp.Regexp { return regexp.MustCompile("/products") }(), // Will replace /products with /products, to test find and replace functionality.
-			RegexSubstitution: "/products",
-		},
-	}
+	hashPolicies := []*xdsclient.HashPolicy{{
+		HashPolicyType:    xdsclient.HashPolicyTypeHeader,
+		HeaderName:        ":path",
+		Regex:             func() *regexp.Regexp { return regexp.MustCompile("/products") }(), // Will replace /products with /new-products, to test find and replace functionality.
+		RegexSubstitution: "/new-products",
+	}}
 
 	requestHashGot := cs.generateHash(rpcInfo, hashPolicies)
 
 	// Precompute the expected hash here - logically representing the value of the :path header which will be
 	// "/products".
-	requestHashWant := xxhash.Sum64String("/products")
+	requestHashWant := xxhash.Sum64String("/new-products")
 
 	if requestHashGot != requestHashWant {
 		t.Fatalf("requestHashGot = %v, requestHashWant = %v", requestHashGot, requestHashWant)
@@ -92,11 +90,9 @@ func (s) TestGenerateRequestHashChannelID(t *testing.T) {
 
 	requestHashWant := xxhash.Sum64String(fmt.Sprintf("%p", &cs.r.cc))
 
-	hashPolicies := []*xdsclient.HashPolicy{
-		{
-			HashPolicyType: xdsclient.HashPolicyTypeChannelID,
-		},
-	}
+	hashPolicies := []*xdsclient.HashPolicy{{
+		HashPolicyType: xdsclient.HashPolicyTypeChannelID,
+	}}
 	requestHashGot := cs.generateHash(iresolver.RPCInfo{}, hashPolicies)
 
 	if requestHashGot != requestHashWant {
