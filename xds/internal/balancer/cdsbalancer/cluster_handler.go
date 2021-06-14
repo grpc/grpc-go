@@ -25,10 +25,24 @@ import (
 
 var errNotReceivedUpdate = errors.New("tried to construct a cluster update on a cluster that has not received an update")
 
+// clusterHandlerUpdate wraps the information received from the registered CDS
+// watcher. A non-nil error is propagated to the underlying cluster_resolver
+// balancer. A valid update results in creating a new cluster_resolver balancer
+// (if one doesn't already exist) and pushing the update to it.
+type clusterHandlerUpdate struct {
+	// securityCfg is the Security Config from the top (root) cluster.
+	securityCfg *xdsclient.SecurityConfig
+	// chu is a list of ClusterUpdates from all the leaf clusters.
+	chu []xdsclient.ClusterUpdate
+	err error
+}
+
 // clusterHandler will be given a name representing a cluster. It will then
 // update the CDS policy constantly with a list of Clusters to pass down to
 // XdsClusterResolverLoadBalancingPolicyConfig in a stream like fashion.
 type clusterHandler struct {
+	parent *cdsBalancer
+
 	// A mutex to protect entire tree of clusters.
 	clusterMutex    sync.Mutex
 	root            *clusterNode
@@ -39,8 +53,13 @@ type clusterHandler struct {
 	// update or from a child with an error. Capacity of one as the only update
 	// CDS Balancer cares about is the most recent update.
 	updateChannel chan clusterHandlerUpdate
+}
 
-	xdsClient xdsclient.XDSClient
+func newClusterHandler(parent *cdsBalancer) *clusterHandler {
+	return &clusterHandler{
+		parent:        parent,
+		updateChannel: make(chan clusterHandlerUpdate, 1),
+	}
 }
 
 func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
@@ -48,7 +67,7 @@ func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
 	defer ch.clusterMutex.Unlock()
 	if ch.root == nil {
 		// Construct a root node on first update.
-		ch.root = createClusterNode(rootClusterName, ch.xdsClient, ch)
+		ch.root = createClusterNode(rootClusterName, ch.parent.xdsClient, ch)
 		ch.rootClusterName = rootClusterName
 		return
 	}
@@ -56,24 +75,33 @@ func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
 	// new one, if not do nothing.
 	if rootClusterName != ch.rootClusterName {
 		ch.root.delete()
-		ch.root = createClusterNode(rootClusterName, ch.xdsClient, ch)
+		ch.root = createClusterNode(rootClusterName, ch.parent.xdsClient, ch)
 		ch.rootClusterName = rootClusterName
 	}
 }
 
 // This function tries to construct a cluster update to send to CDS.
 func (ch *clusterHandler) constructClusterUpdate() {
-	// If there was an error received no op, as this simply means one of the
-	// children hasn't received an update yet.
-	if clusterUpdate, err := ch.root.constructClusterUpdate(); err == nil {
-		// For a ClusterUpdate, the only update CDS cares about is the most
-		// recent one, so opportunistically drain the update channel before
-		// sending the new update.
-		select {
-		case <-ch.updateChannel:
-		default:
-		}
-		ch.updateChannel <- clusterHandlerUpdate{chu: clusterUpdate, err: nil}
+	if ch.root == nil {
+		// If root is nil, this handler is closed, ignore the update.
+		return
+	}
+	clusterUpdate, err := ch.root.constructClusterUpdate()
+	if err != nil {
+		// If there was an error received no op, as this simply means one of the
+		// children hasn't received an update yet.
+		return
+	}
+	// For a ClusterUpdate, the only update CDS cares about is the most
+	// recent one, so opportunistically drain the update channel before
+	// sending the new update.
+	select {
+	case <-ch.updateChannel:
+	default:
+	}
+	ch.updateChannel <- clusterHandlerUpdate{
+		securityCfg: ch.root.clusterUpdate.SecurityCfg,
+		chu:         clusterUpdate,
 	}
 }
 
@@ -82,9 +110,12 @@ func (ch *clusterHandler) constructClusterUpdate() {
 func (ch *clusterHandler) close() {
 	ch.clusterMutex.Lock()
 	defer ch.clusterMutex.Unlock()
+	ch.rootClusterName = ""
+	if ch.root == nil {
+		return
+	}
 	ch.root.delete()
 	ch.root = nil
-	ch.rootClusterName = ""
 }
 
 // This logically represents a cluster. This handles all the logic for starting
@@ -117,7 +148,12 @@ func createClusterNode(clusterName string, xdsClient xdsclient.XDSClient, topLev
 		clusterHandler: topLevelHandler,
 	}
 	// Communicate with the xds client here.
-	c.cancelFunc = xdsClient.WatchCluster(clusterName, c.handleResp)
+	topLevelHandler.parent.logger.Infof("CDS watch started on %v", clusterName)
+	cancel := xdsClient.WatchCluster(clusterName, c.handleResp)
+	c.cancelFunc = func() {
+		topLevelHandler.parent.logger.Infof("CDS watch canceled on %v", clusterName)
+		cancel()
+	}
 	return c
 }
 
@@ -172,15 +208,10 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 		case <-c.clusterHandler.updateChannel:
 		default:
 		}
-		c.clusterHandler.updateChannel <- clusterHandlerUpdate{chu: nil, err: err}
+		c.clusterHandler.updateChannel <- clusterHandlerUpdate{err: err}
 		return
 	}
 
-	// deltaInClusterUpdateFields determines whether there was a delta in the
-	// clusterUpdate fields (forgetting the children). This will be used to help
-	// determine whether to pingClusterHandler at the end of this callback or
-	// not.
-	deltaInClusterUpdateFields := clusterUpdate.ClusterName != c.clusterUpdate.ClusterName || clusterUpdate.ClusterType != c.clusterUpdate.ClusterType
 	c.receivedUpdate = true
 	c.clusterUpdate = clusterUpdate
 
@@ -195,9 +226,9 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 			child.delete()
 		}
 		c.children = nil
-		if deltaInClusterUpdateFields {
-			c.clusterHandler.constructClusterUpdate()
-		}
+		// Always send an update, the child policies know how to deal with
+		// duplicate updates.
+		c.clusterHandler.constructClusterUpdate()
 		return
 	}
 
@@ -230,7 +261,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsclient.ClusterUpdate, err erro
 	for child := range newChildren {
 		if _, inChildrenAlready := mapCurrentChildren[child]; !inChildrenAlready {
 			createdChild = true
-			mapCurrentChildren[child] = createClusterNode(child, c.clusterHandler.xdsClient, c.clusterHandler)
+			mapCurrentChildren[child] = createClusterNode(child, c.clusterHandler.parent.xdsClient, c.clusterHandler)
 		}
 	}
 

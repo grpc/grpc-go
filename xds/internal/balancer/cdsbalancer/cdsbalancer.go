@@ -46,16 +46,16 @@ const (
 var (
 	errBalancerClosed = errors.New("cdsBalancer is closed")
 
-	// newEDSBalancer is a helper function to build a new edsBalancer and will be
-	// overridden in unittests.
-	newEDSBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
+	// newChildBalancer is a helper function to build a new cluster_resolver
+	// balancer and will be overridden in unittests.
+	newChildBalancer = func(cc balancer.ClientConn, opts balancer.BuildOptions) (balancer.Balancer, error) {
 		builder := balancer.Get(edsName)
 		if builder == nil {
 			return nil, fmt.Errorf("xds: no balancer builder with name %v", edsName)
 		}
-		// We directly pass the parent clientConn to the
-		// underlying edsBalancer because the cdsBalancer does
-		// not deal with subConns.
+		// We directly pass the parent clientConn to the underlying
+		// cluster_resolver balancer because the cdsBalancer does not deal with
+		// subConns.
 		return builder.Build(cc, opts), nil
 	}
 	buildProvider = buildProviderFunc
@@ -73,12 +73,11 @@ type bb struct{}
 // Build creates a new CDS balancer with the ClientConn.
 func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	b := &cdsBalancer{
-		bOpts:       opts,
-		updateCh:    buffer.NewUnbounded(),
-		closed:      grpcsync.NewEvent(),
-		done:        grpcsync.NewEvent(),
-		cancelWatch: func() {}, // No-op at this point.
-		xdsHI:       xdsinternal.NewHandshakeInfo(nil, nil),
+		bOpts:    opts,
+		updateCh: buffer.NewUnbounded(),
+		closed:   grpcsync.NewEvent(),
+		done:     grpcsync.NewEvent(),
+		xdsHI:    xdsinternal.NewHandshakeInfo(nil, nil),
 	}
 	b.logger = prefixLogger((b))
 	b.logger.Infof("Created")
@@ -93,7 +92,7 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 		b.xdsCredsInUse = true
 	}
 	b.logger.Infof("xDS credentials in use: %v", b.xdsCredsInUse)
-
+	b.clusterHandler = newClusterHandler(b)
 	b.ccw = &ccWrapper{
 		ClientConn: cc,
 		xdsHI:      b.xdsHI,
@@ -127,46 +126,32 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 // ccUpdate wraps a clientConn update received from gRPC (pushed from the
 // xdsResolver). A valid clusterName causes the cdsBalancer to register a CDS
 // watcher with the xdsClient, while a non-nil error causes it to cancel the
-// existing watch and propagate the error to the underlying edsBalancer.
+// existing watch and propagate the error to the underlying cluster_resolver
+// balancer.
 type ccUpdate struct {
 	clusterName string
 	err         error
 }
 
-type clusterHandlerUpdate struct {
-	chu []xdsclient.ClusterUpdate
-	err error
-}
-
 // scUpdate wraps a subConn update received from gRPC. This is directly passed
-// on to the edsBalancer.
+// on to the cluster_resolver balancer.
 type scUpdate struct {
 	subConn balancer.SubConn
 	state   balancer.SubConnState
 }
 
-// watchUpdate wraps the information received from a registered CDS watcher. A
-// non-nil error is propagated to the underlying edsBalancer. A valid update
-// results in creating a new edsBalancer (if one doesn't already exist) and
-// pushing the update to it.
-type watchUpdate struct {
-	cds xdsclient.ClusterUpdate
-	err error
-}
-
-// cdsBalancer implements a CDS based LB policy. It instantiates an EDS based
-// LB policy to further resolve the serviceName received from CDS, into
-// localities and endpoints. Implements the balancer.Balancer interface which
-// is exposed to gRPC and implements the balancer.ClientConn interface which is
-// exposed to the edsBalancer.
+// cdsBalancer implements a CDS based LB policy. It instantiates a
+// cluster_resolver balancer to further resolve the serviceName received from
+// CDS, into localities and endpoints. Implements the balancer.Balancer
+// interface which is exposed to gRPC and implements the balancer.ClientConn
+// interface which is exposed to the cluster_resolver balancer.
 type cdsBalancer struct {
 	ccw            *ccWrapper            // ClientConn interface passed to child LB.
 	bOpts          balancer.BuildOptions // BuildOptions passed to child LB.
 	updateCh       *buffer.Unbounded     // Channel for gRPC and xdsClient updates.
 	xdsClient      xdsclient.XDSClient   // xDS client to watch Cluster resource.
-	cancelWatch    func()                // Cluster watch cancel func.
-	edsLB          balancer.Balancer     // EDS child policy.
-	clusterToWatch string
+	clusterHandler *clusterHandler       // To watch the clusters.
+	childLB        balancer.Balancer
 	logger         *grpclog.PrefixLogger
 	closed         *grpcsync.Event
 	done           *grpcsync.Event
@@ -182,25 +167,15 @@ type cdsBalancer struct {
 // handleClientConnUpdate handles a ClientConnUpdate received from gRPC. Good
 // updates lead to registration of a CDS watch. Updates with error lead to
 // cancellation of existing watch and propagation of the same error to the
-// edsBalancer.
+// cluster_resolver balancer.
 func (b *cdsBalancer) handleClientConnUpdate(update *ccUpdate) {
 	// We first handle errors, if any, and then proceed with handling the
 	// update, only if the status quo has changed.
 	if err := update.err; err != nil {
 		b.handleErrorFromUpdate(err, true)
-	}
-	if b.clusterToWatch == update.clusterName {
 		return
 	}
-	if update.clusterName != "" {
-		cancelWatch := b.xdsClient.WatchCluster(update.clusterName, b.handleClusterUpdate)
-		b.logger.Infof("Watch started on resource name %v with xds-client %p", update.clusterName, b.xdsClient)
-		b.cancelWatch = func() {
-			cancelWatch()
-			b.logger.Infof("Watch cancelled on resource name %v with xds-client %p", update.clusterName, b.xdsClient)
-		}
-		b.clusterToWatch = update.clusterName
-	}
+	b.clusterHandler.updateRootCluster(update.clusterName)
 }
 
 // handleSecurityConfig processes the security configuration received from the
@@ -292,22 +267,22 @@ func buildProviderFunc(configs map[string]*certprovider.BuildableConfig, instanc
 }
 
 // handleWatchUpdate handles a watch update from the xDS Client. Good updates
-// lead to clientConn updates being invoked on the underlying edsBalancer.
-func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
+// lead to clientConn updates being invoked on the underlying cluster_resolver balancer.
+func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 	if err := update.err; err != nil {
 		b.logger.Warningf("Watch error from xds-client %p: %v", b.xdsClient, err)
 		b.handleErrorFromUpdate(err, false)
 		return
 	}
 
-	b.logger.Infof("Watch update from xds-client %p, content: %+v", b.xdsClient, pretty.ToJSON(update.cds))
+	b.logger.Infof("Watch update from xds-client %p, content: %+v, security config: %v", b.xdsClient, pretty.ToJSON(update.chu), pretty.ToJSON(update.securityCfg))
 
 	// Process the security config from the received update before building the
 	// child policy or forwarding the update to it. We do this because the child
 	// policy may try to create a new subConn inline. Processing the security
 	// configuration here and setting up the handshakeInfo will make sure that
 	// such attempts are handled properly.
-	if err := b.handleSecurityConfig(update.cds.SecurityCfg); err != nil {
+	if err := b.handleSecurityConfig(update.securityCfg); err != nil {
 		// If the security config is invalid, for example, if the provider
 		// instance is not found in the bootstrap config, we need to put the
 		// channel in transient failure.
@@ -317,23 +292,28 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 	}
 
 	// The first good update from the watch API leads to the instantiation of an
-	// edsBalancer. Further updates/errors are propagated to the existing
-	// edsBalancer.
-	if b.edsLB == nil {
-		edsLB, err := newEDSBalancer(b.ccw, b.bOpts)
+	// cluster_resolver balancer. Further updates/errors are propagated to the existing
+	// cluster_resolver balancer.
+	if b.childLB == nil {
+		childLB, err := newChildBalancer(b.ccw, b.bOpts)
 		if err != nil {
 			b.logger.Errorf("Failed to create child policy of type %s, %v", edsName, err)
 			return
 		}
-		b.edsLB = edsLB
-		b.logger.Infof("Created child policy %p of type %s", b.edsLB, edsName)
+		b.childLB = childLB
+		b.logger.Infof("Created child policy %p of type %s", b.childLB, edsName)
 	}
+
+	if len(update.chu) == 0 {
+		b.logger.Infof("got update with 0 cluster updates, should never happen. There should be at least one cluster")
+	}
+	cds := update.chu[0]
 	lbCfg := &edsbalancer.EDSConfig{
-		ClusterName:           update.cds.ClusterName,
-		EDSServiceName:        update.cds.EDSServiceName,
-		MaxConcurrentRequests: update.cds.MaxRequests,
+		ClusterName:           cds.ClusterName,
+		EDSServiceName:        cds.EDSServiceName,
+		MaxConcurrentRequests: cds.MaxRequests,
 	}
-	if update.cds.EnableLRS {
+	if cds.EnableLRS {
 		// An empty string here indicates that the edsBalancer should use the
 		// same xDS server for load reporting as it does for EDS
 		// requests/responses.
@@ -344,7 +324,7 @@ func (b *cdsBalancer) handleWatchUpdate(update *watchUpdate) {
 		ResolverState:  xdsclient.SetClient(resolver.State{}, b.xdsClient),
 		BalancerConfig: lbCfg,
 	}
-	if err := b.edsLB.UpdateClientConnState(ccState); err != nil {
+	if err := b.childLB.UpdateClientConnState(ccState); err != nil {
 		b.logger.Errorf("xds: edsBalancer.UpdateClientConnState(%+v) returned error: %v", ccState, err)
 	}
 }
@@ -362,22 +342,20 @@ func (b *cdsBalancer) run() {
 				b.handleClientConnUpdate(update)
 			case *scUpdate:
 				// SubConn updates are passthrough and are simply handed over to
-				// the underlying edsBalancer.
-				if b.edsLB == nil {
-					b.logger.Errorf("xds: received scUpdate {%+v} with no edsBalancer", update)
+				// the underlying cluster_resolver balancer.
+				if b.childLB == nil {
+					b.logger.Errorf("xds: received scUpdate {%+v} with no cluster_resolver balancer", update)
 					break
 				}
-				b.edsLB.UpdateSubConnState(update.subConn, update.state)
-			case *watchUpdate:
-				b.handleWatchUpdate(update)
+				b.childLB.UpdateSubConnState(update.subConn, update.state)
 			}
+		case u := <-b.clusterHandler.updateChannel:
+			b.handleWatchUpdate(u)
 		case <-b.closed.Done():
-			b.cancelWatch()
-			b.cancelWatch = func() {}
-
-			if b.edsLB != nil {
-				b.edsLB.Close()
-				b.edsLB = nil
+			b.clusterHandler.close()
+			if b.childLB != nil {
+				b.childLB.Close()
+				b.childLB = nil
 			}
 			if b.cachedRoot != nil {
 				b.cachedRoot.Close()
@@ -405,39 +383,29 @@ func (b *cdsBalancer) run() {
 // - If it's from xds client, it means CDS resource were removed. The CDS
 // watcher should keep watching.
 //
-// In both cases, the error will be forwarded to EDS balancer. And if error is
-// resource-not-found, the child EDS balancer will stop watching EDS.
+// In both cases, the error will be forwarded to the child balancer. And if
+// error is resource-not-found, the child balancer will stop watching EDS.
 func (b *cdsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
-	// TODO: connection errors will be sent to the eds balancers directly, and
-	// also forwarded by the parent balancers/resolvers. So the eds balancer may
-	// see the same error multiple times. We way want to only forward the error
-	// to eds if it's not a connection error.
+	// TODO: connection errors will be sent to the child balancers directly, and
+	// also forwarded by the parent balancers/resolvers. So the child balancer
+	// may see the same error multiple times. We way want to only forward the
+	// error to child if it's not a connection error.
 	//
 	// This is not necessary today, because xds client never sends connection
 	// errors.
 	if fromParent && xdsclient.ErrType(err) == xdsclient.ErrorTypeResourceNotFound {
-		b.cancelWatch()
+		b.clusterHandler.close()
 	}
-	if b.edsLB != nil {
-		b.edsLB.ResolverError(err)
+	if b.childLB != nil {
+		b.childLB.ResolverError(err)
 	} else {
-		// If eds balancer was never created, fail the RPCs with
+		// If child balancer was never created, fail the RPCs with
 		// errors.
 		b.ccw.UpdateState(balancer.State{
 			ConnectivityState: connectivity.TransientFailure,
 			Picker:            base.NewErrPicker(err),
 		})
 	}
-}
-
-// handleClusterUpdate is the CDS watch API callback. It simply pushes the
-// received information on to the update channel for run() to pick it up.
-func (b *cdsBalancer) handleClusterUpdate(cu xdsclient.ClusterUpdate, err error) {
-	if b.closed.HasFired() {
-		b.logger.Warningf("xds: received cluster update {%+v} after cdsBalancer was closed", cu)
-		return
-	}
-	b.updateCh.Put(&watchUpdate{cds: cu, err: err})
 }
 
 // UpdateClientConnState receives the serviceConfig (which contains the
