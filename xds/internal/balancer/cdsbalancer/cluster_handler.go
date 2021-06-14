@@ -110,12 +110,12 @@ func (ch *clusterHandler) constructClusterUpdate() {
 func (ch *clusterHandler) close() {
 	ch.clusterMutex.Lock()
 	defer ch.clusterMutex.Unlock()
-	ch.rootClusterName = ""
 	if ch.root == nil {
 		return
 	}
 	ch.root.delete()
 	ch.root = nil
+	ch.rootClusterName = ""
 }
 
 // This logically represents a cluster. This handles all the logic for starting
