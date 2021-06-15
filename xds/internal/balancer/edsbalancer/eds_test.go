@@ -25,7 +25,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"testing"
 	"time"
 
@@ -34,7 +33,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpctest"
 	scpb "google.golang.org/grpc/internal/proto/grpc_service_config"
 	"google.golang.org/grpc/internal/testutils"
@@ -43,7 +41,6 @@ import (
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/load"
 
 	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // V2 client registration.
 )
@@ -52,7 +49,7 @@ const (
 	defaultTestTimeout      = 1 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
 	testServiceName         = "test/foo"
-	testEDSClusterName      = "test/service/eds"
+	testClusterName         = "test/cluster"
 )
 
 var (
@@ -70,15 +67,22 @@ var (
 	}
 )
 
-func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
-	return func() balancer.SubConn {
-		scst, _ := p.Pick(balancer.PickInfo{})
-		return scst.SubConn
-	}
+func init() {
+	balancer.Register(bb{})
 }
 
 type s struct {
 	grpctest.Tester
+
+	cleanup func()
+}
+
+func (ss s) Teardown(t *testing.T) {
+	xdsclient.ClearAllCountersForTesting()
+	ss.Tester.Teardown(t)
+	if ss.cleanup != nil {
+		ss.cleanup()
+	}
 }
 
 func Test(t *testing.T) {
@@ -105,58 +109,49 @@ func (noopTestClientConn) Target() string { return testServiceName }
 
 type scStateChange struct {
 	sc    balancer.SubConn
-	state connectivity.State
+	state balancer.SubConnState
 }
 
-type fakeEDSBalancer struct {
-	cc                 balancer.ClientConn
-	childPolicy        *testutils.Channel
-	subconnStateChange *testutils.Channel
-	edsUpdate          *testutils.Channel
-	serviceName        *testutils.Channel
-	serviceRequestMax  *testutils.Channel
-	clusterName        *testutils.Channel
+type fakeChildBalancer struct {
+	cc              balancer.ClientConn
+	subConnState    *testutils.Channel
+	clientConnState *testutils.Channel
+	resolverError   *testutils.Channel
 }
 
-func (f *fakeEDSBalancer) handleSubConnStateChange(sc balancer.SubConn, state connectivity.State) {
-	f.subconnStateChange.Send(&scStateChange{sc: sc, state: state})
+func (f *fakeChildBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
+	f.clientConnState.Send(state)
+	return nil
 }
 
-func (f *fakeEDSBalancer) handleChildPolicy(name string, config json.RawMessage) {
-	f.childPolicy.Send(&loadBalancingConfig{Name: name, Config: config})
+func (f *fakeChildBalancer) ResolverError(err error) {
+	f.resolverError.Send(err)
 }
 
-func (f *fakeEDSBalancer) handleEDSResponse(edsResp xdsclient.EndpointsUpdate) {
-	f.edsUpdate.Send(edsResp)
+func (f *fakeChildBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	f.subConnState.Send(&scStateChange{sc: sc, state: state})
 }
 
-func (f *fakeEDSBalancer) updateState(priority priorityType, s balancer.State) {}
+func (f *fakeChildBalancer) Close() {}
 
-func (f *fakeEDSBalancer) updateServiceRequestsConfig(serviceName string, max *uint32) {
-	f.serviceName.Send(serviceName)
-	f.serviceRequestMax.Send(max)
-}
-
-func (f *fakeEDSBalancer) updateClusterName(name string) {
-	f.clusterName.Send(name)
-}
-
-func (f *fakeEDSBalancer) close() {}
-
-func (f *fakeEDSBalancer) waitForChildPolicy(ctx context.Context, wantPolicy *loadBalancingConfig) error {
-	val, err := f.childPolicy.Receive(ctx)
+func (f *fakeChildBalancer) waitForClientConnStateChange(ctx context.Context) error {
+	_, err := f.clientConnState.Receive(ctx)
 	if err != nil {
 		return err
-	}
-	gotPolicy := val.(*loadBalancingConfig)
-	if !cmp.Equal(gotPolicy, wantPolicy) {
-		return fmt.Errorf("got childPolicy %v, want %v", gotPolicy, wantPolicy)
 	}
 	return nil
 }
 
-func (f *fakeEDSBalancer) waitForSubConnStateChange(ctx context.Context, wantState *scStateChange) error {
-	val, err := f.subconnStateChange.Receive(ctx)
+func (f *fakeChildBalancer) waitForResolverError(ctx context.Context) error {
+	_, err := f.resolverError.Receive(ctx)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (f *fakeChildBalancer) waitForSubConnStateChange(ctx context.Context, wantState *scStateChange) error {
+	val, err := f.subConnState.Receive(ctx)
 	if err != nil {
 		return err
 	}
@@ -167,70 +162,12 @@ func (f *fakeEDSBalancer) waitForSubConnStateChange(ctx context.Context, wantSta
 	return nil
 }
 
-func (f *fakeEDSBalancer) waitForEDSResponse(ctx context.Context, wantUpdate xdsclient.EndpointsUpdate) error {
-	val, err := f.edsUpdate.Receive(ctx)
-	if err != nil {
-		return err
-	}
-	gotUpdate := val.(xdsclient.EndpointsUpdate)
-	if !reflect.DeepEqual(gotUpdate, wantUpdate) {
-		return fmt.Errorf("got edsUpdate %+v, want %+v", gotUpdate, wantUpdate)
-	}
-	return nil
-}
-
-func (f *fakeEDSBalancer) waitForCounterUpdate(ctx context.Context, wantServiceName string) error {
-	val, err := f.serviceName.Receive(ctx)
-	if err != nil {
-		return err
-	}
-	gotServiceName := val.(string)
-	if gotServiceName != wantServiceName {
-		return fmt.Errorf("got serviceName %v, want %v", gotServiceName, wantServiceName)
-	}
-	return nil
-}
-
-func (f *fakeEDSBalancer) waitForCountMaxUpdate(ctx context.Context, want *uint32) error {
-	val, err := f.serviceRequestMax.Receive(ctx)
-	if err != nil {
-		return err
-	}
-	got := val.(*uint32)
-
-	if got == nil && want == nil {
-		return nil
-	}
-	if got != nil && want != nil {
-		if *got != *want {
-			return fmt.Errorf("got countMax %v, want %v", *got, *want)
-		}
-		return nil
-	}
-	return fmt.Errorf("got countMax %+v, want %+v", got, want)
-}
-
-func (f *fakeEDSBalancer) waitForClusterNameUpdate(ctx context.Context, wantClusterName string) error {
-	val, err := f.clusterName.Receive(ctx)
-	if err != nil {
-		return err
-	}
-	gotServiceName := val.(string)
-	if gotServiceName != wantClusterName {
-		return fmt.Errorf("got clusterName %v, want %v", gotServiceName, wantClusterName)
-	}
-	return nil
-}
-
-func newFakeEDSBalancer(cc balancer.ClientConn) edsBalancerImplInterface {
-	return &fakeEDSBalancer{
-		cc:                 cc,
-		childPolicy:        testutils.NewChannelWithSize(10),
-		subconnStateChange: testutils.NewChannelWithSize(10),
-		edsUpdate:          testutils.NewChannelWithSize(10),
-		serviceName:        testutils.NewChannelWithSize(10),
-		serviceRequestMax:  testutils.NewChannelWithSize(10),
-		clusterName:        testutils.NewChannelWithSize(10),
+func newFakeChildBalancer(cc balancer.ClientConn) balancer.Balancer {
+	return &fakeChildBalancer{
+		cc:              cc,
+		subConnState:    testutils.NewChannelWithSize(10),
+		clientConnState: testutils.NewChannelWithSize(10),
+		resolverError:   testutils.NewChannelWithSize(10),
 	}
 }
 
@@ -239,168 +176,37 @@ type fakeSubConn struct{}
 func (*fakeSubConn) UpdateAddresses([]resolver.Address) { panic("implement me") }
 func (*fakeSubConn) Connect()                           { panic("implement me") }
 
-// waitForNewEDSLB makes sure that a new edsLB is created by the top-level
+// waitForNewChildLB makes sure that a new child LB is created by the top-level
 // edsBalancer.
-func waitForNewEDSLB(ctx context.Context, ch *testutils.Channel) (*fakeEDSBalancer, error) {
+func waitForNewChildLB(ctx context.Context, ch *testutils.Channel) (*fakeChildBalancer, error) {
 	val, err := ch.Receive(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("error when waiting for a new edsLB: %v", err)
 	}
-	return val.(*fakeEDSBalancer), nil
+	return val.(*fakeChildBalancer), nil
 }
 
 // setup overrides the functions which are used to create the xdsClient and the
 // edsLB, creates fake version of them and makes them available on the provided
 // channels. The returned cancel function should be called by the test for
 // cleanup.
-func setup(edsLBCh *testutils.Channel) (*fakeclient.Client, func()) {
+func setup(childLBCh *testutils.Channel) (*fakeclient.Client, func()) {
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
 
-	origNewEDSBalancer := newEDSBalancer
-	newEDSBalancer = func(cc balancer.ClientConn, _ balancer.BuildOptions, _ func(priorityType, balancer.State), _ load.PerClusterReporter, _ *grpclog.PrefixLogger) edsBalancerImplInterface {
-		edsLB := newFakeEDSBalancer(cc)
-		defer func() { edsLBCh.Send(edsLB) }()
-		return edsLB
+	origNewChildBalancer := newChildBalancer
+	newChildBalancer = func(_ balancer.Builder, cc balancer.ClientConn, _ balancer.BuildOptions) balancer.Balancer {
+		childLB := newFakeChildBalancer(cc)
+		defer func() { childLBCh.Send(childLB) }()
+		return childLB
 	}
 	return xdsC, func() {
-		newEDSBalancer = origNewEDSBalancer
+		newChildBalancer = origNewChildBalancer
 		xdsC.Close()
 	}
 }
 
-const (
-	fakeBalancerA = "fake_balancer_A"
-	fakeBalancerB = "fake_balancer_B"
-)
-
-// Install two fake balancers for service config update tests.
-//
-// ParseConfig only accepts the json if the balancer specified is registered.
-func init() {
-	balancer.Register(&fakeBalancerBuilder{name: fakeBalancerA})
-	balancer.Register(&fakeBalancerBuilder{name: fakeBalancerB})
-}
-
-type fakeBalancerBuilder struct {
-	name string
-}
-
-func (b *fakeBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &fakeBalancer{cc: cc}
-}
-
-func (b *fakeBalancerBuilder) Name() string {
-	return b.name
-}
-
-type fakeBalancer struct {
-	cc balancer.ClientConn
-}
-
-func (b *fakeBalancer) ResolverError(error) {
-	panic("implement me")
-}
-
-func (b *fakeBalancer) UpdateClientConnState(balancer.ClientConnState) error {
-	panic("implement me")
-}
-
-func (b *fakeBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
-	panic("implement me")
-}
-
-func (b *fakeBalancer) Close() {}
-
-// TestConfigChildPolicyUpdate verifies scenarios where the childPolicy
-// section of the lbConfig is updated.
-//
-// The test does the following:
-// * Builds a new EDS balancer.
-// * Pushes a new ClientConnState with a childPolicy set to fakeBalancerA.
-//   Verifies that an EDS watch is registered. It then pushes a new edsUpdate
-//   through the fakexds client. Verifies that a new edsLB is created and it
-//   receives the expected childPolicy.
-// * Pushes a new ClientConnState with a childPolicy set to fakeBalancerB.
-//   Verifies that the existing edsLB receives the new child policy.
-func (s) TestConfigChildPolicyUpdate(t *testing.T) {
-	edsLBCh := testutils.NewChannel()
-	xdsC, cleanup := setup(edsLBCh)
-	defer cleanup()
-
-	builder := balancer.Get(edsName)
-	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
-	if edsB == nil {
-		t.Fatalf("builder.Build(%s) failed and returned nil", edsName)
-	}
-	defer edsB.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	edsLB, err := waitForNewEDSLB(ctx, edsLBCh)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	lbCfgA := &loadBalancingConfig{
-		Name:   fakeBalancerA,
-		Config: json.RawMessage("{}"),
-	}
-	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{
-			ChildPolicy:    lbCfgA,
-			ClusterName:    testEDSClusterName,
-			EDSServiceName: testServiceName,
-		},
-	}); err != nil {
-		t.Fatalf("edsB.UpdateClientConnState() failed: %v", err)
-	}
-
-	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
-		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
-	}
-	xdsC.InvokeWatchEDSCallback(defaultEndpointsUpdate, nil)
-	if err := edsLB.waitForChildPolicy(ctx, lbCfgA); err != nil {
-		t.Fatal(err)
-	}
-	if err := edsLB.waitForCounterUpdate(ctx, testEDSClusterName); err != nil {
-		t.Fatal(err)
-	}
-	if err := edsLB.waitForCountMaxUpdate(ctx, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	var testCountMax uint32 = 100
-	lbCfgB := &loadBalancingConfig{
-		Name:   fakeBalancerB,
-		Config: json.RawMessage("{}"),
-	}
-	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{
-			ChildPolicy:           lbCfgB,
-			ClusterName:           testEDSClusterName,
-			EDSServiceName:        testServiceName,
-			MaxConcurrentRequests: &testCountMax,
-		},
-	}); err != nil {
-		t.Fatalf("edsB.UpdateClientConnState() failed: %v", err)
-	}
-	if err := edsLB.waitForChildPolicy(ctx, lbCfgB); err != nil {
-		t.Fatal(err)
-	}
-	if err := edsLB.waitForCounterUpdate(ctx, testEDSClusterName); err != nil {
-		// Counter is updated even though the service name didn't change. The
-		// eds_impl will compare the service names, and skip if it didn't change.
-		t.Fatal(err)
-	}
-	if err := edsLB.waitForCountMaxUpdate(ctx, &testCountMax); err != nil {
-		t.Fatal(err)
-	}
-}
-
 // TestSubConnStateChange verifies if the top-level edsBalancer passes on
-// the subConnStateChange to appropriate child balancer.
+// the subConnState to appropriate child balancer.
 func (s) TestSubConnStateChange(t *testing.T) {
 	edsLBCh := testutils.NewChannel()
 	xdsC, cleanup := setup(edsLBCh)
@@ -413,13 +219,6 @@ func (s) TestSubConnStateChange(t *testing.T) {
 	}
 	defer edsB.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	edsLB, err := waitForNewEDSLB(ctx, edsLBCh)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
@@ -427,14 +226,20 @@ func (s) TestSubConnStateChange(t *testing.T) {
 		t.Fatalf("edsB.UpdateClientConnState() failed: %v", err)
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
 	xdsC.InvokeWatchEDSCallback(defaultEndpointsUpdate, nil)
+	edsLB, err := waitForNewChildLB(ctx, edsLBCh)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	fsc := &fakeSubConn{}
-	state := connectivity.Ready
-	edsB.UpdateSubConnState(fsc, balancer.SubConnState{ConnectivityState: state})
+	state := balancer.SubConnState{ConnectivityState: connectivity.Ready}
+	edsB.UpdateSubConnState(fsc, state)
 	if err := edsLB.waitForSubConnStateChange(ctx, &scStateChange{sc: fsc, state: state}); err != nil {
 		t.Fatal(err)
 	}
@@ -462,24 +267,22 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	edsLB, err := waitForNewEDSLB(ctx, edsLBCh)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
 	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
-	if err := edsLB.waitForEDSResponse(ctx, xdsclient.EndpointsUpdate{}); err != nil {
-		t.Fatalf("EDS impl got unexpected EDS response: %v", err)
+	edsLB, err := waitForNewChildLB(ctx, edsLBCh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := edsLB.waitForClientConnStateChange(ctx); err != nil {
+		t.Fatalf("EDS impl got unexpected update: %v", err)
 	}
 
 	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
@@ -493,8 +296,11 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if err := edsLB.waitForEDSResponse(sCtx, xdsclient.EndpointsUpdate{}); err != context.DeadlineExceeded {
+	if err := edsLB.waitForClientConnStateChange(sCtx); err != context.DeadlineExceeded {
 		t.Fatal(err)
+	}
+	if err := edsLB.waitForResolverError(ctx); err != nil {
+		t.Fatalf("want resolver error, got %v", err)
 	}
 
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "edsBalancer resource not found error")
@@ -507,8 +313,11 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	if err := xdsC.WaitForCancelEDSWatch(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("watch was canceled, want not canceled (timeout error)")
 	}
-	if err := edsLB.waitForEDSResponse(ctx, xdsclient.EndpointsUpdate{}); err != nil {
-		t.Fatalf("eds impl expecting empty update, got %v", err)
+	if err := edsLB.waitForClientConnStateChange(sCtx); err != context.DeadlineExceeded {
+		t.Fatal(err)
+	}
+	if err := edsLB.waitForResolverError(ctx); err != nil {
+		t.Fatalf("want resolver error, got %v", err)
 	}
 
 	// An update with the same service name should not trigger a new watch.
@@ -546,11 +355,6 @@ func (s) TestErrorFromResolver(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	edsLB, err := waitForNewEDSLB(ctx, edsLBCh)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
@@ -562,8 +366,12 @@ func (s) TestErrorFromResolver(t *testing.T) {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
 	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, nil)
-	if err := edsLB.waitForEDSResponse(ctx, xdsclient.EndpointsUpdate{}); err != nil {
-		t.Fatalf("EDS impl got unexpected EDS response: %v", err)
+	edsLB, err := waitForNewChildLB(ctx, edsLBCh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := edsLB.waitForClientConnStateChange(ctx); err != nil {
+		t.Fatalf("EDS impl got unexpected update: %v", err)
 	}
 
 	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
@@ -577,8 +385,11 @@ func (s) TestErrorFromResolver(t *testing.T) {
 
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if err := edsLB.waitForEDSResponse(sCtx, xdsclient.EndpointsUpdate{}); err != context.DeadlineExceeded {
+	if err := edsLB.waitForClientConnStateChange(sCtx); err != context.DeadlineExceeded {
 		t.Fatal("eds impl got EDS resp, want timeout error")
+	}
+	if err := edsLB.waitForResolverError(ctx); err != nil {
+		t.Fatalf("want resolver error, got %v", err)
 	}
 
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "edsBalancer resource not found error")
@@ -586,8 +397,11 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	if err := xdsC.WaitForCancelEDSWatch(ctx); err != nil {
 		t.Fatalf("want watch to be canceled, waitForCancel failed: %v", err)
 	}
-	if err := edsLB.waitForEDSResponse(ctx, xdsclient.EndpointsUpdate{}); err != nil {
-		t.Fatalf("EDS impl got unexpected EDS response: %v", err)
+	if err := edsLB.waitForClientConnStateChange(sCtx); err != context.DeadlineExceeded {
+		t.Fatal(err)
+	}
+	if err := edsLB.waitForResolverError(ctx); err != nil {
+		t.Fatalf("want resolver error, got %v", err)
 	}
 
 	// An update with the same service name should trigger a new watch, because
@@ -681,96 +495,48 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	}
 }
 
-// TestCounterUpdate verifies that the counter update is triggered with the
-// service name from an update's config.
-func (s) TestCounterUpdate(t *testing.T) {
-	edsLBCh := testutils.NewChannel()
-	xdsC, cleanup := setup(edsLBCh)
-	defer cleanup()
+const (
+	fakeBalancerA = "fake_balancer_A"
+	fakeBalancerB = "fake_balancer_B"
+)
 
-	builder := balancer.Get(edsName)
-	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
-	if edsB == nil {
-		t.Fatalf("builder.Build(%s) failed and returned nil", edsName)
-	}
-	defer edsB.Close()
-
-	var testCountMax uint32 = 100
-	// Update should trigger counter update with provided service name.
-	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{
-			ClusterName:           "foobar-1",
-			MaxConcurrentRequests: &testCountMax,
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	edsI := edsB.(*edsBalancer).edsImpl.(*fakeEDSBalancer)
-	if err := edsI.waitForCounterUpdate(ctx, "foobar-1"); err != nil {
-		t.Fatal(err)
-	}
-	if err := edsI.waitForCountMaxUpdate(ctx, &testCountMax); err != nil {
-		t.Fatal(err)
-	}
+// Install two fake balancers for service config update tests.
+//
+// ParseConfig only accepts the json if the balancer specified is registered.
+func init() {
+	balancer.Register(&fakeBalancerBuilder{name: fakeBalancerA})
+	balancer.Register(&fakeBalancerBuilder{name: fakeBalancerB})
 }
 
-// TestClusterNameUpdateInAddressAttributes verifies that cluster name update in
-// edsImpl is triggered with the update from a new service config.
-func (s) TestClusterNameUpdateInAddressAttributes(t *testing.T) {
-	edsLBCh := testutils.NewChannel()
-	xdsC, cleanup := setup(edsLBCh)
-	defer cleanup()
-
-	builder := balancer.Get(edsName)
-	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
-	if edsB == nil {
-		t.Fatalf("builder.Build(%s) failed and returned nil", edsName)
-	}
-	defer edsB.Close()
-
-	// Update should trigger counter update with provided service name.
-	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{
-			ClusterName: "foobar-1",
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	gotCluster, err := xdsC.WaitForWatchEDS(ctx)
-	if err != nil || gotCluster != "foobar-1" {
-		t.Fatalf("unexpected EDS watch: %v, %v", gotCluster, err)
-	}
-	edsI := edsB.(*edsBalancer).edsImpl.(*fakeEDSBalancer)
-	if err := edsI.waitForClusterNameUpdate(ctx, "foobar-1"); err != nil {
-		t.Fatal(err)
-	}
-
-	// Update should trigger counter update with provided service name.
-	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{
-			ClusterName: "foobar-2",
-		},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := xdsC.WaitForCancelEDSWatch(ctx); err != nil {
-		t.Fatalf("failed to wait for EDS cancel: %v", err)
-	}
-	gotCluster2, err := xdsC.WaitForWatchEDS(ctx)
-	if err != nil || gotCluster2 != "foobar-2" {
-		t.Fatalf("unexpected EDS watch: %v, %v", gotCluster2, err)
-	}
-	if err := edsI.waitForClusterNameUpdate(ctx, "foobar-2"); err != nil {
-		t.Fatal(err)
-	}
+type fakeBalancerBuilder struct {
+	name string
 }
+
+func (b *fakeBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &fakeBalancer{cc: cc}
+}
+
+func (b *fakeBalancerBuilder) Name() string {
+	return b.name
+}
+
+type fakeBalancer struct {
+	cc balancer.ClientConn
+}
+
+func (b *fakeBalancer) ResolverError(error) {
+	panic("implement me")
+}
+
+func (b *fakeBalancer) UpdateClientConnState(balancer.ClientConnState) error {
+	panic("implement me")
+}
+
+func (b *fakeBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
+	panic("implement me")
+}
+
+func (b *fakeBalancer) Close() {}
 
 func (s) TestBalancerConfigParsing(t *testing.T) {
 	const testEDSName = "eds.service"
@@ -906,33 +672,6 @@ func (s) TestBalancerConfigParsing(t *testing.T) {
 			}
 			if !cmp.Equal(got, tt.want) {
 				t.Errorf(cmp.Diff(got, tt.want))
-			}
-		})
-	}
-}
-
-func (s) TestEqualStringPointers(t *testing.T) {
-	var (
-		ta1 = "test-a"
-		ta2 = "test-a"
-		tb  = "test-b"
-	)
-	tests := []struct {
-		name string
-		a    *string
-		b    *string
-		want bool
-	}{
-		{"both-nil", nil, nil, true},
-		{"a-non-nil", &ta1, nil, false},
-		{"b-non-nil", nil, &tb, false},
-		{"equal", &ta1, &ta2, true},
-		{"different", &ta1, &tb, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := equalStringPointers(tt.a, tt.b); got != tt.want {
-				t.Errorf("equalStringPointers() = %v, want %v", got, tt.want)
 			}
 		})
 	}

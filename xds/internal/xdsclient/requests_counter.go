@@ -84,3 +84,11 @@ func ClearCounterForTesting(serviceName string) {
 	}
 	c.numRequests = 0
 }
+
+// ClearAllCountersForTesting clears all the counters. Should be only used in
+// tests.
+func ClearAllCountersForTesting() {
+	src.mu.Lock()
+	defer src.mu.Unlock()
+	src.services = make(map[string]*ServiceRequestsCounter)
+}
