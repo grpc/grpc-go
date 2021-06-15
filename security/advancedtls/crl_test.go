@@ -41,7 +41,7 @@ import (
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
-func TestX509NameHash(t *testing.T) {
+func Testx509NameHash(t *testing.T) {
 	nameTests := []struct {
 		in  pkix.Name
 		out string
@@ -113,9 +113,9 @@ func TestX509NameHash(t *testing.T) {
 	}
 	for _, tt := range nameTests {
 		t.Run(tt.in.String(), func(t *testing.T) {
-			h := X509NameHash(tt.in.ToRDNSequence())
+			h := x509NameHash(tt.in.ToRDNSequence())
 			if h != tt.out {
-				t.Errorf("X509NameHash(%v): Got %v wanted %v", tt.in, h, tt.out)
+				t.Errorf("x509NameHash(%v): Got %v wanted %v", tt.in, h, tt.out)
 			}
 		})
 	}
@@ -416,12 +416,12 @@ func TestGetIssuerCRLCache(t *testing.T) {
 	}{
 		{
 			desc:      "Valid",
-			rawIssuer: makeChain(t, "unrevoked.pem")[1].RawIssuer,
-			certs:     makeChain(t, "unrevoked.pem"),
+			rawIssuer: makeChain(t, "crl/unrevoked.pem")[1].RawIssuer,
+			certs:     makeChain(t, "crl/unrevoked.pem"),
 		},
 		{
 			desc:      "Unverified",
-			rawIssuer: makeChain(t, "unrevoked.pem")[1].RawIssuer,
+			rawIssuer: makeChain(t, "crl/unrevoked.pem")[1].RawIssuer,
 		},
 		{
 			desc:      "Not Found",
@@ -432,7 +432,7 @@ func TestGetIssuerCRLCache(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
 			cache.Purge()
-			_, err := fetchIssuerCRL("test", tt.rawIssuer, tt.certs, Config{
+			_, err := fetchIssuerCRL("test", tt.rawIssuer, tt.certs, RevocationConfig{
 				RootDir: testdata.Path("."),
 				Cache:   cache,
 			})
@@ -447,7 +447,7 @@ func TestGetIssuerCRLCache(t *testing.T) {
 }
 
 func TestVerifyCrl(t *testing.T) {
-	tampered := loadCRL(t, "1.crl")
+	tampered := loadCRL(t, "crl/1.crl")
 	// Change the signature so it won't verify
 	tampered.SignatureValue.Bytes[0]++
 
@@ -460,37 +460,37 @@ func TestVerifyCrl(t *testing.T) {
 	}{
 		{
 			desc:     "Pass intermediate",
-			crl:      loadCRL(t, "1.crl"),
-			certs:    makeChain(t, "unrevoked.pem"),
-			cert:     makeChain(t, "unrevoked.pem")[1],
+			crl:      loadCRL(t, "crl/1.crl"),
+			certs:    makeChain(t, "crl/unrevoked.pem"),
+			cert:     makeChain(t, "crl/unrevoked.pem")[1],
 			verifies: true,
 		},
 		{
 			desc:     "Pass leaf",
-			crl:      loadCRL(t, "2.crl"),
-			certs:    makeChain(t, "unrevoked.pem"),
-			cert:     makeChain(t, "unrevoked.pem")[2],
+			crl:      loadCRL(t, "crl/2.crl"),
+			certs:    makeChain(t, "crl/unrevoked.pem"),
+			cert:     makeChain(t, "crl/unrevoked.pem")[2],
 			verifies: true,
 		},
 		{
 			desc:     "Fail wrong cert chain",
-			crl:      loadCRL(t, "3.crl"),
-			certs:    makeChain(t, "unrevoked.pem"),
-			cert:     makeChain(t, "revokedInt.pem")[1],
+			crl:      loadCRL(t, "crl/3.crl"),
+			certs:    makeChain(t, "crl/unrevoked.pem"),
+			cert:     makeChain(t, "crl/revokedInt.pem")[1],
 			verifies: false,
 		},
 		{
 			desc:     "Fail no certs",
-			crl:      loadCRL(t, "1.crl"),
+			crl:      loadCRL(t, "crl/1.crl"),
 			certs:    []*x509.Certificate{},
-			cert:     makeChain(t, "unrevoked.pem")[1],
+			cert:     makeChain(t, "crl/unrevoked.pem")[1],
 			verifies: false,
 		},
 		{
 			desc:     "Fail Tampered signature",
 			crl:      tampered,
-			certs:    makeChain(t, "unrevoked.pem"),
-			cert:     makeChain(t, "unrevoked.pem")[1],
+			certs:    makeChain(t, "crl/unrevoked.pem"),
+			cert:     makeChain(t, "crl/unrevoked.pem")[1],
 			verifies: false,
 		},
 	}
@@ -512,9 +512,9 @@ func TestVerifyCrl(t *testing.T) {
 }
 
 func TestRevokedCert(t *testing.T) {
-	revokedIntChain := makeChain(t, "revokedInt.pem")
-	revokedLeafChain := makeChain(t, "revokedLeaf.pem")
-	validChain := makeChain(t, "unrevoked.pem")
+	revokedIntChain := makeChain(t, "crl/revokedInt.pem")
+	revokedLeafChain := makeChain(t, "crl/revokedLeaf.pem")
+	validChain := makeChain(t, "crl/unrevoked.pem")
 	cache, err := lru.New(5)
 	if err != nil {
 		t.Fatalf("lru.New: err = %v", err)
@@ -575,8 +575,8 @@ func TestRevokedCert(t *testing.T) {
 
 	for _, tt := range revocationTests {
 		t.Run(tt.desc, func(t *testing.T) {
-			err := CheckRevocation(tt.in, Config{
-				RootDir:           testdata.Path("."),
+			err := CheckRevocation(tt.in, RevocationConfig{
+				RootDir:           testdata.Path("crl"),
 				AllowUndetermined: tt.allowUndetermined,
 				Cache:             cache,
 			})
@@ -682,7 +682,7 @@ func TestVerifyConnection(t *testing.T) {
 				t.Fatalf("templ.CreateCRL failed err = %v", err)
 			}
 
-			err = ioutil.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", X509NameHash(cert.Subject.ToRDNSequence()))), crl, 0777)
+			err = ioutil.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", x509NameHash(cert.Subject.ToRDNSequence()))), crl, 0777)
 			if err != nil {
 				t.Fatalf("ioutil.WriteFile failed err = %v", err)
 			}
@@ -692,7 +692,7 @@ func TestVerifyConnection(t *testing.T) {
 			cliCfg := tls.Config{
 				RootCAs: cp,
 				VerifyConnection: func(cs tls.ConnectionState) error {
-					return CheckRevocation(cs, Config{RootDir: dir})
+					return CheckRevocation(cs, RevocationConfig{RootDir: dir})
 				},
 			}
 			conn, err := tls.Dial(l.Addr().Network(), l.Addr().String(), &cliCfg)

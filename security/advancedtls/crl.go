@@ -38,15 +38,16 @@ import (
 )
 
 // Cache is an interface to cache CRL files.
-// All caches from golang-lru satisfy the interface.
+// All caches from golang-lru satisfy the interface and a fixed size
+// lru cache is reccomended.
 type Cache interface {
 	Add(key, value interface{}) bool
 	Contains(key interface{}) bool
 	Get(key interface{}) (value interface{}, ok bool)
 }
 
-// Config contains options for CRL lookup
-type Config struct {
+// RevocationConfig contains options for CRL lookup
+type RevocationConfig struct {
 	// RootDir is the directory to search for CRL files.
 	// Directory format must match OpenSSL X509_LOOKUP_hash_dir(3).
 	RootDir string
@@ -94,8 +95,8 @@ var (
 	oidAuthorityKeyIdentifier = asn1.ObjectIdentifier{2, 5, 29, 35}
 )
 
-// X509NameHash implements the OpenSSL X509_NAME_hash function for hashed directory lookups.
-func X509NameHash(r pkix.RDNSequence) string {
+// x509NameHash implements the OpenSSL X509_NAME_hash function for hashed directory lookups.
+func x509NameHash(r pkix.RDNSequence) string {
 	var canonBytes []byte
 	// First canonicalize all the strings
 	for _, rdnSet := range r {
@@ -136,13 +137,20 @@ func X509NameHash(r pkix.RDNSequence) string {
 }
 
 // CheckRevocation checks the connection for revoked certificates based on RFC5280
-func CheckRevocation(conn tls.ConnectionState, cfg Config) error {
+// This implementation has the following major limitations:
+// 	Indirect CRL files are not supported
+// 	File based lookup only using the X509_LOOKUP_hash_dir format
+// 	OnlySomeReasons is unsupported
+// 	Delta CRL files are unsupported
+// 	Certificate cRLDistributionPoint must be URLs, but are then ignored and converted into a file path
+// 	CRL checks are done after path building, which goes against rfc4158
+func CheckRevocation(conn tls.ConnectionState, cfg RevocationConfig) error {
 	return CheckChainRevocation(conn.VerifiedChains, cfg)
 }
 
 // CheckChainRevocation checks the verified certificate chain
 // for revoked certificates based on RFC5280
-func CheckChainRevocation(verifiedChains [][]*x509.Certificate, cfg Config) error {
+func CheckChainRevocation(verifiedChains [][]*x509.Certificate, cfg RevocationConfig) error {
 	// Iterate the verified chains looking for one that is UNREVOKED.
 	// A single UNREVOKED chain is enough to allow the connection, and a single REVOKED
 	// chain does not mean the connection should fail
@@ -172,7 +180,7 @@ func CheckChainRevocation(verifiedChains [][]*x509.Certificate, cfg Config) erro
 // 1. If any certificate is REVOKED, return REVOKED
 // 2. If any certificate is UNDETERMINED, return UNDETERMINED
 // 3. If all certificates are UNREVOKED, return UNREVOKED
-func checkChain(chain []*x509.Certificate, cfg Config) RevocationStatus {
+func checkChain(chain []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
 	chainStatus := UNREVOKED
 	for _, c := range chain {
 		switch checkCrt(c, chain, cfg) {
@@ -210,7 +218,7 @@ func cachedCrl(rawIssuer []byte, cache Cache) (*certificateListExt, bool) {
 }
 
 // fetchIssuerCRL fetches and verifies the CRL for rawIssuer from disk or cache if configured in cfg.
-func fetchIssuerCRL(crlDistributionPoint string, rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg Config) (*certificateListExt, error) {
+func fetchIssuerCRL(crlDistributionPoint string, rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) (*certificateListExt, error) {
 	if cfg.Cache != nil {
 		if crl, ok := cachedCrl(rawIssuer, cfg.Cache); ok {
 			return crl, nil
@@ -236,7 +244,7 @@ func fetchIssuerCRL(crlDistributionPoint string, rawIssuer []byte, crlVerifyCrt 
 // If we can't load any authoritative CRL files, the status is UNDETERMINED
 // c is the certificate to check
 // crlVerifyCrt is the group of possible certificates to verify the crl
-func checkCrt(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Config) RevocationStatus {
+func checkCrt(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
 	if len(c.CRLDistributionPoints) == 0 {
 		return UNREVOKED
 	}
@@ -414,7 +422,7 @@ func parseCRLExtensions(c *pkix.CertificateList) (*certificateListExt, error) {
 	return certList, nil
 }
 
-func fetchCRL(loc string, rawIssuer []byte, cfg Config) (*certificateListExt, error) {
+func fetchCRL(loc string, rawIssuer []byte, cfg RevocationConfig) (*certificateListExt, error) {
 	var parsedCRL *certificateListExt
 	// 6.3.3 (a) (1) (ii)
 	// According to X509_LOOKUP_hash_dir the format is issuer_hash.rN where N is an increasing number.
@@ -426,7 +434,7 @@ func fetchCRL(loc string, rawIssuer []byte, cfg Config) (*certificateListExt, er
 		if len(rest) != 0 || err != nil {
 			return nil, fmt.Errorf("asn1.Unmarshal(Issuer) len(rest) = %v, err = %v", len(rest), err)
 		}
-		crlPath := fmt.Sprintf("%s.r%d", filepath.Join(cfg.RootDir, X509NameHash(r)), i)
+		crlPath := fmt.Sprintf("%s.r%d", filepath.Join(cfg.RootDir, x509NameHash(r)), i)
 		crlBytes, err := ioutil.ReadFile(crlPath)
 		if err != nil {
 			// Break when we can't read a CRL file
