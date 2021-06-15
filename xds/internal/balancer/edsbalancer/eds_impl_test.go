@@ -427,10 +427,14 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Sleep 2*timeout to wait for the child in cache is removed, so a new
-	// update would trigger a new SubConn (we need this new SubConn to tell if
-	// the next picker is newly created).
-	time.Sleep(cacheTimeout * 2)
+	// Wait for the old SubConn to be removed (which happens when the child
+	// policy is closed), so a new update would trigger a new SubConn (we need
+	// this new SubConn to tell if the next picker is newly created).
+	scToRemove := <-cc.RemoveSubConnCh
+	if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scToRemove)
+	}
+	edsb.UpdateSubConnState(scToRemove, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 
 	// Handle another update with priorities and localities.
 	xdsC.InvokeWatchEDSCallback(parseEDSRespProtoForTesting(clab1.Build()), nil)
