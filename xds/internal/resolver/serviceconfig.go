@@ -217,7 +217,9 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 				continue
 			}
 			joinedValues := strings.Join(values, ",")
-			joinedValues = policy.Regex.ReplaceAllString(joinedValues, policy.RegexSubstitution)
+			if policy.Regex != nil {
+				joinedValues = policy.Regex.ReplaceAllString(joinedValues, policy.RegexSubstitution)
+			}
 			policyHash = xxhash.Sum64String(joinedValues)
 			generatedHash = true
 			generatedPolicyHash = true

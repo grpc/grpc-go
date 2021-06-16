@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cespare/xxhash"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -38,11 +39,14 @@ import (
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/wrr"
+	"google.golang.org/grpc/internal/xds/env"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
@@ -451,6 +455,71 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 		if !reflect.DeepEqual(pickedClusters, tt.wantClusters) {
 			t.Errorf("Picked clusters: %v; want: %v", pickedClusters, tt.wantClusters)
 		}
+	}
+}
+
+// TestXDSResolverRequestHash tests a case where a resolver receives a RouteConfig update
+// with a HashPolicy specifying to generate a hash. The configSelector generated should
+// successfully generate a Hash.
+func (s) TestXDSResolverRequestHash(t *testing.T) {
+	oldRH := env.RingHashSupport
+	env.RingHashSupport = true
+	defer func() { env.RingHashSupport = oldRH }()
+
+	xdsC := fakeclient.NewClient()
+	xdsR, tcc, cancel := testSetup(t, setupOpts{
+		xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
+	})
+	defer xdsR.Close()
+	defer cancel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	waitForWatchListener(ctx, t, xdsC, targetStr)
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+	// Invoke watchAPI callback with a good service update (with hash policies
+	// specified) and wait for UpdateState method to be called on ClientConn.
+	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+		VirtualHosts: []*xdsclient.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes: []*xdsclient.Route{{
+					Prefix: newStringP(""),
+					WeightedClusters: map[string]xdsclient.WeightedCluster{
+						"cluster_1": {Weight: 75},
+						"cluster_2": {Weight: 25},
+					},
+					HashPolicies: []*xdsclient.HashPolicy{{
+						HashPolicyType: xdsclient.HashPolicyTypeHeader,
+						HeaderName:     ":path",
+					}},
+				}},
+			},
+		},
+	}, nil)
+
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	gotState, err := tcc.stateCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
+	}
+	rState := gotState.(resolver.State)
+	cs := iresolver.GetConfigSelector(rState)
+	if cs == nil {
+		t.Error("received nil config selector")
+	}
+	// Selecting a config when there was a hash policy specified in the route
+	// that will be selected should put a request hash in the config's context.
+	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: metadata.NewIncomingContext(context.Background(), metadata.Pairs(":path", "/products"))})
+	if err != nil {
+		t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
+	}
+	requestHashGot := ringhash.GetRequestHashForTesting(res.Context)
+	requestHashWant := xxhash.Sum64String("/products")
+	if requestHashGot != requestHashWant {
+		t.Fatalf("requestHashGot = %v, requestHashWant = %v", requestHashGot, requestHashWant)
 	}
 }
 
