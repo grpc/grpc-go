@@ -169,6 +169,35 @@ func (s) TestAppend(t *testing.T) {
 	}
 }
 
+func (s) TestDelete(t *testing.T) {
+	for _, test := range []struct {
+		md        MD
+		deleteKey string
+		want      MD
+	}{
+		{
+			md:        Pairs("My-Optional-Header", "42"),
+			deleteKey: "My-Optional-Header",
+			want:      Pairs(),
+		},
+		{
+			md:        Pairs("My-Optional-Header", "42"),
+			deleteKey: "Other-Key",
+			want:      Pairs("my-optional-header", "42"),
+		},
+		{
+			md:        Pairs("My-Optional-Header", "42"),
+			deleteKey: "my-OptIoNal-HeAder",
+			want:      Pairs(),
+		},
+	} {
+		test.md.Delete(test.deleteKey)
+		if !reflect.DeepEqual(test.md, test.want) {
+			t.Errorf("value of metadata is %v, want %v", test.md, test.want)
+		}
+	}
+}
+
 func (s) TestAppendToOutgoingContext(t *testing.T) {
 	// Pre-existing metadata
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
