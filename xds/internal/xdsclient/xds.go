@@ -575,14 +575,14 @@ func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy, logg
 		case *v3routepb.RouteAction_HashPolicy_Header_:
 			policy.HashPolicyType = HashPolicyTypeHeader
 			policy.HeaderName = p.GetHeader().GetHeaderName()
-			if p.GetHeader().GetRegexRewrite() != nil {
-				regex := p.GetHeader().GetRegexRewrite().GetPattern().GetRegex()
+			if rr := p.GetHeader().GetRegexRewrite(); rr != nil {
+				regex := rr.GetPattern().GetRegex()
 				re, err := regexp.Compile(regex)
 				if err != nil {
 					return nil, fmt.Errorf("hash policy %+v contains an invalid regex %q", p, regex)
 				}
 				policy.Regex = re
-				policy.RegexSubstitution = p.GetHeader().GetRegexRewrite().GetSubstitution()
+				policy.RegexSubstitution = rr.GetSubstitution()
 			}
 		case *v3routepb.RouteAction_HashPolicy_FilterState_:
 			if p.GetFilterState().GetKey() != "io.grpc.channel_id" {
