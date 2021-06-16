@@ -51,51 +51,52 @@ func (s) TestPruneActiveClusters(t *testing.T) {
 	}
 }
 
-// TestGenerateRequestHashHeaders tests generating request hashes for hash policies that specify
-// to hash headers.
-func (s) TestGenerateRequestHashHeaders(t *testing.T) {
-	cs := &configSelector{}
-
-	rpcInfo := iresolver.RPCInfo{
-		Context: metadata.NewIncomingContext(context.Background(), metadata.Pairs(":path", "/products")),
-		Method:  "/some-method",
-	}
-
-	hashPolicies := []*xdsclient.HashPolicy{{
-		HashPolicyType:    xdsclient.HashPolicyTypeHeader,
-		HeaderName:        ":path",
-		Regex:             func() *regexp.Regexp { return regexp.MustCompile("/products") }(), // Will replace /products with /new-products, to test find and replace functionality.
-		RegexSubstitution: "/new-products",
-	}}
-
-	requestHashGot := cs.generateHash(rpcInfo, hashPolicies)
-
-	// Precompute the expected hash here - logically representing the value of the :path header which will be
-	// "/products".
-	requestHashWant := xxhash.Sum64String("/new-products")
-
-	if requestHashGot != requestHashWant {
-		t.Fatalf("requestHashGot = %v, requestHashWant = %v", requestHashGot, requestHashWant)
-	}
-}
-
-// TestGenerateHashChannelID tests generating request hashes for hash policies that specify
-// to hash something that uniquely identifies the ClientConn (the pointer).
-func (s) TestGenerateRequestHashChannelID(t *testing.T) {
+func (s) TestGenerateRequestHash(t *testing.T) {
 	cs := &configSelector{
 		r: &xdsResolver{
 			cc: &testClientConn{},
 		},
 	}
-
-	requestHashWant := xxhash.Sum64String(fmt.Sprintf("%p", &cs.r.cc))
-
-	hashPolicies := []*xdsclient.HashPolicy{{
-		HashPolicyType: xdsclient.HashPolicyTypeChannelID,
-	}}
-	requestHashGot := cs.generateHash(iresolver.RPCInfo{}, hashPolicies)
-
-	if requestHashGot != requestHashWant {
-		t.Fatalf("requestHashGot = %v, requestHashWant = %v", requestHashGot, requestHashWant)
+	tests := []struct {
+		name            string
+		hashPolicies    []*xdsclient.HashPolicy
+		requestHashWant uint64
+		rpcInfo         iresolver.RPCInfo
+	}{
+		// TestGenerateRequestHashHeaders tests generating request hashes for
+		// hash policies that specify to hash headers.
+		{
+			name: "test-generate-request-hash-headers",
+			hashPolicies: []*xdsclient.HashPolicy{{
+				HashPolicyType:    xdsclient.HashPolicyTypeHeader,
+				HeaderName:        ":path",
+				Regex:             func() *regexp.Regexp { return regexp.MustCompile("/products") }(), // Will replace /products with /new-products, to test find and replace functionality.
+				RegexSubstitution: "/new-products",
+			}},
+			requestHashWant: xxhash.Sum64String("/new-products"),
+			rpcInfo: iresolver.RPCInfo{
+				Context: metadata.NewIncomingContext(context.Background(), metadata.Pairs(":path", "/products")),
+				Method:  "/some-method",
+			},
+		},
+		// TestGenerateHashChannelID tests generating request hashes for hash
+		// policies that specify to hash something that uniquely identifies the
+		// ClientConn (the pointer).
+		{
+			name: "test-generate-request-hash-channel-id",
+			hashPolicies: []*xdsclient.HashPolicy{{
+				HashPolicyType: xdsclient.HashPolicyTypeChannelID,
+			}},
+			requestHashWant: xxhash.Sum64String(fmt.Sprintf("%p", &cs.r.cc)),
+			rpcInfo:         iresolver.RPCInfo{},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			requestHashGot := cs.generateHash(test.rpcInfo, test.hashPolicies)
+			if requestHashGot != test.requestHashWant {
+				t.Fatalf("requestHashGot = %v, requestHashWant = %v", requestHashGot, test.requestHashWant)
+			}
+		})
 	}
 }
