@@ -90,6 +90,23 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 			requestHashWant: xxhash.Sum64String(fmt.Sprintf("%p", &cs.r.cc)),
 			rpcInfo:         iresolver.RPCInfo{},
 		},
+		// TestGenerateRequestHashEmptyString tests generating request hashes
+		// for hash policies that specify to hash headers and replace empty
+		// strings in the headers.
+		{
+			name: "test-generate-request-hash-empty-string",
+			hashPolicies: []*xdsclient.HashPolicy{{
+				HashPolicyType:    xdsclient.HashPolicyTypeHeader,
+				HeaderName:        ":path",
+				Regex:             func() *regexp.Regexp { return regexp.MustCompile("") }(),
+				RegexSubstitution: "e",
+			}},
+			requestHashWant: xxhash.Sum64String("eaebece"),
+			rpcInfo: iresolver.RPCInfo{
+				Context: metadata.NewIncomingContext(context.Background(), metadata.Pairs(":path", "abc")),
+				Method:  "/some-method",
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
