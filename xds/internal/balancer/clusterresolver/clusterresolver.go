@@ -209,7 +209,7 @@ func (b *clusterResolverBalancer) updateChildConfig() error {
 		b.child = newChildBalancer(b.priorityBuilder, b.cc, b.bOpts)
 	}
 
-	childCfgBytes, addrs, err := buildPriorityConfigJSON(b.priorities, b.config.EndpointPickingPolicy)
+	childCfgBytes, addrs, err := buildPriorityConfigJSON(b.priorities, b.config.XDSLBPolicy)
 	if err != nil {
 		return fmt.Errorf("failed to build priority balancer config: %v", err)
 	}
