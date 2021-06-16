@@ -16,7 +16,7 @@
  *
  */
 
-package edsbalancer
+package clusterresolver
 
 import (
 	"fmt"

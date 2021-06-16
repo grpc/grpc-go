@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package edsbalancer
+package clusterresolver
 
 import (
 	"context"
@@ -62,10 +62,10 @@ func init() {
 func setupTestEDS(t *testing.T) (balancer.Balancer, *testutils.TestClientConn, *fakeclient.Client, func()) {
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
 	cc := testutils.NewTestClientConn(t)
-	builder := balancer.Get(edsName)
+	builder := balancer.Get(Name)
 	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
 	if edsb == nil {
-		t.Fatalf("builder.Build(%s) failed and returned nil", edsName)
+		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -74,10 +74,12 @@ func setupTestEDS(t *testing.T) (balancer.Balancer, *testutils.TestClientConn, *
 		BalancerConfig: &EDSConfig{ClusterName: testClusterName},
 	}); err != nil {
 		edsb.Close()
+		xdsC.Close()
 		t.Fatal(err)
 	}
 	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
 		edsb.Close()
+		xdsC.Close()
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
 	return edsb, cc, xdsC, func() {
@@ -480,7 +482,6 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	// Two localities, each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
@@ -502,7 +503,6 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	for i := 0; i < 2; i++ {
 		<-cc.RemoveSubConnCh
 	}
@@ -524,7 +524,6 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	for i := 0; i < 2; i++ {
 		scToRemove := <-cc.RemoveSubConnCh
 		if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) &&
@@ -549,7 +548,6 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	for i := 0; i < 2; i++ {
 		<-cc.RemoveSubConnCh
 	}
@@ -580,7 +578,6 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	// One locality with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
@@ -641,7 +638,6 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	// Picks with drops.
 	dones = []func(){}
 	p2 := <-cc.NewPickerCh

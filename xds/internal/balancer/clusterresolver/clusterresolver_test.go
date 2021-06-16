@@ -18,7 +18,7 @@
  *
  */
 
-package edsbalancer
+package clusterresolver
 
 import (
 	"bytes"
@@ -177,7 +177,7 @@ func (*fakeSubConn) UpdateAddresses([]resolver.Address) { panic("implement me") 
 func (*fakeSubConn) Connect()                           { panic("implement me") }
 
 // waitForNewChildLB makes sure that a new child LB is created by the top-level
-// edsBalancer.
+// clusterResolverBalancer.
 func waitForNewChildLB(ctx context.Context, ch *testutils.Channel) (*fakeChildBalancer, error) {
 	val, err := ch.Receive(ctx)
 	if err != nil {
@@ -205,17 +205,17 @@ func setup(childLBCh *testutils.Channel) (*fakeclient.Client, func()) {
 	}
 }
 
-// TestSubConnStateChange verifies if the top-level edsBalancer passes on
+// TestSubConnStateChange verifies if the top-level clusterResolverBalancer passes on
 // the subConnState to appropriate child balancer.
 func (s) TestSubConnStateChange(t *testing.T) {
 	edsLBCh := testutils.NewChannel()
 	xdsC, cleanup := setup(edsLBCh)
 	defer cleanup()
 
-	builder := balancer.Get(edsName)
+	builder := balancer.Get(Name)
 	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
 	if edsB == nil {
-		t.Fatalf("builder.Build(%s) failed and returned nil", edsName)
+		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
 	defer edsB.Close()
 
@@ -258,10 +258,10 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	xdsC, cleanup := setup(edsLBCh)
 	defer cleanup()
 
-	builder := balancer.Get(edsName)
+	builder := balancer.Get(Name)
 	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
 	if edsB == nil {
-		t.Fatalf("builder.Build(%s) failed and returned nil", edsName)
+		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
 	defer edsB.Close()
 
@@ -303,7 +303,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 		t.Fatalf("want resolver error, got %v", err)
 	}
 
-	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "edsBalancer resource not found error")
+	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "clusterResolverBalancer resource not found error")
 	xdsC.InvokeWatchEDSCallback(xdsclient.EndpointsUpdate{}, resourceErr)
 	// Even if error is resource not found, watch shouldn't be canceled, because
 	// this is an EDS resource removed (and xds client actually never sends this
@@ -346,10 +346,10 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	xdsC, cleanup := setup(edsLBCh)
 	defer cleanup()
 
-	builder := balancer.Get(edsName)
+	builder := balancer.Get(Name)
 	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
 	if edsB == nil {
-		t.Fatalf("builder.Build(%s) failed and returned nil", edsName)
+		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
 	defer edsB.Close()
 
@@ -392,7 +392,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 		t.Fatalf("want resolver error, got %v", err)
 	}
 
-	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "edsBalancer resource not found error")
+	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "clusterResolverBalancer resource not found error")
 	edsB.ResolverError(resourceErr)
 	if err := xdsC.WaitForCancelEDSWatch(ctx); err != nil {
 		t.Fatalf("want watch to be canceled, waitForCancel failed: %v", err)
@@ -448,10 +448,10 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	xdsC, cleanup := setup(edsLBCh)
 	defer cleanup()
 
-	builder := balancer.Get(edsName)
+	builder := balancer.Get(Name)
 	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
 	if edsB == nil {
-		t.Fatalf("builder.Build(%s) failed and returned nil", edsName)
+		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
 	defer edsB.Close()
 

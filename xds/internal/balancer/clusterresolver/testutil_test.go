@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package edsbalancer
+package clusterresolver
 
 import (
 	"fmt"

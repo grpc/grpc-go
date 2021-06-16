@@ -16,7 +16,7 @@
  *
  */
 
-package edsbalancer
+package clusterresolver
 
 import (
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"

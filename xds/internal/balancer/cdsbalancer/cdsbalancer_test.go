@@ -35,7 +35,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/xds/internal/balancer/edsbalancer"
+	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -197,7 +197,7 @@ func cdsCCS(cluster string, xdsC xdsclient.XDSClient) balancer.ClientConnState {
 // edsCCS is a helper function to construct a good update passed from the
 // cdsBalancer to the edsBalancer.
 func edsCCS(service string, countMax *uint32, enableLRS bool) balancer.ClientConnState {
-	lbCfg := &edsbalancer.EDSConfig{
+	lbCfg := &clusterresolver.EDSConfig{
 		ClusterName:           service,
 		MaxConcurrentRequests: countMax,
 	}

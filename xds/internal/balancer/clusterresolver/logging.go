@@ -16,7 +16,7 @@
  *
  */
 
-package edsbalancer
+package clusterresolver
 
 import (
 	"fmt"
@@ -25,10 +25,10 @@ import (
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
-const prefix = "[eds-lb %p] "
+const prefix = "[xds-cluster-resolver-lb %p] "
 
 var logger = grpclog.Component("xds")
 
-func prefixLogger(p *edsBalancer) *internalgrpclog.PrefixLogger {
+func prefixLogger(p *clusterResolverBalancer) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(prefix, p))
 }
