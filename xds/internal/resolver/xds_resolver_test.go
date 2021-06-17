@@ -1198,6 +1198,11 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 		newStreamErr string
 	}{
 		{
+			name:       "empty filters",
+			ldsFilters: []xdsclient.HTTPFilter{},
+			selectErr:  "no router filter present",
+		},
+		{
 			name: "no router filter",
 			ldsFilters: []xdsclient.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
