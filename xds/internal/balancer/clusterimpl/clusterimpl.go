@@ -107,14 +107,17 @@ type clusterImplBalancer struct {
 	clusterNameMu sync.Mutex
 	clusterName   string
 
-	// childState/drops/requestCounter can only be accessed in run(). And run()
-	// is the only goroutine that sends picker to the parent ClientConn. All
+	// childState/drops/requestCounter keeps the state used by the most recently
+	// generated picker. All fields can only be accessed in run(). And run() is
+	// the only goroutine that sends picker to the parent ClientConn. All
 	// requests to update picker need to be sent to pickerUpdateCh.
-	childState      balancer.State
-	drops           []*dropper
-	requestCounter  *xdsclient.ServiceRequestsCounter
-	requestCountMax uint32
-	pickerUpdateCh  *buffer.Unbounded
+	childState            balancer.State
+	dropCategories        []DropConfig // The categories for drops.
+	drops                 []*dropper
+	requestCounterCluster string // The cluster name for the request counter.
+	requestCounter        *xdsclient.ServiceRequestsCounter
+	requestCountMax       uint32
+	pickerUpdateCh        *buffer.Unbounded
 }
 
 // updateLoadStore checks the config for load store, and decides whether it
@@ -205,41 +208,6 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		return err
 	}
 
-	// Compare new drop config. And update picker if it's changed.
-	var updatePicker bool
-	if b.config == nil || !equalDropCategories(b.config.DropCategories, newConfig.DropCategories) {
-		b.drops = make([]*dropper, 0, len(newConfig.DropCategories))
-		for _, c := range newConfig.DropCategories {
-			b.drops = append(b.drops, newDropper(c))
-		}
-		updatePicker = true
-	}
-
-	// Compare cluster name. And update picker if it's changed, because circuit
-	// breaking's stream counter will be different.
-	if b.config == nil || b.config.Cluster != newConfig.Cluster {
-		b.requestCounter = xdsclient.GetServiceRequestsCounter(newConfig.Cluster)
-		updatePicker = true
-	}
-	// Compare upper bound of stream count. And update picker if it's changed.
-	// This is also for circuit breaking.
-	var newRequestCountMax uint32 = 1024
-	if newConfig.MaxConcurrentRequests != nil {
-		newRequestCountMax = *newConfig.MaxConcurrentRequests
-	}
-	if b.requestCountMax != newRequestCountMax {
-		b.requestCountMax = newRequestCountMax
-		updatePicker = true
-	}
-
-	if updatePicker {
-		b.pickerUpdateCh.Put(&dropConfigs{
-			drops:           b.drops,
-			requestCounter:  b.requestCounter,
-			requestCountMax: b.requestCountMax,
-		})
-	}
-
 	// If child policy is a different type, recreate the sub-balancer.
 	if b.config == nil || b.config.ChildPolicy.Name != newConfig.ChildPolicy.Name {
 		if b.childLB != nil {
@@ -258,6 +226,10 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		// will be stuck, and we report the error to the parent.
 		return fmt.Errorf("child policy is nil, this means balancer %q's Build() returned nil", newConfig.ChildPolicy.Name)
 	}
+
+	// Notify run() of this new config, in case drop and request counter need
+	// update (which means a new picker needs to be generated).
+	b.pickerUpdateCh.Put(newConfig)
 
 	// Addresses and sub-balancer config are sent to sub-balancer.
 	return b.childLB.UpdateClientConnState(balancer.ClientConnState{
@@ -355,6 +327,49 @@ type dropConfigs struct {
 	requestCountMax uint32
 }
 
+// handleDropAndRequestCount compares drop and request counter in newConfig with
+// the one currently used by picker. It returns a new dropConfigs if a new
+// picker needs to be generated, otherwise it returns nil.
+func (b *clusterImplBalancer) handleDropAndRequestCount(newConfig *LBConfig) *dropConfigs {
+	// Compare new drop config. And update picker if it's changed.
+	var updatePicker bool
+	if !equalDropCategories(b.dropCategories, newConfig.DropCategories) {
+		b.dropCategories = newConfig.DropCategories
+		b.drops = make([]*dropper, 0, len(newConfig.DropCategories))
+		for _, c := range newConfig.DropCategories {
+			b.drops = append(b.drops, newDropper(c))
+		}
+		updatePicker = true
+	}
+
+	// Compare cluster name. And update picker if it's changed, because circuit
+	// breaking's stream counter will be different.
+	if b.requestCounterCluster != newConfig.Cluster {
+		b.requestCounterCluster = newConfig.Cluster
+		b.requestCounter = xdsclient.GetServiceRequestsCounter(newConfig.Cluster)
+		updatePicker = true
+	}
+	// Compare upper bound of stream count. And update picker if it's changed.
+	// This is also for circuit breaking.
+	var newRequestCountMax uint32 = 1024
+	if newConfig.MaxConcurrentRequests != nil {
+		newRequestCountMax = *newConfig.MaxConcurrentRequests
+	}
+	if b.requestCountMax != newRequestCountMax {
+		b.requestCountMax = newRequestCountMax
+		updatePicker = true
+	}
+
+	if !updatePicker {
+		return nil
+	}
+	return &dropConfigs{
+		drops:           b.drops,
+		requestCounter:  b.requestCounter,
+		requestCountMax: b.requestCountMax,
+	}
+}
+
 func (b *clusterImplBalancer) run() {
 	defer b.done.Fire()
 	for {
@@ -377,13 +392,12 @@ func (b *clusterImplBalancer) run() {
 						requestCountMax: b.requestCountMax,
 					}, b.loadWrapper),
 				})
-			case *dropConfigs:
-				b.drops = u.drops
-				b.requestCounter = u.requestCounter
-				if b.childState.Picker != nil {
+			case *LBConfig:
+				dc := b.handleDropAndRequestCount(u)
+				if dc != nil && b.childState.Picker != nil {
 					b.ClientConn.UpdateState(balancer.State{
 						ConnectivityState: b.childState.ConnectivityState,
-						Picker:            newDropPicker(b.childState, u, b.loadWrapper),
+						Picker:            newDropPicker(b.childState, dc, b.loadWrapper),
 					})
 				}
 			}
