@@ -16,7 +16,7 @@
  *
  */
 
-package edsbalancer
+package clusterresolver
 
 import (
 	"fmt"
@@ -27,9 +27,6 @@ import (
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-
-	_ "google.golang.org/grpc/xds/internal/balancer/clustermanager" // Register the xds_cluster_manager balancer
-	_ "google.golang.org/grpc/xds/internal/balancer/weightedtarget" // Register the weighted_target balancer
 )
 
 const (
