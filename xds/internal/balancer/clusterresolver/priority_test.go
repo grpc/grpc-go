@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfig"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/testutils"
 )
@@ -727,13 +726,13 @@ func (s) TestFallbackToDNS(t *testing.T) {
 
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{
+			DiscoveryMechanisms: []DiscoveryMechanism{
 				{
-					Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterName,
 				},
 				{
-					Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
+					Type:        DiscoveryMechanismTypeLogicalDNS,
 					DNSHostname: testDNSTarget,
 				},
 			},

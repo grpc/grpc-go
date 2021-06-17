@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfig"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
@@ -138,7 +137,7 @@ type clusterResolverBalancer struct {
 	attrsWithClient *attributes.Attributes // Attributes with xdsClient attached to be passed to the child policies.
 
 	child               balancer.Balancer
-	priorities          []balancerconfig.PriorityConfig
+	priorities          []priorityConfig
 	watchUpdateReceived bool
 }
 
@@ -210,7 +209,7 @@ func (b *clusterResolverBalancer) updateChildConfig() error {
 		b.child = newChildBalancer(b.priorityBuilder, b.cc, b.bOpts)
 	}
 
-	childCfgBytes, addrs, err := balancerconfig.BuildPriorityConfigJSON(b.priorities, b.config.EndpointPickingPolicy)
+	childCfgBytes, addrs, err := buildPriorityConfigJSON(b.priorities, b.config.EndpointPickingPolicy)
 	if err != nil {
 		return fmt.Errorf("failed to build priority balancer config: %v", err)
 	}
