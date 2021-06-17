@@ -186,9 +186,6 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 }
 
 func (cs *configSelector) newInterceptor(rt *route, cluster *routeCluster) (iresolver.ClientInterceptor, error) {
-	if len(cs.httpFilterConfig) == 0 {
-		return nil, nil
-	}
 	interceptors := make([]iresolver.ClientInterceptor, 0, len(cs.httpFilterConfig))
 	for _, filter := range cs.httpFilterConfig {
 		if router.IsRouterFilter(filter.Filter) {
