@@ -1277,7 +1277,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		headerError string
 	)
 
-	if !endStream {
+	if initialHeader {
 		httpStatusErr = "malformed header: missing HTTP status"
 	}
 

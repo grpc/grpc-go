@@ -2029,10 +2029,11 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/json"},
+					{Name: ":status", Value: "200"},
 				},
 			},
 			wantStatus: status.New(
-				codes.Internal,
+				codes.Unknown,
 				"transport: received unexpected content-type \"application/json\"",
 			),
 		},
