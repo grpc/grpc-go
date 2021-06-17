@@ -59,7 +59,7 @@ func init() {
 	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond * 100
 }
 
-func setupTestEDS(t *testing.T) (balancer.Balancer, *testutils.TestClientConn, *fakeclient.Client, func()) {
+func setupTestEDS(t *testing.T, initChild *loadBalancingConfig) (balancer.Balancer, *testutils.TestClientConn, *fakeclient.Client, func()) {
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
 	cc := testutils.NewTestClientConn(t)
 	builder := balancer.Get(Name)
@@ -70,8 +70,11 @@ func setupTestEDS(t *testing.T) (balancer.Balancer, *testutils.TestClientConn, *
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName},
+		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
+		BalancerConfig: &EDSConfig{
+			ClusterName: testClusterName,
+			ChildPolicy: initChild,
+		},
 	}); err != nil {
 		edsb.Close()
 		xdsC.Close()
@@ -94,7 +97,7 @@ func setupTestEDS(t *testing.T) (balancer.Balancer, *testutils.TestClientConn, *
 //  - replace backend
 //  - change drop rate
 func (s) TestEDS_OneLocality(t *testing.T) {
-	edsb, cc, xdsC, cleanup := setupTestEDS(t)
+	edsb, cc, xdsC, cleanup := setupTestEDS(t, nil)
 	defer cleanup()
 
 	// One locality with one backend.
@@ -200,7 +203,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 //  - address change for the <not-the-first> locality
 //  - update locality weight
 func (s) TestEDS_TwoLocalities(t *testing.T) {
-	edsb, cc, xdsC, cleanup := setupTestEDS(t)
+	edsb, cc, xdsC, cleanup := setupTestEDS(t, nil)
 	defer cleanup()
 
 	// Two localities, each with one backend.
@@ -321,7 +324,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 // The EDS balancer gets EDS resp with unhealthy endpoints. Test that only
 // healthy ones are used.
 func (s) TestEDS_EndpointsHealth(t *testing.T) {
-	edsb, cc, xdsC, cleanup := setupTestEDS(t)
+	edsb, cc, xdsC, cleanup := setupTestEDS(t, nil)
 	defer cleanup()
 
 	// Two localities, each 3 backend, one Healthy, one Unhealthy, one Unknown.
@@ -394,7 +397,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 //
 // It should send an error picker with transient failure to the parent.
 func (s) TestEDS_EmptyUpdate(t *testing.T) {
-	edsb, cc, xdsC, cleanup := setupTestEDS(t)
+	edsb, cc, xdsC, cleanup := setupTestEDS(t, nil)
 	defer cleanup()
 
 	const cacheTimeout = 100 * time.Microsecond
@@ -473,15 +476,10 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 		},
 	})
 
-	edsb, cc, xdsC, cleanup := setupTestEDS(t)
+	t.Logf("initialize with sub-balancer: stub-balancer")
+	edsb, cc, xdsC, cleanup := setupTestEDS(t, &loadBalancingConfig{Name: balancerName})
 	defer cleanup()
 
-	t.Logf("update sub-balancer to stub-balancer")
-	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName, ChildPolicy: &loadBalancingConfig{Name: balancerName}},
-	}); err != nil {
-		t.Fatal(err)
-	}
 	// Two localities, each with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
@@ -565,7 +563,7 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 }
 
 func (s) TestEDS_CircuitBreaking(t *testing.T) {
-	edsb, cc, xdsC, cleanup := setupTestEDS(t)
+	edsb, cc, xdsC, cleanup := setupTestEDS(t, nil)
 	defer cleanup()
 
 	var maxRequests uint32 = 50
