@@ -52,7 +52,7 @@ type RevocationConfig struct {
 	// RootDir is the directory to search for CRL files.
 	// Directory format must match OpenSSL X509_LOOKUP_hash_dir(3).
 	RootDir string
-	// AllowUndetermined controls if certificate chains with UNDETERMINED
+	// AllowUndetermined controls if certificate chains with RevocationUndetermined
 	// revocation status are allowed to complete.
 	AllowUndetermined bool
 	// Cache will store CRL files if not nil, otherwise files are reloaded for every lookup.
@@ -63,16 +63,16 @@ type RevocationConfig struct {
 type RevocationStatus int
 
 const (
-	// UNDETERMINED means we couldn't find or verify a CRL for the cert
-	UNDETERMINED RevocationStatus = iota
-	// UNREVOKED means we found the CRL for the cert and the cert is not revoked
-	UNREVOKED
-	// REVOKED means we found the CRL and the cert is revoked
-	REVOKED
+	// RevocationUndetermined means we couldn't find or verify a CRL for the cert
+	RevocationUndetermined RevocationStatus = iota
+	// RevocationUnrevoked means we found the CRL for the cert and the cert is not revoked
+	RevocationUnrevoked
+	// RevocationRevoked means we found the CRL and the cert is revoked
+	RevocationRevoked
 )
 
 func (s RevocationStatus) String() string {
-	return [...]string{"UNDETERMINED", "UNREVOKED", "REVOKED"}[s]
+	return [...]string{"RevocationUndetermined", "RevocationUnrevoked", "RevocationRevoked"}[s]
 }
 
 // certificateListExt contains a pkix.CertificateList and parsed
@@ -152,24 +152,24 @@ func CheckRevocation(conn tls.ConnectionState, cfg RevocationConfig) error {
 // CheckChainRevocation checks the verified certificate chain
 // for revoked certificates based on RFC5280.
 func CheckChainRevocation(verifiedChains [][]*x509.Certificate, cfg RevocationConfig) error {
-	// Iterate the verified chains looking for one that is UNREVOKED.
-	// A single UNREVOKED chain is enough to allow the connection, and a single REVOKED
+	// Iterate the verified chains looking for one that is RevocationUnrevoked.
+	// A single RevocationUnrevoked chain is enough to allow the connection, and a single RevocationRevoked
 	// chain does not mean the connection should fail
 	count := make(map[RevocationStatus]int)
 	for _, chain := range verifiedChains {
 		switch checkChain(chain, cfg) {
-		case UNREVOKED:
-			// If any chain is UNREVOKED then return no error
+		case RevocationUnrevoked:
+			// If any chain is RevocationUnrevoked then return no error
 			return nil
-		case REVOKED:
+		case RevocationRevoked:
 			// If this chain is revoked, keep looking for another chain
-			count[REVOKED]++
+			count[RevocationRevoked]++
 			continue
-		case UNDETERMINED:
+		case RevocationUndetermined:
 			if cfg.AllowUndetermined {
 				return nil
 			}
-			count[UNDETERMINED]++
+			count[RevocationUndetermined]++
 			continue
 		}
 	}
@@ -178,22 +178,22 @@ func CheckChainRevocation(verifiedChains [][]*x509.Certificate, cfg RevocationCo
 
 // checkChain will determine and check all certificates in chain against the CRL
 // defined in the certificate with the following rules:
-// 1. If any certificate is REVOKED, return REVOKED
-// 2. If any certificate is UNDETERMINED, return UNDETERMINED
-// 3. If all certificates are UNREVOKED, return UNREVOKED
+// 1. If any certificate is RevocationRevoked, return RevocationRevoked
+// 2. If any certificate is RevocationUndetermined, return RevocationUndetermined
+// 3. If all certificates are RevocationUnrevoked, return RevocationUnrevoked
 func checkChain(chain []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
-	chainStatus := UNREVOKED
+	chainStatus := RevocationUnrevoked
 	for _, c := range chain {
 		switch checkCrt(c, chain, cfg) {
-		case REVOKED:
+		case RevocationRevoked:
 			// Easy case, if a cert in the chain is revoked, the chain is revoked
-			return REVOKED
-		case UNDETERMINED:
-			// If we couldn't find the revocation status for a cert, the chain is at best UNDETERMINED
-			// Keep looking to see if we find a cert in the chain that's REVOKED
-			// but return UNDETERMINED at a minimum
-			chainStatus = UNDETERMINED
-		case UNREVOKED:
+			return RevocationRevoked
+		case RevocationUndetermined:
+			// If we couldn't find the revocation status for a cert, the chain is at best RevocationUndetermined
+			// Keep looking to see if we find a cert in the chain that's RevocationRevoked
+			// but return RevocationUndetermined at a minimum
+			chainStatus = RevocationUndetermined
+		case RevocationUnrevoked:
 			// Continue iterating up the cert chain
 			continue
 		}
@@ -242,12 +242,12 @@ func fetchIssuerCRL(crlDistributionPoint string, rawIssuer []byte, crlVerifyCrt 
 
 // checkCrt checks a single certificate against the CRL defined in the certificate.
 // It will fetch and verify the CRL(s) defined by CRLDistributionPoints.
-// If we can't load any authoritative CRL files, the status is UNDETERMINED
+// If we can't load any authoritative CRL files, the status is RevocationUndetermined
 // c is the certificate to check
 // crlVerifyCrt is the group of possible certificates to verify the crl
 func checkCrt(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
 	if len(c.CRLDistributionPoints) == 0 {
-		return UNREVOKED
+		return RevocationUnrevoked
 	}
 	// Iterate through CRL distribution points to check for status
 	for _, dp := range c.CRLDistributionPoints {
@@ -269,8 +269,8 @@ func checkCrt(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revocat
 		return revocation
 
 	}
-	// We couldn't load any CRL files for the certificate, so we don't know if it's UNREVOKED or not.
-	return UNDETERMINED
+	// We couldn't load any CRL files for the certificate, so we don't know if it's RevocationUnrevoked or not.
+	return RevocationUndetermined
 }
 
 func checkCertRevocation(c *x509.Certificate, crl *certificateListExt) (RevocationStatus, error) {
@@ -278,7 +278,7 @@ func checkCertRevocation(c *x509.Certificate, crl *certificateListExt) (Revocati
 	// Subsequent entries use the previous entry's issuer.
 	rawEntryIssuer, err := asn1.Marshal(crl.CertList.TBSCertList.Issuer)
 	if err != nil {
-		return UNDETERMINED, err
+		return RevocationUndetermined, err
 	}
 
 	// Loop through all the revoked certificates
@@ -290,7 +290,7 @@ func checkCertRevocation(c *x509.Certificate, crl *certificateListExt) (Revocati
 				if err != nil {
 					grpclog.Print(err)
 					if ext.Critical {
-						return UNDETERMINED, err
+						return RevocationUndetermined, err
 					}
 					// Since this is a non-critical extension, we can skip it even though
 					// there was a parsing failure.
@@ -298,19 +298,19 @@ func checkCertRevocation(c *x509.Certificate, crl *certificateListExt) (Revocati
 				}
 				rawEntryIssuer = extIssuer
 			} else if ext.Critical {
-				return UNDETERMINED, fmt.Errorf("checkCertRevocation: Unhandled critical extension: %v", ext.Id)
+				return RevocationUndetermined, fmt.Errorf("checkCertRevocation: Unhandled critical extension: %v", ext.Id)
 			}
 		}
 
 		// If the issuer and serial number appear in the CRL, the certificate is revoked
 		if bytes.Equal(c.RawIssuer, rawEntryIssuer) && c.SerialNumber.Cmp(revCert.SerialNumber) == 0 {
 			// CRL contains the serial, so return revoked
-			return REVOKED, nil
+			return RevocationRevoked, nil
 		}
 	}
 	// We did not find the serial in the CRL file that was valid for the cert
 	// so the certificate is not revoked.
-	return UNREVOKED, nil
+	return RevocationUnrevoked, nil
 }
 
 func parseCertIssuerExt(ext pkix.Extension) ([]byte, error) {
@@ -341,7 +341,7 @@ func parseCertIssuerExt(ext pkix.Extension) ([]byte, error) {
 	// distinguished name (DN) from the issuer field of the certificate that
 	// corresponds to this CRL entry
 	// If we couldn't get a directoryName, we can't reason about this file so cert status is
-	// UNDETERMINED
+	// RevocationUndetermined
 	return nil, errors.New("no DN found in certificate issuer")
 }
 

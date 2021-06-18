@@ -242,7 +242,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 				SerialNumber:          big.NewInt(2),
 				CRLDistributionPoints: []string{"test"},
 			},
-			revoked: REVOKED,
+			revoked: RevocationRevoked,
 		},
 		{
 			desc: "Revoked no entry issuer",
@@ -256,7 +256,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 				SerialNumber:          big.NewInt(3),
 				CRLDistributionPoints: []string{"test"},
 			},
-			revoked: REVOKED,
+			revoked: RevocationRevoked,
 		},
 		{
 			desc: "Revoked new entry issuer",
@@ -270,7 +270,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 				SerialNumber:          big.NewInt(4),
 				CRLDistributionPoints: []string{"test"},
 			},
-			revoked: REVOKED,
+			revoked: RevocationRevoked,
 		},
 		{
 			desc: "Single unrevoked",
@@ -284,7 +284,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 				SerialNumber:          big.NewInt(1),
 				CRLDistributionPoints: []string{"test"},
 			},
-			revoked: UNREVOKED,
+			revoked: RevocationUnrevoked,
 		},
 		{
 			desc: "Single unrevoked Issuer",
@@ -293,7 +293,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 				SerialNumber:          big.NewInt(2),
 				CRLDistributionPoints: []string{"test"},
 			},
-			revoked: UNREVOKED,
+			revoked: RevocationUnrevoked,
 		},
 	}
 
