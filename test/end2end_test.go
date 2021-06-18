@@ -7674,9 +7674,35 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 // set on the client connection when a credential handshake happens.
 func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
 	// A few things: a custom dialer, and also a custom transport credentials
+	/*lis, err := net.Listen("tcp", "localhost:8080")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+	/*var cpdc *connPersistDeadlineCall
+	dialerPersistDeadline := func(ctx context.Context, addr string) (net.Conn, error) {
+		conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		cpdc = &connPersistDeadlineCall{Conn: conn}
+		return cpdc, nil
+	}*/
+
+	/*mtc := &mockTransportCredentials{}
+	// func(context.Context, string) (net.Conn, error)
+	cc, err := grpc.Dial("passthrough:///"+lis.Addr().String(), grpc.WithTransportCredentials(mtc)/*, grpc.WithContextDialer(dialerPersistDeadline)*/) // COME BACK HERE - Define a fake credential struct that implements credentials, and use option in grpc.Dial
+	/*if err != nil {
+		t.Fatalf("grpc.Dial(_) = %v", err)
+	}
+	defer cc.Close()
+
+	if !mtc.connectionHasDeadline {
+		t.Fatalf("There was no deadline set on the RawConn.")
+	}*/
 
 	// Handle custom dialer here (test we see now)
-	e := noBalancerEnv
+	/*e := tcpTLSRREnv
 	var cpdc *connPersistDeadlineCall
 	e.customDialer = func(network, addr string, timeout time.Duration) (net.Conn, error) {
 		conn, err := net.DialTimeout(network, addr, timeout)
@@ -7691,13 +7717,14 @@ func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
-	mtc := &MockTransportCredentials{}
+	mtc := &mockTransportCredentials{}
 	// Logical entrance function - Dialing to the server
-	te.clientConn(grpc.WithTransportCredentials(&MockTransportCredentials{})) // And now make sure this all functions
+	// grpc.Dial("passthrough:///"+ te.srvAddr, grpc.WithTransportCredentials(mtc))
+	te.clientConn(grpc.WithTransportCredentials(mtc)) // And now make sure this all functions
 
 	if !mtc.connectionHasDeadline {
 		t.Fatalf("There was no deadline set on the RawConn.")
-	}
+	}*/
 	// That should trigger behavior which we verify using the RawConn
 
 	// Handle transport creds here (other test in this file)
@@ -7735,47 +7762,6 @@ func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
 
 // The entrance function that we're testing is literally grpc.Dial, verification is deadlineSet on MockConnection
 
-// Mock Dialer or Connection here?
-/*type MockConnection struct { // maybe rename this to connection wrapper or something
-	// How do we wrap a connection?
-	conn net.Conn
-
-	deadlineSet time.Time // Persists this for verification
-}
-
-func (mc *MockConnection) Read(b []byte) (n int, err error) {
-	return mc.conn.Read(b)
-}
-
-func (mc *MockConnection) Write(b []byte) (n int, err error) {
-	return mc.conn.Write(b)
-}
-
-func (mc *MockConnection) Close() error {
-	return mc.conn.Close()
-}
-
-func (mc *MockConnection) LocalAddr() net.Addr {
-	return mc.conn.LocalAddr()
-}
-
-func (mc *MockConnection) RemoteAddr() net.Addr {
-	return mc.conn.RemoteAddr()
-}
-
-// Persist deadline for validation in mock transport credentials
-func (mc *MockConnection) SetDeadline(t time.Time) error {
-	mc.deadlineSet = t
-	return mc.conn.SetDeadline(t)
-}
-
-func (mc *MockConnection) SetReadDeadline(t time.Time) error {
-	return mc.conn.SetReadDeadline(t)
-}
-
-func (mc *MockConnection) SetWriteDeadline(t time.Time) error {
-	return mc.conn.SetWriteDeadline(t)
-}*/
 
 type connPersistDeadlineCall struct {
 	net.Conn
@@ -7786,27 +7772,22 @@ type connPersistDeadlineCall struct {
 // SetDeadline() on the connection in http_client.go will only be called once.
 func (c *connPersistDeadlineCall) SetDeadline(t time.Time) error {
 	c.deadlineSet = t
-	c.deadlineSetNotZeroValue = !(t == time.Time{})
+	print(t.IsZero())
+	c.deadlineSetNotZeroValue = !(t.IsZero())
 	return c.Conn.SetDeadline(t)
 }
 
-
-// This is a function that needs to return the connection ^^^
-/*type MockDialer struct { // I think this is a function in end to end tests.
-	// All this does is wrap a connection being returned, makes sure set deadline is called
-}*/
-
 // Mock credentials implementation here
-type MockTransportCredentials struct {
+type mockTransportCredentials struct {
 	// All this does is verify if connection passed in has deadline
 	connectionHasDeadline bool
 }
 
 
-func (mtc *MockTransportCredentials) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (mtc *mockTransportCredentials) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return rawConn, nil, nil
 }
-func (mtc *MockTransportCredentials) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func (mtc *mockTransportCredentials) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	// Some way that there was a successful Deadline set on the conn
 	// Make sure raw conn is MockConnection?
 	// if rawConn.(MockConnection)
@@ -7814,17 +7795,20 @@ func (mtc *MockTransportCredentials) ClientHandshake(ctx context.Context, author
 	/*if !rawConn.(connPersistDeadlineCall).deadlineSetNotZeroValue {
 		t.Fatalf("There was no deadline set on the rawConn.")
 	}*/
+	print("IN CLIENT HANDSHAKE")
 	mtc.connectionHasDeadline = rawConn.(*connPersistDeadlineCall).deadlineSetNotZeroValue
+	print("connectionHasDeadline: ")
+	print(mtc.connectionHasDeadline)
 	return rawConn, nil, nil
 }
 
-func (mtc *MockTransportCredentials) Info() credentials.ProtocolInfo {
+func (mtc *mockTransportCredentials) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{}
 }
-func (mtc *MockTransportCredentials) Clone() credentials.TransportCredentials {
+func (mtc *mockTransportCredentials) Clone() credentials.TransportCredentials {
 	return mtc
 }
-func (mtc *MockTransportCredentials) OverrideServerName(s string) error {
+func (mtc *mockTransportCredentials) OverrideServerName(s string) error {
 	return nil
 }
 
