@@ -34,6 +34,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"strings"
 	"testing"
 	"time"
 
@@ -452,46 +453,46 @@ func TestVerifyCrl(t *testing.T) {
 	tampered.SignatureValue.Bytes[0]++
 
 	verifyTests := []struct {
-		desc     string
-		crl      *pkix.CertificateList
-		certs    []*x509.Certificate
-		cert     *x509.Certificate
-		verifies bool
+		desc    string
+		crl     *pkix.CertificateList
+		certs   []*x509.Certificate
+		cert    *x509.Certificate
+		errWant string
 	}{
 		{
-			desc:     "Pass intermediate",
-			crl:      loadCRL(t, "crl/1.crl"),
-			certs:    makeChain(t, "crl/unrevoked.pem"),
-			cert:     makeChain(t, "crl/unrevoked.pem")[1],
-			verifies: true,
+			desc:    "Pass intermediate",
+			crl:     loadCRL(t, "crl/1.crl"),
+			certs:   makeChain(t, "crl/unrevoked.pem"),
+			cert:    makeChain(t, "crl/unrevoked.pem")[1],
+			errWant: "",
 		},
 		{
-			desc:     "Pass leaf",
-			crl:      loadCRL(t, "crl/2.crl"),
-			certs:    makeChain(t, "crl/unrevoked.pem"),
-			cert:     makeChain(t, "crl/unrevoked.pem")[2],
-			verifies: true,
+			desc:    "Pass leaf",
+			crl:     loadCRL(t, "crl/2.crl"),
+			certs:   makeChain(t, "crl/unrevoked.pem"),
+			cert:    makeChain(t, "crl/unrevoked.pem")[2],
+			errWant: "",
 		},
 		{
-			desc:     "Fail wrong cert chain",
-			crl:      loadCRL(t, "crl/3.crl"),
-			certs:    makeChain(t, "crl/unrevoked.pem"),
-			cert:     makeChain(t, "crl/revokedInt.pem")[1],
-			verifies: false,
+			desc:    "Fail wrong cert chain",
+			crl:     loadCRL(t, "crl/3.crl"),
+			certs:   makeChain(t, "crl/unrevoked.pem"),
+			cert:    makeChain(t, "crl/revokedInt.pem")[1],
+			errWant: "No certificates mached",
 		},
 		{
-			desc:     "Fail no certs",
-			crl:      loadCRL(t, "crl/1.crl"),
-			certs:    []*x509.Certificate{},
-			cert:     makeChain(t, "crl/unrevoked.pem")[1],
-			verifies: false,
+			desc:    "Fail no certs",
+			crl:     loadCRL(t, "crl/1.crl"),
+			certs:   []*x509.Certificate{},
+			cert:    makeChain(t, "crl/unrevoked.pem")[1],
+			errWant: "No certificates mached",
 		},
 		{
-			desc:     "Fail Tampered signature",
-			crl:      tampered,
-			certs:    makeChain(t, "crl/unrevoked.pem"),
-			cert:     makeChain(t, "crl/unrevoked.pem")[1],
-			verifies: false,
+			desc:    "Fail Tampered signature",
+			crl:     tampered,
+			certs:   makeChain(t, "crl/unrevoked.pem"),
+			cert:    makeChain(t, "crl/unrevoked.pem")[1],
+			errWant: "verification failure",
 		},
 	}
 
@@ -502,10 +503,13 @@ func TestVerifyCrl(t *testing.T) {
 				t.Fatalf("parseCRLExtensions(%v) failed, err = %v", tt.crl.TBSCertList.Issuer, err)
 			}
 			err = verifyCRL(crlExt, tt.cert.RawIssuer, tt.certs)
-			if tt.verifies && err != nil {
+			switch {
+			case tt.errWant == "" && err != nil:
 				t.Errorf("Valid CRL did not verify err = %v", err)
-			} else if !tt.verifies && err == nil {
+			case tt.errWant != "" && err == nil:
 				t.Error("Invalid CRL verified")
+			case tt.errWant != "" && !strings.Contains(err.Error(), tt.errWant):
+				t.Errorf("fetchIssuerCRL(_, %v, %v, _) = %v; want Contains(%v)", tt.cert.RawIssuer, tt.certs, err, tt.errWant)
 			}
 		})
 	}
