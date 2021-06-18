@@ -7682,7 +7682,7 @@ func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
 			return nil, err
 		}
 		cpdc = &connPersistDeadlineCall{
-			Conn: conn,
+			Conn:       conn,
 			deadlineCh: deadlineSetCh,
 		}
 		return cpdc, nil
