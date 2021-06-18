@@ -7669,7 +7669,6 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 	timer.Stop()
 }
 
-
 // TestDeadlineSetOnConnectionOnClientCredentialHandshake tests that there is a deadline
 // set on the client connection when a credential handshake happens.
 func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
