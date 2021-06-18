@@ -401,7 +401,7 @@ type env struct {
 	security     string // The security protocol such as TLS, SSH, etc.
 	httpHandler  bool   // whether to use the http.Handler ServerTransport; requires TLS
 	balancer     string // One of "round_robin", "pick_first", or "".
-	customDialer func(string, string, time.Duration) (net.Conn, error)
+	customDialer func(string, string, time.Duration) (net.Conn, error) // ZACH - CUSTOM DIALER
 }
 
 func (e env) runnable() bool {
@@ -413,7 +413,7 @@ func (e env) runnable() bool {
 
 func (e env) dialer(addr string, timeout time.Duration) (net.Conn, error) {
 	if e.customDialer != nil {
-		return e.customDialer(e.network, addr, timeout)
+		return e.customDialer(e.network, addr, timeout) // Overwrite this custom dialer with something that verifies net conn - TODO: HOW TO CREATE A "WRAPPER" OF net.Conn?
 	}
 	return net.DialTimeout(e.network, addr, timeout)
 }
@@ -499,7 +499,7 @@ type test struct {
 	clientUseCompression bool
 	// clientNopCompression is set to create a compressor whose type is not supported.
 	clientNopCompression        bool
-	unaryClientInt              grpc.UnaryClientInterceptor
+	unaryClientInt              grpc.UnaryClientInterceptor // Somewhere here we need fake credentials to verify right timeout called on conn
 	streamClientInt             grpc.StreamClientInterceptor
 	sc                          <-chan grpc.ServiceConfig
 	customCodec                 encoding.Codec
@@ -863,7 +863,7 @@ func (te *test) clientConn(opts ...grpc.DialOption) *grpc.ClientConn {
 	var scheme string
 	opts, scheme = te.configDial(opts...)
 	var err error
-	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...)
+	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...) // Uses (in this case creates) the component how the user would, "tells the story"
 	if err != nil {
 		te.t.Fatalf("Dial(%q) = %v", scheme+te.srvAddr, err)
 	}
@@ -5093,7 +5093,7 @@ func (s) TestFailfastRPCFailOnFatalHandshakeError(t *testing.T) {
 	}
 	defer lis.Close()
 
-	cc, err := grpc.Dial("passthrough:///"+lis.Addr().String(), grpc.WithTransportCredentials(&clientFailCreds{}))
+	cc, err := grpc.Dial("passthrough:///"+lis.Addr().String(), grpc.WithTransportCredentials(&clientFailCreds{})) // COME BACK HERE - Define a fake credential struct that implements credentials, and use option in grpc.Dial
 	if err != nil {
 		t.Fatalf("grpc.Dial(_) = %v", err)
 	}
@@ -7668,3 +7668,172 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 	s.GracefulStop()
 	timer.Stop()
 }
+
+
+// TestDeadlineSetOnConnectionOnClientCredentialHandshake tests that there is a deadline
+// set on the client connection when a credential handshake happens.
+func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
+	// A few things: a custom dialer, and also a custom transport credentials
+
+	// Handle custom dialer here (test we see now)
+	e := noBalancerEnv
+	var cpdc *connPersistDeadlineCall
+	e.customDialer = func(network, addr string, timeout time.Duration) (net.Conn, error) {
+		conn, err := net.DialTimeout(network, addr, timeout)
+		if err != nil {
+			return nil, err
+		}
+		cpdc = &connPersistDeadlineCall{Conn: conn}
+		return cpdc, nil
+	}
+
+	te := newTest(t, e)
+	te.startServer(&testServer{security: e.security})
+	defer te.tearDown()
+
+	mtc := &MockTransportCredentials{}
+	// Logical entrance function - Dialing to the server
+	te.clientConn(grpc.WithTransportCredentials(&MockTransportCredentials{})) // And now make sure this all functions
+
+	if !mtc.connectionHasDeadline {
+		t.Fatalf("There was no deadline set on the RawConn.")
+	}
+	// That should trigger behavior which we verify using the RawConn
+
+	// Handle transport creds here (other test in this file)
+
+
+
+	// setup step here
+
+	// credentials
+
+	// send something (activate the transport)
+
+	// Verify that thing was sent
+
+	/*net.Conn.SetDeadline(grpc.WithTransportCredentials(&MockTransportCredentials{})) // Figure out some way of verifying that net.Conn.SetDeadline() was successfully called
+
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+
+	cc, err := grpc.Dial("passthrough:///" + lis.Addr().String(), grpc.WithTransportCredentials(&MockTransportCredentials{}))
+	if err != nil {
+		t.Fatalf("grpc.Dial(_) = %v", err)
+	}
+	defer cc.Close()*/
+}
+
+// Steps
+// Setup with everything there: mock client, lower level server it seems (aka just a net.Listener), or should we use a grpc server?
+// Make sure credentials is there too
+// Send something
+// Verify
+
+// The entrance function that we're testing is literally grpc.Dial, verification is deadlineSet on MockConnection
+
+// Mock Dialer or Connection here?
+/*type MockConnection struct { // maybe rename this to connection wrapper or something
+	// How do we wrap a connection?
+	conn net.Conn
+
+	deadlineSet time.Time // Persists this for verification
+}
+
+func (mc *MockConnection) Read(b []byte) (n int, err error) {
+	return mc.conn.Read(b)
+}
+
+func (mc *MockConnection) Write(b []byte) (n int, err error) {
+	return mc.conn.Write(b)
+}
+
+func (mc *MockConnection) Close() error {
+	return mc.conn.Close()
+}
+
+func (mc *MockConnection) LocalAddr() net.Addr {
+	return mc.conn.LocalAddr()
+}
+
+func (mc *MockConnection) RemoteAddr() net.Addr {
+	return mc.conn.RemoteAddr()
+}
+
+// Persist deadline for validation in mock transport credentials
+func (mc *MockConnection) SetDeadline(t time.Time) error {
+	mc.deadlineSet = t
+	return mc.conn.SetDeadline(t)
+}
+
+func (mc *MockConnection) SetReadDeadline(t time.Time) error {
+	return mc.conn.SetReadDeadline(t)
+}
+
+func (mc *MockConnection) SetWriteDeadline(t time.Time) error {
+	return mc.conn.SetWriteDeadline(t)
+}*/
+
+type connPersistDeadlineCall struct {
+	net.Conn
+	deadlineSet time.Time
+	deadlineSetNotZeroValue bool
+}
+
+// SetDeadline() on the connection in http_client.go will only be called once.
+func (c *connPersistDeadlineCall) SetDeadline(t time.Time) error {
+	c.deadlineSet = t
+	c.deadlineSetNotZeroValue = !(t == time.Time{})
+	return c.Conn.SetDeadline(t)
+}
+
+
+// This is a function that needs to return the connection ^^^
+/*type MockDialer struct { // I think this is a function in end to end tests.
+	// All this does is wrap a connection being returned, makes sure set deadline is called
+}*/
+
+// Mock credentials implementation here
+type MockTransportCredentials struct {
+	// All this does is verify if connection passed in has deadline
+	connectionHasDeadline bool
+}
+
+
+func (mtc *MockTransportCredentials) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, nil, nil
+}
+func (mtc *MockTransportCredentials) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	// Some way that there was a successful Deadline set on the conn
+	// Make sure raw conn is MockConnection?
+	// if rawConn.(MockConnection)
+	// Check if it's the zero value?
+	/*if !rawConn.(connPersistDeadlineCall).deadlineSetNotZeroValue {
+		t.Fatalf("There was no deadline set on the rawConn.")
+	}*/
+	mtc.connectionHasDeadline = rawConn.(*connPersistDeadlineCall).deadlineSetNotZeroValue
+	return rawConn, nil, nil
+}
+
+func (mtc *MockTransportCredentials) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (mtc *MockTransportCredentials) Clone() credentials.TransportCredentials {
+	return mtc
+}
+func (mtc *MockTransportCredentials) OverrideServerName(s string) error {
+	return nil
+}
+
+
+// Three components needed to mock: Fake dialer (or?) fake raw conn, fake credentials to verify the connection passed into
+// the Credential Handshake has the right connection deadline on it.
+
+// Find a test that touches credentials, I think that the server isn't needed to be mocked, only the client side stuff
+
+// How do they represent server side, and also how do they test client side? In my test, server side is normal, and client side
+// is the one with the crazy mock stuff
+
