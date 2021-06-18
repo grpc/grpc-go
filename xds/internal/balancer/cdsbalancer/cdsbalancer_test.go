@@ -32,10 +32,12 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpctest"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -131,8 +133,8 @@ func (tb *testEDSBalancer) waitForClientConnUpdate(ctx context.Context, wantCCS 
 	if xdsclient.FromResolverState(gotCCS.ResolverState) == nil {
 		return fmt.Errorf("want resolver state with XDSClient attached, got one without")
 	}
-	if !cmp.Equal(gotCCS, wantCCS, cmpopts.IgnoreFields(resolver.State{}, "Attributes")) {
-		return fmt.Errorf("received ClientConnState: %+v, want %+v", gotCCS, wantCCS)
+	if diff := cmp.Diff(gotCCS, wantCCS, cmpopts.IgnoreFields(resolver.State{}, "Attributes")); diff != "" {
+		return fmt.Errorf("received unexpected ClientConnState, diff (-got +want): %v", diff)
 	}
 	return nil
 }
@@ -196,7 +198,7 @@ func cdsCCS(cluster string, xdsC xdsclient.XDSClient) balancer.ClientConnState {
 
 // edsCCS is a helper function to construct a good update passed from the
 // cdsBalancer to the edsBalancer.
-func edsCCS(service string, countMax *uint32, enableLRS bool) balancer.ClientConnState {
+func edsCCS(service string, countMax *uint32, enableLRS bool, xdslbpolicy *internalserviceconfig.BalancerConfig) balancer.ClientConnState {
 	discoveryMechanism := clusterresolver.DiscoveryMechanism{
 		Type:                  clusterresolver.DiscoveryMechanismTypeEDS,
 		Cluster:               service,
@@ -208,6 +210,7 @@ func edsCCS(service string, countMax *uint32, enableLRS bool) balancer.ClientCon
 	}
 	lbCfg := &clusterresolver.LBConfig{
 		DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{discoveryMechanism},
+		XDSLBPolicy:         xdslbpolicy,
 	}
 
 	return balancer.ClientConnState{
@@ -361,12 +364,23 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 		{
 			name:      "happy-case-with-lrs",
 			cdsUpdate: xdsclient.ClusterUpdate{ClusterName: serviceName, EnableLRS: true},
-			wantCCS:   edsCCS(serviceName, nil, true),
+			wantCCS:   edsCCS(serviceName, nil, true, nil),
 		},
 		{
 			name:      "happy-case-without-lrs",
 			cdsUpdate: xdsclient.ClusterUpdate{ClusterName: serviceName},
-			wantCCS:   edsCCS(serviceName, nil, false),
+			wantCCS:   edsCCS(serviceName, nil, false, nil),
+		},
+		{
+			name: "happy-case-with-ring-hash-lb-policy",
+			cdsUpdate: xdsclient.ClusterUpdate{
+				ClusterName: serviceName,
+				LBPolicy:    &xdsclient.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
+			},
+			wantCCS: edsCCS(serviceName, nil, false, &internalserviceconfig.BalancerConfig{
+				Name:   ringhash.Name,
+				Config: &ringhash.LBConfig{MinRingSize: 10, MaxRingSize: 100},
+			}),
 		},
 	}
 
@@ -434,7 +448,7 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false)
+	wantCCS := edsCCS(serviceName, nil, false, nil)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -519,7 +533,7 @@ func (s) TestResolverError(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false)
+	wantCCS := edsCCS(serviceName, nil, false, nil)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -568,7 +582,7 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false)
+	wantCCS := edsCCS(serviceName, nil, false, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -603,7 +617,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	// the service's counter with the new max requests.
 	var maxRequests uint32 = 1
 	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: clusterName, MaxRequests: &maxRequests}
-	wantCCS := edsCCS(clusterName, &maxRequests, false)
+	wantCCS := edsCCS(clusterName, &maxRequests, false, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -636,7 +650,7 @@ func (s) TestClose(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
 	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false)
+	wantCCS := edsCCS(serviceName, nil, false, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {

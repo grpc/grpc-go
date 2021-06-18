@@ -575,8 +575,42 @@ func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (strin
 	return cluster.GetName(), cu, nil
 }
 
+const (
+	defaultRingHashMinSize = 1024
+	defaultRingHashMaxSize = 8 * 1024 * 1024 // 8M
+	ringHashSizeUpperBound = 8 * 1024 * 1024 // 8M
+)
+
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
-	if cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN {
+	var lbPolicy *ClusterLBPolicyRingHash
+	switch cluster.GetLbPolicy() {
+	case v3clusterpb.Cluster_ROUND_ROBIN:
+		lbPolicy = nil // The default is round_robin, and there's no config to set.
+	case v3clusterpb.Cluster_RING_HASH:
+		rhc := cluster.GetRingHashLbConfig()
+		if rhc.GetHashFunction() != v3clusterpb.Cluster_RingHashLbConfig_XX_HASH {
+			return ClusterUpdate{}, fmt.Errorf("unexpected ring_hash hash function %v in response: %+v", rhc.GetHashFunction(), cluster)
+		}
+		// Minimum defaults to 1024 entries, and limited to 8M entries Maximum
+		// defaults to 8M entries, and limited to 8M entries
+		var minSize, maxSize uint64 = defaultRingHashMinSize, defaultRingHashMaxSize
+		if min := rhc.GetMinimumRingSize(); min != nil {
+			if min.GetValue() > ringHashSizeUpperBound {
+				return ClusterUpdate{}, fmt.Errorf("unexpected ring_hash mininum ring size %v in response: %+v", min.GetValue(), cluster)
+			}
+			minSize = min.GetValue()
+		}
+		if max := rhc.GetMaximumRingSize(); max != nil {
+			if max.GetValue() > ringHashSizeUpperBound {
+				return ClusterUpdate{}, fmt.Errorf("unexpected ring_hash maxinum ring size %v in response: %+v", max.GetValue(), cluster)
+			}
+			maxSize = max.GetValue()
+		}
+		if minSize > maxSize {
+			return ClusterUpdate{}, fmt.Errorf("ring_hash config min size %v is greater than max %v", minSize, maxSize)
+		}
+		lbPolicy = &ClusterLBPolicyRingHash{MinimumRingSize: minSize, MaximumRingSize: maxSize}
+	default:
 		return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
@@ -595,6 +629,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
 		SecurityCfg: sc,
 		MaxRequests: circuitBreakersFromCluster(cluster),
+		LBPolicy:    lbPolicy,
 	}
 
 	// Validate and set cluster type from the response.

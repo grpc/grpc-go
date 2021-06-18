@@ -422,6 +422,13 @@ const (
 	ClusterTypeAggregate
 )
 
+// ClusterLBPolicyRingHash represents ring_hash lb policy, and also contains its
+// config.
+type ClusterLBPolicyRingHash struct {
+	MinimumRingSize uint64
+	MaximumRingSize uint64
+}
+
 // ClusterUpdate contains information from a received CDS response, which is of
 // interest to the registered CDS watcher.
 type ClusterUpdate struct {
@@ -443,6 +450,16 @@ type ClusterUpdate struct {
 	// PrioritizedClusterNames is used only for cluster type aggregate. It represents
 	// a prioritized list of cluster names.
 	PrioritizedClusterNames []string
+
+	// LBPolicy is the lb policy for this cluster.
+	//
+	// This only support round_robin and ring_hash.
+	// - if it's nil, the lb policy is round_robin
+	// - if it's not nil, the lb policy is ring_hash, the this field has the config.
+	//
+	// When we add more support policies, this can be made an interface, and
+	// will be set to different types based on the policy type.
+	LBPolicy *ClusterLBPolicyRingHash
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any

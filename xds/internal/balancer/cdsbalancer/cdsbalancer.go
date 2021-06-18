@@ -32,9 +32,11 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
@@ -331,6 +333,19 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 	}
 	lbCfg := &clusterresolver.LBConfig{
 		DiscoveryMechanisms: dms,
+	}
+
+	// lbPolicy is set only when the policy is ringhash. The default (when it's
+	// not set) is roundrobin. And similarly, we only need to set XDSLBPolicy
+	// for ringhash (it also defaults to roundrobin).
+	if lbp := update.lbPolicy; lbp != nil {
+		lbCfg.XDSLBPolicy = &internalserviceconfig.BalancerConfig{
+			Name: ringhash.Name,
+			Config: &ringhash.LBConfig{
+				MinRingSize: lbp.MinimumRingSize,
+				MaxRingSize: lbp.MaximumRingSize,
+			},
+		}
 	}
 
 	ccState := balancer.ClientConnState{
