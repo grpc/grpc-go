@@ -407,15 +407,17 @@ func (te *test) doServerStreamCall(c *rpcConfig) (*testpb.StreamingOutputCallReq
 }
 
 type expectedData struct {
-	method      string
-	serverAddr  string
-	compression string
-	reqIdx      int
-	requests    []proto.Message
-	respIdx     int
-	responses   []proto.Message
-	err         error
-	failfast    bool
+	method         string
+	isClientStream bool
+	isServerStream bool
+	serverAddr     string
+	compression    string
+	reqIdx         int
+	requests       []proto.Message
+	respIdx        int
+	responses      []proto.Message
+	err            error
+	failfast       bool
 }
 
 type gotData struct {
@@ -455,6 +457,12 @@ func checkBegin(t *testing.T, d *gotData, e *expectedData) {
 		if st.FailFast != e.failfast {
 			t.Fatalf("st.FailFast = %v, want %v", st.FailFast, e.failfast)
 		}
+	}
+	if st.IsClientStream != e.isClientStream {
+		t.Fatalf("st.IsClientStream = %v, want %v", st.IsClientStream, e.isClientStream)
+	}
+	if st.IsServerStream != e.isServerStream {
+		t.Fatalf("st.IsServerStream = %v, want %v", st.IsServerStream, e.isServerStream)
 	}
 }
 
@@ -847,6 +855,9 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 		err    error
 		method string
 
+		isClientStream bool
+		isServerStream bool
+
 		req  proto.Message
 		resp proto.Message
 		e    error
@@ -864,14 +875,18 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 		reqs, resp, e = te.doClientStreamCall(cc)
 		resps = []proto.Message{resp}
 		err = e
+		isClientStream = true
 	case serverStreamRPC:
 		method = "/grpc.testing.TestService/StreamingOutputCall"
 		req, resps, e = te.doServerStreamCall(cc)
 		reqs = []proto.Message{req}
 		err = e
+		isServerStream = true
 	case fullDuplexStreamRPC:
 		method = "/grpc.testing.TestService/FullDuplexCall"
 		reqs, resps, err = te.doFullDuplexCallRoundtrip(cc)
+		isClientStream = true
+		isServerStream = true
 	}
 	if cc.success != (err == nil) {
 		t.Fatalf("cc.success: %v, got error: %v", cc.success, err)
@@ -900,12 +915,14 @@ func testServerStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs []f
 	}
 
 	expect := &expectedData{
-		serverAddr:  te.srvAddr,
-		compression: tc.compress,
-		method:      method,
-		requests:    reqs,
-		responses:   resps,
-		err:         err,
+		serverAddr:     te.srvAddr,
+		compression:    tc.compress,
+		method:         method,
+		requests:       reqs,
+		responses:      resps,
+		err:            err,
+		isClientStream: isClientStream,
+		isServerStream: isServerStream,
 	}
 
 	h.mu.Lock()
@@ -1138,6 +1155,9 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 		method string
 		err    error
 
+		isClientStream bool
+		isServerStream bool
+
 		req  proto.Message
 		resp proto.Message
 		e    error
@@ -1154,14 +1174,18 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 		reqs, resp, e = te.doClientStreamCall(cc)
 		resps = []proto.Message{resp}
 		err = e
+		isClientStream = true
 	case serverStreamRPC:
 		method = "/grpc.testing.TestService/StreamingOutputCall"
 		req, resps, e = te.doServerStreamCall(cc)
 		reqs = []proto.Message{req}
 		err = e
+		isServerStream = true
 	case fullDuplexStreamRPC:
 		method = "/grpc.testing.TestService/FullDuplexCall"
 		reqs, resps, err = te.doFullDuplexCallRoundtrip(cc)
+		isClientStream = true
+		isServerStream = true
 	}
 	if cc.success != (err == nil) {
 		t.Fatalf("cc.success: %v, got error: %v", cc.success, err)
@@ -1194,13 +1218,15 @@ func testClientStats(t *testing.T, tc *testConfig, cc *rpcConfig, checkFuncs map
 	}
 
 	expect := &expectedData{
-		serverAddr:  te.srvAddr,
-		compression: tc.compress,
-		method:      method,
-		requests:    reqs,
-		responses:   resps,
-		failfast:    cc.failfast,
-		err:         err,
+		serverAddr:     te.srvAddr,
+		compression:    tc.compress,
+		method:         method,
+		requests:       reqs,
+		responses:      resps,
+		failfast:       cc.failfast,
+		err:            err,
+		isClientStream: isClientStream,
+		isServerStream: isServerStream,
 	}
 
 	h.mu.Lock()
