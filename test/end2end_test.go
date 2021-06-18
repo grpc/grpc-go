@@ -508,6 +508,7 @@ type test struct {
 	perRPCCreds                 credentials.PerRPCCredentials
 	customDialOptions           []grpc.DialOption
 	resolverScheme              string
+	customTranportCredentials   bool
 
 	// All test dialing is blocking by default. Set this to true if dial
 	// should be non-blocking.
@@ -797,11 +798,13 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	}
 	switch te.e.security {
 	case "tls":
-		creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
-		if err != nil {
-			te.t.Fatalf("Failed to load credentials: %v", err)
+		if !te.customTranportCredentials {
+			creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
+			if err != nil {
+				te.t.Fatalf("Failed to load credentials: %v", err)
+			}
+			opts = append(opts, grpc.WithTransportCredentials(creds))
 		}
-		opts = append(opts, grpc.WithTransportCredentials(creds))
 	case "empty":
 		// Don't add any transport creds option.
 	default:
@@ -863,6 +866,11 @@ func (te *test) clientConn(opts ...grpc.DialOption) *grpc.ClientConn {
 	var scheme string
 	opts, scheme = te.configDial(opts...)
 	var err error
+	print(scheme+te.srvAddr + " ")
+	print(len(opts))
+	for _, opt := range opts {
+		print(opt)
+	}
 	te.cc, err = grpc.Dial(scheme+te.srvAddr, opts...) // Uses (in this case creates) the component how the user would, "tells the story"
 	if err != nil {
 		te.t.Fatalf("Dial(%q) = %v", scheme+te.srvAddr, err)
@@ -7691,7 +7699,7 @@ func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
 
 	/*mtc := &mockTransportCredentials{}
 	// func(context.Context, string) (net.Conn, error)
-	cc, err := grpc.Dial("passthrough:///"+lis.Addr().String(), grpc.WithTransportCredentials(mtc)/*, grpc.WithContextDialer(dialerPersistDeadline)*/) // COME BACK HERE - Define a fake credential struct that implements credentials, and use option in grpc.Dial
+	cc, err := grpc.Dial("passthrough:///"+lis.Addr().String(), grpc.WithTransportCredentials(mtc)/*, grpc.WithContextDialer(dialerPersistDeadline)*///) // COME BACK HERE - Define a fake credential struct that implements credentials, and use option in grpc.Dial
 	/*if err != nil {
 		t.Fatalf("grpc.Dial(_) = %v", err)
 	}
@@ -7702,7 +7710,7 @@ func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
 	}*/
 
 	// Handle custom dialer here (test we see now)
-	/*e := tcpTLSRREnv
+	e := tcpTLSEnv
 	var cpdc *connPersistDeadlineCall
 	e.customDialer = func(network, addr string, timeout time.Duration) (net.Conn, error) {
 		conn, err := net.DialTimeout(network, addr, timeout)
@@ -7714,6 +7722,7 @@ func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
 	}
 
 	te := newTest(t, e)
+	te.customTranportCredentials = true
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
@@ -7721,10 +7730,10 @@ func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
 	// Logical entrance function - Dialing to the server
 	// grpc.Dial("passthrough:///"+ te.srvAddr, grpc.WithTransportCredentials(mtc))
 	te.clientConn(grpc.WithTransportCredentials(mtc)) // And now make sure this all functions
-
+	//grpc.Dial("passthrough:///"+ te.srvAddr, grpc.WithTransportCredentials(mtc))
 	if !mtc.connectionHasDeadline {
 		t.Fatalf("There was no deadline set on the RawConn.")
-	}*/
+	}
 	// That should trigger behavior which we verify using the RawConn
 
 	// Handle transport creds here (other test in this file)
