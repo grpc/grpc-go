@@ -1993,6 +1993,12 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					{Name: "grpc-status", Value: "0"},
 					{Name: ":status", Value: "200"},
 				},
+				HeadersFrame: &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: 0,
+						Flags:    http2.FlagHeadersEndStream,
+					},
+				},
 			},
 			// no error
 			wantStatus: status.New(codes.OK, ""),
@@ -2003,6 +2009,12 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				Fields: []hpack.HeaderField{
 					{Name: "grpc-status", Value: "0"},
 					{Name: ":status", Value: "200"},
+				},
+				HeadersFrame: &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: 0,
+						Flags:    http2.FlagHeadersEndStream,
+					},
 				},
 			},
 			wantStatus: status.New(
@@ -2018,6 +2030,12 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					{Name: "grpc-status", Value: "xxxx"},
 					{Name: ":status", Value: "200"},
 				},
+				HeadersFrame: &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: 0,
+						Flags:    http2.FlagHeadersEndStream,
+					},
+				},
 			},
 			wantStatus: status.New(
 				codes.Internal,
@@ -2029,12 +2047,17 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/json"},
-					{Name: ":status", Value: "200"},
+				},
+				HeadersFrame: &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: 0,
+						Flags:    http2.FlagHeadersEndStream,
+					},
 				},
 			},
 			wantStatus: status.New(
-				codes.Unknown,
-				"transport: received unexpected content-type \"application/json\"",
+				codes.Internal,
+				"malformed header: missing HTTP status; transport: received unexpected content-type \"application/json\"",
 			),
 		},
 		{
@@ -2043,6 +2066,12 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				Fields: []hpack.HeaderField{
 					// No content type provided then fallback into handling http error.
 					{Name: ":status", Value: "xxxx"},
+				},
+				HeadersFrame: &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: 0,
+						Flags:    http2.FlagHeadersEndStream,
+					},
 				},
 			},
 			wantStatus: status.New(
@@ -2055,6 +2084,12 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields:    nil,
 				Truncated: true,
+				HeadersFrame: &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: 0,
+						Flags:    http2.FlagHeadersEndStream,
+					},
+				},
 			},
 			wantStatus: status.New(
 				codes.Internal,
@@ -2080,6 +2115,24 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				"unexpected HTTP status code received from server: 504 (Gateway Timeout)",
 			),
 		},
+		{
+			name: "missing http status",
+			metaHeaderFrame: &http2.MetaHeadersFrame{
+				Fields: []hpack.HeaderField{
+					{Name: "content-type", Value: "application/grpc"},
+				},
+				HeadersFrame: &http2.HeadersFrame{
+					FrameHeader: http2.FrameHeader{
+						StreamID: 0,
+						Flags:    http2.FlagHeadersEndStream,
+					},
+				},
+			},
+			wantStatus: status.New(
+				codes.Internal,
+				"malformed header: missing HTTP status",
+				),
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			ts := &Stream{
@@ -2100,14 +2153,6 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					done: make(chan struct{}),
 					list: &itemList{},
 				},
-			}
-			if test.metaHeaderFrame.HeadersFrame == nil {
-				test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
-					FrameHeader: http2.FrameHeader{
-						StreamID: 0,
-						Flags:    http2.FlagHeadersEndStream,
-					},
-				}
 			}
 
 			s.operateHeaders(test.metaHeaderFrame)
