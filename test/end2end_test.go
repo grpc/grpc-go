@@ -7672,9 +7672,17 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 // TestDeadlineSetOnConnectionOnClientCredentialHandshake tests that there is a deadline
 // set on the net.Conn when a credential handshake happens in http2_client.
 func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
-	// Need a custom dialer which is a logical Dial Option
-	// Needs to use these credentials VVV
-	cvd := &credentialsVerifyDeadline{}
+	lis, err := net.Listen("tcp", "localhost:50053")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	go func() {
+		lis.Accept()
+	}()
+	credsInvoked := testutils.NewChannel()
+	cvd := &credentialsVerifyDeadline{
+		credsInvoked: credsInvoked,
+	}
 	dopts := []grpc.DialOption{
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
 			conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
@@ -7686,14 +7694,21 @@ func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
 			}
 			return cpd, nil
 		}),
-		grpc.WithTransportCredentials(&credentialsVerifyDeadline{}),
+		grpc.WithTransportCredentials(cvd),
 	}
+	cc, err := grpc.Dial(lis.Addr().String(), dopts...)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
 
-	ss := &stubserver.StubServer{}
-	if err := ss.Start(nil, dopts...); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	connectionHasCorrectDeadline, err := credsInvoked.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error receiving from credsInvoked: %v", err)
 	}
-	if !cvd.connectionHasCorrectDeadline {
+	if !connectionHasCorrectDeadline.(bool) {
 		t.Fatalf("Connection did not have deadline set.")
 	}
 }
@@ -7709,6 +7724,7 @@ func (c *connPersistDeadline) SetDeadline(t time.Time) error {
 }
 
 type credentialsVerifyDeadline struct {
+	credsInvoked                 *testutils.Channel
 	connectionHasCorrectDeadline bool
 }
 
@@ -7719,7 +7735,7 @@ func (cvd *credentialsVerifyDeadline) ServerHandshake(rawConn net.Conn) (net.Con
 func (cvd *credentialsVerifyDeadline) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	// Default connection timeout is 20 seconds, so if the deadline exceeds now
 	// + 18 seconds it should be valid.
-	cvd.connectionHasCorrectDeadline = rawConn.(*connPersistDeadline).deadline.After(time.Now().Add(time.Second * 18))
+	cvd.credsInvoked.Send(rawConn.(*connPersistDeadline).deadline.After(time.Now().Add(time.Second * 18)))
 	return rawConn, nil, nil
 }
 
