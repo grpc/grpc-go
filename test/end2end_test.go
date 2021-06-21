@@ -7724,8 +7724,7 @@ func (c *connPersistDeadline) SetDeadline(t time.Time) error {
 }
 
 type credentialsVerifyDeadline struct {
-	credsInvoked                 *testutils.Channel
-	connectionHasCorrectDeadline bool
+	credsInvoked *testutils.Channel
 }
 
 func (cvd *credentialsVerifyDeadline) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
