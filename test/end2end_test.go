@@ -7668,3 +7668,67 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 	s.GracefulStop()
 	timer.Stop()
 }
+
+// TestDeadlineSetOnConnectionOnClientCredentialHandshake tests that there is a deadline
+// set on the net.Conn when a credential handshake happens in http2_client.
+func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
+	// Need a custom dialer which is a logical Dial Option
+	// Needs to use these credentials VVV
+	cvd := &credentialsVerifyDeadline{}
+	dopts := []grpc.DialOption{
+		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+			conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+			if err != nil {
+				return nil, err
+			}
+			cpd := &connPersistDeadline{
+				Conn: conn,
+			}
+			return cpd, nil
+		}),
+		grpc.WithTransportCredentials(&credentialsVerifyDeadline{}),
+	}
+
+	ss := &stubserver.StubServer{}
+	if err := ss.Start(nil, dopts...); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	if !cvd.connectionHasCorrectDeadline {
+		t.Fatalf("Connection did not have deadline set.")
+	}
+}
+
+type connPersistDeadline struct {
+	net.Conn
+	deadline time.Time
+}
+
+func (c *connPersistDeadline) SetDeadline(t time.Time) error {
+	c.deadline = t
+	return c.Conn.SetDeadline(t)
+}
+
+type credentialsVerifyDeadline struct {
+	connectionHasCorrectDeadline bool
+}
+
+func (cvd *credentialsVerifyDeadline) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, nil, nil
+}
+
+func (cvd *credentialsVerifyDeadline) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	// Default connection timeout is 20 seconds, so if the deadline exceeds now
+	// + 18 seconds it should be valid.
+	cvd.connectionHasCorrectDeadline = rawConn.(*connPersistDeadline).deadline.After(time.Now().Add(time.Second * 18))
+	return rawConn, nil, nil
+}
+
+func (cvd *credentialsVerifyDeadline) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (cvd *credentialsVerifyDeadline) Clone() credentials.TransportCredentials {
+	return cvd
+}
+func (cvd *credentialsVerifyDeadline) OverrideServerName(s string) error {
+	return nil
+}
