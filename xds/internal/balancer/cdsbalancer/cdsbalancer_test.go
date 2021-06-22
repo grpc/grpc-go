@@ -596,8 +596,8 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	// will trigger the watch handler on the CDS balancer, which will update
 	// the service's counter with the new max requests.
 	var maxRequests uint32 = 1
-	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName, MaxRequests: &maxRequests}
-	wantCCS := edsCCS(serviceName, &maxRequests, false)
+	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: clusterName, MaxRequests: &maxRequests}
+	wantCCS := edsCCS(clusterName, &maxRequests, false)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -606,7 +606,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 
 	// Since the counter's max requests was set to 1, the first request should
 	// succeed and the second should fail.
-	counter := xdsclient.GetServiceRequestsCounter(serviceName)
+	counter := xdsclient.GetClusterRequestsCounter(clusterName, "")
 	if err := counter.StartRequest(maxRequests); err != nil {
 		t.Fatal(err)
 	}
