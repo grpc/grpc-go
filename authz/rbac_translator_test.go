@@ -82,7 +82,6 @@ func TestTranslatePolicy(t *testing.T) {
 							}
 						}]
 					}`,
-			wantErr: "",
 			wantDenyPolicy: &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_DENY, Policies: map[string]*v3rbacpb.Policy{
 				"authz_deny_policy_1": {
 					Principals: []*v3rbacpb.Principal{
@@ -166,20 +165,16 @@ func TestTranslatePolicy(t *testing.T) {
 			}},
 		},
 		"missing name field": {
-			authzPolicy:     `{}`,
-			wantErr:         "\"name\" is not present",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
+			authzPolicy: `{}`,
+			wantErr:     `"name" is not present`,
 		},
 		"invalid field type": {
-			authzPolicy:     `{"name": 123}`,
-			wantErr:         "failed to unmarshal policy",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
+			authzPolicy: `{"name": 123}`,
+			wantErr:     "failed to unmarshal policy",
 		},
 		"missing allow rules field": {
 			authzPolicy:     `{"name": "authz-foo"}`,
-			wantErr:         "\"allow_rules\" is not present",
+			wantErr:         `"allow_rules" is not present`,
 			wantDenyPolicy:  nil,
 			wantAllowPolicy: nil,
 		},
@@ -188,27 +183,27 @@ func TestTranslatePolicy(t *testing.T) {
 				"name": "authz-foo",
 				"allow_rules": [{}]
 			}`,
-			wantErr:         "\"allow_rules\" 0: \"name\" is not present",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
+			wantErr: `"allow_rules" 0: "name" is not present`,
 		},
 		"missing header key": {
 			authzPolicy: `{
 				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "request": {"headers":[{}]}}]
+				"allow_rules": [{
+					"name": "allow_policy_1",
+					"request": {"headers":[{"key":"key-a", "values": ["value-a"]}, {}]}
+				}]
 			}`,
-			wantErr:         "\"allow_rules\" 0: \"headers\" 0: \"key\" is not present",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
+			wantErr: `"allow_rules" 0: "headers" 1: "key" is not present`,
 		},
 		"missing header values": {
 			authzPolicy: `{
 				"name": "authz",
-				"allow_rules": [{"name": "allow_policy_1", "request": {"headers":[{"key":"key-a"}]}}]
+				"allow_rules": [{
+					"name": "allow_policy_1",
+					"request": {"headers":[{"key":"key-a"}]}
+				}]
 			}`,
-			wantErr:         "\"allow_rules\" 0: \"headers\" 0: \"values\" is not present",
-			wantDenyPolicy:  nil,
-			wantAllowPolicy: nil,
+			wantErr: `"allow_rules" 0: "headers" 0: "values" is not present`,
 		},
 	}
 

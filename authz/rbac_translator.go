@@ -28,28 +28,28 @@ import (
 )
 
 type header struct {
-	Key    string   `json:"key"`
-	Values []string `json:"values"`
+	Key    string
+	Values []string
 }
 
 type peer struct {
-	Principals []string `json:"principals"`
+	Principals []string
 }
 
 type request struct {
-	Paths   []string `json:"paths"`
-	Headers []header `json:"headers"`
+	Paths   []string
+	Headers []header
 }
 
 type rule struct {
-	Name    string  `json:"name"`
-	Source  peer    `json:"source"`
-	Request request `json:"request"`
+	Name    string
+	Source  peer
+	Request request
 }
 
 // Represents the SDK authorization policy provided by user.
 type authorizationPolicy struct {
-	Name       string `json:"name"`
+	Name       string
 	DenyRules  []rule `json:"deny_rules"`
 	AllowRules []rule `json:"allow_rules"`
 }
@@ -97,29 +97,23 @@ func permissionAnd(permission []*v3rbacpb.Permission) *v3rbacpb.Permission {
 func getStringMatcher(value string) *v3matcherpb.StringMatcher {
 	if value == "*" {
 		return &v3matcherpb.StringMatcher{
-			MatchPattern: &v3matcherpb.StringMatcher_Prefix{
-				Prefix: "",
-			},
+			MatchPattern: &v3matcherpb.StringMatcher_Prefix{},
 		}
-	} else if strings.HasSuffix(value, "*") {
+	}
+	if strings.HasSuffix(value, "*") {
 		prefix := strings.TrimSuffix(value, "*")
 		return &v3matcherpb.StringMatcher{
-			MatchPattern: &v3matcherpb.StringMatcher_Prefix{
-				Prefix: prefix,
-			},
+			MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: prefix},
 		}
-	} else if strings.HasPrefix(value, "*") {
+	}
+	if strings.HasPrefix(value, "*") {
 		suffix := strings.TrimPrefix(value, "*")
 		return &v3matcherpb.StringMatcher{
-			MatchPattern: &v3matcherpb.StringMatcher_Suffix{
-				Suffix: suffix,
-			},
+			MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: suffix},
 		}
 	}
 	return &v3matcherpb.StringMatcher{
-		MatchPattern: &v3matcherpb.StringMatcher_Exact{
-			Exact: value,
-		},
+		MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: value},
 	}
 }
 
@@ -129,13 +123,15 @@ func getHeaderMatcher(key, value string) *v3routepb.HeaderMatcher {
 			Name:                 key,
 			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: ""},
 		}
-	} else if strings.HasSuffix(value, "*") {
+	}
+	if strings.HasSuffix(value, "*") {
 		prefix := strings.TrimSuffix(value, "*")
 		return &v3routepb.HeaderMatcher{
 			Name:                 key,
 			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: prefix},
 		}
-	} else if strings.HasPrefix(value, "*") {
+	}
+	if strings.HasPrefix(value, "*") {
 		suffix := strings.TrimPrefix(value, "*")
 		return &v3routepb.HeaderMatcher{
 			Name:                 key,
@@ -149,7 +145,7 @@ func getHeaderMatcher(key, value string) *v3routepb.HeaderMatcher {
 }
 
 func parsePrincipalNames(principalNames []string) []*v3rbacpb.Principal {
-	var or []*v3rbacpb.Principal
+	var ps []*v3rbacpb.Principal
 	for _, principalName := range principalNames {
 		newPrincipalName := &v3rbacpb.Principal{
 			Identifier: &v3rbacpb.Principal_Authenticated_{
@@ -157,17 +153,17 @@ func parsePrincipalNames(principalNames []string) []*v3rbacpb.Principal {
 					PrincipalName: getStringMatcher(principalName),
 				},
 			}}
-		or = append(or, newPrincipalName)
+		ps = append(ps, newPrincipalName)
 	}
-	return or
+	return ps
 }
 
 func parsePeer(source peer) *v3rbacpb.Principal {
 	var and []*v3rbacpb.Principal
 	if source.Principals != nil {
-		or := parsePrincipalNames(source.Principals)
-		if len(or) > 0 {
-			and = append(and, principalOr(or))
+		principals := parsePrincipalNames(source.Principals)
+		if len(principals) > 0 {
+			and = append(and, principalOr(principals))
 		}
 	}
 	if len(and) > 0 {
@@ -181,59 +177,62 @@ func parsePeer(source peer) *v3rbacpb.Principal {
 }
 
 func parsePaths(paths []string) []*v3rbacpb.Permission {
-	var or []*v3rbacpb.Permission
+	var ps []*v3rbacpb.Permission
 	for _, path := range paths {
 		newPath := &v3rbacpb.Permission{
 			Rule: &v3rbacpb.Permission_UrlPath{
 				UrlPath: &v3matcherpb.PathMatcher{
 					Rule: &v3matcherpb.PathMatcher_Path{Path: getStringMatcher(path)}}}}
-		or = append(or, newPath)
+		ps = append(ps, newPath)
 	}
-	return or
+	return ps
 }
 
 func parseHeaderValues(key string, values []string) []*v3rbacpb.Permission {
-	var or []*v3rbacpb.Permission
+	var vs []*v3rbacpb.Permission
 	for _, value := range values {
 		newHeader := &v3rbacpb.Permission{
 			Rule: &v3rbacpb.Permission_Header{
 				Header: getHeaderMatcher(key, value)}}
-		or = append(or, newHeader)
+		vs = append(vs, newHeader)
 	}
-	return or
+	return vs
 }
 
 func parseHeaders(headers []header) ([]*v3rbacpb.Permission, error) {
-	var and []*v3rbacpb.Permission
+	var hs []*v3rbacpb.Permission
 	for i, header := range headers {
 		if header.Key == "" {
-			return nil, fmt.Errorf("\"headers\" %d: \"key\" is not present", i)
+			return nil, fmt.Errorf(`"headers" %d: "key" is not present`, i)
 		}
 		// TODO(ashithasantosh): Return error for unsupported headers- "hop-by-hop",
 		// pseudo headers, "Host" header and headers prefixed with "grpc-".
 		if header.Values == nil {
-			return nil, fmt.Errorf("\"headers\" %d: \"values\" is not present", i)
+			return nil, fmt.Errorf(`"headers" %d: "values" is not present`, i)
 		}
-		and = append(and, permissionOr(parseHeaderValues(header.Key, header.Values)))
+		values := parseHeaderValues(header.Key, header.Values)
+		if len(values) > 0 {
+			hs = append(hs, permissionOr(values))
+		}
 	}
-	return and, nil
+	return hs, nil
 }
 
 func parseRequest(request request) (*v3rbacpb.Permission, error) {
 	var and []*v3rbacpb.Permission
 	if request.Paths != nil {
-		or := parsePaths(request.Paths)
-		if len(or) > 0 {
-			and = append(and, permissionOr(or))
+		paths := parsePaths(request.Paths)
+		if len(paths) > 0 {
+			and = append(and, permissionOr(paths))
 		}
 	}
 	if request.Headers != nil {
-		subAnd, err := parseHeaders(request.Headers)
+		headers, err := parseHeaders(request.Headers)
 		if err != nil {
 			return nil, err
 		}
-		if len(subAnd) > 0 {
-			and = append(and, permissionAnd(subAnd))
+		if len(headers) > 0 {
+			and = append(and, permissionAnd(headers))
 		}
 	}
 	if len(and) > 0 {
@@ -246,11 +245,11 @@ func parseRequest(request request) (*v3rbacpb.Permission, error) {
 	}, nil
 }
 
-func parseRulesArray(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, error) {
+func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, error) {
 	policies := make(map[string]*v3rbacpb.Policy)
 	for i, rule := range rules {
 		if rule.Name == "" {
-			return policies, fmt.Errorf("%d: \"name\" is not present", i)
+			return policies, fmt.Errorf(`%d: "name" is not present`, i)
 		}
 		var principals []*v3rbacpb.Principal
 		principals = append(principals, parsePeer(rule.Source))
@@ -269,33 +268,34 @@ func parseRulesArray(rules []rule, prefixName string) (map[string]*v3rbacpb.Poli
 	return policies, nil
 }
 
-// translatePolicy translates SDK authorization policy in JSON format to two Envoy RBAC polices (deny
-// and allow policy). If the policy cannot be parsed or is invalid, an error will be returned.
-func translatePolicy(policy string) (*v3rbacpb.RBAC, *v3rbacpb.RBAC, error) {
-	var data authorizationPolicy
-	if err := json.Unmarshal([]byte(policy), &data); err != nil {
+// translatePolicy translates SDK authorization policy in JSON format to two
+// Envoy RBAC polices (deny and allow policy). If the policy cannot be parsed
+// or is invalid, an error will be returned.
+func translatePolicy(policyStr string) (*v3rbacpb.RBAC, *v3rbacpb.RBAC, error) {
+	var policy authorizationPolicy
+	if err := json.Unmarshal([]byte(policyStr), &policy); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal policy: %v", err)
 	}
-	if data.Name == "" {
-		return nil, nil, fmt.Errorf("\"name\" is not present")
+	if policy.Name == "" {
+		return nil, nil, fmt.Errorf(`"name" is not present`)
 	}
-	if data.AllowRules == nil {
-		return nil, nil, fmt.Errorf("\"allow_rules\" is not present")
+	if policy.AllowRules == nil {
+		return nil, nil, fmt.Errorf(`"allow_rules" is not present`)
 	}
-	allowPolicies, err := parseRulesArray(data.AllowRules, data.Name)
+	allowPolicies, err := parseRules(policy.AllowRules, policy.Name)
 	if err != nil {
-		return nil, nil, fmt.Errorf("\"allow_rules\" %v", err)
+		return nil, nil, fmt.Errorf(`"allow_rules" %v`, err)
 	}
-	allowRbac := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies}
-	var denyRbac *v3rbacpb.RBAC
-	if data.DenyRules != nil {
-		denyPolicies, err := parseRulesArray(data.DenyRules, data.Name)
+	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies}
+	var denyRBAC *v3rbacpb.RBAC
+	if policy.DenyRules != nil {
+		denyPolicies, err := parseRules(policy.DenyRules, policy.Name)
 		if err != nil {
-			return nil, nil, fmt.Errorf("\"deny_rules\" %v", err)
+			return nil, nil, fmt.Errorf(`"deny_rules" %v`, err)
 		}
-		denyRbac = &v3rbacpb.RBAC{
+		denyRBAC = &v3rbacpb.RBAC{
 			Action:   v3rbacpb.RBAC_DENY,
 			Policies: denyPolicies}
 	}
-	return denyRbac, allowRbac, nil
+	return denyRBAC, allowRBAC, nil
 }
