@@ -35,6 +35,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -42,7 +43,7 @@ import (
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
-func Testx509NameHash(t *testing.T) {
+func TestX509NameHash(t *testing.T) {
 	nameTests := []struct {
 		in  pkix.Name
 		out string
@@ -640,16 +641,32 @@ func setupTLSConn(t *testing.T) (net.Listener, *x509.Certificate, *ecdsa.Private
 // TestVerifyConnection will setup a client/server connection and check revocation in the real TLS dialer
 func TestVerifyConnection(t *testing.T) {
 	l, cert, key := setupTLSConn(t)
+
+	done := make(chan interface{}, 1)
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+	ListenLoop:
 		for {
 			conn, err := l.Accept()
 			if err != nil {
-				t.Errorf("tls.Accept failed err = %v", err)
+				switch {
+				case <-done:
+					wg.Done()
+					break ListenLoop
+				default:
+					t.Errorf("tls.Accept failed err = %v", err)
+				}
 			} else {
 				conn.Write([]byte("Hello, World!"))
 				conn.Close()
 			}
 		}
+	}()
+	defer func() {
+		done <- true
+		l.Close()
+		wg.Wait()
 	}()
 
 	var handshakeTests = []struct {
