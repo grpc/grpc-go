@@ -7676,7 +7676,14 @@ func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	go lis.Accept()
+	go func() {
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error accepting connection: %v", err)
+			return
+		}
+		defer conn.Close()
+	}()
 	deadlineCh := testutils.NewChannel()
 	cvd := &credentialsVerifyDeadline{
 		deadlineCh: deadlineCh,
