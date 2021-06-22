@@ -7672,31 +7672,23 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 // TestDeadlineSetOnConnectionOnClientCredentialHandshake tests that there is a deadline
 // set on the net.Conn when a credential handshake happens in http2_client.
 func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
-	lis, err := net.Listen("tcp", "localhost:50053")
+	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen: %v", err)
 	}
-	go func() {
-		lis.Accept()
-	}()
-	credsInvoked := testutils.NewChannel()
+	go lis.Accept()
+	deadlineCh := testutils.NewChannel()
 	cvd := &credentialsVerifyDeadline{
-		credsInvoked: credsInvoked,
+		deadlineCh: deadlineCh,
 	}
-	dopts := []grpc.DialOption{
-		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-			conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
-			if err != nil {
-				return nil, err
-			}
-			cpd := &connPersistDeadline{
-				Conn: conn,
-			}
-			return cpd, nil
-		}),
-		grpc.WithTransportCredentials(cvd),
-	}
-	cc, err := grpc.Dial(lis.Addr().String(), dopts...)
+	dOpt := grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+		conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		return &infoConn{Conn: conn}, nil
+	})
+	cc, err := grpc.Dial(lis.Addr().String(), dOpt, grpc.WithTransportCredentials(cvd))
 	if err != nil {
 		t.Fatalf("Failed to dial: %v", err)
 	}
@@ -7704,27 +7696,29 @@ func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	connectionHasCorrectDeadline, err := credsInvoked.Receive(ctx)
+	deadline, err := deadlineCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Error receiving from credsInvoked: %v", err)
 	}
-	if !connectionHasCorrectDeadline.(bool) {
+	// Default connection timeout is 20 seconds, so if the deadline exceeds now
+	// + 18 seconds it should be valid.
+	if !deadline.(time.Time).After(time.Now().Add(time.Second * 18)) {
 		t.Fatalf("Connection did not have deadline set.")
 	}
 }
 
-type connPersistDeadline struct {
+type infoConn struct {
 	net.Conn
 	deadline time.Time
 }
 
-func (c *connPersistDeadline) SetDeadline(t time.Time) error {
+func (c *infoConn) SetDeadline(t time.Time) error {
 	c.deadline = t
 	return c.Conn.SetDeadline(t)
 }
 
 type credentialsVerifyDeadline struct {
-	credsInvoked *testutils.Channel
+	deadlineCh *testutils.Channel
 }
 
 func (cvd *credentialsVerifyDeadline) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -7732,9 +7726,7 @@ func (cvd *credentialsVerifyDeadline) ServerHandshake(rawConn net.Conn) (net.Con
 }
 
 func (cvd *credentialsVerifyDeadline) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
-	// Default connection timeout is 20 seconds, so if the deadline exceeds now
-	// + 18 seconds it should be valid.
-	cvd.credsInvoked.Send(rawConn.(*connPersistDeadline).deadline.After(time.Now().Add(time.Second * 18)))
+	cvd.deadlineCh.Send(rawConn.(*infoConn).deadline)
 	return rawConn, nil, nil
 }
 
