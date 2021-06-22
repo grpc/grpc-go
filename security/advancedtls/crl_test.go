@@ -321,7 +321,7 @@ func makeChain(t *testing.T, name string) []*x509.Certificate {
 
 	certChain := make([]*x509.Certificate, 0)
 
-	rest, err := ioutil.ReadFile(testdata.Path(name))
+	rest, err := ioutil.ReadFile(name)
 	if err != nil {
 		t.Fatalf("ioutil.ReadFile(%v) failed %v", name, err)
 	}
@@ -339,7 +339,7 @@ func makeChain(t *testing.T, name string) []*x509.Certificate {
 }
 
 func loadCRL(t *testing.T, path string) *pkix.CertificateList {
-	b, err := ioutil.ReadFile(testdata.Path(path))
+	b, err := ioutil.ReadFile(path)
 	if err != nil {
 		t.Fatalf("readFile(%v) failed err = %v", path, err)
 	}
@@ -418,12 +418,12 @@ func TestGetIssuerCRLCache(t *testing.T) {
 	}{
 		{
 			desc:      "Valid",
-			rawIssuer: makeChain(t, "crl/unrevoked.pem")[1].RawIssuer,
-			certs:     makeChain(t, "crl/unrevoked.pem"),
+			rawIssuer: makeChain(t, testdata.Path("crl/unrevoked.pem"))[1].RawIssuer,
+			certs:     makeChain(t, testdata.Path("crl/unrevoked.pem")),
 		},
 		{
 			desc:      "Unverified",
-			rawIssuer: makeChain(t, "crl/unrevoked.pem")[1].RawIssuer,
+			rawIssuer: makeChain(t, testdata.Path("crl/unrevoked.pem"))[1].RawIssuer,
 		},
 		{
 			desc:      "Not Found",
@@ -449,7 +449,7 @@ func TestGetIssuerCRLCache(t *testing.T) {
 }
 
 func TestVerifyCrl(t *testing.T) {
-	tampered := loadCRL(t, "crl/1.crl")
+	tampered := loadCRL(t, testdata.Path("crl/1.crl"))
 	// Change the signature so it won't verify
 	tampered.SignatureValue.Bytes[0]++
 
@@ -462,37 +462,37 @@ func TestVerifyCrl(t *testing.T) {
 	}{
 		{
 			desc:    "Pass intermediate",
-			crl:     loadCRL(t, "crl/1.crl"),
-			certs:   makeChain(t, "crl/unrevoked.pem"),
-			cert:    makeChain(t, "crl/unrevoked.pem")[1],
+			crl:     loadCRL(t, testdata.Path("crl/1.crl")),
+			certs:   makeChain(t, testdata.Path("crl/unrevoked.pem")),
+			cert:    makeChain(t, testdata.Path("crl/unrevoked.pem"))[1],
 			errWant: "",
 		},
 		{
 			desc:    "Pass leaf",
-			crl:     loadCRL(t, "crl/2.crl"),
-			certs:   makeChain(t, "crl/unrevoked.pem"),
-			cert:    makeChain(t, "crl/unrevoked.pem")[2],
+			crl:     loadCRL(t, testdata.Path("crl/2.crl")),
+			certs:   makeChain(t, testdata.Path("crl/unrevoked.pem")),
+			cert:    makeChain(t, testdata.Path("crl/unrevoked.pem"))[2],
 			errWant: "",
 		},
 		{
 			desc:    "Fail wrong cert chain",
-			crl:     loadCRL(t, "crl/3.crl"),
-			certs:   makeChain(t, "crl/unrevoked.pem"),
-			cert:    makeChain(t, "crl/revokedInt.pem")[1],
+			crl:     loadCRL(t, testdata.Path("crl/3.crl")),
+			certs:   makeChain(t, testdata.Path("crl/unrevoked.pem")),
+			cert:    makeChain(t, testdata.Path("crl/revokedInt.pem"))[1],
 			errWant: "No certificates mached",
 		},
 		{
 			desc:    "Fail no certs",
-			crl:     loadCRL(t, "crl/1.crl"),
+			crl:     loadCRL(t, testdata.Path("crl/1.crl")),
 			certs:   []*x509.Certificate{},
-			cert:    makeChain(t, "crl/unrevoked.pem")[1],
+			cert:    makeChain(t, testdata.Path("crl/unrevoked.pem"))[1],
 			errWant: "No certificates mached",
 		},
 		{
 			desc:    "Fail Tampered signature",
 			crl:     tampered,
-			certs:   makeChain(t, "crl/unrevoked.pem"),
-			cert:    makeChain(t, "crl/unrevoked.pem")[1],
+			certs:   makeChain(t, testdata.Path("crl/unrevoked.pem")),
+			cert:    makeChain(t, testdata.Path("crl/unrevoked.pem"))[1],
 			errWant: "verification failure",
 		},
 	}
@@ -517,9 +517,9 @@ func TestVerifyCrl(t *testing.T) {
 }
 
 func TestRevokedCert(t *testing.T) {
-	revokedIntChain := makeChain(t, "crl/revokedInt.pem")
-	revokedLeafChain := makeChain(t, "crl/revokedLeaf.pem")
-	validChain := makeChain(t, "crl/unrevoked.pem")
+	revokedIntChain := makeChain(t, testdata.Path("crl/revokedInt.pem"))
+	revokedLeafChain := makeChain(t, testdata.Path("crl/revokedLeaf.pem"))
+	validChain := makeChain(t, testdata.Path("crl/unrevoked.pem"))
 	cache, err := lru.New(5)
 	if err != nil {
 		t.Fatalf("lru.New: err = %v", err)
