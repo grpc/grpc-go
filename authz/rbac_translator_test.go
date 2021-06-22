@@ -216,15 +216,13 @@ func TestTranslatePolicy(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			gotDenyPolicy, gotAllowPolicy, gotErr := translatePolicy(test.authzPolicy)
 			if gotErr != nil && !strings.HasPrefix(gotErr.Error(), test.wantErr) {
-				t.Fatalf("translatePolicy%v\nunexpected error\nwant:%v\ngot:%v", test.authzPolicy, test.wantErr, gotErr)
+				t.Fatalf("unexpected error\nwant:%v\ngot:%v", test.wantErr, gotErr)
 			}
 			if diff := cmp.Diff(gotDenyPolicy, test.wantDenyPolicy, protocmp.Transform()); diff != "" {
-				t.Fatalf("translatePolicy%v\nunexpected deny policy\nwant:\n%v\ngot:\n%v",
-					test.authzPolicy, test.wantDenyPolicy, gotDenyPolicy)
+				t.Fatalf("unexpected deny policy\ndiff (-want +got):\n%s", diff)
 			}
 			if diff := cmp.Diff(gotAllowPolicy, test.wantAllowPolicy, protocmp.Transform()); diff != "" {
-				t.Fatalf("translatePolicy%v\nunexpected allow policy\nwant:\n%v\ngot:\n%v",
-					test.authzPolicy, test.wantAllowPolicy, gotAllowPolicy)
+				t.Fatalf("unexpected allow policy\ndiff (-want +got):\n%s", diff)
 			}
 		})
 	}
