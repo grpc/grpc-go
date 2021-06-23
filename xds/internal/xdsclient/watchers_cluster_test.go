@@ -22,6 +22,7 @@ package xdsclient
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -66,7 +67,7 @@ func (s) TestClusterWatch(t *testing.T) {
 
 	wantUpdate := ClusterUpdate{ClusterName: testEDSName}
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -75,7 +76,7 @@ func (s) TestClusterWatch(t *testing.T) {
 		testCDSName:  wantUpdate,
 		"randomName": {},
 	}, UpdateMetadata{})
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -131,7 +132,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 	wantUpdate := ClusterUpdate{ClusterName: testEDSName}
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
 	for i := 0; i < count; i++ {
-		if err := verifyClusterUpdate(ctx, clusterUpdateChs[i], wantUpdate); err != nil {
+		if err := verifyClusterUpdate(ctx, clusterUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -140,7 +141,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 	cancelLastWatch()
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
 	for i := 0; i < count-1; i++ {
-		if err := verifyClusterUpdate(ctx, clusterUpdateChs[i], wantUpdate); err != nil {
+		if err := verifyClusterUpdate(ctx, clusterUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -208,11 +209,11 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	}, UpdateMetadata{})
 
 	for i := 0; i < count; i++ {
-		if err := verifyClusterUpdate(ctx, clusterUpdateChs[i], wantUpdate1); err != nil {
+		if err := verifyClusterUpdate(ctx, clusterUpdateChs[i], wantUpdate1, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2, nil); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -249,7 +250,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	client.NewClusters(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	}, UpdateMetadata{})
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -265,7 +266,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	}
 
 	// New watch should receives the update.
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -349,7 +350,7 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 	client.NewClusters(map[string]ClusterUpdate{
 		testCDSName: wantUpdate,
 	}, UpdateMetadata{})
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -408,10 +409,10 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 		testCDSName + "1": wantUpdate1,
 		testCDSName + "2": wantUpdate2,
 	}, UpdateMetadata{})
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh1, wantUpdate1); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh1, wantUpdate1, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -424,7 +425,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	}
 
 	// Watcher 2 should get the same update again.
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -439,7 +440,43 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	}
 
 	// Watcher 2 should get the same update again.
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestClusterWatchNACKError covers the case that an update is NACK'ed, and the
+// watcher should also receive the error.
+func (s) TestClusterWatchNACKError(t *testing.T) {
+	apiClientCh, cleanup := overrideNewAPIClient()
+	defer cleanup()
+
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	c, err := apiClientCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout when waiting for API client to be created: %v", err)
+	}
+	apiClient := c.(*testAPIClient)
+
+	clusterUpdateCh := testutils.NewChannel()
+	cancelWatch := client.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
+		clusterUpdateCh.Send(clusterUpdateErr{u: update, err: err})
+	})
+	defer cancelWatch()
+	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
+
+	wantError := fmt.Errorf("testing error")
+	client.NewClusters(map[string]ClusterUpdate{testCDSName: {}}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, ClusterUpdate{}, nil); err != nil {
 		t.Fatal(err)
 	}
 }

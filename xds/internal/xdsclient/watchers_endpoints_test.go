@@ -22,6 +22,7 @@ package xdsclient
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -84,7 +85,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	client.NewEndpoints(map[string]EndpointsUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
-	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, wantUpdate); err != nil {
+	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -150,7 +151,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	client.NewEndpoints(map[string]EndpointsUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
 	for i := 0; i < count; i++ {
-		if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[i], wantUpdate); err != nil {
+		if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -159,7 +160,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	cancelLastWatch()
 	client.NewEndpoints(map[string]EndpointsUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
 	for i := 0; i < count-1; i++ {
-		if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[i], wantUpdate); err != nil {
+		if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -227,11 +228,11 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	}, UpdateMetadata{})
 
 	for i := 0; i < count; i++ {
-		if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[i], wantUpdate1); err != nil {
+		if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[i], wantUpdate1, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh2, wantUpdate2); err != nil {
+	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh2, wantUpdate2, nil); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -266,7 +267,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	client.NewEndpoints(map[string]EndpointsUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
-	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, wantUpdate); err != nil {
+	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -282,7 +283,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	}
 
 	// New watch should receives the update.
-	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh2, wantUpdate); err != nil {
+	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh2, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -330,5 +331,41 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 	gotUpdate := u.(endpointsUpdateErr)
 	if gotUpdate.err == nil || !cmp.Equal(gotUpdate.u, EndpointsUpdate{}) {
 		t.Fatalf("unexpected endpointsUpdate: (%v, %v), want: (EndpointsUpdate{}, nil)", gotUpdate.u, gotUpdate.err)
+	}
+}
+
+// TestEndpointsWatchNACKError covers the case that an update is NACK'ed, and
+// the watcher should also receive the error.
+func (s) TestEndpointsWatchNACKError(t *testing.T) {
+	apiClientCh, cleanup := overrideNewAPIClient()
+	defer cleanup()
+
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	c, err := apiClientCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout when waiting for API client to be created: %v", err)
+	}
+	apiClient := c.(*testAPIClient)
+
+	endpointsUpdateCh := testutils.NewChannel()
+	cancelWatch := client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
+		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
+	})
+	defer cancelWatch()
+	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
+
+	wantError := fmt.Errorf("testing error")
+	client.NewEndpoints(map[string]EndpointsUpdate{testCDSName: {}}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
+	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, EndpointsUpdate{}, wantError); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -22,6 +22,7 @@ package xdsclient
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -73,7 +74,7 @@ func (s) TestRDSWatch(t *testing.T) {
 		},
 	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate}, UpdateMetadata{})
-	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, wantUpdate); err != nil {
+	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -146,7 +147,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate}, UpdateMetadata{})
 	for i := 0; i < count; i++ {
-		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate); err != nil {
+		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -155,7 +156,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 	cancelLastWatch()
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate}, UpdateMetadata{})
 	for i := 0; i < count-1; i++ {
-		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate); err != nil {
+		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -237,11 +238,11 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 	}, UpdateMetadata{})
 
 	for i := 0; i < count; i++ {
-		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate1); err != nil {
+		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate1, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh2, wantUpdate2); err != nil {
+	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh2, wantUpdate2, nil); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -283,7 +284,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 		},
 	}
 	client.NewRouteConfigs(map[string]RouteConfigUpdate{testRDSName: wantUpdate}, UpdateMetadata{})
-	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, wantUpdate); err != nil {
+	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -308,5 +309,41 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	defer sCancel()
 	if u, err := rdsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected RouteConfigUpdate: %v, %v, want channel recv timeout", u, err)
+	}
+}
+
+// TestRouteWatchNACKError covers the case that an update is NACK'ed, and the
+// watcher should also receive the error.
+func (s) TestRouteWatchNACKError(t *testing.T) {
+	apiClientCh, cleanup := overrideNewAPIClient()
+	defer cleanup()
+
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	c, err := apiClientCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout when waiting for API client to be created: %v", err)
+	}
+	apiClient := c.(*testAPIClient)
+
+	rdsUpdateCh := testutils.NewChannel()
+	cancelWatch := client.WatchRouteConfig(testCDSName, func(update RouteConfigUpdate, err error) {
+		rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
+	})
+	defer cancelWatch()
+	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
+
+	wantError := fmt.Errorf("testing error")
+	client.NewRouteConfigs(map[string]RouteConfigUpdate{testCDSName: {}}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
+	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, RouteConfigUpdate{}, wantError); err != nil {
+		t.Fatal(err)
 	}
 }
