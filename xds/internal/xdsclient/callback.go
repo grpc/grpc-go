@@ -280,3 +280,16 @@ func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate, metadata U
 		}
 	}
 }
+
+// NewConnectionError is called by the underlying xdsAPIClient when it receives
+// a connection error. The error will be forwarded to all the resource watchers.
+func (c *clientImpl) NewConnectionError(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for _, s := range c.edsWatchers {
+		for wi := range s {
+			wi.newError(NewErrorf(ErrorTypeConnection, "xds: error received from xDS stream: %v", err))
+		}
+	}
+}
