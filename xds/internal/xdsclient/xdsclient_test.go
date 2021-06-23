@@ -18,7 +18,7 @@
  *
  */
 
-package tests_test
+package xdsclient_test
 
 import (
 	"testing"
