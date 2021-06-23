@@ -7684,7 +7684,7 @@ func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
 			t.Errorf("Error accepting connection: %v", err)
 			return
 		}
-		connCh<-conn
+		connCh <- conn
 	}()
 	defer func() {
 		conn := <-connCh
