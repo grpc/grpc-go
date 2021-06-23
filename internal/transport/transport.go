@@ -530,6 +530,7 @@ type ServerConfig struct {
 	ChannelzParentID      int64
 	MaxHeaderListSize     *uint32
 	HeaderTableSize       *uint32
+	BaseContext           func(net.Addr, net.Addr) context.Context
 }
 
 // ConnectOptions covers all relevant options for communicating with the server.

@@ -165,6 +165,7 @@ type serverOptions struct {
 	maxHeaderListSize     *uint32
 	headerTableSize       *uint32
 	numServerWorkers      uint32
+	baseContext           func(net.Addr, net.Addr) context.Context
 }
 
 var defaultServerOptions = serverOptions{
@@ -509,6 +510,17 @@ func NumStreamWorkers(numServerWorkers uint32) ServerOption {
 	// number of CPUs available is most performant; requires thorough testing.
 	return newFuncServerOption(func(o *serverOptions) {
 		o.numServerWorkers = numServerWorkers
+	})
+}
+
+// BaseContext returns a ServerOption that optionally specifies a function
+// that returns base context for incoming requests on this server.
+// The provided local and remote is the specific net.Addr from incoming connection.
+// If BaseContext is nil, the default is context.Background().
+// If non-nil, it must return a non-nil context.
+func BaseContext(f func(local net.Addr, remote net.Addr) context.Context) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.baseContext = f
 	})
 }
 
@@ -902,6 +914,7 @@ func (s *Server) newHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) tr
 		ChannelzParentID:      s.channelzID,
 		MaxHeaderListSize:     s.opts.maxHeaderListSize,
 		HeaderTableSize:       s.opts.headerTableSize,
+		BaseContext:           s.opts.baseContext,
 	}
 	st, err := transport.NewServerTransport(c, config)
 	if err != nil {
