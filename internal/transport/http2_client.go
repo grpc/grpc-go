@@ -877,18 +877,18 @@ func (t *http2Client) Close(err error) {
 	// Append info about previous goaways if there were any, since this may be important
 	// for understanding the root cause for this connection to be closed.
 	_, goAwayDebugMessage := t.GetGoAwayReason()
+
+	var st *status.Status
 	if len(goAwayDebugMessage) > 0 {
-		tmpErr := true
-		originalErr := err
-		if ce, ok := err.(ConnectionError); ok {
-			tmpErr = ce.Temporary()
-			originalErr = ce.Origin()
-		}
-		err = connectionErrorf(tmpErr, originalErr, "closing transport due to: %v, received prior goaway: %v", originalErr, goAwayDebugMessage)
+		st = status.Newf(codes.Unavailable, "closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
+		err = st.Err()
+	} else {
+		st = status.New(codes.Unavailable, err.Error())
 	}
+
 	// Notify all active streams.
 	for _, s := range streams {
-		t.closeStream(s, err, false, http2.ErrCodeNo, status.New(codes.Unavailable, err.Error()), nil, false)
+		t.closeStream(s, err, false, http2.ErrCodeNo, st, nil, false)
 	}
 	if t.statsHandler != nil {
 		connEnd := &stats.ConnEnd{
