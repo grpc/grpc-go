@@ -22,6 +22,8 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
+
+	"google.golang.org/grpc/resolver"
 )
 
 // LocalityID is xds.Locality without XXX fields, so it can be used as map
@@ -52,4 +54,20 @@ func LocalityIDFromString(s string) (ret LocalityID, _ error) {
 		return LocalityID{}, fmt.Errorf("%s is not a well formatted locality ID, error: %v", s, err)
 	}
 	return ret, nil
+}
+
+type localityKeyType string
+
+const localityKey = localityKeyType("grpc.xds.internal.address.locality")
+
+// GetLocalityID returns the locality ID of addr.
+func GetLocalityID(addr resolver.Address) LocalityID {
+	path, _ := addr.Attributes.Value(localityKey).(LocalityID)
+	return path
+}
+
+// SetLocalityID sets locality ID in addr to l.
+func SetLocalityID(addr resolver.Address, l LocalityID) resolver.Address {
+	addr.Attributes = addr.Attributes.WithValues(localityKey, l)
+	return addr
 }
