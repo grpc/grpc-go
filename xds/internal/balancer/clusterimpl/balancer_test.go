@@ -651,6 +651,11 @@ func TestLoadReporting(t *testing.T) {
 	if reqStats.InProgress != 0 {
 		t.Errorf("got inProgress %v, want %v", reqStats.InProgress, 0)
 	}
+
+	b.Close()
+	if err := xdsC.WaitForCancelReportLoad(ctx); err != nil {
+		t.Fatalf("unexpected error waiting form load report to be canceled: %v", err)
+	}
 }
 
 // TestUpdateLRSServer covers the cases

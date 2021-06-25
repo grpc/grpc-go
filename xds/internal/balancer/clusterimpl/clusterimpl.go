@@ -171,24 +171,21 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 	)
 
 	// Check if it's necessary to restart load report.
-	//
-	// Compare the old LRS server and new LRS server:
-	// - old is nil,     new is not nil --> start new LRS
-	// - old is nil,     new is nil     --> do nothing
-	// - old is not nil, new is nil     --> stop old LRS, don't start new
-	// - old is not nil, new is not nil --> compare string value, if different, stop old and start new
 	if b.lrsServerName == nil {
-		// There is no existing LRS stream.
 		if newConfig.LoadReportingServerName != nil {
+			// Old is nil, new is not nil, start new LRS.
 			b.lrsServerName = newConfig.LoadReportingServerName
 			startNewLoadReport = true
 		}
+		// Old is nil, new is nil, do nothing.
 	} else {
-		// There is an existing LRS stream.
 		if newConfig.LoadReportingServerName == nil {
+			// Old is not nil, new is nil, stop old, don't start new.
 			b.lrsServerName = newConfig.LoadReportingServerName
 			stopOldLoadReport = true
 		} else {
+			// Old is not nil, new is not nil, compare string values, if
+			// different, stop old and start new.
 			if *b.lrsServerName != *newConfig.LoadReportingServerName {
 				b.lrsServerName = newConfig.LoadReportingServerName
 				stopOldLoadReport = true
@@ -523,6 +520,10 @@ func (b *clusterImplBalancer) run() {
 			}
 			b.mu.Unlock()
 		case <-b.closed.Done():
+			if b.cancelLoadReport != nil {
+				b.cancelLoadReport()
+				b.cancelLoadReport = nil
+			}
 			return
 		}
 	}
