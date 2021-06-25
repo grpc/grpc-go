@@ -43,10 +43,12 @@ import (
 )
 
 const (
-	defaultTestTimeout = 1 * time.Second
-	testClusterName    = "test-cluster"
-	testServiceName    = "test-eds-service"
-	testLRSServerName  = "test-lrs-name"
+	defaultTestTimeout      = 1 * time.Second
+	defaultShortTestTimeout = 100 * time.Microsecond
+
+	testClusterName   = "test-cluster"
+	testServiceName   = "test-eds-service"
+	testLRSServerName = "test-lrs-name"
 )
 
 var (
@@ -648,6 +650,104 @@ func TestLoadReporting(t *testing.T) {
 	}
 	if reqStats.InProgress != 0 {
 		t.Errorf("got inProgress %v, want %v", reqStats.InProgress, 0)
+	}
+}
+
+// TestUpdateLRSServer covers the cases
+// - the init config specifies "" as the LRS server
+// - config modifies LRS server to a different string
+// - config sets LRS server to nil to stop load reporting
+func TestUpdateLRSServer(t *testing.T) {
+	var testLocality = xdsinternal.LocalityID{
+		Region:  "test-region",
+		Zone:    "test-zone",
+		SubZone: "test-sub-zone",
+	}
+
+	xdsC := fakeclient.NewClient()
+	defer xdsC.Close()
+
+	builder := balancer.Get(Name)
+	cc := testutils.NewTestClientConn(t)
+	b := builder.Build(cc, balancer.BuildOptions{})
+	defer b.Close()
+
+	addrs := make([]resolver.Address, len(testBackendAddrs))
+	for i, a := range testBackendAddrs {
+		addrs[i] = xdsinternal.SetLocalityID(a, testLocality)
+	}
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
+		BalancerConfig: &LBConfig{
+			Cluster:                 testClusterName,
+			EDSServiceName:          testServiceName,
+			LoadReportingServerName: newString(""),
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	got, err := xdsC.WaitForReportLoad(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
+	}
+	if got.Server != "" {
+		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, "")
+	}
+
+	// Update LRS server to a different name.
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
+		BalancerConfig: &LBConfig{
+			Cluster:                 testClusterName,
+			EDSServiceName:          testServiceName,
+			LoadReportingServerName: newString(testLRSServerName),
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+	}
+	if err := xdsC.WaitForCancelReportLoad(ctx); err != nil {
+		t.Fatalf("unexpected error waiting form load report to be canceled: %v", err)
+	}
+	got2, err2 := xdsC.WaitForReportLoad(ctx)
+	if err2 != nil {
+		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err2)
+	}
+	if got2.Server != testLRSServerName {
+		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got2.Server, testLRSServerName)
+	}
+
+	// Update LRS server to nil, to disable LRS.
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
+		BalancerConfig: &LBConfig{
+			Cluster:                 testClusterName,
+			EDSServiceName:          testServiceName,
+			LoadReportingServerName: nil,
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name: roundrobin.Name,
+			},
+		},
+	}); err != nil {
+		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
+	}
+	if err := xdsC.WaitForCancelReportLoad(ctx); err != nil {
+		t.Fatalf("unexpected error waiting form load report to be canceled: %v", err)
+	}
+
+	shortCtx, shortCancel := context.WithTimeout(context.Background(), defaultShortTestTimeout)
+	defer shortCancel()
+	if s, err := xdsC.WaitForReportLoad(shortCtx); err != context.DeadlineExceeded {
+		t.Fatalf("unexpected load report to server: %q", s)
 	}
 }
 
