@@ -69,16 +69,6 @@ func principalOr(principals []*v3rbacpb.Principal) *v3rbacpb.Principal {
 	}
 }
 
-func principalAnd(principals []*v3rbacpb.Principal) *v3rbacpb.Principal {
-	return &v3rbacpb.Principal{
-		Identifier: &v3rbacpb.Principal_AndIds{
-			AndIds: &v3rbacpb.Principal_Set{
-				Ids: principals,
-			},
-		},
-	}
-}
-
 func permissionOr(permission []*v3rbacpb.Permission) *v3rbacpb.Permission {
 	return &v3rbacpb.Permission{
 		Rule: &v3rbacpb.Permission_OrRules{
