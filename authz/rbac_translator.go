@@ -15,6 +15,11 @@
  */
 
 // Package authz exposes methods to manage authorization within gRPC.
+//
+// Experimental
+//
+// Notice: This package is EXPERIMENTAL and may be changed or removed
+// in a later release.
 package authz
 
 import (
@@ -95,52 +100,60 @@ func permissionAnd(permission []*v3rbacpb.Permission) *v3rbacpb.Permission {
 }
 
 func getStringMatcher(value string) *v3matcherpb.StringMatcher {
-	if value == "*" {
+	switch {
+	case value == "*":
 		return &v3matcherpb.StringMatcher{
 			MatchPattern: &v3matcherpb.StringMatcher_Prefix{},
 		}
-	}
-	if strings.HasSuffix(value, "*") {
-		prefix := strings.TrimSuffix(value, "*")
-		return &v3matcherpb.StringMatcher{
-			MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: prefix},
+	case strings.HasSuffix(value, "*"):
+		{
+			prefix := strings.TrimSuffix(value, "*")
+			return &v3matcherpb.StringMatcher{
+				MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: prefix},
+			}
 		}
-	}
-	if strings.HasPrefix(value, "*") {
-		suffix := strings.TrimPrefix(value, "*")
-		return &v3matcherpb.StringMatcher{
-			MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: suffix},
+	case strings.HasPrefix(value, "*"):
+		{
+			suffix := strings.TrimPrefix(value, "*")
+			return &v3matcherpb.StringMatcher{
+				MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: suffix},
+			}
 		}
-	}
-	return &v3matcherpb.StringMatcher{
-		MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: value},
+	default:
+		return &v3matcherpb.StringMatcher{
+			MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: value},
+		}
 	}
 }
 
 func getHeaderMatcher(key, value string) *v3routepb.HeaderMatcher {
-	if value == "*" {
+	switch {
+	case value == "*":
 		return &v3routepb.HeaderMatcher{
 			Name:                 key,
-			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: ""},
+			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{},
 		}
-	}
-	if strings.HasSuffix(value, "*") {
-		prefix := strings.TrimSuffix(value, "*")
+	case strings.HasSuffix(value, "*"):
+		{
+			prefix := strings.TrimSuffix(value, "*")
+			return &v3routepb.HeaderMatcher{
+				Name:                 key,
+				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: prefix},
+			}
+		}
+	case strings.HasPrefix(value, "*"):
+		{
+			suffix := strings.TrimPrefix(value, "*")
+			return &v3routepb.HeaderMatcher{
+				Name:                 key,
+				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{SuffixMatch: suffix},
+			}
+		}
+	default:
 		return &v3routepb.HeaderMatcher{
 			Name:                 key,
-			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: prefix},
+			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: value},
 		}
-	}
-	if strings.HasPrefix(value, "*") {
-		suffix := strings.TrimPrefix(value, "*")
-		return &v3routepb.HeaderMatcher{
-			Name:                 key,
-			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{SuffixMatch: suffix},
-		}
-	}
-	return &v3routepb.HeaderMatcher{
-		Name:                 key,
-		HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: value},
 	}
 }
 
@@ -159,15 +172,10 @@ func parsePrincipalNames(principalNames []string) []*v3rbacpb.Principal {
 }
 
 func parsePeer(source peer) *v3rbacpb.Principal {
-	var and []*v3rbacpb.Principal
 	if source.Principals != nil {
-		principals := parsePrincipalNames(source.Principals)
-		if len(principals) > 0 {
-			and = append(and, principalOr(principals))
+		if len(source.Principals) > 0 {
+			return principalOr(parsePrincipalNames(source.Principals))
 		}
-	}
-	if len(and) > 0 {
-		return principalAnd(and)
 	}
 	return &v3rbacpb.Principal{
 		Identifier: &v3rbacpb.Principal_Any{
@@ -199,26 +207,20 @@ func parseHeaderValues(key string, values []string) []*v3rbacpb.Permission {
 	return vs
 }
 
-// hop-by-hop headers.
-var hopHeaders = []string{
-	"Connection",
-	"Keep-Alive",
-	"Proxy-Authenticate",
-	"Proxy-Authorization",
-	"Te",
-	"Trailer",
-	"Transfer-Encoding",
-	"Upgrade",
-}
-
 func unsupportedHeader(key string) bool {
-	if strings.HasPrefix(key, ":") || strings.HasPrefix(key, "grpc-") || key == "host" || key == "Host" {
+	switch {
+	case strings.HasPrefix(key, ":"):
 		return true
-	}
-	for _, h := range hopHeaders {
-		if h == key {
-			return true
-		}
+	case strings.HasPrefix(key, "grpc-"):
+		return true
+	case key == "host":
+		return true
+	// hop-by-hop headers.
+	case key == "connection" || key == "keep-alive" ||
+		key == "proxy-authenticate" || key == "proxy-authorization" ||
+		key == "te" || key == "trailer" || key == "transfer-encoding" ||
+		key == "upgrade":
+		return true
 	}
 	return false
 }
@@ -229,16 +231,14 @@ func parseHeaders(headers []header) ([]*v3rbacpb.Permission, error) {
 		if header.Key == "" {
 			return nil, fmt.Errorf(`"headers" %d: "key" is not present`, i)
 		}
-		if unsupportedHeader(header.Key) {
+		if unsupportedHeader(strings.ToLower(header.Key)) {
 			return nil, fmt.Errorf(`"headers" %d: unsupported "key" %s`, i, header.Key)
 		}
-		if header.Values == nil {
-			return nil, fmt.Errorf(`"headers" %d: "values" is not present`, i)
+		if header.Values == nil || len(header.Values) == 0 {
+			return nil, fmt.Errorf(`"headers" %d: "values" is not present/empty`, i)
 		}
 		values := parseHeaderValues(header.Key, header.Values)
-		if len(values) > 0 {
-			hs = append(hs, permissionOr(values))
-		}
+		hs = append(hs, permissionOr(values))
 	}
 	return hs, nil
 }
@@ -246,17 +246,16 @@ func parseHeaders(headers []header) ([]*v3rbacpb.Permission, error) {
 func parseRequest(request request) (*v3rbacpb.Permission, error) {
 	var and []*v3rbacpb.Permission
 	if request.Paths != nil {
-		paths := parsePaths(request.Paths)
-		if len(paths) > 0 {
-			and = append(and, permissionOr(paths))
+		if len(request.Paths) > 0 {
+			and = append(and, permissionOr(parsePaths(request.Paths)))
 		}
 	}
 	if request.Headers != nil {
-		headers, err := parseHeaders(request.Headers)
-		if err != nil {
-			return nil, err
-		}
-		if len(headers) > 0 {
+		if len(request.Headers) > 0 {
+			headers, err := parseHeaders(request.Headers)
+			if err != nil {
+				return nil, err
+			}
 			and = append(and, permissionAnd(headers))
 		}
 	}
@@ -276,18 +275,15 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 		if rule.Name == "" {
 			return policies, fmt.Errorf(`%d: "name" is not present`, i)
 		}
-		var principals []*v3rbacpb.Principal
-		principals = append(principals, parsePeer(rule.Source))
-		var permissions []*v3rbacpb.Permission
+		principal := parsePeer(rule.Source)
 		permission, err := parseRequest(rule.Request)
 		if err != nil {
 			return nil, fmt.Errorf("%d: %v", i, err)
 		}
-		permissions = append(permissions, permission)
 		policyName := prefixName + "_" + rule.Name
 		policies[policyName] = &v3rbacpb.Policy{
-			Principals:  principals,
-			Permissions: permissions,
+			Principals:  []*v3rbacpb.Principal{principal},
+			Permissions: []*v3rbacpb.Permission{permission},
 		}
 	}
 	return policies, nil
@@ -320,7 +316,8 @@ func translatePolicy(policyStr string) (*v3rbacpb.RBAC, *v3rbacpb.RBAC, error) {
 		}
 		denyRBAC = &v3rbacpb.RBAC{
 			Action:   v3rbacpb.RBAC_DENY,
-			Policies: denyPolicies}
+			Policies: denyPolicies,
+		}
 	}
 	return denyRBAC, allowRBAC, nil
 }

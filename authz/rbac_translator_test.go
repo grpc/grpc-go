@@ -85,24 +85,21 @@ func TestTranslatePolicy(t *testing.T) {
 			wantDenyPolicy: &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_DENY, Policies: map[string]*v3rbacpb.Policy{
 				"authz_deny_policy_1": {
 					Principals: []*v3rbacpb.Principal{
-						{Identifier: &v3rbacpb.Principal_AndIds{AndIds: &v3rbacpb.Principal_Set{
+						{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
 							Ids: []*v3rbacpb.Principal{
-								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
-									Ids: []*v3rbacpb.Principal{
-										{Identifier: &v3rbacpb.Principal_Authenticated_{
-											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
-												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "spiffe://foo.abc"}}}}},
-										{Identifier: &v3rbacpb.Principal_Authenticated_{
-											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
-												MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "spiffe://bar"}}}}},
-										{Identifier: &v3rbacpb.Principal_Authenticated_{
-											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
-												MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "baz"}}}}},
-										{Identifier: &v3rbacpb.Principal_Authenticated_{
-											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
-												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "spiffe://abc.*.com"}}}}},
-									}}}}},
-						}}}},
+								{Identifier: &v3rbacpb.Principal_Authenticated_{
+									Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+										MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "spiffe://foo.abc"}}}}},
+								{Identifier: &v3rbacpb.Principal_Authenticated_{
+									Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+										MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "spiffe://bar"}}}}},
+								{Identifier: &v3rbacpb.Principal_Authenticated_{
+									Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+										MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "baz"}}}}},
+								{Identifier: &v3rbacpb.Principal_Authenticated_{
+									Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+										MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "spiffe://abc.*.com"}}}}},
+							}}}}},
 					Permissions: []*v3rbacpb.Permission{
 						{Rule: &v3rbacpb.Permission_Any{Any: true}}},
 				},
@@ -110,15 +107,12 @@ func TestTranslatePolicy(t *testing.T) {
 			wantAllowPolicy: &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: map[string]*v3rbacpb.Policy{
 				"authz_allow_policy_1": {
 					Principals: []*v3rbacpb.Principal{
-						{Identifier: &v3rbacpb.Principal_AndIds{AndIds: &v3rbacpb.Principal_Set{
+						{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
 							Ids: []*v3rbacpb.Principal{
-								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
-									Ids: []*v3rbacpb.Principal{
-										{Identifier: &v3rbacpb.Principal_Authenticated_{
-											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
-												MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: ""}}}}},
-									}}}}},
-						}}}},
+								{Identifier: &v3rbacpb.Principal_Authenticated_{
+									Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+										MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: ""}}}}},
+							}}}}},
 					Permissions: []*v3rbacpb.Permission{
 						{Rule: &v3rbacpb.Permission_AndRules{AndRules: &v3rbacpb.Permission_Set{
 							Rules: []*v3rbacpb.Permission{
@@ -203,7 +197,7 @@ func TestTranslatePolicy(t *testing.T) {
 					"request": {"headers":[{"key":"key-a"}]}
 				}]
 			}`,
-			wantErr: `"allow_rules" 0: "headers" 0: "values" is not present`,
+			wantErr: `"allow_rules" 0: "headers" 0: "values" is not present/empty`,
 		},
 		"unsupported header": {
 			authzPolicy: `{
