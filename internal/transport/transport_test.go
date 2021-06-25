@@ -2131,7 +2131,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			wantStatus: status.New(
 				codes.Internal,
 				"malformed header: missing HTTP status",
-				),
+			),
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
