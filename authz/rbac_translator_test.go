@@ -205,6 +205,16 @@ func TestTranslatePolicy(t *testing.T) {
 			}`,
 			wantErr: `"allow_rules" 0: "headers" 0: "values" is not present`,
 		},
+		"unsupported header": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [{
+					"name": "allow_policy_1",
+					"request": {"headers":[{"key":":method", "values":["GET"]}]}
+				}]
+			}`,
+			wantErr: `"allow_rules" 0: "headers" 0: unsupported key ":method"`,
+		},
 	}
 
 	for name, test := range tests {

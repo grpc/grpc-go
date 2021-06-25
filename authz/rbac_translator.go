@@ -205,8 +205,10 @@ func parseHeaders(headers []header) ([]*v3rbacpb.Permission, error) {
 		if header.Key == "" {
 			return nil, fmt.Errorf(`"headers" %d: "key" is not present`, i)
 		}
-		// TODO(ashithasantosh): Return error for unsupported headers- "hop-by-hop",
-		// pseudo headers, "Host" header and headers prefixed with "grpc-".
+		// TODO(ashithasantosh): Add check for unsupported "hop-by-hop" headers.
+		if strings.HasPrefix(header.Key, ":") || strings.HasPrefix(header.Key, "grpc-") || header.Key == "host" || header.Key == "Host" {
+			return nil, fmt.Errorf(`"headers" %d: unsupported key "%s".`, i, header.Key)
+		}
 		if header.Values == nil {
 			return nil, fmt.Errorf(`"headers" %d: "values" is not present`, i)
 		}
