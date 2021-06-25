@@ -104,7 +104,7 @@ type clusterImplBalancer struct {
 	childLB          balancer.Balancer
 	cancelLoadReport func()
 	edsServiceName   string
-	lrsServerName    string
+	lrsServerName    *string
 	loadWrapper      *loadstore.Wrapper
 
 	clusterNameMu sync.Mutex
@@ -165,22 +165,53 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 		b.loadWrapper.UpdateClusterAndService(clusterName, b.edsServiceName)
 	}
 
+	var (
+		stopOldLoadReport  bool
+		startNewLoadReport bool
+	)
+
 	// Check if it's necessary to restart load report.
-	var newLRSServerName string
-	if newConfig.LoadReportingServerName != nil {
-		newLRSServerName = *newConfig.LoadReportingServerName
+	//
+	// Compare the old LRS server and new LRS server:
+	// - old is nil,     new is not nil --> start new LRS
+	// - old is nil,     new is nil     --> do nothing
+	// - old is not nil, new is nil     --> stop old LRS, don't start new
+	// - old is not nil, new is not nil --> compare string value, if different, stop old and start new
+	if b.lrsServerName == nil {
+		// There is no existing LRS stream.
+		if newConfig.LoadReportingServerName != nil {
+			b.lrsServerName = newConfig.LoadReportingServerName
+			startNewLoadReport = true
+		}
+	} else {
+		// There is an existing LRS stream.
+		if newConfig.LoadReportingServerName == nil {
+			b.lrsServerName = newConfig.LoadReportingServerName
+			stopOldLoadReport = true
+		} else {
+			if *b.lrsServerName != *newConfig.LoadReportingServerName {
+				b.lrsServerName = newConfig.LoadReportingServerName
+				stopOldLoadReport = true
+				startNewLoadReport = true
+			}
+		}
 	}
-	if b.lrsServerName != newLRSServerName {
-		// LoadReportingServerName is different, load should be report to a
-		// different server, restart.
-		b.lrsServerName = newLRSServerName
+
+	if stopOldLoadReport {
 		if b.cancelLoadReport != nil {
 			b.cancelLoadReport()
 			b.cancelLoadReport = nil
+			if !startNewLoadReport {
+				// If a new LRS stream will be started later, no need to update
+				// it to nil here.
+				b.loadWrapper.UpdateLoadStore(nil)
+			}
 		}
+	}
+	if startNewLoadReport {
 		var loadStore *load.Store
 		if b.xdsClient != nil {
-			loadStore, b.cancelLoadReport = b.xdsClient.ReportLoad(b.lrsServerName)
+			loadStore, b.cancelLoadReport = b.xdsClient.ReportLoad(*b.lrsServerName)
 		}
 		b.loadWrapper.UpdateLoadStore(loadStore)
 	}
