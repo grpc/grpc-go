@@ -161,17 +161,18 @@ func parsePrincipalNames(principalNames []string) []*v3rbacpb.Principal {
 	return ps
 }
 
-func parsePeer(source peer) *v3rbacpb.Principal {
+func parsePeer(source peer) (*v3rbacpb.Principal, error) {
 	if source.Principals != nil {
-		if len(source.Principals) > 0 {
-			return principalOr(parsePrincipalNames(source.Principals))
+		if len(source.Principals) == 0 {
+			return nil, fmt.Errorf(`"principals" is empty`)
 		}
+		return principalOr(parsePrincipalNames(source.Principals)), nil
 	}
 	return &v3rbacpb.Principal{
 		Identifier: &v3rbacpb.Principal_Any{
 			Any: true,
 		},
-	}
+	}, nil
 }
 
 func parsePaths(paths []string) []*v3rbacpb.Permission {
@@ -236,18 +237,20 @@ func parseHeaders(headers []header) ([]*v3rbacpb.Permission, error) {
 func parseRequest(request request) (*v3rbacpb.Permission, error) {
 	var and []*v3rbacpb.Permission
 	if request.Paths != nil {
-		if len(request.Paths) > 0 {
-			and = append(and, permissionOr(parsePaths(request.Paths)))
+		if len(request.Paths) == 0 {
+			return nil, fmt.Errorf(`"paths" is empty`)
 		}
+		and = append(and, permissionOr(parsePaths(request.Paths)))
 	}
 	if request.Headers != nil {
-		if len(request.Headers) > 0 {
-			headers, err := parseHeaders(request.Headers)
-			if err != nil {
-				return nil, err
-			}
-			and = append(and, permissionAnd(headers))
+		if len(request.Headers) == 0 {
+			return nil, fmt.Errorf(`"headers" is empty`)
 		}
+		headers, err := parseHeaders(request.Headers)
+		if err != nil {
+			return nil, err
+		}
+		and = append(and, permissionAnd(headers))
 	}
 	if len(and) > 0 {
 		return permissionAnd(and), nil
@@ -265,7 +268,10 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 		if rule.Name == "" {
 			return policies, fmt.Errorf(`%d: "name" is not present`, i)
 		}
-		principal := parsePeer(rule.Source)
+		principal, err := parsePeer(rule.Source)
+		if err != nil {
+			return nil, fmt.Errorf("%d: %v", i, err)
+		}
 		permission, err := parseRequest(rule.Request)
 		if err != nil {
 			return nil, fmt.Errorf("%d: %v", i, err)
