@@ -199,15 +199,38 @@ func parseHeaderValues(key string, values []string) []*v3rbacpb.Permission {
 	return vs
 }
 
+// hop-by-hop headers.
+var hopHeaders = []string{
+	"Connection",
+	"Keep-Alive",
+	"Proxy-Authenticate",
+	"Proxy-Authorization",
+	"Te",
+	"Trailer",
+	"Transfer-Encoding",
+	"Upgrade",
+}
+
+func unsupportedHeader(key string) bool {
+	if strings.HasPrefix(key, ":") || strings.HasPrefix(key, "grpc-") || key == "host" || key == "Host" {
+		return true
+	}
+	for _, h := range hopHeaders {
+		if h == key {
+			return true
+		}
+	}
+	return false
+}
+
 func parseHeaders(headers []header) ([]*v3rbacpb.Permission, error) {
 	var hs []*v3rbacpb.Permission
 	for i, header := range headers {
 		if header.Key == "" {
 			return nil, fmt.Errorf(`"headers" %d: "key" is not present`, i)
 		}
-		// TODO(ashithasantosh): Add check for unsupported "hop-by-hop" headers.
-		if strings.HasPrefix(header.Key, ":") || strings.HasPrefix(header.Key, "grpc-") || header.Key == "host" || header.Key == "Host" {
-			return nil, fmt.Errorf(`"headers" %d: unsupported key "%s".`, i, header.Key)
+		if unsupportedHeader(header.Key) {
+			return nil, fmt.Errorf(`"headers" %d: unsupported "key" %s`, i, header.Key)
 		}
 		if header.Values == nil {
 			return nil, fmt.Errorf(`"headers" %d: "values" is not present`, i)

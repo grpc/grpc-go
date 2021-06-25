@@ -213,7 +213,7 @@ func TestTranslatePolicy(t *testing.T) {
 					"request": {"headers":[{"key":":method", "values":["GET"]}]}
 				}]
 			}`,
-			wantErr: `"allow_rules" 0: "headers" 0: unsupported key ":method"`,
+			wantErr: `"allow_rules" 0: "headers" 0: unsupported "key" :method`,
 		},
 	}
 
