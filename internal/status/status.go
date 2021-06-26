@@ -151,8 +151,8 @@ func (e *Error) GRPCStatus() *Status {
 	return FromProto(e.e)
 }
 
-// Is implements future error.Is functionality.
-// A Error is equivalent if the code and message are identical.
+// Is implements Go 1.13 errors.Is functionality.
+// An Error is equivalent if the code and message are identical.
 func (e *Error) Is(target error) bool {
 	tse, ok := target.(*Error)
 	if !ok {
