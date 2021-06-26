@@ -735,6 +735,11 @@ func (e ConnectionError) Temporary() bool {
 	return e.temp
 }
 
+// Unwrap implements Go 1.13 errors.Unwrap functionality.
+func (e ConnectionError) Unwrap() error {
+	return e.err
+}
+
 // Origin returns the original error of this connection error.
 func (e ConnectionError) Origin() error {
 	// Never return nil error here.

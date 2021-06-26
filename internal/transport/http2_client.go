@@ -619,6 +619,11 @@ func (p PerformedIOError) Error() string {
 	return p.Err.Error()
 }
 
+// Unwrap implements Go 1.13 errors.Unwrap functionality.
+func (p PerformedIOError) Unwrap() error {
+	return p.Err
+}
+
 // NewStream creates a stream and registers it into the transport as "active"
 // streams.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Stream, err error) {
