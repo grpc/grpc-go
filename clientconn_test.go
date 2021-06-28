@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -1048,6 +1049,68 @@ func (s) TestDefaultServiceConfig(t *testing.T) {
 	testDefaultServiceConfigWhenResolverServiceConfigDisabled(t, r, addr, js)
 	testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t, r, addr, js)
 	testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t, r, addr, js)
+}
+
+func BenchmarkChainClientUnaryInterceptors(b *testing.B) {
+	for _, n := range []int{1, 3, 5, 10} {
+		n := n
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			interceptors := make([]UnaryClientInterceptor, 0, n)
+			for i := 0; i < n; i++ {
+				interceptors = append(interceptors, func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+					return invoker(ctx, method, req, reply, cc, opts...)
+				})
+			}
+			c, err := Dial("fake",
+				WithInsecure(),
+				WithChainUnaryInterceptor(interceptors...),
+			)
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if err := c.dopts.unaryInt(context.Background(), "", nil, nil, c,
+					func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, opts ...CallOption) error {
+						return nil
+					},
+				); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkChainClientStreamInterceptors(b *testing.B) {
+	for _, n := range []int{1, 3, 5, 10} {
+		n := n
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			interceptors := make([]StreamClientInterceptor, 0, n)
+			for i := 0; i < n; i++ {
+				interceptors = append(interceptors, func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
+					return streamer(ctx, desc, cc, method, opts...)
+				})
+			}
+			c, err := Dial("fake",
+				WithInsecure(),
+				WithChainStreamInterceptor(interceptors...),
+			)
+			if err != nil {
+				b.Fatal(err)
+			}
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if _, err := c.dopts.streamInt(context.Background(), nil, c, "", func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
+					return nil, nil
+				}); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }
 
 func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {

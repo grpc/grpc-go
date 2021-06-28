@@ -357,26 +357,26 @@ func chainUnaryClientInterceptors(cc *ClientConn) {
 		interceptors = append([]UnaryClientInterceptor{cc.dopts.unaryInt}, interceptors...)
 	}
 	var chainedInt UnaryClientInterceptor
-	if len(interceptors) == 0 {
+	switch len(interceptors) {
+	case 0:
 		chainedInt = nil
-	} else if len(interceptors) == 1 {
+	case 1:
 		chainedInt = interceptors[0]
-	} else {
+	default:
 		chainedInt = func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
-			return interceptors[0](ctx, method, req, reply, cc, getChainUnaryInvoker(interceptors, 0, invoker), opts...)
+			var i int
+			var next UnaryInvoker
+			next = func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, opts ...CallOption) error {
+				if i == len(interceptors)-1 {
+					return interceptors[i](ctx, method, req, reply, cc, invoker, opts...)
+				}
+				i++
+				return interceptors[i-1](ctx, method, req, reply, cc, next, opts...)
+			}
+			return next(ctx, method, req, reply, cc, opts...)
 		}
 	}
 	cc.dopts.unaryInt = chainedInt
-}
-
-// getChainUnaryInvoker recursively generate the chained unary invoker.
-func getChainUnaryInvoker(interceptors []UnaryClientInterceptor, curr int, finalInvoker UnaryInvoker) UnaryInvoker {
-	if curr == len(interceptors)-1 {
-		return finalInvoker
-	}
-	return func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, opts ...CallOption) error {
-		return interceptors[curr+1](ctx, method, req, reply, cc, getChainUnaryInvoker(interceptors, curr+1, finalInvoker), opts...)
-	}
 }
 
 // chainStreamClientInterceptors chains all stream client interceptors into one.
@@ -388,26 +388,26 @@ func chainStreamClientInterceptors(cc *ClientConn) {
 		interceptors = append([]StreamClientInterceptor{cc.dopts.streamInt}, interceptors...)
 	}
 	var chainedInt StreamClientInterceptor
-	if len(interceptors) == 0 {
+	switch len(interceptors) {
+	case 0:
 		chainedInt = nil
-	} else if len(interceptors) == 1 {
+	case 1:
 		chainedInt = interceptors[0]
-	} else {
+	default:
 		chainedInt = func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
-			return interceptors[0](ctx, desc, cc, method, getChainStreamer(interceptors, 0, streamer), opts...)
+			var i int
+			var next Streamer
+			next = func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
+				if i == len(interceptors)-1 {
+					return interceptors[i](ctx, desc, cc, method, streamer, opts...)
+				}
+				i++
+				return interceptors[i-1](ctx, desc, cc, method, next, opts...)
+			}
+			return next(ctx, desc, cc, method, opts...)
 		}
 	}
 	cc.dopts.streamInt = chainedInt
-}
-
-// getChainStreamer recursively generate the chained client stream constructor.
-func getChainStreamer(interceptors []StreamClientInterceptor, curr int, finalStreamer Streamer) Streamer {
-	if curr == len(interceptors)-1 {
-		return finalStreamer
-	}
-	return func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (ClientStream, error) {
-		return interceptors[curr+1](ctx, desc, cc, method, getChainStreamer(interceptors, curr+1, finalStreamer), opts...)
-	}
 }
 
 // connectivityStateManager keeps the connectivity.State of ClientConn.

@@ -1110,30 +1110,26 @@ func chainUnaryServerInterceptors(s *Server) {
 	}
 
 	var chainedInt UnaryServerInterceptor
-	if len(interceptors) == 0 {
+	switch len(interceptors) {
+	case 0:
 		chainedInt = nil
-	} else if len(interceptors) == 1 {
+	case 1:
 		chainedInt = interceptors[0]
-	} else {
-		chainedInt = chainUnaryInterceptors(interceptors)
-	}
-
-	s.opts.unaryInt = chainedInt
-}
-
-func chainUnaryInterceptors(interceptors []UnaryServerInterceptor) UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (interface{}, error) {
-		var i int
-		var next UnaryHandler
-		next = func(ctx context.Context, req interface{}) (interface{}, error) {
-			if i == len(interceptors)-1 {
-				return interceptors[i](ctx, req, info, handler)
+	default:
+		chainedInt = func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (interface{}, error) {
+			var i int
+			var next UnaryHandler
+			next = func(ctx context.Context, req interface{}) (interface{}, error) {
+				if i == len(interceptors)-1 {
+					return interceptors[i](ctx, req, info, handler)
+				}
+				i++
+				return interceptors[i-1](ctx, req, info, next)
 			}
-			i++
-			return interceptors[i-1](ctx, req, info, next)
+			return next(ctx, req)
 		}
-		return next(ctx, req)
 	}
+	s.opts.unaryInt = chainedInt
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, info *serviceInfo, md *MethodDesc, trInfo *traceInfo) (err error) {
@@ -1395,30 +1391,26 @@ func chainStreamServerInterceptors(s *Server) {
 	}
 
 	var chainedInt StreamServerInterceptor
-	if len(interceptors) == 0 {
+	switch len(interceptors) {
+	case 0:
 		chainedInt = nil
-	} else if len(interceptors) == 1 {
+	case 1:
 		chainedInt = interceptors[0]
-	} else {
-		chainedInt = chainStreamInterceptors(interceptors)
-	}
-
-	s.opts.streamInt = chainedInt
-}
-
-func chainStreamInterceptors(interceptors []StreamServerInterceptor) StreamServerInterceptor {
-	return func(srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error {
-		var i int
-		var next StreamHandler
-		next = func(srv interface{}, ss ServerStream) error {
-			if i == len(interceptors)-1 {
-				return interceptors[i](srv, ss, info, handler)
+	default:
+		chainedInt = func(srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error {
+			var i int
+			var next StreamHandler
+			next = func(srv interface{}, ss ServerStream) error {
+				if i == len(interceptors)-1 {
+					return interceptors[i](srv, ss, info, handler)
+				}
+				i++
+				return interceptors[i-1](srv, ss, info, next)
 			}
-			i++
-			return interceptors[i-1](srv, ss, info, next)
+			return next(srv, ss)
 		}
-		return next(srv, ss)
 	}
+	s.opts.streamInt = chainedInt
 }
 
 func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transport.Stream, info *serviceInfo, sd *StreamDesc, trInfo *traceInfo) (err error) {
