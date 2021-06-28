@@ -35,7 +35,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -640,33 +639,9 @@ func setupTLSConn(t *testing.T) (net.Listener, *x509.Certificate, *ecdsa.Private
 
 // TestVerifyConnection will setup a client/server connection and check revocation in the real TLS dialer
 func TestVerifyConnection(t *testing.T) {
-	l, cert, key := setupTLSConn(t)
-
-	done := make(chan interface{}, 1)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-	ListenLoop:
-		for {
-			conn, err := l.Accept()
-			if err != nil {
-				switch {
-				case <-done:
-					wg.Done()
-					break ListenLoop
-				default:
-					t.Errorf("tls.Accept failed err = %v", err)
-				}
-			} else {
-				conn.Write([]byte("Hello, World!"))
-				conn.Close()
-			}
-		}
-	}()
+	lis, cert, key := setupTLSConn(t)
 	defer func() {
-		done <- true
-		l.Close()
-		wg.Wait()
+		lis.Close()
 	}()
 
 	var handshakeTests = []struct {
@@ -692,6 +667,17 @@ func TestVerifyConnection(t *testing.T) {
 	}
 	for _, tt := range handshakeTests {
 		t.Run(tt.desc, func(t *testing.T) {
+			// Accept one connection.
+			go func() {
+				conn, err := lis.Accept()
+				if err != nil {
+					t.Errorf("tls.Accept failed err = %v", err)
+				} else {
+					conn.Write([]byte("Hello, World!"))
+					conn.Close()
+				}
+			}()
+
 			dir, err := ioutil.TempDir("", "crl_dir")
 			if err != nil {
 				t.Fatalf("ioutil.TempDir failed err = %v", err)
@@ -716,7 +702,7 @@ func TestVerifyConnection(t *testing.T) {
 					return CheckRevocation(cs, RevocationConfig{RootDir: dir})
 				},
 			}
-			conn, err := tls.Dial(l.Addr().Network(), l.Addr().String(), &cliCfg)
+			conn, err := tls.Dial(lis.Addr().Network(), lis.Addr().String(), &cliCfg)
 			t.Logf("tls.Dial err = %v", err)
 			if tt.success && err != nil {
 				t.Errorf("Expected success got err = %v", err)
