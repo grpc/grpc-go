@@ -178,19 +178,17 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 			startNewLoadReport = true
 		}
 		// Old is nil, new is nil, do nothing.
+	} else if newConfig.LoadReportingServerName == nil {
+		// Old is not nil, new is nil, stop old, don't start new.
+		b.lrsServerName = newConfig.LoadReportingServerName
+		stopOldLoadReport = true
 	} else {
-		if newConfig.LoadReportingServerName == nil {
-			// Old is not nil, new is nil, stop old, don't start new.
+		// Old is not nil, new is not nil, compare string values, if
+		// different, stop old and start new.
+		if *b.lrsServerName != *newConfig.LoadReportingServerName {
 			b.lrsServerName = newConfig.LoadReportingServerName
 			stopOldLoadReport = true
-		} else {
-			// Old is not nil, new is not nil, compare string values, if
-			// different, stop old and start new.
-			if *b.lrsServerName != *newConfig.LoadReportingServerName {
-				b.lrsServerName = newConfig.LoadReportingServerName
-				stopOldLoadReport = true
-				startNewLoadReport = true
-			}
+			startNewLoadReport = true
 		}
 	}
 
