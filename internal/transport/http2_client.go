@@ -139,6 +139,12 @@ type http2Client struct {
 	bufferPool *bufferPool
 
 	connectionID uint64
+
+	// This will be used as the authority header for the Connection, if set.
+	// Once grpc-go supports per-RPC overrides for :authority header, this could
+	// be overriden by CallHdr.Host, as that is per-RPC, vs this which will be
+	// per connection.
+	ServerName string
 }
 
 func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error), addr resolver.Address, useProxy bool, grpcUA string) (net.Conn, error) {
@@ -313,6 +319,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		onClose:               onClose,
 		keepaliveEnabled:      keepaliveEnabled,
 		bufferPool:            newBufferPool(),
+		ServerName:            addr.ServerName,
 	}
 
 	if md, ok := addr.Metadata.(*metadata.MD); ok {
@@ -484,7 +491,12 @@ func (t *http2Client) createHeaderFields(ctx context.Context, callHdr *CallHdr) 
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":method", Value: "POST"})
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":scheme", Value: t.scheme})
 	headerFields = append(headerFields, hpack.HeaderField{Name: ":path", Value: callHdr.Method})
-	headerFields = append(headerFields, hpack.HeaderField{Name: ":authority", Value: callHdr.Host})
+	if t.ServerName != "" {
+		headerFields = append(headerFields, hpack.HeaderField{Name: ":authority", Value: callHdr.Host})
+	} else {
+		// TODO: Once per RPC overrides are supported, this might get overwritten due to precedence.
+		headerFields = append(headerFields, hpack.HeaderField{Name: ":authority", Value: t.ServerName})
+	}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: grpcutil.ContentType(callHdr.ContentSubtype)})
 	headerFields = append(headerFields, hpack.HeaderField{Name: "user-agent", Value: t.userAgent})
 	headerFields = append(headerFields, hpack.HeaderField{Name: "te", Value: "trailers"})
