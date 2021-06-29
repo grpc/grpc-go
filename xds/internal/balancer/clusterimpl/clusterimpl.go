@@ -104,7 +104,7 @@ type clusterImplBalancer struct {
 	childLB          balancer.Balancer
 	cancelLoadReport func()
 	edsServiceName   string
-	lrsServerName    string
+	lrsServerName    *string
 	loadWrapper      *loadstore.Wrapper
 
 	clusterNameMu sync.Mutex
@@ -165,22 +165,48 @@ func (b *clusterImplBalancer) updateLoadStore(newConfig *LBConfig) error {
 		b.loadWrapper.UpdateClusterAndService(clusterName, b.edsServiceName)
 	}
 
+	var (
+		stopOldLoadReport  bool
+		startNewLoadReport bool
+	)
+
 	// Check if it's necessary to restart load report.
-	var newLRSServerName string
-	if newConfig.LoadReportingServerName != nil {
-		newLRSServerName = *newConfig.LoadReportingServerName
+	if b.lrsServerName == nil {
+		if newConfig.LoadReportingServerName != nil {
+			// Old is nil, new is not nil, start new LRS.
+			b.lrsServerName = newConfig.LoadReportingServerName
+			startNewLoadReport = true
+		}
+		// Old is nil, new is nil, do nothing.
+	} else if newConfig.LoadReportingServerName == nil {
+		// Old is not nil, new is nil, stop old, don't start new.
+		b.lrsServerName = newConfig.LoadReportingServerName
+		stopOldLoadReport = true
+	} else {
+		// Old is not nil, new is not nil, compare string values, if
+		// different, stop old and start new.
+		if *b.lrsServerName != *newConfig.LoadReportingServerName {
+			b.lrsServerName = newConfig.LoadReportingServerName
+			stopOldLoadReport = true
+			startNewLoadReport = true
+		}
 	}
-	if b.lrsServerName != newLRSServerName {
-		// LoadReportingServerName is different, load should be report to a
-		// different server, restart.
-		b.lrsServerName = newLRSServerName
+
+	if stopOldLoadReport {
 		if b.cancelLoadReport != nil {
 			b.cancelLoadReport()
 			b.cancelLoadReport = nil
+			if !startNewLoadReport {
+				// If a new LRS stream will be started later, no need to update
+				// it to nil here.
+				b.loadWrapper.UpdateLoadStore(nil)
+			}
 		}
+	}
+	if startNewLoadReport {
 		var loadStore *load.Store
 		if b.xdsClient != nil {
-			loadStore, b.cancelLoadReport = b.xdsClient.ReportLoad(b.lrsServerName)
+			loadStore, b.cancelLoadReport = b.xdsClient.ReportLoad(*b.lrsServerName)
 		}
 		b.loadWrapper.UpdateLoadStore(loadStore)
 	}
@@ -492,6 +518,10 @@ func (b *clusterImplBalancer) run() {
 			}
 			b.mu.Unlock()
 		case <-b.closed.Done():
+			if b.cancelLoadReport != nil {
+				b.cancelLoadReport()
+				b.cancelLoadReport = nil
+			}
 			return
 		}
 	}
