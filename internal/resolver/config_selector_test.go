@@ -48,6 +48,8 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 
 	retChan1 := make(chan *RPCConfig)
 	retChan2 := make(chan *RPCConfig)
+	defer close(retChan1)
+	defer close(retChan2)
 
 	one := 1
 	two := 2
@@ -55,8 +57,8 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 	resp1 := &RPCConfig{MethodConfig: serviceconfig.MethodConfig{MaxReqSize: &one}}
 	resp2 := &RPCConfig{MethodConfig: serviceconfig.MethodConfig{MaxReqSize: &two}}
 
-	cs1Called := make(chan struct{})
-	cs2Called := make(chan struct{})
+	cs1Called := make(chan struct{}, 1)
+	cs2Called := make(chan struct{}, 1)
 
 	cs1 := &fakeConfigSelector{
 		selectConfig: func(r RPCInfo) (*RPCConfig, error) {
