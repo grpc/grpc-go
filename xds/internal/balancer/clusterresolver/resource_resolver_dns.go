@@ -27,15 +27,16 @@ import (
 
 var (
 	newDNS = func(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
-		dnsB := resolver.Get("dns")
-		return dnsB.Build(target, cc, opts)
+		// The dns resolver is registered by the grpc package. So, this call to
+		// resolver.Get() is never expected to return nil.
+		return resolver.Get("dns").Build(target, cc, opts)
 	}
 )
 
-// dnsResolver watches updates for the given DNS hostname.
+// dnsDiscoveryMechanism watches updates for the given DNS hostname.
 //
 // It implements resolver.ClientConn interface to work with the DNS resolver.
-type dnsResolver struct {
+type dnsDiscoveryMechanism struct {
 	target           string
 	topLevelResolver *resourceResolver
 	r                resolver.Resolver
@@ -44,8 +45,8 @@ type dnsResolver struct {
 	updateReceived bool
 }
 
-func newDNSResolver(target string, topLevelResolver *resourceResolver) *dnsResolver {
-	ret := &dnsResolver{
+func newDNSResolver(target string, topLevelResolver *resourceResolver) *dnsDiscoveryMechanism {
+	ret := &dnsDiscoveryMechanism{
 		target:           target,
 		topLevelResolver: topLevelResolver,
 	}
@@ -61,25 +62,25 @@ func newDNSResolver(target string, topLevelResolver *resourceResolver) *dnsResol
 	return ret
 }
 
-func (dr *dnsResolver) lastUpdate() (interface{}, bool) {
+func (dr *dnsDiscoveryMechanism) lastUpdate() (interface{}, bool) {
 	if !dr.updateReceived {
 		return nil, false
 	}
 	return dr.addrs, true
 }
 
-func (dr *dnsResolver) resolveNow() {
+func (dr *dnsDiscoveryMechanism) resolveNow() {
 	dr.r.ResolveNow(resolver.ResolveNowOptions{})
 }
 
-func (dr *dnsResolver) stop() {
+func (dr *dnsDiscoveryMechanism) stop() {
 	dr.r.Close()
 }
 
-// dnsResolver needs to implement resolver.ClientConn interface to receive
+// dnsDiscoveryMechanism needs to implement resolver.ClientConn interface to receive
 // updates from the real DNS resolver.
 
-func (dr *dnsResolver) UpdateState(state resolver.State) error {
+func (dr *dnsDiscoveryMechanism) UpdateState(state resolver.State) error {
 	dr.topLevelResolver.mu.Lock()
 	defer dr.topLevelResolver.mu.Unlock()
 	addrs := make([]string, len(state.Addresses))
@@ -92,7 +93,7 @@ func (dr *dnsResolver) UpdateState(state resolver.State) error {
 	return nil
 }
 
-func (dr *dnsResolver) ReportError(err error) {
+func (dr *dnsDiscoveryMechanism) ReportError(err error) {
 	select {
 	case <-dr.topLevelResolver.updateChannel:
 	default:
@@ -100,14 +101,14 @@ func (dr *dnsResolver) ReportError(err error) {
 	dr.topLevelResolver.updateChannel <- &resourceUpdate{err: err}
 }
 
-func (dr *dnsResolver) NewAddress(addresses []resolver.Address) {
+func (dr *dnsDiscoveryMechanism) NewAddress(addresses []resolver.Address) {
 	dr.UpdateState(resolver.State{Addresses: addresses})
 }
 
-func (dr *dnsResolver) NewServiceConfig(string) {
+func (dr *dnsDiscoveryMechanism) NewServiceConfig(string) {
 	// This method is deprecated, and service config isn't supported.
 }
 
-func (dr *dnsResolver) ParseServiceConfig(string) *serviceconfig.ParseResult {
+func (dr *dnsDiscoveryMechanism) ParseServiceConfig(string) *serviceconfig.ParseResult {
 	return &serviceconfig.ParseResult{Err: fmt.Errorf("service config not supported")}
 }

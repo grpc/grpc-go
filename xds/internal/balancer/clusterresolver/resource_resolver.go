@@ -33,7 +33,7 @@ type resourceUpdate struct {
 	err error
 }
 
-type resolverInterface interface {
+type discoveryMechanism interface {
 	lastUpdate() (interface{}, bool)
 	resolveNow()
 	stop()
@@ -55,7 +55,7 @@ type discoveryMechanismKey struct {
 type resolverMechanismTuple struct {
 	dm    balancerconfig.DiscoveryMechanism
 	dmKey discoveryMechanismKey
-	r     resolverInterface
+	r     discoveryMechanism
 }
 
 type resourceResolver struct {
@@ -63,17 +63,17 @@ type resourceResolver struct {
 	updateChannel chan *resourceUpdate
 
 	// mu protects the slice and map, and content of the resolvers in the slice.
-	mu           sync.Mutex
-	mechanisms   []balancerconfig.DiscoveryMechanism
-	resolvers    []resolverMechanismTuple
-	resolversMap map[discoveryMechanismKey]resolverInterface
+	mu          sync.Mutex
+	mechanisms  []balancerconfig.DiscoveryMechanism
+	children    []resolverMechanismTuple
+	childrenMap map[discoveryMechanismKey]discoveryMechanism
 }
 
 func newResourceResolver(parent *clusterResolverBalancer) *resourceResolver {
 	return &resourceResolver{
 		parent:        parent,
 		updateChannel: make(chan *resourceUpdate, 1),
-		resolversMap:  make(map[discoveryMechanismKey]resolverInterface),
+		childrenMap:   make(map[discoveryMechanismKey]discoveryMechanism),
 	}
 }
 
@@ -84,7 +84,7 @@ func (rr *resourceResolver) updateMechanisms(mechanisms []balancerconfig.Discove
 		return
 	}
 	rr.mechanisms = mechanisms
-	rr.resolvers = make([]resolverMechanismTuple, len(mechanisms))
+	rr.children = make([]resolverMechanismTuple, len(mechanisms))
 	newDMs := make(map[discoveryMechanismKey]bool)
 
 	// Start one watch for each new discover mechanism {type+resource_name}.
@@ -100,30 +100,30 @@ func (rr *resourceResolver) updateMechanisms(mechanisms []balancerconfig.Discove
 			dmKey := discoveryMechanismKey{typ: dm.Type, name: nameToWatch}
 			newDMs[dmKey] = true
 
-			r := rr.resolversMap[dmKey]
+			r := rr.childrenMap[dmKey]
 			if r == nil {
 				r = newEDSResolver(nameToWatch, rr.parent.xdsClient, rr)
-				rr.resolversMap[dmKey] = r
+				rr.childrenMap[dmKey] = r
 			}
-			rr.resolvers[i] = resolverMechanismTuple{dm: dm, dmKey: dmKey, r: r}
+			rr.children[i] = resolverMechanismTuple{dm: dm, dmKey: dmKey, r: r}
 		case balancerconfig.DiscoveryMechanismTypeLogicalDNS:
 			// Name to resolve in DNS is the hostname, not the ClientConn
 			// target.
 			dmKey := discoveryMechanismKey{typ: dm.Type, name: dm.DNSHostname}
 			newDMs[dmKey] = true
 
-			r := rr.resolversMap[dmKey]
+			r := rr.childrenMap[dmKey]
 			if r == nil {
 				r = newDNSResolver(dm.DNSHostname, rr)
-				rr.resolversMap[dmKey] = r
+				rr.childrenMap[dmKey] = r
 			}
-			rr.resolvers[i] = resolverMechanismTuple{dm: dm, dmKey: dmKey, r: r}
+			rr.children[i] = resolverMechanismTuple{dm: dm, dmKey: dmKey, r: r}
 		}
 	}
 	// Stop the resources that were removed.
-	for dm, r := range rr.resolversMap {
+	for dm, r := range rr.childrenMap {
 		if !newDMs[dm] {
-			delete(rr.resolversMap, dm)
+			delete(rr.childrenMap, dm)
 			r.stop()
 		}
 	}
@@ -137,7 +137,7 @@ func (rr *resourceResolver) updateMechanisms(mechanisms []balancerconfig.Discove
 func (rr *resourceResolver) resolveNow() {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
-	for _, r := range rr.resolversMap {
+	for _, r := range rr.childrenMap {
 		r.resolveNow()
 	}
 }
@@ -145,12 +145,12 @@ func (rr *resourceResolver) resolveNow() {
 func (rr *resourceResolver) stop() {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
-	for dm, r := range rr.resolversMap {
-		delete(rr.resolversMap, dm)
+	for dm, r := range rr.childrenMap {
+		delete(rr.childrenMap, dm)
 		r.stop()
 	}
 	rr.mechanisms = nil
-	rr.resolvers = nil
+	rr.children = nil
 }
 
 // generate collects all the updates from all the resolvers, and push the
@@ -161,8 +161,8 @@ func (rr *resourceResolver) stop() {
 // caller must hold rr.mu.
 func (rr *resourceResolver) generate() {
 	var ret []balancerconfig.PriorityConfig
-	for _, rDM := range rr.resolvers {
-		r, ok := rr.resolversMap[rDM.dmKey]
+	for _, rDM := range rr.children {
+		r, ok := rr.childrenMap[rDM.dmKey]
 		if !ok {
 			rr.parent.logger.Infof("resolver for %+v not found, should never happen", rDM.dmKey)
 			continue
@@ -188,30 +188,30 @@ func (rr *resourceResolver) generate() {
 	rr.updateChannel <- &resourceUpdate{p: ret}
 }
 
-type edsResolver struct {
+type edsDiscoveryMechanism struct {
 	cancel func()
 
 	update         xdsclient.EndpointsUpdate
 	updateReceived bool
 }
 
-func (er *edsResolver) lastUpdate() (interface{}, bool) {
+func (er *edsDiscoveryMechanism) lastUpdate() (interface{}, bool) {
 	if !er.updateReceived {
 		return nil, false
 	}
 	return er.update, true
 }
 
-func (er *edsResolver) resolveNow() {
+func (er *edsDiscoveryMechanism) resolveNow() {
 }
 
-func (er *edsResolver) stop() {
+func (er *edsDiscoveryMechanism) stop() {
 	er.cancel()
 }
 
 // newEDSResolver starts the EDS watch on the given xds client.
-func newEDSResolver(nameToWatch string, xdsc xdsclient.XDSClient, topLevelResolver *resourceResolver) *edsResolver {
-	ret := &edsResolver{}
+func newEDSResolver(nameToWatch string, xdsc xdsclient.XDSClient, topLevelResolver *resourceResolver) *edsDiscoveryMechanism {
+	ret := &edsDiscoveryMechanism{}
 	topLevelResolver.parent.logger.Infof("EDS watch started on %v", nameToWatch)
 	cancel := xdsc.WatchEndpoints(nameToWatch, func(update xdsclient.EndpointsUpdate, err error) {
 		topLevelResolver.mu.Lock()
