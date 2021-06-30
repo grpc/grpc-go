@@ -99,12 +99,12 @@ func NewRPCData(ctx context.Context, fullMethod string) (*RPCData, error) {
 	}
 
 	return &RPCData{
-		MD: md,
-		PeerInfo: pi,
-		FullMethod: fullMethod,
+		MD:              md,
+		PeerInfo:        pi,
+		FullMethod:      fullMethod,
 		DestinationPort: uint32(dp),
 		DestinationAddr: conn.LocalAddr(),
-		PrincipalName: pName,
+		PrincipalName:   pName,
 	}, nil
 }
 
