@@ -38,8 +38,8 @@ import (
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
-	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -181,7 +181,7 @@ func buildClusterImplConfigForEDS(parentPriority int, edsResp xdsclient.Endpoint
 		// Prepend parent priority to the priority names, to avoid duplicates.
 		pName := fmt.Sprintf("priority-%v-%v", parentPriority, priorityName)
 		retNames = append(retNames, pName)
-		wtConfig, addrs := localitiesToWeightedTarget(priorityLocalities, pName, endpointPickingPolicy, mechanism.LoadReportingServerName, mechanism.Cluster, mechanism.EDSServiceName)
+		wtConfig, addrs := localitiesToWeightedTarget(priorityLocalities, pName, endpointPickingPolicy, mechanism.Cluster, mechanism.EDSServiceName)
 		retConfigs[pName] = &clusterimpl.LBConfig{
 			Cluster:                 mechanism.Cluster,
 			EDSServiceName:          mechanism.EDSServiceName,
@@ -249,7 +249,7 @@ func dedupSortedIntSlice(a []int) []int {
 //
 // The addresses have path hierarchy set to [priority-name, locality-name], so
 // priority and weighted target know which child policy they are for.
-func localitiesToWeightedTarget(localities []xdsclient.Locality, priorityName string, childPolicy *internalserviceconfig.BalancerConfig, lrsServer *string, cluster, edsService string) (*weightedtarget.LBConfig, []resolver.Address) {
+func localitiesToWeightedTarget(localities []xdsclient.Locality, priorityName string, childPolicy *internalserviceconfig.BalancerConfig, cluster, edsService string) (*weightedtarget.LBConfig, []resolver.Address) {
 	weightedTargets := make(map[string]weightedtarget.Target)
 	var addrs []resolver.Address
 	for _, locality := range localities {
@@ -257,25 +257,7 @@ func localitiesToWeightedTarget(localities []xdsclient.Locality, priorityName st
 		if err != nil {
 			localityStr = fmt.Sprintf("%+v", locality.ID)
 		}
-
-		child := childPolicy
-		// If lrsServer is not set, we can skip this extra layer of the LRS
-		// policy.
-		if lrsServer != nil {
-			localityID := locality.ID
-			child = &internalserviceconfig.BalancerConfig{
-				Name: lrs.Name,
-				Config: &lrs.LBConfig{
-					ClusterName:             cluster,
-					EDSServiceName:          edsService,
-					ChildPolicy:             childPolicy,
-					LoadReportingServerName: *lrsServer,
-					Locality:                &localityID,
-				},
-			}
-		}
-		weightedTargets[localityStr] = weightedtarget.Target{Weight: locality.Weight, ChildPolicy: child}
-
+		weightedTargets[localityStr] = weightedtarget.Target{Weight: locality.Weight, ChildPolicy: childPolicy}
 		for _, endpoint := range locality.Endpoints {
 			// Filter out all "unhealthy" endpoints (unknown and healthy are
 			// both considered to be healthy:
@@ -290,6 +272,7 @@ func localitiesToWeightedTarget(localities []xdsclient.Locality, priorityName st
 				addr = weightedroundrobin.SetAddrInfo(addr, ai)
 			}
 			addr = hierarchy.Set(addr, []string{priorityName, localityStr})
+			addr = internal.SetLocalityID(addr, locality.ID)
 			addrs = append(addrs, addr)
 		}
 	}

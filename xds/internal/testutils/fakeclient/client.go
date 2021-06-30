@@ -32,6 +32,11 @@ import (
 // Client is a fake implementation of an xds client. It exposes a bunch of
 // channels to signal the occurrence of various events.
 type Client struct {
+	// Embed XDSClient so this fake client implements the interface, but it's
+	// never set (it's always nil). This may cause nil panic since not all the
+	// methods are implemented.
+	xdsclient.XDSClient
+
 	name         string
 	ldsWatchCh   *testutils.Channel
 	rdsWatchCh   *testutils.Channel
@@ -42,6 +47,7 @@ type Client struct {
 	cdsCancelCh  *testutils.Channel
 	edsCancelCh  *testutils.Channel
 	loadReportCh *testutils.Channel
+	lrsCancelCh  *testutils.Channel
 	loadStore    *load.Store
 	bootstrapCfg *bootstrap.Config
 
@@ -215,7 +221,16 @@ type ReportLoadArgs struct {
 // ReportLoad starts reporting load about clusterName to server.
 func (xdsC *Client) ReportLoad(server string) (loadStore *load.Store, cancel func()) {
 	xdsC.loadReportCh.Send(ReportLoadArgs{Server: server})
-	return xdsC.loadStore, func() {}
+	return xdsC.loadStore, func() {
+		xdsC.lrsCancelCh.Send(nil)
+	}
+}
+
+// WaitForCancelReportLoad waits for a load report to be cancelled and returns
+// context.DeadlineExceeded otherwise.
+func (xdsC *Client) WaitForCancelReportLoad(ctx context.Context) error {
+	_, err := xdsC.lrsCancelCh.Receive(ctx)
+	return err
 }
 
 // LoadStore returns the underlying load data store.
@@ -227,7 +242,10 @@ func (xdsC *Client) LoadStore() *load.Store {
 // returns the arguments passed to it.
 func (xdsC *Client) WaitForReportLoad(ctx context.Context) (ReportLoadArgs, error) {
 	val, err := xdsC.loadReportCh.Receive(ctx)
-	return val.(ReportLoadArgs), err
+	if err != nil {
+		return ReportLoadArgs{}, err
+	}
+	return val.(ReportLoadArgs), nil
 }
 
 // Close fires xdsC.Closed, indicating it was called.
@@ -270,6 +288,7 @@ func NewClientWithName(name string) *Client {
 		cdsCancelCh:  testutils.NewChannelWithSize(10),
 		edsCancelCh:  testutils.NewChannel(),
 		loadReportCh: testutils.NewChannel(),
+		lrsCancelCh:  testutils.NewChannel(),
 		loadStore:    load.NewStore(),
 		cdsCbs:       make(map[string]func(xdsclient.ClusterUpdate, error)),
 		Closed:       grpcsync.NewEvent(),

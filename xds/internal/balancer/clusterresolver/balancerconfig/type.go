@@ -29,17 +29,20 @@ type DiscoveryMechanismType int
 
 const (
 	// DiscoveryMechanismTypeEDS is eds.
-	DiscoveryMechanismTypeEDS DiscoveryMechanismType = iota // `json:EDS`
+	DiscoveryMechanismTypeEDS DiscoveryMechanismType = iota // `json:"EDS"`
 	// DiscoveryMechanismTypeLogicalDNS is DNS.
-	DiscoveryMechanismTypeLogicalDNS // `json:LOGICAL_DNS`
+	DiscoveryMechanismTypeLogicalDNS // `json:"LOGICAL_DNS"`
 )
 
 // MarshalJSON marshals a DiscoveryMechanismType to a quoted json string.
 //
 // This is necessary to handle enum (as strings) from JSON.
-func (t *DiscoveryMechanismType) MarshalJSON() ([]byte, error) {
+//
+// Note that this needs to be defined on the type not pointer, otherwise the
+// variables of this type will marshal to int not string.
+func (t DiscoveryMechanismType) MarshalJSON() ([]byte, error) {
 	buffer := bytes.NewBufferString(`"`)
-	switch *t {
+	switch t {
 	case DiscoveryMechanismTypeEDS:
 		buffer.WriteString("EDS")
 	case DiscoveryMechanismTypeLogicalDNS:

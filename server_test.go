@@ -22,6 +22,7 @@ import (
 	"context"
 	"net"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -128,5 +129,61 @@ func (s) TestStreamContext(t *testing.T) {
 	stream, ok := s.(*transport.Stream)
 	if !ok || expectedStream != stream {
 		t.Fatalf("GetStreamFromContext(%v) = %v, %t, want: %v, true", ctx, stream, ok, expectedStream)
+	}
+}
+
+func BenchmarkChainUnaryInterceptor(b *testing.B) {
+	for _, n := range []int{1, 3, 5, 10} {
+		n := n
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			interceptors := make([]UnaryServerInterceptor, 0, n)
+			for i := 0; i < n; i++ {
+				interceptors = append(interceptors, func(
+					ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler,
+				) (interface{}, error) {
+					return handler(ctx, req)
+				})
+			}
+
+			s := NewServer(ChainUnaryInterceptor(interceptors...))
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if _, err := s.opts.unaryInt(context.Background(), nil, nil,
+					func(ctx context.Context, req interface{}) (interface{}, error) {
+						return nil, nil
+					},
+				); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkChainStreamInterceptor(b *testing.B) {
+	for _, n := range []int{1, 3, 5, 10} {
+		n := n
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			interceptors := make([]StreamServerInterceptor, 0, n)
+			for i := 0; i < n; i++ {
+				interceptors = append(interceptors, func(
+					srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler,
+				) error {
+					return handler(srv, ss)
+				})
+			}
+
+			s := NewServer(ChainStreamInterceptor(interceptors...))
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if err := s.opts.streamInt(nil, nil, nil, func(srv interface{}, stream ServerStream) error {
+					return nil
+				}); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }

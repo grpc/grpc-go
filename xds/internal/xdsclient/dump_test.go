@@ -18,7 +18,7 @@
  *
  */
 
-package tests_test
+package xdsclient_test
 
 import (
 	"fmt"
@@ -85,6 +85,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client.Close()
+	updateHandler := client.(xdsclient.UpdateHandler)
 
 	// Expected unknown.
 	if err := compareDump(client.DumpLDS, "", map[string]xdsclient.UpdateWithMD{}); err != nil {
@@ -111,7 +112,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 			Raw: r,
 		}
 	}
-	client.NewListeners(update0, xdsclient.UpdateMetadata{Version: testVersion})
+	updateHandler.NewListeners(update0, xdsclient.UpdateMetadata{Version: testVersion})
 
 	// Expect ACK.
 	if err := compareDump(client.DumpLDS, testVersion, want0); err != nil {
@@ -120,7 +121,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 
 	const nackVersion = "lds-version-nack"
 	var nackErr = fmt.Errorf("lds nack error")
-	client.NewListeners(
+	updateHandler.NewListeners(
 		map[string]xdsclient.ListenerUpdate{
 			ldsTargets[0]: {},
 		},
@@ -195,6 +196,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client.Close()
+	updateHandler := client.(xdsclient.UpdateHandler)
 
 	// Expected unknown.
 	if err := compareDump(client.DumpRDS, "", map[string]xdsclient.UpdateWithMD{}); err != nil {
@@ -221,7 +223,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 			Raw: r,
 		}
 	}
-	client.NewRouteConfigs(update0, xdsclient.UpdateMetadata{Version: testVersion})
+	updateHandler.NewRouteConfigs(update0, xdsclient.UpdateMetadata{Version: testVersion})
 
 	// Expect ACK.
 	if err := compareDump(client.DumpRDS, testVersion, want0); err != nil {
@@ -230,7 +232,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 
 	const nackVersion = "rds-version-nack"
 	var nackErr = fmt.Errorf("rds nack error")
-	client.NewRouteConfigs(
+	updateHandler.NewRouteConfigs(
 		map[string]xdsclient.RouteConfigUpdate{
 			rdsTargets[0]: {},
 		},
@@ -305,6 +307,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client.Close()
+	updateHandler := client.(xdsclient.UpdateHandler)
 
 	// Expected unknown.
 	if err := compareDump(client.DumpCDS, "", map[string]xdsclient.UpdateWithMD{}); err != nil {
@@ -331,7 +334,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 			Raw: r,
 		}
 	}
-	client.NewClusters(update0, xdsclient.UpdateMetadata{Version: testVersion})
+	updateHandler.NewClusters(update0, xdsclient.UpdateMetadata{Version: testVersion})
 
 	// Expect ACK.
 	if err := compareDump(client.DumpCDS, testVersion, want0); err != nil {
@@ -340,7 +343,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 
 	const nackVersion = "cds-version-nack"
 	var nackErr = fmt.Errorf("cds nack error")
-	client.NewClusters(
+	updateHandler.NewClusters(
 		map[string]xdsclient.ClusterUpdate{
 			cdsTargets[0]: {},
 		},
@@ -401,6 +404,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client.Close()
+	updateHandler := client.(xdsclient.UpdateHandler)
 
 	// Expected unknown.
 	if err := compareDump(client.DumpEDS, "", map[string]xdsclient.UpdateWithMD{}); err != nil {
@@ -427,7 +431,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 			Raw: r,
 		}
 	}
-	client.NewEndpoints(update0, xdsclient.UpdateMetadata{Version: testVersion})
+	updateHandler.NewEndpoints(update0, xdsclient.UpdateMetadata{Version: testVersion})
 
 	// Expect ACK.
 	if err := compareDump(client.DumpEDS, testVersion, want0); err != nil {
@@ -436,7 +440,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 
 	const nackVersion = "eds-version-nack"
 	var nackErr = fmt.Errorf("eds nack error")
-	client.NewEndpoints(
+	updateHandler.NewEndpoints(
 		map[string]xdsclient.EndpointsUpdate{
 			edsTargets[0]: {},
 		},

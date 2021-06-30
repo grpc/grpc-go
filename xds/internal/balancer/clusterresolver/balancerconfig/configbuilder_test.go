@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
-	"google.golang.org/grpc/xds/internal/balancer/lrs"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -228,30 +227,12 @@ func TestBuildPriorityConfig(t *testing.T) {
 							Config: &weightedtarget.LBConfig{
 								Targets: map[string]weightedtarget.Target{
 									assertString(testLocalityIDs[0].ToString): {
-										Weight: 20,
-										ChildPolicy: &internalserviceconfig.BalancerConfig{
-											Name: lrs.Name,
-											Config: &lrs.LBConfig{
-												ClusterName:             testClusterName,
-												EDSServiceName:          testEDSServiceName,
-												LoadReportingServerName: testLRSServer,
-												Locality:                &testLocalityIDs[0],
-												ChildPolicy:             &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-											},
-										},
+										Weight:      20,
+										ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
 									},
 									assertString(testLocalityIDs[1].ToString): {
-										Weight: 80,
-										ChildPolicy: &internalserviceconfig.BalancerConfig{
-											Name: lrs.Name,
-											Config: &lrs.LBConfig{
-												ClusterName:             testClusterName,
-												EDSServiceName:          testEDSServiceName,
-												LoadReportingServerName: testLRSServer,
-												Locality:                &testLocalityIDs[1],
-												ChildPolicy:             &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-											},
-										},
+										Weight:      80,
+										ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
 									},
 								},
 							},
@@ -279,30 +260,12 @@ func TestBuildPriorityConfig(t *testing.T) {
 							Config: &weightedtarget.LBConfig{
 								Targets: map[string]weightedtarget.Target{
 									assertString(testLocalityIDs[2].ToString): {
-										Weight: 20,
-										ChildPolicy: &internalserviceconfig.BalancerConfig{
-											Name: lrs.Name,
-											Config: &lrs.LBConfig{
-												ClusterName:             testClusterName,
-												EDSServiceName:          testEDSServiceName,
-												LoadReportingServerName: testLRSServer,
-												Locality:                &testLocalityIDs[2],
-												ChildPolicy:             &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-											},
-										},
+										Weight:      20,
+										ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
 									},
 									assertString(testLocalityIDs[3].ToString): {
-										Weight: 80,
-										ChildPolicy: &internalserviceconfig.BalancerConfig{
-											Name: lrs.Name,
-											Config: &lrs.LBConfig{
-												ClusterName:             testClusterName,
-												EDSServiceName:          testEDSServiceName,
-												LoadReportingServerName: testLRSServer,
-												Locality:                &testLocalityIDs[3],
-												ChildPolicy:             &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-											},
-										},
+										Weight:      80,
+										ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
 									},
 								},
 							},
@@ -324,16 +287,16 @@ func TestBuildPriorityConfig(t *testing.T) {
 		Priorities: []string{"priority-0-0", "priority-0-1", "priority-1"},
 	}
 	wantAddrs := []resolver.Address{
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[0][0]}, []string{"priority-0-0", assertString(testLocalityIDs[0].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[0][1]}, []string{"priority-0-0", assertString(testLocalityIDs[0].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[1][0]}, []string{"priority-0-0", assertString(testLocalityIDs[1].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[1][1]}, []string{"priority-0-0", assertString(testLocalityIDs[1].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[2][0]}, []string{"priority-0-1", assertString(testLocalityIDs[2].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[2][1]}, []string{"priority-0-1", assertString(testLocalityIDs[2].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[3][0]}, []string{"priority-0-1", assertString(testLocalityIDs[3].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[3][1]}, []string{"priority-0-1", assertString(testLocalityIDs[3].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[4][0]}, []string{"priority-1"}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[4][1]}, []string{"priority-1"}),
+		testAddrWithAttrs(testAddressStrs[0][0], nil, "priority-0-0", &testLocalityIDs[0]),
+		testAddrWithAttrs(testAddressStrs[0][1], nil, "priority-0-0", &testLocalityIDs[0]),
+		testAddrWithAttrs(testAddressStrs[1][0], nil, "priority-0-0", &testLocalityIDs[1]),
+		testAddrWithAttrs(testAddressStrs[1][1], nil, "priority-0-0", &testLocalityIDs[1]),
+		testAddrWithAttrs(testAddressStrs[2][0], nil, "priority-0-1", &testLocalityIDs[2]),
+		testAddrWithAttrs(testAddressStrs[2][1], nil, "priority-0-1", &testLocalityIDs[2]),
+		testAddrWithAttrs(testAddressStrs[3][0], nil, "priority-0-1", &testLocalityIDs[3]),
+		testAddrWithAttrs(testAddressStrs[3][1], nil, "priority-0-1", &testLocalityIDs[3]),
+		testAddrWithAttrs(testAddressStrs[4][0], nil, "priority-1", nil),
+		testAddrWithAttrs(testAddressStrs[4][1], nil, "priority-1", nil),
 	}
 
 	if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
@@ -434,30 +397,12 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 				Config: &weightedtarget.LBConfig{
 					Targets: map[string]weightedtarget.Target{
 						assertString(testLocalityIDs[0].ToString): {
-							Weight: 20,
-							ChildPolicy: &internalserviceconfig.BalancerConfig{
-								Name: lrs.Name,
-								Config: &lrs.LBConfig{
-									ClusterName:             testClusterName,
-									EDSServiceName:          testEDSServiceName,
-									LoadReportingServerName: testLRSServer,
-									Locality:                &testLocalityIDs[0],
-									ChildPolicy:             &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-								},
-							},
+							Weight:      20,
+							ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
 						},
 						assertString(testLocalityIDs[1].ToString): {
-							Weight: 80,
-							ChildPolicy: &internalserviceconfig.BalancerConfig{
-								Name: lrs.Name,
-								Config: &lrs.LBConfig{
-									ClusterName:             testClusterName,
-									EDSServiceName:          testEDSServiceName,
-									LoadReportingServerName: testLRSServer,
-									Locality:                &testLocalityIDs[1],
-									ChildPolicy:             &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-								},
-							},
+							Weight:      80,
+							ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
 						},
 					},
 				},
@@ -479,30 +424,12 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 				Config: &weightedtarget.LBConfig{
 					Targets: map[string]weightedtarget.Target{
 						assertString(testLocalityIDs[2].ToString): {
-							Weight: 20,
-							ChildPolicy: &internalserviceconfig.BalancerConfig{
-								Name: lrs.Name,
-								Config: &lrs.LBConfig{
-									ClusterName:             testClusterName,
-									EDSServiceName:          testEDSServiceName,
-									LoadReportingServerName: testLRSServer,
-									Locality:                &testLocalityIDs[2],
-									ChildPolicy:             &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-								},
-							},
+							Weight:      20,
+							ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
 						},
 						assertString(testLocalityIDs[3].ToString): {
-							Weight: 80,
-							ChildPolicy: &internalserviceconfig.BalancerConfig{
-								Name: lrs.Name,
-								Config: &lrs.LBConfig{
-									ClusterName:             testClusterName,
-									EDSServiceName:          testEDSServiceName,
-									LoadReportingServerName: testLRSServer,
-									Locality:                &testLocalityIDs[3],
-									ChildPolicy:             &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-								},
-							},
+							Weight:      80,
+							ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
 						},
 					},
 				},
@@ -510,14 +437,14 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 		},
 	}
 	wantAddrs := []resolver.Address{
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[0][0]}, []string{"priority-2-0", assertString(testLocalityIDs[0].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[0][1]}, []string{"priority-2-0", assertString(testLocalityIDs[0].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[1][0]}, []string{"priority-2-0", assertString(testLocalityIDs[1].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[1][1]}, []string{"priority-2-0", assertString(testLocalityIDs[1].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[2][0]}, []string{"priority-2-1", assertString(testLocalityIDs[2].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[2][1]}, []string{"priority-2-1", assertString(testLocalityIDs[2].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[3][0]}, []string{"priority-2-1", assertString(testLocalityIDs[3].ToString)}),
-		hierarchy.Set(resolver.Address{Addr: testAddressStrs[3][1]}, []string{"priority-2-1", assertString(testLocalityIDs[3].ToString)}),
+		testAddrWithAttrs(testAddressStrs[0][0], nil, "priority-2-0", &testLocalityIDs[0]),
+		testAddrWithAttrs(testAddressStrs[0][1], nil, "priority-2-0", &testLocalityIDs[0]),
+		testAddrWithAttrs(testAddressStrs[1][0], nil, "priority-2-0", &testLocalityIDs[1]),
+		testAddrWithAttrs(testAddressStrs[1][1], nil, "priority-2-0", &testLocalityIDs[1]),
+		testAddrWithAttrs(testAddressStrs[2][0], nil, "priority-2-1", &testLocalityIDs[2]),
+		testAddrWithAttrs(testAddressStrs[2][1], nil, "priority-2-1", &testLocalityIDs[2]),
+		testAddrWithAttrs(testAddressStrs[3][0], nil, "priority-2-1", &testLocalityIDs[3]),
+		testAddrWithAttrs(testAddressStrs[3][1], nil, "priority-2-1", &testLocalityIDs[3]),
 	}
 
 	if diff := cmp.Diff(gotNames, wantNames); diff != "" {
@@ -674,38 +601,20 @@ func TestLocalitiesToWeightedTarget(t *testing.T) {
 			wantConfig: &weightedtarget.LBConfig{
 				Targets: map[string]weightedtarget.Target{
 					assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString): {
-						Weight: 20,
-						ChildPolicy: &internalserviceconfig.BalancerConfig{
-							Name: lrs.Name,
-							Config: &lrs.LBConfig{
-								ClusterName:             "test-cluster",
-								EDSServiceName:          "test-eds-service",
-								LoadReportingServerName: "test-lrs-server",
-								Locality:                &internal.LocalityID{Zone: "test-zone-1"},
-								ChildPolicy:             &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-							},
-						},
+						Weight:      20,
+						ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
 					},
 					assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString): {
-						Weight: 80,
-						ChildPolicy: &internalserviceconfig.BalancerConfig{
-							Name: lrs.Name,
-							Config: &lrs.LBConfig{
-								ClusterName:             "test-cluster",
-								EDSServiceName:          "test-eds-service",
-								LoadReportingServerName: "test-lrs-server",
-								Locality:                &internal.LocalityID{Zone: "test-zone-2"},
-								ChildPolicy:             &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-							},
-						},
+						Weight:      80,
+						ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
 					},
 				},
 			},
 			wantAddrs: []resolver.Address{
-				hierarchy.Set(resolver.Address{Addr: "addr-1-1"}, []string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
-				hierarchy.Set(resolver.Address{Addr: "addr-1-2"}, []string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
-				hierarchy.Set(resolver.Address{Addr: "addr-2-1"}, []string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
-				hierarchy.Set(resolver.Address{Addr: "addr-2-2"}, []string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+				testAddrWithAttrs("addr-1-1", nil, "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
+				testAddrWithAttrs("addr-1-2", nil, "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
+				testAddrWithAttrs("addr-2-1", nil, "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
+				testAddrWithAttrs("addr-2-2", nil, "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
 			},
 		},
 		{
@@ -748,10 +657,10 @@ func TestLocalitiesToWeightedTarget(t *testing.T) {
 				},
 			},
 			wantAddrs: []resolver.Address{
-				hierarchy.Set(resolver.Address{Addr: "addr-1-1"}, []string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
-				hierarchy.Set(resolver.Address{Addr: "addr-1-2"}, []string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
-				hierarchy.Set(resolver.Address{Addr: "addr-2-1"}, []string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
-				hierarchy.Set(resolver.Address{Addr: "addr-2-2"}, []string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+				testAddrWithAttrs("addr-1-1", nil, "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
+				testAddrWithAttrs("addr-1-2", nil, "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
+				testAddrWithAttrs("addr-2-1", nil, "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
+				testAddrWithAttrs("addr-2-2", nil, "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
 			},
 		},
 		{
@@ -794,24 +703,16 @@ func TestLocalitiesToWeightedTarget(t *testing.T) {
 				},
 			},
 			wantAddrs: []resolver.Address{
-				hierarchy.Set(
-					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-1-1"}, weightedroundrobin.AddrInfo{Weight: 90}),
-					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
-				hierarchy.Set(
-					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-1-2"}, weightedroundrobin.AddrInfo{Weight: 10}),
-					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-1"}.ToString)}),
-				hierarchy.Set(
-					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-2-1"}, weightedroundrobin.AddrInfo{Weight: 90}),
-					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
-				hierarchy.Set(
-					weightedroundrobin.SetAddrInfo(resolver.Address{Addr: "addr-2-2"}, weightedroundrobin.AddrInfo{Weight: 10}),
-					[]string{"test-priority", assertString(internal.LocalityID{Zone: "test-zone-2"}.ToString)}),
+				testAddrWithAttrs("addr-1-1", newUint32(90), "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
+				testAddrWithAttrs("addr-1-2", newUint32(10), "test-priority", &internal.LocalityID{Zone: "test-zone-1"}),
+				testAddrWithAttrs("addr-2-1", newUint32(90), "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
+				testAddrWithAttrs("addr-2-2", newUint32(10), "test-priority", &internal.LocalityID{Zone: "test-zone-2"}),
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := localitiesToWeightedTarget(tt.localities, tt.priorityName, tt.childPolicy, tt.lrsServer, tt.cluster, tt.edsService)
+			got, got1 := localitiesToWeightedTarget(tt.localities, tt.priorityName, tt.childPolicy, tt.cluster, tt.edsService)
 			if diff := cmp.Diff(got, tt.wantConfig); diff != "" {
 				t.Errorf("localitiesToWeightedTarget() diff (-got +want) %v", diff)
 			}
@@ -836,4 +737,18 @@ func assertString(f func() (string, error)) string {
 		panic(err.Error())
 	}
 	return s
+}
+
+func testAddrWithAttrs(addrStr string, weight *uint32, priority string, lID *internal.LocalityID) resolver.Address {
+	addr := resolver.Address{Addr: addrStr}
+	if weight != nil {
+		addr = weightedroundrobin.SetAddrInfo(addr, weightedroundrobin.AddrInfo{Weight: *weight})
+	}
+	path := []string{priority}
+	if lID != nil {
+		path = append(path, assertString(lID.ToString))
+		addr = internal.SetLocalityID(addr, *lID)
+	}
+	addr = hierarchy.Set(addr, path)
+	return addr
 }

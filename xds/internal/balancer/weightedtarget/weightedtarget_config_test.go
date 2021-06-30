@@ -26,8 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
-
-	_ "google.golang.org/grpc/xds/internal/balancer/lrs" // Register LRS balancer, so we can use it as child policy in the config tests.
+	"google.golang.org/grpc/xds/internal/balancer/priority"
 )
 
 const (
@@ -35,23 +34,22 @@ const (
   "targets": {
 	"cluster_1" : {
 	  "weight":75,
-	  "childPolicy":[{"lrs_experimental":{"clusterName":"cluster_1","lrsLoadReportingServerName":"lrs.server","locality":{"zone":"test-zone-1"}}}]
+	  "childPolicy":[{"priority_experimental":{"priorities": ["child-1"], "children": {"child-1": {"config": [{"round_robin":{}}]}}}}]
 	},
 	"cluster_2" : {
 	  "weight":25,
-	  "childPolicy":[{"lrs_experimental":{"clusterName":"cluster_2","lrsLoadReportingServerName":"lrs.server","locality":{"zone":"test-zone-2"}}}]
+	  "childPolicy":[{"priority_experimental":{"priorities": ["child-2"], "children": {"child-2": {"config": [{"round_robin":{}}]}}}}]
 	}
   }
 }`
-	lrsBalancerName = "lrs_experimental"
 )
 
 var (
-	lrsConfigParser = balancer.Get(lrsBalancerName).(balancer.ConfigParser)
-	lrsConfigJSON1  = `{"clusterName":"cluster_1","lrsLoadReportingServerName":"lrs.server","locality":{"zone":"test-zone-1"}}`
-	lrsConfig1, _   = lrsConfigParser.ParseConfig([]byte(lrsConfigJSON1))
-	lrsConfigJSON2  = `{"clusterName":"cluster_2","lrsLoadReportingServerName":"lrs.server","locality":{"zone":"test-zone-2"}}`
-	lrsConfig2, _   = lrsConfigParser.ParseConfig([]byte(lrsConfigJSON2))
+	testConfigParser = balancer.Get(priority.Name).(balancer.ConfigParser)
+	testConfigJSON1  = `{"priorities": ["child-1"], "children": {"child-1": {"config": [{"round_robin":{}}]}}}`
+	testConfig1, _   = testConfigParser.ParseConfig([]byte(testConfigJSON1))
+	testConfigJSON2  = `{"priorities": ["child-2"], "children": {"child-2": {"config": [{"round_robin":{}}]}}}`
+	testConfig2, _   = testConfigParser.ParseConfig([]byte(testConfigJSON2))
 )
 
 func Test_parseConfig(t *testing.T) {
@@ -75,15 +73,15 @@ func Test_parseConfig(t *testing.T) {
 					"cluster_1": {
 						Weight: 75,
 						ChildPolicy: &internalserviceconfig.BalancerConfig{
-							Name:   lrsBalancerName,
-							Config: lrsConfig1,
+							Name:   priority.Name,
+							Config: testConfig1,
 						},
 					},
 					"cluster_2": {
 						Weight: 25,
 						ChildPolicy: &internalserviceconfig.BalancerConfig{
-							Name:   lrsBalancerName,
-							Config: lrsConfig2,
+							Name:   priority.Name,
+							Config: testConfig2,
 						},
 					},
 				},

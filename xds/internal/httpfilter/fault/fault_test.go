@@ -40,10 +40,8 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/httpfilter"
 	xtestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -138,13 +136,6 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 		bootstrapCleanup()
 		server.Stop()
 	}
-}
-
-func init() {
-	env.FaultInjectionSupport = true
-	// Manually register to avoid a race between this init and the one that
-	// check the env var to register the fault injection filter.
-	httpfilter.Register(builder{})
 }
 
 func (s) TestFaultInjection_Unary(t *testing.T) {

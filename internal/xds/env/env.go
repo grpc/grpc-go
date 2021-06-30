@@ -39,9 +39,7 @@ const (
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileContentEnv = "GRPC_XDS_BOOTSTRAP_CONFIG"
 
-	circuitBreakingSupportEnv    = "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING"
-	timeoutSupportEnv            = "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT"
-	faultInjectionSupportEnv     = "GRPC_XDS_EXPERIMENTAL_FAULT_INJECTION"
+	ringHashSupportEnv           = "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH"
 	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
 	aggregateAndDNSSupportEnv    = "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER"
 
@@ -62,18 +60,10 @@ var (
 	//
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileContent = os.Getenv(BootstrapFileContentEnv)
-
-	// CircuitBreakingSupport indicates whether circuit breaking support is
-	// enabled, which can be disabled by setting the environment variable
-	// "GRPC_XDS_EXPERIMENTAL_CIRCUIT_BREAKING" to "false".
-	CircuitBreakingSupport = !strings.EqualFold(os.Getenv(circuitBreakingSupportEnv), "false")
-	// TimeoutSupport indicates whether support for max_stream_duration in
-	// route actions is enabled.  This can be disabled by setting the
-	// environment variable "GRPC_XDS_EXPERIMENTAL_ENABLE_TIMEOUT" to "false".
-	TimeoutSupport = !strings.EqualFold(os.Getenv(timeoutSupportEnv), "false")
-	// FaultInjectionSupport is used to control both fault injection and HTTP
-	// filter support.
-	FaultInjectionSupport = !strings.EqualFold(os.Getenv(faultInjectionSupportEnv), "false")
+	// RingHashSupport indicates whether ring hash support is enabled, which can
+	// be enabled by setting the environment variable
+	// "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH" to "true".
+	RingHashSupport = strings.EqualFold(os.Getenv(ringHashSupportEnv), "true")
 	// ClientSideSecuritySupport is used to control processing of security
 	// configuration on the client-side.
 	//
