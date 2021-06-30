@@ -203,7 +203,7 @@ var unsupportedHeaders = map[string]bool{
 }
 
 func unsupportedHeader(key string) bool {
-	return strings.HasPrefix(key, ":") || strings.HasPrefix(key, "grpc-") || unsupportedHeaders[key]
+	return key[0] == ':' || strings.HasPrefix(key, "grpc-") || unsupportedHeaders[key]
 }
 
 func parseHeaders(headers []header) ([]*v3rbacpb.Permission, error) {
@@ -216,8 +216,8 @@ func parseHeaders(headers []header) ([]*v3rbacpb.Permission, error) {
 		if unsupportedHeader(header.Key) {
 			return nil, fmt.Errorf(`"headers" %d: unsupported "key" %s`, i, header.Key)
 		}
-		if header.Values == nil || len(header.Values) == 0 {
-			return nil, fmt.Errorf(`"headers" %d: "values" is not present/empty`, i)
+		if len(header.Values) == 0 {
+			return nil, fmt.Errorf(`"headers" %d: "values" is not present`, i)
 		}
 		values := parseHeaderValues(header.Key, header.Values)
 		hs = append(hs, permissionOr(values))
@@ -287,7 +287,7 @@ func translatePolicy(policyStr string) (*v3rbacpb.RBAC, *v3rbacpb.RBAC, error) {
 	if policy.Name == "" {
 		return nil, nil, fmt.Errorf(`"name" is not present`)
 	}
-	if policy.AllowRules == nil {
+	if len(policy.AllowRules) == 0 {
 		return nil, nil, fmt.Errorf(`"allow_rules" is not present`)
 	}
 	allowPolicies, err := parseRules(policy.AllowRules, policy.Name)
@@ -296,7 +296,7 @@ func translatePolicy(policyStr string) (*v3rbacpb.RBAC, *v3rbacpb.RBAC, error) {
 	}
 	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies}
 	var denyRBAC *v3rbacpb.RBAC
-	if policy.DenyRules != nil {
+	if len(policy.DenyRules) > 0 {
 		denyPolicies, err := parseRules(policy.DenyRules, policy.Name)
 		if err != nil {
 			return nil, nil, fmt.Errorf(`"deny_rules" %v`, err)

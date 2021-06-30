@@ -197,7 +197,7 @@ func TestTranslatePolicy(t *testing.T) {
 					"request": {"headers":[{"key":"key-a"}]}
 				}]
 			}`,
-			wantErr: `"allow_rules" 0: "headers" 0: "values" is not present/empty`,
+			wantErr: `"allow_rules" 0: "headers" 0: "values" is not present`,
 		},
 		"unsupported header": {
 			authzPolicy: `{
