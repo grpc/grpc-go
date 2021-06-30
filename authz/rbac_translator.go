@@ -96,18 +96,14 @@ func getStringMatcher(value string) *v3matcherpb.StringMatcher {
 			MatchPattern: &v3matcherpb.StringMatcher_Prefix{},
 		}
 	case strings.HasSuffix(value, "*"):
-		{
-			prefix := strings.TrimSuffix(value, "*")
-			return &v3matcherpb.StringMatcher{
-				MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: prefix},
-			}
+		prefix := strings.TrimSuffix(value, "*")
+		return &v3matcherpb.StringMatcher{
+			MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: prefix},
 		}
 	case strings.HasPrefix(value, "*"):
-		{
-			suffix := strings.TrimPrefix(value, "*")
-			return &v3matcherpb.StringMatcher{
-				MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: suffix},
-			}
+		suffix := strings.TrimPrefix(value, "*")
+		return &v3matcherpb.StringMatcher{
+			MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: suffix},
 		}
 	default:
 		return &v3matcherpb.StringMatcher{
@@ -124,20 +120,16 @@ func getHeaderMatcher(key, value string) *v3routepb.HeaderMatcher {
 			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{},
 		}
 	case strings.HasSuffix(value, "*"):
-		{
-			prefix := strings.TrimSuffix(value, "*")
-			return &v3routepb.HeaderMatcher{
-				Name:                 key,
-				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: prefix},
-			}
+		prefix := strings.TrimSuffix(value, "*")
+		return &v3routepb.HeaderMatcher{
+			Name:                 key,
+			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: prefix},
 		}
 	case strings.HasPrefix(value, "*"):
-		{
-			suffix := strings.TrimPrefix(value, "*")
-			return &v3routepb.HeaderMatcher{
-				Name:                 key,
-				HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{SuffixMatch: suffix},
-			}
+		suffix := strings.TrimPrefix(value, "*")
+		return &v3routepb.HeaderMatcher{
+			Name:                 key,
+			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SuffixMatch{SuffixMatch: suffix},
 		}
 	default:
 		return &v3routepb.HeaderMatcher{
@@ -198,22 +190,20 @@ func parseHeaderValues(key string, values []string) []*v3rbacpb.Permission {
 	return vs
 }
 
+var unsupportedHeaders = map[string]bool{
+	"host":                true,
+	"connection":          true,
+	"keep-alive":          true,
+	"proxy-authenticate":  true,
+	"proxy-authorization": true,
+	"te":                  true,
+	"trailer":             true,
+	"transfer-encoding":   true,
+	"upgrade":             true,
+}
+
 func unsupportedHeader(key string) bool {
-	switch {
-	case strings.HasPrefix(key, ":"):
-		return true
-	case strings.HasPrefix(key, "grpc-"):
-		return true
-	case key == "host":
-		return true
-	// hop-by-hop headers.
-	case key == "connection" || key == "keep-alive" ||
-		key == "proxy-authenticate" || key == "proxy-authorization" ||
-		key == "te" || key == "trailer" || key == "transfer-encoding" ||
-		key == "upgrade":
-		return true
-	}
-	return false
+	return strings.HasPrefix(key, ":") || strings.HasPrefix(key, "grpc-") || unsupportedHeaders[key]
 }
 
 func parseHeaders(headers []header) ([]*v3rbacpb.Permission, error) {
@@ -222,7 +212,8 @@ func parseHeaders(headers []header) ([]*v3rbacpb.Permission, error) {
 		if header.Key == "" {
 			return nil, fmt.Errorf(`"headers" %d: "key" is not present`, i)
 		}
-		if unsupportedHeader(strings.ToLower(header.Key)) {
+		header.Key = strings.ToLower(header.Key)
+		if unsupportedHeader(header.Key) {
 			return nil, fmt.Errorf(`"headers" %d: unsupported "key" %s`, i, header.Key)
 		}
 		if header.Values == nil || len(header.Values) == 0 {
