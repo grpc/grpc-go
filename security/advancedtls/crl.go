@@ -41,7 +41,7 @@ var grpclogLogger = grpclog.Component("advancedtls")
 
 // Cache is an interface to cache CRL files.
 // The cache implemetation must be concurrency safe.
-// A fixed size lru cache from golang-lru is reccomended.
+// A fixed size lru cache from golang-lru is recommended.
 type Cache interface {
 	// Add adds a value to the cache.
 	Add(key, value interface{}) bool
