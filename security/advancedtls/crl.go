@@ -37,6 +37,8 @@ import (
 	"google.golang.org/grpc/grpclog"
 )
 
+var grpclogLogger = grpclog.Component("advancedtls")
+
 // Cache is an interface to cache CRL files.
 // The cache implemetation must be concurrency safe.
 // A fixed size lru cache from golang-lru is reccomended.
@@ -252,12 +254,12 @@ func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg Revoca
 	for _, dp := range c.CRLDistributionPoints {
 		crl, err := fetchIssuerCRL(dp, c.RawIssuer, crlVerifyCrt, cfg)
 		if err != nil {
-			grpclog.Warningf("getIssuerCRL(%v) err = %v", c.Issuer, err)
+			grpclogLogger.Warningf("getIssuerCRL(%v) err = %v", c.Issuer, err)
 			continue
 		}
 		revocation, err := checkCertRevocation(c, crl)
 		if err != nil {
-			grpclog.Warningf("checkCertRevocation(CRL %v) failed %v", crl.CertList.TBSCertList.Issuer, err)
+			grpclogLogger.Warningf("checkCertRevocation(CRL %v) failed %v", crl.CertList.TBSCertList.Issuer, err)
 			// We couldn't check the CRL file for some reason, so continue
 			// to the next file
 			continue
@@ -287,7 +289,7 @@ func checkCertRevocation(c *x509.Certificate, crl *certificateListExt) (Revocati
 			if oidCertificateIssuer.Equal(ext.Id) {
 				extIssuer, err := parseCertIssuerExt(ext)
 				if err != nil {
-					grpclog.Print(err)
+					grpclogLogger.Info(err)
 					if ext.Critical {
 						return RevocationUndetermined, err
 					}
@@ -438,7 +440,7 @@ func fetchCRL(loc string, rawIssuer []byte, cfg RevocationConfig) (*certificateL
 		crlBytes, err := ioutil.ReadFile(crlPath)
 		if err != nil {
 			// Break when we can't read a CRL file.
-			grpclog.Printf("readFile: %v", err)
+			grpclogLogger.Infof("readFile: %v", err)
 			break
 		}
 
@@ -449,7 +451,7 @@ func fetchCRL(loc string, rawIssuer []byte, cfg RevocationConfig) (*certificateL
 		}
 		var certList *certificateListExt
 		if certList, err = parseCRLExtensions(crl); err != nil {
-			grpclog.Printf("fetchCRL: unsupported crl %v, err = %v", crlPath, err)
+			grpclogLogger.Infof("fetchCRL: unsupported crl %v, err = %v", crlPath, err)
 			// Continue to find a supported CRL
 			continue
 		}
