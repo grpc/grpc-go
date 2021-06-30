@@ -91,6 +91,9 @@ func NewRPCData(ctx context.Context, fullMethod string) (*RPCData, error) {
 		return nil, err
 	}
 	dp, err := strconv.ParseUint(dPort, 10, 32)
+	if err != nil {
+		return nil, err
+	}
 
 	tlsState := pi.AuthInfo.(credentials.TLSInfo).State // TODO: Handle errors on type conversion?
 	pName, err := findPrincipalNameFromCerts(tlsState.PeerCertificates)
