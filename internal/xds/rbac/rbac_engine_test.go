@@ -41,6 +41,56 @@ type addr struct {
 	ipAddress string
 }
 
+// "Getters don't make sense"
+// So keep this function here, but the only thing RBAC defines in the API layer is the context, but will call this function
+
+// Errors combine
+
+// How does the logic in c core work {1, 2, 3, 4, 5, 6} <- does each field need to be populated with data, does this make sense?
+// Right now this function has to have everything
+// Could instantiate it with ctx, pull stuff out of context as needed (will return errors there)
+// Instantiate with ctx
+// Pull stuff out of that generic data as needed...with getters
+// Or helperfunciton(ctx) data prepopulated...
+
+// TestNewRPCData tests the helper function which populates an RPCData struct. OR, have this implicitly tested VVV by taking a context at first
+// then passing that into RBAC Engine...how should we switch them around
+func (s) TestNewRPCData(t *testing.T) {
+	tests := []struct {
+		name string
+		// Test a context embedded with both metadata and connection (for dest port etc.)
+		wantErr     bool
+		wantRPCData *RPCData
+	}{
+		// Basic case tests a basic conversion with headers
+		// Will also test if context makes sense without anything but data
+		{
+			name:    "basic-case",
+			wantErr: false,
+			wantRPCData: &RPCData{
+				MD: map[string][]string{
+					":path": {"localhost-fan-page"},
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			/*if _, err := NewEngine(test.rbacConfig); (err != nil) != test.wantErr {
+				t.Fatalf("NewEngine(%+v) returned err: %v, wantErr: %v", test.rbacConfig, err, test.wantErr)
+			}*/
+			rpcData, error := NewRPCData(ctx, fullMethod)
+
+		})
+	}
+	// Test the error case as well
+	rpcData, error := NewRPCData()
+}
+
+// It first constructs a context representing the context of an incoming RPC on the server side
+
+// And then calls into the helepr function and validates if it correctly was built
+
 func (addr) Network() string   { return "" }
 func (a *addr) String() string { return a.ipAddress }
 

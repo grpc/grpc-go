@@ -370,17 +370,73 @@ func (pm *portMatcher) match(data *RPCData) bool {
 // subject field is used. If unset, it applies to any user that is
 // authenticated. authenticatedMatcher implements the matcher interface.
 type authenticatedMatcher struct {
-	stringMatcher internalmatcher.StringMatcher
+	stringMatcher *internalmatcher.StringMatcher
 }
 
+// Two things of logic here: config can be null, in which case you don't persist a string matcher and it matches any principal name
 func newAuthenticatedMatcher(authenticatedMatcherConfig *v3rbacpb.Principal_Authenticated) (*authenticatedMatcher, error) {
+	// Represents this line in the RBAC documentation = "If unset, it applies to
+	// any user that is authenticated".
+	if authenticatedMatcherConfig.PrincipalName == nil {
+		return &authenticatedMatcher{}, nil
+	}
+	// This will be split to branching logic, how is that represented in GoLang?
 	stringMatcher, err := internalmatcher.StringMatcherFromProto(authenticatedMatcherConfig.PrincipalName)
 	if err != nil {
 		return nil, err
 	}
-	return &authenticatedMatcher{stringMatcher: stringMatcher}, nil
+	return &authenticatedMatcher{stringMatcher: &stringMatcher}, nil
 }
 
+// This should take TLS Certs and then loop through them...
+
+// Similar loop to previous: first loop through URI SAN, then loop through DNS SAN, then subject name
 func (am *authenticatedMatcher) match(data *RPCData) bool {
-	return am.stringMatcher.Match(data.PrincipalName)
+	// Represents this line in the RBAC documentation = "If unset, it applies to
+	// any user that is authenticated". Thus, if a user is authenticated user should
+	// match. An authenticated user will have a certificate provided.
+	if am.stringMatcher == nil {
+		// TODO: Is this correct? If a TLS Certificate is provided, that certificate means
+		// that that individual was logically authenticated with a key.
+		if len(data.Certs) != 0 {
+			return true
+		}
+	}
+
+	// Loop through URI SAN's (list will be persisted in data)
+	for _, cert := range data.Certs {
+		for _, uriSAN := range cert.URIs {
+			if am.stringMatcher.Match(uriSAN.String()) {
+				return true
+			}
+		}
+	}
+	// Loop through DNS SAN's (list will be persisted in data)
+	for _, cert := range data.Certs {
+		for _, dnsSAN := range cert.DNSNames {
+			if am.stringMatcher.Match(dnsSAN) {
+				return true
+			}
+		}
+	}
+
+	// Check against subject names
+	for _, cert := range data.Certs {
+		if am.stringMatcher.Match(cert.Subject.String()) {
+			return true
+		}
+	}
+	return false
 }
+
+// Tasks
+// Authenticated matcher has wrong logic (Done I think nope)
+// Change API Layer, which will be a two liner (Done I think... nope)
+
+// Testing Tasks, will depend on ^^^
+// Unit test helper function to RPC Data (This should be first test written, as might change API Layer of what you need to pass into it which will break VVV)
+// This ^^^ unit test will be implicitly tested though if we change API Layer, it'll hit that codepath (NewRPCData helper method) internally implicitly
+// API changed (takes in context)
+// Authenticated matcher is different now
+
+// ^^^ All part of one PR or split into three?

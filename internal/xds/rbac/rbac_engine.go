@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/x509"
 	"errors"
+	"google.golang.org/grpc/codes"
 	"net"
 	"strconv"
 
@@ -29,6 +30,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 )
 
 // Engine is used for matching incoming RPCs to policies.
@@ -72,7 +74,7 @@ func SetConnection(ctx context.Context, conn net.Conn) context.Context {
 // needed for server RPC Call with headers and connection piped into it) and the
 // method name of the Service being called server side and populates an RPCData
 // struct ready to be passed to the RBAC Engine to find a matching policy.
-func NewRPCData(ctx context.Context, fullMethod string) (*RPCData, error) {
+func NewRPCData(ctx context.Context, fullMethod string) (*RPCData, error) { // *Big question*: Thought I just had: For this function on an error case, should it really return an error in certain situations, as it doesn't really all 6 fields...
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, errors.New("error retrieving metadata from incoming ctx")
@@ -96,7 +98,7 @@ func NewRPCData(ctx context.Context, fullMethod string) (*RPCData, error) {
 	}
 
 	tlsState := pi.AuthInfo.(credentials.TLSInfo).State // TODO: Handle errors on type conversion?
-	pName, err := findPrincipalNameFromCerts(tlsState.PeerCertificates)
+	// pName, err := findPrincipalNameFromCerts(tlsState.PeerCertificates)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +109,7 @@ func NewRPCData(ctx context.Context, fullMethod string) (*RPCData, error) {
 		FullMethod:      fullMethod,
 		DestinationPort: uint32(dp),
 		DestinationAddr: conn.LocalAddr(),
-		PrincipalName:   pName,
+		Certs:           tlsState.PeerCertificates,
 	}, nil
 }
 
@@ -144,7 +146,7 @@ func findPrincipalNameFromCerts(certs []*x509.Certificate) (string, error) {
 
 // RPCData wraps data pulled from an incoming RPC that the RBAC engine needs to
 // find a matching policy.
-type RPCData struct {
+type RPCData struct { // <- unexport this struct
 	// MD is the HTTP Headers that are present in the incoming RPC.
 	MD metadata.MD
 	// PeerInfo is information about the downstream peer.
@@ -160,13 +162,46 @@ type RPCData struct {
 	// SAN or DNS SAN in that order is used from the certificate, otherwise the
 	// subject field is used. If unset, it applies to any user that is
 	// authenticated.
-	PrincipalName string
+	// These certs will be used to find the PrincipalName
+	Certs []*x509.Certificate
 }
+
+type RBACData struct {
+	// This ctx is what is going to be pre populated with things
+	ctx        context.Context
+	methodName string
+}
+
+var ErrPolicyNotFound = errors.New("a matching policy was not found")
 
 // FindMatchingPolicy determines if an incoming RPC matches a policy. On a
 // successful match, it returns the name of the matching policy and a true
+// boolean to specify that there was a matching policy found.  It returns
+// an error in the case of ctx passed into it not having the correct data
+// inside it.
+func (r *Engine) FindMatchingPolicy(data RBACData) (string, error) {
+	// Convert this generic data about an incoming RPC on server side to data that can be passed around RBAC - RPCData
+	// This needs to return an error...
+	rpcData, err := NewRPCData(data.ctx, data.methodName)
+	if err != nil {
+		// Status error?
+		return "", status.Error(codes.InvalidArgument, "data could not be converted")
+	}
+	// What to do about error handling here?
+	for policy, matcher := range r.policies {
+		if matcher.match(rpcData) {
+			return policy, nil
+		}
+	}
+	return "", ErrPolicyNotFound // I can either make this return a bool (false), or scale up returns to handle error
+}
+
+/*
+// FindMatchingPolicy determines if an incoming RPC matches a policy. On a
+// successful match, it returns the name of the matching policy and a true
 // boolean to specify that there was a matching policy found.
-func (r *Engine) FindMatchingPolicy(data *RPCData) (string, bool) {
+func (r *Engine) FindMatchingPolicy(data *RPCData) (string, bool) { // <- switch this RPC Data into a context and method name, and convert that to RPC Data
+	// Convert here.
 	for policy, matcher := range r.policies {
 		if matcher.match(data) {
 			return policy, true
@@ -174,3 +209,4 @@ func (r *Engine) FindMatchingPolicy(data *RPCData) (string, bool) {
 	}
 	return "", false
 }
+*/
