@@ -55,8 +55,6 @@ func NewEngine(policy *v3rbacpb.RBAC) (*Engine, error) {
 	return &Engine{policies: policies}, nil
 }
 
-// Helper functions here which put connection in and out of the context.
-// This is used for authorization interceptors, so do we put it here or in authorization package?
 type connectionKey struct{}
 
 func getConnection(ctx context.Context) net.Conn {
@@ -70,11 +68,11 @@ func SetConnection(ctx context.Context, conn net.Conn) context.Context {
 	return context.WithValue(ctx, connectionKey{}, conn)
 }
 
-// NewRPCData takes a incoming context (should be a context representing state
+// newRPCData takes a incoming context (should be a context representing state
 // needed for server RPC Call with headers and connection piped into it) and the
 // method name of the Service being called server side and populates an RPCData
 // struct ready to be passed to the RBAC Engine to find a matching policy.
-func NewRPCData(ctx context.Context, fullMethod string) (*RPCData, error) { // *Big question*: Thought I just had: For this function on an error case, should it really return an error in certain situations, as it doesn't really all 6 fields...
+func newRPCData(ctx context.Context, fullMethod string) (*rpcData, error) { // *Big question*: Thought I just had: For this function on an error case, should it really return an error in certain situations, as it doesn't really need all 6 fields...
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, errors.New("error retrieving metadata from incoming ctx")
@@ -98,18 +96,17 @@ func NewRPCData(ctx context.Context, fullMethod string) (*RPCData, error) { // *
 	}
 
 	tlsState := pi.AuthInfo.(credentials.TLSInfo).State // TODO: Handle errors on type conversion?
-	// pName, err := findPrincipalNameFromCerts(tlsState.PeerCertificates)
 	if err != nil {
 		return nil, err
 	}
 
-	return &RPCData{
-		MD:              md,
-		PeerInfo:        pi,
-		FullMethod:      fullMethod,
-		DestinationPort: uint32(dp),
-		DestinationAddr: conn.LocalAddr(),
-		Certs:           tlsState.PeerCertificates,
+	return &rpcData{
+		md:              md,
+		peerInfo:        pi,
+		fullMethod:      fullMethod,
+		destinationPort: uint32(dp),
+		destinationAddr: conn.LocalAddr(),
+		certs:           tlsState.PeerCertificates,
 	}, nil
 }
 
@@ -144,69 +141,53 @@ func findPrincipalNameFromCerts(certs []*x509.Certificate) (string, error) {
 	return "", errors.New("the URI SAN, DNS SAN, or subject field was not found in the certificates")
 }
 
-// RPCData wraps data pulled from an incoming RPC that the RBAC engine needs to
+// rpcData wraps data pulled from an incoming RPC that the RBAC engine needs to
 // find a matching policy.
-type RPCData struct { // <- unexport this struct
-	// MD is the HTTP Headers that are present in the incoming RPC.
-	MD metadata.MD
-	// PeerInfo is information about the downstream peer.
-	PeerInfo *peer.Peer
-	// FullMethod is the method name being called on the upstream service.
-	FullMethod string
-	// DestinationPort is the port that the RPC is being sent to on the
+type rpcData struct {
+	// md is the HTTP Headers that are present in the incoming RPC.
+	md metadata.MD
+	// peerInfo is information about the downstream peer.
+	peerInfo *peer.Peer
+	// fullMethod is the method name being called on the upstream service.
+	fullMethod string
+	// destinationPort is the port that the RPC is being sent to on the
 	// server.
-	DestinationPort uint32
-	// DestinationAddr is the address that the RPC is being sent to.
-	DestinationAddr net.Addr
-	// PrincipalName is the name of the downstream principal. If set, the URI
-	// SAN or DNS SAN in that order is used from the certificate, otherwise the
-	// subject field is used. If unset, it applies to any user that is
-	// authenticated.
-	// These certs will be used to find the PrincipalName
-	Certs []*x509.Certificate
+	destinationPort uint32
+	// destinationAddr is the address that the RPC is being sent to.
+	destinationAddr net.Addr
+	// certs will be used for authenticated matcher.
+	certs []*x509.Certificate
 }
 
-type RBACData struct {
+// Data represents the generic data about incoming RPC's that must be passed
+// into the RBAC Engine in order to try and find a matching policy or not. The
+// ctx passed in must have metadata, peerinfo (used for source ip/port and TLS
+// information) and connection (used for destination ip/port) embedded within
+// it.
+type Data struct {
 	// This ctx is what is going to be pre populated with things
-	ctx        context.Context
-	methodName string
+	Ctx        context.Context
+	MethodName string
 }
 
 var ErrPolicyNotFound = errors.New("a matching policy was not found")
 
 // FindMatchingPolicy determines if an incoming RPC matches a policy. On a
-// successful match, it returns the name of the matching policy and a true
-// boolean to specify that there was a matching policy found.  It returns
-// an error in the case of ctx passed into it not having the correct data
-// inside it.
-func (r *Engine) FindMatchingPolicy(data RBACData) (string, error) {
-	// Convert this generic data about an incoming RPC on server side to data that can be passed around RBAC - RPCData
-	// This needs to return an error...
-	rpcData, err := NewRPCData(data.ctx, data.methodName)
+// successful match, it returns the name of the matching policy and a nil error
+// to specify that there was a matching policy found.  It returns an error in
+// the case of ctx passed into function not having the correct data inside it or
+// not finding a matching policy.
+func (r *Engine) FindMatchingPolicy(data Data) (string, error) {
+	// Convert passed in generic data into something easily passable around the
+	// RBAC Engine.
+	rpcData, err := newRPCData(data.Ctx, data.MethodName)
 	if err != nil {
-		// Status error?
 		return "", status.Error(codes.InvalidArgument, "data could not be converted")
 	}
-	// What to do about error handling here?
 	for policy, matcher := range r.policies {
 		if matcher.match(rpcData) {
 			return policy, nil
 		}
 	}
-	return "", ErrPolicyNotFound // I can either make this return a bool (false), or scale up returns to handle error
+	return "", ErrPolicyNotFound
 }
-
-/*
-// FindMatchingPolicy determines if an incoming RPC matches a policy. On a
-// successful match, it returns the name of the matching policy and a true
-// boolean to specify that there was a matching policy found.
-func (r *Engine) FindMatchingPolicy(data *RPCData) (string, bool) { // <- switch this RPC Data into a context and method name, and convert that to RPC Data
-	// Convert here.
-	for policy, matcher := range r.policies {
-		if matcher.match(data) {
-			return policy, true
-		}
-	}
-	return "", false
-}
-*/
