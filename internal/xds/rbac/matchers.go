@@ -388,9 +388,6 @@ func newAuthenticatedMatcher(authenticatedMatcherConfig *v3rbacpb.Principal_Auth
 	return &authenticatedMatcher{stringMatcher: &stringMatcher}, nil
 }
 
-// This should take TLS Certs and then loop through them...
-
-// Similar loop to previous: first loop through URI SAN, then loop through DNS SAN, then subject name
 func (am *authenticatedMatcher) match(data *rpcData) bool {
 	// Represents this line in the RBAC documentation = "If unset, it applies to
 	// any user that is authenticated". Thus, if a user is authenticated user should

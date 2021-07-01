@@ -33,9 +33,85 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// This will be called by an interceptor, so rather than instantiate it every time with a config, instantiate it once with
+// a config and continue.
+
+// ChainedRBACEngine represents a chain of RBAC Engines, which will be used in order to determine the status of incoming RPC's according
+// to the actions of each engine.
+type ChainedRBACEngine struct {
+	chainedEngines []*Engine
+}
+
+func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainedRBACEngine, error) {
+	// Loop through that list and convert it to RBAC stuff
+	// Now RBAC will have to persist actions
+	// Convert from one slice to another slice i.e. policies -> ChainedRBACEngine.chainedEngines
+	var chainedEngines []*Engine
+	for _, policy := range policies {
+		rbacEngine, err := NewEngine(policy)
+		if err != nil {
+			return nil, err
+		}
+		chainedEngines = append(chainedEngines, rbacEngine)
+	}
+	return &ChainedRBACEngine{chainedEngines: chainedEngines}, nil
+}
+
+// DetermineStatus takes in data about incoming RPC's and returns a status
+// representing whether the RPC should be denied or not (i.e. PermissionDenied)
+// based on the full list of RBAC Engines and their associated actions.
+func (cre *ChainedRBACEngine) DetermineStatus(data Data) (codes.Code, error) { // Should I combine these into one <-?
+	// Convert Data into RPCData
+	rpcData, err := newRPCData(data.Ctx, data.MethodName)
+	if err != nil {
+		// Return should be a status error though. Should I combine codes.Code and error into one thing or no?
+	}
+	// Loop through RBAC Engines, logic here
+	// allow Engine <- RPCData, spits out result handle it
+	// deny Engine <- RPCData, spits out matching policy name handle it using the Action persisted in the RBAC Engine
+	for _, engine := range cre.chainedEngines {
+		// What do I do now with this matchingPolicyName?
+		matchingPolicyName, err := engine.FindMatchingPolicy(rpcData) // change this layer back
+		// Two stoppers (return PermissionDenied), matchingPolicy + Deny, and also non matching Policy + allow
+
+		// If the engine type was allow and a matching policy was not found, this RPC should be denied.
+		if engine.action == allow && err = ErrPolicyNotFound {
+			return codes.PermissionDenied, nil // This should be combine into one
+		}
+
+		// If the engine type was deny and also a matching policy was found, this RPC should be denied.
+		if engine.action == deny && err != ErrPolicyNotFound {
+			return codes.PermissionDenied, nil // This should be combine into one
+		}
+	}
+
+	// Return status code here about whether it's permission denied or not
+	return codes.OK, nil //<- combine into one?
+}
+
+// Add another layer here in regards to function calls
+func chainPolicies(policies []*v3rbacpb.RBAC, data Data) /*Status code such as permission denied*/ {
+	// Handle the logic here about instantiating RBAC Engines in a list
+
+	// Convert Data into RPCData (only has to happen once), then pass that to the list of engines
+	// allow <- RPCData, spits out result handle it
+	// deny <- RPCData, spits out result handle it
+
+	// Return status code here about whether it's permission denied or not
+}
+
+type action int
+
+const (
+	allow action = iota
+	deny
+)
+
 // Engine is used for matching incoming RPCs to policies.
 type Engine struct {
 	policies map[string]*policyMatcher
+	// Persist something here that represents action, don't return it, have caller handle the logic used to call this Engine
+	action action
 }
 
 // NewEngine creates an RBAC Engine based on the contents of policy. If the
@@ -44,6 +120,7 @@ type Engine struct {
 // present in the policy, and will leave up to caller to handle the action that
 // is attached to the config.
 func NewEngine(policy *v3rbacpb.RBAC) (*Engine, error) {
+	// Persist action - any verification needed on action i.e. what to do on action.LOG?
 	policies := make(map[string]*policyMatcher)
 	for name, config := range policy.Policies {
 		matcher, err := newPolicyMatcher(config)
@@ -177,7 +254,7 @@ var ErrPolicyNotFound = errors.New("a matching policy was not found")
 // to specify that there was a matching policy found.  It returns an error in
 // the case of ctx passed into function not having the correct data inside it or
 // not finding a matching policy.
-func (r *Engine) FindMatchingPolicy(data Data) (string, error) {
+func (r *Engine) FindMatchingPolicy(data Data) (string, error) { // Convert this back to old definition
 	// Convert passed in generic data into something easily passable around the
 	// RBAC Engine.
 	rpcData, err := newRPCData(data.Ctx, data.MethodName)
