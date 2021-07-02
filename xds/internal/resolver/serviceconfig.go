@@ -22,14 +22,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/bits"
+	"strings"
 	"sync/atomic"
 	"time"
 
+	"github.com/cespare/xxhash"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/grpcrand"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/wrr"
+	"google.golang.org/grpc/internal/xds/env"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -115,6 +122,7 @@ type route struct {
 	maxStreamDuration time.Duration
 	// map from filter name to its config
 	httpFilterConfigOverride map[string]httpfilter.FilterConfig
+	hashPolicies             []*xdsclient.HashPolicy
 }
 
 func (r route) String() string {
@@ -160,9 +168,15 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		return nil, err
 	}
 
+	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
+	// Request Hashes are only applicable for a Ring Hash LB.
+	if env.RingHashSupport {
+		lbCtx = ringhash.SetRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
+	}
+
 	config := &iresolver.RPCConfig{
-		// Communicate to the LB policy the chosen cluster.
-		Context: clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name),
+		// Communicate to the LB policy the chosen cluster and request hash, if Ring Hash LB policy.
+		Context: lbCtx,
 		OnCommitted: func() {
 			// When the RPC is committed, the cluster is no longer required.
 			// Decrease its ref.
@@ -183,6 +197,61 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	}
 
 	return config, nil
+}
+
+func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies []*xdsclient.HashPolicy) uint64 {
+	var hash uint64
+	var generatedHash bool
+	for _, policy := range hashPolicies {
+		var policyHash uint64
+		var generatedPolicyHash bool
+		switch policy.HashPolicyType {
+		case xdsclient.HashPolicyTypeHeader:
+			md, ok := metadata.FromIncomingContext(rpcInfo.Context)
+			if !ok {
+				continue
+			}
+			values := md.Get(policy.HeaderName)
+			// If the header isn't present, no-op.
+			if len(values) == 0 {
+				continue
+			}
+			joinedValues := strings.Join(values, ",")
+			if policy.Regex != nil {
+				joinedValues = policy.Regex.ReplaceAllString(joinedValues, policy.RegexSubstitution)
+			}
+			policyHash = xxhash.Sum64String(joinedValues)
+			generatedHash = true
+			generatedPolicyHash = true
+		case xdsclient.HashPolicyTypeChannelID:
+			// Hash the ClientConn pointer which logically uniquely
+			// identifies the client.
+			policyHash = xxhash.Sum64String(fmt.Sprintf("%p", &cs.r.cc))
+			generatedHash = true
+			generatedPolicyHash = true
+		}
+
+		// Deterministically combine the hash policies. Rotating prevents
+		// duplicate hash policies from cancelling each other out and preserves
+		// the 64 bits of entropy.
+		if generatedPolicyHash {
+			hash = bits.RotateLeft64(hash, 1)
+			hash = hash ^ policyHash
+		}
+
+		// If terminal policy and a hash has already been generated, ignore the
+		// rest of the policies and use that hash already generated.
+		if policy.Terminal && generatedHash {
+			break
+		}
+	}
+
+	if generatedHash {
+		return hash
+	}
+	// If no generated hash return a random long. In the grand scheme of things
+	// this logically will map to choosing a random backend to route request to.
+	return grpcrand.Uint64()
 }
 
 func (cs *configSelector) newInterceptor(rt *route, cluster *routeCluster) (iresolver.ClientInterceptor, error) {
@@ -292,6 +361,7 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 		}
 
 		cs.routes[i].httpFilterConfigOverride = rt.HTTPFilterConfigOverride
+		cs.routes[i].hashPolicies = rt.HashPolicies
 	}
 
 	// Account for this config selector's clusters.  Do this after no further

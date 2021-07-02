@@ -1209,6 +1209,64 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			}},
 			wantErr: false,
 		},
+		// This tests that policy.Regex ends up being nil if RegexRewrite is not
+		// set in xds response.
+		{
+			name: "good-with-header-hash-policy-no-regex-specified",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								Name: "th",
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{
+									PrefixMatch: "tv",
+								},
+								InvertMatch: true,
+							},
+						},
+						RuntimeFraction: &v3corepb.RuntimeFractionalPercent{
+							DefaultValue: &v3typepb.FractionalPercent{
+								Numerator:   1,
+								Denominator: v3typepb.FractionalPercent_HUNDRED,
+							},
+						},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{
+							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+								WeightedClusters: &v3routepb.WeightedCluster{
+									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
+										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
+									},
+									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
+								}},
+							HashPolicy: []*v3routepb.RouteAction_HashPolicy{
+								{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_Header_{Header: &v3routepb.RouteAction_HashPolicy_Header{HeaderName: ":path"}}},
+							},
+						}},
+				},
+			},
+			wantRoutes: []*Route{{
+				Prefix: newStringP("/a/"),
+				Headers: []*HeaderMatcher{
+					{
+						Name:        "th",
+						InvertMatch: newBoolP(true),
+						PrefixMatch: newStringP("tv"),
+					},
+				},
+				Fraction:         newUInt32P(10000),
+				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
+				HashPolicies: []*HashPolicy{
+					{HashPolicyType: HashPolicyTypeHeader,
+						HeaderName: ":path"},
+				},
+			}},
+			wantErr: false,
+		},
 		{
 			name:       "with custom HTTP filter config",
 			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": customFilterConfig}),

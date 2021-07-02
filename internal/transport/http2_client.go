@@ -242,7 +242,15 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		// and passed to the credential handshaker. This makes it possible for
 		// address specific arbitrary data to reach the credential handshaker.
 		connectCtx = icredentials.NewClientHandshakeInfoContext(connectCtx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
-		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, conn)
+		rawConn := conn
+		// Pull the deadline from the connectCtx, which will be used for
+		// timeouts in the authentication protocol handshake. Can ignore the
+		// boolean as the deadline will return the zero value, which will make
+		// the conn not timeout on I/O operations.
+		deadline, _ := connectCtx.Deadline()
+		rawConn.SetDeadline(deadline)
+		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, rawConn)
+		rawConn.SetDeadline(time.Time{})
 		if err != nil {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
@@ -878,12 +886,18 @@ func (t *http2Client) Close(err error) {
 	// Append info about previous goaways if there were any, since this may be important
 	// for understanding the root cause for this connection to be closed.
 	_, goAwayDebugMessage := t.GetGoAwayReason()
+
+	var st *status.Status
 	if len(goAwayDebugMessage) > 0 {
-		err = fmt.Errorf("closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
+		st = status.Newf(codes.Unavailable, "closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
+		err = st.Err()
+	} else {
+		st = status.New(codes.Unavailable, err.Error())
 	}
+
 	// Notify all active streams.
 	for _, s := range streams {
-		t.closeStream(s, err, false, http2.ErrCodeNo, status.New(codes.Unavailable, err.Error()), nil, false)
+		t.closeStream(s, err, false, http2.ErrCodeNo, st, nil, false)
 	}
 	if t.statsHandler != nil {
 		connEnd := &stats.ConnEnd{
