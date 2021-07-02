@@ -26,7 +26,6 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/peer"
 )
 
 type s struct {
@@ -53,44 +52,7 @@ type addr struct {
 // Pull stuff out of that generic data as needed...with getters
 // Or helperfunciton(ctx) data prepopulated...
 
-// TestNewRPCData tests the helper function which populates an RPCData struct. OR, have this implicitly tested VVV by taking a context at first
-// then passing that into RBAC Engine...how should we switch them around
-func (s) TestNewRPCData(t *testing.T) {
-	tests := []struct {
-		name string
-		// Test a context embedded with both metadata and connection (for dest port etc.)
-		wantErr     bool
-		wantRPCData *RPCData
-	}{
-		// Basic case tests a basic conversion with headers
-		// Will also test if context makes sense without anything but data
-		{
-			name:    "basic-case",
-			wantErr: false,
-			wantRPCData: &RPCData{
-				MD: map[string][]string{
-					":path": {"localhost-fan-page"},
-				},
-			},
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			/*if _, err := NewEngine(test.rbacConfig); (err != nil) != test.wantErr {
-				t.Fatalf("NewEngine(%+v) returned err: %v, wantErr: %v", test.rbacConfig, err, test.wantErr)
-			}*/
-			rpcData, error := NewRPCData(ctx, fullMethod)
-
-		})
-	}
-	// Test the error case as well
-	rpcData, error := NewRPCData()
-}
-
-// It first constructs a context representing the context of an incoming RPC on the server side
-
-// And then calls into the helepr function and validates if it correctly was built
-
+/*
 func (addr) Network() string   { return "" }
 func (a *addr) String() string { return a.ipAddress }
 
@@ -653,7 +615,7 @@ func (s) TestRBACEngine(t *testing.T) {
 			}
 		})
 	}
-}
+}*/
 
 // Function here for configuration (chaining)
 // Take singular configurations from previous
@@ -876,6 +838,7 @@ func (s) TestChainedRBACEngineConstruction(t *testing.T) {
 					},
 				},
 			},
+			wantErr: true,
 		},
 		{
 			name: "TestMatcherToNotPolicy",
@@ -1020,5 +983,7 @@ func (s) TestChainedRBACEngineConstruction(t *testing.T) {
 
 // Function here for once configured and instantiated, check incoming RPC's against it
 // Will check conversion function + chaining logic of whether incoming RPC's should be allowed
+
+// Thus, this needs to construct a context at the beginning full of the things that represent data
 
 // After writing all these tests, also need to check code coverage
