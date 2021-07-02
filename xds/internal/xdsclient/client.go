@@ -141,7 +141,7 @@ type UpdateHandler interface {
 	// NewEndpoints handles updates to xDS ClusterLoadAssignment (or tersely
 	// referred to as Endpoints) resources.
 	NewEndpoints(map[string]EndpointsUpdate, UpdateMetadata)
-	// NewConnectionError handles connection error from the xDS stream. The
+	// NewConnectionError handles connection errors from the xDS stream. The
 	// error will be reported to all the resource watchers.
 	NewConnectionError(err error)
 }
