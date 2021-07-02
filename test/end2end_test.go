@@ -7263,7 +7263,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 				"content-type", "application/grpc",
 				"grpc-status", "abc",
 			},
-			errCode: codes.Unavailable,
+			errCode: codes.Internal,
 		},
 		{
 			// Malformed grpc-tags-bin field.
