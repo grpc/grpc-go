@@ -1434,19 +1434,9 @@ func (ac *addrConn) resetConnectBackoff() {
 // If ac's state is IDLE, it will trigger ac to connect.
 func (ac *addrConn) getReadyTransport() (transport.ClientTransport, bool) {
 	ac.mu.Lock()
+	defer ac.mu.Unlock()
 	if ac.state == connectivity.Ready && ac.transport != nil {
-		t := ac.transport
-		ac.mu.Unlock()
-		return t, true
-	}
-	var idle bool
-	if ac.state == connectivity.Idle {
-		idle = true
-	}
-	ac.mu.Unlock()
-	// Trigger idle ac to connect.
-	if idle {
-		ac.connect()
+		return ac.transport, true
 	}
 	return nil, false
 }
