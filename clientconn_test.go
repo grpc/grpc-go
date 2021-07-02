@@ -217,7 +217,7 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 		client.Close()
 		t.Fatalf("Unexpected success (err=nil) while dialing")
 	}
-	expectedMsg := "server handshake"
+	expectedMsg := "server preface"
 	if !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) || !strings.Contains(err.Error(), expectedMsg) {
 		t.Fatalf("DialContext(_) = %v; want a message that includes both %q and %q", err, context.DeadlineExceeded.Error(), expectedMsg)
 	}
@@ -289,6 +289,9 @@ func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
+
+	go stayConnected(client)
+
 	// wait for connection to be accepted on the server.
 	timer := time.NewTimer(time.Second * 10)
 	select {
@@ -311,9 +314,7 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 	defer lis.Close()
 	done := make(chan struct{})
 	go func() { // Launch the server.
-		defer func() {
-			close(done)
-		}()
+		defer close(done)
 		conn, err := lis.Accept() // Accept the connection only to close it immediately.
 		if err != nil {
 			t.Errorf("Error while accepting. Err: %v", err)
@@ -340,13 +341,13 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 			prevAt = meow
 		}
 	}()
-	client, err := Dial(lis.Addr().String(), WithInsecure())
+	cc, err := Dial(lis.Addr().String(), WithInsecure())
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
-	defer client.Close()
+	defer cc.Close()
+	go stayConnected(cc)
 	<-done
-
 }
 
 func (s) TestWithTimeout(t *testing.T) {
@@ -831,6 +832,7 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 		t.Fatalf("Dial() = _, %v; want _, nil", err)
 	}
 	defer cc.Close()
+	go stayConnected(cc)
 	select {
 	case <-dials:
 	case <-time.NewTimer(10 * time.Second).C:
@@ -985,6 +987,7 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
+	go stayConnected(client)
 
 	timeout := time.After(5 * time.Second)
 
@@ -1110,5 +1113,16 @@ func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T
 	})
 	if !verifyWaitForReadyEqualsTrue(cc) {
 		t.Fatal("default service config failed to be applied after 1s")
+	}
+}
+
+// stayConnected makes cc stay connected by repeatedly calling cc.Connect()
+// until the state becomes Shutdown or until 10 seconds elapses.
+func stayConnected(cc *ClientConn) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	for state := cc.GetState(); state != connectivity.Shutdown && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
+		cc.Connect()
 	}
 }

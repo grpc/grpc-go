@@ -107,10 +107,12 @@ func (b *pickfirstBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.S
 	}
 
 	switch s.ConnectivityState {
-	case connectivity.Ready, connectivity.Idle:
+	case connectivity.Ready:
 		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{result: balancer.PickResult{SubConn: sc}}})
 	case connectivity.Connecting:
 		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{err: balancer.ErrNoSubConnAvailable}})
+	case connectivity.Idle:
+		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &pickerKicker{sc: sc, err: balancer.ErrNoSubConnAvailable}})
 	case connectivity.TransientFailure:
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: s.ConnectivityState,
@@ -129,6 +131,18 @@ type picker struct {
 
 func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	return p.result, p.err
+}
+
+// pickerKicker kicks the SubConn into connecting when Pick is called.
+type pickerKicker struct {
+	sc     balancer.SubConn
+	result balancer.PickResult
+	err    error
+}
+
+func (pk *pickerKicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	pk.sc.Connect()
+	return pk.result, pk.err
 }
 
 func init() {

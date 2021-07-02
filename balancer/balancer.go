@@ -353,8 +353,9 @@ var ErrBadResolverState = errors.New("bad resolver state")
 //
 // It's not thread safe.
 type ConnectivityStateEvaluator struct {
-	numReady      uint64 // Number of addrConns in ready state.
-	numConnecting uint64 // Number of addrConns in connecting state.
+	numReady            uint64 // Number of addrConns in ready state.
+	numConnecting       uint64 // Number of addrConns in connecting state.
+	numTransientFailure uint64 // Number of addrConns in transient failure state.
 }
 
 // RecordTransition records state change happening in subConn and based on that
@@ -362,9 +363,10 @@ type ConnectivityStateEvaluator struct {
 //
 //  - If at least one SubConn in Ready, the aggregated state is Ready;
 //  - Else if at least one SubConn in Connecting, the aggregated state is Connecting;
-//  - Else the aggregated state is TransientFailure.
+//  - Else if at least one SubConn is TransientFailure, the aggregated state is Transient Failure;
+//  - Else the aggregated state is Idle
 //
-// Idle and Shutdown are not considered.
+// Shutdown is not considered.
 func (cse *ConnectivityStateEvaluator) RecordTransition(oldState, newState connectivity.State) connectivity.State {
 	// Update counters.
 	for idx, state := range []connectivity.State{oldState, newState} {
@@ -374,6 +376,8 @@ func (cse *ConnectivityStateEvaluator) RecordTransition(oldState, newState conne
 			cse.numReady += updateVal
 		case connectivity.Connecting:
 			cse.numConnecting += updateVal
+		case connectivity.TransientFailure:
+			cse.numTransientFailure += updateVal
 		}
 	}
 
@@ -384,5 +388,8 @@ func (cse *ConnectivityStateEvaluator) RecordTransition(oldState, newState conne
 	if cse.numConnecting > 0 {
 		return connectivity.Connecting
 	}
-	return connectivity.TransientFailure
+	if cse.numTransientFailure > 0 {
+		return connectivity.TransientFailure
+	}
+	return connectivity.Idle
 }
