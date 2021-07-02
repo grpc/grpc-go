@@ -1978,6 +1978,31 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 }
 
 func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
+	testStream := func() *Stream {
+		return &Stream{
+			done:       make(chan struct{}),
+			headerChan: make(chan struct{}),
+			buf: &recvBuffer{
+				c:  make(chan recvMsg),
+				mu: sync.Mutex{},
+			},
+		}
+	}
+
+	testClient := func(ts *Stream) *http2Client {
+		return &http2Client{
+			mu: sync.Mutex{},
+			activeStreams: map[uint32]*Stream{
+				0: ts,
+			},
+			controlBuf: &controlBuffer{
+				ch:   make(chan struct{}),
+				done: make(chan struct{}),
+				list: &itemList{},
+			},
+		}
+	}
+
 	for _, test := range []struct {
 		name string
 		// input
@@ -1993,12 +2018,6 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					{Name: "grpc-status", Value: "0"},
 					{Name: ":status", Value: "200"},
 				},
-				HeadersFrame: &http2.HeadersFrame{
-					FrameHeader: http2.FrameHeader{
-						StreamID: 0,
-						Flags:    http2.FlagHeadersEndStream,
-					},
-				},
 			},
 			// no error
 			wantStatus: status.New(codes.OK, ""),
@@ -2009,12 +2028,6 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				Fields: []hpack.HeaderField{
 					{Name: "grpc-status", Value: "0"},
 					{Name: ":status", Value: "200"},
-				},
-				HeadersFrame: &http2.HeadersFrame{
-					FrameHeader: http2.FrameHeader{
-						StreamID: 0,
-						Flags:    http2.FlagHeadersEndStream,
-					},
 				},
 			},
 			wantStatus: status.New(
@@ -2030,12 +2043,6 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					{Name: "grpc-status", Value: "xxxx"},
 					{Name: ":status", Value: "200"},
 				},
-				HeadersFrame: &http2.HeadersFrame{
-					FrameHeader: http2.FrameHeader{
-						StreamID: 0,
-						Flags:    http2.FlagHeadersEndStream,
-					},
-				},
 			},
 			wantStatus: status.New(
 				codes.Internal,
@@ -2047,12 +2054,6 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/json"},
-				},
-				HeadersFrame: &http2.HeadersFrame{
-					FrameHeader: http2.FrameHeader{
-						StreamID: 0,
-						Flags:    http2.FlagHeadersEndStream,
-					},
 				},
 			},
 			wantStatus: status.New(
@@ -2067,12 +2068,6 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					// No content type provided then fallback into handling http error.
 					{Name: ":status", Value: "xxxx"},
 				},
-				HeadersFrame: &http2.HeadersFrame{
-					FrameHeader: http2.FrameHeader{
-						StreamID: 0,
-						Flags:    http2.FlagHeadersEndStream,
-					},
-				},
 			},
 			wantStatus: status.New(
 				codes.Internal,
@@ -2084,12 +2079,6 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields:    nil,
 				Truncated: true,
-				HeadersFrame: &http2.HeadersFrame{
-					FrameHeader: http2.FrameHeader{
-						StreamID: 0,
-						Flags:    http2.FlagHeadersEndStream,
-					},
-				},
 			},
 			wantStatus: status.New(
 				codes.Internal,
@@ -2104,11 +2093,6 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 					{Name: "grpc-status", Value: "0"},
 					{Name: ":status", Value: "504"},
 				},
-				HeadersFrame: &http2.HeadersFrame{
-					FrameHeader: http2.FrameHeader{
-						StreamID: 0,
-					},
-				},
 			},
 			wantStatus: status.New(
 				codes.Unavailable,
@@ -2121,12 +2105,6 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
 				},
-				HeadersFrame: &http2.HeadersFrame{
-					FrameHeader: http2.FrameHeader{
-						StreamID: 0,
-						Flags:    http2.FlagHeadersEndStream,
-					},
-				},
 			},
 			wantStatus: status.New(
 				codes.Internal,
@@ -2134,24 +2112,33 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			),
 		},
 	} {
+
 		t.Run(test.name, func(t *testing.T) {
-			ts := &Stream{
-				done:       make(chan struct{}),
-				headerChan: make(chan struct{}),
-				buf: &recvBuffer{
-					c:  make(chan recvMsg),
-					mu: sync.Mutex{},
+			ts := testStream()
+			s := testClient(ts)
+
+			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
+				FrameHeader: http2.FrameHeader{
+					StreamID: 0,
 				},
 			}
-			s := &http2Client{
-				mu: sync.Mutex{},
-				activeStreams: map[uint32]*Stream{
-					0: ts,
-				},
-				controlBuf: &controlBuffer{
-					ch:   make(chan struct{}),
-					done: make(chan struct{}),
-					list: &itemList{},
+
+			s.operateHeaders(test.metaHeaderFrame)
+
+			got := ts.status
+			want := test.wantStatus
+			if got.Code() != want.Code() || got.Message() != want.Message() {
+				t.Fatalf("operateHeaders(%v); status = \ngot: %s\nwant: %s", test.metaHeaderFrame, got, want)
+			}
+		})
+		t.Run(fmt.Sprintf("%s-end_stream", test.name), func(t *testing.T) {
+			ts := testStream()
+			s := testClient(ts)
+
+			test.metaHeaderFrame.HeadersFrame = &http2.HeadersFrame{
+				FrameHeader: http2.FrameHeader{
+					StreamID: 0,
+					Flags:    http2.FlagHeadersEndStream,
 				},
 			}
 
