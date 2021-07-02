@@ -94,3 +94,38 @@ func (s) TestClientSideXDS(t *testing.T) {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
 }
+
+// TestClientSideNACKError covers that if a resource is NACKed, and there's no
+// valid resource before it, the NACK error will be returned by the RPCs.
+func (s) TestClientSideNACKError(t *testing.T) {
+	port, cleanup := clientSetup(t)
+	defer cleanup()
+
+	const serviceName = "my-service-client-side-xds"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     xdsClientNodeID,
+		Host:       "localhost",
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	resources.Listeners[0].ApiListener.ApiListener.Value[0]++
+	resources.SkipValidation = true
+	if err := managementServer.Update(resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolverBuilder))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testpb.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+}
