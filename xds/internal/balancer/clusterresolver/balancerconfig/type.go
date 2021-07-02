@@ -99,3 +99,46 @@ type DiscoveryMechanism struct {
 	// LOGICAL_DNS only.
 	DNSHostname string `json:"dnsHostname,omitempty"`
 }
+
+// Equal returns whether the DiscoveryMechanism is the same with the parameter.
+func (dm DiscoveryMechanism) Equal(b DiscoveryMechanism) bool {
+	if dm.Cluster != b.Cluster {
+		return false
+	}
+	if !equalStringP(dm.LoadReportingServerName, b.LoadReportingServerName) {
+		return false
+	}
+	if !equalUint32P(dm.MaxConcurrentRequests, b.MaxConcurrentRequests) {
+		return false
+	}
+	if dm.Type != b.Type {
+		return false
+	}
+	if dm.EDSServiceName != b.EDSServiceName {
+		return false
+	}
+	if dm.DNSHostname != b.DNSHostname {
+		return false
+	}
+	return true
+}
+
+func equalStringP(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+func equalUint32P(a, b *uint32) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}

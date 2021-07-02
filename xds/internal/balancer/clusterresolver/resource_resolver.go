@@ -19,7 +19,6 @@
 package clusterresolver
 
 import (
-	"reflect"
 	"sync"
 
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfig"
@@ -77,10 +76,23 @@ func newResourceResolver(parent *clusterResolverBalancer) *resourceResolver {
 	}
 }
 
+func equalDiscoveryMechanisms(a, b []balancerconfig.DiscoveryMechanism) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, aa := range a {
+		bb := b[i]
+		if !aa.Equal(bb) {
+			return false
+		}
+	}
+	return true
+}
+
 func (rr *resourceResolver) updateMechanisms(mechanisms []balancerconfig.DiscoveryMechanism) {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
-	if reflect.DeepEqual(rr.mechanisms, mechanisms) {
+	if equalDiscoveryMechanisms(rr.mechanisms, mechanisms) {
 		return
 	}
 	rr.mechanisms = mechanisms
