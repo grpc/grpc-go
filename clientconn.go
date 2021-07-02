@@ -1429,16 +1429,14 @@ func (ac *addrConn) resetConnectBackoff() {
 	ac.mu.Unlock()
 }
 
-// getReadyTransport returns the transport if ac's state is READY.
-// Otherwise it returns nil, false.
-// If ac's state is IDLE, it will trigger ac to connect.
-func (ac *addrConn) getReadyTransport() (transport.ClientTransport, bool) {
+// getReadyTransport returns the transport if ac's state is READY or nil if not.
+func (ac *addrConn) getReadyTransport() transport.ClientTransport {
 	ac.mu.Lock()
 	defer ac.mu.Unlock()
-	if ac.state == connectivity.Ready && ac.transport != nil {
-		return ac.transport, true
+	if ac.state == connectivity.Ready {
+		return ac.transport
 	}
-	return nil, false
+	return nil
 }
 
 // tearDown starts to tear down the addrConn.
