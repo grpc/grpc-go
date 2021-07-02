@@ -373,14 +373,12 @@ type authenticatedMatcher struct {
 	stringMatcher *internalmatcher.StringMatcher
 }
 
-// Two things of logic here: config can be null, in which case you don't persist a string matcher and it matches any principal name
 func newAuthenticatedMatcher(authenticatedMatcherConfig *v3rbacpb.Principal_Authenticated) (*authenticatedMatcher, error) {
 	// Represents this line in the RBAC documentation = "If unset, it applies to
 	// any user that is authenticated".
 	if authenticatedMatcherConfig.PrincipalName == nil {
 		return &authenticatedMatcher{}, nil
 	}
-	// This will be split to branching logic, how is that represented in GoLang?
 	stringMatcher, err := internalmatcher.StringMatcherFromProto(authenticatedMatcherConfig.PrincipalName)
 	if err != nil {
 		return nil, err
@@ -400,7 +398,8 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 		}
 	}
 
-	// Loop through URI SAN's (list will be persisted in data)
+	// The precedence according to documentation specifies to use URI SANs at
+	// first if present.
 	for _, cert := range data.certs {
 		for _, uriSAN := range cert.URIs {
 			if am.stringMatcher.Match(uriSAN.String()) {
@@ -408,7 +407,7 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 			}
 		}
 	}
-	// Loop through DNS SAN's (list will be persisted in data)
+	// The next thing to check against if present DNS SANs, if present.
 	for _, cert := range data.certs {
 		for _, dnsSAN := range cert.DNSNames {
 			if am.stringMatcher.Match(dnsSAN) {
@@ -417,7 +416,7 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 		}
 	}
 
-	// Check against subject names
+	// The last thing to check is the subject field.
 	for _, cert := range data.certs {
 		if am.stringMatcher.Match(cert.Subject.String()) {
 			return true
@@ -425,18 +424,3 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 	}
 	return false
 }
-
-// Tasks
-// Authenticated matcher has wrong logic (Done I think nope)
-// Change API Layer, which will be a two liner (Done I think... nope)
-
-// Testing Tasks, will depend on ^^^
-// Unit test helper function to RPC Data (This should be first test written, as might change API Layer of what you need to pass into it which will break VVV)
-// This ^^^ unit test will be implicitly tested though if we change API Layer, it'll hit that codepath (NewRPCData helper method) internally implicitly
-// API changed (takes in context)
-// Authenticated matcher is different now
-
-// ^^^ All part of one PR or split into three?
-
-// Cleanup
-// Start testing

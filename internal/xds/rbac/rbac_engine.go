@@ -37,14 +37,14 @@ import (
 // order to determine whether to allow incoming RPC's to proceed according to
 // the actions of each engine.
 type ChainedRBACEngine struct {
-	chainedEngines []*Engine
+	chainedEngines []*engine
 }
 
 // NewChainEngine returns a new Chain of RBAC Engines to query if incoming RPC's
 // are allowed to proceed or not. This function returns an error in the case
 // that one of the policies is invalid.
 func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainedRBACEngine, error) {
-	var chainedEngines []*Engine
+	var chainedEngines []*engine
 	for _, policy := range policies {
 		rbacEngine, err := NewEngine(policy)
 		if err != nil {
@@ -58,10 +58,10 @@ func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainedRBACEngine, error) {
 // DetermineStatus takes in data about incoming RPC's and returns a status error
 // representing whether the RPC should be denied or not (i.e. PermissionDenied or OK)
 // based on the full list of RBAC Engines and their associated actions.
-func (cre *ChainedRBACEngine) DetermineStatus(data Data) error { // Should I combine these into one <-?
+func (cre *ChainedRBACEngine) DetermineStatus(data Data) error {
 	// This conversion step (i.e. pulling things out of generic ctx) can be done
 	// once, and then be used for the whole chain of RBAC Engines.
-	rpcData, err := newRPCData(data.Ctx, data.MethodName)
+	rpcData, err := newRPCData(data)
 	if err != nil {
 		return status.Error(codes.InvalidArgument, "passed in data did not have enough information representing incoming rpc")
 	}
@@ -94,11 +94,10 @@ const (
 	deny
 )
 
-// Engine is used for matching incoming RPCs to policies.
-type Engine struct {
+// engine is used for matching incoming RPCs to policies.
+type engine struct {
 	policies map[string]*policyMatcher
-	// Persist something here that represents action, don't return it, have caller handle the logic used to call this Engine
-	action action
+	action   action
 }
 
 // NewEngine creates an RBAC Engine based on the contents of policy. If the
@@ -106,7 +105,7 @@ type Engine struct {
 // will return an error. This created RBAC Engine will not persist the action
 // present in the policy, and will leave up to caller to handle the action that
 // is attached to the config.
-func NewEngine(policy *v3rbacpb.RBAC) (*Engine, error) {
+func NewEngine(policy *v3rbacpb.RBAC) (*engine, error) {
 	var action action
 	switch *policy.Action.Enum() {
 	case v3rbacpb.RBAC_ALLOW:
@@ -125,7 +124,7 @@ func NewEngine(policy *v3rbacpb.RBAC) (*Engine, error) {
 		}
 		policies[name] = matcher
 	}
-	return &Engine{
+	return &engine{
 		policies: policies,
 		action:   action,
 	}, nil
@@ -144,24 +143,34 @@ func SetConnection(ctx context.Context, conn net.Conn) context.Context {
 	return context.WithValue(ctx, connectionKey{}, conn)
 }
 
+// Data represents the generic data about incoming RPC's that must be passed
+// into the RBAC Engine in order to try and find a matching policy or not. The
+// ctx passed in must have metadata, peerinfo (used for source ip/port and TLS
+// information) and connection (used for destination ip/port) embedded within
+// it.
+type Data struct {
+	Ctx        context.Context
+	MethodName string
+}
+
 // newRPCData takes a incoming context (should be a context representing state
 // needed for server RPC Call with headers and connection piped into it) and the
 // method name of the Service being called server side and populates an RPCData
 // struct ready to be passed to the RBAC Engine to find a matching policy.
-func newRPCData(ctx context.Context, fullMethod string) (*rpcData, error) { // *Big question*: Thought I just had: For this function on an error case, should it really return an error in certain situations, as it doesn't really need all 6 fields...
-	md, ok := metadata.FromIncomingContext(ctx)
+func newRPCData(data Data) (*rpcData, error) { // *Big question*: Thought I just had: For this function on an error case, should it really return an error in certain situations, as it doesn't really need all 6 fields...
+	md, ok := metadata.FromIncomingContext(data.Ctx)
 	if !ok {
 		return nil, errors.New("error retrieving metadata from incoming ctx")
 	}
 
-	pi, ok := peer.FromContext(ctx)
+	pi, ok := peer.FromContext(data.Ctx)
 	if !ok {
 		return nil, errors.New("error retrieving peer info from incoming ctx")
 	}
 
 	// You need the connection in order to find the destination address and port
 	// of the incoming RPC Call.
-	conn := getConnection(ctx)
+	conn := getConnection(data.Ctx)
 	_, dPort, err := net.SplitHostPort(conn.LocalAddr().String())
 	if err != nil {
 		return nil, err
@@ -179,7 +188,7 @@ func newRPCData(ctx context.Context, fullMethod string) (*rpcData, error) { // *
 	return &rpcData{
 		md:              md,
 		peerInfo:        pi,
-		fullMethod:      fullMethod,
+		fullMethod:      data.MethodName,
 		destinationPort: uint32(dp),
 		destinationAddr: conn.LocalAddr(),
 		certs:           tlsInfo.State.PeerCertificates,
@@ -204,24 +213,13 @@ type rpcData struct {
 	certs []*x509.Certificate
 }
 
-// Data represents the generic data about incoming RPC's that must be passed
-// into the RBAC Engine in order to try and find a matching policy or not. The
-// ctx passed in must have metadata, peerinfo (used for source ip/port and TLS
-// information) and connection (used for destination ip/port) embedded within
-// it.
-type Data struct {
-	// This ctx is what is going to be pre populated with things
-	Ctx        context.Context
-	MethodName string
-}
-
 var ErrPolicyNotFound = errors.New("a matching policy was not found")
 
 // findMatchingPolicy determines if an incoming RPC matches a policy. On a
 // successful match, it returns the name of the matching policy and a nil error
 // to specify that there was a matching policy found.  It returns an error in
 // the case of not finding a matching policy.
-func (r *Engine) findMatchingPolicy(rpcData *rpcData) (string, error) {
+func (r *engine) findMatchingPolicy(rpcData *rpcData) (string, error) {
 	for policy, matcher := range r.policies {
 		if matcher.match(rpcData) {
 			return policy, nil
