@@ -26,7 +26,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
-// resourceUpdate is a combined updates from all the resources, in the order of
+// resourceUpdate is a combined update from all the resources, in the order of
 // priority. For example, it can be {EDS, EDS, DNS}.
 type resourceUpdate struct {
 	p   []balancerconfig.PriorityConfig

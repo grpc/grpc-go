@@ -201,16 +201,17 @@ func (xdsC *Client) WaitForWatchEDS(ctx context.Context) (string, error) {
 // Not thread safe with WatchEndpoints. Only call this after
 // WaitForWatchEDS.
 func (xdsC *Client) InvokeWatchEDSCallback(name string, update xdsclient.EndpointsUpdate, err error) {
-	// Keeps functionality with previous usage of this, if single callback call that callback.
-	if len(xdsC.edsCbs) == 1 {
-		for n := range xdsC.edsCbs {
-			name = n
-		}
-		xdsC.edsCbs[name](update, err)
-	} else {
+	if len(xdsC.edsCbs) != 1 {
 		// This may panic if name isn't found. But it's fine for tests.
 		xdsC.edsCbs[name](update, err)
+		return
 	}
+	// Keeps functionality with previous usage of this, if single callback call
+	// that callback.
+	for n := range xdsC.edsCbs {
+		name = n
+	}
+	xdsC.edsCbs[name](update, err)
 }
 
 // WaitForCancelEDSWatch waits for a EDS watch to be cancelled and returns
