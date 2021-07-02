@@ -525,20 +525,25 @@ func (cs *clientStream) commitAttempt() {
 // shouldRetry returns nil if the RPC should be retried; otherwise it returns
 // the error that should be returned by the operation.
 func (cs *clientStream) shouldRetry(err error) error {
-	unprocessed := false
 	if cs.attempt.s == nil {
+		// Error from NewClientStream.
 		pioErr, ok := err.(transport.PerformedIOError)
-		if ok {
-			// Unwrap error.
-			err = toRPCErr(pioErr.Err)
-		} else {
-			unprocessed = true
-		}
-		if !ok && !cs.callInfo.failFast {
+		if !ok {
 			// In the event of a non-IO operation error from NewStream, we
 			// never attempted to write anything to the wire, so we can retry
-			// indefinitely for non-fail-fast RPCs.
+			// indefinitely.  Except for INTERNAL errors, which indicate the
+			// RPC should not be retried due to max header list size violation.
+			if status.Convert(err).Code() == codes.Internal {
+				return err
+			}
 			return nil
+		}
+		// Unwrap error.
+		err = toRPCErr(pioErr.Err)
+		// INTERNAL errors from NewStream indicate the RPC should not be
+		// retried.
+		if status.Convert(err).Code() == codes.Internal {
+			return err
 		}
 	}
 	if cs.finished || cs.committed {
@@ -546,6 +551,7 @@ func (cs *clientStream) shouldRetry(err error) error {
 		return err
 	}
 	// Wait for the trailers.
+	unprocessed := false
 	if cs.attempt.s != nil {
 		<-cs.attempt.s.Done()
 		unprocessed = cs.attempt.s.Unprocessed()

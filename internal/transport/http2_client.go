@@ -630,12 +630,17 @@ func (p PerformedIOError) Error() string {
 // NewStream creates a stream and registers it into the transport as "active"
 // streams.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Stream, err error) {
+	defer func() {
+		if err != nil && (len(t.perRPCCreds) > 0 || callHdr.Creds != nil) {
+			// We may have performed I/O in the per-RPC creds callback, so do not
+			// allow transparent retry.
+			err = PerformedIOError{err}
+		}
+	}()
 	ctx = peer.NewContext(ctx, t.getPeer())
 	headerFields, err := t.createHeaderFields(ctx, callHdr)
 	if err != nil {
-		// We may have performed I/O in the per-RPC creds callback, so do not
-		// allow transparent retry.
-		return nil, PerformedIOError{err}
+		return nil, err
 	}
 	s := t.newStream(ctx, callHdr)
 	cleanup := func(err error) {
