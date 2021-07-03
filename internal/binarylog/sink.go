@@ -69,7 +69,8 @@ type writerSink struct {
 func (ws *writerSink) Write(e *pb.GrpcLogEntry) error {
 	b, err := proto.Marshal(e)
 	if err != nil {
-		grpclogLogger.Infof("binary logging: failed to marshal proto message: %v", err)
+		grpclogLogger.Errorf("binary logging: failed to marshal proto message: %v", err)
+		return err
 	}
 	hdr := make([]byte, 4)
 	binary.BigEndian.PutUint32(hdr, uint32(len(b)))
