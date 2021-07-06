@@ -18,6 +18,7 @@ package rbac
 
 import (
 	"context"
+	"fmt"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -1009,6 +1010,8 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 	tests := []struct {
 		name        string
 		rbacConfigs []*v3rbacpb.RBAC // Scaled up to handle long list
+		// Actually, rather than defining the three things you pipe into context, define RPC Data,
+		// and pull stuff off, build md, pi and conn, put that into context, send that to chain
 		rbacQueries []struct {
 			/*Previously:
 			(What you send into API, What you get back from API)
@@ -1021,10 +1024,12 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 			// Generic Data in context (Metadata, PeerInfo, Conn) that will get pulled out
 			// Why not literally have the four data points: Metadata, PeerInfo, and Connection and MethodName
 			// Pipe first three into context, call the function with fourth as well
-			md             metadata.MD
+			/*md             metadata.MD
 			pi             *peer.Peer
 			conn           net.Conn
 			methodName     string
+			wantStatusCode codes.Code*/
+			rpcData        *rpcData
 			wantStatusCode codes.Code
 		}
 	}{
@@ -1049,15 +1054,15 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 				},
 			},
 			rbacQueries: []struct {
-				md             metadata.MD
-				pi             *peer.Peer
-				conn           net.Conn
-				methodName     string
+				rpcData        *rpcData
 				wantStatusCode codes.Code
 			}{
 				{
 					// If you unspecify the three, this will logically represent the same thing as previous. What will happen in this scenario?
-					methodName:     "some method",
+					rpcData: &rpcData{
+						fullMethod: "some method",
+						// The rest default i.e. make connection, but otherwise have it default
+					},
 					wantStatusCode: codes.OK,
 				},
 			},
@@ -1103,15 +1108,58 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 				// Construct the context with three data points that have enough
 				// information to represent incoming RPC's. This will be how a
 				// user uses this API.
-				ctx := metadata.NewIncomingContext(context.Background(), data.md)
+				ctx := metadata.NewIncomingContext(context.Background(), data.rpcData.md) // This stays the same
+
+				// Make a TCP connection with a certain destination port. The
+				// address/port of this connection will be used to populate the
+				// destination ip/port in RPCData struct. This represents what
+				// the user of ChainedRBACEngine will have to place into
+				// context, as this is only way to get destination ip and port.
+				lis, err := net.Listen("tcp", "localhost:"+fmt.Sprint(data.rpcData.destinationPort))
+				var conn net.Conn
+				go func() {
+					conn, err = lis.Accept()
+					if err != nil {
+						t.Fatalf("Error accepting connection: %v", err)
+						return
+					}
+				}()
+				// I feel like what I have to do is this:
+				// Client: Dial, Server: net.Listen (listening on a configurable port), dest addr + port
+				// ==, now have a conn connecting client and server
+				// the thing is, we're testing that the conversion works, so can't mock or hook into RPCData passed
+				// into chain of engines
+				net.Dial("tcp", lis.Addr().String())
+
+				// Construct connection to put in context here
+				// Connection needs to have a certain IP and a certain PORT (dest ip + dest port)
+				// How do you construct a connection like that?
+				// net.Listen up there? Pass that in? - I think this might be best option
+				// conn := /*Mock Connection here...*/ // PROBLEM STATEMENT: HOW DOES (IF EVEN...) THE CODEBASE DEFINE A MOCK CONNECTION?
+				// The only thing that this connection needs is a way to get IP Address string it will split into address + port
+
+				// If we construct PeerInfo from net.Listen, how would that work?
+				// Construct PeerInfo to put in context here
+				// PeerInfo has authinfo + addr
+				// if authinfo isn't tls, unauthenticated user
+				// addr is something easily mockable, take addr defined in RPCData specified and put it inside PeerInfo
+				// Like we had before
+				// pi := &peer.Peer{
+				// Addr: /*Construct an address based on rpc specification, also have this default*/,
+				// AuthInfo: // If the test specifies list of credentials, have this thing have tls auth info,
+				// } Outside of Connection, PeerInfo is still defined in RPCData...
+
+				// These three things -> RPCData, define RPCData, use that to build three things, like how user of API will use
+
 				// data.conn is used for local addr + port
-				ctx = SetConnection(ctx, data.conn) // The RPC has to happen on a connection, so this will never be unspecified...
+				ctx = SetConnection(ctx, conn) // The RPC has to happen on a connection, so this will never be unspecified..., how do we have a connection with a mock address
 				// data.pi is used for remote addr + port
-				ctx = peer.NewContext(ctx, data.pi)
-				data.pi.
-				err := cre.DetermineStatus(Data{
+				// Set this to TLS Credentials if specified...
+				ctx = peer.NewContext(ctx, data.rpcData.peerInfo) // This has auth info (new thing) + addr, define this in test case
+				// Default should be present, but when looks into it it pulls off nil value...
+				err = cre.DetermineStatus(Data{
 					Ctx:        ctx,
-					MethodName: data.methodName,
+					MethodName: data.rpcData.fullMethod,
 				})
 
 				// I think a nil status represents a OK code, perhaps return a nil error instead?

@@ -172,7 +172,8 @@ func newRPCData(data Data) (*rpcData, error) { // *Big question*: Thought I just
 	// You need the connection in order to find the destination address and port
 	// of the incoming RPC Call.
 	conn := getConnection(data.Ctx)
-	_, dPort, err := net.SplitHostPort(conn.LocalAddr().String())
+	_, dPort, err := net.SplitHostPort(conn.LocalAddr().String()) // Nil panic here, although this will never in practice, because conn must be there
+	// "Behavior is undefined if pass in something with nil conn"
 	if err != nil {
 		return nil, err
 	}
@@ -181,9 +182,12 @@ func newRPCData(data Data) (*rpcData, error) { // *Big question*: Thought I just
 		return nil, err
 	}
 
-	tlsInfo, ok := pi.AuthInfo.(credentials.TLSInfo) // Does this have to be TLS?
-	if !ok {
-		return nil, errors.New("wrong credentials provided, need to be tls")
+	// What happens if this is nil? Will this typecast work?
+	tlsInfo, ok := pi.AuthInfo.(credentials.TLSInfo) // Does this have to be TLS? If grpc has to specify HTTPS, then it should, if can be just HTTP
+	var peerCertificates []*x509.Certificate
+	if ok {
+		// return nil, errors.New("wrong credentials provided, need to be tls") // Perhaps scale this error back
+		peerCertificates = tlsInfo.State.PeerCertificates
 	}
 
 	// I think we should require all 3 except TLS Info might be questionable
@@ -193,7 +197,7 @@ func newRPCData(data Data) (*rpcData, error) { // *Big question*: Thought I just
 		fullMethod:      data.MethodName,
 		destinationPort: uint32(dp),
 		destinationAddr: conn.LocalAddr(),
-		certs:           tlsInfo.State.PeerCertificates,
+		certs:           peerCertificates, // Set this to nil if not there, have a nil check in authenticated matcher
 	}, nil
 }
 
