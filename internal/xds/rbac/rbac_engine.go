@@ -158,6 +158,7 @@ type Data struct {
 // method name of the Service being called server side and populates an RPCData
 // struct ready to be passed to the RBAC Engine to find a matching policy.
 func newRPCData(data Data) (*rpcData, error) { // *Big question*: Thought I just had: For this function on an error case, should it really return an error in certain situations, as it doesn't really need all 6 fields...
+	// Will we leave it up to caller to pipe these three pieces of data into context? Right now, as expected, it's failing.
 	md, ok := metadata.FromIncomingContext(data.Ctx)
 	if !ok {
 		return nil, errors.New("error retrieving metadata from incoming ctx")
@@ -180,12 +181,13 @@ func newRPCData(data Data) (*rpcData, error) { // *Big question*: Thought I just
 		return nil, err
 	}
 
-	tlsInfo, ok := pi.AuthInfo.(credentials.TLSInfo)
+	tlsInfo, ok := pi.AuthInfo.(credentials.TLSInfo) // Does this have to be TLS?
 	if !ok {
 		return nil, errors.New("wrong credentials provided, need to be tls")
 	}
 
-	return &rpcData{
+	// I think we should require all 3 except TLS Info might be questionable
+	return &rpcData{ // Big question: What to do when data is not specified...? Should we require all 3?
 		md:              md,
 		peerInfo:        pi,
 		fullMethod:      data.MethodName,

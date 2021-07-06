@@ -17,6 +17,12 @@
 package rbac
 
 import (
+	"context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
+	"net"
 	"testing"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -39,6 +45,8 @@ func Test(t *testing.T) {
 type addr struct {
 	ipAddress string
 }
+
+// Actually I might keep these...
 
 // "Getters don't make sense"
 // So keep this function here, but the only thing RBAC defines in the API layer is the context, but will call this function
@@ -619,6 +627,12 @@ func (s) TestRBACEngine(t *testing.T) {
 
 // Function here for configuration (chaining)
 // Take singular configurations from previous
+
+// TestChainedRBACEngineConstruction tests the construction of the
+// ChainedRBACEngine. Due to some types of RBAC configuration being logically
+// wrong and returning an error rather than successfully constructing the RBAC
+// Engine, this test tests both RBAC Configurations deemed successful and also
+// RBAC Configurations that will raise errors.
 func (s) TestChainedRBACEngineConstruction(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -985,5 +999,129 @@ func (s) TestChainedRBACEngineConstruction(t *testing.T) {
 // Will check conversion function + chaining logic of whether incoming RPC's should be allowed
 
 // Thus, this needs to construct a context at the beginning full of the things that represent data
+
+// TestChainedRBACEngine tests the chain of RBAC Engines by configuring the
+// chain of engines in a certain way in different scenarios. After configuring
+// the chain of engines in a certain way, this test pings the chain of engines
+// with different types of data representing incoming RPC's (usually data piped
+// into a context), and verifies that it works as expected.
+func (s) TestChainedRBACEngine(t *testing.T) {
+	tests := []struct {
+		name        string
+		rbacConfigs []*v3rbacpb.RBAC // Scaled up to handle long list
+		rbacQueries []struct {
+			/*Previously:
+			(What you send into API, What you get back from API)
+			rpcData *RPCData
+			wantMatchingPolicyName string
+			wantMatch bool
+			*/
+			// DetermineStatus(data Data) error <- will have information about what to do about the RPC
+			/*Now: You send in generic data to API, you get a status code without matching policy name there*/
+			// Generic Data in context (Metadata, PeerInfo, Conn) that will get pulled out
+			// Why not literally have the four data points: Metadata, PeerInfo, and Connection and MethodName
+			// Pipe first three into context, call the function with fourth as well
+			md             metadata.MD
+			pi             *peer.Peer
+			conn           net.Conn
+			methodName     string
+			wantStatusCode codes.Code
+		}
+	}{
+		// TestSuccessCaseAnyMatch tests a single RBAC Engine instantiated with
+		// a config with a policy with any rules for both permissions and
+		// principals, meaning that any data about incoming RPC's that the RBAC
+		// Engine is queried with should match that policy.
+		{
+			name: "TestSuccessCaseAnyMatch",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"anyone": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				md             metadata.MD
+				pi             *peer.Peer
+				conn           net.Conn
+				methodName     string
+				wantStatusCode codes.Code
+			}{
+				{
+					// If you unspecify the three, this will logically represent the same thing as previous. What will happen in this scenario?
+					methodName:     "some method",
+					wantStatusCode: codes.OK,
+				},
+			},
+		},
+		// TestSuccessCaseSimplePolicy is a test that tests a single policy
+		// that only allows an rpc to proceed if the rpc is calling with a certain
+		// path and port.
+		/*{
+			name: "TestSuccessCaseSimplePolicy",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"localhost-fan": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 8080}},
+								{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				// Why
+			},
+		},*/
+	}
+
+	// Also check what happens if stuff isn't already in context (i.e. metadata, peerinfo, conn)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// Instantiate the chainedRBACEngine with different configurations that are
+			// interesting to test and to query.
+			cre, err := NewChainEngine(test.rbacConfigs)
+			if err != nil {
+				t.Fatalf("Error constructing RBAC Engine: %v", err)
+			}
+			// Query the created chain of RBAC Engines with different args to see
+			// if the chain of RBAC Engines configured as such works as intended.
+			for _, data := range test.rbacQueries { // What about specifying the RPC Data to send around, pulling stuff off that RPC Data to construct three basic...?
+				// Construct the context with three data points that have enough
+				// information to represent incoming RPC's. This will be how a
+				// user uses this API.
+				ctx := metadata.NewIncomingContext(context.Background(), data.md)
+				// data.conn is used for local addr + port
+				ctx = SetConnection(ctx, data.conn) // The RPC has to happen on a connection, so this will never be unspecified...
+				// data.pi is used for remote addr + port
+				ctx = peer.NewContext(ctx, data.pi)
+				data.pi.
+				err := cre.DetermineStatus(Data{
+					Ctx:        ctx,
+					MethodName: data.methodName,
+				})
+
+				// I think a nil status represents a OK code, perhaps return a nil error instead?
+				status, _ := status.FromError(err)
+				if data.wantStatusCode != status.Code() {
+					t.Fatalf("DetermineStatus() returned (), want()")
+				}
+			}
+		})
+	}
+}
 
 // After writing all these tests, also need to check code coverage
