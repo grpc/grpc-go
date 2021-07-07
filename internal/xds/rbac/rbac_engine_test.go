@@ -845,6 +845,9 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 				// the user of ChainedRBACEngine will have to place into
 				// context, as this is only way to get destination ip and port.
 				lis, err := net.Listen("tcp", "localhost:"+fmt.Sprint(data.rpcData.destinationPort))
+				if err != nil {
+					t.Fatalf("Error listening: %v", err)
+				}
 				connCh := make(chan net.Conn, 1)
 				go func() {
 					conn, err := lis.Accept()
