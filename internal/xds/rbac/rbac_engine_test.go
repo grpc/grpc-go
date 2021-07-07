@@ -47,6 +47,9 @@ type addr struct {
 	ipAddress string
 }
 
+func (addr) Network() string   { return "" }
+func (a *addr) String() string { return a.ipAddress }
+
 // Actually I might keep these...
 
 // "Getters don't make sense"
@@ -62,8 +65,6 @@ type addr struct {
 // Or helperfunciton(ctx) data prepopulated...
 
 /*
-func (addr) Network() string   { return "" }
-func (a *addr) String() string { return a.ipAddress }
 
 // TestRBACEngineConstruction tests the construction of the RBAC Engine. Due to
 // some types of RBAC configuration being logically wrong and returning an error
@@ -999,8 +1000,6 @@ func (s) TestChainedRBACEngineConstruction(t *testing.T) {
 // Function here for once configured and instantiated, check incoming RPC's against it
 // Will check conversion function + chaining logic of whether incoming RPC's should be allowed
 
-// Thus, this needs to construct a context at the beginning full of the things that represent data
-
 // TestChainedRBACEngine tests the chain of RBAC Engines by configuring the
 // chain of engines in a certain way in different scenarios. After configuring
 // the chain of engines in a certain way, this test pings the chain of engines
@@ -1062,6 +1061,9 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 					rpcData: &rpcData{
 						fullMethod: "some method",
 						// The rest default i.e. make connection, but otherwise have it default
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
 					},
 					wantStatusCode: codes.OK,
 				},
@@ -1070,7 +1072,7 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 		// TestSuccessCaseSimplePolicy is a test that tests a single policy
 		// that only allows an rpc to proceed if the rpc is calling with a certain
 		// path and port.
-		/*{
+		{
 			name: "TestSuccessCaseSimplePolicy",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
@@ -1088,9 +1090,342 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 				},
 			},
 			rbacQueries: []struct {
-				// Why
+				rpcData        *rpcData
+				wantStatusCode codes.Code
+			}{
+				// This RPC should match with the local host fan policy. Thus,
+				// this RPC should be allowed to proceed.
+				{
+					rpcData: &rpcData{
+						md: map[string][]string{
+							":path": {"localhost-fan-page"},
+						},
+						destinationPort: 8080,
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
+
+				// This RPC shouldn't match with the local host fan policy. Thus,
+				// this rpc shouldn't be allowed to proceed.
+				{
+					rpcData: &rpcData{
+						destinationPort: 8000,
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
 			},
-		},*/
+		},
+		// TestSuccessCaseEnvoyExample is a test based on the example provided
+		// in the EnvoyProxy docs. The RBAC Config contains two policies,
+		// service admin and product viewer, that provides an example of a real
+		// RBAC Config that might be configured for a given for a given backend
+		// service.
+		{
+			name: "TestSuccessCaseEnvoyExample",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"service-admin": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/admin"}}}}},
+								{Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/superuser"}}}}},
+							},
+						},
+						"product-viewer": {
+							Permissions: []*v3rbacpb.Permission{
+								{
+									Rule: &v3rbacpb.Permission_AndRules{AndRules: &v3rbacpb.Permission_Set{
+										Rules: []*v3rbacpb.Permission{
+											{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "GET"}}}},
+											{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "/products"}}}}}},
+											{Rule: &v3rbacpb.Permission_OrRules{OrRules: &v3rbacpb.Permission_Set{
+												Rules: []*v3rbacpb.Permission{
+													{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 80}},
+													{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 443}},
+												},
+											}}},
+										},
+									},
+									},
+								},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				rpcData        *rpcData
+				wantStatusCode codes.Code
+			}{
+				// This incoming RPC Call should match with the service admin
+				// policy.
+				{
+					rpcData: &rpcData{
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+							// Auth Info logically representing something with TLS Certs
+							// here. From the TLS Certs, the principal name should be: "cluster.local/ns/default/sa/admin"
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
+				// These incoming RPC calls should not match any policy.
+				{
+					rpcData: &rpcData{
+						destinationPort: 8000,
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+				{
+					rpcData: &rpcData{
+						destinationPort: 8080,
+						fullMethod:      "get-product-list",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+				{
+					rpcData: &rpcData{
+						destinationPort: 8080,
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+							// Principal Name here - "localhost", will be done with Auth Info
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+			},
+		},
+		{
+			name: "TestNotMatcher",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"not-secret-content": {
+							Permissions: []*v3rbacpb.Permission{
+								{
+									Rule: &v3rbacpb.Permission_NotRule{
+										NotRule: &v3rbacpb.Permission{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "/secret-content"}}}}}},
+									},
+								},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				rpcData        *rpcData
+				wantStatusCode codes.Code
+			}{
+				// This incoming RPC Call should match with the not-secret-content policy.
+				{
+					rpcData: &rpcData{
+						fullMethod: "/regular-content",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
+				// This incoming RPC Call shouldn't match with the not-secret-content-policy.
+				{
+					rpcData: &rpcData{
+						fullMethod: "/secret-content",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+			},
+		},
+		{
+			name: "TestSourceIpMatcher",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"certain-source-ip": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				rpcData        *rpcData
+				wantStatusCode codes.Code
+			}{
+				// This incoming RPC Call should match with the certain-source-ip policy.
+				{
+					rpcData: &rpcData{
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
+				// This incoming RPC Call shouldn't match with the certain-source-ip policy.
+				{
+					rpcData: &rpcData{
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "10.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+			},
+		},
+		// What we should do for this matcher is have it specify whatever address localhost is.
+		// Or perhaps just get rid of this one
+		{
+			name: "TestDestinationIpMatcher",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"certain-destination-ip": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_DestinationIp{DestinationIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				rpcData        *rpcData
+				wantStatusCode codes.Code
+			}{
+				// This incoming RPC Call shouldn't match with the
+				// certain-destination-ip policy, as the test listens on local
+				// host.
+				{
+					rpcData: &rpcData{
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "10.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+			},
+		},
+		// TestAllowAndDenyPolicy tests a policy with an allow (on path) and
+		// deny (on port) policy chained together. This represents how a user
+		// configured interceptor would use this, and also is a potential
+		// configuration for a dynamic xds interceptor.
+		{
+			name: "TestAllowAndDenyPolicy",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"certain-source-ip": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_DirectRemoteIp{DirectRemoteIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+							},
+						},
+					},
+					Action: v3rbacpb.RBAC_ALLOW,
+				},
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"localhost-fan": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 8080}},
+								{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+					Action: v3rbacpb.RBAC_DENY,
+				},
+			},
+			rbacQueries: []struct {
+				rpcData        *rpcData
+				wantStatusCode codes.Code
+			}{
+				// This RPC should match with the allow policy, and shouldn't
+				// match with the deny and thus should be allowed to proceed.
+				{
+					rpcData: &rpcData{
+						destinationPort: 8000,
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
+				// This RPC should match with both the allow policy and deny policy
+				// and thus shouldn't be allowed to proceed as matched with deny.
+				{
+					rpcData: &rpcData{
+						md: map[string][]string{
+							":path": {"localhost-fan-page"},
+						},
+						destinationPort: 8080,
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+				// This RPC shouldn't match with either policy, and thus
+				// shouldn't be allowed to proceed as didn't match with allow.
+				{
+					rpcData: &rpcData{
+						destinationPort: 8000,
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "10.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+				// This RPC shouldn't match with allow, match with deny, and
+				// thus shouldn't be allowed to proceed.
+				{
+					rpcData: &rpcData{
+						md: map[string][]string{
+							":path": {"localhost-fan-page"},
+						},
+						destinationPort: 8080,
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "10.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+			},
+		},
 	}
 
 	// Also check what happens if stuff isn't already in context (i.e. metadata, peerinfo, conn)
@@ -1104,11 +1439,12 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 			}
 			// Query the created chain of RBAC Engines with different args to see
 			// if the chain of RBAC Engines configured as such works as intended.
-			for _, data := range test.rbacQueries { // What about specifying the RPC Data to send around, pulling stuff off that RPC Data to construct three basic...?
+			for _, data := range test.rbacQueries {
 				// Construct the context with three data points that have enough
 				// information to represent incoming RPC's. This will be how a
-				// user uses this API.
-				ctx := metadata.NewIncomingContext(context.Background(), data.rpcData.md) // This stays the same
+				// user uses this API. A user will have to put MD, PeerInfo, and
+				// the connection rpc is sent on in the context.
+				ctx := metadata.NewIncomingContext(context.Background(), data.rpcData.md)
 
 				// Make a TCP connection with a certain destination port. The
 				// address/port of this connection will be used to populate the
@@ -1116,47 +1452,19 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 				// the user of ChainedRBACEngine will have to place into
 				// context, as this is only way to get destination ip and port.
 				lis, err := net.Listen("tcp", "localhost:"+fmt.Sprint(data.rpcData.destinationPort))
-				var conn net.Conn
+				connCh := make(chan net.Conn, 1)
 				go func() {
-					conn, err = lis.Accept()
+					conn, err := lis.Accept()
 					if err != nil {
 						t.Fatalf("Error accepting connection: %v", err)
 						return
 					}
+					connCh <- conn
 				}()
-				// I feel like what I have to do is this:
-				// Client: Dial, Server: net.Listen (listening on a configurable port), dest addr + port
-				// ==, now have a conn connecting client and server
-				// the thing is, we're testing that the conversion works, so can't mock or hook into RPCData passed
-				// into chain of engines
 				net.Dial("tcp", lis.Addr().String())
-
-				// Construct connection to put in context here
-				// Connection needs to have a certain IP and a certain PORT (dest ip + dest port)
-				// How do you construct a connection like that?
-				// net.Listen up there? Pass that in? - I think this might be best option
-				// conn := /*Mock Connection here...*/ // PROBLEM STATEMENT: HOW DOES (IF EVEN...) THE CODEBASE DEFINE A MOCK CONNECTION?
-				// The only thing that this connection needs is a way to get IP Address string it will split into address + port
-
-				// If we construct PeerInfo from net.Listen, how would that work?
-				// Construct PeerInfo to put in context here
-				// PeerInfo has authinfo + addr
-				// if authinfo isn't tls, unauthenticated user
-				// addr is something easily mockable, take addr defined in RPCData specified and put it inside PeerInfo
-				// Like we had before
-				// pi := &peer.Peer{
-				// Addr: /*Construct an address based on rpc specification, also have this default*/,
-				// AuthInfo: // If the test specifies list of credentials, have this thing have tls auth info,
-				// } Outside of Connection, PeerInfo is still defined in RPCData...
-
-				// These three things -> RPCData, define RPCData, use that to build three things, like how user of API will use
-
-				// data.conn is used for local addr + port
-				ctx = SetConnection(ctx, conn) // The RPC has to happen on a connection, so this will never be unspecified..., how do we have a connection with a mock address
-				// data.pi is used for remote addr + port
-				// Set this to TLS Credentials if specified...
-				ctx = peer.NewContext(ctx, data.rpcData.peerInfo) // This has auth info (new thing) + addr, define this in test case
-				// Default should be present, but when looks into it it pulls off nil value...
+				conn := <-connCh
+				ctx = SetConnection(ctx, conn)
+				ctx = peer.NewContext(ctx, data.rpcData.peerInfo) // This has auth info (new thing) + addr (was already there previously), define this in test case
 				err = cre.DetermineStatus(Data{
 					Ctx:        ctx,
 					MethodName: data.rpcData.fullMethod,
@@ -1165,11 +1473,17 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 				// I think a nil status represents a OK code, perhaps return a nil error instead?
 				status, _ := status.FromError(err)
 				if data.wantStatusCode != status.Code() {
-					t.Fatalf("DetermineStatus() returned (), want()")
+					t.Fatalf("DetermineStatus(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, status.Code(), data.wantStatusCode)
 				}
+				conn.Close()
+				lis.Close()
 			}
 		})
 	}
 }
 
-// After writing all these tests, also need to check code coverage
+// Task list: Fix Success Case envoy example (principal name logic)
+// Scale up tests to allow + deny policy
+// Cleanup, send out for PR :)
+
+// After writing all these tests, also need to check code coverage, especially for authenticated stuff

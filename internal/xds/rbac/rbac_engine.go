@@ -182,12 +182,14 @@ func newRPCData(data Data) (*rpcData, error) { // *Big question*: Thought I just
 		return nil, err
 	}
 
-	// What happens if this is nil? Will this typecast work?
-	tlsInfo, ok := pi.AuthInfo.(credentials.TLSInfo) // Does this have to be TLS? If grpc has to specify HTTPS, then it should, if can be just HTTP
 	var peerCertificates []*x509.Certificate
-	if ok {
-		// return nil, errors.New("wrong credentials provided, need to be tls") // Perhaps scale this error back
-		peerCertificates = tlsInfo.State.PeerCertificates
+	// What happens if this is nil? Will this typecast work?
+	if pi.AuthInfo != nil {
+		tlsInfo, ok := pi.AuthInfo.(credentials.TLSInfo) // Does this have to be TLS? If grpc has to specify HTTPS, then it should, if can be just HTTP
+		if ok {
+			// return nil, errors.New("wrong credentials provided, need to be tls") // Perhaps scale this error back
+			peerCertificates = tlsInfo.State.PeerCertificates
+		}
 	}
 
 	// I think we should require all 3 except TLS Info might be questionable
