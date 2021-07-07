@@ -71,13 +71,13 @@ func (cre *ChainedRBACEngine) DetermineStatus(data Data) error {
 
 		// If the engine action type was allow and a matching policy was not
 		// found, this RPC should be denied.
-		if engine.action == allow && err == ErrPolicyNotFound {
+		if engine.action == allow && err == errPolicyNotFound {
 			return status.Error(codes.PermissionDenied, "incoming RPC did not match an allow policy")
 		}
 
 		// If the engine type was deny and also a matching policy was found,
 		// this RPC should be denied.
-		if engine.action == deny && err != ErrPolicyNotFound {
+		if engine.action == deny && err != errPolicyNotFound {
 			return status.Error(codes.PermissionDenied, "incoming RPC matched a deny policy")
 		}
 	}
@@ -217,7 +217,7 @@ type rpcData struct {
 	certs []*x509.Certificate
 }
 
-var ErrPolicyNotFound = errors.New("a matching policy was not found")
+var errPolicyNotFound = errors.New("a matching policy was not found")
 
 // findMatchingPolicy determines if an incoming RPC matches a policy. On a
 // successful match, it returns the name of the matching policy and a nil error
@@ -229,5 +229,5 @@ func (r *engine) findMatchingPolicy(rpcData *rpcData) (string, error) {
 			return policy, nil
 		}
 	}
-	return "", ErrPolicyNotFound
+	return "", errPolicyNotFound
 }
