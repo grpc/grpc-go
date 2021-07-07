@@ -18,8 +18,12 @@ package rbac
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"fmt"
 	"net"
+	"net/url"
 	"testing"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -29,6 +33,7 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -532,8 +537,8 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 								{Rule: &v3rbacpb.Permission_Any{Any: true}},
 							},
 							Principals: []*v3rbacpb.Principal{
-								{Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/admin"}}}}},
-								{Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "cluster.local/ns/default/sa/superuser"}}}}},
+								{Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "//cluster.local/ns/default/sa/admin"}}}}},
+								{Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "//cluster.local/ns/default/sa/superuser"}}}}},
 							},
 						},
 						"product-viewer": {
@@ -572,8 +577,20 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 						fullMethod: "some method",
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
-							// Auth Info logically representing something with TLS Certs
-							// here. From the TLS Certs, the principal name should be: "cluster.local/ns/default/sa/admin"
+							AuthInfo: credentials.TLSInfo{
+								State: tls.ConnectionState{
+									PeerCertificates: []*x509.Certificate{
+										{
+											URIs: []*url.URL{
+												{
+													Host: "cluster.local",
+													Path: "/ns/default/sa/admin",
+												},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 					wantStatusCode: codes.OK,
@@ -603,7 +620,17 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 						destinationPort: 8080,
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
-							// Principal Name here - "localhost", will be done with Auth Info
+							AuthInfo: credentials.TLSInfo{
+								State: tls.ConnectionState{
+									PeerCertificates: []*x509.Certificate{
+										{
+											Subject: pkix.Name{
+												CommonName: "localhost",
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
