@@ -849,7 +849,7 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 				go func() {
 					conn, err := lis.Accept()
 					if err != nil {
-						t.Fatalf("Error accepting connection: %v", err)
+						t.Errorf("Error accepting connection: %v", err)
 						return
 					}
 					connCh <- conn
