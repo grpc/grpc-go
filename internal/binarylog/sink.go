@@ -92,6 +92,7 @@ type bufferedSink struct {
 
 	writeStartOnce sync.Once
 	writeTicker    *time.Ticker
+	done           chan struct{}
 }
 
 func (fs *bufferedSink) Write(e *pb.GrpcLogEntry) error {
@@ -113,7 +114,12 @@ const (
 func (fs *bufferedSink) startFlushGoroutine() {
 	fs.writeTicker = time.NewTicker(bufFlushDuration)
 	go func() {
-		for range fs.writeTicker.C {
+		for {
+			select {
+			case <-fs.done:
+				return
+			case <-fs.writeTicker.C:
+			}
 			fs.mu.Lock()
 			if err := fs.buf.Flush(); err != nil {
 				grpclogLogger.Warningf("failed to flush to Sink: %v", err)
@@ -127,6 +133,7 @@ func (fs *bufferedSink) Close() error {
 	if fs.writeTicker != nil {
 		fs.writeTicker.Stop()
 	}
+	close(fs.done)
 	fs.mu.Lock()
 	if err := fs.buf.Flush(); err != nil {
 		grpclogLogger.Warningf("failed to flush to Sink: %v", err)
@@ -155,5 +162,6 @@ func NewBufferedSink(o io.WriteCloser) Sink {
 		closer: o,
 		out:    newWriterSink(bufW),
 		buf:    bufW,
+		done:   make(chan struct{}),
 	}
 }
