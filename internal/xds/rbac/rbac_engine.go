@@ -46,7 +46,7 @@ type ChainedRBACEngine struct {
 func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainedRBACEngine, error) {
 	var chainedEngines []*engine
 	for _, policy := range policies {
-		rbacEngine, err := NewEngine(policy)
+		rbacEngine, err := newEngine(policy)
 		if err != nil {
 			return nil, err
 		}
@@ -100,12 +100,10 @@ type engine struct {
 	action   action
 }
 
-// NewEngine creates an RBAC Engine based on the contents of policy. If the
+// newEngine creates an RBAC Engine based on the contents of policy. If the
 // config is invalid (and fails to build underlying tree of matchers), NewEngine
-// will return an error. This created RBAC Engine will not persist the action
-// present in the policy, and will leave up to caller to handle the action that
-// is attached to the config.
-func NewEngine(policy *v3rbacpb.RBAC) (*engine, error) {
+// will return an error.
+func newEngine(policy *v3rbacpb.RBAC) (*engine, error) {
 	var action action
 	switch *policy.Action.Enum() {
 	case v3rbacpb.RBAC_ALLOW:
@@ -154,11 +152,13 @@ type Data struct {
 }
 
 // newRPCData takes a incoming context (should be a context representing state
-// needed for server RPC Call with headers and connection piped into it) and the
-// method name of the Service being called server side and populates an RPCData
-// struct ready to be passed to the RBAC Engine to find a matching policy.
-func newRPCData(data Data) (*rpcData, error) { // *Big question*: Thought I just had: For this function on an error case, should it really return an error in certain situations, as it doesn't really need all 6 fields...
-	// Will we leave it up to caller to pipe these three pieces of data into context? Right now, as expected, it's failing.
+// needed for server RPC Call with headers, connection and peer info piped into
+// it) and the method name of the Service being called server side and populates
+// an rpcData struct ready to be passed to the RBAC Engine to find a matching
+// policy.
+func newRPCData(data Data) (*rpcData, error) {
+	// The caller should populate all of these fields (i.e. for empty headers,
+	// pipe an empty md into context).
 	md, ok := metadata.FromIncomingContext(data.Ctx)
 	if !ok {
 		return nil, errors.New("error retrieving metadata from incoming ctx")
@@ -169,11 +169,10 @@ func newRPCData(data Data) (*rpcData, error) { // *Big question*: Thought I just
 		return nil, errors.New("error retrieving peer info from incoming ctx")
 	}
 
-	// You need the connection in order to find the destination address and port
-	// of the incoming RPC Call.
+	// The connection is needed in order to find the destination address and
+	// port of the incoming RPC Call.
 	conn := getConnection(data.Ctx)
-	_, dPort, err := net.SplitHostPort(conn.LocalAddr().String()) // Nil panic here, although this will never in practice, because conn must be there
-	// "Behavior is undefined if pass in something with nil conn"
+	_, dPort, err := net.SplitHostPort(conn.LocalAddr().String())
 	if err != nil {
 		return nil, err
 	}
@@ -183,23 +182,20 @@ func newRPCData(data Data) (*rpcData, error) { // *Big question*: Thought I just
 	}
 
 	var peerCertificates []*x509.Certificate
-	// What happens if this is nil? Will this typecast work?
 	if pi.AuthInfo != nil {
-		tlsInfo, ok := pi.AuthInfo.(credentials.TLSInfo) // Does this have to be TLS? If grpc has to specify HTTPS, then it should, if can be just HTTP
+		tlsInfo, ok := pi.AuthInfo.(credentials.TLSInfo)
 		if ok {
-			// return nil, errors.New("wrong credentials provided, need to be tls") // Perhaps scale this error back
 			peerCertificates = tlsInfo.State.PeerCertificates
 		}
 	}
 
-	// I think we should require all 3 except TLS Info might be questionable
-	return &rpcData{ // Big question: What to do when data is not specified...? Should we require all 3?
+	return &rpcData{
 		md:              md,
 		peerInfo:        pi,
 		fullMethod:      data.MethodName,
 		destinationPort: uint32(dp),
 		destinationAddr: conn.LocalAddr(),
-		certs:           peerCertificates, // Set this to nil if not there, have a nil check in authenticated matcher
+		certs:           peerCertificates,
 	}, nil
 }
 
