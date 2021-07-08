@@ -127,16 +127,18 @@ func bootstrapConfigFromEnvVariable() ([]byte, error) {
 //
 // The format of the bootstrap file will be as follows:
 // {
-//    "xds_server": {
-//      "server_uri": <string containing URI of management server>,
-//      "channel_creds": [
-//        {
-//          "type": <string containing channel cred type>,
-//          "config": <JSON object containing config for the type>
-//        }
-//      ],
-//      "server_features": [ ... ],
-//    },
+//    "xds_servers": [
+//      {
+//        "server_uri": <string containing URI of management server>,
+//        "channel_creds": [
+//          {
+//            "type": <string containing channel cred type>,
+//            "config": <JSON object containing config for the type>
+//          }
+//        ],
+//        "server_features": [ ... ],
+//      }
+//    ],
 //    "node": <JSON form of Node proto>,
 //    "certificate_providers" : {
 //      "default": {
