@@ -375,7 +375,7 @@ type authenticatedMatcher struct {
 
 func newAuthenticatedMatcher(authenticatedMatcherConfig *v3rbacpb.Principal_Authenticated) (*authenticatedMatcher, error) {
 	// Represents this line in the RBAC documentation = "If unset, it applies to
-	// any user that is authenticated".
+	// any user that is authenticated" (see package-level comments).
 	if authenticatedMatcherConfig.PrincipalName == nil {
 		return &authenticatedMatcher{}, nil
 	}
@@ -388,8 +388,9 @@ func newAuthenticatedMatcher(authenticatedMatcherConfig *v3rbacpb.Principal_Auth
 
 func (am *authenticatedMatcher) match(data *rpcData) bool {
 	// Represents this line in the RBAC documentation = "If unset, it applies to
-	// any user that is authenticated". Thus, if a user is authenticated user should
-	// match. An authenticated user will have a certificate provided.
+	// any user that is authenticated" (see package-level comments).
+	// Thus, if a user is authenticated, the user should match. An authenticated
+	// user will have a certificate provided.
 	if am.stringMatcher == nil {
 		// TODO: Is this correct? If a TLS Certificate is provided, that certificate means
 		// that that individual was logically authenticated with a key.
@@ -398,8 +399,8 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 		}
 	}
 
-	// The precedence according to documentation specifies to use URI SANs at
-	// first if present.
+	// The order of matching as per the RBAC documentation (see package-level comments)
+	// is as follows: URI SANs, DNS SANs, and then subject name.
 	for _, cert := range data.certs {
 		for _, uriSAN := range cert.URIs {
 			if am.stringMatcher.Match(uriSAN.String()) {
@@ -407,7 +408,6 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 			}
 		}
 	}
-	// The next thing to check against if present DNS SANs, if present.
 	for _, cert := range data.certs {
 		for _, dnsSAN := range cert.DNSNames {
 			if am.stringMatcher.Match(dnsSAN) {
@@ -415,8 +415,6 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 			}
 		}
 	}
-
-	// The last thing to check is the subject field.
 	for _, cert := range data.certs {
 		if am.stringMatcher.Match(cert.Subject.String()) {
 			return true

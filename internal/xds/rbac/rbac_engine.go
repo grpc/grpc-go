@@ -15,7 +15,9 @@
  */
 
 // Package rbac provides service-level and method-level access control for a
-// service.
+// service. See
+// https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/rbac/v3/rbac.proto#role-based-access-control-rbac
+// for documentation.
 package rbac
 
 import (
@@ -33,58 +35,53 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// ChainedRBACEngine represents a chain of RBAC Engines, which will be used in
-// order to determine whether to allow incoming RPC's to proceed according to
-// the actions of each engine.
-type ChainedRBACEngine struct {
+// ChainEngine represents a chain of RBAC Engines, used to make authorization
+// decisions on incoming RPCs.
+type ChainEngine struct {
 	chainedEngines []*engine
 }
 
-// NewChainEngine returns a new Chain of RBAC Engines to query if incoming RPC's
-// are allowed to proceed or not. This function returns an error in the case
-// that one of the policies is invalid.
-func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainedRBACEngine, error) {
-	var chainedEngines []*engine
+// NewChainEngine returns a chain of RBAC engines, used to make authorization
+// decisions on incoming RPCs. Returns a non-nil error for invalid policies.
+func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainEngine, error) {
+	var engines []*engine
 	for _, policy := range policies {
-		rbacEngine, err := newEngine(policy)
+		engine, err := newEngine(policy)
 		if err != nil {
 			return nil, err
 		}
-		chainedEngines = append(chainedEngines, rbacEngine)
+		engines = append(engines, engine)
 	}
-	return &ChainedRBACEngine{chainedEngines: chainedEngines}, nil
+	return &ChainEngine{chainedEngines: engines}, nil
 }
 
-// DetermineStatus takes in data about incoming RPC's and returns a status error
-// representing whether the RPC should be denied or not (i.e. PermissionDenied or OK)
-// based on the full list of RBAC Engines and their associated actions.
-func (cre *ChainedRBACEngine) DetermineStatus(data Data) error {
+// IsAuthorized determines if an incoming RPC is authorized based on the chain of RBAC
+// engines and their associated actions.
+//
+// Errors returned by this function are compatible with the status package.
+func (cre *ChainEngine) IsAuthorized(ctx context.Context, methodName string) error {
 	// This conversion step (i.e. pulling things out of generic ctx) can be done
 	// once, and then be used for the whole chain of RBAC Engines.
-	rpcData, err := newRPCData(data)
+	rpcData, err := newRPCData(ctx, methodName)
 	if err != nil {
-		return status.Error(codes.InvalidArgument, "passed in data did not have enough information representing incoming rpc")
+		return status.Errorf(codes.InvalidArgument, "missing fields in ctx %+v: %v", ctx, err)
 	}
 	for _, engine := range cre.chainedEngines {
 		// TODO: What do I do now with this matchingPolicyName?
 		_, err := engine.findMatchingPolicy(rpcData)
 
-		// If the engine action type was allow and a matching policy was not
-		// found, this RPC should be denied.
-		if engine.action == allow && err == errPolicyNotFound {
-			return status.Error(codes.PermissionDenied, "incoming RPC did not match an allow policy")
-		}
-
-		// If the engine type was deny and also a matching policy was found,
-		// this RPC should be denied.
-		if engine.action == deny && err != errPolicyNotFound {
-			return status.Error(codes.PermissionDenied, "incoming RPC matched a deny policy")
+		switch {
+		case engine.action == allow && err == errPolicyNotFound:
+			return status.Errorf(codes.PermissionDenied, "incoming RPC %v did not match an allow policy", rpcData)
+		case engine.action == deny && err != errPolicyNotFound:
+			return status.Errorf(codes.PermissionDenied, "incoming RPC %+v matched a deny policy", rpcData)
+		default:
 		}
 	}
 	// If the incoming RPC gets through all of the engines successfully (i.e.
 	// doesn't not match an allow or match a deny engine), the RPC is authorized
 	// to proceed.
-	return status.Error(codes.OK, "rpc is ok to proceed")
+	return status.Error(codes.OK, "")
 }
 
 type action int
@@ -100,9 +97,8 @@ type engine struct {
 	action   action
 }
 
-// newEngine creates an RBAC Engine based on the contents of policy. If the
-// config is invalid (and fails to build underlying tree of matchers), NewEngine
-// will return an error.
+// newEngine creates an RBAC Engine based on the contents of policy. Returns a
+// non-nil error if the policy is invalid.
 func newEngine(policy *v3rbacpb.RBAC) (*engine, error) {
 	var action action
 	switch *policy.Action.Enum() {
@@ -114,7 +110,7 @@ func newEngine(policy *v3rbacpb.RBAC) (*engine, error) {
 		return nil, errors.New("unsupported action")
 	}
 
-	policies := make(map[string]*policyMatcher)
+	policies := make(map[string]*policyMatcher, len(policy.Policies))
 	for name, config := range policy.Policies {
 		matcher, err := newPolicyMatcher(config)
 		if err != nil {
@@ -128,50 +124,43 @@ func newEngine(policy *v3rbacpb.RBAC) (*engine, error) {
 	}, nil
 }
 
-type connectionKey struct{}
+var errPolicyNotFound = errors.New("a matching policy was not found")
 
-func getConnection(ctx context.Context) net.Conn {
-	conn, _ := ctx.Value(connectionKey{}).(net.Conn)
-	return conn
-}
-
-// SetConnection adds the connection to the context to be able to get
-// information about the destination ip and port for an incoming RPC.
-func SetConnection(ctx context.Context, conn net.Conn) context.Context {
-	return context.WithValue(ctx, connectionKey{}, conn)
-}
-
-// Data represents the generic data about incoming RPC's that must be passed
-// into the RBAC Engine in order to try and find a matching policy or not. The
-// ctx passed in must have metadata, peerinfo (used for source ip/port and TLS
-// information) and connection (used for destination ip/port) embedded within
-// it.
-type Data struct {
-	Ctx        context.Context
-	MethodName string
+// findMatchingPolicy determines if an incoming RPC matches a policy. On a
+// successful match, it returns the name of the matching policy and a nil error
+// to specify that there was a matching policy found.  It returns an error in
+// the case of not finding a matching policy.
+func (r *engine) findMatchingPolicy(rpcData *rpcData) (string, error) {
+	for policy, matcher := range r.policies {
+		if matcher.match(rpcData) {
+			return policy, nil
+		}
+	}
+	return "", errPolicyNotFound
 }
 
 // newRPCData takes a incoming context (should be a context representing state
-// needed for server RPC Call with headers, connection and peer info piped into
+// needed for server RPC Call with metadata, peer info (used for source ip/port
+// and TLS information) and connection (used for destination ip/port) piped into
 // it) and the method name of the Service being called server side and populates
 // an rpcData struct ready to be passed to the RBAC Engine to find a matching
 // policy.
-func newRPCData(data Data) (*rpcData, error) {
+func newRPCData(ctx context.Context, methodName string) (*rpcData, error) {
 	// The caller should populate all of these fields (i.e. for empty headers,
 	// pipe an empty md into context).
-	md, ok := metadata.FromIncomingContext(data.Ctx)
+	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, errors.New("error retrieving metadata from incoming ctx")
+		return nil, errors.New("missing metadata in incoming context")
 	}
 
-	pi, ok := peer.FromContext(data.Ctx)
+	pi, ok := peer.FromContext(ctx)
 	if !ok {
-		return nil, errors.New("error retrieving peer info from incoming ctx")
+		return nil, errors.New("missing peer info in incoming context")
 	}
 
 	// The connection is needed in order to find the destination address and
 	// port of the incoming RPC Call.
-	conn := getConnection(data.Ctx)
+	conn := getConnection(ctx)
 	_, dPort, err := net.SplitHostPort(conn.LocalAddr().String())
 	if err != nil {
 		return nil, err
@@ -192,7 +181,7 @@ func newRPCData(data Data) (*rpcData, error) {
 	return &rpcData{
 		md:              md,
 		peerInfo:        pi,
-		fullMethod:      data.MethodName,
+		fullMethod:      methodName,
 		destinationPort: uint32(dp),
 		destinationAddr: conn.LocalAddr(),
 		certs:           peerCertificates,
@@ -213,21 +202,20 @@ type rpcData struct {
 	destinationPort uint32
 	// destinationAddr is the address that the RPC is being sent to.
 	destinationAddr net.Addr
-	// certs will be used for authenticated matcher.
+	// certs are the certificates presented by the peer during a TLS
+	// handshake.
 	certs []*x509.Certificate
 }
 
-var errPolicyNotFound = errors.New("a matching policy was not found")
+type connectionKey struct{}
 
-// findMatchingPolicy determines if an incoming RPC matches a policy. On a
-// successful match, it returns the name of the matching policy and a nil error
-// to specify that there was a matching policy found.  It returns an error in
-// the case of not finding a matching policy.
-func (r *engine) findMatchingPolicy(rpcData *rpcData) (string, error) {
-	for policy, matcher := range r.policies {
-		if matcher.match(rpcData) {
-			return policy, nil
-		}
-	}
-	return "", errPolicyNotFound
+func getConnection(ctx context.Context) net.Conn {
+	conn, _ := ctx.Value(connectionKey{}).(net.Conn)
+	return conn
+}
+
+// SetConnection adds the connection to the context to be able to get
+// information about the destination ip and port for an incoming RPC.
+func SetConnection(ctx context.Context, conn net.Conn) context.Context {
+	return context.WithValue(ctx, connectionKey{}, conn)
 }

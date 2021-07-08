@@ -55,12 +55,12 @@ type addr struct {
 func (addr) Network() string   { return "" }
 func (a *addr) String() string { return a.ipAddress }
 
-// TestChainedRBACEngineConstruction tests the construction of the
-// ChainedRBACEngine. Due to some types of RBAC configuration being logically
-// wrong and returning an error rather than successfully constructing the RBAC
-// Engine, this test tests both RBAC Configurations deemed successful and also
-// RBAC Configurations that will raise errors.
-func (s) TestChainedRBACEngineConstruction(t *testing.T) {
+// TestChainEngineConstruction tests the construction of the ChainEngine. Due to
+// some types of RBAC configuration being logically wrong and returning an error
+// rather than successfully constructing the RBAC Engine, this test tests both
+// RBAC Configurations deemed successful and also RBAC Configurations that will
+// raise errors.
+func (s) TestChainEngineConstruction(t *testing.T) {
 	tests := []struct {
 		name        string
 		rbacConfigs []*v3rbacpb.RBAC
@@ -421,12 +421,12 @@ func (s) TestChainedRBACEngineConstruction(t *testing.T) {
 	}
 }
 
-// TestChainedRBACEngine tests the chain of RBAC Engines by configuring the
-// chain of engines in a certain way in different scenarios. After configuring
-// the chain of engines in a certain way, this test pings the chain of engines
-// with different types of data representing incoming RPC's (piped into a
-// context), and verifies that it works as expected.
-func (s) TestChainedRBACEngine(t *testing.T) {
+// TestChainEngine tests the chain of RBAC Engines by configuring the chain of
+// engines in a certain way in different scenarios. After configuring the chain
+// of engines in a certain way, this test pings the chain of engines with
+// different types of data representing incoming RPC's (piped into a context),
+// and verifies that it works as expected.
+func (s) TestChainEngine(t *testing.T) {
 	tests := []struct {
 		name        string
 		rbacConfigs []*v3rbacpb.RBAC
@@ -869,7 +869,7 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 				// Make a TCP connection with a certain destination port. The
 				// address/port of this connection will be used to populate the
 				// destination ip/port in RPCData struct. This represents what
-				// the user of ChainedRBACEngine will have to place into
+				// the user of ChainEngine will have to place into
 				// context, as this is only way to get destination ip and port.
 				lis, err := net.Listen("tcp", "localhost:"+fmt.Sprint(data.rpcData.destinationPort))
 				if err != nil {
@@ -888,25 +888,16 @@ func (s) TestChainedRBACEngine(t *testing.T) {
 				conn := <-connCh
 				ctx = SetConnection(ctx, conn)
 				ctx = peer.NewContext(ctx, data.rpcData.peerInfo)
-				err = cre.DetermineStatus(Data{
-					Ctx:        ctx,
-					MethodName: data.rpcData.fullMethod,
-				})
 
-				// TODO: I think a nil status represents a OK code, perhaps return a nil error instead?
+				err = cre.IsAuthorized(ctx, data.rpcData.fullMethod)
 				status, _ := status.FromError(err)
 				if data.wantStatusCode != status.Code() {
-					t.Fatalf("DetermineStatus(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, status.Code(), data.wantStatusCode)
+					t.Fatalf("IsAuthorized(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, status.Code(), data.wantStatusCode)
 				}
+
 				conn.Close()
 				lis.Close()
 			}
 		})
 	}
 }
-
-// Task list: Fix Success Case envoy example (principal name logic)
-// Scale up tests to allow + deny policy
-// Cleanup, send out for PR :)
-
-// After writing all these tests, also need to check code coverage, especially for authenticated stuff
