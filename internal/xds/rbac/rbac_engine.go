@@ -160,7 +160,10 @@ func newRPCData(ctx context.Context, methodName string) (*rpcData, error) {
 
 	// The connection is needed in order to find the destination address and
 	// port of the incoming RPC Call.
-	conn := getConnection(ctx)
+	conn, ok := getConnection(ctx)
+	if !ok {
+		return nil, errors.New("missing connection in incoming context")
+	}
 	_, dPort, err := net.SplitHostPort(conn.LocalAddr().String())
 	if err != nil {
 		return nil, err
@@ -209,9 +212,9 @@ type rpcData struct {
 
 type connectionKey struct{}
 
-func getConnection(ctx context.Context) net.Conn {
-	conn, _ := ctx.Value(connectionKey{}).(net.Conn)
-	return conn
+func getConnection(ctx context.Context) (net.Conn, bool) {
+	conn, ok := ctx.Value(connectionKey{}).(net.Conn)
+	return conn, ok
 }
 
 // SetConnection adds the connection to the context to be able to get
