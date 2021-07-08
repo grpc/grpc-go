@@ -99,11 +99,10 @@ func (fs *bufferedSink) Write(e *pb.GrpcLogEntry) error {
 	// Start the write loop when Write is called.
 	fs.writeStartOnce.Do(fs.startFlushGoroutine)
 	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	if err := fs.out.Write(e); err != nil {
-		fs.mu.Unlock()
 		return err
 	}
-	fs.mu.Unlock()
 	return nil
 }
 
@@ -135,6 +134,7 @@ func (fs *bufferedSink) Close() error {
 	}
 	close(fs.done)
 	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	if err := fs.buf.Flush(); err != nil {
 		grpclogLogger.Warningf("failed to flush to Sink: %v", err)
 	}
@@ -144,7 +144,6 @@ func (fs *bufferedSink) Close() error {
 	if err := fs.out.Close(); err != nil {
 		grpclogLogger.Warningf("failed to close the Sink: %v", err)
 	}
-	fs.mu.Unlock()
 	return nil
 }
 
