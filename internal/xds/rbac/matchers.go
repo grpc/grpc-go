@@ -395,9 +395,8 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 	if am.stringMatcher == nil {
 		if len(data.certs) != 0 {
 			return true
-		} else {
-			return false
 		}
+		return false
 	}
 
 	// The order of matching as per the RBAC documentation (see package-level comments)
