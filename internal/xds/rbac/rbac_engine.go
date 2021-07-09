@@ -28,6 +28,7 @@ import (
 	"strconv"
 
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
@@ -59,10 +60,10 @@ func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainEngine, error) {
 // engines and their associated actions.
 //
 // Errors returned by this function are compatible with the status package.
-func (cre *ChainEngine) IsAuthorized(ctx context.Context, methodName string) error {
-	// This conversion step (i.e. pulling things out of generic ctx) can be done
-	// once, and then be used for the whole chain of RBAC Engines.
-	rpcData, err := newRPCData(ctx, methodName)
+func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
+	// This conversion step (i.e. pulling things out of ctx) can be done once,
+	// and then be used for the whole chain of RBAC Engines.
+	rpcData, err := newRPCData(ctx)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "missing fields in ctx %+v: %v", ctx, err)
 	}
@@ -144,7 +145,7 @@ func (r *engine) findMatchingPolicy(rpcData *rpcData) (string, error) {
 // it) and the method name of the Service being called server side and populates
 // an rpcData struct ready to be passed to the RBAC Engine to find a matching
 // policy.
-func newRPCData(ctx context.Context, methodName string) (*rpcData, error) {
+func newRPCData(ctx context.Context) (*rpcData, error) {
 	// The caller should populate all of these fields (i.e. for empty headers,
 	// pipe an empty md into context).
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -155,6 +156,14 @@ func newRPCData(ctx context.Context, methodName string) (*rpcData, error) {
 	pi, ok := peer.FromContext(ctx)
 	if !ok {
 		return nil, errors.New("missing peer info in incoming context")
+	}
+
+	// The methodName will be available in the passed in ctx from a unary or streaming
+	// interceptor, as grpc.Server pipes in a transport stream which contains the methodName
+	// into contexts available in both unary or streaming interceptors.
+	mn, ok := grpc.Method(ctx)
+	if !ok {
+		return nil, errors.New("missing method in incoming context")
 	}
 
 	// The connection is needed in order to find the destination address and
@@ -183,7 +192,7 @@ func newRPCData(ctx context.Context, methodName string) (*rpcData, error) {
 	return &rpcData{
 		md:              md,
 		peerInfo:        pi,
-		fullMethod:      methodName,
+		fullMethod:      mn,
 		destinationPort: uint32(dp),
 		destinationAddr: conn.LocalAddr(),
 		certs:           peerCertificates,

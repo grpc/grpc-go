@@ -22,6 +22,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
+	"google.golang.org/grpc"
 	"net"
 	"net/url"
 	"testing"
@@ -901,8 +902,12 @@ func (s) TestChainEngine(t *testing.T) {
 				conn := <-connCh
 				ctx = SetConnection(ctx, conn)
 				ctx = peer.NewContext(ctx, data.rpcData.peerInfo)
+				stream := &ServerTransportStreamWithMethod{
+					method: data.rpcData.fullMethod,
+				}
 
-				err = cre.IsAuthorized(ctx, data.rpcData.fullMethod)
+				ctx = grpc.NewContextWithServerTransportStream(ctx, stream)
+				err = cre.IsAuthorized(ctx)
 				status, _ := status.FromError(err)
 				if data.wantStatusCode != status.Code() {
 					t.Fatalf("IsAuthorized(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, status.Code(), data.wantStatusCode)
@@ -913,4 +918,24 @@ func (s) TestChainEngine(t *testing.T) {
 			}
 		})
 	}
+}
+
+type ServerTransportStreamWithMethod struct {
+	method string
+}
+
+func (sts *ServerTransportStreamWithMethod) Method() string {
+	return sts.method
+}
+
+func (sts *ServerTransportStreamWithMethod) SetHeader(md metadata.MD) error {
+	return nil
+}
+
+func (sts *ServerTransportStreamWithMethod) SendHeader(md metadata.MD) error {
+	return nil
+}
+
+func (sts *ServerTransportStreamWithMethod) SetTrailer(md metadata.MD) error {
+	return nil
 }
