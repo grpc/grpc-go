@@ -393,10 +393,7 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 	// provide a certificate to prove their identity. Thus, you can simply check
 	// if there is a certificate present.
 	if am.stringMatcher == nil {
-		if len(data.certs) != 0 {
-			return true
-		}
-		return false
+		return len(data.certs) != 0
 	}
 
 	// The order of matching as per the RBAC documentation (see package-level comments)
