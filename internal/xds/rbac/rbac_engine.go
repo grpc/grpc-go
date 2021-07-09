@@ -75,7 +75,6 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context, methodName string) err
 			return status.Errorf(codes.PermissionDenied, "incoming RPC %v did not match an allow policy", rpcData)
 		case engine.action == deny && err != errPolicyNotFound:
 			return status.Errorf(codes.PermissionDenied, "incoming RPC %+v matched a deny policy", rpcData)
-		default:
 		}
 	}
 	// If the incoming RPC gets through all of the engines successfully (i.e.

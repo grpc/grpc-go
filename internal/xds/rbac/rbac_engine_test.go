@@ -55,20 +55,20 @@ type addr struct {
 func (addr) Network() string   { return "" }
 func (a *addr) String() string { return a.ipAddress }
 
-// TestChainEngineConstruction tests the construction of the ChainEngine. Due to
-// some types of RBAC configuration being logically wrong and returning an error
+// TestNewChainEngine tests the construction of the ChainEngine. Due to some
+// types of RBAC configuration being logically wrong and returning an error
 // rather than successfully constructing the RBAC Engine, this test tests both
 // RBAC Configurations deemed successful and also RBAC Configurations that will
 // raise errors.
-func (s) TestChainEngineConstruction(t *testing.T) {
+func (s) TestNewChainEngine(t *testing.T) {
 	tests := []struct {
-		name        string
-		rbacConfigs []*v3rbacpb.RBAC
-		wantErr     bool
+		name     string
+		policies []*v3rbacpb.RBAC
+		wantErr  bool
 	}{
 		{
-			name: "TestSuccessCaseAnyMatchSingular",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "SuccessCaseAnyMatchSingular",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -85,8 +85,8 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 			},
 		},
 		{
-			name: "TestSuccessCaseAnyMatchMultiple",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "SuccessCaseAnyMatchMultiple",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -116,8 +116,8 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 			},
 		},
 		{
-			name: "TestSuccessCaseSimplePolicySingular",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "SuccessCaseSimplePolicySingular",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -134,9 +134,14 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 				},
 			},
 		},
+		// SuccessCaseSimplePolicyTwoPolicies tests the construction of the
+		// chained engines in the case where there are two policies in a list,
+		// one with an allow policy and one with a deny policy. A situation
+		// where two policies (allow and deny) is a very common use case for
+		// this API, and should successfully build.
 		{
-			name: "TestSuccessCaseSimplePolicyMultiple",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "SuccessCaseSimplePolicyTwoPolicies",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -168,8 +173,8 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 			},
 		},
 		{
-			name: "TestSuccessCaseEnvoyExampleSingular",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "SuccessCaseEnvoyExampleSingular",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -193,7 +198,9 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 												{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 80}},
 												{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 443}},
 											},
-										}}},
+										},
+										},
+										},
 									},
 								},
 								},
@@ -208,8 +215,8 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 			},
 		},
 		{
-			name: "TestSourceIpMatcherSuccessSingular",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "SourceIpMatcherSuccessSingular",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -226,8 +233,8 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 			},
 		},
 		{
-			name: "TestSourceIpMatcherFailureSingular",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "SourceIpMatcherFailureSingular",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -245,8 +252,8 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "TestDestinationIpMatcherSuccess",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "DestinationIpMatcherSuccess",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -263,8 +270,8 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 			},
 		},
 		{
-			name: "TestDestinationIpMatcherFailure",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "DestinationIpMatcherFailure",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -282,8 +289,8 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "TestMatcherToNotPolicy",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "MatcherToNotPolicy",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -300,8 +307,8 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 			},
 		},
 		{
-			name: "TestMatcherToNotPrinicipal",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "MatcherToNotPrinicipal",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -317,9 +324,12 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 				},
 			},
 		},
+		// PrinicpalProductViewer tests the construction of a chained engine
+		// with a policy that allows any downstream to send a GET request on a
+		// certain path.
 		{
-			name: "TestPrincipalProductViewer",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "PrincipalProductViewer",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_ALLOW,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -345,9 +355,12 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 				},
 			},
 		},
+		// Certain Headers tests the construction of a chained engine with a
+		// policy that allows any downstream to send an HTTP request with
+		// certain headers.
 		{
-			name: "TestCertainHeaders",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "CertainHeaders",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
 						"certain-headers": {
@@ -376,8 +389,8 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 			},
 		},
 		{
-			name: "TestLogAction",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "LogAction",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Action: v3rbacpb.RBAC_LOG,
 					Policies: map[string]*v3rbacpb.Policy{
@@ -395,8 +408,8 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "TestActionNotSpecified",
-			rbacConfigs: []*v3rbacpb.RBAC{
+			name: "ActionNotSpecified",
+			policies: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
 						"anyone": {
@@ -414,8 +427,8 @@ func (s) TestChainEngineConstruction(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if _, err := NewChainEngine(test.rbacConfigs); (err != nil) != test.wantErr {
-				t.Fatalf("NewChainEngine(%+v) returned err: %v, wantErr: %v", test.rbacConfigs, err, test.wantErr)
+			if _, err := NewChainEngine(test.policies); (err != nil) != test.wantErr {
+				t.Fatalf("NewChainEngine(%+v) returned err: %v, wantErr: %v", test.policies, err, test.wantErr)
 			}
 		})
 	}
@@ -435,12 +448,12 @@ func (s) TestChainEngine(t *testing.T) {
 			wantStatusCode codes.Code
 		}
 	}{
-		// TestSuccessCaseAnyMatch tests a single RBAC Engine instantiated with
+		// SuccessCaseAnyMatch tests a single RBAC Engine instantiated with
 		// a config with a policy with any rules for both permissions and
 		// principals, meaning that any data about incoming RPC's that the RBAC
 		// Engine is queried with should match that policy.
 		{
-			name: "TestSuccessCaseAnyMatch",
+			name: "SuccessCaseAnyMatch",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
@@ -470,11 +483,11 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 			},
 		},
-		// TestSuccessCaseSimplePolicy is a test that tests a single policy
+		// SuccessCaseSimplePolicy is a test that tests a single policy
 		// that only allows an rpc to proceed if the rpc is calling with a certain
 		// path and port.
 		{
-			name: "TestSuccessCaseSimplePolicy",
+			name: "SuccessCaseSimplePolicy",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
@@ -522,13 +535,13 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 			},
 		},
-		// TestSuccessCaseEnvoyExample is a test based on the example provided
+		// SuccessCaseEnvoyExample is a test based on the example provided
 		// in the EnvoyProxy docs. The RBAC Config contains two policies,
 		// service admin and product viewer, that provides an example of a real
 		// RBAC Config that might be configured for a given for a given backend
 		// service.
 		{
-			name: "TestSuccessCaseEnvoyExample",
+			name: "SuccessCaseEnvoyExample",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
@@ -638,7 +651,7 @@ func (s) TestChainEngine(t *testing.T) {
 			},
 		},
 		{
-			name: "TestNotMatcher",
+			name: "NotMatcher",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
@@ -684,7 +697,7 @@ func (s) TestChainEngine(t *testing.T) {
 			},
 		},
 		{
-			name: "TestSourceIpMatcher",
+			name: "SourceIpMatcher",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
@@ -724,7 +737,7 @@ func (s) TestChainEngine(t *testing.T) {
 			},
 		},
 		{
-			name: "TestDestinationIpMatcher",
+			name: "DestinationIpMatcher",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
@@ -756,12 +769,12 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 			},
 		},
-		// TestAllowAndDenyPolicy tests a policy with an allow (on path) and
+		// AllowAndDenyPolicy tests a policy with an allow (on path) and
 		// deny (on port) policy chained together. This represents how a user
 		// configured interceptor would use this, and also is a potential
 		// configuration for a dynamic xds interceptor.
 		{
-			name: "TestAllowAndDenyPolicy",
+			name: "AllowAndDenyPolicy",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
