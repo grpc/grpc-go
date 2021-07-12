@@ -209,7 +209,6 @@ func processHTTPFilterOverrides(cfgs map[string]*anypb.Any) (map[string]httpfilt
 func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilter, error) {
 	ret := make([]HTTPFilter, 0, len(filters))
 	seenNames := make(map[string]bool, len(filters))
-	fmt.Println(" ------- ", seenNames)
 	for _, filter := range filters {
 		name := filter.GetName()
 		if name == "" {
