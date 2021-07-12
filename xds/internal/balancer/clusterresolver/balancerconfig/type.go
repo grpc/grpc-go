@@ -95,4 +95,46 @@ type DiscoveryMechanism struct {
 	// This is used for EDS watch if set. If unset, Cluster is used for EDS
 	// watch.
 	EDSServiceName string `json:"edsServiceName,omitempty"`
+	// DNSHostname is the DNS name to resolve in "host:port" form. For type
+	// LOGICAL_DNS only.
+	DNSHostname string `json:"dnsHostname,omitempty"`
+}
+
+// Equal returns whether the DiscoveryMechanism is the same with the parameter.
+func (dm DiscoveryMechanism) Equal(b DiscoveryMechanism) bool {
+	switch {
+	case dm.Cluster != b.Cluster:
+		return false
+	case !equalStringP(dm.LoadReportingServerName, b.LoadReportingServerName):
+		return false
+	case !equalUint32P(dm.MaxConcurrentRequests, b.MaxConcurrentRequests):
+		return false
+	case dm.Type != b.Type:
+		return false
+	case dm.EDSServiceName != b.EDSServiceName:
+		return false
+	case dm.DNSHostname != b.DNSHostname:
+		return false
+	}
+	return true
+}
+
+func equalStringP(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+func equalUint32P(a, b *uint32) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
