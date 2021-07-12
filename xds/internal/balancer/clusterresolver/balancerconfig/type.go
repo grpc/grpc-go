@@ -102,22 +102,18 @@ type DiscoveryMechanism struct {
 
 // Equal returns whether the DiscoveryMechanism is the same with the parameter.
 func (dm DiscoveryMechanism) Equal(b DiscoveryMechanism) bool {
-	if dm.Cluster != b.Cluster {
+	switch {
+	case dm.Cluster != b.Cluster:
 		return false
-	}
-	if !equalStringP(dm.LoadReportingServerName, b.LoadReportingServerName) {
+	case !equalStringP(dm.LoadReportingServerName, b.LoadReportingServerName):
 		return false
-	}
-	if !equalUint32P(dm.MaxConcurrentRequests, b.MaxConcurrentRequests) {
+	case !equalUint32P(dm.MaxConcurrentRequests, b.MaxConcurrentRequests):
 		return false
-	}
-	if dm.Type != b.Type {
+	case dm.Type != b.Type:
 		return false
-	}
-	if dm.EDSServiceName != b.EDSServiceName {
+	case dm.EDSServiceName != b.EDSServiceName:
 		return false
-	}
-	if dm.DNSHostname != b.DNSHostname {
+	case dm.DNSHostname != b.DNSHostname:
 		return false
 	}
 	return true
