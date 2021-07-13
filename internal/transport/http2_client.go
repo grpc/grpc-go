@@ -1286,7 +1286,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		statusGen      *status.Status
 		httpStatusCode *int
 		httpStatusErr  string
-		rawStatusCode  *codes.Code
+		rawStatusCode  = codes.Unknown
 		// headerError is set if an error is encountered while parsing the headers
 		headerError string
 	)
@@ -1314,8 +1314,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 				return
 			}
-			c := codes.Code(uint32(code))
-			rawStatusCode = &c
+			rawStatusCode = codes.Code(uint32(code))
 		case "grpc-message":
 			grpcMessage = decodeGrpcMessage(hf.Value)
 		case "grpc-status-details-bin":
@@ -1435,11 +1434,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 
 	if statusGen == nil {
-		rsc := codes.Unknown
-		if rawStatusCode != nil {
-			rsc = *rawStatusCode
-		}
-		statusGen = status.New(rsc, grpcMessage)
+		statusGen = status.New(rawStatusCode, grpcMessage)
 	}
 
 	// if client received END_STREAM from server while stream was still active, send RST_STREAM
