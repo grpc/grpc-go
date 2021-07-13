@@ -1070,7 +1070,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			resources: []*anypb.Any{listenerEmptyTransportSocket},
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
-					InboundListenerCfg: &InboundListenerConfig{
+					InboundListenerCfg: &InboundListenerConfig{ // Inbound listener - server side listener
 						Address: "0.0.0.0",
 						Port:    "9999",
 						FilterChains: &FilterChainManager{
@@ -1155,7 +1155,9 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name:      "happy case with no validation context",
-			resources: []*anypb.Any{listenerNoValidationContext},
+			resources: []*anypb.Any{listenerNoValidationContext}, // This is what gets converted to the want update
+			// That thing should have a list of http filters that you need to convert
+			// This resource has no actual HTTP Filters...inside the HCM
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					InboundListenerCfg: &InboundListenerConfig{
@@ -1174,6 +1176,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 																IdentityInstanceName: "identityPluginInstance",
 																IdentityCertName:     "identityCertName",
 															},
+															HTTPFilters: []HTTPFilter{},
 														},
 													},
 												},
@@ -1187,6 +1190,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									IdentityInstanceName: "defaultIdentityPluginInstance",
 									IdentityCertName:     "defaultIdentityCertName",
 								},
+								HTTPFilters: []HTTPFilter{},
 							},
 						},
 					},
@@ -1222,6 +1226,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 																IdentityCertName:     "identityCertName",
 																RequireClientCert:    true,
 															},
+															HTTPFilters: []HTTPFilter{},
 														},
 													},
 												},
@@ -1238,6 +1243,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									IdentityCertName:     "defaultIdentityCertName",
 									RequireClientCert:    true,
 								},
+								HTTPFilters: []HTTPFilter{},
 							},
 						},
 					},
