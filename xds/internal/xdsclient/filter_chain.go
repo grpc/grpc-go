@@ -24,8 +24,10 @@ import (
 	"net"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 
 	"google.golang.org/grpc/xds/internal/version"
 )
@@ -52,12 +54,12 @@ const (
 // Listener resource.
 //
 // Currently, this simply contains the security configuration found in the
-// 'transport_socket' field of the filter chain. The actual set of filters
-// associated with this filter chain are not captured here, since we do not
-// support these filters on the server-side yet.
+// 'transport_socket' field of the filter chain.
 type FilterChain struct {
 	// SecurityCfg contains transport socket security configuration.
 	SecurityCfg *SecurityConfig
+	// HTTPFilters represent the HTTP Filters that comprise this FilterChain.
+	HTTPFilters []HTTPFilter
 }
 
 // SourceType specifies the connection source IP match type.
@@ -395,8 +397,7 @@ func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePre
 }
 
 // filterChainFromProto extracts the relevant information from the FilterChain
-// proto and stores it in our internal representation. Currently, we only
-// process the security configuration stored in the transport_socket field.
+// proto and stores it in our internal representation.
 func filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
 	// If the transport_socket field is not specified, it means that the control
 	// plane has not sent us any security config. This is fine and the server
@@ -431,7 +432,25 @@ func filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
 	if sc.RequireClientCert && sc.RootInstanceName == "" {
 		return nil, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
 	}
-	return &FilterChain{SecurityCfg: sc}, nil
+
+	var httpFilters []HTTPFilter
+	for _, filter := range fc.GetFilters() {
+		tc := filter.GetTypedConfig()
+		hcm := &v3httppb.HttpConnectionManager{}
+		if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
+			// This should never happen, as the proto was already validated to
+			// contain a single L4 Filter (HCM), as that is the only L4 filter
+			// grpc-go currently supports.
+			return nil, fmt.Errorf("filter chain {%+v} failed unmarshaling of network filter {%+v}: %v", fc, filter, err)
+		}
+		if httpFilters, err = processHTTPFilters(hcm.GetHttpFilters(), true); err != nil {
+			return nil, err
+		}
+	}
+	return &FilterChain{
+		SecurityCfg: sc,
+		HTTPFilters: httpFilters,
+	}, nil
 }
 
 // FilterChainLookupParams wraps parameters to be passed to Lookup.
