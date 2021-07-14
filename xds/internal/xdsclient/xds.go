@@ -268,13 +268,6 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 			Port:    strconv.Itoa(int(sockAddr.GetPortValue())),
 		},
 	}
-	chains := lis.GetFilterChains()
-	if def := lis.GetDefaultFilterChain(); def != nil {
-		chains = append(chains, def)
-	}
-	if err := validateNetworkFilterChains(chains); err != nil {
-		return nil, err
-	}
 
 	fcMgr, err := NewFilterChainManager(lis)
 	if err != nil {
@@ -284,17 +277,17 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	return lu, nil
 }
 
-func validateNetworkFilterChains(filterChains []*v3listenerpb.FilterChain) error {
-	for _, filterChain := range filterChains {
+func validateNetworkFilterChain(filterChain *v3listenerpb.FilterChain) ([]HTTPFilter, error) {
 		seenNames := make(map[string]bool, len(filterChain.GetFilters()))
 		seenHCM := false
+		var httpFilters []HTTPFilter
 		for _, filter := range filterChain.GetFilters() {
 			name := filter.GetName()
 			if name == "" {
-				return fmt.Errorf("filter chain {%+v} is missing name field in filter: {%+v}", filterChain, filter)
+				return nil, fmt.Errorf("filter chain {%+v} is missing name field in filter: {%+v}", filterChain, filter)
 			}
 			if seenNames[name] {
-				return fmt.Errorf("filter chain {%+v} has duplicate filter name %q", filterChain, name)
+				return nil, fmt.Errorf("filter chain {%+v} has duplicate filter name %q", filterChain, name)
 			}
 			seenNames[name] = true
 
@@ -315,28 +308,25 @@ func validateNetworkFilterChains(filterChains []*v3listenerpb.FilterChain) error
 				// we have for HTTP filters), when we have to support network
 				// filters other than HttpConnectionManager.
 				if tc.GetTypeUrl() != version.V3HTTPConnManagerURL {
-					return fmt.Errorf("filter chain {%+v} has unsupported network filter %q in filter {%+v}", filterChain, tc.GetTypeUrl(), filter)
+					return nil, fmt.Errorf("filter chain {%+v} has unsupported network filter %q in filter {%+v}", filterChain, tc.GetTypeUrl(), filter)
 				}
 				hcm := &v3httppb.HttpConnectionManager{}
 				if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
-					return fmt.Errorf("filter chain {%+v} failed unmarshaling of network filter {%+v}: %v", filterChain, filter, err)
+					return nil, fmt.Errorf("filter chain {%+v} failed unmarshaling of network filter {%+v}: %v", filterChain, filter, err)
 				}
-				// We currently don't support HTTP filters on the server-side.
-				// We will be adding support for it in the future. So, we want
-				// to make sure that the http_filters configuration is valid.
-				if _, err := processHTTPFilters(hcm.GetHttpFilters(), true); err != nil {
-					return err
+				var err error
+				if httpFilters, err = processHTTPFilters(hcm.GetHttpFilters(), true); err != nil {
+					return nil, fmt.Errorf("filter chain {%+v} had invalid server side HTTP Filters {%+v}", filterChain, hcm.GetHttpFilters())
 				}
 				seenHCM = true
 			default:
-				return fmt.Errorf("filter chain {%+v} has unsupported config_type %T in filter %s", filterChain, typ, filter.GetName())
+				return nil, fmt.Errorf("filter chain {%+v} has unsupported config_type %T in filter %s", filterChain, typ, filter.GetName())
 			}
 		}
 		if !seenHCM {
-			return fmt.Errorf("filter chain {%+v} missing HttpConnectionManager filter", filterChain)
+			return nil, fmt.Errorf("filter chain {%+v} missing HttpConnectionManager filter", filterChain)
 		}
-	}
-	return nil
+	return httpFilters, nil
 }
 
 // UnmarshalRouteConfig processes resources received in an RDS response,
