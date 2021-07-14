@@ -164,7 +164,7 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 	}
 	// Build the source and dest prefix slices used by Lookup().
 	fcSeen := false
-	for _, dstPrefix := range fci.dstPrefixMap { // Validate non default
+	for _, dstPrefix := range fci.dstPrefixMap {
 		fci.dstPrefixes = append(fci.dstPrefixes, dstPrefix)
 		for _, st := range dstPrefix.srcTypeArr {
 			if st == nil {
@@ -187,7 +187,7 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 	var def *FilterChain
 	if dfc := lis.GetDefaultFilterChain(); dfc != nil {
 		var err error
-		if def, err = filterChainFromProto(dfc); err != nil { // Validate default
+		if def, err = filterChainFromProto(dfc); err != nil {
 			return nil, err
 		}
 	}
@@ -637,3 +637,14 @@ func filterBySourcePorts(spe *sourcePrefixEntry, srcPort int) *FilterChain {
 
 // You have to validate somewhere, rather than validate in xds, then instantiate (with same expensive validations)
 // validate in filter chain with correct logic (delete tls check line)
+// Tests that are failing:
+// Test/UnmarshalListener_ServerSide/client_only_http_filter_inside_the_network_filter
+// Test/UnmarshalListener_ServerSide/empty_transport_socket
+
+// TestNewFilterChainImpl_Failure_OverlappingMatchingRules: misisng HCM filter, wantErr: multiple filter chains with overlapping matching rules are defined
+// TestNewFilterChainImpl_Failure_BadSecurityConfig missing HCM filter, want errors related to security config
+// TestNewFilterChainImpl_Success_SecurityConfig: missing HCM filter, want nil
+// TestNewFilterChainImpl_Success_UnsupportedMatchFields: missing hcm errors, want nil
+// TestNewFilterChainImpl_Success_AllCombinations: missing hcm errors, want nil
+// TestLookup_Failures: missing hcm Check
+// TestLookup_Successes: missing hcm Check

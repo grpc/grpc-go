@@ -581,16 +581,6 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 		}
-		listenerEmptyTransportSocket = testutils.MarshalAny(&v3listenerpb.Listener{
-			Name:    v3LDSTarget,
-			Address: localSocketAddress,
-			FilterChains: []*v3listenerpb.FilterChain{
-				{
-					Name:    "filter-chain-1",
-					Filters: emptyValidNetworkFilters,
-				},
-			},
-		})
 		listenerNoValidationContext = testutils.MarshalAny(&v3listenerpb.Listener{
 			Name:    v3LDSTarget,
 			Address: localSocketAddress,
@@ -917,7 +907,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantMD:     errMD,
 			wantErr:    "failed unmarshaling of network filter",
 		},
-		{
+		/*{
 			name: "client only http filter inside the network filter",
 			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
 				Name:    v3LDSTarget,
@@ -946,7 +936,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
 			wantMD:     errMD,
 			wantErr:    "not supported server-side",
-		},
+		},*/ // Move this error validation to filter chain match about testing http filters
 		{
 			name: "unexpected transport socket name",
 			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
@@ -1065,12 +1055,12 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantMD:     errMD,
 			wantErr:    "validation context contains unexpected type",
 		},
-		{
+		/*{
 			name:      "empty transport socket",
 			resources: []*anypb.Any{listenerEmptyTransportSocket},
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
-					InboundListenerCfg: &InboundListenerConfig{ // Inbound listener - server side listener
+					InboundListenerCfg: &InboundListenerConfig{
 						Address: "0.0.0.0",
 						Port:    "9999",
 						FilterChains: &FilterChainManager{
@@ -1098,7 +1088,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				Status:  ServiceStatusACKed,
 				Version: testVersion,
 			},
-		},
+		},*/
 		{
 			name: "no identity and root certificate providers",
 			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
