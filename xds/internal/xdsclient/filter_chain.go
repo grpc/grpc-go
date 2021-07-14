@@ -634,7 +634,6 @@ func filterBySourcePorts(spe *sourcePrefixEntry, srcPort int) *FilterChain {
 	return nil
 }
 
-
 // You have to validate somewhere, rather than validate in xds, then instantiate (with same expensive validations)
 // validate in filter chain with correct logic (delete tls check line)
 // Tests that are failing:
