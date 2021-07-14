@@ -339,6 +339,8 @@ func (t *testUpdateReceiver) NewEndpoints(d map[string]xdsclient.EndpointsUpdate
 	t.newUpdate(xdsclient.EndpointsResource, dd, metadata)
 }
 
+func (t *testUpdateReceiver) NewConnectionError(error) {}
+
 func (t *testUpdateReceiver) newUpdate(rType xdsclient.ResourceType, d map[string]interface{}, metadata xdsclient.UpdateMetadata) {
 	t.f(rType, d, metadata)
 }

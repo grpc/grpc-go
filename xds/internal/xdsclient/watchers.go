@@ -66,6 +66,17 @@ func (wi *watchInfo) newUpdate(update interface{}) {
 	wi.c.scheduleCallback(wi, update, nil)
 }
 
+func (wi *watchInfo) newError(err error) {
+	wi.mu.Lock()
+	defer wi.mu.Unlock()
+	if wi.state == watchInfoStateCanceled {
+		return
+	}
+	wi.state = watchInfoStateRespReceived
+	wi.expiryTimer.Stop()
+	wi.sendErrorLocked(err)
+}
+
 func (wi *watchInfo) resourceNotFound() {
 	wi.mu.Lock()
 	defer wi.mu.Unlock()

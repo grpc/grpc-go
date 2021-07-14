@@ -84,14 +84,16 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate, metadata Up
 		// On NACK, update overall version to the NACKed resp.
 		c.ldsVersion = metadata.ErrState.Version
 		for name := range updates {
-			if _, ok := c.ldsWatchers[name]; ok {
+			if s, ok := c.ldsWatchers[name]; ok {
 				// On error, keep previous version for each resource. But update
 				// status and error.
 				mdCopy := c.ldsMD[name]
 				mdCopy.ErrState = metadata.ErrState
 				mdCopy.Status = metadata.Status
 				c.ldsMD[name] = mdCopy
-				// TODO: send the NACK error to the watcher.
+				for wi := range s {
+					wi.newError(metadata.ErrState.Err)
+				}
 			}
 		}
 		return
@@ -143,14 +145,16 @@ func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate, metad
 		// On NACK, update overall version to the NACKed resp.
 		c.rdsVersion = metadata.ErrState.Version
 		for name := range updates {
-			if _, ok := c.rdsWatchers[name]; ok {
+			if s, ok := c.rdsWatchers[name]; ok {
 				// On error, keep previous version for each resource. But update
 				// status and error.
 				mdCopy := c.rdsMD[name]
 				mdCopy.ErrState = metadata.ErrState
 				mdCopy.Status = metadata.Status
 				c.rdsMD[name] = mdCopy
-				// TODO: send the NACK error to the watcher.
+				for wi := range s {
+					wi.newError(metadata.ErrState.Err)
+				}
 			}
 		}
 		return
@@ -185,14 +189,16 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate, metadata Upda
 		// On NACK, update overall version to the NACKed resp.
 		c.cdsVersion = metadata.ErrState.Version
 		for name := range updates {
-			if _, ok := c.cdsWatchers[name]; ok {
+			if s, ok := c.cdsWatchers[name]; ok {
 				// On error, keep previous version for each resource. But update
 				// status and error.
 				mdCopy := c.cdsMD[name]
 				mdCopy.ErrState = metadata.ErrState
 				mdCopy.Status = metadata.Status
 				c.cdsMD[name] = mdCopy
-				// TODO: send the NACK error to the watcher.
+				for wi := range s {
+					wi.newError(metadata.ErrState.Err)
+				}
 			}
 		}
 		return
@@ -244,14 +250,16 @@ func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate, metadata U
 		// On NACK, update overall version to the NACKed resp.
 		c.edsVersion = metadata.ErrState.Version
 		for name := range updates {
-			if _, ok := c.edsWatchers[name]; ok {
+			if s, ok := c.edsWatchers[name]; ok {
 				// On error, keep previous version for each resource. But update
 				// status and error.
 				mdCopy := c.edsMD[name]
 				mdCopy.ErrState = metadata.ErrState
 				mdCopy.Status = metadata.Status
 				c.edsMD[name] = mdCopy
-				// TODO: send the NACK error to the watcher.
+				for wi := range s {
+					wi.newError(metadata.ErrState.Err)
+				}
 			}
 		}
 		return
@@ -269,6 +277,19 @@ func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate, metadata U
 			c.logger.Debugf("EDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
 			c.edsCache[name] = update
 			c.edsMD[name] = metadata
+		}
+	}
+}
+
+// NewConnectionError is called by the underlying xdsAPIClient when it receives
+// a connection error. The error will be forwarded to all the resource watchers.
+func (c *clientImpl) NewConnectionError(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for _, s := range c.edsWatchers {
+		for wi := range s {
+			wi.newError(NewErrorf(ErrorTypeConnection, "xds: error received from xDS stream: %v", err))
 		}
 	}
 }

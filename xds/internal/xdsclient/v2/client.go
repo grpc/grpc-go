@@ -140,7 +140,7 @@ func (v2c *client) RecvResponse(s grpc.ClientStream) (proto.Message, error) {
 
 	resp, err := stream.Recv()
 	if err != nil {
-		// TODO: call watch callbacks with error when stream is broken.
+		v2c.parent.NewConnectionError(err)
 		return nil, fmt.Errorf("xds: stream.Recv() failed: %v", err)
 	}
 	v2c.logger.Infof("ADS response received, type: %v", resp.GetTypeUrl())
