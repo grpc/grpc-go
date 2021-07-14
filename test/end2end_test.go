@@ -7254,7 +7254,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 				":status", "403",
 				"content-type", "application/grpc",
 			},
-			errCode: codes.Unknown,
+			errCode: codes.PermissionDenied,
 		},
 		{
 			// malformed grpc-status.
@@ -7273,7 +7273,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 				"grpc-status", "0",
 				"grpc-tags-bin", "???",
 			},
-			errCode: codes.Internal,
+			errCode: codes.Unavailable,
 		},
 		{
 			// gRPC status error.
@@ -7282,14 +7282,14 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 				"content-type", "application/grpc",
 				"grpc-status", "3",
 			},
-			errCode: codes.InvalidArgument,
+			errCode: codes.Unavailable,
 		},
 	} {
 		doHTTPHeaderTest(t, test.errCode, test.header)
 	}
 }
 
-// Testing non-Trailers-only Trailers (delievered in second HEADERS frame)
+// Testing non-Trailers-only Trailers (delivered in second HEADERS frame)
 func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 	for _, test := range []struct {
 		responseHeader []string
@@ -7305,11 +7305,23 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 				// trailer missing grpc-status
 				":status", "502",
 			},
-			errCode: codes.Unknown,
+			errCode: codes.Unavailable,
 		},
 		{
 			responseHeader: []string{
 				":status", "404",
+				"content-type", "application/grpc",
+			},
+			trailer: []string{
+				// malformed grpc-status-details-bin field
+				"grpc-status", "0",
+				"grpc-status-details-bin", "????",
+			},
+			errCode: codes.Unimplemented,
+		},
+		{
+			responseHeader: []string{
+				":status", "200",
 				"content-type", "application/grpc",
 			},
 			trailer: []string{
