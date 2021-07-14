@@ -23,6 +23,7 @@ package server
 import (
 	"context"
 	"errors"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"net"
 	"strconv"
 	"testing"
@@ -80,6 +81,14 @@ var listenerWithFilterChains = &v3listenerpb.Listener{
 							},
 						},
 					}),
+				},
+			},
+			Filters: []*v3listenerpb.Filter{
+				{
+					Name: "filter-1",
+					ConfigType: &v3listenerpb.Filter_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+					},
 				},
 			},
 		},
