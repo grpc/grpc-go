@@ -910,7 +910,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -964,7 +964,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -1561,9 +1561,9 @@ func (fci *FilterChainManager) Equal(other *FilterChainManager) bool {
 		return true
 	}
 	switch {
-	case !cmp.Equal(fci.dstPrefixMap, other.dstPrefixMap):
+	case !cmp.Equal(fci.dstPrefixMap, other.dstPrefixMap, cmpopts.EquateEmpty()):
 		return false
-	case !cmp.Equal(fci.def, other.def):
+	case !cmp.Equal(fci.def, other.def, cmpopts.EquateEmpty()):
 		return false
 	}
 	return true
@@ -1580,7 +1580,7 @@ func (dpe *destPrefixEntry) Equal(other *destPrefixEntry) bool {
 		return false
 	}
 	for i, st := range dpe.srcTypeArr {
-		if !cmp.Equal(st, other.srcTypeArr[i]) {
+		if !cmp.Equal(st, other.srcTypeArr[i], cmpopts.EquateEmpty()) {
 			return false
 		}
 	}
@@ -1594,7 +1594,7 @@ func (sp *sourcePrefixes) Equal(other *sourcePrefixes) bool {
 	if sp == nil {
 		return true
 	}
-	return cmp.Equal(sp.srcPrefixMap, other.srcPrefixMap)
+	return cmp.Equal(sp.srcPrefixMap, other.srcPrefixMap, cmpopts.EquateEmpty())
 }
 
 func (spe *sourcePrefixEntry) Equal(other *sourcePrefixEntry) bool {
@@ -1607,7 +1607,7 @@ func (spe *sourcePrefixEntry) Equal(other *sourcePrefixEntry) bool {
 	switch {
 	case !cmp.Equal(spe.net, other.net):
 		return false
-	case !cmp.Equal(spe.srcPortMap, other.srcPortMap):
+	case !cmp.Equal(spe.srcPortMap, other.srcPortMap, cmpopts.EquateEmpty()):
 		return false
 	}
 	return true
