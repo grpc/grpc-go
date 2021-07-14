@@ -86,21 +86,24 @@ func (ws *writerSink) Write(e *pb.GrpcLogEntry) error {
 func (ws *writerSink) Close() error { return nil }
 
 type bufferedSink struct {
-	mu     sync.Mutex
-	closer io.Closer
-	out    Sink          // out is built on buf.
-	buf    *bufio.Writer // buf is kept for flush.
+	mu             sync.Mutex
+	closer         io.Closer
+	out            Sink          // out is built on buf.
+	buf            *bufio.Writer // buf is kept for flush.
+	flusherStarted bool
 
-	writeStartOnce sync.Once
-	writeTicker    *time.Ticker
-	done           chan struct{}
+	writeTicker *time.Ticker
+	done        chan struct{}
 }
 
 func (fs *bufferedSink) Write(e *pb.GrpcLogEntry) error {
-	// Start the write loop when Write is called.
-	fs.writeStartOnce.Do(fs.startFlushGoroutine)
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
+	if !fs.flusherStarted {
+		// Start the write loop when Write is called.
+		fs.startFlushGoroutine()
+		fs.flusherStarted = true
+	}
 	if err := fs.out.Write(e); err != nil {
 		return err
 	}
