@@ -408,6 +408,55 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 	}
 }
 
+// TestNewFilterChainImpl_Failure_BadHTTPFilters verifies cases where the
+// HTTP Filters in the filter chain are invalid.
+func TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
+	tests := []struct {
+		name    string
+		lis     *v3listenerpb.Listener
+		wantErr string
+	}{
+		{
+			name: "client side HTTP filter",
+			lis: &v3listenerpb.Listener{
+				Name:    "grpc/server?xds.resource.listening_address=0.0.0.0:9999",
+				Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{SocketAddress: &v3corepb.SocketAddress{Address: "0.0.0.0", PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: 9999}}}},
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											{
+												Name:       "clientOnlyCustomFilter",
+												ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: clientOnlyCustomFilterConfig},
+											},
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: "invalid server side HTTP Filters",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewFilterChainManager(test.lis)
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, test.wantErr)
+			}
+		})
+	}
+
+	// TODO: ADD TODO FOR COMPARING FIELDS IN DIFF
+}
+
 // TestNewFilterChainImpl_Success_SecurityConfig verifies cases where the
 // security configuration in the filter chain contains valid data.
 func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
@@ -1563,6 +1612,7 @@ func (fci *FilterChainManager) Equal(other *FilterChainManager) bool {
 	switch {
 	case !cmp.Equal(fci.dstPrefixMap, other.dstPrefixMap, cmpopts.EquateEmpty()):
 		return false
+	// TODO: Support comparing dstPrefixes slice?
 	case !cmp.Equal(fci.def, other.def, cmpopts.EquateEmpty()):
 		return false
 	}
@@ -1594,6 +1644,7 @@ func (sp *sourcePrefixes) Equal(other *sourcePrefixes) bool {
 	if sp == nil {
 		return true
 	}
+	// TODO: Support comparing srcPrefixes slice?
 	return cmp.Equal(sp.srcPrefixMap, other.srcPrefixMap, cmpopts.EquateEmpty())
 }
 

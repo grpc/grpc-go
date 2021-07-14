@@ -917,36 +917,6 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantMD:     errMD,
 			wantErr:    "failed unmarshaling of network filter",
 		},
-		/*{
-			name: "client only http filter inside the network filter",
-			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
-				Name:    v3LDSTarget,
-				Address: localSocketAddress,
-				FilterChains: []*v3listenerpb.FilterChain{
-					{
-						Name: "filter-chain-1",
-						Filters: []*v3listenerpb.Filter{
-							{
-								Name: "hcm",
-								ConfigType: &v3listenerpb.Filter_TypedConfig{
-									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
-										HttpFilters: []*v3httppb.HttpFilter{
-											{
-												Name:       "clientOnlyCustomFilter",
-												ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: clientOnlyCustomFilterConfig},
-											},
-										},
-									}),
-								},
-							},
-						},
-					},
-				},
-			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
-			wantMD:     errMD,
-			wantErr:    "not supported server-side",
-		},*/ // Move this error validation to filter chain match about testing http filters
 		{
 			name: "unexpected transport socket name",
 			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
