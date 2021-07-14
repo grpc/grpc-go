@@ -1237,7 +1237,7 @@ func (t *http2Client) setGoAwayReason(f *http2.GoAwayFrame) {
 	if len(f.DebugData()) == 0 {
 		t.goAwayDebugMessage = fmt.Sprintf("code: %s", f.ErrCode)
 	} else {
-		t.goAwayDebugMessage = fmt.Sprintf("code: %s, debug data: %v", f.ErrCode, string(f.DebugData()))
+		t.goAwayDebugMessage = fmt.Sprintf("code: %s, debug data: %q", f.ErrCode, string(f.DebugData()))
 	}
 }
 

@@ -1453,7 +1453,7 @@ func (s) TestDetailedGoawayErrorOnAbruptClosePropagatesToRPCError(t *testing.T) 
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall = _, %v, want _, <nil>", ss.Client, err)
 	}
-	const expectedErrorMessageSubstring = "received prior goaway: code: ENHANCE_YOUR_CALM, debug data: too_many_pings"
+	const expectedErrorMessageSubstring = `received prior goaway: code: ENHANCE_YOUR_CALM, debug data: "too_many_pings"`
 	_, err = stream.Recv()
 	close(rpcDoneOnClient)
 	if err == nil || !strings.Contains(err.Error(), expectedErrorMessageSubstring) {
