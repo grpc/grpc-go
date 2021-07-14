@@ -582,15 +582,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			},
 		}
 		listenerEmptyTransportSocket = testutils.MarshalAny(&v3listenerpb.Listener{
-                       Name:    v3LDSTarget,
-                       Address: localSocketAddress,
-                       FilterChains: []*v3listenerpb.FilterChain{
-                               {
-                                       Name:    "filter-chain-1",
-                                       Filters: emptyValidNetworkFilters,
-                              },
-                       },
-               })
+			Name:    v3LDSTarget,
+			Address: localSocketAddress,
+			FilterChains: []*v3listenerpb.FilterChain{
+				{
+					Name:    "filter-chain-1",
+					Filters: emptyValidNetworkFilters,
+				},
+			},
+		})
 		listenerNoValidationContext = testutils.MarshalAny(&v3listenerpb.Listener{
 			Name:    v3LDSTarget,
 			Address: localSocketAddress,
