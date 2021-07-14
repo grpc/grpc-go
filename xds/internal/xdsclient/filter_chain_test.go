@@ -22,7 +22,6 @@ package xdsclient
 
 import (
 	"fmt"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"net"
 	"strings"
 	"testing"
@@ -32,6 +31,7 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -686,7 +686,7 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters,},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -715,7 +715,7 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters,},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -744,7 +744,7 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters,},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{

@@ -1155,9 +1155,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		},
 		{
 			name:      "happy case with no validation context",
-			resources: []*anypb.Any{listenerNoValidationContext}, // This is what gets converted to the want update
-			// That thing should have a list of http filters that you need to convert
-			// This resource has no actual HTTP Filters...inside the HCM
+			resources: []*anypb.Any{listenerNoValidationContext},
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					InboundListenerCfg: &InboundListenerConfig{
@@ -1176,7 +1174,6 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 																IdentityInstanceName: "identityPluginInstance",
 																IdentityCertName:     "identityCertName",
 															},
-															HTTPFilters: []HTTPFilter{},
 														},
 													},
 												},
@@ -1190,7 +1187,6 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									IdentityInstanceName: "defaultIdentityPluginInstance",
 									IdentityCertName:     "defaultIdentityCertName",
 								},
-								HTTPFilters: []HTTPFilter{},
 							},
 						},
 					},
