@@ -408,8 +408,8 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 	}
 }
 
-// TestNewFilterChainImpl_Failure_BadHTTPFilters verifies cases where the
-// HTTP Filters in the filter chain are invalid.
+// TestNewFilterChainImpl_Failure_BadHTTPFilters verifies cases where the HTTP
+// Filters in the filter chain are invalid.
 func TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -453,8 +453,6 @@ func TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
 			}
 		})
 	}
-
-	// TODO: ADD TODO FOR COMPARING FIELDS IN DIFF
 }
 
 // TestNewFilterChainImpl_Success_SecurityConfig verifies cases where the
