@@ -32,6 +32,7 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -47,6 +48,14 @@ var (
 				TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
 			},
 		},
+	}
+	validServerSideHTTPFilter = &v3httppb.HttpFilter{
+		Name:       "serverOnlyCustomFilter",
+		ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
+	}
+	validServerSideHTTPFilter2 = &v3httppb.HttpFilter{
+		Name:       "serverOnlyCustomFilter2",
+		ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
 	}
 )
 
@@ -444,12 +453,210 @@ func TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
 			},
 			wantErr: "invalid server side HTTP Filters",
 		},
+		{
+			name: "one valid then one invalid HTTP filter",
+			lis: &v3listenerpb.Listener{
+				Name:    "grpc/server?xds.resource.listening_address=0.0.0.0:9999",
+				Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{SocketAddress: &v3corepb.SocketAddress{Address: "0.0.0.0", PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: 9999}}}},
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											validServerSideHTTPFilter,
+											{
+												Name:       "clientOnlyCustomFilter",
+												ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: clientOnlyCustomFilterConfig},
+											},
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: "invalid server side HTTP Filters",
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := NewFilterChainManager(test.lis)
 			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, test.wantErr)
+			}
+		})
+	}
+}
+
+// TestNewFilterChainImpl_Success_HTTPFilters tests the construction of the
+// filter chain with valid HTTP Filters present.
+func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
+	tests := []struct {
+		name   string
+		lis    *v3listenerpb.Listener
+		wantFC *FilterChainManager
+	}{
+		{
+			name: "singular valid http filter",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											validServerSideHTTPFilter,
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									HttpFilters: []*v3httppb.HttpFilter{
+										validServerSideHTTPFilter,
+									},
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: {
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									unspecifiedPrefixMapKey: {
+										srcPortMap: map[int]*FilterChain{
+											0: {HTTPFilters: []HTTPFilter{
+												{
+													Name:   "serverOnlyCustomFilter",
+													Filter: serverOnlyHTTPFilter{},
+													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+												},
+											}},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				def: &FilterChain{HTTPFilters: []HTTPFilter{
+					{
+						Name:   "serverOnlyCustomFilter",
+						Filter: serverOnlyHTTPFilter{},
+						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+					},
+				}},
+			},
+		},
+		{
+			name: "two valid http filters",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											validServerSideHTTPFilter,
+											validServerSideHTTPFilter2,
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									HttpFilters: []*v3httppb.HttpFilter{
+										validServerSideHTTPFilter,
+										validServerSideHTTPFilter2,
+									},
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: {
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									unspecifiedPrefixMapKey: {
+										srcPortMap: map[int]*FilterChain{
+											0: {HTTPFilters: []HTTPFilter{
+												{
+													Name:   "serverOnlyCustomFilter",
+													Filter: serverOnlyHTTPFilter{},
+													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+												},
+												{
+													Name:   "serverOnlyCustomFilter2",
+													Filter: serverOnlyHTTPFilter{},
+													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+												},
+											}},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				def: &FilterChain{HTTPFilters: []HTTPFilter{
+					{
+						Name:   "serverOnlyCustomFilter",
+						Filter: serverOnlyHTTPFilter{},
+						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+					},
+					{
+						Name:   "serverOnlyCustomFilter2",
+						Filter: serverOnlyHTTPFilter{},
+						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+					},
+				},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gotFC, err := NewFilterChainManager(test.lis)
+			print(gotFC.def.HTTPFilters)
+			if err != nil {
+				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
+			}
+			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{}), cmpOpts) {
+				t.Fatalf("NewFilterChainManager() returned %+v, want: %+v", gotFC, test.wantFC)
 			}
 		})
 	}
@@ -1611,7 +1818,7 @@ func (fci *FilterChainManager) Equal(other *FilterChainManager) bool {
 	case !cmp.Equal(fci.dstPrefixMap, other.dstPrefixMap, cmpopts.EquateEmpty()):
 		return false
 	// TODO: Support comparing dstPrefixes slice?
-	case !cmp.Equal(fci.def, other.def, cmpopts.EquateEmpty()):
+	case !cmp.Equal(fci.def, other.def, cmpopts.EquateEmpty(), protocmp.Transform()):
 		return false
 	}
 	return true
@@ -1656,7 +1863,7 @@ func (spe *sourcePrefixEntry) Equal(other *sourcePrefixEntry) bool {
 	switch {
 	case !cmp.Equal(spe.net, other.net):
 		return false
-	case !cmp.Equal(spe.srcPortMap, other.srcPortMap, cmpopts.EquateEmpty()):
+	case !cmp.Equal(spe.srcPortMap, other.srcPortMap, cmpopts.EquateEmpty(), protocmp.Transform()):
 		return false
 	}
 	return true
@@ -1783,5 +1990,3 @@ func cidrRangeFromAddressAndPrefixLen(address string, len int) *v3corepb.CidrRan
 		},
 	}
 }
-
-// Add tests here for HTTP Filters are invalid (like the client side ones)

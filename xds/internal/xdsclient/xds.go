@@ -277,7 +277,7 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	return lu, nil
 }
 
-func validateNetworkFilterChain(filterChain *v3listenerpb.FilterChain) ([]HTTPFilter, error) {
+func processNetworkFilterChain(filterChain *v3listenerpb.FilterChain) ([]HTTPFilter, error) {
 	seenNames := make(map[string]bool, len(filterChain.GetFilters()))
 	seenHCM := false
 	var httpFilters []HTTPFilter

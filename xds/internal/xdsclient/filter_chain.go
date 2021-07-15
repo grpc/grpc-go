@@ -393,7 +393,7 @@ func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePre
 // filterChainFromProto extracts the relevant information from the FilterChain
 // proto and stores it in our internal representation.
 func filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
-	httpFilters, err := validateNetworkFilterChain(fc)
+	httpFilters, err := processNetworkFilterChain(fc)
 	if err != nil {
 		return nil, err
 	}
