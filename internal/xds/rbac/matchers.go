@@ -404,16 +404,16 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 	// is as follows: URI SANs, DNS SANs, and then subject name.
 	for _, uriSAN := range cert.URIs {
 		if am.stringMatcher.Match(uriSAN.String()) {
-				return true
-			}
+			return true
+		}
 	}
 	for _, dnsSAN := range cert.DNSNames {
 		if am.stringMatcher.Match(dnsSAN) {
-				return true
-			}
+			return true
+		}
 	}
 	if am.stringMatcher.Match(cert.Subject.String()) {
-			return true
+		return true
 	}
 	return false
 }
