@@ -26,6 +26,8 @@ import (
 	"testing"
 )
 
+const testService = "test-service-name"
+
 type counterTest struct {
 	name              string
 	maxRequests       uint32
@@ -51,9 +53,9 @@ var tests = []counterTest{
 	},
 }
 
-func resetServiceRequestsCounter() {
-	src = &servicesRequestsCounter{
-		services: make(map[string]*ServiceRequestsCounter),
+func resetClusterRequestsCounter() {
+	src = &clusterRequestsCounter{
+		clusters: make(map[clusterNameAndServiceName]*ClusterRequestsCounter),
 	}
 }
 
@@ -67,7 +69,7 @@ func testCounter(t *testing.T, test counterTest) {
 	var successes, errors uint32
 	for i := 0; i < int(test.numRequests); i++ {
 		go func() {
-			counter := GetServiceRequestsCounter(test.name)
+			counter := GetClusterRequestsCounter(test.name, testService)
 			defer requestsDone.Done()
 			err := counter.StartRequest(test.maxRequests)
 			if err == nil {
@@ -103,7 +105,7 @@ func testCounter(t *testing.T, test counterTest) {
 }
 
 func (s) TestRequestsCounter(t *testing.T) {
-	defer resetServiceRequestsCounter()
+	defer resetClusterRequestsCounter()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testCounter(t, test)
@@ -111,18 +113,18 @@ func (s) TestRequestsCounter(t *testing.T) {
 	}
 }
 
-func (s) TestGetServiceRequestsCounter(t *testing.T) {
-	defer resetServiceRequestsCounter()
+func (s) TestGetClusterRequestsCounter(t *testing.T) {
+	defer resetClusterRequestsCounter()
 	for _, test := range tests {
-		counterA := GetServiceRequestsCounter(test.name)
-		counterB := GetServiceRequestsCounter(test.name)
+		counterA := GetClusterRequestsCounter(test.name, testService)
+		counterB := GetClusterRequestsCounter(test.name, testService)
 		if counterA != counterB {
 			t.Errorf("counter %v %v != counter %v %v", counterA, *counterA, counterB, *counterB)
 		}
 	}
 }
 
-func startRequests(t *testing.T, n uint32, max uint32, counter *ServiceRequestsCounter) {
+func startRequests(t *testing.T, n uint32, max uint32, counter *ClusterRequestsCounter) {
 	for i := uint32(0); i < n; i++ {
 		if err := counter.StartRequest(max); err != nil {
 			t.Fatalf("error starting initial request: %v", err)
@@ -131,11 +133,11 @@ func startRequests(t *testing.T, n uint32, max uint32, counter *ServiceRequestsC
 }
 
 func (s) TestSetMaxRequestsIncreased(t *testing.T) {
-	defer resetServiceRequestsCounter()
-	const serviceName string = "set-max-requests-increased"
+	defer resetClusterRequestsCounter()
+	const clusterName string = "set-max-requests-increased"
 	var initialMax uint32 = 16
 
-	counter := GetServiceRequestsCounter(serviceName)
+	counter := GetClusterRequestsCounter(clusterName, testService)
 	startRequests(t, initialMax, initialMax, counter)
 	if err := counter.StartRequest(initialMax); err == nil {
 		t.Fatal("unexpected success on start request after max met")
@@ -148,11 +150,11 @@ func (s) TestSetMaxRequestsIncreased(t *testing.T) {
 }
 
 func (s) TestSetMaxRequestsDecreased(t *testing.T) {
-	defer resetServiceRequestsCounter()
-	const serviceName string = "set-max-requests-decreased"
+	defer resetClusterRequestsCounter()
+	const clusterName string = "set-max-requests-decreased"
 	var initialMax uint32 = 16
 
-	counter := GetServiceRequestsCounter(serviceName)
+	counter := GetClusterRequestsCounter(clusterName, testService)
 	startRequests(t, initialMax-1, initialMax, counter)
 
 	newMax := initialMax - 1

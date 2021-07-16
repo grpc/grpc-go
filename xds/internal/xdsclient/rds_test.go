@@ -88,7 +88,6 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		rc         *v3routepb.RouteConfiguration
 		wantUpdate RouteConfigUpdate
 		wantError  bool
-		disableFI  bool // disable fault injection
 	}{
 		{
 			name: "default-route-match-field-is-nil",
@@ -474,19 +473,10 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("unknown.custom.filter")}),
 			wantUpdate: goodUpdateWithFilterConfigs(nil),
 		},
-		{
-			name:       "good-route-config-with-http-err-filter-config-fi-disabled",
-			disableFI:  true,
-			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
-			wantUpdate: goodUpdateWithFilterConfigs(nil),
-		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			oldFI := env.FaultInjectionSupport
-			env.FaultInjectionSupport = !test.disableFI
-
 			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil, false)
 			if (gotError != nil) != test.wantError ||
 				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),
@@ -494,8 +484,6 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 						return fmt.Sprint(fc)
 					})) {
 				t.Errorf("generateRDSUpdateFromRouteConfiguration(%+v, %v) returned unexpected, diff (-want +got):\\n%s", test.rc, ldsTarget, cmp.Diff(test.wantUpdate, gotUpdate, cmpopts.EquateEmpty()))
-
-				env.FaultInjectionSupport = oldFI
 			}
 		})
 	}
@@ -815,7 +803,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 		routes     []*v3routepb.Route
 		wantRoutes []*Route
 		wantErr    bool
-		disableFI  bool // disable fault injection
 	}{
 		{
 			name: "no path",
@@ -1168,6 +1155,119 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "good-with-channel-id-hash-policy",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								Name: "th",
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{
+									PrefixMatch: "tv",
+								},
+								InvertMatch: true,
+							},
+						},
+						RuntimeFraction: &v3corepb.RuntimeFractionalPercent{
+							DefaultValue: &v3typepb.FractionalPercent{
+								Numerator:   1,
+								Denominator: v3typepb.FractionalPercent_HUNDRED,
+							},
+						},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{
+							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+								WeightedClusters: &v3routepb.WeightedCluster{
+									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
+										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
+									},
+									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
+								}},
+							HashPolicy: []*v3routepb.RouteAction_HashPolicy{
+								{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{FilterState: &v3routepb.RouteAction_HashPolicy_FilterState{Key: "io.grpc.channel_id"}}},
+							},
+						}},
+				},
+			},
+			wantRoutes: []*Route{{
+				Prefix: newStringP("/a/"),
+				Headers: []*HeaderMatcher{
+					{
+						Name:        "th",
+						InvertMatch: newBoolP(true),
+						PrefixMatch: newStringP("tv"),
+					},
+				},
+				Fraction:         newUInt32P(10000),
+				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
+				HashPolicies: []*HashPolicy{
+					{HashPolicyType: HashPolicyTypeChannelID},
+				},
+			}},
+			wantErr: false,
+		},
+		// This tests that policy.Regex ends up being nil if RegexRewrite is not
+		// set in xds response.
+		{
+			name: "good-with-header-hash-policy-no-regex-specified",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+						Headers: []*v3routepb.HeaderMatcher{
+							{
+								Name: "th",
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{
+									PrefixMatch: "tv",
+								},
+								InvertMatch: true,
+							},
+						},
+						RuntimeFraction: &v3corepb.RuntimeFractionalPercent{
+							DefaultValue: &v3typepb.FractionalPercent{
+								Numerator:   1,
+								Denominator: v3typepb.FractionalPercent_HUNDRED,
+							},
+						},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{
+							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
+								WeightedClusters: &v3routepb.WeightedCluster{
+									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
+										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
+									},
+									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
+								}},
+							HashPolicy: []*v3routepb.RouteAction_HashPolicy{
+								{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_Header_{Header: &v3routepb.RouteAction_HashPolicy_Header{HeaderName: ":path"}}},
+							},
+						}},
+				},
+			},
+			wantRoutes: []*Route{{
+				Prefix: newStringP("/a/"),
+				Headers: []*HeaderMatcher{
+					{
+						Name:        "th",
+						InvertMatch: newBoolP(true),
+						PrefixMatch: newStringP("tv"),
+					},
+				},
+				Fraction:         newUInt32P(10000),
+				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
+				HashPolicies: []*HashPolicy{
+					{HashPolicyType: HashPolicyTypeHeader,
+						HeaderName: ":path"},
+				},
+			}},
+			wantErr: false,
+		},
+		{
 			name:       "with custom HTTP filter config",
 			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": customFilterConfig}),
 			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
@@ -1183,12 +1283,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
 		},
 		{
-			name:       "with custom HTTP filter config, FI disabled",
-			disableFI:  true,
-			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": customFilterConfig}),
-			wantRoutes: goodUpdateWithFilterConfigs(nil),
-		},
-		{
 			name:    "with erroring custom HTTP filter config",
 			routes:  goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
 			wantErr: true,
@@ -1197,12 +1291,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			name:    "with optional erroring custom HTTP filter config",
 			routes:  goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("err.custom.filter")}),
 			wantErr: true,
-		},
-		{
-			name:       "with erroring custom HTTP filter config, FI disabled",
-			disableFI:  true,
-			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": errFilterConfig}),
-			wantRoutes: goodUpdateWithFilterConfigs(nil),
 		},
 		{
 			name:    "with unknown custom HTTP filter config",
@@ -1223,19 +1311,130 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			return fmt.Sprint(fc)
 		}),
 	}
-
+	oldRingHashSupport := env.RingHashSupport
+	env.RingHashSupport = true
+	defer func() { env.RingHashSupport = oldRingHashSupport }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			oldFI := env.FaultInjectionSupport
-			env.FaultInjectionSupport = !tt.disableFI
-			defer func() { env.FaultInjectionSupport = oldFI }()
-
 			got, err := routesProtoToSlice(tt.routes, nil, false)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if diff := cmp.Diff(got, tt.wantRoutes, cmpOpts...); diff != "" {
 				t.Fatalf("routesProtoToSlice() returned unexpected diff (-got +want):\n%s", diff)
+			}
+		})
+	}
+}
+
+func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
+	tests := []struct {
+		name             string
+		hashPolicies     []*v3routepb.RouteAction_HashPolicy
+		wantHashPolicies []*HashPolicy
+		wantErr          bool
+	}{
+		// header-hash-policy tests a basic hash policy that specifies to hash a
+		// certain header.
+		{
+			name: "header-hash-policy",
+			hashPolicies: []*v3routepb.RouteAction_HashPolicy{
+				{
+					PolicySpecifier: &v3routepb.RouteAction_HashPolicy_Header_{
+						Header: &v3routepb.RouteAction_HashPolicy_Header{
+							HeaderName: ":path",
+							RegexRewrite: &v3matcherpb.RegexMatchAndSubstitute{
+								Pattern:      &v3matcherpb.RegexMatcher{Regex: "/products"},
+								Substitution: "/products",
+							},
+						},
+					},
+				},
+			},
+			wantHashPolicies: []*HashPolicy{
+				{
+					HashPolicyType:    HashPolicyTypeHeader,
+					HeaderName:        ":path",
+					Regex:             func() *regexp.Regexp { return regexp.MustCompile("/products") }(),
+					RegexSubstitution: "/products",
+				},
+			},
+		},
+		// channel-id-hash-policy tests a basic hash policy that specifies to
+		// hash a unique identifier of the channel.
+		{
+			name: "channel-id-hash-policy",
+			hashPolicies: []*v3routepb.RouteAction_HashPolicy{
+				{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{FilterState: &v3routepb.RouteAction_HashPolicy_FilterState{Key: "io.grpc.channel_id"}}},
+			},
+			wantHashPolicies: []*HashPolicy{
+				{HashPolicyType: HashPolicyTypeChannelID},
+			},
+		},
+		// unsupported-filter-state-key tests that an unsupported key in the
+		// filter state hash policy are treated as a no-op.
+		{
+			name: "wrong-filter-state-key",
+			hashPolicies: []*v3routepb.RouteAction_HashPolicy{
+				{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{FilterState: &v3routepb.RouteAction_HashPolicy_FilterState{Key: "unsupported key"}}},
+			},
+		},
+		// no-op-hash-policy tests that hash policies that are not supported by
+		// grpc are treated as a no-op.
+		{
+			name: "no-op-hash-policy",
+			hashPolicies: []*v3routepb.RouteAction_HashPolicy{
+				{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{}},
+			},
+		},
+		// header-and-channel-id-hash-policy test that a list of header and
+		// channel id hash policies are successfully converted to an internal
+		// struct.
+		{
+			name: "header-and-channel-id-hash-policy",
+			hashPolicies: []*v3routepb.RouteAction_HashPolicy{
+				{
+					PolicySpecifier: &v3routepb.RouteAction_HashPolicy_Header_{
+						Header: &v3routepb.RouteAction_HashPolicy_Header{
+							HeaderName: ":path",
+							RegexRewrite: &v3matcherpb.RegexMatchAndSubstitute{
+								Pattern:      &v3matcherpb.RegexMatcher{Regex: "/products"},
+								Substitution: "/products",
+							},
+						},
+					},
+				},
+				{
+					PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{FilterState: &v3routepb.RouteAction_HashPolicy_FilterState{Key: "io.grpc.channel_id"}},
+					Terminal:        true,
+				},
+			},
+			wantHashPolicies: []*HashPolicy{
+				{
+					HashPolicyType:    HashPolicyTypeHeader,
+					HeaderName:        ":path",
+					Regex:             func() *regexp.Regexp { return regexp.MustCompile("/products") }(),
+					RegexSubstitution: "/products",
+				},
+				{
+					HashPolicyType: HashPolicyTypeChannelID,
+					Terminal:       true,
+				},
+			},
+		},
+	}
+
+	oldRingHashSupport := env.RingHashSupport
+	env.RingHashSupport = true
+	defer func() { env.RingHashSupport = oldRingHashSupport }()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := hashPoliciesProtoToSlice(tt.hashPolicies, nil)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("hashPoliciesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if diff := cmp.Diff(got, tt.wantHashPolicies, cmp.AllowUnexported(regexp.Regexp{})); diff != "" {
+				t.Fatalf("hashPoliciesProtoToSlice() returned unexpected diff (-got +want):\n%s", diff)
 			}
 		})
 	}

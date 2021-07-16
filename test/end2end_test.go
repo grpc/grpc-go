@@ -1453,7 +1453,7 @@ func (s) TestDetailedGoawayErrorOnAbruptClosePropagatesToRPCError(t *testing.T) 
 	if err != nil {
 		t.Fatalf("%v.FullDuplexCall = _, %v, want _, <nil>", ss.Client, err)
 	}
-	const expectedErrorMessageSubstring = "received prior goaway: code: ENHANCE_YOUR_CALM, debug data: too_many_pings"
+	const expectedErrorMessageSubstring = `received prior goaway: code: ENHANCE_YOUR_CALM, debug data: "too_many_pings"`
 	_, err = stream.Recv()
 	close(rpcDoneOnClient)
 	if err == nil || !strings.Contains(err.Error(), expectedErrorMessageSubstring) {
@@ -7254,7 +7254,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 				":status", "403",
 				"content-type", "application/grpc",
 			},
-			errCode: codes.Unknown,
+			errCode: codes.PermissionDenied,
 		},
 		{
 			// malformed grpc-status.
@@ -7273,7 +7273,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 				"grpc-status", "0",
 				"grpc-tags-bin", "???",
 			},
-			errCode: codes.Internal,
+			errCode: codes.Unavailable,
 		},
 		{
 			// gRPC status error.
@@ -7282,14 +7282,14 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 				"content-type", "application/grpc",
 				"grpc-status", "3",
 			},
-			errCode: codes.InvalidArgument,
+			errCode: codes.Unavailable,
 		},
 	} {
 		doHTTPHeaderTest(t, test.errCode, test.header)
 	}
 }
 
-// Testing non-Trailers-only Trailers (delievered in second HEADERS frame)
+// Testing non-Trailers-only Trailers (delivered in second HEADERS frame)
 func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 	for _, test := range []struct {
 		responseHeader []string
@@ -7305,11 +7305,23 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 				// trailer missing grpc-status
 				":status", "502",
 			},
-			errCode: codes.Unknown,
+			errCode: codes.Unavailable,
 		},
 		{
 			responseHeader: []string{
 				":status", "404",
+				"content-type", "application/grpc",
+			},
+			trailer: []string{
+				// malformed grpc-status-details-bin field
+				"grpc-status", "0",
+				"grpc-status-details-bin", "????",
+			},
+			errCode: codes.Unimplemented,
+		},
+		{
+			responseHeader: []string{
+				":status", "200",
 				"content-type", "application/grpc",
 			},
 			trailer: []string{
@@ -7667,4 +7679,90 @@ func (s) TestClientSettingsFloodCloseConn(t *testing.T) {
 	})
 	s.GracefulStop()
 	timer.Stop()
+}
+
+// TestDeadlineSetOnConnectionOnClientCredentialHandshake tests that there is a deadline
+// set on the net.Conn when a credential handshake happens in http2_client.
+func (s) TestDeadlineSetOnConnectionOnClientCredentialHandshake(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	connCh := make(chan net.Conn, 1)
+	go func() {
+		defer close(connCh)
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error accepting connection: %v", err)
+			return
+		}
+		connCh <- conn
+	}()
+	defer func() {
+		conn := <-connCh
+		if conn != nil {
+			conn.Close()
+		}
+	}()
+	deadlineCh := testutils.NewChannel()
+	cvd := &credentialsVerifyDeadline{
+		deadlineCh: deadlineCh,
+	}
+	dOpt := grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
+		conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return nil, err
+		}
+		return &infoConn{Conn: conn}, nil
+	})
+	cc, err := grpc.Dial(lis.Addr().String(), dOpt, grpc.WithTransportCredentials(cvd))
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	deadline, err := deadlineCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error receiving from credsInvoked: %v", err)
+	}
+	// Default connection timeout is 20 seconds, so if the deadline exceeds now
+	// + 18 seconds it should be valid.
+	if !deadline.(time.Time).After(time.Now().Add(time.Second * 18)) {
+		t.Fatalf("Connection did not have deadline set.")
+	}
+}
+
+type infoConn struct {
+	net.Conn
+	deadline time.Time
+}
+
+func (c *infoConn) SetDeadline(t time.Time) error {
+	c.deadline = t
+	return c.Conn.SetDeadline(t)
+}
+
+type credentialsVerifyDeadline struct {
+	deadlineCh *testutils.Channel
+}
+
+func (cvd *credentialsVerifyDeadline) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	return rawConn, nil, nil
+}
+
+func (cvd *credentialsVerifyDeadline) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	cvd.deadlineCh.Send(rawConn.(*infoConn).deadline)
+	return rawConn, nil, nil
+}
+
+func (cvd *credentialsVerifyDeadline) Info() credentials.ProtocolInfo {
+	return credentials.ProtocolInfo{}
+}
+func (cvd *credentialsVerifyDeadline) Clone() credentials.TransportCredentials {
+	return cvd
+}
+func (cvd *credentialsVerifyDeadline) OverrideServerName(s string) error {
+	return nil
 }

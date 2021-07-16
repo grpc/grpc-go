@@ -59,13 +59,6 @@ const (
 	defaultTestTimeout = 10 * time.Second
 )
 
-type xdsClientWithWatch interface {
-	WatchListener(string, func(xdsclient.ListenerUpdate, error)) func()
-	WatchRouteConfig(string, func(xdsclient.RouteConfigUpdate, error)) func()
-	WatchCluster(string, func(xdsclient.ClusterUpdate, error)) func()
-	WatchEndpoints(string, func(xdsclient.EndpointsUpdate, error)) func()
-}
-
 var cmpOpts = cmp.Options{
 	cmpopts.EquateEmpty(),
 	cmp.Comparer(func(a, b *timestamppb.Timestamp) bool { return true }),
@@ -250,7 +243,7 @@ func TestCSDS(t *testing.T) {
 	}
 }
 
-func commonSetup(t *testing.T) (xdsClientWithWatch, *e2e.ManagementServer, string, v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient, func()) {
+func commonSetup(t *testing.T) (xdsclient.XDSClient, *e2e.ManagementServer, string, v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient, func()) {
 	t.Helper()
 
 	// Spin up a xDS management server on a local port.
@@ -275,7 +268,7 @@ func commonSetup(t *testing.T) (xdsClientWithWatch, *e2e.ManagementServer, strin
 		t.Fatalf("failed to create xds client: %v", err)
 	}
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() xdsClient { return xdsC }
+	newXDSClient = func() xdsclient.XDSClient { return xdsC }
 
 	// Initialize an gRPC server and register CSDS on it.
 	server := grpc.NewServer()
@@ -635,7 +628,7 @@ func protoToJSON(p proto.Message) string {
 
 func TestCSDSNoXDSClient(t *testing.T) {
 	oldNewXDSClient := newXDSClient
-	newXDSClient = func() xdsClient { return nil }
+	newXDSClient = func() xdsclient.XDSClient { return nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
 
 	// Initialize an gRPC server and register CSDS on it.

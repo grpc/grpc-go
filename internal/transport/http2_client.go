@@ -24,6 +24,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/http"
 	"strconv"
 	"strings"
 	"sync"
@@ -241,7 +242,15 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		// and passed to the credential handshaker. This makes it possible for
 		// address specific arbitrary data to reach the credential handshaker.
 		connectCtx = icredentials.NewClientHandshakeInfoContext(connectCtx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
-		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, conn)
+		rawConn := conn
+		// Pull the deadline from the connectCtx, which will be used for
+		// timeouts in the authentication protocol handshake. Can ignore the
+		// boolean as the deadline will return the zero value, which will make
+		// the conn not timeout on I/O operations.
+		deadline, _ := connectCtx.Deadline()
+		rawConn.SetDeadline(deadline)
+		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, rawConn)
+		rawConn.SetDeadline(time.Time{})
 		if err != nil {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
@@ -877,12 +886,18 @@ func (t *http2Client) Close(err error) {
 	// Append info about previous goaways if there were any, since this may be important
 	// for understanding the root cause for this connection to be closed.
 	_, goAwayDebugMessage := t.GetGoAwayReason()
+
+	var st *status.Status
 	if len(goAwayDebugMessage) > 0 {
-		err = fmt.Errorf("closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
+		st = status.Newf(codes.Unavailable, "closing transport due to: %v, received prior goaway: %v", err, goAwayDebugMessage)
+		err = st.Err()
+	} else {
+		st = status.New(codes.Unavailable, err.Error())
 	}
+
 	// Notify all active streams.
 	for _, s := range streams {
-		t.closeStream(s, err, false, http2.ErrCodeNo, status.New(codes.Unavailable, err.Error()), nil, false)
+		t.closeStream(s, err, false, http2.ErrCodeNo, st, nil, false)
 	}
 	if t.statsHandler != nil {
 		connEnd := &stats.ConnEnd{
@@ -1220,7 +1235,11 @@ func (t *http2Client) setGoAwayReason(f *http2.GoAwayFrame) {
 			t.goAwayReason = GoAwayTooManyPings
 		}
 	}
-	t.goAwayDebugMessage = fmt.Sprintf("code: %s, debug data: %v", f.ErrCode, string(f.DebugData()))
+	if len(f.DebugData()) == 0 {
+		t.goAwayDebugMessage = fmt.Sprintf("code: %s", f.ErrCode)
+	} else {
+		t.goAwayDebugMessage = fmt.Sprintf("code: %s, debug data: %q", f.ErrCode, string(f.DebugData()))
+	}
 }
 
 func (t *http2Client) GetGoAwayReason() (GoAwayReason, string) {
@@ -1266,29 +1285,40 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		// that the peer is speaking gRPC and we are in gRPC mode.
 		isGRPC         = !initialHeader
 		mdata          = make(map[string][]string)
-		contentTypeErr string
+		contentTypeErr = "malformed header: missing HTTP content-type"
 		grpcMessage    string
 		statusGen      *status.Status
-
-		httpStatus string
-		rawStatus  string
+		httpStatusCode *int
+		httpStatusErr  string
+		rawStatusCode  = codes.Unknown
 		// headerError is set if an error is encountered while parsing the headers
 		headerError string
 	)
+
+	if initialHeader {
+		httpStatusErr = "malformed header: missing HTTP status"
+	}
 
 	for _, hf := range frame.Fields {
 		switch hf.Name {
 		case "content-type":
 			if _, validContentType := grpcutil.ContentSubtype(hf.Value); !validContentType {
-				contentTypeErr = fmt.Sprintf("transport: received the unexpected content-type %q", hf.Value)
+				contentTypeErr = fmt.Sprintf("transport: received unexpected content-type %q", hf.Value)
 				break
 			}
+			contentTypeErr = ""
 			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
 			isGRPC = true
 		case "grpc-encoding":
 			s.recvCompress = hf.Value
 		case "grpc-status":
-			rawStatus = hf.Value
+			code, err := strconv.ParseInt(hf.Value, 10, 32)
+			if err != nil {
+				se := status.New(codes.Internal, fmt.Sprintf("transport: malformed grpc-status: %v", err))
+				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+				return
+			}
+			rawStatusCode = codes.Code(uint32(code))
 		case "grpc-message":
 			grpcMessage = decodeGrpcMessage(hf.Value)
 		case "grpc-status-details-bin":
@@ -1298,7 +1328,27 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 				headerError = fmt.Sprintf("transport: malformed grpc-status-details-bin: %v", err)
 			}
 		case ":status":
-			httpStatus = hf.Value
+			if hf.Value == "200" {
+				httpStatusErr = ""
+				statusCode := 200
+				httpStatusCode = &statusCode
+				break
+			}
+
+			c, err := strconv.ParseInt(hf.Value, 10, 32)
+			if err != nil {
+				se := status.New(codes.Internal, fmt.Sprintf("transport: malformed http-status: %v", err))
+				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
+				return
+			}
+			statusCode := int(c)
+			httpStatusCode = &statusCode
+
+			httpStatusErr = fmt.Sprintf(
+				"unexpected HTTP status code received from server: %d (%s)",
+				statusCode,
+				http.StatusText(statusCode),
+			)
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
 				break
@@ -1313,30 +1363,25 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		}
 	}
 
-	if !isGRPC {
-		var (
-			code           = codes.Internal // when header does not include HTTP status, return INTERNAL
-			httpStatusCode int
-		)
+	if !isGRPC || httpStatusErr != "" {
+		var code = codes.Internal // when header does not include HTTP status, return INTERNAL
 
-		if httpStatus != "" {
-			c, err := strconv.ParseInt(httpStatus, 10, 32)
-			if err != nil {
-				se := status.New(codes.Internal, fmt.Sprintf("transport: malformed http-status: %v", err))
-				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-				return
-			}
-			httpStatusCode = int(c)
-
+		if httpStatusCode != nil {
 			var ok bool
-			code, ok = HTTPStatusConvTab[httpStatusCode]
+			code, ok = HTTPStatusConvTab[*httpStatusCode]
 			if !ok {
 				code = codes.Unknown
 			}
 		}
-
+		var errs []string
+		if httpStatusErr != "" {
+			errs = append(errs, httpStatusErr)
+		}
+		if contentTypeErr != "" {
+			errs = append(errs, contentTypeErr)
+		}
 		// Verify the HTTP response is a 200.
-		se := status.New(code, constructHTTPErrMsg(&httpStatusCode, contentTypeErr))
+		se := status.New(code, strings.Join(errs, "; "))
 		t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 		return
 	}
@@ -1393,16 +1438,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 
 	if statusGen == nil {
-		rawStatusCode := codes.Unknown
-		if rawStatus != "" {
-			code, err := strconv.ParseInt(rawStatus, 10, 32)
-			if err != nil {
-				se := status.New(codes.Internal, fmt.Sprintf("transport: malformed grpc-status: %v", err))
-				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
-				return
-			}
-			rawStatusCode = codes.Code(uint32(code))
-		}
 		statusGen = status.New(rawStatusCode, grpcMessage)
 	}
 

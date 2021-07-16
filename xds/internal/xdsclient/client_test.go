@@ -187,59 +187,83 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 
 	wantUpdate := ClusterUpdate{ClusterName: testEDSName}
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	wantUpdate2 := ClusterUpdate{ClusterName: testEDSName + "2"}
 	client.NewClusters(map[string]ClusterUpdate{testCDSName: wantUpdate2}, UpdateMetadata{})
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate2); err != nil {
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate2, nil); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate ListenerUpdate) error {
+func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate ListenerUpdate, wantErr error) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for listener update: %v", err)
 	}
 	gotUpdate := u.(ldsUpdateErr)
+	if wantErr != nil {
+		if gotUpdate.err != wantErr {
+			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.err, wantErr)
+		}
+		return nil
+	}
 	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate) {
 		return fmt.Errorf("unexpected endpointsUpdate: (%v, %v), want: (%v, nil)", gotUpdate.u, gotUpdate.err, wantUpdate)
 	}
 	return nil
 }
 
-func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate RouteConfigUpdate) error {
+func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate RouteConfigUpdate, wantErr error) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for route configuration update: %v", err)
 	}
 	gotUpdate := u.(rdsUpdateErr)
+	if wantErr != nil {
+		if gotUpdate.err != wantErr {
+			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.err, wantErr)
+		}
+		return nil
+	}
 	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate) {
 		return fmt.Errorf("unexpected route config update: (%v, %v), want: (%v, nil)", gotUpdate.u, gotUpdate.err, wantUpdate)
 	}
 	return nil
 }
 
-func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate ClusterUpdate) error {
+func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate ClusterUpdate, wantErr error) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for cluster update: %v", err)
 	}
 	gotUpdate := u.(clusterUpdateErr)
-	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate) {
+	if wantErr != nil {
+		if gotUpdate.err != wantErr {
+			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.err, wantErr)
+		}
+		return nil
+	}
+	if !cmp.Equal(gotUpdate.u, wantUpdate) {
 		return fmt.Errorf("unexpected clusterUpdate: (%v, %v), want: (%v, nil)", gotUpdate.u, gotUpdate.err, wantUpdate)
 	}
 	return nil
 }
 
-func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate EndpointsUpdate) error {
+func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate EndpointsUpdate, wantErr error) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for endpoints update: %v", err)
 	}
 	gotUpdate := u.(endpointsUpdateErr)
+	if wantErr != nil {
+		if gotUpdate.err != wantErr {
+			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.err, wantErr)
+		}
+		return nil
+	}
 	if gotUpdate.err != nil || !cmp.Equal(gotUpdate.u, wantUpdate, cmpopts.EquateEmpty()) {
 		return fmt.Errorf("unexpected endpointsUpdate: (%v, %v), want: (%v, nil)", gotUpdate.u, gotUpdate.err, wantUpdate)
 	}
@@ -263,7 +287,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	defer cleanup()
 
 	// The first New(). Should create a Client and a new APIClient.
-	client, err := New()
+	client, err := newRefCounted()
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -280,7 +304,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	// and should not create new API client.
 	const count = 9
 	for i := 0; i < count; i++ {
-		tc, terr := New()
+		tc, terr := newRefCounted()
 		if terr != nil {
 			client.Close()
 			t.Fatalf("%d-th call to New() failed with error: %v", i, terr)
@@ -324,7 +348,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 
 	// Call New() again after the previous Client is actually closed. Should
 	// create a Client and a new APIClient.
-	client2, err2 := New()
+	client2, err2 := newRefCounted()
 	if err2 != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}

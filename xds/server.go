@@ -35,14 +35,13 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/xds/internal/server"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const serverPrefix = "[xds-server %p] "
 
 var (
 	// These new functions will be overridden in unit tests.
-	newXDSClient = func() (xdsClient, error) {
+	newXDSClient = func() (xdsclient.XDSClient, error) {
 		return xdsclient.New()
 	}
 	newGRPCServer = func(opts ...grpc.ServerOption) grpcServer {
@@ -58,14 +57,6 @@ func prefixLogger(p *GRPCServer) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(serverPrefix, p))
 }
 
-// xdsClient contains methods from xdsClient.Client which are used by
-// the server. This is useful for overriding in unit tests.
-type xdsClient interface {
-	WatchListener(string, func(xdsclient.ListenerUpdate, error)) func()
-	BootstrapConfig() *bootstrap.Config
-	Close()
-}
-
 // grpcServer contains methods from grpc.Server which are used by the
 // GRPCServer type here. This is useful for overriding in unit tests.
 type grpcServer interface {
@@ -73,6 +64,7 @@ type grpcServer interface {
 	Serve(net.Listener) error
 	Stop()
 	GracefulStop()
+	GetServiceInfo() map[string]grpc.ServiceInfo
 }
 
 // GRPCServer wraps a gRPC server and provides server-side xDS functionality, by
@@ -90,7 +82,7 @@ type GRPCServer struct {
 	// beginning of Serve(), where we have to decide if we have to create a
 	// client or use an existing one.
 	clientMu sync.Mutex
-	xdsC     xdsClient
+	xdsC     xdsclient.XDSClient
 }
 
 // NewGRPCServer creates an xDS-enabled gRPC server using the passed in opts.
@@ -145,6 +137,12 @@ func (s *GRPCServer) RegisterService(sd *grpc.ServiceDesc, ss interface{}) {
 	s.gs.RegisterService(sd, ss)
 }
 
+// GetServiceInfo returns a map from service names to ServiceInfo.
+// Service names include the package names, in the form of <package>.<service>.
+func (s *GRPCServer) GetServiceInfo() map[string]grpc.ServiceInfo {
+	return s.gs.GetServiceInfo()
+}
+
 // initXDSClient creates a new xdsClient if there is no existing one available.
 func (s *GRPCServer) initXDSClient() error {
 	s.clientMu.Lock()
@@ -156,7 +154,7 @@ func (s *GRPCServer) initXDSClient() error {
 
 	newXDSClient := newXDSClient
 	if s.opts.bootstrapContents != nil {
-		newXDSClient = func() (xdsClient, error) {
+		newXDSClient = func() (xdsclient.XDSClient, error) {
 			return xdsclient.NewClientWithBootstrapContents(s.opts.bootstrapContents)
 		}
 	}

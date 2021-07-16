@@ -295,9 +295,11 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: c.failFast})
 		beginTime = time.Now()
 		begin := &stats.Begin{
-			Client:    true,
-			BeginTime: beginTime,
-			FailFast:  c.failFast,
+			Client:         true,
+			BeginTime:      beginTime,
+			FailFast:       c.failFast,
+			IsClientStream: desc.ClientStreams,
+			IsServerStream: desc.ServerStreams,
 		}
 		sh.HandleRPC(ctx, begin)
 	}

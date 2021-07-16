@@ -141,6 +141,9 @@ type UpdateHandler interface {
 	// NewEndpoints handles updates to xDS ClusterLoadAssignment (or tersely
 	// referred to as Endpoints) resources.
 	NewEndpoints(map[string]EndpointsUpdate, UpdateMetadata)
+	// NewConnectionError handles connection errors from the xDS stream. The
+	// error will be reported to all the resource watchers.
+	NewConnectionError(err error)
 }
 
 // ServiceStatus is the status of the update.
@@ -269,6 +272,28 @@ type VirtualHost struct {
 	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
 }
 
+// HashPolicyType specifies the type of HashPolicy from a received RDS Response.
+type HashPolicyType int
+
+const (
+	// HashPolicyTypeHeader specifies to hash a Header in the incoming request.
+	HashPolicyTypeHeader HashPolicyType = iota
+	// HashPolicyTypeChannelID specifies to hash a unique Identifier of the
+	// Channel. In grpc-go, this will be done using the ClientConn pointer.
+	HashPolicyTypeChannelID
+)
+
+// HashPolicy specifies the HashPolicy if the upstream cluster uses a hashing
+// load balancer.
+type HashPolicy struct {
+	HashPolicyType HashPolicyType
+	Terminal       bool
+	// Fields used for type HEADER.
+	HeaderName        string
+	Regex             *regexp.Regexp
+	RegexSubstitution string
+}
+
 // Route is both a specification of how to match a request as well as an
 // indication of the action to take upon match.
 type Route struct {
@@ -280,6 +305,8 @@ type Route struct {
 	CaseInsensitive bool
 	Headers         []*HeaderMatcher
 	Fraction        *uint32
+
+	HashPolicies []*HashPolicy
 
 	// If the matchers above indicate a match, the below configuration is used.
 	WeightedClusters map[string]WeightedCluster
@@ -579,7 +606,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 
 // BootstrapConfig returns the configuration read from the bootstrap file.
 // Callers must treat the return value as read-only.
-func (c *Client) BootstrapConfig() *bootstrap.Config {
+func (c *clientRefCounted) BootstrapConfig() *bootstrap.Config {
 	return c.config
 }
 
