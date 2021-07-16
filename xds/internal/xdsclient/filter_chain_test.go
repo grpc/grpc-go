@@ -646,6 +646,107 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 				},
 			},
 		},
+		// In the case of two HTTP Connection Manager's being present, the
+		// second HTTP Connection Manager should be validated, but ignored.
+		{
+			name: "two hcms",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											validServerSideHTTPFilter,
+											validServerSideHTTPFilter2,
+										},
+									}),
+								},
+							},
+							{
+								Name: "hcm2",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											validServerSideHTTPFilter,
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									HttpFilters: []*v3httppb.HttpFilter{
+										validServerSideHTTPFilter,
+										validServerSideHTTPFilter2,
+									},
+								}),
+							},
+						},
+						{
+							Name: "hcm2",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									HttpFilters: []*v3httppb.HttpFilter{
+										validServerSideHTTPFilter,
+									},
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: {
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									unspecifiedPrefixMapKey: {
+										srcPortMap: map[int]*FilterChain{
+											0: {HTTPFilters: []HTTPFilter{
+												{
+													Name:   "serverOnlyCustomFilter",
+													Filter: serverOnlyHTTPFilter{},
+													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+												},
+												{
+													Name:   "serverOnlyCustomFilter2",
+													Filter: serverOnlyHTTPFilter{},
+													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+												},
+											}},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				def: &FilterChain{HTTPFilters: []HTTPFilter{
+					{
+						Name:   "serverOnlyCustomFilter",
+						Filter: serverOnlyHTTPFilter{},
+						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+					},
+					{
+						Name:   "serverOnlyCustomFilter2",
+						Filter: serverOnlyHTTPFilter{},
+						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+					},
+				},
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {

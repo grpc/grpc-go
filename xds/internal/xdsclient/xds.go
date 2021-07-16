@@ -314,9 +314,14 @@ func processNetworkFilterChain(filterChain *v3listenerpb.FilterChain) ([]HTTPFil
 			if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
 				return nil, fmt.Errorf("filter chain {%+v} failed unmarshaling of network filter {%+v}: %v", filterChain, filter, err)
 			}
-			var err error
-			if httpFilters, err = processHTTPFilters(hcm.GetHttpFilters(), true); err != nil {
-				return nil, fmt.Errorf("filter chain {%+v} had invalid server side HTTP Filters {%+v}", filterChain, hcm.GetHttpFilters())
+			// "Any filters after HttpConnectionManager should be ignored during
+			// connection processing but still be considered for validity." - A36
+			if !seenHCM {
+				var err error
+				// "HTTPConnectionManager must have valid http_filters." - A36
+				if httpFilters, err = processHTTPFilters(hcm.GetHttpFilters(), true); err != nil {
+					return nil, fmt.Errorf("filter chain {%+v} had invalid server side HTTP Filters {%+v}", filterChain, hcm.GetHttpFilters())
+				}
 			}
 			seenHCM = true
 		default:
