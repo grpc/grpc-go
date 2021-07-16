@@ -908,9 +908,10 @@ func (s) TestChainEngine(t *testing.T) {
 
 				ctx = grpc.NewContextWithServerTransportStream(ctx, stream)
 				err = cre.IsAuthorized(ctx)
-				status, _ := status.FromError(err)
-				if data.wantStatusCode != status.Code() {
-					t.Fatalf("IsAuthorized(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, status.Code(), data.wantStatusCode)
+				if gotCode := status.Code(err); gotCode != data.wantStatusCode {
+					t.Fatalf("IsAuthorized(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, gotCode, data.wantStatusCode)
+					conn.Close()
+					lis.Close()
 				}
 
 				conn.Close()

@@ -24,6 +24,7 @@ import (
 	"context"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"net"
 	"strconv"
 
@@ -69,13 +70,13 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	}
 	for _, engine := range cre.chainedEngines {
 		// TODO: What do I do now with this matchingPolicyName?
-		_, err := engine.findMatchingPolicy(rpcData)
+		matchingPolicyName, matchingPolicy := engine.findMatchingPolicy(rpcData)
 
 		switch {
-		case engine.action == allow && err == errPolicyNotFound:
-			return status.Errorf(codes.PermissionDenied, "incoming RPC %v did not match an allow policy", rpcData)
-		case engine.action == deny && err != errPolicyNotFound:
-			return status.Errorf(codes.PermissionDenied, "incoming RPC %+v matched a deny policy", rpcData)
+		case engine.action == allow && !matchingPolicy:
+			return status.Errorf(codes.PermissionDenied, "incoming RPC did not match an allow policy")
+		case engine.action == deny && matchingPolicy:
+			return status.Errorf(codes.PermissionDenied, "incoming RPC matched a deny policy %v", matchingPolicyName)
 		}
 	}
 	// If the incoming RPC gets through all of the engines successfully (i.e.
@@ -100,14 +101,14 @@ type engine struct {
 // newEngine creates an RBAC Engine based on the contents of policy. Returns a
 // non-nil error if the policy is invalid.
 func newEngine(policy *v3rbacpb.RBAC) (*engine, error) {
-	var action action
+	var a action
 	switch *policy.Action.Enum() {
 	case v3rbacpb.RBAC_ALLOW:
-		action = allow
+		a = allow
 	case v3rbacpb.RBAC_DENY:
-		action = deny
-	case v3rbacpb.RBAC_LOG:
-		return nil, errors.New("unsupported action")
+		a = deny
+	default:
+		return nil, fmt.Errorf("unsupported action %s", policy.Action)
 	}
 
 	policies := make(map[string]*policyMatcher, len(policy.Policies))
@@ -120,26 +121,26 @@ func newEngine(policy *v3rbacpb.RBAC) (*engine, error) {
 	}
 	return &engine{
 		policies: policies,
-		action:   action,
+		action:   a,
 	}, nil
 }
 
 var errPolicyNotFound = errors.New("a matching policy was not found")
 
 // findMatchingPolicy determines if an incoming RPC matches a policy. On a
-// successful match, it returns the name of the matching policy and a nil error
-// to specify that there was a matching policy found.  It returns an error in
+// successful match, it returns the name of the matching policy and a true bool
+// to specify that there was a matching policy found.  It returns false in
 // the case of not finding a matching policy.
-func (r *engine) findMatchingPolicy(rpcData *rpcData) (string, error) {
+func (r *engine) findMatchingPolicy(rpcData *rpcData) (string, bool) {
 	for policy, matcher := range r.policies {
 		if matcher.match(rpcData) {
-			return policy, nil
+			return policy, true
 		}
 	}
-	return "", errPolicyNotFound
+	return "", false
 }
 
-// newRPCData takes a incoming context (should be a context representing state
+// newRPCData takes an incoming context (should be a context representing state
 // needed for server RPC Call with metadata, peer info (used for source ip/port
 // and TLS information) and connection (used for destination ip/port) piped into
 // it) and the method name of the Service being called server side and populates
@@ -168,17 +169,17 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 
 	// The connection is needed in order to find the destination address and
 	// port of the incoming RPC Call.
-	conn, ok := getConnection(ctx)
-	if !ok {
+	conn := getConnection(ctx)
+	if conn == nil {
 		return nil, errors.New("missing connection in incoming context")
 	}
 	_, dPort, err := net.SplitHostPort(conn.LocalAddr().String())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error parsing local address: %v", err)
 	}
 	dp, err := strconv.ParseUint(dPort, 10, 32)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error parsing local address: %v", err)
 	}
 
 	var peerCertificates []*x509.Certificate
@@ -220,9 +221,9 @@ type rpcData struct {
 
 type connectionKey struct{}
 
-func getConnection(ctx context.Context) (net.Conn, bool) {
-	conn, ok := ctx.Value(connectionKey{}).(net.Conn)
-	return conn, ok
+func getConnection(ctx context.Context) net.Conn {
+	conn, _ := ctx.Value(connectionKey{}).(net.Conn)
+	return conn
 }
 
 // SetConnection adds the connection to the context to be able to get
