@@ -412,8 +412,5 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 			return true
 		}
 	}
-	if am.stringMatcher.Match(cert.Subject.String()) {
-		return true
-	}
-	return false
+	return am.stringMatcher.Match(cert.Subject.String())
 }

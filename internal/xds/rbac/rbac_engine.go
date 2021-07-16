@@ -125,8 +125,6 @@ func newEngine(policy *v3rbacpb.RBAC) (*engine, error) {
 	}, nil
 }
 
-var errPolicyNotFound = errors.New("a matching policy was not found")
-
 // findMatchingPolicy determines if an incoming RPC matches a policy. On a
 // successful match, it returns the name of the matching policy and a true bool
 // to specify that there was a matching policy found.  It returns false in
