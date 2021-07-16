@@ -391,7 +391,11 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.controlBuf.put(&headerFrame{
 			streamID: streamID,
 			hf: []hpack.HeaderField{
+				// http status 415: unsupported media type
 				{Name: ":status", Value: "415"},
+				{Name: "grpc-message", Value: encodeGrpcMessage("unsupported media type")},
+				{Name: "grpc-status", Value: strconv.Itoa(int(codes.Internal))},
+				{Name: "content-type", Value: "application/grpc"},
 			},
 			endStream: true,
 		})
@@ -403,7 +407,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			s,
 			status.Newf(codes.Internal, "transport: http2Server.operateHeaders failed parse headers: %v", headerError),
 		); err != nil && logger.V(logLevel) {
-			logger.Errorf("transport: http2Server.operateHeaders failed to write status %v", err)
+			logger.Infof("transport: http2Server.operateHeaders failed to write status %v", err)
 		}
 		return false
 	}
