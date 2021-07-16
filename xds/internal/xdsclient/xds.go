@@ -277,17 +277,17 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	return lu, nil
 }
 
-func processNetworkFilterChain(filterChain *v3listenerpb.FilterChain) ([]HTTPFilter, error) {
-	seenNames := make(map[string]bool, len(filterChain.GetFilters()))
+func processNetworkFilters(filters []*v3listenerpb.Filter) ([]HTTPFilter, error) {
+	seenNames := make(map[string]bool, len(filters))
 	seenHCM := false
 	var httpFilters []HTTPFilter
-	for _, filter := range filterChain.GetFilters() {
+	for _, filter := range filters {
 		name := filter.GetName()
 		if name == "" {
-			return nil, fmt.Errorf("filter chain {%+v} is missing name field in filter: {%+v}", filterChain, filter)
+			return nil, fmt.Errorf("network filters {%+v} is missing name field in filter: {%+v}", filters, filter)
 		}
 		if seenNames[name] {
-			return nil, fmt.Errorf("filter chain {%+v} has duplicate filter name %q", filterChain, name)
+			return nil, fmt.Errorf("network filters {%+v} has duplicate filter name %q", filters, name)
 		}
 		seenNames[name] = true
 
@@ -308,28 +308,29 @@ func processNetworkFilterChain(filterChain *v3listenerpb.FilterChain) ([]HTTPFil
 			// we have for HTTP filters), when we have to support network
 			// filters other than HttpConnectionManager.
 			if tc.GetTypeUrl() != version.V3HTTPConnManagerURL {
-				return nil, fmt.Errorf("filter chain {%+v} has unsupported network filter %q in filter {%+v}", filterChain, tc.GetTypeUrl(), filter)
+				return nil, fmt.Errorf("network filters {%+v} has unsupported network filter %q in filter {%+v}", filters, tc.GetTypeUrl(), filter)
 			}
 			hcm := &v3httppb.HttpConnectionManager{}
 			if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
-				return nil, fmt.Errorf("filter chain {%+v} failed unmarshaling of network filter {%+v}: %v", filterChain, filter, err)
+				return nil, fmt.Errorf("network filters {%+v} failed unmarshaling of network filter {%+v}: %v", filters, filter, err)
 			}
 			// "Any filters after HttpConnectionManager should be ignored during
 			// connection processing but still be considered for validity." - A36
-			if !seenHCM {
-				var err error
-				// "HTTPConnectionManager must have valid http_filters." - A36
-				if httpFilters, err = processHTTPFilters(hcm.GetHttpFilters(), true); err != nil {
-					return nil, fmt.Errorf("filter chain {%+v} had invalid server side HTTP Filters {%+v}", filterChain, hcm.GetHttpFilters())
-				}
+			filters, err := processHTTPFilters(hcm.GetHttpFilters(), true)
+			// "HTTPConnectionManager must have valid http_filters." - A36
+			if err != nil {
+				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}", filters, hcm.GetHttpFilters())
 			}
-			seenHCM = true
+			if !seenHCM {
+				httpFilters = filters
+				seenHCM = true
+			}
 		default:
-			return nil, fmt.Errorf("filter chain {%+v} has unsupported config_type %T in filter %s", filterChain, typ, filter.GetName())
+			return nil, fmt.Errorf("network filters {%+v} has unsupported config_type %T in filter %s", filters, typ, filter.GetName())
 		}
 	}
 	if !seenHCM {
-		return nil, fmt.Errorf("filter chain {%+v} missing HttpConnectionManager filter", filterChain)
+		return nil, fmt.Errorf("network filters {%+v} missing HttpConnectionManager filter", filters)
 	}
 	return httpFilters, nil
 }
