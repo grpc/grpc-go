@@ -348,8 +348,8 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		// headerError is set if an error is encountered while parsing the headers
 		headerError error
 
-		timeoutSet bool
-		timeout    time.Duration
+		timeoutSet  bool
+		timeout     time.Duration
 		contentType string
 	)
 
@@ -392,7 +392,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 
 	if !isGRPC {
 		h, err := json.Marshal(hpack.HeaderField{
-			Name: "grpc-message",
+			Name:  "grpc-message",
 			Value: encodeGrpcMessage("unsupported media type"),
 		})
 		if err != nil {
@@ -400,10 +400,10 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		}
 
 		t.controlBuf.put(&dataFrame{
-			streamID:    streamID,
-			endStream:   true,
-			h:           h,
-			d:           []byte(fmt.Sprintf("unsupported content-type %q", contentType)),
+			streamID:  streamID,
+			endStream: true,
+			h:         h,
+			d:         []byte(fmt.Sprintf("unsupported content-type %q", contentType)),
 		})
 		return false
 	}
