@@ -21,7 +21,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"fmt"
 	"net"
 	"net/url"
 	"testing"
@@ -486,7 +485,7 @@ func (s) TestChainEngine(t *testing.T) {
 		},
 		// SuccessCaseSimplePolicy is a test that tests a single policy
 		// that only allows an rpc to proceed if the rpc is calling with a certain
-		// path and port.
+		// path.
 		{
 			name: "SuccessCaseSimplePolicy",
 			rbacConfigs: []*v3rbacpb.RBAC{
@@ -494,7 +493,6 @@ func (s) TestChainEngine(t *testing.T) {
 					Policies: map[string]*v3rbacpb.Policy{
 						"localhost-fan": {
 							Permissions: []*v3rbacpb.Permission{
-								{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 8080}},
 								{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
 							},
 							Principals: []*v3rbacpb.Principal{
@@ -512,10 +510,7 @@ func (s) TestChainEngine(t *testing.T) {
 				// this RPC should be allowed to proceed.
 				{
 					rpcData: &rpcData{
-						md: map[string][]string{
-							":path": {"localhost-fan-page"},
-						},
-						destinationPort: 8080,
+						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
 						},
@@ -527,7 +522,6 @@ func (s) TestChainEngine(t *testing.T) {
 				// this rpc shouldn't be allowed to proceed.
 				{
 					rpcData: &rpcData{
-						destinationPort: 8000,
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
 						},
@@ -562,12 +556,6 @@ func (s) TestChainEngine(t *testing.T) {
 										Rules: []*v3rbacpb.Permission{
 											{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "GET"}}}},
 											{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "/products"}}}}}},
-											{Rule: &v3rbacpb.Permission_OrRules{OrRules: &v3rbacpb.Permission_Set{
-												Rules: []*v3rbacpb.Permission{
-													{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 80}},
-													{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 443}},
-												},
-											}}},
 										},
 									},
 									},
@@ -612,7 +600,6 @@ func (s) TestChainEngine(t *testing.T) {
 				// These incoming RPC calls should not match any policy.
 				{
 					rpcData: &rpcData{
-						destinationPort: 8000,
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
 						},
@@ -621,7 +608,6 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				{
 					rpcData: &rpcData{
-						destinationPort: 8080,
 						fullMethod:      "get-product-list",
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
@@ -631,7 +617,6 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				{
 					rpcData: &rpcData{
-						destinationPort: 8080,
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
 							AuthInfo: credentials.TLSInfo{
@@ -794,7 +779,6 @@ func (s) TestChainEngine(t *testing.T) {
 					Policies: map[string]*v3rbacpb.Policy{
 						"localhost-fan": {
 							Permissions: []*v3rbacpb.Permission{
-								{Rule: &v3rbacpb.Permission_DestinationPort{DestinationPort: 8080}},
 								{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "localhost-fan-page"}}}}}},
 							},
 							Principals: []*v3rbacpb.Principal{
@@ -813,7 +797,6 @@ func (s) TestChainEngine(t *testing.T) {
 				// match with the deny and thus should be allowed to proceed.
 				{
 					rpcData: &rpcData{
-						destinationPort: 8000,
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
 						},
@@ -824,10 +807,7 @@ func (s) TestChainEngine(t *testing.T) {
 				// and thus shouldn't be allowed to proceed as matched with deny.
 				{
 					rpcData: &rpcData{
-						md: map[string][]string{
-							":path": {"localhost-fan-page"},
-						},
-						destinationPort: 8080,
+						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
 						},
@@ -838,7 +818,6 @@ func (s) TestChainEngine(t *testing.T) {
 				// shouldn't be allowed to proceed as didn't match with allow.
 				{
 					rpcData: &rpcData{
-						destinationPort: 8000,
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "10.0.0.0"},
 						},
@@ -849,10 +828,7 @@ func (s) TestChainEngine(t *testing.T) {
 				// thus shouldn't be allowed to proceed.
 				{
 					rpcData: &rpcData{
-						md: map[string][]string{
-							":path": {"localhost-fan-page"},
-						},
-						destinationPort: 8080,
+						fullMethod: "localhost-fan-page",
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "10.0.0.0"},
 						},
@@ -886,7 +862,7 @@ func (s) TestChainEngine(t *testing.T) {
 					// destination ip/port in RPCData struct. This represents what
 					// the user of ChainEngine will have to place into
 					// context, as this is only way to get destination ip and port.
-					lis, err := net.Listen("tcp", "localhost:"+fmt.Sprint(data.rpcData.destinationPort))
+					lis, err := net.Listen("tcp", "localhost:0")
 					defer lis.Close()
 					if err != nil {
 						t.Fatalf("Error listening: %v", err)
