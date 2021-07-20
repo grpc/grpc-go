@@ -69,15 +69,16 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 		return status.Errorf(codes.InvalidArgument, "missing fields in ctx %+v: %v", ctx, err)
 	}
 	for _, engine := range cre.chainedEngines {
-		// TODO: What do I do now with this matchingPolicyName?
-		matchingPolicyName, matchingPolicy := engine.findMatchingPolicy(rpcData)
+		matchingPolicyName, ok := engine.findMatchingPolicy(rpcData)
 
 		switch {
-		case engine.action == allow && !matchingPolicy:
+		case engine.action == allow && !ok:
 			return status.Errorf(codes.PermissionDenied, "incoming RPC did not match an allow policy")
-		case engine.action == deny && matchingPolicy:
-			return status.Errorf(codes.PermissionDenied, "incoming RPC matched a deny policy %v", matchingPolicyName)
+		case engine.action == deny && ok:
+			return status.Errorf(codes.PermissionDenied, "incoming RPC matched a deny policy %q", matchingPolicyName)
 		}
+		// Every policy in the engine list must be queried. Thus, iterate to the
+		// next policy.
 	}
 	// If the incoming RPC gets through all of the engines successfully (i.e.
 	// doesn't not match an allow or match a deny engine), the RPC is authorized
@@ -100,19 +101,19 @@ type engine struct {
 
 // newEngine creates an RBAC Engine based on the contents of policy. Returns a
 // non-nil error if the policy is invalid.
-func newEngine(policy *v3rbacpb.RBAC) (*engine, error) {
+func newEngine(config *v3rbacpb.RBAC) (*engine, error) {
 	var a action
-	switch *policy.Action.Enum() {
+	switch *config.Action.Enum() {
 	case v3rbacpb.RBAC_ALLOW:
 		a = allow
 	case v3rbacpb.RBAC_DENY:
 		a = deny
 	default:
-		return nil, fmt.Errorf("unsupported action %s", policy.Action)
+		return nil, fmt.Errorf("unsupported action %s", config.Action)
 	}
 
-	policies := make(map[string]*policyMatcher, len(policy.Policies))
-	for name, config := range policy.Policies {
+	policies := make(map[string]*policyMatcher, len(config.Policies))
+	for name, config := range config.Policies {
 		matcher, err := newPolicyMatcher(config)
 		if err != nil {
 			return nil, err

@@ -874,48 +874,50 @@ func (s) TestChainEngine(t *testing.T) {
 			// Query the created chain of RBAC Engines with different args to see
 			// if the chain of RBAC Engines configured as such works as intended.
 			for _, data := range test.rbacQueries {
-				// Construct the context with three data points that have enough
-				// information to represent incoming RPC's. This will be how a
-				// user uses this API. A user will have to put MD, PeerInfo, and
-				// the connection the RPC is sent on in the context.
-				ctx := metadata.NewIncomingContext(context.Background(), data.rpcData.md)
+				func() {
+					// Construct the context with three data points that have enough
+					// information to represent incoming RPC's. This will be how a
+					// user uses this API. A user will have to put MD, PeerInfo, and
+					// the connection the RPC is sent on in the context.
+					ctx := metadata.NewIncomingContext(context.Background(), data.rpcData.md)
 
-				// Make a TCP connection with a certain destination port. The
-				// address/port of this connection will be used to populate the
-				// destination ip/port in RPCData struct. This represents what
-				// the user of ChainEngine will have to place into
-				// context, as this is only way to get destination ip and port.
-				lis, err := net.Listen("tcp", "localhost:"+fmt.Sprint(data.rpcData.destinationPort))
-				if err != nil {
-					t.Fatalf("Error listening: %v", err)
-				}
-				connCh := make(chan net.Conn, 1)
-				go func() {
-					conn, err := lis.Accept()
+					// Make a TCP connection with a certain destination port. The
+					// address/port of this connection will be used to populate the
+					// destination ip/port in RPCData struct. This represents what
+					// the user of ChainEngine will have to place into
+					// context, as this is only way to get destination ip and port.
+					lis, err := net.Listen("tcp", "localhost:"+fmt.Sprint(data.rpcData.destinationPort))
+					defer lis.Close()
 					if err != nil {
-						t.Errorf("Error accepting connection: %v", err)
-						return
+						t.Fatalf("Error listening: %v", err)
 					}
-					connCh <- conn
+					connCh := make(chan net.Conn, 1)
+					go func() {
+						conn, err := lis.Accept()
+						if err != nil {
+							t.Errorf("Error accepting connection: %v", err)
+							return
+						}
+						connCh <- conn
+					}()
+					_, err = net.Dial("tcp", lis.Addr().String())
+					if err != nil {
+						t.Fatalf("Error dialing: %v", err)
+					}
+					conn := <-connCh
+					defer conn.Close()
+					ctx = SetConnection(ctx, conn)
+					ctx = peer.NewContext(ctx, data.rpcData.peerInfo)
+					stream := &ServerTransportStreamWithMethod{
+						method: data.rpcData.fullMethod,
+					}
+
+					ctx = grpc.NewContextWithServerTransportStream(ctx, stream)
+					err = cre.IsAuthorized(ctx)
+					if gotCode := status.Code(err); gotCode != data.wantStatusCode {
+						t.Fatalf("IsAuthorized(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, gotCode, data.wantStatusCode)
+					}
 				}()
-				net.Dial("tcp", lis.Addr().String())
-				conn := <-connCh
-				ctx = SetConnection(ctx, conn)
-				ctx = peer.NewContext(ctx, data.rpcData.peerInfo)
-				stream := &ServerTransportStreamWithMethod{
-					method: data.rpcData.fullMethod,
-				}
-
-				ctx = grpc.NewContextWithServerTransportStream(ctx, stream)
-				err = cre.IsAuthorized(ctx)
-				if gotCode := status.Code(err); gotCode != data.wantStatusCode {
-					t.Fatalf("IsAuthorized(%+v, %+v) returned (%+v), want(%+v)", ctx, data.rpcData.fullMethod, gotCode, data.wantStatusCode)
-					conn.Close()
-					lis.Close()
-				}
-
-				conn.Close()
-				lis.Close()
 			}
 		})
 	}
