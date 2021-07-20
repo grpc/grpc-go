@@ -49,7 +49,7 @@ var (
 			},
 		},
 	}
-	validServerSideHTTPFilter = &v3httppb.HttpFilter{
+	validServerSideHTTPFilter1 = &v3httppb.HttpFilter{
 		Name:       "serverOnlyCustomFilter",
 		ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
 	}
@@ -428,8 +428,7 @@ func TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
 		{
 			name: "client side HTTP filter",
 			lis: &v3listenerpb.Listener{
-				Name:    "grpc/server?xds.resource.listening_address=0.0.0.0:9999",
-				Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{SocketAddress: &v3corepb.SocketAddress{Address: "0.0.0.0", PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: 9999}}}},
+				Name: "grpc/server?xds.resource.listening_address=0.0.0.0:9999",
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
 						Name: "filter-chain-1",
@@ -456,8 +455,7 @@ func TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
 		{
 			name: "one valid then one invalid HTTP filter",
 			lis: &v3listenerpb.Listener{
-				Name:    "grpc/server?xds.resource.listening_address=0.0.0.0:9999",
-				Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{SocketAddress: &v3corepb.SocketAddress{Address: "0.0.0.0", PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: 9999}}}},
+				Name: "grpc/server?xds.resource.listening_address=0.0.0.0:9999",
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
 						Name: "filter-chain-1",
@@ -467,7 +465,7 @@ func TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
 									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 										HttpFilters: []*v3httppb.HttpFilter{
-											validServerSideHTTPFilter,
+											validServerSideHTTPFilter1,
 											{
 												Name:       "clientOnlyCustomFilter",
 												ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: clientOnlyCustomFilterConfig},
@@ -513,7 +511,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
 									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 										HttpFilters: []*v3httppb.HttpFilter{
-											validServerSideHTTPFilter,
+											validServerSideHTTPFilter1,
 										},
 									}),
 								},
@@ -528,7 +526,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 							ConfigType: &v3listenerpb.Filter_TypedConfig{
 								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 									HttpFilters: []*v3httppb.HttpFilter{
-										validServerSideHTTPFilter,
+										validServerSideHTTPFilter1,
 									},
 								}),
 							},
@@ -579,7 +577,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
 									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 										HttpFilters: []*v3httppb.HttpFilter{
-											validServerSideHTTPFilter,
+											validServerSideHTTPFilter1,
 											validServerSideHTTPFilter2,
 										},
 									}),
@@ -595,7 +593,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 							ConfigType: &v3listenerpb.Filter_TypedConfig{
 								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 									HttpFilters: []*v3httppb.HttpFilter{
-										validServerSideHTTPFilter,
+										validServerSideHTTPFilter1,
 										validServerSideHTTPFilter2,
 									},
 								}),
@@ -660,7 +658,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
 									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 										HttpFilters: []*v3httppb.HttpFilter{
-											validServerSideHTTPFilter,
+											validServerSideHTTPFilter1,
 											validServerSideHTTPFilter2,
 										},
 									}),
@@ -671,7 +669,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
 									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 										HttpFilters: []*v3httppb.HttpFilter{
-											validServerSideHTTPFilter,
+											validServerSideHTTPFilter1,
 										},
 									}),
 								},
@@ -686,7 +684,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 							ConfigType: &v3listenerpb.Filter_TypedConfig{
 								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 									HttpFilters: []*v3httppb.HttpFilter{
-										validServerSideHTTPFilter,
+										validServerSideHTTPFilter1,
 										validServerSideHTTPFilter2,
 									},
 								}),
@@ -697,7 +695,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 							ConfigType: &v3listenerpb.Filter_TypedConfig{
 								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 									HttpFilters: []*v3httppb.HttpFilter{
-										validServerSideHTTPFilter,
+										validServerSideHTTPFilter1,
 									},
 								}),
 							},
@@ -752,7 +750,6 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			gotFC, err := NewFilterChainManager(test.lis)
-			print(gotFC.def.HTTPFilters)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}

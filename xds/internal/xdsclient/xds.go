@@ -315,9 +315,9 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) ([]HTTPFilter, error)
 				return nil, fmt.Errorf("network filters {%+v} failed unmarshaling of network filter {%+v}: %v", filters, filter, err)
 			}
 			// "Any filters after HttpConnectionManager should be ignored during
-			// connection processing but still be considered for validity." - A36
+			// connection processing but still be considered for validity.
+			// HTTPConnectionManager must have valid http_filters." - A36
 			filters, err := processHTTPFilters(hcm.GetHttpFilters(), true)
-			// "HTTPConnectionManager must have valid http_filters." - A36
 			if err != nil {
 				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}", filters, hcm.GetHttpFilters())
 			}

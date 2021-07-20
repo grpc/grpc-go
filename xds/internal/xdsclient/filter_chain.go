@@ -397,13 +397,14 @@ func filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
 	if err != nil {
 		return nil, err
 	}
+	filterChain := &FilterChain{HTTPFilters: httpFilters}
 	// If the transport_socket field is not specified, it means that the control
 	// plane has not sent us any security config. This is fine and the server
 	// will use the fallback credentials configured as part of the
 	// xdsCredentials.
 	ts := fc.GetTransportSocket()
 	if ts == nil {
-		return &FilterChain{HTTPFilters: httpFilters}, nil
+		return filterChain, nil
 	}
 	if name := ts.GetName(); name != transportSocketName {
 		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
@@ -430,10 +431,8 @@ func filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
 	if sc.RequireClientCert && sc.RootInstanceName == "" {
 		return nil, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
 	}
-	return &FilterChain{
-		HTTPFilters: httpFilters,
-		SecurityCfg: sc,
-	}, nil
+	filterChain.SecurityCfg = sc
+	return filterChain, nil
 }
 
 // FilterChainLookupParams wraps parameters to be passed to Lookup.
