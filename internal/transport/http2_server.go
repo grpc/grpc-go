@@ -21,6 +21,7 @@ package transport
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -349,6 +350,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 
 		timeoutSet bool
 		timeout    time.Duration
+		contentType string
 	)
 
 	for _, hf := range frame.Fields {
@@ -356,6 +358,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		case "content-type":
 			contentSubtype, validContentType := grpcutil.ContentSubtype(hf.Value)
 			if !validContentType {
+				contentType = hf.Value
 				break
 			}
 			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
@@ -388,16 +391,19 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 
 	if !isGRPC {
-		t.controlBuf.put(&headerFrame{
-			streamID: streamID,
-			hf: []hpack.HeaderField{
-				// http status 415: unsupported media type
-				{Name: ":status", Value: "415"},
-				{Name: "grpc-message", Value: encodeGrpcMessage("unsupported media type")},
-				{Name: "grpc-status", Value: strconv.Itoa(int(codes.Internal))},
-				{Name: "content-type", Value: "application/grpc"},
-			},
-			endStream: true,
+		h, err := json.Marshal(hpack.HeaderField{
+			Name: "grpc-message",
+			Value: encodeGrpcMessage("unsupported media type"),
+		})
+		if err != nil {
+			return false
+		}
+
+		t.controlBuf.put(&dataFrame{
+			streamID:    streamID,
+			endStream:   true,
+			h:           h,
+			d:           []byte(fmt.Sprintf("unsupported content-type %q", contentType)),
 		})
 		return false
 	}
