@@ -608,7 +608,7 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 				{
 					rpcData: &rpcData{
-						fullMethod:      "get-product-list",
+						fullMethod: "get-product-list",
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
 						},
