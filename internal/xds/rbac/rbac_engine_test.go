@@ -863,10 +863,10 @@ func (s) TestChainEngine(t *testing.T) {
 					// the user of ChainEngine will have to place into
 					// context, as this is only way to get destination ip and port.
 					lis, err := net.Listen("tcp", "localhost:0")
-					defer lis.Close()
 					if err != nil {
 						t.Fatalf("Error listening: %v", err)
 					}
+					defer lis.Close()
 					connCh := make(chan net.Conn, 1)
 					go func() {
 						conn, err := lis.Accept()
