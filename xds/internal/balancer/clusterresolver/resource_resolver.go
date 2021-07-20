@@ -28,8 +28,8 @@ import (
 // resourceUpdate is a combined update from all the resources, in the order of
 // priority. For example, it can be {EDS, EDS, DNS}.
 type resourceUpdate struct {
-	p   []balancerconfig.PriorityConfig
-	err error
+	priorities []balancerconfig.PriorityConfig
+	err        error
 }
 
 type discoveryMechanism interface {
@@ -197,7 +197,7 @@ func (rr *resourceResolver) generate() {
 	case <-rr.updateChannel:
 	default:
 	}
-	rr.updateChannel <- &resourceUpdate{p: ret}
+	rr.updateChannel <- &resourceUpdate{priorities: ret}
 }
 
 type edsDiscoveryMechanism struct {

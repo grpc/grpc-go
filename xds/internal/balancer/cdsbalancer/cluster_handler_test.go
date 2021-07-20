@@ -95,7 +95,7 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 			fakeClient.InvokeWatchClusterCallback(test.clusterUpdate, nil)
 			select {
 			case chu := <-ch.updateChannel:
-				if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{test.clusterUpdate}); diff != "" {
+				if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{test.clusterUpdate}); diff != "" {
 					t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
@@ -189,7 +189,7 @@ func (s) TestSuccessCaseLeafNodeThenNewUpdate(t *testing.T) {
 			fakeClient.InvokeWatchClusterCallback(test.newClusterUpdate, nil)
 			select {
 			case chu := <-ch.updateChannel:
-				if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{test.newClusterUpdate}); diff != "" {
+				if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{test.newClusterUpdate}); diff != "" {
 					t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
@@ -305,7 +305,7 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	// ordered as per the cluster update.
 	select {
 	case chu := <-ch.updateChannel:
-		if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{{
+		if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{{
 			ClusterType: xdsclient.ClusterTypeEDS,
 			ClusterName: edsService,
 		}, {
@@ -412,7 +412,7 @@ func (s) TestUpdateRootClusterAggregateThenChangeChild(t *testing.T) {
 
 	select {
 	case chu := <-ch.updateChannel:
-		if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{{
+		if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{{
 			ClusterType: xdsclient.ClusterTypeEDS,
 			ClusterName: edsService,
 		}, {
@@ -658,7 +658,7 @@ func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
 	// Then an update should successfully be written to the update buffer.
 	select {
 	case chu := <-ch.updateChannel:
-		if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{{
+		if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{{
 			ClusterType: xdsclient.ClusterTypeEDS,
 			ClusterName: edsService2,
 		}}); diff != "" {

@@ -275,7 +275,7 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 		return
 	}
 
-	b.logger.Infof("Watch update from xds-client %p, content: %+v, security config: %v", b.xdsClient, pretty.ToJSON(update.chu), pretty.ToJSON(update.securityCfg))
+	b.logger.Infof("Watch update from xds-client %p, content: %+v, security config: %v", b.xdsClient, pretty.ToJSON(update.updates), pretty.ToJSON(update.securityCfg))
 
 	// Process the security config from the received update before building the
 	// child policy or forwarding the update to it. We do this because the child
@@ -304,8 +304,8 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 		b.logger.Infof("Created child policy %p of type %s", b.childLB, clusterresolver.Name)
 	}
 
-	dms := make([]balancerconfig.DiscoveryMechanism, len(update.chu))
-	for i, cu := range update.chu {
+	dms := make([]balancerconfig.DiscoveryMechanism, len(update.updates))
+	for i, cu := range update.updates {
 		switch cu.ClusterType {
 		case xdsclient.ClusterTypeEDS:
 			dms[i] = balancerconfig.DiscoveryMechanism{

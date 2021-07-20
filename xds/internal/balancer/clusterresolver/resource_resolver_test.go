@@ -110,7 +110,7 @@ func (s) TestResourceResolverOneEDSResource(t *testing.T) {
 			fakeClient.InvokeWatchEDSCallback("", test.edsUpdate, nil)
 			select {
 			case u := <-rr.updateChannel:
-				if diff := cmp.Diff(u.p, test.want); diff != "" {
+				if diff := cmp.Diff(u.priorities, test.want); diff != "" {
 					t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
@@ -192,7 +192,7 @@ func (s) TestResourceResolverOneDNSResource(t *testing.T) {
 			dnsR.UpdateState(resolver.State{Addresses: test.addrs})
 			select {
 			case u := <-rr.updateChannel:
-				if diff := cmp.Diff(u.p, test.want); diff != "" {
+				if diff := cmp.Diff(u.priorities, test.want); diff != "" {
 					t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
@@ -240,7 +240,7 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 	fakeClient.InvokeWatchEDSCallback(gotEDSName1, testEDSUpdates[0], nil)
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{{
+		if diff := cmp.Diff(u.priorities, []balancerconfig.PriorityConfig{{
 			Mechanism: balancerconfig.DiscoveryMechanism{
 				Type:           balancerconfig.DiscoveryMechanismTypeEDS,
 				Cluster:        testClusterName,
@@ -287,7 +287,7 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 	fakeClient.InvokeWatchEDSCallback(gotEDSName2, testEDSUpdates[1], nil)
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{{
+		if diff := cmp.Diff(u.priorities, []balancerconfig.PriorityConfig{{
 			Mechanism: balancerconfig.DiscoveryMechanism{
 				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
 				Cluster: testClusterName,
@@ -314,7 +314,7 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 	}
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{{
+		if diff := cmp.Diff(u.priorities, []balancerconfig.PriorityConfig{{
 			Mechanism: balancerconfig.DiscoveryMechanism{
 				Type:                  balancerconfig.DiscoveryMechanismTypeEDS,
 				Cluster:               testClusterName,
@@ -385,7 +385,7 @@ func (s) TestResourceResolverNoChangeNoUpdate(t *testing.T) {
 	fakeClient.InvokeWatchEDSCallback(gotEDSName2, testEDSUpdates[1], nil)
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{
+		if diff := cmp.Diff(u.priorities, []balancerconfig.PriorityConfig{
 			{
 				Mechanism: balancerconfig.DiscoveryMechanism{
 					Type:    balancerconfig.DiscoveryMechanismTypeEDS,
@@ -497,7 +497,7 @@ func (s) TestResourceResolverChangePriority(t *testing.T) {
 	fakeClient.InvokeWatchEDSCallback(gotEDSName2, testEDSUpdates[1], nil)
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{
+		if diff := cmp.Diff(u.priorities, []balancerconfig.PriorityConfig{
 			{
 				Mechanism: balancerconfig.DiscoveryMechanism{
 					Type:    balancerconfig.DiscoveryMechanismTypeEDS,
@@ -538,7 +538,7 @@ func (s) TestResourceResolverChangePriority(t *testing.T) {
 	}
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{
+		if diff := cmp.Diff(u.priorities, []balancerconfig.PriorityConfig{
 			{
 				Mechanism: balancerconfig.DiscoveryMechanism{
 					Type:    balancerconfig.DiscoveryMechanismTypeEDS,
@@ -625,7 +625,7 @@ func (s) TestResourceResolverEDSAndDNS(t *testing.T) {
 	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "1.1.1.1"}, {Addr: "2.2.2.2"}}})
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{
+		if diff := cmp.Diff(u.priorities, []balancerconfig.PriorityConfig{
 			{
 				Mechanism: balancerconfig.DiscoveryMechanism{
 					Type:    balancerconfig.DiscoveryMechanismTypeEDS,
@@ -687,7 +687,7 @@ func (s) TestResourceResolverChangeFromEDSToDNS(t *testing.T) {
 	fakeClient.InvokeWatchEDSCallback(gotEDSName1, testEDSUpdates[0], nil)
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{{
+		if diff := cmp.Diff(u.priorities, []balancerconfig.PriorityConfig{{
 			Mechanism: balancerconfig.DiscoveryMechanism{
 				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
 				Cluster: testClusterName,
@@ -724,7 +724,7 @@ func (s) TestResourceResolverChangeFromEDSToDNS(t *testing.T) {
 	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "1.1.1.1"}, {Addr: "2.2.2.2"}}})
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{{
+		if diff := cmp.Diff(u.priorities, []balancerconfig.PriorityConfig{{
 			Mechanism: balancerconfig.DiscoveryMechanism{
 				Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname: testDNSTarget,
@@ -845,7 +845,7 @@ func (s) TestResourceResolverDNSResolveNow(t *testing.T) {
 	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "1.1.1.1"}, {Addr: "2.2.2.2"}}})
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{{
+		if diff := cmp.Diff(u.priorities, []balancerconfig.PriorityConfig{{
 			Mechanism: balancerconfig.DiscoveryMechanism{
 				Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname: testDNSTarget,

@@ -215,14 +215,8 @@ func (s) TestSubConnStateChange(t *testing.T) {
 	defer edsB.Close()
 
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
-				Cluster:        testClusterName,
-				Type:           balancerconfig.DiscoveryMechanismTypeEDS,
-				EDSServiceName: testEDSServcie,
-			}},
-		},
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
+		BalancerConfig: newLBConfigWithOneEDS(testEDSServcie),
 	}); err != nil {
 		t.Fatalf("edsB.UpdateClientConnState() failed: %v", err)
 	}
@@ -269,14 +263,8 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
-				Cluster:        testClusterName,
-				Type:           balancerconfig.DiscoveryMechanismTypeEDS,
-				EDSServiceName: testEDSServcie,
-			}},
-		},
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
+		BalancerConfig: newLBConfigWithOneEDS(testEDSServcie),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -329,14 +317,8 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 
 	// An update with the same service name should not trigger a new watch.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
-				Cluster:        testClusterName,
-				Type:           balancerconfig.DiscoveryMechanismTypeEDS,
-				EDSServiceName: testEDSServcie,
-			}},
-		},
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
+		BalancerConfig: newLBConfigWithOneEDS(testEDSServcie),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -369,14 +351,8 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
-				Cluster:        testClusterName,
-				Type:           balancerconfig.DiscoveryMechanismTypeEDS,
-				EDSServiceName: testEDSServcie,
-			}},
-		},
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
+		BalancerConfig: newLBConfigWithOneEDS(testEDSServcie),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -426,14 +402,8 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	// An update with the same service name should trigger a new watch, because
 	// the previous watch was canceled.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
-				Cluster:        testClusterName,
-				Type:           balancerconfig.DiscoveryMechanismTypeEDS,
-				EDSServiceName: testEDSServcie,
-			}},
-		},
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
+		BalancerConfig: newLBConfigWithOneEDS(testEDSServcie),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -484,14 +454,8 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	defer cancel()
 	// If eds service name is not set, should watch for cluster name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
-				Cluster:        testClusterName,
-				Type:           balancerconfig.DiscoveryMechanismTypeEDS,
-				EDSServiceName: "cluster-1",
-			}},
-		},
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
+		BalancerConfig: newLBConfigWithOneEDS("cluster-1"),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -502,14 +466,8 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	// Update with an non-empty edsServiceName should trigger an EDS watch for
 	// the same.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
-				Cluster:        testClusterName,
-				Type:           balancerconfig.DiscoveryMechanismTypeEDS,
-				EDSServiceName: "foobar-1",
-			}},
-		},
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
+		BalancerConfig: newLBConfigWithOneEDS("foobar-1"),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -522,18 +480,22 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	// registered watch will be cancelled, which will result in an EDS request
 	// with no resource names being sent to the server.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
-				Cluster:        testClusterName,
-				Type:           balancerconfig.DiscoveryMechanismTypeEDS,
-				EDSServiceName: "foobar-2",
-			}},
-		},
+		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
+		BalancerConfig: newLBConfigWithOneEDS("foobar-2"),
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if err := verifyExpectedRequests(ctx, xdsC, "", "foobar-2"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func newLBConfigWithOneEDS(edsServiceName string) *LBConfig {
+	return &LBConfig{
+		DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+			Cluster:        testClusterName,
+			Type:           balancerconfig.DiscoveryMechanismTypeEDS,
+			EDSServiceName: edsServiceName,
+		}},
 	}
 }

@@ -186,9 +186,9 @@ func (b *clusterResolverBalancer) handleWatchUpdate(update *resourceUpdate) {
 		return
 	}
 
-	b.logger.Infof("resource update: %+v", pretty.ToJSON(update.p))
+	b.logger.Infof("resource update: %+v", pretty.ToJSON(update.priorities))
 	b.watchUpdateReceived = true
-	b.priorities = update.p
+	b.priorities = update.priorities
 
 	// A new EDS update triggers new child configs (e.g. different priorities
 	// for the priority balancer), and new addresses (the endpoints come from

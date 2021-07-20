@@ -49,7 +49,7 @@ type LBConfig struct {
 	// locality-policy's config. Optional; defaults to "round_robin".
 	EndpointPickingPolicy *internalserviceconfig.BalancerConfig `json:"endpointPickingPolicy,omitempty"`
 
-	// FIXME: read and warn if endpoint is not roundrobin or locality is not
+	// TODO: read and warn if endpoint is not roundrobin or locality is not
 	// weightedtarget.
 }
 
