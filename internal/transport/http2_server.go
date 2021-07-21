@@ -21,6 +21,7 @@ package transport
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -345,10 +346,11 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		mdata      = make(map[string][]string)
 		httpMethod string
 		// headerError is set if an error is encountered while parsing the headers
-		headerError bool
+		headerError error
 
-		timeoutSet bool
-		timeout    time.Duration
+		timeoutSet  bool
+		timeout     time.Duration
+		contentType string
 	)
 
 	for _, hf := range frame.Fields {
@@ -356,6 +358,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		case "content-type":
 			contentSubtype, validContentType := grpcutil.ContentSubtype(hf.Value)
 			if !validContentType {
+				contentType = hf.Value
 				break
 			}
 			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
@@ -371,7 +374,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			timeoutSet = true
 			var err error
 			if timeout, err = decodeTimeout(hf.Value); err != nil {
-				headerError = true
+				headerError = err
 			}
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
@@ -379,7 +382,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			}
 			v, err := decodeMetadataHeader(hf.Name, hf.Value)
 			if err != nil {
-				headerError = true
+				headerError = err
 				logger.Warningf("Failed to decode metadata header (%q, %q): %v", hf.Name, hf.Value, err)
 				break
 			}
@@ -387,13 +390,31 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		}
 	}
 
-	if !isGRPC || headerError {
-		t.controlBuf.put(&cleanupStream{
-			streamID: streamID,
-			rst:      true,
-			rstCode:  http2.ErrCodeProtocol,
-			onWrite:  func() {},
+	if !isGRPC {
+		h, err := json.Marshal(hpack.HeaderField{
+			Name:  "grpc-message",
+			Value: encodeGrpcMessage("unsupported media type"),
 		})
+		if err != nil {
+			return false
+		}
+
+		t.controlBuf.put(&dataFrame{
+			streamID:  streamID,
+			endStream: true,
+			h:         h,
+			d:         []byte(fmt.Sprintf("unsupported content-type %q", contentType)),
+		})
+		return false
+	}
+
+	if headerError != nil {
+		if err := t.WriteStatus(
+			s,
+			status.Newf(codes.Internal, "transport: http2Server.operateHeaders failed parse headers: %v", headerError),
+		); err != nil && logger.V(logLevel) {
+			logger.Infof("transport: http2Server.operateHeaders failed to write status %v", err)
+		}
 		return false
 	}
 
