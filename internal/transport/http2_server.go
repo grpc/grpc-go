@@ -215,9 +215,16 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	if kep.MinTime == 0 {
 		kep.MinTime = defaultKeepalivePolicyMinTime
 	}
+	baseCtx := context.Background()
+	if config.BaseContext != nil {
+		baseCtx = config.BaseContext(conn.LocalAddr(), conn.RemoteAddr())
+		if baseCtx == nil {
+			panic("BaseContext returned a nil context")
+		}
+	}
 	done := make(chan struct{})
 	t := &http2Server{
-		ctx:               context.Background(),
+		ctx:               baseCtx,
 		done:              done,
 		conn:              conn,
 		remoteAddr:        conn.RemoteAddr(),
