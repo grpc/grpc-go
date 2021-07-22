@@ -437,18 +437,275 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 	}
 }
 
-// Fix breaking tests
-
-// Add tests for good route updates here
-// Inline + name
+// TestNewFilterChainImpl_Success_RouteUpdate tests the construction of the
+// filter chain with valid HTTP Filters present.
 func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
-
+	tests := []struct {
+		name   string
+		lis    *v3listenerpb.Listener
+		wantFC *FilterChainManager
+	}{
+		{
+			name: "rds",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+											Rds: &v3httppb.Rds{
+												ConfigSource: &v3corepb.ConfigSource{
+													ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+												},
+												RouteConfigName: "route-1",
+											},
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+										Rds: &v3httppb.Rds{
+											ConfigSource: &v3corepb.ConfigSource{
+												ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+											},
+											RouteConfigName: "route-1",
+										},
+									},
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: {
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									unspecifiedPrefixMapKey: {
+										srcPortMap: map[int]*FilterChain{
+											0: {
+												RouteConfigName: "route-1",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				def: &FilterChain{
+					RouteConfigName: "route-1",
+				},
+			},
+		},
+		{
+			name: "inline route config",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+											RouteConfig: routeConfig,
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+										RouteConfig: routeConfig,
+									},
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: {
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									unspecifiedPrefixMapKey: {
+										srcPortMap: map[int]*FilterChain{
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				def: &FilterChain{
+					InlineRouteConfig: inlineRouteConfig,
+				},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gotFC, err := NewFilterChainManager(test.lis)
+			if err != nil {
+				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
+			}
+			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{}), cmpOpts) {
+				t.Fatalf("NewFilterChainManager() returned %+v, want: %+v", gotFC, test.wantFC)
+			}
+		})
+	}
 }
 
-// Add tests for bad route updates here
-// Stuff that would trigger failure case
+// TestNewFilterChainImpl_Failure_BadRouteUpdate verifies cases where the Route
+// Update in the filter chain are invalid.
 func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
+	tests := []struct {
+		name    string
+		lis     *v3listenerpb.Listener
+		wantErr string
+	}{
+		{
+			name: "no-route-specifier",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+							},
+						},
+					},
+				},
+			},
+			wantErr: "no RouteSpecifier",
+		},
+		{
+			name: "not-ads",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+											Rds: &v3httppb.Rds{
+												RouteConfigName: "route-1",
+											},
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+										Rds: &v3httppb.Rds{
+											RouteConfigName: "route-1",
+										},
+									},
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantErr: "ConfigSource is not ADS",
+		},
+		{
+			name: "unsupported-route-specifier",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
+									}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantErr: "unsupported type",
+		},
+	}
 
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewFilterChainManager(test.lis)
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, test.wantErr)
+			}
+		})
+	}
 }
 
 // TestNewFilterChainImpl_Failure_BadHTTPFilters verifies cases where the HTTP
