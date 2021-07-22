@@ -71,6 +71,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		}
 		goodUpdateWithFilterConfigs = func(cfgs map[string]httpfilter.FilterConfig) RouteConfigUpdate {
 			return RouteConfigUpdate{
+				RouteName: routeName,
 				VirtualHosts: []*VirtualHost{{
 					Domains: []string{ldsTarget},
 					Routes: []*Route{{
@@ -175,6 +176,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 								ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
 							}}}}}}},
 			wantUpdate: RouteConfigUpdate{
+				RouteName: routeName,
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
@@ -217,6 +219,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				},
 			},
 			wantUpdate: RouteConfigUpdate{
+				RouteName: routeName,
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{uninterestingDomain},
@@ -251,6 +254,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				},
 			},
 			wantUpdate: RouteConfigUpdate{
+				RouteName: routeName,
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
@@ -321,6 +325,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				},
 			},
 			wantUpdate: RouteConfigUpdate{
+				RouteName: routeName,
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
@@ -358,6 +363,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				},
 			},
 			wantUpdate: RouteConfigUpdate{
+				RouteName: routeName,
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
@@ -392,6 +398,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				},
 			},
 			wantUpdate: RouteConfigUpdate{
+				RouteName: routeName,
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
@@ -426,6 +433,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				},
 			},
 			wantUpdate: RouteConfigUpdate{
+				RouteName: routeName,
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
@@ -618,6 +626,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			resources: []*anypb.Any{v2RouteConfig},
 			wantUpdate: map[string]RouteConfigUpdate{
 				v2RouteConfigName: {
+					RouteName: v2RouteConfigName,
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -641,6 +650,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			resources: []*anypb.Any{v3RouteConfig},
 			wantUpdate: map[string]RouteConfigUpdate{
 				v3RouteConfigName: {
+					RouteName: v3RouteConfigName,
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -664,6 +674,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			resources: []*anypb.Any{v2RouteConfig, v3RouteConfig},
 			wantUpdate: map[string]RouteConfigUpdate{
 				v3RouteConfigName: {
+					RouteName: v3RouteConfigName,
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -677,6 +688,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					Raw: v3RouteConfig,
 				},
 				v2RouteConfigName: {
+					RouteName: v2RouteConfigName,
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -711,6 +723,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			},
 			wantUpdate: map[string]RouteConfigUpdate{
 				v3RouteConfigName: {
+					RouteName: v3RouteConfigName,
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -724,6 +737,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					Raw: v3RouteConfig,
 				},
 				v2RouteConfigName: {
+					RouteName: v2RouteConfigName,
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},

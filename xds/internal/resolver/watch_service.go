@@ -246,6 +246,8 @@ func match(domain, host string) (domainMatchType, bool) {
 	}
 }
 
+// ^^ move this to something shared, call another fucntion
+
 // findBestMatchingVirtualHost returns the virtual host whose domains field best
 // matches host
 //
@@ -261,6 +263,9 @@ func match(domain, host string) (domainMatchType, bool) {
 //  - If two matches are of the same pattern type, the longer match is better
 //    - This is to compare the length of the matching pattern, e.g. “*ABCDE” >
 //    “*ABC”
+// Perhaps move this to shared place as well
+// instead of this being called with host, call it with the authority header. Also the data type is different
+// rather than xdsclient.VirtualHost it's not that it's virtualHost in lis wrapper.
 func findBestMatchingVirtualHost(host string, vHosts []*xdsclient.VirtualHost) *xdsclient.VirtualHost {
 	var (
 		matchVh   *xdsclient.VirtualHost
@@ -284,5 +289,15 @@ func findBestMatchingVirtualHost(host string, vHosts []*xdsclient.VirtualHost) *
 			matchLen = len(domain)
 		}
 	}
-	return matchVh
+	return matchVh // once this matches you should have filters instantiated already
 }
+
+// Maybe generalize this? to handle both xdsclient.VirtualHost and virtual host
+// logically just an iteration through []
+
+// This should definitely be supported with the new data structure
+
+// Underlying logic is the same, but top level iteration isn't
+
+// xdsclient.VirtualHost doesn't have the filters preinstantiated, thus you can't pass that in to the xds interceptors, as
+// the xds interceptors are per rpc, and you would have to instantiate the filters per RPC in those interceptors

@@ -30,6 +30,9 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
+// A few options - persist the route information in conn on a fc accept
+// persist it in filter chain, pipe it into conn
+
 // connWrapper is a thin wrapper around a net.Conn returned by Accept(). It
 // provides the following additional functionality:
 // 1. A way to retrieve the configured deadline. This is required by the
@@ -58,6 +61,9 @@ type connWrapper struct {
 	// completing the HTTP2 handshake.
 	deadlineMu sync.Mutex
 	deadline   time.Time
+
+	httpFilters []xdsclient.ServerInterceptorWithName
+	virtualHosts []xdsclient.VirtualHostWithFilters
 }
 
 // SetDeadline makes a copy of the passed in deadline and forwards the call to
@@ -103,7 +109,7 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	cpc := c.parent.xdsC.BootstrapConfig().CertProviderConfigs
 	// Identity provider name is mandatory on the server-side, and this is
 	// enforced when the resource is received at the XDSClient layer.
-	secCfg := c.filterChain.SecurityCfg
+	secCfg := c.filterChain.SecurityCfg // Persists the filter chain solely for the security config
 	ip, err := buildProviderFunc(cpc, secCfg.IdentityInstanceName, secCfg.IdentityCertName, true, false)
 	if err != nil {
 		return nil, err

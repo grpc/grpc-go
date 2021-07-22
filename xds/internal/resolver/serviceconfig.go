@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/grpc/xds/internal/matcher"
 	"math/bits"
 	"strings"
 	"sync/atomic"
@@ -117,7 +118,7 @@ type routeCluster struct {
 }
 
 type route struct {
-	m                 *compositeMatcher // converted from route matchers
+	m                 *matcher.CompositeMatcher // converted from route matchers
 	clusters          wrr.WRR           // holds *routeCluster entries
 	maxStreamDuration time.Duration
 	// map from filter name to its config
@@ -146,7 +147,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	var rt *route
 	// Loop through routes in order and select first match.
 	for _, r := range cs.routes {
-		if r.m.match(rpcInfo) {
+		if r.m.Match(rpcInfo) {
 			rt = &r
 			break
 		}
@@ -163,7 +164,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	ref := &cs.clusters[cluster.name].refCount
 	atomic.AddInt32(ref, 1)
 
-	interceptor, err := cs.newInterceptor(rt, cluster)
+	interceptor, err := cs.newInterceptor(rt, cluster) // called per rpc, instantiate it once per connection
 	if err != nil {
 		return nil, err
 	}
@@ -259,12 +260,13 @@ func (cs *configSelector) newInterceptor(rt *route, cluster *routeCluster) (ires
 		return nil, nil
 	}
 	interceptors := make([]iresolver.ClientInterceptor, 0, len(cs.httpFilterConfig))
-	for _, filter := range cs.httpFilterConfig {
+	for _, filter := range cs.httpFilterConfig { // Takes List of http filters and constructs this ish
 		if router.IsRouterFilter(filter.Filter) {
 			// Ignore any filters after the router filter.  The router itself
 			// is currently a nop.
 			return &interceptorList{interceptors: interceptors}, nil
 		}
+		// httpFilter.FilterConfig is the type of these
 		override := cluster.httpFilterConfigOverride[filter.Name] // cluster is highest priority
 		if override == nil {
 			override = rt.httpFilterConfigOverride[filter.Name] // route is second priority
@@ -272,12 +274,12 @@ func (cs *configSelector) newInterceptor(rt *route, cluster *routeCluster) (ires
 		if override == nil {
 			override = cs.virtualHost.httpFilterConfigOverride[filter.Name] // VH is third & lowest priority
 		}
-		ib, ok := filter.Filter.(httpfilter.ClientInterceptorBuilder)
+		ib, ok := filter.Filter.(httpfilter.ClientInterceptorBuilder) // Get's the filter to instantiate here, how do I do this on server side?
 		if !ok {
 			// Should not happen if it passed xdsClient validation.
 			return nil, fmt.Errorf("filter does not support use in client")
 		}
-		i, err := ib.BuildClientInterceptor(filter.Config, override)
+		i, err := ib.BuildClientInterceptor(filter.Config, override) // Builds it once you have both the filter and the filter override
 		if err != nil {
 			return nil, fmt.Errorf("error constructing filter: %v", err)
 		}
@@ -318,18 +320,21 @@ func (cs *configSelector) stop() {
 // A global for testing.
 var newWRR = wrr.NewRandom
 
+// Management server -> (internal -> something usable) here, does it on construction of the config selector
 // newConfigSelector creates the config selector for su; may add entries to
 // r.activeClusters for previously-unseen clusters.
 func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, error) {
 	cs := &configSelector{
 		r:                r,
 		virtualHost:      virtualHost{httpFilterConfigOverride: su.virtualHost.HTTPFilterConfigOverride},
-		routes:           make([]route, len(su.virtualHost.Routes)),
+		routes:           make([]route, len(su.virtualHost.Routes)), // Route has a bunch of crap, really only need composite matcher
 		clusters:         make(map[string]*clusterInfo),
 		httpFilterConfig: su.ldsConfig.httpFilterConfig,
 	}
 
-	for i, rt := range su.virtualHost.Routes {
+	// Also has multiple virtual hosts on server side
+	for i, rt := range su.virtualHost.Routes { // This is per filter chain on server side
+		// But I do think we should convert to some sort of internal representation serversideroute perhaps
 		clusters := newWRR()
 		for cluster, wc := range rt.WeightedClusters {
 			clusters.Add(&routeCluster{
@@ -350,7 +355,7 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 		cs.routes[i].clusters = clusters
 
 		var err error
-		cs.routes[i].m, err = routeToMatcher(rt)
+		cs.routes[i].m, err = matcher.RouteToMatcher(rt)
 		if err != nil {
 			return nil, err
 		}

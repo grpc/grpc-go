@@ -117,9 +117,12 @@ type ClientInterceptor interface {
 	NewStream(ctx context.Context, ri RPCInfo, done func(), newStream func(ctx context.Context, done func()) (ClientStream, error)) (ClientStream, error)
 }
 
-// ServerInterceptor is unimplementable; do not use.
+// I don't think we should implement RBAC Right now...or should we
 type ServerInterceptor interface {
-	notDefined()
+	// AllowedToProceed checks if an incoming RPC is allowed to proceed based on
+	// information about connection RPC was received on, and HTTP Headers. This
+	// information will be piped into context.
+	AllowedToProceed(ctx context.Context) error
 }
 
 type csKeyType string

@@ -98,7 +98,7 @@ func (xdsC *Client) WatchRouteConfig(routeName string, callback func(xdsclient.R
 	xdsC.rdsCb = callback
 	xdsC.rdsWatchCh.Send(routeName)
 	return func() {
-		xdsC.rdsCancelCh.Send(nil)
+		xdsC.rdsCancelCh.Send(routeName)
 	}
 }
 
@@ -122,9 +122,12 @@ func (xdsC *Client) InvokeWatchRouteConfigCallback(update xdsclient.RouteConfigU
 
 // WaitForCancelRouteConfigWatch waits for a RDS watch to be cancelled  and returns
 // context.DeadlineExceeded otherwise.
-func (xdsC *Client) WaitForCancelRouteConfigWatch(ctx context.Context) error {
-	_, err := xdsC.rdsCancelCh.Receive(ctx)
-	return err
+func (xdsC *Client) WaitForCancelRouteConfigWatch(ctx context.Context) (string, error) {
+	val, err := xdsC.rdsCancelCh.Receive(ctx)
+	if err != nil {
+		return "", err
+	}
+	return val.(string), err
 }
 
 // WatchCluster registers a CDS watch.
@@ -293,11 +296,11 @@ func NewClientWithName(name string) *Client {
 	return &Client{
 		name:         name,
 		ldsWatchCh:   testutils.NewChannel(),
-		rdsWatchCh:   testutils.NewChannel(),
+		rdsWatchCh:   testutils.NewChannelWithSize(10),
 		cdsWatchCh:   testutils.NewChannelWithSize(10),
 		edsWatchCh:   testutils.NewChannelWithSize(10),
 		ldsCancelCh:  testutils.NewChannel(),
-		rdsCancelCh:  testutils.NewChannel(),
+		rdsCancelCh:  testutils.NewChannelWithSize(10),
 		cdsCancelCh:  testutils.NewChannelWithSize(10),
 		edsCancelCh:  testutils.NewChannelWithSize(10),
 		loadReportCh: testutils.NewChannel(),

@@ -170,7 +170,7 @@ func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool) (httpfilter.Fi
 	if !lds {
 		parseFunc = filterBuilder.ParseFilterConfigOverride
 	}
-	filterConfig, err := parseFunc(config)
+	filterConfig, err := parseFunc(config) // Logically, typed to correct
 	if err != nil {
 		return nil, nil, fmt.Errorf("error parsing config for filter %q: %v", typeURL, err)
 	}
@@ -277,65 +277,6 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	return lu, nil
 }
 
-func processNetworkFilters(filters []*v3listenerpb.Filter) ([]HTTPFilter, error) {
-	seenNames := make(map[string]bool, len(filters))
-	seenHCM := false
-	var httpFilters []HTTPFilter
-	for _, filter := range filters {
-		name := filter.GetName()
-		if name == "" {
-			return nil, fmt.Errorf("network filters {%+v} is missing name field in filter: {%+v}", filters, filter)
-		}
-		if seenNames[name] {
-			return nil, fmt.Errorf("network filters {%+v} has duplicate filter name %q", filters, name)
-		}
-		seenNames[name] = true
-
-		// Network filters have a oneof field named `config_type` where we
-		// only support `TypedConfig` variant.
-		switch typ := filter.GetConfigType().(type) {
-		case *v3listenerpb.Filter_TypedConfig:
-			// The typed_config field has an `anypb.Any` proto which could
-			// directly contain the serialized bytes of the actual filter
-			// configuration, or it could be encoded as a `TypedStruct`.
-			// TODO: Add support for `TypedStruct`.
-			tc := filter.GetTypedConfig()
-
-			// The only network filter that we currently support is the v3
-			// HttpConnectionManager. So, we can directly check the type_url
-			// and unmarshal the config.
-			// TODO: Implement a registry of supported network filters (like
-			// we have for HTTP filters), when we have to support network
-			// filters other than HttpConnectionManager.
-			if tc.GetTypeUrl() != version.V3HTTPConnManagerURL {
-				return nil, fmt.Errorf("network filters {%+v} has unsupported network filter %q in filter {%+v}", filters, tc.GetTypeUrl(), filter)
-			}
-			hcm := &v3httppb.HttpConnectionManager{}
-			if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
-				return nil, fmt.Errorf("network filters {%+v} failed unmarshaling of network filter {%+v}: %v", filters, filter, err)
-			}
-			// "Any filters after HttpConnectionManager should be ignored during
-			// connection processing but still be considered for validity.
-			// HTTPConnectionManager must have valid http_filters." - A36
-			filters, err := processHTTPFilters(hcm.GetHttpFilters(), true)
-			if err != nil {
-				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}", filters, hcm.GetHttpFilters())
-			}
-			if !seenHCM {
-				// TODO: Implement terminal filter logic, as per A36.
-				httpFilters = filters
-				seenHCM = true
-			}
-		default:
-			return nil, fmt.Errorf("network filters {%+v} has unsupported config_type %T in filter %s", filters, typ, filter.GetName())
-		}
-	}
-	if !seenHCM {
-		return nil, fmt.Errorf("network filters {%+v} missing HttpConnectionManager filter", filters)
-	}
-	return httpFilters, nil
-}
-
 // UnmarshalRouteConfig processes resources received in an RDS response,
 // validates them, and transforms them into a native struct which contains only
 // fields we are interested in. The provided hostname determines the route
@@ -402,7 +343,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 		}
 		vhs = append(vhs, vhOut)
 	}
-	return RouteConfigUpdate{VirtualHosts: vhs}, nil
+	return RouteConfigUpdate{RouteName: rc.Name, VirtualHosts: vhs}, nil
 }
 
 func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger, v2 bool) ([]*Route, error) {
@@ -491,65 +432,74 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 			route.Fraction = &n
 		}
 
-		route.WeightedClusters = make(map[string]WeightedCluster)
-		action := r.GetRoute()
+		switch r.GetAction().(type) {
+		case *v3routepb.Route_Route:
+			route.WeightedClusters = make(map[string]WeightedCluster)
+			action := r.GetRoute()
 
-		// Hash Policies are only applicable for a Ring Hash LB.
-		if env.RingHashSupport {
-			hp, err := hashPoliciesProtoToSlice(action.HashPolicy, logger)
-			if err != nil {
-				return nil, err
-			}
-			route.HashPolicies = hp
-		}
-
-		switch a := action.GetClusterSpecifier().(type) {
-		case *v3routepb.RouteAction_Cluster:
-			route.WeightedClusters[a.Cluster] = WeightedCluster{Weight: 1}
-		case *v3routepb.RouteAction_WeightedClusters:
-			wcs := a.WeightedClusters
-			var totalWeight uint32
-			for _, c := range wcs.Clusters {
-				w := c.GetWeight().GetValue()
-				if w == 0 {
-					continue
+			// Hash Policies are only applicable for a Ring Hash LB.
+			if env.RingHashSupport {
+				hp, err := hashPoliciesProtoToSlice(action.HashPolicy, logger)
+				if err != nil {
+					return nil, err
 				}
-				wc := WeightedCluster{Weight: w}
-				if !v2 {
-					cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
-					if err != nil {
-						return nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
+				route.HashPolicies = hp
+			}
+
+			switch a := action.GetClusterSpecifier().(type) {
+			case *v3routepb.RouteAction_Cluster:
+				route.WeightedClusters[a.Cluster] = WeightedCluster{Weight: 1}
+			case *v3routepb.RouteAction_WeightedClusters:
+				wcs := a.WeightedClusters
+				var totalWeight uint32
+				for _, c := range wcs.Clusters {
+					w := c.GetWeight().GetValue()
+					if w == 0 {
+						continue
 					}
-					wc.HTTPFilterConfigOverride = cfgs
+					wc := WeightedCluster{Weight: w}
+					if !v2 {
+						cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
+						if err != nil {
+							return nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
+						}
+						wc.HTTPFilterConfigOverride = cfgs
+					}
+					route.WeightedClusters[c.GetName()] = wc
+					totalWeight += w
 				}
-				route.WeightedClusters[c.GetName()] = wc
-				totalWeight += w
+				// envoy xds doc
+				// default TotalWeight https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto.html#envoy-v3-api-field-config-route-v3-weightedcluster-total-weight
+				wantTotalWeight := uint32(100)
+				if tw := wcs.GetTotalWeight(); tw != nil {
+					wantTotalWeight = tw.GetValue()
+				}
+				if totalWeight != wantTotalWeight {
+					return nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, expected total weight from response: %v", r, a, totalWeight, wantTotalWeight)
+				}
+				if totalWeight == 0 {
+					return nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
+				}
+			case *v3routepb.RouteAction_ClusterHeader:
+				continue
 			}
-			// envoy xds doc
-			// default TotalWeight https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto.html#envoy-v3-api-field-config-route-v3-weightedcluster-total-weight
-			wantTotalWeight := uint32(100)
-			if tw := wcs.GetTotalWeight(); tw != nil {
-				wantTotalWeight = tw.GetValue()
-			}
-			if totalWeight != wantTotalWeight {
-				return nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, expected total weight from response: %v", r, a, totalWeight, wantTotalWeight)
-			}
-			if totalWeight == 0 {
-				return nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
-			}
-		case *v3routepb.RouteAction_ClusterHeader:
-			continue
-		}
 
-		msd := action.GetMaxStreamDuration()
-		// Prefer grpc_timeout_header_max, if set.
-		dur := msd.GetGrpcTimeoutHeaderMax()
-		if dur == nil {
-			dur = msd.GetMaxStreamDuration()
-		}
-		if dur != nil {
-			d := dur.AsDuration()
-			route.MaxStreamDuration = &d
+			msd := action.GetMaxStreamDuration()
+			// Prefer grpc_timeout_header_max, if set.
+			dur := msd.GetGrpcTimeoutHeaderMax()
+			if dur == nil {
+				dur = msd.GetMaxStreamDuration()
+			}
+			if dur != nil {
+				d := dur.AsDuration()
+				route.MaxStreamDuration = &d
+			}
+			route.RouteAction = RouteActionRoute
+		case *v3routepb.Route_NonForwardingAction:
+			// Expected to be used on server side.
+			route.RouteAction = RouteActionNonForwardingAction
+		default:
+			route.RouteAction = RouteActionUnsupported
 		}
 
 		if !v2 {

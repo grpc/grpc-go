@@ -16,7 +16,9 @@
  *
  */
 
-package resolver
+// Package matcher contains matchers that need to be shared by the routing on
+// client side and routing on server side.
+package matcher
 
 import (
 	"fmt"
@@ -30,7 +32,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
-func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
+func RouteToMatcher(r *xdsclient.Route) (*CompositeMatcher, error) {
 	var pm pathMatcher
 	switch {
 	case r.Regex != nil:
@@ -75,18 +77,23 @@ func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
 	return newCompositeMatcher(pm, headerMatchers, fractionMatcher), nil
 }
 
-// compositeMatcher.match returns true if all matchers return true.
-type compositeMatcher struct {
+// So...just like in RBAC Matcher,
+// This patches incoming RPC's to different types of routes, just like policies etc.
+
+// If it's the same Route stuff as on client side, why not just reuse this xds/internal/resolver internal representation/implementation?
+
+// CompositeMatcher.match returns true if all matchers return true.
+type CompositeMatcher struct {
 	pm  pathMatcher
 	hms []matcher.HeaderMatcher
 	fm  *fractionMatcher
 }
 
-func newCompositeMatcher(pm pathMatcher, hms []matcher.HeaderMatcher, fm *fractionMatcher) *compositeMatcher {
-	return &compositeMatcher{pm: pm, hms: hms, fm: fm}
+func newCompositeMatcher(pm pathMatcher, hms []matcher.HeaderMatcher, fm *fractionMatcher) *CompositeMatcher {
+	return &CompositeMatcher{pm: pm, hms: hms, fm: fm}
 }
 
-func (a *compositeMatcher) match(info iresolver.RPCInfo) bool {
+func (a *CompositeMatcher) Match(info iresolver.RPCInfo) bool {
 	if a.pm != nil && !a.pm.match(info.Method) {
 		return false
 	}
@@ -119,7 +126,7 @@ func (a *compositeMatcher) match(info iresolver.RPCInfo) bool {
 	return true
 }
 
-func (a *compositeMatcher) String() string {
+func (a *CompositeMatcher) String() string {
 	var ret string
 	if a.pm != nil {
 		ret += a.pm.String()

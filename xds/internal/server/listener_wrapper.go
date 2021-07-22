@@ -84,6 +84,11 @@ func (s ServingMode) String() string {
 // non-nil error if the server has transitioned into not-serving mode.
 type ServingModeCallback func(addr net.Addr, mode ServingMode, err error)
 
+// DrainCallback is the callback that users can register to get pinged whenever
+// a new listener update gets received, and we want any clients to reconnect to
+// get the updated configuration.
+type DrainCallback func(addr net.Addr)
+
 func prefixLogger(p *listenerWrapper) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[xds-server-listener %p] ", p))
 }
@@ -92,6 +97,7 @@ func prefixLogger(p *listenerWrapper) *internalgrpclog.PrefixLogger {
 // the listenerWrapper.
 type XDSClient interface {
 	WatchListener(string, func(xdsclient.ListenerUpdate, error)) func()
+	WatchRouteConfig(string, func(xdsclient.RouteConfigUpdate, error)) func()
 	BootstrapConfig() *bootstrap.Config
 }
 
@@ -108,6 +114,8 @@ type ListenerWrapperParams struct {
 	XDSClient XDSClient
 	// ModeCallback is the callback to invoke when the serving mode changes.
 	ModeCallback ServingModeCallback
+	// DrainCallback is the callback to invoke when the Listener gets a new update.
+	DrainCallback DrainCallback
 }
 
 // NewListenerWrapper creates a new listenerWrapper with params. It returns a
@@ -122,10 +130,12 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 		xdsCredsInUse:     params.XDSCredsInUse,
 		xdsC:              params.XDSClient,
 		modeCallback:      params.ModeCallback,
+		drainCallback:     params.DrainCallback,
 		isUnspecifiedAddr: params.Listener.Addr().(*net.TCPAddr).IP.IsUnspecified(),
 
 		closed:     grpcsync.NewEvent(),
 		goodUpdate: grpcsync.NewEvent(),
+		updateCh:   make(chan ldsUpdateWithError, 1),
 	}
 	lw.logger = prefixLogger(lw)
 
@@ -134,13 +144,21 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 	lisAddr := lw.Listener.Addr().String()
 	lw.addr, lw.port, _ = net.SplitHostPort(lisAddr)
 
+	lw.rdsHandler = newRDSHandler(lw)
+
 	cancelWatch := lw.xdsC.WatchListener(lw.name, lw.handleListenerUpdate)
 	lw.logger.Infof("Watch started on resource name %v", lw.name)
 	lw.cancelWatch = func() {
 		cancelWatch()
 		lw.logger.Infof("Watch cancelled on resource name %v", lw.name)
 	}
+	go lw.run()
 	return lw, lw.goodUpdate.Done()
+}
+
+type ldsUpdateWithError struct {
+	update xdsclient.ListenerUpdate
+	err    error
 }
 
 // listenerWrapper wraps the net.Listener associated with the listening address
@@ -155,6 +173,7 @@ type listenerWrapper struct {
 	xdsC          XDSClient
 	cancelWatch   func()
 	modeCallback  ServingModeCallback
+	drainCallback DrainCallback
 
 	// Set to true if the listener is bound to the IP_ANY address (which is
 	// "0.0.0.0" for IPv4 and "::" for IPv6).
@@ -185,6 +204,17 @@ type listenerWrapper struct {
 	mode ServingMode
 	// Filter chains received as part of the last good update.
 	filterChains *xdsclient.FilterChainManager
+
+	rdsHandler *rdsHandler
+
+	// rdsMu guards access to the rdsUpdate. The reason for using an rw lock
+	// here is that these fields are read in Accept() for all incoming
+	// connections, but writes happen rarely (when we get all the RDS resources
+	// needed).
+	rdsMu sync.RWMutex
+	rdsUpdates map[string]xdsclient.RouteConfigUpdate
+
+	updateCh chan ldsUpdateWithError
 }
 
 // Accept blocks on an Accept() on the underlying listener, and wraps the
@@ -264,7 +294,20 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			conn.Close()
 			continue
 		}
-		return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
+		var rc xdsclient.RouteConfigUpdate
+		if fc.InlineRouteConfig != nil {
+			rc = *fc.InlineRouteConfig
+		} else {
+			l.rdsMu.RLock()
+			rc = l.rdsUpdates[fc.RouteConfigName]
+			l.rdsMu.RUnlock()
+		}
+
+		if err := fc.ConstructUsableRouteConfiguration(rc); err != nil {
+			// TODO: is this correct? Will this invoke the right behavior in GRPCServer?
+			return nil, fmt.Errorf("error constructing usable route configuration: %v", err)
+		}
+		return &connWrapper{Conn: conn, filterChain: fc, parent: l, httpFilters: fc.InstantiatedHTTPFilters, virtualHosts: fc.VirtualHosts}, nil
 	}
 }
 
@@ -277,25 +320,78 @@ func (l *listenerWrapper) Close() error {
 	if l.cancelWatch != nil {
 		l.cancelWatch()
 	}
+	l.rdsHandler.close()
 	return nil
 }
 
+// run is a long running goroutine which handles all xds updates. LDS and RDS
+// push updates onto a channel which is read and acted upon from this goroutine.
+func (l *listenerWrapper) run() {
+	for {
+		select {
+		case <-l.closed.Done():
+			return
+		case u := <-l.updateCh:
+			l.handleLDSUpdate(u)
+		case u := <-l.rdsHandler.updateChannel:
+			l.handleRDSUpdate(u)
+		}
+	}
+}
+
+// handleLDSUpdate is the callback which handles LDS Updates. It writes the
+// received update to the update channel, which is picked up by the run
+// goroutine.
 func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, err error) {
 	if l.closed.HasFired() {
 		l.logger.Warningf("Resource %q received update: %v with error: %v, after listener was closed", l.name, update, err)
 		return
 	}
+	// Remove any existing entry in updateCh and replace with the new one, as the only update
+	// listener cares about is most recent update.
+	select {
+	case <-l.updateCh:
+	default:
+	}
+	l.updateCh <- ldsUpdateWithError{update: update, err: err}
+}
 
-	if err != nil {
-		l.logger.Warningf("Received error for resource %q: %+v", l.name, err)
-		if xdsclient.ErrType(err) == xdsclient.ErrorTypeResourceNotFound {
-			l.switchMode(nil, ServingModeNotServing, err)
+// handleRDSUpdate handles a full rds update from rds handler. On a successful
+// update, the server will switch to ServingModeServing as the full
+// configuration (both LDS and RDS) has been received.
+func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
+	if l.closed.HasFired() {
+		l.logger.Warningf("RDS received update: %v with error: %v, after listener was closed", update.rdsUpdates, update.err)
+		return
+	}
+	if update.err != nil {
+		l.logger.Warningf("Received error for rds names specified in resource %q: %+v", l.name, update.err)
+		if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
+			l.switchMode(nil, ServingModeNotServing, update.err)
 		}
 		// For errors which are anything other than "resource-not-found", we
 		// continue to use the old configuration.
 		return
 	}
-	l.logger.Infof("Received update for resource %q: %+v", l.name, update)
+	l.rdsMu.Lock()
+	l.rdsUpdates = update.rdsUpdates
+	l.rdsMu.Unlock()
+
+	l.switchMode(l.filterChains, ServingModeServing, nil)
+	l.goodUpdate.Fire()
+}
+
+func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
+	if update.err != nil {
+		l.logger.Warningf("Received error for resource %q: %+v", l.name, update.err)
+		if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
+			l.switchMode(nil, ServingModeNotServing, update.err)
+		}
+		// For errors which are anything other than "resource-not-found", we
+		// continue to use the old configuration.
+		return
+	}
+	l.logger.Infof("Received update for resource %q: %+v", l.name, update.update)
 
 	// Make sure that the socket address on the received Listener resource
 	// matches the address of the net.Listener passed to us by the user. This
@@ -309,14 +405,30 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 	// What this means is that the XDSClient has ACKed a resource which can push
 	// the server into a "not serving" mode. This is not ideal, but this is
 	// what we have decided to do. See gRPC A36 for more details.
-	ilc := update.InboundListenerCfg
+	ilc := update.update.InboundListenerCfg
 	if ilc.Address != l.addr || ilc.Port != l.port {
 		l.switchMode(nil, ServingModeNotServing, fmt.Errorf("address (%s:%s) in Listener update does not match listening address: (%s:%s)", ilc.Address, ilc.Port, l.addr, l.port))
 		return
 	}
 
-	l.switchMode(ilc.FilterChains, ServingModeServing, nil)
-	l.goodUpdate.Fire()
+	// "Updates to a Listener cause all older connections on that Listener to be
+	// gracefully shut down with a grace period of 10 minutes for long-lived
+	// RPC's, such that clients will reconnect and have the updated
+	// configuration apply." - A36 Note that this is not the same as moving the
+	// Server's state to ServingModeNotServing. That prevents new connections
+	// from being accepted, whereas here we simply want the clients to reconnect
+	// to get the updated configuration.
+	if l.drainCallback != nil {
+		l.drainCallback(l.Listener.Addr())
+	}
+	l.rdsHandler.updateRouteNamesToWatch(ilc.FilterChains.RouteConfigNames)
+	// If there are no dynamic RDS Configurations still needed to be received
+	// from the management server, this listener has all the configuration
+	// needed, and is ready to be Served on.
+	if len(ilc.FilterChains.RouteConfigNames) == 0 {
+		l.switchMode(ilc.FilterChains, ServingModeServing, nil)
+		l.goodUpdate.Fire()
+	}
 }
 
 func (l *listenerWrapper) switchMode(fcs *xdsclient.FilterChainManager, newMode ServingMode, err error) {
