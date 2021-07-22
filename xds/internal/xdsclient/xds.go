@@ -268,13 +268,6 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 			Port:    strconv.Itoa(int(sockAddr.GetPortValue())),
 		},
 	}
-	chains := lis.GetFilterChains()
-	if def := lis.GetDefaultFilterChain(); def != nil {
-		chains = append(chains, def)
-	}
-	if err := validateNetworkFilterChains(chains); err != nil {
-		return nil, err
-	}
 
 	fcMgr, err := NewFilterChainManager(lis)
 	if err != nil {
@@ -284,59 +277,63 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	return lu, nil
 }
 
-func validateNetworkFilterChains(filterChains []*v3listenerpb.FilterChain) error {
-	for _, filterChain := range filterChains {
-		seenNames := make(map[string]bool, len(filterChain.GetFilters()))
-		seenHCM := false
-		for _, filter := range filterChain.GetFilters() {
-			name := filter.GetName()
-			if name == "" {
-				return fmt.Errorf("filter chain {%+v} is missing name field in filter: {%+v}", filterChain, filter)
-			}
-			if seenNames[name] {
-				return fmt.Errorf("filter chain {%+v} has duplicate filter name %q", filterChain, name)
-			}
-			seenNames[name] = true
-
-			// Network filters have a oneof field named `config_type` where we
-			// only support `TypedConfig` variant.
-			switch typ := filter.GetConfigType().(type) {
-			case *v3listenerpb.Filter_TypedConfig:
-				// The typed_config field has an `anypb.Any` proto which could
-				// directly contain the serialized bytes of the actual filter
-				// configuration, or it could be encoded as a `TypedStruct`.
-				// TODO: Add support for `TypedStruct`.
-				tc := filter.GetTypedConfig()
-
-				// The only network filter that we currently support is the v3
-				// HttpConnectionManager. So, we can directly check the type_url
-				// and unmarshal the config.
-				// TODO: Implement a registry of supported network filters (like
-				// we have for HTTP filters), when we have to support network
-				// filters other than HttpConnectionManager.
-				if tc.GetTypeUrl() != version.V3HTTPConnManagerURL {
-					return fmt.Errorf("filter chain {%+v} has unsupported network filter %q in filter {%+v}", filterChain, tc.GetTypeUrl(), filter)
-				}
-				hcm := &v3httppb.HttpConnectionManager{}
-				if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
-					return fmt.Errorf("filter chain {%+v} failed unmarshaling of network filter {%+v}: %v", filterChain, filter, err)
-				}
-				// We currently don't support HTTP filters on the server-side.
-				// We will be adding support for it in the future. So, we want
-				// to make sure that the http_filters configuration is valid.
-				if _, err := processHTTPFilters(hcm.GetHttpFilters(), true); err != nil {
-					return err
-				}
-				seenHCM = true
-			default:
-				return fmt.Errorf("filter chain {%+v} has unsupported config_type %T in filter %s", filterChain, typ, filter.GetName())
-			}
+func processNetworkFilters(filters []*v3listenerpb.Filter) ([]HTTPFilter, error) {
+	seenNames := make(map[string]bool, len(filters))
+	seenHCM := false
+	var httpFilters []HTTPFilter
+	for _, filter := range filters {
+		name := filter.GetName()
+		if name == "" {
+			return nil, fmt.Errorf("network filters {%+v} is missing name field in filter: {%+v}", filters, filter)
 		}
-		if !seenHCM {
-			return fmt.Errorf("filter chain {%+v} missing HttpConnectionManager filter", filterChain)
+		if seenNames[name] {
+			return nil, fmt.Errorf("network filters {%+v} has duplicate filter name %q", filters, name)
+		}
+		seenNames[name] = true
+
+		// Network filters have a oneof field named `config_type` where we
+		// only support `TypedConfig` variant.
+		switch typ := filter.GetConfigType().(type) {
+		case *v3listenerpb.Filter_TypedConfig:
+			// The typed_config field has an `anypb.Any` proto which could
+			// directly contain the serialized bytes of the actual filter
+			// configuration, or it could be encoded as a `TypedStruct`.
+			// TODO: Add support for `TypedStruct`.
+			tc := filter.GetTypedConfig()
+
+			// The only network filter that we currently support is the v3
+			// HttpConnectionManager. So, we can directly check the type_url
+			// and unmarshal the config.
+			// TODO: Implement a registry of supported network filters (like
+			// we have for HTTP filters), when we have to support network
+			// filters other than HttpConnectionManager.
+			if tc.GetTypeUrl() != version.V3HTTPConnManagerURL {
+				return nil, fmt.Errorf("network filters {%+v} has unsupported network filter %q in filter {%+v}", filters, tc.GetTypeUrl(), filter)
+			}
+			hcm := &v3httppb.HttpConnectionManager{}
+			if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
+				return nil, fmt.Errorf("network filters {%+v} failed unmarshaling of network filter {%+v}: %v", filters, filter, err)
+			}
+			// "Any filters after HttpConnectionManager should be ignored during
+			// connection processing but still be considered for validity.
+			// HTTPConnectionManager must have valid http_filters." - A36
+			filters, err := processHTTPFilters(hcm.GetHttpFilters(), true)
+			if err != nil {
+				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}", filters, hcm.GetHttpFilters())
+			}
+			if !seenHCM {
+				// TODO: Implement terminal filter logic, as per A36.
+				httpFilters = filters
+				seenHCM = true
+			}
+		default:
+			return nil, fmt.Errorf("network filters {%+v} has unsupported config_type %T in filter %s", filters, typ, filter.GetName())
 		}
 	}
-	return nil
+	if !seenHCM {
+		return nil, fmt.Errorf("network filters {%+v} missing HttpConnectionManager filter", filters)
+	}
+	return httpFilters, nil
 }
 
 // UnmarshalRouteConfig processes resources received in an RDS response,

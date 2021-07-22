@@ -28,13 +28,35 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/version"
+)
+
+var (
+	emptyValidNetworkFilters = []*v3listenerpb.Filter{
+		{
+			Name: "filter-1",
+			ConfigType: &v3listenerpb.Filter_TypedConfig{
+				TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+			},
+		},
+	}
+	validServerSideHTTPFilter1 = &v3httppb.HttpFilter{
+		Name:       "serverOnlyCustomFilter",
+		ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
+	}
+	validServerSideHTTPFilter2 = &v3httppb.HttpFilter{
+		Name:       "serverOnlyCustomFilter2",
+		ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
+	}
 )
 
 // TestNewFilterChainImpl_Failure_BadMatchFields verifies cases where we have a
@@ -150,11 +172,13 @@ func TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{
 							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16), cidrRangeFromAddressAndPrefixLen("10.0.0.0", 0)},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{
 							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.2.2", 16)},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -165,15 +189,19 @@ func TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourceType: v3listenerpb.FilterChainMatch_ANY},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourceType: v3listenerpb.FilterChainMatch_EXTERNAL},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourceType: v3listenerpb.FilterChainMatch_EXTERNAL},
+						Filters:          emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -186,11 +214,13 @@ func TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{
 							SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16), cidrRangeFromAddressAndPrefixLen("10.0.0.0", 0)},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{
 							SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.2.2", 16)},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -201,12 +231,15 @@ func TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourcePorts: []uint32{1, 2, 3, 4, 5}},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourcePorts: []uint32{5, 6, 7}},
+						Filters:          emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -243,6 +276,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
 						TransportSocket: &v3corepb.TransportSocket{Name: "unsupported-transport-socket-name"},
+						Filters:         emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -259,6 +293,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 								TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{}),
 							},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -278,6 +313,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 								},
 							},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -294,6 +330,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{}),
 							},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -318,6 +355,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 								}),
 							},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -342,6 +380,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 								}),
 							},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -360,6 +399,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 								}),
 							},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -372,6 +412,349 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 			_, err := NewFilterChainManager(test.lis)
 			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, test.wantErr)
+			}
+		})
+	}
+}
+
+// TestNewFilterChainImpl_Failure_BadHTTPFilters verifies cases where the HTTP
+// Filters in the filter chain are invalid.
+func TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
+	tests := []struct {
+		name    string
+		lis     *v3listenerpb.Listener
+		wantErr string
+	}{
+		{
+			name: "client side HTTP filter",
+			lis: &v3listenerpb.Listener{
+				Name: "grpc/server?xds.resource.listening_address=0.0.0.0:9999",
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											{
+												Name:       "clientOnlyCustomFilter",
+												ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: clientOnlyCustomFilterConfig},
+											},
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: "invalid server side HTTP Filters",
+		},
+		{
+			name: "one valid then one invalid HTTP filter",
+			lis: &v3listenerpb.Listener{
+				Name: "grpc/server?xds.resource.listening_address=0.0.0.0:9999",
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											validServerSideHTTPFilter1,
+											{
+												Name:       "clientOnlyCustomFilter",
+												ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: clientOnlyCustomFilterConfig},
+											},
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+			wantErr: "invalid server side HTTP Filters",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewFilterChainManager(test.lis)
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, test.wantErr)
+			}
+		})
+	}
+}
+
+// TestNewFilterChainImpl_Success_HTTPFilters tests the construction of the
+// filter chain with valid HTTP Filters present.
+func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
+	tests := []struct {
+		name   string
+		lis    *v3listenerpb.Listener
+		wantFC *FilterChainManager
+	}{
+		{
+			name: "singular valid http filter",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											validServerSideHTTPFilter1,
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									HttpFilters: []*v3httppb.HttpFilter{
+										validServerSideHTTPFilter1,
+									},
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: {
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									unspecifiedPrefixMapKey: {
+										srcPortMap: map[int]*FilterChain{
+											0: {HTTPFilters: []HTTPFilter{
+												{
+													Name:   "serverOnlyCustomFilter",
+													Filter: serverOnlyHTTPFilter{},
+													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+												},
+											}},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				def: &FilterChain{HTTPFilters: []HTTPFilter{
+					{
+						Name:   "serverOnlyCustomFilter",
+						Filter: serverOnlyHTTPFilter{},
+						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+					},
+				}},
+			},
+		},
+		{
+			name: "two valid http filters",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											validServerSideHTTPFilter1,
+											validServerSideHTTPFilter2,
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									HttpFilters: []*v3httppb.HttpFilter{
+										validServerSideHTTPFilter1,
+										validServerSideHTTPFilter2,
+									},
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: {
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									unspecifiedPrefixMapKey: {
+										srcPortMap: map[int]*FilterChain{
+											0: {HTTPFilters: []HTTPFilter{
+												{
+													Name:   "serverOnlyCustomFilter",
+													Filter: serverOnlyHTTPFilter{},
+													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+												},
+												{
+													Name:   "serverOnlyCustomFilter2",
+													Filter: serverOnlyHTTPFilter{},
+													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+												},
+											}},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				def: &FilterChain{HTTPFilters: []HTTPFilter{
+					{
+						Name:   "serverOnlyCustomFilter",
+						Filter: serverOnlyHTTPFilter{},
+						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+					},
+					{
+						Name:   "serverOnlyCustomFilter2",
+						Filter: serverOnlyHTTPFilter{},
+						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+					},
+				},
+				},
+			},
+		},
+		// In the case of two HTTP Connection Manager's being present, the
+		// second HTTP Connection Manager should be validated, but ignored.
+		{
+			name: "two hcms",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											validServerSideHTTPFilter1,
+											validServerSideHTTPFilter2,
+										},
+									}),
+								},
+							},
+							{
+								Name: "hcm2",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{
+											validServerSideHTTPFilter1,
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									HttpFilters: []*v3httppb.HttpFilter{
+										validServerSideHTTPFilter1,
+										validServerSideHTTPFilter2,
+									},
+								}),
+							},
+						},
+						{
+							Name: "hcm2",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									HttpFilters: []*v3httppb.HttpFilter{
+										validServerSideHTTPFilter1,
+									},
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: {
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									unspecifiedPrefixMapKey: {
+										srcPortMap: map[int]*FilterChain{
+											0: {HTTPFilters: []HTTPFilter{
+												{
+													Name:   "serverOnlyCustomFilter",
+													Filter: serverOnlyHTTPFilter{},
+													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+												},
+												{
+													Name:   "serverOnlyCustomFilter2",
+													Filter: serverOnlyHTTPFilter{},
+													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+												},
+											}},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				def: &FilterChain{HTTPFilters: []HTTPFilter{
+					{
+						Name:   "serverOnlyCustomFilter",
+						Filter: serverOnlyHTTPFilter{},
+						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+					},
+					{
+						Name:   "serverOnlyCustomFilter2",
+						Filter: serverOnlyHTTPFilter{},
+						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+					},
+				},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gotFC, err := NewFilterChainManager(test.lis)
+			if err != nil {
+				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
+			}
+			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{}), cmpOpts) {
+				t.Fatalf("NewFilterChainManager() returned %+v, want: %+v", gotFC, test.wantFC)
 			}
 		})
 	}
@@ -390,10 +773,13 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 			lis: &v3listenerpb.Listener{
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
-						Name: "filter-chain-1",
+						Name:    "filter-chain-1",
+						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: emptyValidNetworkFilters,
+				},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -432,6 +818,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 								}),
 							},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 				DefaultFilterChain: &v3listenerpb.FilterChain{
@@ -448,6 +835,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 							}),
 						},
 					},
+					Filters: emptyValidNetworkFilters,
 				},
 			},
 			wantFC: &FilterChainManager{
@@ -504,6 +892,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 								}),
 							},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 				DefaultFilterChain: &v3listenerpb.FilterChain{
@@ -528,6 +917,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 							}),
 						},
 					},
+					Filters: emptyValidNetworkFilters,
 				},
 			},
 			wantFC: &FilterChainManager{
@@ -573,7 +963,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
-			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{})) {
+			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{}), cmpopts.EquateEmpty()) {
 				t.Fatalf("NewFilterChainManager() returned %+v, want: %+v", gotFC, test.wantFC)
 			}
 		})
@@ -610,7 +1000,8 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 			lis: &v3listenerpb.Listener{
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
-						Name: "good-chain",
+						Name:    "good-chain",
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						Name: "unsupported-destination-port",
@@ -618,9 +1009,10 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 							PrefixRanges:    []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
 							DestinationPort: &wrapperspb.UInt32Value{Value: 666},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -634,7 +1026,8 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 			lis: &v3listenerpb.Listener{
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
-						Name: "good-chain",
+						Name:    "good-chain",
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						Name: "unsupported-server-names",
@@ -642,9 +1035,10 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
 							ServerNames:  []string{"example-server"},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -661,7 +1055,8 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 			lis: &v3listenerpb.Listener{
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
-						Name: "good-chain",
+						Name:    "good-chain",
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						Name: "unsupported-transport-protocol",
@@ -669,9 +1064,10 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 							PrefixRanges:      []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
 							TransportProtocol: "tls",
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -688,7 +1084,8 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 			lis: &v3listenerpb.Listener{
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
-						Name: "good-chain",
+						Name:    "good-chain",
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						Name: "unsupported-application-protocol",
@@ -696,9 +1093,10 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 							PrefixRanges:         []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
 							ApplicationProtocols: []string{"h2"},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -718,7 +1116,7 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
-			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{})) {
+			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{}), cmpopts.EquateEmpty()) {
 				t.Fatalf("NewFilterChainManager() returned %+v, want: %+v", gotFC, test.wantFC)
 			}
 		})
@@ -740,6 +1138,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 					{
 						// Unspecified destination prefix.
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						// v4 wildcard destination prefix.
@@ -747,6 +1146,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
 							SourceType:   v3listenerpb.FilterChainMatch_EXTERNAL,
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						// v6 wildcard destination prefix.
@@ -754,15 +1154,18 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("::", 0)},
 							SourceType:   v3listenerpb.FilterChainMatch_EXTERNAL,
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)}},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("10.0.0.0", 8)}},
+						Filters:          emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -849,15 +1252,17 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{
 							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
 							SourceType:   v3listenerpb.FilterChainMatch_EXTERNAL,
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -901,15 +1306,17 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("10.0.0.0", 8)}},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{
 							PrefixRanges:       []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
 							SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -952,6 +1359,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourcePorts: []uint32{1, 2, 3}},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{
@@ -960,9 +1368,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							SourceType:         v3listenerpb.FilterChainMatch_EXTERNAL,
 							SourcePorts:        []uint32{1, 2, 3},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -1010,15 +1419,18 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)}},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{
 							PrefixRanges:      []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("10.0.0.0", 8)},
 							TransportProtocol: "raw_buffer",
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						// This chain will be dropped in favor of the above
@@ -1032,6 +1444,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							SourceType:         v3listenerpb.FilterChainMatch_EXTERNAL,
 							SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("10.0.0.0", 16)},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						// This chain will be dropped for unsupported server
@@ -1040,6 +1453,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.100.1", 32)},
 							ServerNames:  []string{"foo", "bar"},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						// This chain will be dropped for unsupported transport
@@ -1048,6 +1462,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							PrefixRanges:      []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.100.2", 32)},
 							TransportProtocol: "not-raw-buffer",
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						// This chain will be dropped for unsupported
@@ -1056,9 +1471,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 							PrefixRanges:         []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.100.3", 32)},
 							ApplicationProtocols: []string{"h2"},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{},
+				DefaultFilterChain: &v3listenerpb.FilterChain{Filters: emptyValidNetworkFilters},
 			},
 			wantFC: &FilterChainManager{
 				dstPrefixMap: map[string]*destPrefixEntry{
@@ -1147,6 +1563,7 @@ func TestLookup_Failures(t *testing.T) {
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)}},
+						Filters:          emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -1165,6 +1582,7 @@ func TestLookup_Failures(t *testing.T) {
 							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
 							SourceType:   v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -1184,6 +1602,7 @@ func TestLookup_Failures(t *testing.T) {
 							SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 24)},
 							SourceType:         v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -1200,12 +1619,14 @@ func TestLookup_Failures(t *testing.T) {
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourcePorts: []uint32{1, 2, 3}},
+						Filters:          emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{
 							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)},
 							SourcePorts:  []uint32{1},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -1224,6 +1645,7 @@ func TestLookup_Failures(t *testing.T) {
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{SourcePorts: []uint32{1, 2, 3}},
+						Filters:          emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -1246,11 +1668,13 @@ func TestLookup_Failures(t *testing.T) {
 							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.100.1", 32)},
 							ServerNames:  []string{"foo"},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 					{
 						FilterChainMatch: &v3listenerpb.FilterChainMatch{
 							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.100.0", 16)},
 						},
+						Filters: emptyValidNetworkFilters,
 					},
 				},
 			},
@@ -1293,6 +1717,7 @@ func TestLookup_Successes(t *testing.T) {
 						}),
 					},
 				},
+				Filters: emptyValidNetworkFilters,
 			},
 		},
 		// A default filter chain with an empty transport socket.
@@ -1307,12 +1732,14 @@ func TestLookup_Successes(t *testing.T) {
 					}),
 				},
 			},
+			Filters: emptyValidNetworkFilters,
 		},
 	}
 	lisWithoutDefaultChain := &v3listenerpb.Listener{
 		FilterChains: []*v3listenerpb.FilterChain{
 			{
 				TransportSocket: transportSocketWithInstanceName("unspecified-dest-and-source-prefix"),
+				Filters:         emptyValidNetworkFilters,
 			},
 			{
 				FilterChainMatch: &v3listenerpb.FilterChainMatch{
@@ -1320,16 +1747,19 @@ func TestLookup_Successes(t *testing.T) {
 					SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
 				},
 				TransportSocket: transportSocketWithInstanceName("wildcard-prefixes-v4"),
+				Filters:         emptyValidNetworkFilters,
 			},
 			{
 				FilterChainMatch: &v3listenerpb.FilterChainMatch{
 					SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("::", 0)},
 				},
 				TransportSocket: transportSocketWithInstanceName("wildcard-source-prefix-v6"),
+				Filters:         emptyValidNetworkFilters,
 			},
 			{
 				FilterChainMatch: &v3listenerpb.FilterChainMatch{PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 16)}},
 				TransportSocket:  transportSocketWithInstanceName("specific-destination-prefix-unspecified-source-type"),
+				Filters:          emptyValidNetworkFilters,
 			},
 			{
 				FilterChainMatch: &v3listenerpb.FilterChainMatch{
@@ -1337,6 +1767,7 @@ func TestLookup_Successes(t *testing.T) {
 					SourceType:   v3listenerpb.FilterChainMatch_EXTERNAL,
 				},
 				TransportSocket: transportSocketWithInstanceName("specific-destination-prefix-specific-source-type"),
+				Filters:         emptyValidNetworkFilters,
 			},
 			{
 				FilterChainMatch: &v3listenerpb.FilterChainMatch{
@@ -1345,6 +1776,7 @@ func TestLookup_Successes(t *testing.T) {
 					SourceType:         v3listenerpb.FilterChainMatch_EXTERNAL,
 				},
 				TransportSocket: transportSocketWithInstanceName("specific-destination-prefix-specific-source-type-specific-source-prefix"),
+				Filters:         emptyValidNetworkFilters,
 			},
 			{
 				FilterChainMatch: &v3listenerpb.FilterChainMatch{
@@ -1354,6 +1786,7 @@ func TestLookup_Successes(t *testing.T) {
 					SourcePorts:        []uint32{80},
 				},
 				TransportSocket: transportSocketWithInstanceName("specific-destination-prefix-specific-source-type-specific-source-prefix-specific-source-port"),
+				Filters:         emptyValidNetworkFilters,
 			},
 		},
 	}
@@ -1462,7 +1895,7 @@ func TestLookup_Successes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("FilterChainManager.Lookup(%v) failed: %v", test.params, err)
 			}
-			if !cmp.Equal(gotFC, test.wantFC) {
+			if !cmp.Equal(gotFC, test.wantFC, cmpopts.EquateEmpty()) {
 				t.Fatalf("FilterChainManager.Lookup(%v) = %v, want %v", test.params, gotFC, test.wantFC)
 			}
 		})
@@ -1480,9 +1913,10 @@ func (fci *FilterChainManager) Equal(other *FilterChainManager) bool {
 		return true
 	}
 	switch {
-	case !cmp.Equal(fci.dstPrefixMap, other.dstPrefixMap):
+	case !cmp.Equal(fci.dstPrefixMap, other.dstPrefixMap, cmpopts.EquateEmpty()):
 		return false
-	case !cmp.Equal(fci.def, other.def):
+	// TODO: Support comparing dstPrefixes slice?
+	case !cmp.Equal(fci.def, other.def, cmpopts.EquateEmpty(), protocmp.Transform()):
 		return false
 	}
 	return true
@@ -1499,7 +1933,7 @@ func (dpe *destPrefixEntry) Equal(other *destPrefixEntry) bool {
 		return false
 	}
 	for i, st := range dpe.srcTypeArr {
-		if !cmp.Equal(st, other.srcTypeArr[i]) {
+		if !cmp.Equal(st, other.srcTypeArr[i], cmpopts.EquateEmpty()) {
 			return false
 		}
 	}
@@ -1513,7 +1947,8 @@ func (sp *sourcePrefixes) Equal(other *sourcePrefixes) bool {
 	if sp == nil {
 		return true
 	}
-	return cmp.Equal(sp.srcPrefixMap, other.srcPrefixMap)
+	// TODO: Support comparing srcPrefixes slice?
+	return cmp.Equal(sp.srcPrefixMap, other.srcPrefixMap, cmpopts.EquateEmpty())
 }
 
 func (spe *sourcePrefixEntry) Equal(other *sourcePrefixEntry) bool {
@@ -1526,7 +1961,7 @@ func (spe *sourcePrefixEntry) Equal(other *sourcePrefixEntry) bool {
 	switch {
 	case !cmp.Equal(spe.net, other.net):
 		return false
-	case !cmp.Equal(spe.srcPortMap, other.srcPortMap):
+	case !cmp.Equal(spe.srcPortMap, other.srcPortMap, cmpopts.EquateEmpty(), protocmp.Transform()):
 		return false
 	}
 	return true
