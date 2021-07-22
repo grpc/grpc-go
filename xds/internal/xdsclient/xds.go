@@ -277,10 +277,10 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	return lu, nil
 }
 
-func processNetworkFilters(filters []*v3listenerpb.Filter) ([]HTTPFilter, error) {
+func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error) {
+	filterChain := &FilterChain{}
 	seenNames := make(map[string]bool, len(filters))
 	seenHCM := false
-	var httpFilters []HTTPFilter
 	for _, filter := range filters {
 		name := filter.GetName()
 		if name == "" {
@@ -323,8 +323,35 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) ([]HTTPFilter, error)
 			}
 			if !seenHCM {
 				// TODO: Implement terminal filter logic, as per A36.
-				httpFilters = filters
+				filterChain.HTTPFilters = filters
 				seenHCM = true
+				switch hcm.RouteSpecifier.(type) {
+				case *v3httppb.HttpConnectionManager_Rds:
+					if hcm.GetRds().GetConfigSource().GetAds() == nil {
+						return nil, fmt.Errorf("ConfigSource is not ADS: %+v", hcm)
+					}
+					name := hcm.GetRds().GetRouteConfigName()
+					if name == "" {
+						return nil, fmt.Errorf("empty route_config_name: %+v", hcm)
+					}
+					filterChain.RouteConfigName = name
+				case *v3httppb.HttpConnectionManager_RouteConfig:
+					// "RouteConfiguration validation logic inherits all
+					// previous validations made for client-side usage as RDS
+					// does not distinguish between client-side and
+					// server-side." - A36
+					// Can specify v3 here, as will never get to this function
+					// if v2.
+					routeU, err := generateRDSUpdateFromRouteConfiguration(hcm.GetRouteConfig(), nil, false)
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
+					}
+					filterChain.InlineRouteConfig = &routeU // Now that all this is here, scale up listener inputs in test to persist route update
+				case nil:
+					return nil, fmt.Errorf("no RouteSpecifier: +%v", hcm)
+				default:
+					return nil, fmt.Errorf("unsupported type %T for RouteSpecifier", hcm.RouteSpecifier)
+				}
 			}
 		default:
 			return nil, fmt.Errorf("network filters {%+v} has unsupported config_type %T in filter %s", filters, typ, filter.GetName())
@@ -333,7 +360,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) ([]HTTPFilter, error)
 	if !seenHCM {
 		return nil, fmt.Errorf("network filters {%+v} missing HttpConnectionManager filter", filters)
 	}
-	return httpFilters, nil
+	return filterChain, nil
 }
 
 // UnmarshalRouteConfig processes resources received in an RDS response,
@@ -491,65 +518,72 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 			route.Fraction = &n
 		}
 
-		route.WeightedClusters = make(map[string]WeightedCluster)
-		action := r.GetRoute()
+		switch r.GetAction().(type) {
+		case *v3routepb.Route_Route:
+			route.WeightedClusters = make(map[string]WeightedCluster)
+			action := r.GetRoute()
 
-		// Hash Policies are only applicable for a Ring Hash LB.
-		if env.RingHashSupport {
-			hp, err := hashPoliciesProtoToSlice(action.HashPolicy, logger)
-			if err != nil {
-				return nil, err
-			}
-			route.HashPolicies = hp
-		}
-
-		switch a := action.GetClusterSpecifier().(type) {
-		case *v3routepb.RouteAction_Cluster:
-			route.WeightedClusters[a.Cluster] = WeightedCluster{Weight: 1}
-		case *v3routepb.RouteAction_WeightedClusters:
-			wcs := a.WeightedClusters
-			var totalWeight uint32
-			for _, c := range wcs.Clusters {
-				w := c.GetWeight().GetValue()
-				if w == 0 {
-					continue
+			// Hash Policies are only applicable for a Ring Hash LB.
+			if env.RingHashSupport {
+				hp, err := hashPoliciesProtoToSlice(action.HashPolicy, logger)
+				if err != nil {
+					return nil, err
 				}
-				wc := WeightedCluster{Weight: w}
-				if !v2 {
-					cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
-					if err != nil {
-						return nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
+				route.HashPolicies = hp
+			}
+
+			switch a := action.GetClusterSpecifier().(type) {
+			case *v3routepb.RouteAction_Cluster:
+				route.WeightedClusters[a.Cluster] = WeightedCluster{Weight: 1}
+			case *v3routepb.RouteAction_WeightedClusters:
+				wcs := a.WeightedClusters
+				var totalWeight uint32
+				for _, c := range wcs.Clusters {
+					w := c.GetWeight().GetValue()
+					if w == 0 {
+						continue
 					}
-					wc.HTTPFilterConfigOverride = cfgs
+					wc := WeightedCluster{Weight: w}
+					if !v2 {
+						cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
+						if err != nil {
+							return nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
+						}
+						wc.HTTPFilterConfigOverride = cfgs
+					}
+					route.WeightedClusters[c.GetName()] = wc
+					totalWeight += w
 				}
-				route.WeightedClusters[c.GetName()] = wc
-				totalWeight += w
+				// envoy xds doc
+				// default TotalWeight https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto.html#envoy-v3-api-field-config-route-v3-weightedcluster-total-weight
+				wantTotalWeight := uint32(100)
+				if tw := wcs.GetTotalWeight(); tw != nil {
+					wantTotalWeight = tw.GetValue()
+				}
+				if totalWeight != wantTotalWeight {
+					return nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, expected total weight from response: %v", r, a, totalWeight, wantTotalWeight)
+				}
+				if totalWeight == 0 {
+					return nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
+				}
+			case *v3routepb.RouteAction_ClusterHeader:
+				continue
 			}
-			// envoy xds doc
-			// default TotalWeight https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto.html#envoy-v3-api-field-config-route-v3-weightedcluster-total-weight
-			wantTotalWeight := uint32(100)
-			if tw := wcs.GetTotalWeight(); tw != nil {
-				wantTotalWeight = tw.GetValue()
-			}
-			if totalWeight != wantTotalWeight {
-				return nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, expected total weight from response: %v", r, a, totalWeight, wantTotalWeight)
-			}
-			if totalWeight == 0 {
-				return nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
-			}
-		case *v3routepb.RouteAction_ClusterHeader:
-			continue
-		}
 
-		msd := action.GetMaxStreamDuration()
-		// Prefer grpc_timeout_header_max, if set.
-		dur := msd.GetGrpcTimeoutHeaderMax()
-		if dur == nil {
-			dur = msd.GetMaxStreamDuration()
-		}
-		if dur != nil {
-			d := dur.AsDuration()
-			route.MaxStreamDuration = &d
+			msd := action.GetMaxStreamDuration()
+			// Prefer grpc_timeout_header_max, if set.
+			dur := msd.GetGrpcTimeoutHeaderMax()
+			if dur == nil {
+				dur = msd.GetMaxStreamDuration()
+			}
+			if dur != nil {
+				d := dur.AsDuration()
+				route.MaxStreamDuration = &d
+			}
+		case *v3routepb.Route_NonForwardingAction:
+			// Expected to be used on server side.
+		default:
+			return nil, fmt.Errorf("route %+v has invalid action %+v", r, r.GetAction())
 		}
 
 		if !v2 {
