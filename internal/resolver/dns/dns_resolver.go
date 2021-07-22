@@ -323,12 +323,12 @@ func (d *dnsResolver) lookupTXT() *serviceconfig.ParseResult {
 }
 
 func (d *dnsResolver) lookupHost() ([]resolver.Address, error) {
-	var newAddrs []resolver.Address
 	addrs, err := d.resolver.LookupHost(d.ctx, d.host)
 	if err != nil {
 		err = handleDNSError(err, "A")
 		return nil, err
 	}
+	newAddrs := make([]resolver.Address, 0, len(addrs))
 	for _, a := range addrs {
 		ip, ok := formatIP(a)
 		if !ok {

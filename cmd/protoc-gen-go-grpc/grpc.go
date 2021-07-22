@@ -207,7 +207,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	g.P()
 
 	// Server handler implementations.
-	var handlerNames []string
+	handlerNames := make([]string, 0, len(service.Methods))
 	for _, method := range service.Methods {
 		hname := genServerMethod(gen, file, g, method)
 		handlerNames = append(handlerNames, hname)

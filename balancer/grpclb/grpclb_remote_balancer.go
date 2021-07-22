@@ -63,7 +63,7 @@ func (lb *lbBalancer) processServerList(l *lbpb.ServerList) {
 	}
 	lb.fullServerList = l.Servers
 
-	var backendAddrs []resolver.Address
+	backendAddrs := make([]resolver.Address, 0, len(l.Servers))
 	for i, s := range l.Servers {
 		if s.Drop {
 			continue

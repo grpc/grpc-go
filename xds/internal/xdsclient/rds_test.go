@@ -1378,6 +1378,7 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 			hashPolicies: []*v3routepb.RouteAction_HashPolicy{
 				{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{FilterState: &v3routepb.RouteAction_HashPolicy_FilterState{Key: "unsupported key"}}},
 			},
+			wantHashPolicies: []*HashPolicy{},
 		},
 		// no-op-hash-policy tests that hash policies that are not supported by
 		// grpc are treated as a no-op.
@@ -1386,6 +1387,7 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 			hashPolicies: []*v3routepb.RouteAction_HashPolicy{
 				{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{}},
 			},
+			wantHashPolicies: []*HashPolicy{},
 		},
 		// header-and-channel-id-hash-policy test that a list of header and
 		// channel id hash policies are successfully converted to an internal

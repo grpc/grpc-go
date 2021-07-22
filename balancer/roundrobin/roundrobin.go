@@ -51,7 +51,7 @@ func (*rrPickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
 	if len(info.ReadySCs) == 0 {
 		return base.NewErrPicker(balancer.ErrNoSubConnAvailable)
 	}
-	var scs []balancer.SubConn
+	scs := make([]balancer.SubConn, 0, len(info.ReadySCs))
 	for sc := range info.ReadySCs {
 		scs = append(scs, sc)
 	}
