@@ -322,6 +322,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) ([]HTTPFilter, error)
 				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}", filters, hcm.GetHttpFilters())
 			}
 			if !seenHCM {
+				// TODO: Implement terminal filter logic, as per A36.
 				httpFilters = filters
 				seenHCM = true
 			}
