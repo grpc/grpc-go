@@ -34,6 +34,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -7218,7 +7219,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
 		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
 			":status", fmt.Sprintf("%d", httpCode),
 			"content-type", "text/html", // non-gRPC content type to switch to HTTP mode.
-			"grpc-status", "1", // Make up a gRPC status error
+			"grpc-status", strconv.Itoa(int(transport.HTTPStatusConvTab[httpCode])),
 			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
 		})
 	}
@@ -7228,7 +7229,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
 		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
 			":status", fmt.Sprintf("%d", httpCode),
 			// Omitting content type to switch to HTTP mode.
-			"grpc-status", "1", // Make up a gRPC status error
+			"grpc-status", strconv.Itoa(int(transport.HTTPStatusConvTab[httpCode])),
 			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
 		})
 	}
@@ -7237,7 +7238,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
 	doHTTPHeaderTest(t, codes.Internal, []string{
 		":status", "abc",
 		// Omitting content type to switch to HTTP mode.
-		"grpc-status", "1", // Make up a gRPC status error
+		"grpc-status", "13", // Make up a gRPC status error
 		"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
 	})
 }
@@ -7270,7 +7271,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 			header: []string{
 				":status", "502",
 				"content-type", "application/grpc",
-				"grpc-status", "0",
+				"grpc-status", "14",
 				"grpc-tags-bin", "???",
 			},
 			errCode: codes.Unavailable,
@@ -7280,7 +7281,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 			header: []string{
 				":status", "502",
 				"content-type", "application/grpc",
-				"grpc-status", "3",
+				"grpc-status", "14",
 			},
 			errCode: codes.Unavailable,
 		},

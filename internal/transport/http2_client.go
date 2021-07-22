@@ -1290,7 +1290,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		statusGen      *status.Status
 		httpStatusCode *int
 		httpStatusErr  string
-		rawStatusCode  = codes.Unknown
+		rawStatusCode  *codes.Code
 		// headerError is set if an error is encountered while parsing the headers
 		headerError string
 	)
@@ -1312,13 +1312,14 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		case "grpc-encoding":
 			s.recvCompress = hf.Value
 		case "grpc-status":
-			code, err := strconv.ParseInt(hf.Value, 10, 32)
+			code, err := strconv.ParseUint(hf.Value, 10, 32)
 			if err != nil {
 				se := status.New(codes.Internal, fmt.Sprintf("transport: malformed grpc-status: %v", err))
 				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
 				return
 			}
-			rawStatusCode = codes.Code(uint32(code))
+			rsc := codes.Code(uint32(code))
+			rawStatusCode = &rsc
 		case "grpc-message":
 			grpcMessage = decodeGrpcMessage(hf.Value)
 		case "grpc-status-details-bin":
@@ -1366,7 +1367,9 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	if !isGRPC || httpStatusErr != "" {
 		var code = codes.Internal // when header does not include HTTP status, return INTERNAL
 
-		if httpStatusCode != nil {
+		if rawStatusCode != nil {
+			code = *rawStatusCode
+		} else if httpStatusCode != nil {
 			var ok bool
 			code, ok = HTTPStatusConvTab[*httpStatusCode]
 			if !ok {
@@ -1438,7 +1441,11 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 
 	if statusGen == nil {
-		statusGen = status.New(rawStatusCode, grpcMessage)
+		rsc := codes.Unknown
+		if rawStatusCode != nil {
+			rsc = *rawStatusCode
+		}
+		statusGen = status.New(rsc, grpcMessage)
 	}
 
 	// if client received END_STREAM from server while stream was still active, send RST_STREAM

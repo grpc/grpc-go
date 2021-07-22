@@ -2031,7 +2031,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				},
 			},
 			wantStatus: status.New(
-				codes.Unknown,
+				codes.OK,
 				"malformed header: missing HTTP content-type",
 			),
 		},
@@ -2046,7 +2046,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			},
 			wantStatus: status.New(
 				codes.Internal,
-				"transport: malformed grpc-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
+				"transport: malformed grpc-status: strconv.ParseUint: parsing \"xxxx\": invalid syntax",
 			),
 		},
 		{
@@ -2090,7 +2090,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
-					{Name: "grpc-status", Value: "0"},
+					{Name: "grpc-status", Value: "14"},
 					{Name: ":status", Value: "504"},
 				},
 			},
