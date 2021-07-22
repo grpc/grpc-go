@@ -72,9 +72,9 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 		matchingPolicyName, ok := engine.findMatchingPolicy(rpcData)
 
 		switch {
-		case engine.action == allow && !ok:
+		case engine.action == v3rbacpb.RBAC_ALLOW && !ok:
 			return status.Errorf(codes.PermissionDenied, "incoming RPC did not match an allow policy")
-		case engine.action == deny && ok:
+		case engine.action == v3rbacpb.RBAC_DENY && ok:
 			return status.Errorf(codes.PermissionDenied, "incoming RPC matched a deny policy %q", matchingPolicyName)
 		}
 		// Every policy in the engine list must be queried. Thus, iterate to the
@@ -86,35 +86,24 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	return status.Error(codes.OK, "")
 }
 
-type action int
-
-const (
-	allow action = iota
-	deny
-)
-
 // engine is used for matching incoming RPCs to policies.
 type engine struct {
 	policies map[string]*policyMatcher
-	action   action
+	// action must be ALLOW or DENY.
+	action   v3rbacpb.RBAC_Action
 }
 
 // newEngine creates an RBAC Engine based on the contents of policy. Returns a
 // non-nil error if the policy is invalid.
 func newEngine(config *v3rbacpb.RBAC) (*engine, error) {
-	var a action
-	switch *config.Action.Enum() {
-	case v3rbacpb.RBAC_ALLOW:
-		a = allow
-	case v3rbacpb.RBAC_DENY:
-		a = deny
-	default:
+	a := *config.Action.Enum()
+	if a != v3rbacpb.RBAC_ALLOW && a != v3rbacpb.RBAC_DENY {
 		return nil, fmt.Errorf("unsupported action %s", config.Action)
 	}
 
 	policies := make(map[string]*policyMatcher, len(config.Policies))
-	for name, config := range config.Policies {
-		matcher, err := newPolicyMatcher(config)
+	for name, policy := range config.Policies {
+		matcher, err := newPolicyMatcher(policy)
 		if err != nil {
 			return nil, err
 		}
