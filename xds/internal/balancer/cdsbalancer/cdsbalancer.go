@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
-	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfig"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
@@ -304,12 +303,12 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 		b.logger.Infof("Created child policy %p of type %s", b.childLB, clusterresolver.Name)
 	}
 
-	dms := make([]balancerconfig.DiscoveryMechanism, len(update.updates))
+	dms := make([]clusterresolver.DiscoveryMechanism, len(update.updates))
 	for i, cu := range update.updates {
 		switch cu.ClusterType {
 		case xdsclient.ClusterTypeEDS:
-			dms[i] = balancerconfig.DiscoveryMechanism{
-				Type:                  balancerconfig.DiscoveryMechanismTypeEDS,
+			dms[i] = clusterresolver.DiscoveryMechanism{
+				Type:                  clusterresolver.DiscoveryMechanismTypeEDS,
 				Cluster:               cu.ClusterName,
 				EDSServiceName:        cu.EDSServiceName,
 				MaxConcurrentRequests: cu.MaxRequests,
@@ -322,8 +321,8 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 
 			}
 		case xdsclient.ClusterTypeLogicalDNS:
-			dms[i] = balancerconfig.DiscoveryMechanism{
-				Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
+			dms[i] = clusterresolver.DiscoveryMechanism{
+				Type:        clusterresolver.DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname: cu.DNSHostName,
 			}
 		default:

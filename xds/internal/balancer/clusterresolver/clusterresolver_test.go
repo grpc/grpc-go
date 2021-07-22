@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfig"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 
@@ -492,9 +491,9 @@ func (s) TestClientWatchEDS(t *testing.T) {
 
 func newLBConfigWithOneEDS(edsServiceName string) *LBConfig {
 	return &LBConfig{
-		DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+		DiscoveryMechanisms: []DiscoveryMechanism{{
 			Cluster:        testClusterName,
-			Type:           balancerconfig.DiscoveryMechanismTypeEDS,
+			Type:           DiscoveryMechanismTypeEDS,
 			EDSServiceName: edsServiceName,
 		}},
 	}

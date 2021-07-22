@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
-	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfig"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget"
 	"google.golang.org/grpc/xds/internal/testutils"
@@ -74,9 +73,9 @@ func setupTestEDS(t *testing.T, initChild *internalserviceconfig.BalancerConfig)
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
 		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+			DiscoveryMechanisms: []DiscoveryMechanism{{
 				Cluster: testClusterName,
-				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+				Type:    DiscoveryMechanismTypeEDS,
 			}},
 			EndpointPickingPolicy: initChild,
 		},
@@ -495,9 +494,9 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	t.Logf("update sub-balancer to stub-balancer")
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+			DiscoveryMechanisms: []DiscoveryMechanism{{
 				Cluster: testClusterName,
-				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+				Type:    DiscoveryMechanismTypeEDS,
 			}},
 			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
 				Name: balancerName,
@@ -525,9 +524,9 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	t.Logf("update sub-balancer to round-robin")
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+			DiscoveryMechanisms: []DiscoveryMechanism{{
 				Cluster: testClusterName,
-				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+				Type:    DiscoveryMechanismTypeEDS,
 			}},
 			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
@@ -555,9 +554,9 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	t.Logf("update sub-balancer to stub-balancer")
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+			DiscoveryMechanisms: []DiscoveryMechanism{{
 				Cluster: testClusterName,
-				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+				Type:    DiscoveryMechanismTypeEDS,
 			}},
 			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
 				Name: balancerName,
@@ -588,9 +587,9 @@ func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
 	t.Logf("update sub-balancer to round-robin")
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+			DiscoveryMechanisms: []DiscoveryMechanism{{
 				Cluster: testClusterName,
-				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+				Type:    DiscoveryMechanismTypeEDS,
 			}},
 			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
@@ -623,10 +622,10 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	var maxRequests uint32 = 50
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+			DiscoveryMechanisms: []DiscoveryMechanism{{
 				Cluster:               testClusterName,
 				MaxConcurrentRequests: &maxRequests,
-				Type:                  balancerconfig.DiscoveryMechanismTypeEDS,
+				Type:                  DiscoveryMechanismTypeEDS,
 			}},
 			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
@@ -689,10 +688,10 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	var maxRequests2 uint32 = 10
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{{
+			DiscoveryMechanisms: []DiscoveryMechanism{{
 				Cluster:               testClusterName,
 				MaxConcurrentRequests: &maxRequests2,
-				Type:                  balancerconfig.DiscoveryMechanismTypeEDS,
+				Type:                  DiscoveryMechanismTypeEDS,
 			}},
 			EndpointPickingPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
