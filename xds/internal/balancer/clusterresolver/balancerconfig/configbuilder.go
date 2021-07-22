@@ -139,7 +139,7 @@ func buildPriorityConfig(priorities []PriorityConfig, endpointPickingPolicy *int
 func buildClusterImplConfigForDNS(parentPriority int, addrStrs []string) (string, *clusterimpl.LBConfig, []resolver.Address) {
 	// Endpoint picking policy for DNS is hardcoded to pick_first.
 	const childPolicy = "pick_first"
-	var retAddrs []resolver.Address
+	retAddrs := make([]resolver.Address, 0, len(addrStrs))
 	pName := fmt.Sprintf("priority-%v", parentPriority)
 	for _, addrStr := range addrStrs {
 		retAddrs = append(retAddrs, hierarchy.Set(resolver.Address{Addr: addrStr}, []string{pName}))
@@ -157,12 +157,6 @@ func buildClusterImplConfigForDNS(parentPriority int, addrStrs []string) (string
 // - [p0_address_0, p0_address_1, p1_address_0, p1_address_1]
 //   - p0 addresses' hierarchy attributes are set to p0
 func buildClusterImplConfigForEDS(parentPriority int, edsResp xdsclient.EndpointsUpdate, mechanism DiscoveryMechanism, endpointPickingPolicy *internalserviceconfig.BalancerConfig) ([]string, map[string]*clusterimpl.LBConfig, []resolver.Address) {
-	var (
-		retNames   []string
-		retAddrs   []resolver.Address
-		retConfigs = make(map[string]*clusterimpl.LBConfig)
-	)
-
 	if endpointPickingPolicy == nil {
 		endpointPickingPolicy = &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}
 	}
@@ -176,6 +170,9 @@ func buildClusterImplConfigForEDS(parentPriority int, edsResp xdsclient.Endpoint
 	}
 
 	priorityChildNames, priorities := groupLocalitiesByPriority(edsResp.Localities)
+	retNames := make([]string, 0, len(priorityChildNames))
+	retAddrs := make([]resolver.Address, 0, len(priorityChildNames))
+	retConfigs := make(map[string]*clusterimpl.LBConfig, len(priorityChildNames))
 	for _, priorityName := range priorityChildNames {
 		priorityLocalities := priorities[priorityName]
 		// Prepend parent priority to the priority names, to avoid duplicates.
@@ -205,8 +202,8 @@ func buildClusterImplConfigForEDS(parentPriority int, edsResp xdsclient.Endpoint
 // - ["p0", "p1"]
 // - map{"p0":[L0, L1], "p1":[L2]}
 func groupLocalitiesByPriority(localities []xdsclient.Locality) ([]string, map[string][]xdsclient.Locality) {
-	var priorityIntSlice []int
-	priorities := make(map[string][]xdsclient.Locality)
+	priorities := make(map[string][]xdsclient.Locality, len(localities))
+	priorityIntSlice := make([]int, 0, len(localities))
 	for _, locality := range localities {
 		if locality.Weight == 0 {
 			continue

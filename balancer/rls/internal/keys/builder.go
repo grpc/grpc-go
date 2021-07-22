@@ -218,7 +218,7 @@ func (b builder) keys(md metadata.MD) KeyMap {
 }
 
 func mapToString(kv map[string]string) string {
-	var keys []string
+	keys := make([]string, 0, len(kv))
 	for k := range kv {
 		keys = append(keys, k)
 	}

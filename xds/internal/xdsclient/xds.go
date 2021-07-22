@@ -383,7 +383,7 @@ func unmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (s
 // message, the cluster field will contain the clusterName or weighted clusters
 // we are looking for.
 func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, logger *grpclog.PrefixLogger, v2 bool) (RouteConfigUpdate, error) {
-	var vhs []*VirtualHost
+	vhs := make([]*VirtualHost, 0, len(rc.GetVirtualHosts()))
 	for _, vh := range rc.GetVirtualHosts() {
 		routes, err := routesProtoToSlice(vh.Routes, logger, v2)
 		if err != nil {
@@ -406,8 +406,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 }
 
 func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger, v2 bool) ([]*Route, error) {
-	var routesRet []*Route
-
+	routesRet := make([]*Route, 0, len(routes))
 	for _, r := range routes {
 		match := r.GetMatch()
 		if match == nil {
@@ -565,7 +564,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 }
 
 func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy, logger *grpclog.PrefixLogger) ([]*HashPolicy, error) {
-	var hashPoliciesRet []*HashPolicy
+	hashPoliciesRet := make([]*HashPolicy, 0, len(policies))
 	for _, p := range policies {
 		policy := HashPolicy{Terminal: p.Terminal}
 		switch p.GetPolicySpecifier().(type) {

@@ -714,17 +714,17 @@ func testDNSResolver(t *testing.T) {
 		},
 		{
 			"srv.ipv4.multi.fake",
-			nil,
+			[]resolver.Address{},
 			generateSC("srv.ipv4.multi.fake"),
 		},
 		{
 			"srv.ipv6.single.fake",
-			nil,
+			[]resolver.Address{},
 			generateSC("srv.ipv6.single.fake"),
 		},
 		{
 			"srv.ipv6.multi.fake",
-			nil,
+			[]resolver.Address{},
 			generateSC("srv.ipv6.multi.fake"),
 		},
 	}
@@ -913,13 +913,13 @@ func testDNSResolverWithSRV(t *testing.T) {
 		{
 			"foo.bar.com",
 			[]resolver.Address{{Addr: "1.2.3.4" + colonDefaultPort}, {Addr: "5.6.7.8" + colonDefaultPort}},
-			nil,
+			[]resolver.Address{},
 			generateSC("foo.bar.com"),
 		},
 		{
 			"foo.bar.com:1234",
 			[]resolver.Address{{Addr: "1.2.3.4:1234"}, {Addr: "5.6.7.8:1234"}},
-			nil,
+			[]resolver.Address{},
 			generateSC("foo.bar.com"),
 		},
 		{
@@ -930,7 +930,7 @@ func testDNSResolverWithSRV(t *testing.T) {
 		},
 		{
 			"srv.ipv4.multi.fake",
-			nil,
+			[]resolver.Address{},
 			[]resolver.Address{
 				{Addr: "1.2.3.4:1234", ServerName: "ipv4.multi.fake"},
 				{Addr: "5.6.7.8:1234", ServerName: "ipv4.multi.fake"},
@@ -940,13 +940,13 @@ func testDNSResolverWithSRV(t *testing.T) {
 		},
 		{
 			"srv.ipv6.single.fake",
-			nil,
+			[]resolver.Address{},
 			[]resolver.Address{{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.single.fake"}},
 			generateSC("srv.ipv6.single.fake"),
 		},
 		{
 			"srv.ipv6.multi.fake",
-			nil,
+			[]resolver.Address{},
 			[]resolver.Address{
 				{Addr: "[2607:f8b0:400a:801::1001]:1234", ServerName: "ipv6.multi.fake"},
 				{Addr: "[2607:f8b0:400a:801::1002]:1234", ServerName: "ipv6.multi.fake"},
