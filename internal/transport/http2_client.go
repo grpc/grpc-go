@@ -1312,7 +1312,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		case "grpc-encoding":
 			s.recvCompress = hf.Value
 		case "grpc-status":
-			code, err := strconv.ParseInt(hf.Value, 10, 32)
+			code, err := strconv.ParseUint(hf.Value, 10, 32)
 			if err != nil {
 				se := status.New(codes.Internal, fmt.Sprintf("transport: malformed grpc-status: %v", err))
 				t.closeStream(s, se.Err(), true, http2.ErrCodeProtocol, se, nil, endStream)
@@ -1441,11 +1441,11 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 
 	if statusGen == nil {
-		if rawStatusCode == nil {
-			rsc := codes.Unknown
-			rawStatusCode = &rsc
+		rsc := codes.Unknown
+		if rawStatusCode != nil {
+			rsc = *rawStatusCode
 		}
-		statusGen = status.New(*rawStatusCode, grpcMessage)
+		statusGen = status.New(rsc, grpcMessage)
 	}
 
 	// if client received END_STREAM from server while stream was still active, send RST_STREAM

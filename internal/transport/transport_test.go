@@ -2046,7 +2046,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			},
 			wantStatus: status.New(
 				codes.Internal,
-				"transport: malformed grpc-status: strconv.ParseInt: parsing \"xxxx\": invalid syntax",
+				"transport: malformed grpc-status: strconv.ParseUint: parsing \"xxxx\": invalid syntax",
 			),
 		},
 		{
