@@ -90,7 +90,7 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 type engine struct {
 	policies map[string]*policyMatcher
 	// action must be ALLOW or DENY.
-	action   v3rbacpb.RBAC_Action
+	action v3rbacpb.RBAC_Action
 }
 
 // newEngine creates an RBAC Engine based on the contents of policy. Returns a
