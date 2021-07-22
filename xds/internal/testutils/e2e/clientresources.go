@@ -199,7 +199,20 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+									RouteConfig: &v3routepb.RouteConfiguration{
+										Name: "routeName",
+										VirtualHosts: []*v3routepb.VirtualHost{{
+											Domains: []string{"lds.target.good:3333"},
+											Routes: []*v3routepb.Route{{
+												Match: &v3routepb.RouteMatch{
+													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+												},
+												Action: &v3routepb.Route_NonForwardingAction{},
+											}}}}},
+								},
+							}),
 						},
 					},
 				},
@@ -230,7 +243,20 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 					{
 						Name: "filter-1",
 						ConfigType: &v3listenerpb.Filter_TypedConfig{
-							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+									RouteConfig: &v3routepb.RouteConfiguration{
+										Name: "routeName",
+										VirtualHosts: []*v3routepb.VirtualHost{{
+											Domains: []string{"lds.target.good:3333"},
+											Routes: []*v3routepb.Route{{
+												Match: &v3routepb.RouteMatch{
+													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+												},
+												Action: &v3routepb.Route_NonForwardingAction{},
+											}}}}},
+								},
+							}),
 						},
 					},
 				},
