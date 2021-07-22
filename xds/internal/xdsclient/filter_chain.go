@@ -54,6 +54,15 @@ type FilterChain struct {
 	SecurityCfg *SecurityConfig
 	// HTTPFilters represent the HTTP Filters that comprise this FilterChain.
 	HTTPFilters []HTTPFilter
+	// RouteConfigName is the route configuration name for this FilterChain.
+	//
+	// Only one of RouteConfigName and InlineRouteConfig is set.
+	RouteConfigName string
+	// InlineRouteConfig is the inline route configuration (RDS response)
+	// returned for this filter chain.
+	//
+	// Only one of RouteConfigName and InlineRouteConfig is set.
+	InlineRouteConfig *RouteConfigUpdate
 }
 
 // SourceType specifies the connection source IP match type.
@@ -393,11 +402,11 @@ func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePre
 // filterChainFromProto extracts the relevant information from the FilterChain
 // proto and stores it in our internal representation.
 func filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
-	httpFilters, err := processNetworkFilters(fc.GetFilters())
+	filterChain, err := processNetworkFilters(fc.GetFilters())
 	if err != nil {
 		return nil, err
 	}
-	filterChain := &FilterChain{HTTPFilters: httpFilters}
+	// filterChain := &FilterChain{HTTPFilters: httpFilters}
 	// If the transport_socket field is not specified, it means that the control
 	// plane has not sent us any security config. This is fine and the server
 	// will use the fallback credentials configured as part of the
