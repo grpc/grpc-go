@@ -21,12 +21,74 @@
 package clusterresolver
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
-	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfig"
 )
+
+func TestDiscoveryMechanismTypeMarshalJSON(t *testing.T) {
+	tests := []struct {
+		name string
+		typ  DiscoveryMechanismType
+		want string
+	}{
+		{
+			name: "eds",
+			typ:  DiscoveryMechanismTypeEDS,
+			want: `"EDS"`,
+		},
+		{
+			name: "dns",
+			typ:  DiscoveryMechanismTypeLogicalDNS,
+			want: `"LOGICAL_DNS"`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got, err := json.Marshal(tt.typ); err != nil || string(got) != tt.want {
+				t.Fatalf("DiscoveryMechanismTypeEDS.MarshalJSON() = (%v, %v), want (%s, nil)", string(got), err, tt.want)
+			}
+		})
+	}
+}
+func TestDiscoveryMechanismTypeUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name    string
+		js      string
+		want    DiscoveryMechanismType
+		wantErr bool
+	}{
+		{
+			name: "eds",
+			js:   `"EDS"`,
+			want: DiscoveryMechanismTypeEDS,
+		},
+		{
+			name: "dns",
+			js:   `"LOGICAL_DNS"`,
+			want: DiscoveryMechanismTypeLogicalDNS,
+		},
+		{
+			name:    "error",
+			js:      `"1234"`,
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got DiscoveryMechanismType
+			err := json.Unmarshal([]byte(tt.js), &got)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("DiscoveryMechanismTypeEDS.UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if diff := cmp.Diff(got, tt.want); diff != "" {
+				t.Fatalf("DiscoveryMechanismTypeEDS.UnmarshalJSON() got unexpected output, diff (-got +want): %v", diff)
+			}
+		})
+	}
+}
 
 const (
 	testJSONConfig1 = `{
@@ -60,9 +122,6 @@ const (
   "localityPickingPolicy":[{"pick_first":{}}],
   "endpointPickingPolicy":[{"pick_first":{}}]
 }`
-
-	testLRSServer   = "test-lrs-server"
-	testMaxRequests = 314
 )
 
 func TestParseConfig(t *testing.T) {
@@ -82,12 +141,12 @@ func TestParseConfig(t *testing.T) {
 			name: "OK with one discovery mechanism",
 			js:   testJSONConfig1,
 			want: &LBConfig{
-				DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{
+				DiscoveryMechanisms: []DiscoveryMechanism{
 					{
 						Cluster:                 testClusterName,
 						LoadReportingServerName: newString(testLRSServer),
 						MaxConcurrentRequests:   newUint32(testMaxRequests),
-						Type:                    balancerconfig.DiscoveryMechanismTypeEDS,
+						Type:                    DiscoveryMechanismTypeEDS,
 						EDSServiceName:          testEDSServcie,
 					},
 				},
@@ -100,16 +159,16 @@ func TestParseConfig(t *testing.T) {
 			name: "OK with multiple discovery mechanisms",
 			js:   testJSONConfig2,
 			want: &LBConfig{
-				DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{
+				DiscoveryMechanisms: []DiscoveryMechanism{
 					{
 						Cluster:                 testClusterName,
 						LoadReportingServerName: newString(testLRSServer),
 						MaxConcurrentRequests:   newUint32(testMaxRequests),
-						Type:                    balancerconfig.DiscoveryMechanismTypeEDS,
+						Type:                    DiscoveryMechanismTypeEDS,
 						EDSServiceName:          testEDSServcie,
 					},
 					{
-						Type: balancerconfig.DiscoveryMechanismTypeLogicalDNS,
+						Type: DiscoveryMechanismTypeLogicalDNS,
 					},
 				},
 				LocalityPickingPolicy: nil,
@@ -121,12 +180,12 @@ func TestParseConfig(t *testing.T) {
 			name: "OK with picking policy override",
 			js:   testJSONConfig3,
 			want: &LBConfig{
-				DiscoveryMechanisms: []balancerconfig.DiscoveryMechanism{
+				DiscoveryMechanisms: []DiscoveryMechanism{
 					{
 						Cluster:                 testClusterName,
 						LoadReportingServerName: newString(testLRSServer),
 						MaxConcurrentRequests:   newUint32(testMaxRequests),
-						Type:                    balancerconfig.DiscoveryMechanismTypeEDS,
+						Type:                    DiscoveryMechanismTypeEDS,
 						EDSServiceName:          testEDSServcie,
 					},
 				},
