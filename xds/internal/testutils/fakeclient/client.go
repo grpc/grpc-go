@@ -98,7 +98,7 @@ func (xdsC *Client) WatchRouteConfig(routeName string, callback func(xdsclient.R
 	xdsC.rdsCb = callback
 	xdsC.rdsWatchCh.Send(routeName)
 	return func() {
-		xdsC.rdsCancelCh.Send(nil)
+		xdsC.rdsCancelCh.Send(routeName)
 	}
 }
 

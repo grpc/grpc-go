@@ -33,8 +33,11 @@ type rdsHandler struct {
 // using the function below.
 func newRdsHandler(parent *listenerWrapper) *rdsHandler { // Tell Easwar routeNamesToWatch will be built in FilterChainManager in PR
 	return &rdsHandler{
-		parent:        parent,
-		updateChannel: make(chan rdsHandlerUpdate, 1),
+		parent:            parent,
+		updateChannel:     make(chan rdsHandlerUpdate, 1),
+		routeNamesToWatch: make(map[string]bool),
+		rdsUpdates:        make(map[string]xdsclient.RouteConfigUpdate),
+		rdsCancels:        make(map[string]func()),
 	}
 }
 
