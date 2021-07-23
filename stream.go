@@ -668,13 +668,11 @@ func (cs *clientStream) withRetry(op func(a *csAttempt) error, onSuccess func())
 	for {
 		if cs.committed {
 			cs.mu.Unlock()
-			err := op(cs.attempt)
-			if err != nil {
-				if nse, ok := err.(*transport.NewStreamError); ok {
-					return toRPCErr(nse.Err)
-				}
-			}
-			return err
+			// toRPCErr is used in case the error from the attempt comes from
+			// NewClientStream, which intentionally doesn't return a status
+			// error to allow for further inspection; all other errors should
+			// already be status errors.
+			return toRPCErr(op(cs.attempt))
 		}
 		a := cs.attempt
 		cs.mu.Unlock()
