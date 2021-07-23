@@ -616,25 +616,33 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 	return callAuthData, nil
 }
 
-// PerformedIOError wraps an error to indicate IO may have been performed
-// before the error occurred.
-type PerformedIOError struct {
+// NewStreamError wraps an error and reports additional information.
+type NewStreamError struct {
 	Err error
+
+	DoNotRetry  bool
+	PerformedIO bool
 }
 
-// Error implements error.
-func (p PerformedIOError) Error() string {
-	return p.Err.Error()
+func (e NewStreamError) Error() string {
+	return e.Err.Error()
 }
 
 // NewStream creates a stream and registers it into the transport as "active"
-// streams.
+// streams.  All non-nil errors returned will be *NewStreamError.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Stream, err error) {
 	defer func() {
-		if err != nil && (len(t.perRPCCreds) > 0 || callHdr.Creds != nil) {
-			// We may have performed I/O in the per-RPC creds callback, so do not
-			// allow transparent retry.
-			err = PerformedIOError{err}
+		if err != nil {
+			nse, ok := err.(*NewStreamError)
+			if !ok {
+				nse = &NewStreamError{Err: err}
+			}
+			if len(t.perRPCCreds) > 0 || callHdr.Creds != nil {
+				// We may have performed I/O in the per-RPC creds callback, so do not
+				// allow transparent retry.
+				nse.PerformedIO = true
+			}
+			err = nse
 		}
 	}()
 	ctx = peer.NewContext(ctx, t.getPeer())
@@ -746,7 +754,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 			break
 		}
 		if hdrListSizeErr != nil {
-			return nil, hdrListSizeErr
+			return nil, &NewStreamError{Err: hdrListSizeErr, DoNotRetry: true}
 		}
 		firstTry = false
 		select {

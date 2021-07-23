@@ -421,12 +421,9 @@ func (a *csAttempt) newStream() error {
 	cs.callHdr.PreviousAttempts = cs.numRetries
 	s, err := a.t.NewStream(cs.ctx, cs.callHdr)
 	if err != nil {
-		if _, ok := err.(transport.PerformedIOError); ok {
-			// Return without converting to an RPC error so retry code can
-			// inspect.
-			return err
-		}
-		return toRPCErr(err)
+		// Return without converting to an RPC error so retry code can
+		// inspect.
+		return err
 	}
 	cs.attempt.s = s
 	cs.attempt.p = &parser{r: s}
@@ -527,23 +524,27 @@ func (cs *clientStream) commitAttempt() {
 func (cs *clientStream) shouldRetry(err error) error {
 	if cs.attempt.s == nil {
 		// Error from NewClientStream.
-		pioErr, ok := err.(transport.PerformedIOError)
+		nse, ok := err.(*transport.NewStreamError)
 		if !ok {
-			// In the event of a non-IO operation error from NewStream, we
-			// never attempted to write anything to the wire, so we can retry
-			// indefinitely.  Except for INTERNAL errors, which indicate the
-			// RPC should not be retried due to max header list size violation.
-			if status.Convert(err).Code() == codes.Internal {
-				return err
-			}
+			// Unexpected, but assume no I/O was performed and the RPC is not
+			// fatal, so retry indefinitely.
 			return nil
 		}
-		// Unwrap error.
-		err = toRPCErr(pioErr.Err)
-		// INTERNAL errors from NewStream indicate the RPC should not be
-		// retried.
-		if status.Convert(err).Code() == codes.Internal {
+
+		// Unwrap and convert error.
+		err = toRPCErr(nse.Err)
+
+		// Never retry DoNotRetry errors, which indicate the RPC should not be
+		// retried due to max header list size violation, etc.
+		if nse.DoNotRetry {
 			return err
+		}
+
+		// In the event of a non-IO operation error from NewStream, we never
+		// attempted to write anything to the wire, so we can retry
+		// indefinitely.
+		if !nse.PerformedIO {
+			return nil
 		}
 	}
 	if cs.finished || cs.committed {
@@ -640,7 +641,7 @@ func (cs *clientStream) shouldRetry(err error) error {
 // Returns nil if a retry was performed and succeeded; error otherwise.
 func (cs *clientStream) retryLocked(lastErr error) error {
 	for {
-		cs.attempt.finish(lastErr)
+		cs.attempt.finish(toRPCErr(lastErr))
 		if err := cs.shouldRetry(lastErr); err != nil {
 			cs.commitAttemptLocked()
 			return err
@@ -667,7 +668,13 @@ func (cs *clientStream) withRetry(op func(a *csAttempt) error, onSuccess func())
 	for {
 		if cs.committed {
 			cs.mu.Unlock()
-			return op(cs.attempt)
+			err := op(cs.attempt)
+			if err != nil {
+				if nse, ok := err.(*transport.NewStreamError); ok {
+					return toRPCErr(nse.Err)
+				}
+			}
+			return err
 		}
 		a := cs.attempt
 		cs.mu.Unlock()
