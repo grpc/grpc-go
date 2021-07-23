@@ -22,7 +22,6 @@ package server
 
 import (
 	"fmt"
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"net"
 	"sync"
 	"time"
@@ -187,12 +186,6 @@ type listenerWrapper struct {
 	mode ServingMode
 	// Filter chains received as part of the last good update.
 	filterChains *xdsclient.FilterChainManager
-
-	routeNamesToWatch map[string]bool
-	// map[routeName] -> RDSUpdate
-	rdsUpdates map[string]xdsclient.RouteConfigUpdate
-	// map[routeName] -> cancel()
-	rdsCancels map[string]func()
 }
 
 // Accept blocks on an Accept() on the underlying listener, and wraps the
@@ -324,46 +317,11 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 		return
 	}
 
-	// persisted map[string]
-	l.routeNamesToWatch // OldChildren
-
-	ilc.FilterChains.RouteConfigNames // NewChildren
-
-	// Add and start watches for any child nodes to routeNamesToWatch
-	for routeName := range ilc.FilterChains.RouteConfigNames {
-		if _, inLisAlready := l.routeNamesToWatch[routeName]; !inLisAlready {
-			l.routeNamesToWatch[routeName] = true
-			// start watch, persist in map here
-			l.rdsCancels[routeName] = l.xdsC.WatchRouteConfig(routeName, l.handleRDSResp)
-			// Delete from FilterChains?
-		}
-	}
-
-	// Delete and cancel watches for any child nodes from routeNamesToWatch
-	for routeName := range l.routeNamesToWatch {
-		if _, stillRDS := l.routeNamesToWatch[routeName]; !stillRDS {
-			l.rdsCancels[routeName]()
-			delete(l.routeNamesToWatch, routeName)
-		}
-	}
-
 	// "The listenerWrapper should move the server to "serving only after receiving all the required
-	// RDS resources"
+	// RDS resources" - Easwar
 	l.switchMode(ilc.FilterChains, ServingModeServing, nil)
 	l.goodUpdate.Fire()
 }
-
-func (l *listenerWrapper) handleRDSResp(update xdsclient.RouteConfigUpdate, err error) {
-	// Persist in map - although does this actually have access to the name?
-	/*rc := v3routepb.RouteConfiguration{}
-	update.Raw.*/ // This is one way to do it
-	// Name is already plumbed around codebase...figure out someway to get it VVV
-	// Error handling here - what to do?
-	// Protect this map memory with some type of mutex
-	l.rdsUpdates[update.RouteConfigName] = update
-}
-
-// Where do I grab the mutex here?
 
 func (l *listenerWrapper) switchMode(fcs *xdsclient.FilterChainManager, newMode ServingMode, err error) {
 	l.mu.Lock()
