@@ -122,9 +122,12 @@ func (xdsC *Client) InvokeWatchRouteConfigCallback(update xdsclient.RouteConfigU
 
 // WaitForCancelRouteConfigWatch waits for a RDS watch to be cancelled  and returns
 // context.DeadlineExceeded otherwise.
-func (xdsC *Client) WaitForCancelRouteConfigWatch(ctx context.Context) error {
-	_, err := xdsC.rdsCancelCh.Receive(ctx)
-	return err
+func (xdsC *Client) WaitForCancelRouteConfigWatch(ctx context.Context) (string, error) {
+	val, err := xdsC.rdsCancelCh.Receive(ctx)
+	if err != nil {
+		return "", err
+	}
+	return val.(string), err
 }
 
 // WatchCluster registers a CDS watch.
