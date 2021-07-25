@@ -9,7 +9,7 @@ import (
 // rdsHandlerUpdate wraps the full RouteConfigUpdate that are dynamically queried for a given
 // server side listener.
 type rdsHandlerUpdate struct {
-	rdsUpdates map[string]xdsclient.RouteConfigUpdate // Should this have inline as well?
+	rdsUpdates map[string]xdsclient.RouteConfigUpdate
 	err        error
 }
 
@@ -31,7 +31,7 @@ type rdsHandler struct {
 // listener. On any LDS updates the wrapped listener receives, the listener
 // should update the handler with the route names (which specify dynamic RDS)
 // using the function below.
-func newRdsHandler(parent *listenerWrapper) *rdsHandler { // Tell Easwar routeNamesToWatch will be built in FilterChainManager in PR
+func newRdsHandler(parent *listenerWrapper) *rdsHandler {
 	return &rdsHandler{
 		parent:            parent,
 		updateChannel:     make(chan rdsHandlerUpdate, 1),
@@ -85,7 +85,6 @@ func (rh *rdsHandler) handleRouteUpdate(update xdsclient.RouteConfigUpdate, err 
 		default:
 		}
 		rh.updateChannel <- rdsHandlerUpdate{err: err}
-		// Should we delete Route Update here? Or use successful Route Update if previously received?
 		return
 	}
 	rh.rdsUpdates[update.RouteConfigName] = update
@@ -112,8 +111,3 @@ func (rh *rdsHandler) close() {
 		cancel()
 	}
 }
-
-// Watch Service LDS received, starts RDS, in handle RDS is where stuff happens (i.e. logic iterates), similar to what we need
-// here with Serving state.
-
-// (ADDING ROUTE CONFIG NAME WILL BE A SEPERATE PR)..., also maybe should add (list of RDS Names to start a watch for to PR in flight rn)
