@@ -24,9 +24,10 @@ func setupTests(t *testing.T) (*rdsHandler, *fakeclient.Client) {
 	return rh, xdsC
 }
 
-// Simplest test: the rds handler receives a route name of length 1, starts a
-// watch, gets a successful update, and then writes an update to the update
-// channel for listener to pick up.
+// TestSuccessCaseOneRDSWatch tests the simplest scenario: the rds handler
+// receives a single route name, starts a watch for that route name, gets a
+// successful update, and then writes an update to the update channel for
+// listener to pick up.
 func (s) TestSuccessCaseOneRDSWatch(t *testing.T) {
 	rh, fakeClient := setupTests(t)
 	// When you first update the rds handler with a list of a single Route names
@@ -71,14 +72,12 @@ func (s) TestSuccessCaseOneRDSWatch(t *testing.T) {
 	if routeNameDeleted != route1 {
 		t.Fatalf("xdsClient.CancelRDS called for route %v, want %v", routeNameDeleted, route1)
 	}
-} // Cleanup (including other files vs. the route config PR I just sent out) + Just get this build working before even trying to add new tests
+}
 
-// test case 1 < A
-
-// test case 2 < A, then AB
-// TestSuccessCaseTwoUpdates tests the case where the rds handler receives an update with a single Route, then receives
-// a second update with two routes. The handler should start a watch for the added route, and if received a RDS update for that
-// route it should send an update with both RDS updates present.
+// TestSuccessCaseTwoUpdates tests the case where the rds handler receives an
+// update with a single Route, then receives a second update with two routes.
+// The handler should start a watch for the added route, and if received a RDS
+// update for that route it should send an update with both RDS updates present.
 func (s) TestSuccessCaseTwoUpdates(t *testing.T) {
 	rh, fakeClient := setupTests(t)
 
@@ -163,9 +162,9 @@ func (s) TestSuccessCaseTwoUpdates(t *testing.T) {
 	}
 }
 
-// test case 3 < AB, A
-// TestSuccessCaseDeletedRoute tests the case where the rds handler receives an update with two routes,
-// then receives an update with only
+// TestSuccessCaseDeletedRoute tests the case where the rds handler receives an
+// update with two routes, then receives an update with only one route. The RDS
+// Handler is expected to cancel the watch for the route no longer present.
 func (s) TestSuccessCaseDeletedRoute(t *testing.T) {
 	rh, fakeClient := setupTests(t)
 
@@ -221,7 +220,6 @@ func (s) TestSuccessCaseDeletedRoute(t *testing.T) {
 	}
 }
 
-// test case 4 < AB, BC
 // TestSuccessCaseTwoUpdatesAddAndDeleteRoute tests the case where the rds
 // handler receives an update with two routes, and then receives an update with
 // two routes, one previously there and one added (i.e. 12 -> 23). This should
@@ -325,9 +323,6 @@ func (s) TestSuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 		t.Fatalf("xdsClient.CancelRDS called for route %v, want %v or %v", routeNameDeleted, route2, route3)
 	}
 }
-
-// Perhaps still test the update buffer to test the three maps present, in case
-// something goes wrong in the logic for the three maps data.
 
 // TestErrorReceived tests the case where the rds handler receives a route name
 // to watch, then receives an update with an error. This error should be then
