@@ -118,6 +118,11 @@ type FilterChainManager struct {
 	dstPrefixes []*destPrefixEntry
 
 	def *FilterChain // Default filter chain, if specified.
+
+	// RouteConfigNames are the route configuration names which need to be
+	// dynamically queried for RDS Configuration for any FilterChains which
+	// specify to load RDS Configuration dynamically.
+	RouteConfigNames map[string]bool
 }
 
 // destPrefixEntry is the value type of the map indexed on destination prefixes.
@@ -167,7 +172,10 @@ type sourcePrefixEntry struct {
 // create a FilterChainManager.
 func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, error) {
 	// Parse all the filter chains and build the internal data structures.
-	fci := &FilterChainManager{dstPrefixMap: make(map[string]*destPrefixEntry)}
+	fci := &FilterChainManager{
+		dstPrefixMap:     make(map[string]*destPrefixEntry),
+		RouteConfigNames: make(map[string]bool),
+	}
 	if err := fci.addFilterChains(lis.GetFilterChains()); err != nil {
 		return nil, err
 	}
@@ -196,7 +204,7 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 	var def *FilterChain
 	if dfc := lis.GetDefaultFilterChain(); dfc != nil {
 		var err error
-		if def, err = filterChainFromProto(dfc); err != nil {
+		if def, err = fci.filterChainFromProto(dfc); err != nil {
 			return nil, err
 		}
 	}
@@ -377,7 +385,7 @@ func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePre
 		srcPorts = append(srcPorts, int(port))
 	}
 
-	fc, err := filterChainFromProto(fcProto)
+	fc, err := fci.filterChainFromProto(fcProto)
 	if err != nil {
 		return err
 	}
@@ -400,13 +408,19 @@ func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePre
 }
 
 // filterChainFromProto extracts the relevant information from the FilterChain
-// proto and stores it in our internal representation.
-func filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
+// proto and stores it in our internal representation. It also persists any
+// RouteNames which need to be queried dynamically via RDS.
+func (fci *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
 	filterChain, err := processNetworkFilters(fc.GetFilters())
 	if err != nil {
 		return nil, err
 	}
-	// filterChain := &FilterChain{HTTPFilters: httpFilters}
+	// These Route Names will be dynamically queried via RDS in the wrapped
+	// listener, which receives the LDS response, if specified for the Filter
+	// Chain.
+	if filterChain.RouteConfigName != "" {
+		fci.RouteConfigNames[filterChain.RouteConfigName] = true
+	}
 	// If the transport_socket field is not specified, it means that the control
 	// plane has not sent us any security config. This is fine and the server
 	// will use the fallback credentials configured as part of the

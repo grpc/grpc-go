@@ -511,6 +511,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 				def: &FilterChain{
 					RouteConfigName: "route-1",
 				},
+				RouteConfigNames: map[string]bool{"route-1": true},
 			},
 		},
 		{
@@ -568,6 +569,80 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
+				},
+			},
+		},
+		// two rds tests whether the Filter Chain Manager successfully persists
+		// the two RDS names that need to be dynamically queried.
+		{
+			name: "two rds",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+											Rds: &v3httppb.Rds{
+												ConfigSource: &v3corepb.ConfigSource{
+													ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+												},
+												RouteConfigName: "route-1",
+											},
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+										Rds: &v3httppb.Rds{
+											ConfigSource: &v3corepb.ConfigSource{
+												ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+											},
+											RouteConfigName: "route-2",
+										},
+									},
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantFC: &FilterChainManager{
+				dstPrefixMap: map[string]*destPrefixEntry{
+					unspecifiedPrefixMapKey: {
+						srcTypeArr: [3]*sourcePrefixes{
+							{
+								srcPrefixMap: map[string]*sourcePrefixEntry{
+									unspecifiedPrefixMapKey: {
+										srcPortMap: map[int]*FilterChain{
+											0: {
+												RouteConfigName: "route-1",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				def: &FilterChain{
+					RouteConfigName: "route-2",
+				},
+				RouteConfigNames: map[string]bool{
+					"route-1": true,
+					"route-2": true,
 				},
 			},
 		},
@@ -2269,6 +2344,8 @@ func (fci *FilterChainManager) Equal(other *FilterChainManager) bool {
 		return false
 	// TODO: Support comparing dstPrefixes slice?
 	case !cmp.Equal(fci.def, other.def, cmpopts.EquateEmpty(), protocmp.Transform()):
+		return false
+	case !cmp.Equal(fci.RouteConfigNames, other.RouteConfigNames, cmpopts.EquateEmpty()):
 		return false
 	}
 	return true
