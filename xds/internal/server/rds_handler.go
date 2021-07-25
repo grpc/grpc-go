@@ -74,6 +74,8 @@ func (rh *rdsHandler) updateRouteNamesToWatch(routeNamesToWatch map[string]bool)
 func (rh *rdsHandler) handleRouteUpdate(update xdsclient.RouteConfigUpdate, err error) {
 	rh.rdsMutex.Lock()
 	defer rh.rdsMutex.Unlock()
+	// Note: this doesn't need a check for if name in RouteConfigUpdate is wrong
+	// (i.e. not started a watch for). This will be validated in xdsclient.
 	if err != nil {
 		// For a rdsHandler update, the only update wrapped listener cares about
 		// is most recent one, so opportunistically drain the update before
@@ -84,6 +86,7 @@ func (rh *rdsHandler) handleRouteUpdate(update xdsclient.RouteConfigUpdate, err 
 		}
 		rh.updateChannel <- rdsHandlerUpdate{err: err}
 		// Should we delete Route Update here? Or use successful Route Update if previously received?
+		return
 	}
 	rh.rdsUpdates[update.RouteConfigName] = update
 
