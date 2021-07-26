@@ -250,8 +250,9 @@ type InboundListenerConfig struct {
 // RouteConfigUpdate contains information received in an RDS response, which is
 // of interest to the registered RDS watcher.
 type RouteConfigUpdate struct {
-	// Persist the name here that way we can view it in listener wrapper
-	RouteConfigName string // TODO today <- populate this field
+	// RouteConfigName - Persist the name here that way we can view it in
+	// listener wrapper
+	RouteConfigName string
 
 	VirtualHosts []*VirtualHost
 
