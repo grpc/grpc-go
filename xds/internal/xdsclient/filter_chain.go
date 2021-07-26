@@ -218,9 +218,6 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 		return nil, fmt.Errorf("no supported filter chains and no default filter chain")
 	}
 
-	// Construct the rds names needed for dynamic configuration here
-	// List of rds names (or set)?
-
 	return fci, nil
 }
 
