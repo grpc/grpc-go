@@ -117,7 +117,7 @@ run_test() {
 main() {
   local script_dir
   script_dir="$(dirname "$0")"
-  # shellcheck source=tools/internal_ci/linux/grpc_xds_k8s_install_test_driver.sh
+  # shellcheck source=test/kokoro/xds_k8s_install_test_driver.sh
   source "${script_dir}/xds_k8s_install_test_driver.sh"
   set -x
   if [[ -n "${KOKORO_ARTIFACTS_DIR}" ]]; then
