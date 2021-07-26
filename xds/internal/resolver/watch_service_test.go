@@ -237,7 +237,7 @@ func (s) TestServiceWatchLDSUpdate(t *testing.T) {
 
 	// Another LDS update with a different RDS_name.
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr + "2"}, nil)
-	if err := xdsC.WaitForCancelRouteConfigWatch(ctx); err != nil {
+	if _, err := xdsC.WaitForCancelRouteConfigWatch(ctx); err != nil {
 		t.Fatalf("wait for cancel route watch failed: %v, want nil", err)
 	}
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr+"2")
@@ -354,7 +354,7 @@ func (s) TestServiceNotCancelRDSOnSameLDSUpdate(t *testing.T) {
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{RouteConfigName: routeStr}, nil)
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if err := xdsC.WaitForCancelRouteConfigWatch(sCtx); err != context.DeadlineExceeded {
+	if _, err := xdsC.WaitForCancelRouteConfigWatch(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("wait for cancel route watch failed: %v, want nil", err)
 	}
 }
@@ -402,7 +402,7 @@ func (s) TestServiceWatchInlineRDS(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{wantVirtualHosts2},
 	}}, nil)
 	// This inline RDS resource should cause the RDS watch to be canceled.
-	if err := xdsC.WaitForCancelRouteConfigWatch(ctx); err != nil {
+	if _, err := xdsC.WaitForCancelRouteConfigWatch(ctx); err != nil {
 		t.Fatalf("wait for cancel route watch failed: %v, want nil", err)
 	}
 	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate2); err != nil {
@@ -429,7 +429,7 @@ func (s) TestServiceWatchInlineRDS(t *testing.T) {
 		VirtualHosts: []*xdsclient.VirtualHost{wantVirtualHosts2},
 	}}, nil)
 	// This inline RDS resource should cause the RDS watch to be canceled.
-	if err := xdsC.WaitForCancelRouteConfigWatch(ctx); err != nil {
+	if _, err := xdsC.WaitForCancelRouteConfigWatch(ctx); err != nil {
 		t.Fatalf("wait for cancel route watch failed: %v, want nil", err)
 	}
 	if err := verifyServiceUpdate(ctx, serviceUpdateCh, wantUpdate2); err != nil {
