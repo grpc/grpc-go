@@ -38,24 +38,22 @@ type rdsHandler struct {
 
 	rdsMutex sync.Mutex
 
-	routeNamesToWatch map[string]bool
-	rdsUpdates        map[string]xdsclient.RouteConfigUpdate
-	rdsCancels        map[string]func()
+	rdsUpdates map[string]xdsclient.RouteConfigUpdate
+	rdsCancels map[string]func()
 
 	updateChannel chan rdsHandlerUpdate
 }
 
-// newRdsHandler is expected to called once on instantiation of a wrapped
+// newRDSHandler is expected to called once on instantiation of a wrapped
 // listener. On any LDS updates the wrapped listener receives, the listener
 // should update the handler with the route names (which specify dynamic RDS)
 // using the function below.
-func newRdsHandler(parent *listenerWrapper) *rdsHandler {
+func newRDSHandler(parent *listenerWrapper) *rdsHandler {
 	return &rdsHandler{
-		parent:            parent,
-		updateChannel:     make(chan rdsHandlerUpdate, 1),
-		routeNamesToWatch: make(map[string]bool),
-		rdsUpdates:        make(map[string]xdsclient.RouteConfigUpdate),
-		rdsCancels:        make(map[string]func()),
+		parent:        parent,
+		updateChannel: make(chan rdsHandlerUpdate, 1),
+		rdsUpdates:    make(map[string]xdsclient.RouteConfigUpdate),
+		rdsCancels:    make(map[string]func()),
 	}
 }
 
@@ -68,19 +66,17 @@ func (rh *rdsHandler) updateRouteNamesToWatch(routeNamesToWatch map[string]bool)
 	defer rh.rdsMutex.Unlock()
 	// Add and start watches for any routes for any new routes in routeNamesToWatch.
 	for routeName := range routeNamesToWatch {
-		if _, inRHAlready := rh.routeNamesToWatch[routeName]; !inRHAlready {
-			rh.routeNamesToWatch[routeName] = true
+		if _, ok := rh.rdsCancels[routeName]; !ok {
 			rh.rdsCancels[routeName] = rh.parent.xdsC.WatchRouteConfig(routeName, rh.handleRouteUpdate)
 		}
 	}
 
 	// Delete and cancel watches for any routes from persisted routeNamesToWatch
 	// that are no longer present.
-	for routeName := range rh.routeNamesToWatch {
+	for routeName := range rh.rdsCancels {
 		if _, stillRDS := routeNamesToWatch[routeName]; !stillRDS {
 			rh.rdsCancels[routeName]()
 			delete(rh.rdsCancels, routeName)
-			delete(rh.routeNamesToWatch, routeName)
 			delete(rh.rdsUpdates, routeName)
 		}
 	}
@@ -109,7 +105,7 @@ func (rh *rdsHandler) handleRouteUpdate(update xdsclient.RouteConfigUpdate, err 
 
 	// If the full list (determined by length) of rdsUpdates have successfully updated,
 	// the listener is ready to be updated.
-	if len(rh.rdsUpdates) == len(rh.routeNamesToWatch) {
+	if len(rh.rdsUpdates) == len(rh.rdsCancels) {
 		// For a rdsHandler update, the only update lis wrapper cares about is most recent one,
 		// so opportunistically drain the update before sending the new update.
 		select {

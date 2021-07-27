@@ -40,7 +40,7 @@ var (
 // xds client.
 func setupTests(t *testing.T) (*rdsHandler, *fakeclient.Client) {
 	xdsC := fakeclient.NewClient()
-	rh := newRdsHandler(&listenerWrapper{xdsC: xdsC})
+	rh := newRDSHandler(&listenerWrapper{xdsC: xdsC})
 	return rh, xdsC
 }
 

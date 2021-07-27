@@ -135,13 +135,21 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 	lisAddr := lw.Listener.Addr().String()
 	lw.addr, lw.port, _ = net.SplitHostPort(lisAddr)
 
+	lw.rdsHandler = newRDSHandler(lw)
+
 	cancelWatch := lw.xdsC.WatchListener(lw.name, lw.handleListenerUpdate)
 	lw.logger.Infof("Watch started on resource name %v", lw.name)
-	lw.cancelWatch = func() {
+	lw.cancelWatch = func() { // Does this need to stay the same?
 		cancelWatch()
 		lw.logger.Infof("Watch cancelled on resource name %v", lw.name)
 	}
+	// go run()
 	return lw, lw.goodUpdate.Done()
+}
+
+type ldsUpdateWithError struct {
+	update xdsclient.ListenerUpdate
+	err    error
 }
 
 // listenerWrapper wraps the net.Listener associated with the listening address
@@ -186,6 +194,12 @@ type listenerWrapper struct {
 	mode ServingMode
 	// Filter chains received as part of the last good update.
 	filterChains *xdsclient.FilterChainManager
+
+	rdsHandler *rdsHandler
+
+	rdsUpdates map[string]xdsclient.RouteConfigUpdate
+
+	updateCh chan ldsUpdateWithError
 }
 
 // Accept blocks on an Accept() on the underlying listener, and wraps the
@@ -279,14 +293,117 @@ func (l *listenerWrapper) Close() error {
 	if l.cancelWatch != nil {
 		l.cancelWatch()
 	}
+	// I also need to close rds component
 	return nil
 }
 
+// Listener update (has inline route config as well) (wait for route update to happen before updating) + Route Update are logically distinct things
+// Route Update will just update route configuration that's it
+// Tied to listener update event
+// right now, only thing that can happen is a
+// abaaaaabbb
+// I think that either one can happen at any moment
+// a determines b (will need to update route config)
+// I think you need to rewrite this to have run(), with a (l) listener update and an rds update
+// Both types of updates affect listener state, can happen at any time, and also a determines b
+// What did I scale up compared to previously...?
+
+// run is a long running goroutine which handles all xds updates. LDS and RDS
+// push updates onto a channel which is read and acted upon from this goroutine.
+func (l *listenerWrapper) run() {
+	for {
+		select { // This thing syncs memory accesses
+		// Listener update
+		case u := <-l.updateCh:
+			// handle Listener update
+			l.handleLDSUpdate(u)
+		// Route Update
+		case u := <-l.rdsHandler.updateChannel:
+			l.handleRDSUpdate(u)
+			// cds balancer also has close event on the select
+		}
+	}
+}
+
+// handleLDSUpdate is the callback which handles LDS Updates. It writes the
+// received update to the update channel, which is picked up by the run
+// goroutine.
 func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, err error) {
 	if l.closed.HasFired() {
 		l.logger.Warningf("Resource %q received update: %v with error: %v, after listener was closed", l.name, update, err)
 		return
 	}
+	// Remove any existing entry in updateCh and replace with the new one.
+	select {
+	case <-l.updateCh:
+	default:
+	}
+	l.updateCh <- ldsUpdateWithError{update: update, err: err}
+}
+
+// handleRDSUpdate handles a full rds update from rds handler. This leads to functionality
+// x, y, and z
+func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
+	// ERROR HANDLING HERE...
+
+	// Persist updated route config is that it? or handle errors too
+	// This needs to grab onto some type of mutex
+	l.rdsUpdates = update.rdsUpdates
+
+	// Does this need to do anything else?
+
+	// Switch mode to serving mode serving
+	// Fire good update channel on first receipt, cause lis to be passed to grpc.Server.Serve(lis)
+	// "Applying updates to a listener should be delayed until dependent resources have been attempted to be loaded (e.g. via RDS)"
+	// "attempted to be loaded" - what does this mean
+	// "applying updates to the listener" aka any state that persists from Listener Update?
+	l.switchMode(l.filterChains, ServingModeServing, nil)
+	l.goodUpdate.Fire()
+}
+
+func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
+	/*handleListenerUpdate here with update.X and update.Y*/
+	// Figure out synchronization primitives and stuff - handleRDSUpdate will never
+	// get hit before this, as handleRDSUpdate is dependent on the first successful listener update
+	// ARE THERE ANY DIFFERENCES IN LOGIC HERE?
+	if update.err != nil {
+		l.logger.Warningf("Received error for resource %q: %+v", l.name, update.err)
+		if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
+			l.switchMode(nil, ServingModeNotServing, update.err)
+		}
+		// For errors which are anything other than "resource-not-found", we
+		// continue to use the old configuration.
+		return
+	}
+	l.logger.Infof("Received update for resource %q: %+v", l.name, update.update)
+
+	// Make sure that the socket address on the received Listener resource
+	// matches the address of the net.Listener passed to us by the user. This
+	// check is done here instead of at the XDSClient layer because of the
+	// following couple of reasons:
+	// - XDSClient cannot know the listening address of every listener in the
+	//   system, and hence cannot perform this check.
+	// - this is a very context-dependent check and only the server has the
+	//   appropriate context to perform this check.
+	//
+	// What this means is that the XDSClient has ACKed a resource which can push
+	// the server into a "not serving" mode. This is not ideal, but this is
+	// what we have decided to do. See gRPC A36 for more details.
+	ilc := update.update.InboundListenerCfg
+	if ilc.Address != l.addr || ilc.Port != l.port {
+		l.switchMode(nil, ServingModeNotServing, fmt.Errorf("address (%s:%s) in Listener update does not match listening address: (%s:%s)", ilc.Address, ilc.Port, l.addr, l.port))
+		return
+	}
+
+	l.rdsHandler.updateRouteNamesToWatch(ilc.FilterChains.RouteConfigNames)
+}
+
+func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, err error) {
+	// Change this to write to an update channel buffer
+	/*if l.closed.HasFired() {
+		l.logger.Warningf("Resource %q received update: %v with error: %v, after listener was closed", l.name, update, err)
+		return
+	}*/
 
 	if err != nil {
 		l.logger.Warningf("Received error for resource %q: %+v", l.name, err)
@@ -317,9 +434,12 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 		return
 	}
 
+	// rdshandler.updateRouteNamesToWatch()
+	l.rdsHandler.updateRouteNamesToWatch(ilc.FilterChains.RouteConfigNames)
+
 	// "The listenerWrapper should move the server to "serving only after receiving all the required
 	// RDS resources" - Easwar
-	l.switchMode(ilc.FilterChains, ServingModeServing, nil)
+	l.switchMode(ilc.FilterChains, ServingModeServing, nil) // Only thing it persists is Filter Chains
 	l.goodUpdate.Fire()
 }
 
