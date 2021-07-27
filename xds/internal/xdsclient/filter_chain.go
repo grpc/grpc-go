@@ -24,8 +24,10 @@ import (
 	"net"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -455,6 +457,93 @@ func (fci *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain
 		return nil, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
 	}
 	filterChain.SecurityCfg = sc
+	return filterChain, nil
+}
+
+func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error) {
+	filterChain := &FilterChain{}
+	seenNames := make(map[string]bool, len(filters))
+	seenHCM := false
+	for _, filter := range filters {
+		name := filter.GetName()
+		if name == "" {
+			return nil, fmt.Errorf("network filters {%+v} is missing name field in filter: {%+v}", filters, filter)
+		}
+		if seenNames[name] {
+			return nil, fmt.Errorf("network filters {%+v} has duplicate filter name %q", filters, name)
+		}
+		seenNames[name] = true
+
+		// Network filters have a oneof field named `config_type` where we
+		// only support `TypedConfig` variant.
+		switch typ := filter.GetConfigType().(type) {
+		case *v3listenerpb.Filter_TypedConfig:
+			// The typed_config field has an `anypb.Any` proto which could
+			// directly contain the serialized bytes of the actual filter
+			// configuration, or it could be encoded as a `TypedStruct`.
+			// TODO: Add support for `TypedStruct`.
+			tc := filter.GetTypedConfig()
+
+			// The only network filter that we currently support is the v3
+			// HttpConnectionManager. So, we can directly check the type_url
+			// and unmarshal the config.
+			// TODO: Implement a registry of supported network filters (like
+			// we have for HTTP filters), when we have to support network
+			// filters other than HttpConnectionManager.
+			if tc.GetTypeUrl() != version.V3HTTPConnManagerURL {
+				return nil, fmt.Errorf("network filters {%+v} has unsupported network filter %q in filter {%+v}", filters, tc.GetTypeUrl(), filter)
+			}
+			hcm := &v3httppb.HttpConnectionManager{}
+			if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
+				return nil, fmt.Errorf("network filters {%+v} failed unmarshaling of network filter {%+v}: %v", filters, filter, err)
+			}
+			// "Any filters after HttpConnectionManager should be ignored during
+			// connection processing but still be considered for validity.
+			// HTTPConnectionManager must have valid http_filters." - A36
+			filters, err := processHTTPFilters(hcm.GetHttpFilters(), true)
+			if err != nil {
+				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}", filters, hcm.GetHttpFilters())
+			}
+			if !seenHCM {
+				// TODO: Implement terminal filter logic, as per A36.
+				filterChain.HTTPFilters = filters
+				seenHCM = true
+				switch hcm.RouteSpecifier.(type) {
+				case *v3httppb.HttpConnectionManager_Rds:
+					if hcm.GetRds().GetConfigSource().GetAds() == nil {
+						return nil, fmt.Errorf("ConfigSource is not ADS: %+v", hcm)
+					}
+					name := hcm.GetRds().GetRouteConfigName()
+					if name == "" {
+						return nil, fmt.Errorf("empty route_config_name: %+v", hcm)
+					}
+					filterChain.RouteConfigName = name
+				case *v3httppb.HttpConnectionManager_RouteConfig:
+					// "RouteConfiguration validation logic inherits all
+					// previous validations made for client-side usage as RDS
+					// does not distinguish between client-side and
+					// server-side." - A36
+					// Can specify v3 here, as will never get to this function
+					// if v2.
+					routeU, err := generateRDSUpdateFromRouteConfiguration(hcm.GetRouteConfig(), nil, false)
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
+					}
+					filterChain.InlineRouteConfig = &routeU
+				case nil:
+					// No-op, as no route specifier is a valid configuration on
+					// the server side.
+				default:
+					return nil, fmt.Errorf("unsupported type %T for RouteSpecifier", hcm.RouteSpecifier)
+				}
+			}
+		default:
+			return nil, fmt.Errorf("network filters {%+v} has unsupported config_type %T in filter %s", filters, typ, filter.GetName())
+		}
+	}
+	if !seenHCM {
+		return nil, fmt.Errorf("network filters {%+v} missing HttpConnectionManager filter", filters)
+	}
 	return filterChain, nil
 }
 
