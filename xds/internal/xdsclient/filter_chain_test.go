@@ -55,7 +55,7 @@ var (
 	inlineRouteConfig = &RouteConfigUpdate{
 		VirtualHosts: []*VirtualHost{{
 			Domains: []string{"lds.target.good:3333"},
-			Routes:  []*Route{{Prefix: newStringP("/")}},
+			Routes:  []*Route{{Prefix: newStringP("/"), RouteAction: RouteActionNonForwardingAction}},
 		}}}
 	emptyValidNetworkFilters = []*v3listenerpb.Filter{
 		{
@@ -668,35 +668,6 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 		lis     *v3listenerpb.Listener
 		wantErr string
 	}{
-		{
-			name: "no-route-specifier",
-			lis: &v3listenerpb.Listener{
-				FilterChains: []*v3listenerpb.FilterChain{
-					{
-						Name: "filter-chain-1",
-						Filters: []*v3listenerpb.Filter{
-							{
-								Name: "hcm",
-								ConfigType: &v3listenerpb.Filter_TypedConfig{
-									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
-								},
-							},
-						},
-					},
-				},
-				DefaultFilterChain: &v3listenerpb.FilterChain{
-					Filters: []*v3listenerpb.Filter{
-						{
-							Name: "hcm",
-							ConfigType: &v3listenerpb.Filter_TypedConfig{
-								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
-							},
-						},
-					},
-				},
-			},
-			wantErr: "no RouteSpecifier",
-		},
 		{
 			name: "not-ads",
 			lis: &v3listenerpb.Listener{

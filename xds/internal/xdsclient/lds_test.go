@@ -576,7 +576,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		inlineRouteConfig = &RouteConfigUpdate{
 			VirtualHosts: []*VirtualHost{{
 				Domains: []string{"lds.target.good:3333"},
-				Routes:  []*Route{{Prefix: newStringP("/")}},
+				Routes:  []*Route{{Prefix: newStringP("/"), RouteAction: RouteActionNonForwardingAction}},
 			}}}
 		emptyValidNetworkFilters = []*v3listenerpb.Filter{
 			{
