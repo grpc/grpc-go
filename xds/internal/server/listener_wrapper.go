@@ -84,6 +84,11 @@ func (s ServingMode) String() string {
 // non-nil error if the server has transitioned into not-serving mode.
 type ServingModeCallback func(addr net.Addr, mode ServingMode, err error)
 
+// DrainCallback is the callback that users can register to get pinged whenever
+// a new listener update gets received, and we want any clients to reconnect to
+// get the updated configuration.
+type DrainCallback func(addr net.Addr)
+
 func prefixLogger(p *listenerWrapper) *internalgrpclog.PrefixLogger {
 	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[xds-server-listener %p] ", p))
 }
@@ -109,6 +114,8 @@ type ListenerWrapperParams struct {
 	XDSClient XDSClient
 	// ModeCallback is the callback to invoke when the serving mode changes.
 	ModeCallback ServingModeCallback
+	// DrainCallback is the callback to invoke when the Listener gets a new update.
+	DrainCallback DrainCallback
 }
 
 // NewListenerWrapper creates a new listenerWrapper with params. It returns a
@@ -123,6 +130,7 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 		xdsCredsInUse:     params.XDSCredsInUse,
 		xdsC:              params.XDSClient,
 		modeCallback:      params.ModeCallback,
+		drainCallback:     params.DrainCallback
 		isUnspecifiedAddr: params.Listener.Addr().(*net.TCPAddr).IP.IsUnspecified(),
 
 		closed:     grpcsync.NewEvent(),
@@ -164,6 +172,7 @@ type listenerWrapper struct {
 	xdsC          XDSClient
 	cancelWatch   func()
 	modeCallback  ServingModeCallback
+	drainCallback DrainCallback
 
 	// Set to true if the listener is bound to the IP_ANY address (which is
 	// "0.0.0.0" for IPv4 and "::" for IPv6).
@@ -262,6 +271,7 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			SourceAddr:            srcAddr.IP,
 			SourcePort:            srcAddr.Port,
 		})
+		// [][][][] RDS <- dynamic, this starts watch and holds onto RDS
 		l.mu.RUnlock()
 		if err != nil {
 			// When a matching filter chain is not found, we close the
@@ -293,7 +303,7 @@ func (l *listenerWrapper) Close() error {
 	if l.cancelWatch != nil {
 		l.cancelWatch()
 	}
-	// I also need to close rds component
+	l.rdsHandler.close()
 	return nil
 }
 
@@ -348,7 +358,7 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 
 	// Persist updated route config is that it? or handle errors too
 	// This needs to grab onto some type of mutex
-	l.rdsUpdates = update.rdsUpdates
+	l.rdsUpdates = update.rdsUpdates // Dynamic portion of configuration
 
 	// Does this need to do anything else?
 
@@ -362,6 +372,25 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 }
 
 func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
+	// if listener changed in any way, iniate graceful shutdown so clients can reconnect and
+	// get new configuration
+
+	// "updates to a Listener" cause all older connections on that Listener to be gracefully shut down
+	// with a grace period of 10 minutes for long lived RPC's"
+	// how do we determine if there was an "update to a listener" <- big question
+	update.update.InboundListenerCfg.
+
+
+
+
+
+
+
+	// Just drain, subset of serving to non serving
+	// graceful - send goaway
+	// lis gets put in state and accept and close() connection, just need first part of existing transport
+	// can just call drainServerTransports takes a lock
+
 	/*handleListenerUpdate here with update.X and update.Y*/
 	// Figure out synchronization primitives and stuff - handleRDSUpdate will never
 	// get hit before this, as handleRDSUpdate is dependent on the first successful listener update
@@ -395,52 +424,16 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 		return
 	}
 
+	// "Updates to a Listener cause all older connections on that Listener to be
+	// gracefully shut down with a grace period of 10 minutes for long-lived
+	// RPC's, such that clients will reconnect and have the updated
+	// configuration apply." - A36 Note that this is not the same as moving the
+	// Server's state to ServingModeNotServing. That prevents new connections
+	// from being accepted, whereas here we simply want the clients to reconnect
+	// to get the updated configuration.
+	l.drainCallback(ilc.Address)
+
 	l.rdsHandler.updateRouteNamesToWatch(ilc.FilterChains.RouteConfigNames)
-}
-
-func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, err error) {
-	// Change this to write to an update channel buffer
-	/*if l.closed.HasFired() {
-		l.logger.Warningf("Resource %q received update: %v with error: %v, after listener was closed", l.name, update, err)
-		return
-	}*/
-
-	if err != nil {
-		l.logger.Warningf("Received error for resource %q: %+v", l.name, err)
-		if xdsclient.ErrType(err) == xdsclient.ErrorTypeResourceNotFound {
-			l.switchMode(nil, ServingModeNotServing, err)
-		}
-		// For errors which are anything other than "resource-not-found", we
-		// continue to use the old configuration.
-		return
-	}
-	l.logger.Infof("Received update for resource %q: %+v", l.name, update)
-
-	// Make sure that the socket address on the received Listener resource
-	// matches the address of the net.Listener passed to us by the user. This
-	// check is done here instead of at the XDSClient layer because of the
-	// following couple of reasons:
-	// - XDSClient cannot know the listening address of every listener in the
-	//   system, and hence cannot perform this check.
-	// - this is a very context-dependent check and only the server has the
-	//   appropriate context to perform this check.
-	//
-	// What this means is that the XDSClient has ACKed a resource which can push
-	// the server into a "not serving" mode. This is not ideal, but this is
-	// what we have decided to do. See gRPC A36 for more details.
-	ilc := update.InboundListenerCfg
-	if ilc.Address != l.addr || ilc.Port != l.port {
-		l.switchMode(nil, ServingModeNotServing, fmt.Errorf("address (%s:%s) in Listener update does not match listening address: (%s:%s)", ilc.Address, ilc.Port, l.addr, l.port))
-		return
-	}
-
-	// rdshandler.updateRouteNamesToWatch()
-	l.rdsHandler.updateRouteNamesToWatch(ilc.FilterChains.RouteConfigNames)
-
-	// "The listenerWrapper should move the server to "serving only after receiving all the required
-	// RDS resources" - Easwar
-	l.switchMode(ilc.FilterChains, ServingModeServing, nil) // Only thing it persists is Filter Chains
-	l.goodUpdate.Fire()
 }
 
 func (l *listenerWrapper) switchMode(fcs *xdsclient.FilterChainManager, newMode ServingMode, err error) {
