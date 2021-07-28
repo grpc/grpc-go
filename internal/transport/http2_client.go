@@ -1275,6 +1275,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		contentTypeErr string
 		grpcMessage    string
 		statusGen      *status.Status
+		recvCompress   string
 
 		httpStatus string
 		rawStatus  string
@@ -1292,7 +1293,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
 			isGRPC = true
 		case "grpc-encoding":
-			s.recvCompress = hf.Value
+			recvCompress = hf.Value
 		case "grpc-status":
 			rawStatus = hf.Value
 		case "grpc-message":
@@ -1384,6 +1385,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			// These values can be set without any synchronization because
 			// stream goroutine will read it only after seeing a closed
 			// headerChan which we'll close after setting this.
+			s.recvCompress = recvCompress
 			if len(mdata) > 0 {
 				s.header = mdata
 			}
