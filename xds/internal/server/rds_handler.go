@@ -101,7 +101,7 @@ func (rh *rdsHandler) handleRouteUpdate(update xdsclient.RouteConfigUpdate, err 
 		rh.updateChannel <- rdsHandlerUpdate{err: err}
 		return
 	}
-	rh.rdsUpdates[update.RouteConfigName] = update
+	rh.rdsUpdates[update.RouteConfigName] = update // BIG TODO: MAKE THIS A CLOSURE TO NOT SCALE UP UPDATE
 
 	// If the full list (determined by length) of rdsUpdates have successfully updated,
 	// the listener is ready to be updated.
