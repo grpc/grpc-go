@@ -411,8 +411,8 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	// from the management server, this listener has all the configuration
 	// needed, and is ready to be Served on.
 	if len(ilc.FilterChains.RouteConfigNames) == 0 {
-		// Does it even get here? DEBUG TIME
-		l.switchMode(l.filterChains, ServingModeServing, nil)
+		print("route config names are zero, switching mode")
+		l.switchMode(ilc.FilterChains, ServingModeServing, nil)
 		l.goodUpdate.Fire()
 	}
 }
