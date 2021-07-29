@@ -252,10 +252,6 @@ func newListenerWrapper(t *testing.T) (*listenerWrapper, <-chan struct{}, *fakec
 	return lw, readyCh, xdsC, lis, func() { l.Close() }
 }
 
-// Testing NewListenerWrapper
-// new() starts LDS Watch
-// invoke callback with bad update
-// then good update, should transition to ServingModeServing
 func (s) TestNewListenerWrapper(t *testing.T) {
 	_, readyCh, xdsC, _, cleanup := newListenerWrapper(t)
 	defer cleanup()
@@ -314,15 +310,6 @@ func (s) TestNewListenerWrapper(t *testing.T) {
 			FilterChains: fcm,
 		}}, nil)
 
-	// Actually, this should stay the same. It doesn't NEED to specify any route names to watch
-	// so you can move to ServingModeServing if LDS doesn't specify any dynamic
-
-	// ^^^^ This stuff all stays the same, functionality changes below VVVVV
-	// rather than write to a ready channel after LDS
-	// get LDS, start RDS, get RDS, then ready channel is written too
-
-	// Should send RDS Handler (should mock this) a list of route names to watch
-
 	select {
 	case <-ctx.Done():
 		t.Fatalf("timeout waiting for the ready channel to be written to after receipt of a good Listener update")
@@ -330,9 +317,11 @@ func (s) TestNewListenerWrapper(t *testing.T) {
 	}
 }
 
-// TestNewListenerWrapperWithRouteUpdate tests the scenario where
-// the listener gets built, starts a watch, that watch returns a list of Route Names to return, than receives an update from the rds handler. Only after
-// receiving the update from the rds handler should it move the server to ServingModeServing.
+// TestNewListenerWrapperWithRouteUpdate tests the scenario where the listener
+// gets built, starts a watch, that watch returns a list of Route Names to
+// return, than receives an update from the rds handler. Only after receiving
+// the update from the rds handler should it move the server to
+// ServingModeServing.
 func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	_, readyCh, xdsC, _, cleanup := newListenerWrapper(t)
 	defer cleanup()
@@ -341,7 +330,6 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	// expected Listener resource name.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// name is verified in previous test
 	_, err := xdsC.WaitForWatchListener(ctx)
 	if err != nil {
 		t.Fatalf("error when waiting for a watch on a Listener resource: %v", err)
@@ -388,73 +376,15 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 		RouteConfigName: "route-1",
 	}, nil)
 
-	// All of the rds updates have completed, so can expect to send a ping on good update channel.
+	// All of the xDS updates have completed, so can expect to send a ping on
+	// good update channel.
 	select {
 	case <-ctx.Done():
 		t.Fatalf("timeout waiting for the ready channel to be written to after receipt of a good rds update")
 	case <-readyCh:
 	}
-
-	// Write full list of rds updates
-
-	// Push an update with the full list of contained rds updates. This should move the Server
-	// to a ServingModeServing.
-	// Do we write to a channel directly or just mock the whole handler itself?
 }
 
-// TestListenerWrapper_Accept_RouteConfiguration tests configuring a Listener Wrapper with certain
-// route configuration and then accepting a connection persists the correct route/httpfilters on that connection from the matched filter chain...?
-/*func (s) TestListenerWrapper_Accept_RouteConfiguration(t *testing.T) {
-	lw, readyCh, xdsC, lis, cleanup := newListenerWrapper(t)
-	defer cleanup()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	_, err := xdsC.WaitForWatchListener(ctx)
-	if err != nil {
-		t.Fatalf("error when waiting for a watch on a Listener resource: %v", err)
-	}
-	fcm, err := xdsclient.NewFilterChainManager(listenerWithRouteConfiguration)
-	if err != nil {
-		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
-	}
-	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
-		InboundListenerCfg: &xdsclient.InboundListenerConfig{
-			Address: fakeListenerHost,
-			Port:    strconv.Itoa(fakeListenerPort),
-			FilterChains: fcm,
-		}}, nil)
-
-	_, err = xdsC.WaitForWatchRouteConfig(ctx)
-	if err != nil {
-		t.Fatalf("error when waiting for a watch on a Route resource: %v", err)
-	}
-	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
-		RouteConfigName: "route-1",
-	}, nil)
-
-	select {
-	case <-ctx.Done():
-		t.Fatalf("timeout waiting for the ready channel to be written to after receipt of a good rds update")
-	case <-readyCh:
-	}
-	// Everything above ^^^ is verified in the previous test.
-
-	// Okay so now we need to actually query it
-
-}*/
-
-// TODO:
-// Get this build (lister wrapper + listener wrapper test) working
-//             do we need to add any accept tests ourselves? - doesn't seem like it
-// Fix breaking higher level tests + Add your own higher level tests
-// ADD RDS Resource name to rds response in other pr
-
-// Do we test whether conn has HTTP Filters and Route Config as well, should we go ahead and persist
-// that state in the conn in this PR?
-
-// Persist it in wrapped conn + instantiate filters will be next PR
-
-// We haven't scaled the data in wrapped conn up yet, so we don't need to add anything, as this is all testing Accept()
 func (s) TestListenerWrapper_Accept(t *testing.T) {
 	boCh := testutils.NewChannel()
 	origBackoffFunc := backoffFunc
@@ -543,18 +473,3 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 		t.Fatalf("error when waiting for Accept() to return the conn on filter chain match: %v", err)
 	}
 }
-
-// Do we even need to scale this up?
-// Added test
-// Fix breaking tests...
-
-// Right now (master):
-// LDS
-// On good update -> Serve(lis)
-
-// Changed to
-// LDS
-// triggers RDS
-// On good update -> Serve(lis)
-
-// Something blocks forever after LDS Update

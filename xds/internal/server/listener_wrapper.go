@@ -405,7 +405,6 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	if l.drainCallback != nil {
 		l.drainCallback(l.Listener.Addr())
 	}
-	// A Filter Chain is required to be there
 	l.rdsHandler.updateRouteNamesToWatch(ilc.FilterChains.RouteConfigNames)
 	// If there are no dynamic RDS Configurations still needed to be received
 	// from the management server, this listener has all the configuration
