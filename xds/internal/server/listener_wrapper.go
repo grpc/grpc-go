@@ -130,11 +130,12 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 		xdsCredsInUse:     params.XDSCredsInUse,
 		xdsC:              params.XDSClient,
 		modeCallback:      params.ModeCallback,
-		drainCallback:     params.DrainCallback
+		drainCallback:     params.DrainCallback,
 		isUnspecifiedAddr: params.Listener.Addr().(*net.TCPAddr).IP.IsUnspecified(),
 
 		closed:     grpcsync.NewEvent(),
 		goodUpdate: grpcsync.NewEvent(),
+		updateCh:   make(chan ldsUpdateWithError, 1),
 	}
 	lw.logger = prefixLogger(lw)
 
@@ -147,7 +148,7 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 
 	cancelWatch := lw.xdsC.WatchListener(lw.name, lw.handleListenerUpdate)
 	lw.logger.Infof("Watch started on resource name %v", lw.name)
-	lw.cancelWatch = func() { // Does this need to stay the same?
+	lw.cancelWatch = func() {
 		cancelWatch()
 		lw.logger.Infof("Watch cancelled on resource name %v", lw.name)
 	}
@@ -206,7 +207,7 @@ type listenerWrapper struct {
 
 	rdsHandler *rdsHandler
 
-	rdsUpdates map[string]xdsclient.RouteConfigUpdate
+	rdsUpdates map[string]xdsclient.RouteConfigUpdate // TODO: if this will be read in accept, this will need a read lock as well.
 
 	updateCh chan ldsUpdateWithError
 }
@@ -312,8 +313,11 @@ func (l *listenerWrapper) Close() error {
 // run is a long running goroutine which handles all xds updates. LDS and RDS
 // push updates onto a channel which is read and acted upon from this goroutine.
 func (l *listenerWrapper) run() {
+	print("run() goroutine started")
 	for {
 		select {
+		case <-l.closed.Done():
+			return
 		case u := <-l.updateCh:
 			l.handleLDSUpdate(u)
 		case u := <-l.rdsHandler.updateChannel:
@@ -326,11 +330,13 @@ func (l *listenerWrapper) run() {
 // received update to the update channel, which is picked up by the run
 // goroutine.
 func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, err error) {
+	print("handleListenerUpdate")
 	if l.closed.HasFired() {
 		l.logger.Warningf("Resource %q received update: %v with error: %v, after listener was closed", l.name, update, err)
 		return
 	}
-	// Remove any existing entry in updateCh and replace with the new one.
+	// Remove any existing entry in updateCh and replace with the new one, as the only update
+	// listener cares about is most recent update.
 	select {
 	case <-l.updateCh:
 	default:
@@ -342,6 +348,7 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 // update, the server will switch to ServingModeServing as the full
 // configuration (both LDS and RDS) has been received.
 func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
+	print("handleRDSUpdate")
 	if update.err != nil {
 		l.logger.Warningf("Received error for rds names specified in resource %q: %+v", l.name, update.err)
 		if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
@@ -351,8 +358,6 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 		// continue to use the old configuration.
 		return
 	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
 	l.rdsUpdates = update.rdsUpdates
 
 	l.switchMode(l.filterChains, ServingModeServing, nil)
@@ -360,6 +365,7 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 }
 
 func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
+	print("handleLDSUpdate (from run())")
 	if update.err != nil {
 		l.logger.Warningf("Received error for resource %q: %+v", l.name, update.err)
 		if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
@@ -396,12 +402,16 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	// Server's state to ServingModeNotServing. That prevents new connections
 	// from being accepted, whereas here we simply want the clients to reconnect
 	// to get the updated configuration.
-	l.drainCallback(l.Listener.Addr())
+	if l.drainCallback != nil {
+		l.drainCallback(l.Listener.Addr())
+	}
+	// A Filter Chain is required to be there
 	l.rdsHandler.updateRouteNamesToWatch(ilc.FilterChains.RouteConfigNames)
 	// If there are no dynamic RDS Configurations still needed to be received
 	// from the management server, this listener has all the configuration
 	// needed, and is ready to be Served on.
 	if len(ilc.FilterChains.RouteConfigNames) == 0 {
+		// Does it even get here? DEBUG TIME
 		l.switchMode(l.filterChains, ServingModeServing, nil)
 		l.goodUpdate.Fire()
 	}

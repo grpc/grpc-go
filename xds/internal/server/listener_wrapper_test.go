@@ -282,12 +282,18 @@ func (s) TestNewListenerWrapper(t *testing.T) {
 		t.Fatalf("ready channel written to after receipt of a bad Listener update")
 	}
 
+	fcm, err := xdsclient.NewFilterChainManager(listenerWithFilterChains)
+	if err != nil {
+		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
+	}
+
 	// Push an update whose address does not match the address to which our
 	// listener is bound, and verify that the ready channel is not written to.
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
 		InboundListenerCfg: &xdsclient.InboundListenerConfig{
 			Address: "10.0.0.1",
 			Port:    "50051",
+			FilterChains: fcm,
 		}}, nil)
 	timer = time.NewTimer(defaultTestShortTimeout)
 	select {
@@ -305,6 +311,7 @@ func (s) TestNewListenerWrapper(t *testing.T) {
 		InboundListenerCfg: &xdsclient.InboundListenerConfig{
 			Address: fakeListenerHost,
 			Port:    strconv.Itoa(fakeListenerPort),
+			FilterChains: fcm,
 		}}, nil)
 
 	// Actually, this should stay the same. It doesn't NEED to specify any route names to watch
@@ -360,8 +367,8 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for a watch on a Route resource: %v", err)
 	}
-	if routeName != "route1" {
-		t.Fatalf("listenerWrapper registered a lds watch on %s, want %s", routeName, "route1")
+	if routeName != "route-1" {
+		t.Fatalf("listenerWrapper registered a lds watch on %s, want %s", routeName, "route-1")
 	}
 
 	// This shouldn't invoke good update channel, as has not received rds updates yet.
@@ -373,14 +380,12 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 		t.Fatalf("ready channel written to without rds configuration specified")
 	}
 
-	// Invoke rds callback for the started rds watch. (How would we specify this
-	// with a closure? Seems like route name is better) This valid rds callback
+	// Invoke rds callback for the started rds watch. This valid rds callback
 	// should trigger the listener wrapper to fire GoodUpdate, as it has
 	// received both it's LDS Configuration and also RDS Configuration,
 	// specified in LDS Configuration.
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
-		// TODO: I don't think RouteName is needed - form closure in rds handler
-		VirtualHosts: , // Do we even need this?
+		RouteConfigName: "route-1",
 	}, nil)
 
 	// All of the rds updates have completed, so can expect to send a ping on good update channel.
@@ -400,7 +405,7 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 
 // TestListenerWrapper_Accept_RouteConfiguration tests configuring a Listener Wrapper with certain
 // route configuration and then accepting a connection persists the correct route/httpfilters on that connection from the matched filter chain...?
-func (s) TestListenerWrapper_Accept_RouteConfiguration(t *testing.T) {
+/*func (s) TestListenerWrapper_Accept_RouteConfiguration(t *testing.T) {
 	lw, readyCh, xdsC, lis, cleanup := newListenerWrapper(t)
 	defer cleanup()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -425,8 +430,7 @@ func (s) TestListenerWrapper_Accept_RouteConfiguration(t *testing.T) {
 		t.Fatalf("error when waiting for a watch on a Route resource: %v", err)
 	}
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
-		// TODO: I don't think RouteName is needed - form closure in rds handler
-		VirtualHosts: , // Do we even need this?
+		RouteConfigName: "route-1",
 	}, nil)
 
 	select {
@@ -438,14 +442,22 @@ func (s) TestListenerWrapper_Accept_RouteConfiguration(t *testing.T) {
 
 	// Okay so now we need to actually query it
 
-}
+}*/
+
+// TODO:
+// Get this build (lister wrapper + listener wrapper test) working
+//             do we need to add any accept tests ourselves? - doesn't seem like it
+// Fix breaking higher level tests + Add your own higher level tests
+// ADD RDS Resource name to rds response in other pr
 
 // Do we test whether conn has HTTP Filters and Route Config as well, should we go ahead and persist
 // that state in the conn in this PR?
 
+// Persist it in wrapped conn + instantiate filters will be next PR
 
 
 
+// We haven't scaled the data in wrapped conn up yet, so we don't need to add anything, as this is all testing Accept()
 func (s) TestListenerWrapper_Accept(t *testing.T) {
 	boCh := testutils.NewChannel()
 	origBackoffFunc := backoffFunc
@@ -534,6 +546,7 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 		t.Fatalf("error when waiting for Accept() to return the conn on filter chain match: %v", err)
 	}
 }
+
 // Do we even need to scale this up?
 // Added test
 // Fix breaking tests...
@@ -546,3 +559,5 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 // LDS
 // triggers RDS
 // On good update -> Serve(lis)
+
+// Something blocks forever after LDS Update
