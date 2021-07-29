@@ -288,7 +288,10 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			conn.Close()
 			continue
 		}
-		// TODO: once matched here, instantiate the filters, pipe it + override (and route) over to the xdsUnary/Stream interceptors
+		// TODO: once matched an accepted connection to a filter chain,
+		// instantiate the HTTP filters in the filter chain + the filter
+		// overrides, pipe filters and route into connection, which will
+		// eventually be passed to xdsUnary/Stream interceptors.
 		return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
 	}
 }
@@ -394,8 +397,14 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	// from being accepted, whereas here we simply want the clients to reconnect
 	// to get the updated configuration.
 	l.drainCallback(l.Listener.Addr())
-
 	l.rdsHandler.updateRouteNamesToWatch(ilc.FilterChains.RouteConfigNames)
+	// If there are no dynamic RDS Configurations still needed to be received
+	// from the management server, this listener has all the configuration
+	// needed, and is ready to be Served on.
+	if len(ilc.FilterChains.RouteConfigNames) == 0 {
+		l.switchMode(l.filterChains, ServingModeServing, nil)
+		l.goodUpdate.Fire()
+	}
 }
 
 func (l *listenerWrapper) switchMode(fcs *xdsclient.FilterChainManager, newMode ServingMode, err error) {
