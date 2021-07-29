@@ -291,8 +291,8 @@ func (s) TestNewListenerWrapper(t *testing.T) {
 	// listener is bound, and verify that the ready channel is not written to.
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
 		InboundListenerCfg: &xdsclient.InboundListenerConfig{
-			Address: "10.0.0.1",
-			Port:    "50051",
+			Address:      "10.0.0.1",
+			Port:         "50051",
 			FilterChains: fcm,
 		}}, nil)
 	timer = time.NewTimer(defaultTestShortTimeout)
@@ -309,8 +309,8 @@ func (s) TestNewListenerWrapper(t *testing.T) {
 	// that it is ready.
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
 		InboundListenerCfg: &xdsclient.InboundListenerConfig{
-			Address: fakeListenerHost,
-			Port:    strconv.Itoa(fakeListenerPort),
+			Address:      fakeListenerHost,
+			Port:         strconv.Itoa(fakeListenerPort),
 			FilterChains: fcm,
 		}}, nil)
 
@@ -357,8 +357,8 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	// xds client for rds name "route-1".
 	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
 		InboundListenerCfg: &xdsclient.InboundListenerConfig{
-			Address: fakeListenerHost,
-			Port:    strconv.Itoa(fakeListenerPort),
+			Address:      fakeListenerHost,
+			Port:         strconv.Itoa(fakeListenerPort),
 			FilterChains: fcm,
 		}}, nil)
 
@@ -376,7 +376,7 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	select {
 	case <-timer.C:
 		timer.Stop()
-	case <- readyCh:
+	case <-readyCh:
 		t.Fatalf("ready channel written to without rds configuration specified")
 	}
 
@@ -394,7 +394,6 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 		t.Fatalf("timeout waiting for the ready channel to be written to after receipt of a good rds update")
 	case <-readyCh:
 	}
-
 
 	// Write full list of rds updates
 
@@ -454,8 +453,6 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 // that state in the conn in this PR?
 
 // Persist it in wrapped conn + instantiate filters will be next PR
-
-
 
 // We haven't scaled the data in wrapped conn up yet, so we don't need to add anything, as this is all testing Accept()
 func (s) TestListenerWrapper_Accept(t *testing.T) {
