@@ -444,8 +444,8 @@ func (s) TestServeSuccess(t *testing.T) {
 	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
 		RouteConfigName: "routeconfig",
 		InboundListenerCfg: &xdsclient.InboundListenerConfig{
-			Address: addr,
-			Port:    port,
+			Address:      addr,
+			Port:         port,
 			FilterChains: fcm,
 		},
 	}, nil)
@@ -468,8 +468,8 @@ func (s) TestServeSuccess(t *testing.T) {
 	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
 		RouteConfigName: "routeconfig",
 		InboundListenerCfg: &xdsclient.InboundListenerConfig{
-			Address: "10.20.30.40",
-			Port:    "666",
+			Address:      "10.20.30.40",
+			Port:         "666",
 			FilterChains: fcm,
 		},
 	}, nil)
