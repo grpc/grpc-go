@@ -349,6 +349,10 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 // configuration (both LDS and RDS) has been received.
 func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 	print("handleRDSUpdate")
+	if l.closed.HasFired() {
+		l.logger.Warningf("RDS received update: %v with error: %v, after listener was closed", update.rdsUpdates, update.err)
+		return
+	}
 	if update.err != nil {
 		l.logger.Warningf("Received error for rds names specified in resource %q: %+v", l.name, update.err)
 		if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
