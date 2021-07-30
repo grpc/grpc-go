@@ -135,9 +135,10 @@ func (f *fakeGRPCServer) RegisterService(*grpc.ServiceDesc, interface{}) {
 	f.registerServiceCh.Send(nil)
 }
 
-func (f *fakeGRPCServer) Serve(net.Listener) error {
+func (f *fakeGRPCServer) Serve(lis net.Listener) error {
 	f.serveCh.Send(nil)
 	<-f.done
+	lis.Close()
 	return nil
 }
 
