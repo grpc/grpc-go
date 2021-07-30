@@ -66,7 +66,7 @@ func (s) TestSuccessCaseOneRDSWatch(t *testing.T) {
 		t.Fatalf("xdsClient.WatchRDS called for route: %v, want %v", gotRoute, route1)
 	}
 	rdsUpdate := xdsclient.RouteConfigUpdate{
-		RouteConfigName: route1,
+		RouteName: route1,
 	}
 	// Invoke callback with the xds client with a certain route update. Due to
 	// this route update updating every route name that rds handler handles,
@@ -128,7 +128,7 @@ func (s) TestSuccessCaseTwoUpdates(t *testing.T) {
 	// handler to write an update, as it has not received RouteConfigurations
 	// for every RouteName.
 	rdsUpdate1 := xdsclient.RouteConfigUpdate{
-		RouteConfigName: route1,
+		RouteName: route1,
 	}
 	fakeClient.InvokeWatchRouteConfigCallback(rdsUpdate1, nil)
 
@@ -145,7 +145,7 @@ func (s) TestSuccessCaseTwoUpdates(t *testing.T) {
 	// handler to write an update, as it has received RouteConfigurations for
 	// every RouteName.
 	rdsUpdate2 := xdsclient.RouteConfigUpdate{
-		RouteConfigName: route2,
+		RouteName: route2,
 	}
 	fakeClient.InvokeWatchRouteConfigCallback(rdsUpdate2, nil)
 	// The RDS Handler should then update the listener wrapper with an update
@@ -217,7 +217,7 @@ func (s) TestSuccessCaseDeletedRoute(t *testing.T) {
 	}
 
 	rdsUpdate := xdsclient.RouteConfigUpdate{
-		RouteConfigName: route1,
+		RouteName: route1,
 	}
 	// Invoke callback with the xds client with a certain route update. Due to
 	// this route update updating every route name that rds handler handles,
@@ -291,7 +291,7 @@ func (s) TestSuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 	// handler to write an update, as it has not received RouteConfigurations
 	// for every RouteName.
 	rdsUpdate2 := xdsclient.RouteConfigUpdate{
-		RouteConfigName: route2,
+		RouteName: route2,
 	}
 	fakeClient.InvokeWatchRouteConfigCallback(rdsUpdate2, nil)
 
@@ -308,7 +308,7 @@ func (s) TestSuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 	// handler to write an update, as it has received RouteConfigurations for
 	// every RouteName.
 	rdsUpdate3 := xdsclient.RouteConfigUpdate{
-		RouteConfigName: route3,
+		RouteName: route3,
 	}
 	fakeClient.InvokeWatchRouteConfigCallback(rdsUpdate3, nil)
 	// The RDS Handler should then update the listener wrapper with an update

@@ -373,7 +373,7 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	// received both it's LDS Configuration and also RDS Configuration,
 	// specified in LDS Configuration.
 	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
-		RouteConfigName: "route-1",
+		RouteName: "route-1",
 	}, nil)
 
 	// All of the xDS updates have completed, so can expect to send a ping on
