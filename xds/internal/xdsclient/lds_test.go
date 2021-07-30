@@ -491,6 +491,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					InlineRouteConfig: &RouteConfigUpdate{
+						RouteName: routeName,
 						VirtualHosts: []*VirtualHost{{
 							Domains: []string{v3LDSTarget},
 							Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}}},
@@ -574,6 +575,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					Action: &v3routepb.Route_NonForwardingAction{},
 				}}}}}
 		inlineRouteConfig = &RouteConfigUpdate{
+			RouteName: "routeName",
 			VirtualHosts: []*VirtualHost{{
 				Domains: []string{"lds.target.good:3333"},
 				Routes:  []*Route{{Prefix: newStringP("/"), RouteAction: RouteActionNonForwardingAction}},

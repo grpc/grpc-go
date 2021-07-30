@@ -53,6 +53,7 @@ var (
 				Action: &v3routepb.Route_NonForwardingAction{},
 			}}}}}
 	inlineRouteConfig = &RouteConfigUpdate{
+		RouteName: "routeName",
 		VirtualHosts: []*VirtualHost{{
 			Domains: []string{"lds.target.good:3333"},
 			Routes:  []*Route{{Prefix: newStringP("/"), RouteAction: RouteActionNonForwardingAction}},

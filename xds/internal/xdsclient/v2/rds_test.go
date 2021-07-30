@@ -92,6 +92,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			wantErr:     false,
 			wantUpdate: map[string]xdsclient.RouteConfigUpdate{
 				goodRouteName1: {
+					RouteName:    goodRouteName1,
 					VirtualHosts: nil,
 					Raw:          marshaledNoVirtualHostsRouteConfig,
 				},
@@ -108,6 +109,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			wantErr:     false,
 			wantUpdate: map[string]xdsclient.RouteConfigUpdate{
 				goodRouteName2: {
+					RouteName: goodRouteName2,
 					VirtualHosts: []*xdsclient.VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -133,6 +135,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			wantErr:     false,
 			wantUpdate: map[string]xdsclient.RouteConfigUpdate{
 				goodRouteName1: {
+					RouteName: goodRouteName1,
 					VirtualHosts: []*xdsclient.VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
