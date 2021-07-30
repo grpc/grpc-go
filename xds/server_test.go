@@ -440,6 +440,9 @@ func (s) TestServeSuccess(t *testing.T) {
 	// Push a good LDS response, and wait for Serve() to be invoked on the
 	// underlying grpc.Server.
 	fcm, err := xdsclient.NewFilterChainManager(listenerWithFilterChains)
+	if err != nil {
+		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
+	}
 	addr, port := splitHostPort(lis.Addr().String())
 	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
 		RouteConfigName: "routeconfig",
