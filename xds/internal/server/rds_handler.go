@@ -105,9 +105,7 @@ func (rh *rdsHandler) handleRouteUpdate(update xdsclient.RouteConfigUpdate, err 
 
 	// If the full list (determined by length) of rdsUpdates have successfully updated,
 	// the listener is ready to be updated.
-	print("in handle route update in rds handler")
 	if len(rh.rdsUpdates) == len(rh.rdsCancels) {
-		print("updating updateChannel now")
 		// For a rdsHandler update, the only update lis wrapper cares about is most recent one,
 		// so opportunistically drain the update before sending the new update.
 		select {

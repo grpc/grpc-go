@@ -313,7 +313,6 @@ func (l *listenerWrapper) Close() error {
 // run is a long running goroutine which handles all xds updates. LDS and RDS
 // push updates onto a channel which is read and acted upon from this goroutine.
 func (l *listenerWrapper) run() {
-	print("run() goroutine started")
 	for {
 		select {
 		case <-l.closed.Done():
@@ -330,7 +329,6 @@ func (l *listenerWrapper) run() {
 // received update to the update channel, which is picked up by the run
 // goroutine.
 func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, err error) {
-	print("handleListenerUpdate")
 	if l.closed.HasFired() {
 		l.logger.Warningf("Resource %q received update: %v with error: %v, after listener was closed", l.name, update, err)
 		return
@@ -348,7 +346,6 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 // update, the server will switch to ServingModeServing as the full
 // configuration (both LDS and RDS) has been received.
 func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
-	print("handleRDSUpdate")
 	if l.closed.HasFired() {
 		l.logger.Warningf("RDS received update: %v with error: %v, after listener was closed", update.rdsUpdates, update.err)
 		return
@@ -369,7 +366,6 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 }
 
 func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
-	print("handleLDSUpdate (from run())")
 	if update.err != nil {
 		l.logger.Warningf("Received error for resource %q: %+v", l.name, update.err)
 		if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
@@ -414,7 +410,6 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	// from the management server, this listener has all the configuration
 	// needed, and is ready to be Served on.
 	if len(ilc.FilterChains.RouteConfigNames) == 0 {
-		print("route config names are zero, switching mode")
 		l.switchMode(ilc.FilterChains, ServingModeServing, nil)
 		l.goodUpdate.Fire()
 	}
