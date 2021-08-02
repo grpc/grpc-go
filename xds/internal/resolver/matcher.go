@@ -75,6 +75,11 @@ func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
 	return newCompositeMatcher(pm, headerMatchers, fractionMatcher), nil
 }
 
+// So...just like in RBAC Matcher,
+// This patches incoming RPC's to different types of routes, just like policies etc.
+
+// If it's the same Route stuff as on client side, why not just reuse this xds/internal/resolver internal representation/implementation?
+
 // compositeMatcher.match returns true if all matchers return true.
 type compositeMatcher struct {
 	pm  pathMatcher

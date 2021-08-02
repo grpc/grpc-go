@@ -22,6 +22,8 @@ package server
 
 import (
 	"fmt"
+	"google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/xds/internal/httpfilter"
 	"net"
 	"sync"
 	"time"
@@ -293,9 +295,135 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		// instantiate the HTTP filters in the filter chain + the filter
 		// overrides, pipe filters and route into connection, which will
 		// eventually be passed to xdsUnary/Stream interceptors.
+		fc.InlineRouteConfig // What on earth do we do with this thing? Either convert to Internal representation or just pass this directly
+		// Def matching in interceptors though
+		fc.HTTPFilters // Do we instantiate these + overrides here on somewhere else?
+		// map[string]httpfilter.FilterConfig
+		fc.InlineRouteConfig.VirtualHosts[0].HTTPFilterConfigOverride // <- matched to VH based on authority
+		fc.InlineRouteConfig.VirtualHosts[0].Routes[0].HTTPFilterConfigOverride // <- matched based on incoming RPC info
+		fc.HTTPFilters
+		fc.InlineRouteConfig.V
+		// Or get it from RDS
+		// ib.BuildServerInterceptor(Filter, Override)
+		// [virtual host (route, route, route), virtual host (route, route, route), virtual host (route, route, route)]
+		// conn needs []virtualHost, and also httpFilterConfig
+		// also convert virtual hosts + (vh and route overrides) and httpFilterConfig (into instantiatedHTTPFilters) do it on conn accept?
 		return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
 	}
 }
+
+type virtualHost struct {
+	// Matches to virtual host based on :authority header - how should we implement this, is the relevant data even persisted?
+	routes []route
+	httpFilterOverrides map[string]/*Instantiated HTTP Filter here*/
+}
+
+type route struct {
+	m *compositeMatcher // Move this code to something shared
+	httpFilterOverrides map[string]/*Instantiated HTTP Filter here*/
+}
+
+// Define this data structure
+type dataAddToConn struct {
+	// This is ordered, also need some way of persisting name here to be overriden by route and virtual host
+	httpFilters []serverInterceptorWithName // Build this thing out - conn.httpFilters = httpFilters
+	virtualHosts []virtualHost // Then construct this thing - conn.virtualHosts = virtualHosts
+}
+
+type serverInterceptorWithName struct {
+	name string // Will be used for finding filter overrides (which will already be instantiated)
+	interceptor resolver.ServerInterceptor
+}
+
+// also needs []instantiatedHTTPFilter
+// conn needs List is new from client side-> ([])vh - map[string]instantiatedHTTPFilter, which each have []route - map[string]instantiatedHTTPFilter
+// The HTTP Filter actually being instantiated is new as well
+// handles dataAddToConn.httpFilters - []instantiated HTTP Filters
+func convertHTTPFilters(filters []xdsclient.HTTPFilter) ([]serverInterceptorWithName, error) {
+	interceptors := make([]serverInterceptorWithName, 0, len(filters))
+	for _, filter := range filters {
+		ib, ok := filter.Filter.(httpfilter.ServerInterceptorBuilder)
+		if !ok {
+			// Should not happen if passed xdsClient validation.
+			return nil, fmt.Errorf("filter does not support use in server")
+		}
+		i, err := ib.BuildServerInterceptor(filter.Config, /*Override - nil this?*/)
+		if err != nil {
+			return nil, fmt.Errorf("error constructing filter: %v", err)
+		}
+		if i != nil {
+			interceptors = append(interceptors, serverInterceptorWithName{
+				name: filter.Name,
+				interceptor: i,
+			})
+		}
+	}
+	return interceptors, nil
+}
+
+// dataAddToConn.virtualHosts
+// convertVirtualHosts converts the xdsclients persistence of virtual hosts to something usable here
+func convertVirtualHosts(virtualHosts []*xdsclient.VirtualHost) ([]virtualHost, error) {
+	vhs := make([]virtualHost, len(virtualHosts))
+	for i, vh := range virtualHosts {
+		vh.Domains
+		// how does vh.Domains even match logically? This is []string, is this similar to how it matches routes
+
+		vh.HTTPFilterConfigOverride // map[string]httpfilter.FilterConfig, perhaps have a helper to convert this to a map[string](somethingInstantitated)
+		var err error
+		vhs[i].routes, err = convertRoutes(vh.Routes)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return vhs, nil
+}
+
+// virtualHost.routes - []route
+func convertRoutes(routes []*xdsclient.Route) ([]route, error) {
+	rs := make([]route, len(routes))
+	for i, r := range routes {
+		var err error
+		rs[i].m, err = routeToMatcher(r) // This method is reusing
+	}
+	return routes, nil
+}
+
+
+func convertHTTPFilterOverrides(overrideConfigs map[string]httpfilter.FilterConfig) map[string]resolver.ServerInterceptor {
+
+}
+
+// route.m
+// route.httpFilterOverride
+
+// VVV called for both []HTTPFilters and also the HTTPFilterConfigOverrides map[string]FilterConfig for each Virtual Host and
+// Route
+
+// convertHTTPFilter converts the xds clients representation of an HTTP Filter to a usable Server Side HTTP Filter
+// VVV perhaps only call this on the virtual host and route
+func instantiateHTTPFilter(filter xdsclient.HTTPFilter) resolver.ServerInterceptor {
+	// Wrong argument type
+	filter.Config // Filter config is what is
+	BuildServerInterceptor(/*Non overriden config*/, /*Override config*/)
+}
+
+// Construct filter overrides here for each ones that require it
+
+// ctx error
+
+// HTTPFilters[] -> HTTPFilters[]?
+// Internal data structure for []virtual host + filter overrides for each one
+// And then []route, with composite matcher and also filter overrides
+
+// What are the behaviors that we want to happen here?
+// A lot of ways to get here
+// End result: For each RPC, run it through HTTP Filters, which can be HTTP Filters or
+// their override configurations (determined by route).
+
+// construct route config? fc.routeconfig -> usuable route config (per filter chain!)
+// When do I convert this? Per connection?
+//
 
 // Close closes the underlying listener. It also cancels the xDS watch
 // registered in Serve() and closes any certificate provider instances created
