@@ -239,17 +239,17 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 			return
 		}
 
-		ac, err := cc.newAddrConn(addrs, opts)
+		newAC, err := cc.newAddrConn(addrs, opts)
 		if err != nil {
 			channelz.Warningf(logger, acbw.ac.channelzID, "acBalancerWrapper: UpdateAddresses: failed to newAddrConn: %v", err)
 			return
 		}
-		acbw.ac = ac
-		ac.mu.Lock()
-		ac.acbw = acbw
-		ac.mu.Unlock()
+		acbw.ac = newAC
+		newAC.mu.Lock()
+		newAC.acbw = acbw
+		newAC.mu.Unlock()
 		if acState != connectivity.Idle {
-			ac.connect()
+			go newAC.connect()
 		}
 	}
 }
@@ -257,7 +257,7 @@ func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
 func (acbw *acBalancerWrapper) Connect() {
 	acbw.mu.Lock()
 	defer acbw.mu.Unlock()
-	acbw.ac.connect()
+	go acbw.ac.connect()
 }
 
 func (acbw *acBalancerWrapper) getAddrConn() *addrConn {

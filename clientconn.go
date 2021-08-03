@@ -858,8 +858,7 @@ func (ac *addrConn) connect() error {
 	ac.updateConnectivityState(connectivity.Connecting, nil)
 	ac.mu.Unlock()
 
-	// Start a goroutine connecting to the server asynchronously.
-	go ac.resetTransport()
+	ac.resetTransport()
 	return nil
 }
 
@@ -1182,6 +1181,7 @@ func (ac *addrConn) resetTransport() {
 	ac.mu.Unlock()
 
 	if err := ac.tryAllAddrs(addrs, connectDeadline); err != nil {
+		ac.cc.resolveNow(resolver.ResolveNowOptions{})
 		// After exhausting all addresses, the addrConn enters
 		// TRANSIENT_FAILURE.
 		ac.mu.Lock()
@@ -1207,7 +1207,6 @@ func (ac *addrConn) resetTransport() {
 			timer.Stop()
 			return
 		}
-		ac.cc.resolveNow(resolver.ResolveNowOptions{})
 
 		ac.mu.Lock()
 		if ac.state != connectivity.Shutdown {
@@ -1271,8 +1270,6 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		addr.ServerName = ac.cc.authority
 	}
 
-	// Because onPreface may be called before NewClientTransport returns, we
-	// pass the transport to onPreface via a channel.
 	hctx, hcancel := context.WithCancel(ac.ctx)
 	hcStarted := false // protected by ac.mu
 
@@ -1287,6 +1284,8 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		}
 		hcancel()
 		ac.transport = nil
+		// Refresh the name resolver
+		ac.cc.resolveNow(resolver.ResolveNowOptions{})
 		if ac.state != connectivity.Shutdown {
 			ac.updateConnectivityState(connectivity.Idle, nil)
 		}
