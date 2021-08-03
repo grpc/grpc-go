@@ -133,7 +133,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	return p.result, p.err
 }
 
-// idlePicker is used with the SubConn is IDLE and kicks the SubConn into
+// idlePicker is used when the SubConn is IDLE and kicks the SubConn into
 // CONNECTING when Pick is called.
 type idlePicker struct {
 	sc balancer.SubConn
