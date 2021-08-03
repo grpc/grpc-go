@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/xds/internal/httpfilter"
+	"google.golang.org/grpc/xds/internal/matcher"
 	"net"
 	"sync"
 	"time"
@@ -314,13 +315,14 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 
 type virtualHost struct {
 	// Matches to virtual host based on :authority header - how should we implement this, is the relevant data even persisted?
+	domains []string
 	routes []route
-	httpFilterOverrides map[string]/*Instantiated HTTP Filter here*/
+	httpFilterOverrides map[string]resolver.ServerInterceptor
 }
 
 type route struct {
-	m *compositeMatcher // Move this code to something shared
-	httpFilterOverrides map[string]/*Instantiated HTTP Filter here*/
+	m *matcher.CompositeMatcher // Move this code to something shared
+	httpFilterOverrides map[string]resolver.ServerInterceptor
 }
 
 // Define this data structure
@@ -347,7 +349,12 @@ func convertHTTPFilters(filters []xdsclient.HTTPFilter) ([]serverInterceptorWith
 			// Should not happen if passed xdsClient validation.
 			return nil, fmt.Errorf("filter does not support use in server")
 		}
-		i, err := ib.BuildServerInterceptor(filter.Config, /*Override - nil this?*/)
+		// Unlike the client side, the servers HTTP Filters are preinstantiated.
+		// Thus, the listener wrapper on an accept will preinstantiate both the
+		// nonoverriden filter and each of the filter overrides. It is up to the
+		// Server Side HTTP Filter implementation on handling different possible
+		// message types for it's normal/override configuration.
+		i, err := ib.BuildServerInterceptor(filter.Config, nil)
 		if err != nil {
 			return nil, fmt.Errorf("error constructing filter: %v", err)
 		}
@@ -366,11 +373,13 @@ func convertHTTPFilters(filters []xdsclient.HTTPFilter) ([]serverInterceptorWith
 func convertVirtualHosts(virtualHosts []*xdsclient.VirtualHost) ([]virtualHost, error) {
 	vhs := make([]virtualHost, len(virtualHosts))
 	for i, vh := range virtualHosts {
-		vh.Domains
+		vhs[i].domains = vh.Domains // This will be used to match domain, which is already coded in findBestMatchingVirtualHost, but will probably have to rewrite
 		// how does vh.Domains even match logically? This is []string, is this similar to how it matches routes
-
-		vh.HTTPFilterConfigOverride // map[string]httpfilter.FilterConfig, perhaps have a helper to convert this to a map[string](somethingInstantitated)
 		var err error
+		vhs[i].httpFilterOverrides, err = convertHTTPFilterOverrides(vh.HTTPFilterConfigOverride) // map[string]httpfilter.FilterConfig, perhaps have a helper to convert this to a map[string](somethingInstantitated)
+		if err != nil {
+			return nil, err
+		}
 		vhs[i].routes, err = convertRoutes(vh.Routes)
 		if err != nil {
 			return nil, err
@@ -384,14 +393,41 @@ func convertRoutes(routes []*xdsclient.Route) ([]route, error) {
 	rs := make([]route, len(routes))
 	for i, r := range routes {
 		var err error
-		rs[i].m, err = routeToMatcher(r) // This method is reusing
+		rs[i].httpFilterOverrides, err = convertHTTPFilterOverrides(r.HTTPFilterConfigOverride)
+		if err != nil {
+			return nil, err
+		}
+		// "Routes are matched the same as on client-side" - A36.
+		rs[i].m, err = matcher.RouteToMatcher(r) // This method is reusing what is pulled in from serviceConfig
+		if err != nil {
+			return nil, err
+		}
 	}
-	return routes, nil
+	return rs, nil
 }
 
+// for each route, construct a list of http filters
 
-func convertHTTPFilterOverrides(overrideConfigs map[string]httpfilter.FilterConfig) map[string]resolver.ServerInterceptor {
+func convertHTTPFilterOverrides(overrideConfigs map[string]httpfilter.FilterConfig) (map[string]resolver.ServerInterceptor, error) {
+	oCfgs := make(map[string]resolver.ServerInterceptor)
+	for name, config := range overrideConfigs {
+		// From the data we have right now, how do we determine which filter type to instantiate
+		 // <- use this to look into filter registry for which thing to instantiate - will be ib
+		// Build crap with this
+		// ib, ok := filter.Filter.(httpfilter.ServerInterceptorBuilder) (filter is iteration from list, need to do list.filter)
+		// "Filter" is the HTTP Filter found in the registry for the config type
+		// Client side pulls name from filter list, then uses that to determine override
+		// This also has name, pull it out from HTTP Filter list, and use that?
+		oCfgs[name] = ib.buildServerInterceptor(nil, config) // This here needs some sort of way to know filter type to instantiate - wb looking at list
+		// What guarantee do we have from xds.go's parsing? are we guaranteed to be able to look at type of filter?
+		// "As with the HttpConnectionManager.http_filters.typed_config field, the type of the protobuf message determines which filter is used, based on the filters known to the filter registry."
+		// type the config to something, then query registry?
 
+		// config proto.GetTypeUrl()...
+		config.
+
+	}
+	return oCfgs, nil
 }
 
 // route.m

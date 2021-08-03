@@ -18,7 +18,7 @@
  *
  */
 
-package resolver
+package matcher
 
 import (
 	"regexp"

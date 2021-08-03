@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"google.golang.org/grpc/xds/internal/matcher"
 	"math/bits"
 	"strings"
 	"sync/atomic"
@@ -117,7 +118,7 @@ type routeCluster struct {
 }
 
 type route struct {
-	m                 *compositeMatcher // converted from route matchers
+	m                 *matcher.CompositeMatcher // converted from route matchers
 	clusters          wrr.WRR           // holds *routeCluster entries
 	maxStreamDuration time.Duration
 	// map from filter name to its config
@@ -146,7 +147,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	var rt *route
 	// Loop through routes in order and select first match.
 	for _, r := range cs.routes {
-		if r.m.match(rpcInfo) {
+		if r.m.Match(rpcInfo) {
 			rt = &r
 			break
 		}
@@ -273,7 +274,7 @@ func (cs *configSelector) newInterceptor(rt *route, cluster *routeCluster) (ires
 		if override == nil {
 			override = cs.virtualHost.httpFilterConfigOverride[filter.Name] // VH is third & lowest priority
 		}
-		ib, ok := filter.Filter.(httpfilter.ClientInterceptorBuilder)
+		ib, ok := filter.Filter.(httpfilter.ClientInterceptorBuilder) // Get's the filter to instantiate here, how do I do this on server side?
 		if !ok {
 			// Should not happen if it passed xdsClient validation.
 			return nil, fmt.Errorf("filter does not support use in client")
@@ -354,7 +355,7 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 		cs.routes[i].clusters = clusters
 
 		var err error
-		cs.routes[i].m, err = routeToMatcher(rt)
+		cs.routes[i].m, err = matcher.RouteToMatcher(rt)
 		if err != nil {
 			return nil, err
 		}

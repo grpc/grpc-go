@@ -102,7 +102,8 @@ func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fil
 }
 
 var _ httpfilter.ClientInterceptorBuilder = builder{}
-
+// On the server side, just take one of clause, don't have the override legitimately override the cfg
+// Why not just send it the override? Build the override as such
 func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (iresolver.ClientInterceptor, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("fault: nil config provided")
@@ -116,7 +117,7 @@ func (builder) BuildClientInterceptor(cfg, override httpfilter.FilterConfig) (ir
 	if override != nil {
 		// override completely replaces the listener configuration; but we
 		// still validate the listener config type.
-		c, ok = override.(config)
+		c, ok = override.(config) // typecast to this
 		if !ok {
 			return nil, fmt.Errorf("fault: incorrect override config type provided (%T): %v", override, override)
 		}

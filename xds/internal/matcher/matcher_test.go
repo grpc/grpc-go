@@ -18,7 +18,7 @@
  *
  */
 
-package resolver
+package matcher
 
 import (
 	"context"
@@ -109,7 +109,7 @@ func TestAndMatcherMatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			a := newCompositeMatcher(tt.pm, []matcher.HeaderMatcher{tt.hm}, nil)
-			if got := a.match(tt.info); got != tt.want {
+			if got := a.Match(tt.info); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
 		})

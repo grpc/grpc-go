@@ -170,7 +170,7 @@ func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool) (httpfilter.Fi
 	if !lds {
 		parseFunc = filterBuilder.ParseFilterConfigOverride
 	}
-	filterConfig, err := parseFunc(config)
+	filterConfig, err := parseFunc(config) // Logically, typed to correct
 	if err != nil {
 		return nil, nil, fmt.Errorf("error parsing config for filter %q: %v", typeURL, err)
 	}
