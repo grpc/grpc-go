@@ -494,7 +494,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						RouteName: routeName,
 						VirtualHosts: []*VirtualHost{{
 							Domains: []string{v3LDSTarget},
-							Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}}},
+							Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}, RouteAction: RouteActionRoute}},
 						}}},
 					MaxStreamDuration: time.Second,
 					Raw:               v3LisWithInlineRoute,

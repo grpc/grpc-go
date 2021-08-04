@@ -113,11 +113,11 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 					VirtualHosts: []*xdsclient.VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+							Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{uninterestingClusterName: {Weight: 1}}, RouteAction: xdsclient.RouteActionRoute}},
 						},
 						{
 							Domains: []string{goodLDSTarget1},
-							Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{goodClusterName2: {Weight: 1}}}},
+							Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{goodClusterName2: {Weight: 1}}, RouteAction: xdsclient.RouteActionRoute}},
 						},
 					},
 					Raw: marshaledGoodRouteConfig2,
@@ -139,11 +139,11 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 					VirtualHosts: []*xdsclient.VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+							Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{uninterestingClusterName: {Weight: 1}}, RouteAction: xdsclient.RouteActionRoute}},
 						},
 						{
 							Domains: []string{goodLDSTarget1},
-							Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{goodClusterName1: {Weight: 1}}}},
+							Routes:  []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{goodClusterName1: {Weight: 1}}, RouteAction: xdsclient.RouteActionRoute}},
 						},
 					},
 					Raw: marshaledGoodRouteConfig1,

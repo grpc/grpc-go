@@ -417,9 +417,9 @@ func (fci *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain
 	if err != nil {
 		return nil, err
 	}
-	// These Route Names will be dynamically queried via RDS in the wrapped
-	// listener, which receives the LDS response, if specified for the Filter
-	// Chain.
+	// These route names will be dynamically queried via RDS in the wrapped
+	// listener, which receives the LDS response, if specified for the filter
+	// chain.
 	if filterChain.RouteConfigName != "" {
 		fci.RouteConfigNames[filterChain.RouteConfigName] = true
 	}
