@@ -47,7 +47,7 @@ func parseConfig(c json.RawMessage) (*LBConfig, error) {
 		return nil, err
 	}
 	if cfg.MinRingSize == 0 {
-		cfg.MinRingSize = defaultMaxSize
+		cfg.MinRingSize = defaultMinSize
 	}
 	if cfg.MaxRingSize == 0 {
 		cfg.MaxRingSize = defaultMaxSize

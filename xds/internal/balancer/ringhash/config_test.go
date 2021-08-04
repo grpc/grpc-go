@@ -37,9 +37,14 @@ func TestParseConfig(t *testing.T) {
 			want: &LBConfig{MinRingSize: 1, MaxRingSize: 2},
 		},
 		{
-			name: "OK with default",
-			js:   `{"maxRingSize": 2}`,
-			want: &LBConfig{MinRingSize: 0, MaxRingSize: 2},
+			name: "OK with default min",
+			js:   `{"maxRingSize": 2000}`,
+			want: &LBConfig{MinRingSize: defaultMinSize, MaxRingSize: 2000},
+		},
+		{
+			name: "OK with default max",
+			js:   `{"minRingSize": 2000}`,
+			want: &LBConfig{MinRingSize: 2000, MaxRingSize: defaultMaxSize},
 		},
 		{
 			name:    "min greater than max",
