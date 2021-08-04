@@ -7766,3 +7766,89 @@ func (cvd *credentialsVerifyDeadline) Clone() credentials.TransportCredentials {
 func (cvd *credentialsVerifyDeadline) OverrideServerName(s string) error {
 	return nil
 }
+
+func unaryInterceptorVerifyConn(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	conn := transport.GetConnection(ctx)
+	if conn == nil {
+		return nil, status.Error(codes.NotFound, "connection was not in context")
+	}
+	return nil, status.Error(codes.OK, "")
+}
+
+// TestUnaryServerInterceptorGetsConnection tests whether the accepted conn on
+// the server gets to any unary interceptors on the server side.
+func (s) TestUnaryServerInterceptorGetsConnection(t *testing.T) {
+	for _, e := range listTestEnv() {
+		// Skip this env due to #619.
+		if e.name == "handler-tls" {
+			continue
+		}
+		testUnaryServerInterceptorGetsConnection(t, e)
+	}
+}
+
+func testUnaryServerInterceptorGetsConnection(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.unaryServerInt = unaryInterceptorVerifyConn
+	te.startServer(&testServer{})
+	defer te.tearDown()
+
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.OK {
+		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, error code %s", tc, err, codes.OK)
+	}
+}
+
+func streamingInterceptorVerifyConn(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	conn := transport.GetConnection(ss.Context())
+	if conn == nil {
+		return status.Error(codes.NotFound, "connection was not in context")
+	}
+	return status.Error(codes.OK, "")
+}
+
+// TestStreamingServerInterceptorGetsConnection tests whether the accepted conn on
+// the server gets to any streaming interceptors on the server side.
+func (s) TestStreamingServerInterceptorGetsConnection(t *testing.T) {
+	for _, e := range listTestEnv() {
+		// Skip this env due to #619.
+		if e.name == "handler-tls" {
+			continue
+		}
+		testUnaryServerInterceptorGetsConnection(t, e)
+	}
+}
+
+func (s) testStreamingServerInterceptorGetsConnection(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.streamServerInt = streamingInterceptorVerifyConn
+	te.startServer(&testServer{})
+	defer te.tearDown()
+
+	tc := testpb.NewTestServiceClient(te.clientConn())
+	respParam := []*testpb.ResponseParameters{
+		{
+			Size: int32(1),
+		},
+	}
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
+		ResponseParameters: respParam,
+		Payload:            payload,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	s1, err := tc.StreamingOutputCall(ctx, req)
+	if err != nil {
+		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, <nil>", tc, err)
+	}
+	if _, err := s1.Recv(); status.Code(err) != codes.OK {
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, error code %s", tc, err, codes.OK)
+	}
+}
