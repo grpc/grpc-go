@@ -7817,11 +7817,11 @@ func (s) TestStreamingServerInterceptorGetsConnection(t *testing.T) {
 		if e.name == "handler-tls" {
 			continue
 		}
-		testUnaryServerInterceptorGetsConnection(t, e)
+		testStreamingServerInterceptorGetsConnection(t, e)
 	}
 }
 
-func (s) testStreamingServerInterceptorGetsConnection(t *testing.T, e env) {
+func testStreamingServerInterceptorGetsConnection(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.streamServerInt = streamingInterceptorVerifyConn
 	te.startServer(&testServer{})
@@ -7844,11 +7844,8 @@ func (s) testStreamingServerInterceptorGetsConnection(t *testing.T, e env) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	s1, err := tc.StreamingOutputCall(ctx, req)
-	if err != nil {
-		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, <nil>", tc, err)
-	}
-	if _, err := s1.Recv(); status.Code(err) != codes.OK {
-		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, error code %s", tc, err, codes.OK)
+	_, err = tc.StreamingOutputCall(ctx, req)
+	if status.Code(err) != codes.OK {
+		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, error code %s", tc, err, codes.OK)
 	}
 }
