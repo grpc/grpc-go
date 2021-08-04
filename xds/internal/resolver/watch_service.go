@@ -246,6 +246,8 @@ func match(domain, host string) (domainMatchType, bool) {
 	}
 }
 
+// ^^ move this to something shared, call another fucntion
+
 // findBestMatchingVirtualHost returns the virtual host whose domains field best
 // matches host
 //
@@ -289,6 +291,9 @@ func findBestMatchingVirtualHost(host string, vHosts []*xdsclient.VirtualHost) *
 	}
 	return matchVh // once this matches you should have filters instantiated already
 }
+
+// Maybe generalize this? to handle both xdsclient.VirtualHost and virtual host
+// logically just an iteration through []
 
 // This should definitely be supported with the new data structure
 
