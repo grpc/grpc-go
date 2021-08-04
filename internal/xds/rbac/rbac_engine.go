@@ -86,6 +86,10 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	return status.Error(codes.OK, "")
 }
 
+func (cre *ChainEngine) IsEmpty() bool {
+	return len(cre.chainedEngines) == 0
+}
+
 // engine is used for matching incoming RPCs to policies.
 type engine struct {
 	policies map[string]*policyMatcher
@@ -100,7 +104,6 @@ func newEngine(config *v3rbacpb.RBAC) (*engine, error) {
 	if a != v3rbacpb.RBAC_ALLOW && a != v3rbacpb.RBAC_DENY {
 		return nil, fmt.Errorf("unsupported action %s", config.Action)
 	}
-
 	policies := make(map[string]*policyMatcher, len(config.Policies))
 	for name, policy := range config.Policies {
 		matcher, err := newPolicyMatcher(policy)
@@ -158,16 +161,19 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 	// The connection is needed in order to find the destination address and
 	// port of the incoming RPC Call.
 	conn := getConnection(ctx)
-	if conn == nil {
-		return nil, errors.New("missing connection in incoming context")
-	}
-	_, dPort, err := net.SplitHostPort(conn.LocalAddr().String())
-	if err != nil {
-		return nil, fmt.Errorf("error parsing local address: %v", err)
-	}
-	dp, err := strconv.ParseUint(dPort, 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing local address: %v", err)
+	var destinationPort uint32
+	var destinationAddr net.Addr
+	if conn != nil {
+		_, dPort, err := net.SplitHostPort(conn.LocalAddr().String())
+		if err != nil {
+			return nil, fmt.Errorf("error parsing local address: %v", err)
+		}
+		dp, err := strconv.ParseUint(dPort, 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing local address: %v", err)
+		}
+		destinationPort = uint32(dp)
+		destinationAddr = conn.LocalAddr()
 	}
 
 	var peerCertificates []*x509.Certificate
@@ -182,8 +188,8 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 		md:              md,
 		peerInfo:        pi,
 		fullMethod:      mn,
-		destinationPort: uint32(dp),
-		destinationAddr: conn.LocalAddr(),
+		destinationPort: destinationPort,
+		destinationAddr: destinationAddr,
 		certs:           peerCertificates,
 	}, nil
 }
