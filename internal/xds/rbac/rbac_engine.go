@@ -25,6 +25,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/internal/transport"
 	"net"
 	"strconv"
 
@@ -157,7 +158,7 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 
 	// The connection is needed in order to find the destination address and
 	// port of the incoming RPC Call.
-	conn := getConnection(ctx)
+	conn := transport.GetConnection(ctx)
 	if conn == nil {
 		return nil, errors.New("missing connection in incoming context")
 	}
@@ -205,17 +206,4 @@ type rpcData struct {
 	// certs are the certificates presented by the peer during a TLS
 	// handshake.
 	certs []*x509.Certificate
-}
-
-type connectionKey struct{}
-
-func getConnection(ctx context.Context) net.Conn {
-	conn, _ := ctx.Value(connectionKey{}).(net.Conn)
-	return conn
-}
-
-// SetConnection adds the connection to the context to be able to get
-// information about the destination ip and port for an incoming RPC.
-func SetConnection(ctx context.Context, conn net.Conn) context.Context {
-	return context.WithValue(ctx, connectionKey{}, conn)
 }

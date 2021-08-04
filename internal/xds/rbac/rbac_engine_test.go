@@ -21,6 +21,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"google.golang.org/grpc/internal/transport"
 	"net"
 	"net/url"
 	"testing"
@@ -882,7 +883,7 @@ func (s) TestChainEngine(t *testing.T) {
 					}
 					conn := <-connCh
 					defer conn.Close()
-					ctx = SetConnection(ctx, conn)
+					ctx = transport.SetConnection(ctx, conn)
 					ctx = peer.NewContext(ctx, data.rpcData.peerInfo)
 					stream := &ServerTransportStreamWithMethod{
 						method: data.rpcData.fullMethod,
