@@ -36,10 +36,21 @@ type LBConfig struct {
 	MaxRingSize uint64 `json:"maxRingSize,omitempty"`
 }
 
+const (
+	defaultMinSize = 1024
+	defaultMaxSize = 8 * 1024 * 1024 // 8M
+)
+
 func parseConfig(c json.RawMessage) (*LBConfig, error) {
 	var cfg LBConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
 		return nil, err
+	}
+	if cfg.MinRingSize == 0 {
+		cfg.MinRingSize = defaultMaxSize
+	}
+	if cfg.MaxRingSize == 0 {
+		cfg.MaxRingSize = defaultMaxSize
 	}
 	if cfg.MinRingSize > cfg.MaxRingSize {
 		return nil, fmt.Errorf("min %v is greater than max %v", cfg.MinRingSize, cfg.MaxRingSize)

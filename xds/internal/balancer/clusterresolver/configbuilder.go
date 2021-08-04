@@ -248,11 +248,14 @@ func dedupSortedIntSlice(a []int) []int {
 	return a[:i+1]
 }
 
+// rrBalancerConfig is a const roundrobin config, used as child of
+// weighted-roundrobin. To avoid allocating memory everytime.
+var rrBalancerConfig = &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}
+
 // priorityLocalitiesToClusterImpl takes a list of localities (with the same
 // priority), and generates a cluster impl policy config, and a list of
 // addresses.
 func priorityLocalitiesToClusterImpl(localities []xdsclient.Locality, priorityName string, mechanism DiscoveryMechanism, drops []clusterimpl.DropConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*clusterimpl.LBConfig, []resolver.Address, error) {
-	var addrs []resolver.Address
 	clusterImplCfg := &clusterimpl.LBConfig{
 		Cluster:                 mechanism.Cluster,
 		EDSServiceName:          mechanism.EDSServiceName,
@@ -267,13 +270,8 @@ func priorityLocalitiesToClusterImpl(localities []xdsclient.Locality, priorityNa
 		// - locality-picking policy is weighted_target
 		// - endpoint-picking policy is round_robin
 		logger.Infof("xds lb policy is %q, building config with weighted_target + round_robin", rrName)
-		var wtConfig *weightedtarget.LBConfig
-		wtConfig, addrs = localitiesToWeightedTarget(
-			localities, priorityName,
-			// Child of weighted_target is hardcoded to round_robin.
-			&internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-		)
-
+		// Child of weighted_target is hardcoded to round_robin.
+		wtConfig, addrs := localitiesToWeightedTarget(localities, priorityName, rrBalancerConfig)
 		clusterImplCfg.ChildPolicy = &internalserviceconfig.BalancerConfig{Name: weightedtarget.Name, Config: wtConfig}
 		return clusterImplCfg, addrs, nil
 	}
@@ -283,7 +281,7 @@ func priorityLocalitiesToClusterImpl(localities []xdsclient.Locality, priorityNa
 		// The endpoints from all localities will be flattened to one addresses
 		// list, and the ring_hash policy will pick endpoints from it.
 		logger.Infof("xds lb policy is %q, building config with ring_hash", rhName)
-		addrs = localitiesToRingHash(localities, priorityName)
+		addrs := localitiesToRingHash(localities, priorityName)
 		// Set child to ring_hash, note that the ring_hash config is from
 		// xdsLBPolicy.
 		clusterImplCfg.ChildPolicy = &internalserviceconfig.BalancerConfig{Name: ringhash.Name, Config: xdsLBPolicy.Config}
