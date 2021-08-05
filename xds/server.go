@@ -233,6 +233,11 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 				err:  err,
 			})
 		},
+		DrainCallback: func(addr net.Addr) {
+			if gs, ok := s.gs.(*grpc.Server); ok {
+				drainServerTransports(gs, addr.String())
+			}
+		},
 	})
 
 	// Block until a good LDS response is received or the server is stopped.

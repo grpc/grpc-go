@@ -217,6 +217,7 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 	if !fcSeen && fci.def == nil {
 		return nil, fmt.Errorf("no supported filter chains and no default filter chain")
 	}
+
 	return fci, nil
 }
 
