@@ -314,12 +314,13 @@ const (
 	emptyCall string = "EmptyCall"
 )
 
-func parseRPCTypes(rpcStr string) (ret []string) {
+func parseRPCTypes(rpcStr string) []string {
 	if len(rpcStr) == 0 {
 		return []string{unaryCall}
 	}
 
 	rpcs := strings.Split(rpcStr, ",")
+	ret := make([]string, 0, len(rpcStr))
 	for _, r := range rpcs {
 		switch r {
 		case unaryCall, emptyCall:
@@ -329,7 +330,7 @@ func parseRPCTypes(rpcStr string) (ret []string) {
 			log.Fatalf("unsupported RPC type: %v", r)
 		}
 	}
-	return
+	return ret
 }
 
 type rpcConfig struct {

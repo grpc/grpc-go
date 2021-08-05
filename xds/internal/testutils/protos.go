@@ -59,7 +59,7 @@ type ClusterLoadAssignmentBuilder struct {
 
 // NewClusterLoadAssignmentBuilder creates a ClusterLoadAssignmentBuilder.
 func NewClusterLoadAssignmentBuilder(clusterName string, dropPercents map[string]uint32) *ClusterLoadAssignmentBuilder {
-	var drops []*v2xdspb.ClusterLoadAssignment_Policy_DropOverload
+	drops := make([]*v2xdspb.ClusterLoadAssignment_Policy_DropOverload, 0, len(dropPercents))
 	for n, d := range dropPercents {
 		drops = append(drops, &v2xdspb.ClusterLoadAssignment_Policy_DropOverload{
 			Category: n,
@@ -88,7 +88,7 @@ type AddLocalityOptions struct {
 
 // AddLocality adds a locality to the builder.
 func (clab *ClusterLoadAssignmentBuilder) AddLocality(subzone string, weight uint32, priority uint32, addrsWithPort []string, opts *AddLocalityOptions) {
-	var lbEndPoints []*v2endpointpb.LbEndpoint
+	lbEndPoints := make([]*v2endpointpb.LbEndpoint, 0, len(addrsWithPort))
 	for i, a := range addrsWithPort {
 		host, portStr, err := net.SplitHostPort(a)
 		if err != nil {
