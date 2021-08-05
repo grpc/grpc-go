@@ -62,16 +62,8 @@ type connWrapper struct {
 	deadlineMu sync.Mutex
 	deadline   time.Time
 
-	// only written to once, read in route but will never be updated
-	// []xdsclient.HTTPFilters
-	// or
-	// []serverInterceptorWithName
-
-
-	// []VirtualHost (with route usable), with domain matching will happen in a helper function
-	// with common functionality pulled out
-	// or
-	// []xdsclient.VirtualHost
+	httpFilters []xdsclient.ServerInterceptorWithName
+	virtualHosts []xdsclient.VirtualHostWithFilters
 }
 
 // SetDeadline makes a copy of the passed in deadline and forwards the call to

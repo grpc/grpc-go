@@ -22,9 +22,6 @@ package server
 
 import (
 	"fmt"
-	"google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/xds/internal/httpfilter"
-	"google.golang.org/grpc/xds/internal/matcher"
 	"net"
 	"sync"
 	"time"
@@ -210,7 +207,12 @@ type listenerWrapper struct {
 
 	rdsHandler *rdsHandler
 
-	rdsUpdates map[string]xdsclient.RouteConfigUpdate // TODO: if this will be read in accept, this will need a read lock as well.
+	// rdsMu guards access to the rdsUpdate. The reason for using an rw lock
+	// here is that these fields are read in Accept() for all incoming
+	// connections, but writes happen rarely (when we get all the RDS resources
+	// needed).
+	rdsMu sync.RWMutex
+	rdsUpdates map[string]xdsclient.RouteConfigUpdate
 
 	updateCh chan ldsUpdateWithError
 }
@@ -292,164 +294,21 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			conn.Close()
 			continue
 		}
+		var rc xdsclient.RouteConfigUpdate
+		if fc.InlineRouteConfig != nil {
+			rc = *fc.InlineRouteConfig
+		} else {
+			l.rdsMu.RLock()
+			rc = l.rdsUpdates[fc.RouteConfigName]
+			l.rdsMu.RUnlock()
+		}
 
-		// If fc doesn't have http filters etc., build it
-
-		// fc.Something
-
-		// If it does, get that information from that
-
-		// Pipe that information into conn below VVV
-
-
-
-
-
-
-
-
-
-
-
-
-		fc.HTTPFilters
-		fc.RouteConfigName // If it's this, pull it from the map
-		fc.InlineRouteConfig // InlineRouteConfig
-		fc.InlineRouteConfig.VirtualHosts // All this does
-		// It's literally HTTP Filters and []VirtualHosts, I think it makes sense to convert it here on a conn accept
-		// Domain match using a helper function, pull that functionality into a common place
-
-		// TODO: once matched an accepted connection to a filter chain,
-		// instantiate the HTTP filters in the filter chain + the filter
-		// overrides, pipe filters and route into connection, which will
-		// eventually be passed to xdsUnary/Stream interceptors.
-
-		return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
+		if err := fc.ConstructUsableRouteConfiguration(rc); err != nil {
+			// TODO: is this correct? Will this invoke the right behavior in GRPCServer?
+			return nil, fmt.Errorf("error constructing usable route configuration: %v", err)
+		}
+		return &connWrapper{Conn: conn, filterChain: fc, parent: l, httpFilters: fc.InstantiatedHTTPFilters, virtualHosts: fc.VirtualHosts}, nil
 	}
-}
-
-// Have this similar to xds resolver
-// Get normal filter config + filter overrides and then build in xds(Unary|Stream)interceptors
-// convert route
-// leave domains as is, and add something to findBestMatchingVirtualHost to support this one
-
-type virtualHost struct {
-	domains []string
-	routes []route
-	httpFilterOverrides map[string]resolver.ServerInterceptor
-}
-
-type route struct {
-	m *matcher.CompositeMatcher // Move this code to something shared
-	httpFilterOverrides map[string]resolver.ServerInterceptor
-}
-
-// Define this data structure
-type dataAddToConn struct {
-	// This is ordered, also need some way of persisting name here to be overriden by route and virtual host
-	httpFilters []serverInterceptorWithName // Build this thing out - conn.httpFilters = httpFilters
-	virtualHosts []virtualHost // Then construct this thing - conn.virtualHosts = virtualHosts
-}
-
-type serverInterceptorWithName struct {
-	name string // Will be used for finding filter overrides (which will already be instantiated)
-	interceptor resolver.ServerInterceptor
-}
-
-// IF LAZY CACHING IS FINE THIS MAKES THIS PR SO MUCH EASIER, PERSIST STUFF IN CONN, SEND IT OVER
-// INSTANTIATE HTTP FILTER, LAZY CACHE IN XDS(UNARY|STREAM) or in conn on construction
-
-// also needs []instantiatedHTTPFilter
-// conn needs List is new from client side-> ([])vh - map[string]instantiatedHTTPFilter, which each have []route - map[string]instantiatedHTTPFilter
-// The HTTP Filter actually being instantiated is new as well
-// handles dataAddToConn.httpFilters - []instantiated HTTP Filters
-func convertHTTPFilters(filters []xdsclient.HTTPFilter) ([]serverInterceptorWithName, error) {
-	interceptors := make([]serverInterceptorWithName, 0, len(filters))
-	for _, filter := range filters {
-		ib, ok := filter.Filter.(httpfilter.ServerInterceptorBuilder)
-		if !ok {
-			// Should not happen if passed xdsClient validation.
-			return nil, fmt.Errorf("filter does not support use in server")
-		}
-		// Unlike the client side, the servers HTTP Filters are preinstantiated.
-		// Thus, the listener wrapper on an accept will preinstantiate both the
-		// nonoverriden filter and each of the filter overrides. It is up to the
-		// Server Side HTTP Filter implementation on handling different possible
-		// message types for it's normal/override configuration.
-		i, err := ib.BuildServerInterceptor(filter.Config, nil) // No more need to transform these
-		if err != nil {
-			return nil, fmt.Errorf("error constructing filter: %v", err)
-		}
-		if i != nil {
-			interceptors = append(interceptors, serverInterceptorWithName{
-				name: filter.Name,
-				interceptor: i,
-			})
-		}
-	}
-	return interceptors, nil
-}
-
-// Inline construction of HTTP Filters in xds unary/stream interceptors, so no need to construct any of these here
-// persist route matcher + domain names for matching
-
-// dataAddToConn.virtualHosts
-// convertVirtualHosts converts the xdsclients persistence of virtual hosts to something usable here
-func convertVirtualHosts(virtualHosts []*xdsclient.VirtualHost) ([]virtualHost, error) {
-	vhs := make([]virtualHost, len(virtualHosts))
-	for i, vh := range virtualHosts {
-		// This will be used to match domain, which is already coded in findBestMatchingVirtualHost, but will have to rewrite
-		// for this representation of virtual host
-		vhs[i].domains = vh.Domains
-		var err error
-		vhs[i].httpFilterOverrides, err = convertHTTPFilterOverrides(vh.HTTPFilterConfigOverride)
-		if err != nil {
-			return nil, err
-		}
-		vhs[i].routes, err = convertRoutes(vh.Routes)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return vhs, nil
-}
-
-func convertRoutes(routes []*xdsclient.Route) ([]route, error) {
-	rs := make([]route, len(routes))
-	for i, r := range routes {
-		var err error
-		rs[i].httpFilterOverrides, err = convertHTTPFilterOverrides(r.HTTPFilterConfigOverride)
-		if err != nil {
-			return nil, err
-		}
-		// "Routes are matched the same as on client-side" - A36.
-		rs[i].m, err = matcher.RouteToMatcher(r)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return rs, nil
-}
-
-func convertHTTPFilterOverrides(overrideConfigs map[string]httpfilter.FilterConfig) (map[string]resolver.ServerInterceptor, error) {
-	oCfgs := make(map[string]resolver.ServerInterceptor)
-	for name, config := range overrideConfigs {
-		// From the data we have right now, how do we determine which filter type to instantiate
-		 // <- use this to look into filter registry for which thing to instantiate - will be ib
-		// ib, ok := filter.Filter.(httpfilter.ServerInterceptorBuilder) (filter is iteration from list, need to do list.filter)
-		// "Filter" is the HTTP Filter found in the registry for the config type
-		// Client side pulls name from filter list, then uses that to determine override
-		// This also has name, pull it out from HTTP Filter list, and use that?
-		oCfgs[name] = ib.buildServerInterceptor(nil, config) // This here needs some sort of way to know filter type to instantiate - wb looking at list
-		// What guarantee do we have from xds.go's parsing? are we guaranteed to be able to look at type of filter?
-		// "As with the HttpConnectionManager.http_filters.typed_config field, the type of the protobuf message determines which filter is used, based on the filters known to the filter registry."
-		// type the config to something, then query registry?
-
-		// config proto.GetTypeUrl()...
-		config.
-
-	}
-	return oCfgs, nil
 }
 
 // Close closes the underlying listener. It also cancels the xDS watch
@@ -514,7 +373,9 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 		// continue to use the old configuration.
 		return
 	}
+	l.rdsMu.Lock()
 	l.rdsUpdates = update.rdsUpdates
+	l.rdsMu.Unlock()
 
 	l.switchMode(l.filterChains, ServingModeServing, nil)
 	l.goodUpdate.Fire()
@@ -569,12 +430,6 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 		l.goodUpdate.Fire()
 	}
 }
-
-// Persist built filters in filter chain, persist for life of listener
-
-// Every 30 minutes, disconnecting things from a receive from traffic director
-
-// Atomic instead of lock on an update
 
 func (l *listenerWrapper) switchMode(fcs *xdsclient.FilterChainManager, newMode ServingMode, err error) {
 	l.mu.Lock()

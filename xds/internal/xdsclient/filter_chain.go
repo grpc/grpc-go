@@ -70,65 +70,104 @@ type FilterChain struct {
 	InlineRouteConfig *RouteConfigUpdate
 
 	// InstantiatedFilters represents whether the xds client data has been
-	// converted to something usable for routing.
+	// converted to something usable for routing. Since this usable data will be
+	// used for any accepted connections that match to this filter chain, it is
+	// best to persist here.
 	InstantiatedFilters bool // Any mutexes?
 	// InstantiatedHTTPFilters are the top level HTTP Filters built using
 	// their top level configuration.
-	InstantiatedHTTPFilters []serverInterceptorWithName
+	InstantiatedHTTPFilters []ServerInterceptorWithName
 	// VirtualHosts are the virtual hosts ready to be used in the xds interceptors.
 	// It contains a way to match routes using a matcher and also instantiates
 	// HTTPFilter overrides to simply run incoming RPC's through if they are selected.
-	VirtualHosts []
+	VirtualHosts []VirtualHostWithFilters
 }
 
-type serverInterceptorWithName struct {
-	name string // Will be used for finding filter overrides (which will already be instantiated)
-	interceptor resolver.ServerInterceptor
+// ServerInterceptorWithName contains an instantiated HTTP Filter along with
+// it's name. The name is needed to find any override filters you potentially have
+// to run incoming RPC's through instead.
+type ServerInterceptorWithName struct {
+	// Name will be used for finding any filter overrides, which will already be
+	// instantiated if found.
+	Name string
+	// Interceptor is the Instantiated HTTP Filter.
+	Interceptor resolver.ServerInterceptor
 }
 
+// VirtualHostWithFilters captures information present in a VirtualHost
+// update, and also contains instantiated HTTP Filter overrides.
 type VirtualHostWithFilters struct {
+	// Domains are the domain names which map to this Virtual Host. On the
+	// server side, this will be dictated by the :authority header of the
+	// incoming RPC.
 	Domains []string
-	routes []RouteWithFilters
+	// Routes are the Routes for this Virtual Host.
+	Routes []RouteWithFilters
+	// HTTPFilterOverrides are the instantiated HTTP Filter overrides for this
+	// VirtualHost, keyed on the name of the filter.
 	HTTPFilterOverrides map[string]resolver.ServerInterceptor
 }
 
+// RouteWithFilters captures information in a Route, and contains
+// a usable matcher and also instantiated HTTP Filter overrides.
 type RouteWithFilters struct {
+	// M is the matcher used to match to this route.
 	M *matcher.CompositeMatcher
+	// HTTPFilterOverrides are the instantiated HTTP Filter overrides for this
+	// Route, keyed on the name of the filter.
 	HTTPFilterOverrides map[string]resolver.ServerInterceptor
 }
 
-// ConstructUsableRouteConfiguration
-func (f *FilterChain) ConstructUsableRouteConfiguration() /*Error to signify?*/ {
-	f.HTTPFilters // Persist filters and also virtual host here
+// ConstructUsableRouteConfiguration will be called on any accepted connection
+// in the wrapped listener that matches to this filter chain. This will convert
+// route to a matcher and also instantiate the top level HTTP Filters and also
+// any HTTP Filter overrides. Listeners will never start accepting connections
+// until after the full rds configuration has been received, so there will be
+// RDS configuration, even for filter chains that needed dynamic configuration.
+func (f *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdate) error {
+	if f.InstantiatedFilters {
+		return nil
+	}
+	f.InstantiatedFilters = true
+	sInts, ib, err := convertHTTPFilters(f.HTTPFilters)
+	if err != nil {
+		return fmt.Errorf("error constructing top level HTTP Filters: %v", err)
+	}
+	f.InstantiatedHTTPFilters = sInts
+	vhwf, err := convertVirtualHosts(config.VirtualHosts, ib)
+	if err != nil {
+		return fmt.Errorf("error converting Virtual Hosts: %v", err)
+	}
+	f.VirtualHosts = vhwf
+	return nil
 }
 
-func convertHTTPFilters(filters []HTTPFilter) ([]serverInterceptorWithName, error) {
-	interceptors := make([]serverInterceptorWithName, 0, len(filters))
-	// We also need a map with [name]InstantiatedFilter here so overrides know which one to instantitate
-	var interceptorBuilder map[string]httpfilter.ServerInterceptorBuilder
+func convertHTTPFilters(filters []HTTPFilter) ([]ServerInterceptorWithName, map[string]httpfilter.ServerInterceptorBuilder, error) {
+	interceptors := make([]ServerInterceptorWithName, 0, len(filters))
+	var interceptorBuilders map[string]httpfilter.ServerInterceptorBuilder
 	for _, filter := range filters {
 		ib, ok := filter.Filter.(httpfilter.ServerInterceptorBuilder)
 		if !ok {
 			// Should not happen if passed xdsClient validation.
-			return nil, fmt.Errorf("filter does not support use in server")
+			return nil, nil, fmt.Errorf("filter does not support use in server")
 		}
-		// This is building out top level HTTP Filters. However, the overrides
-		// only know which kind of HTTP Filter it's configuration applies to
-		// from it's name. Thus, persist the Filter Builders in a map so the
-		// filters will know.
-		interceptorBuilder[filter.Name] = ib
+		// This loop body constructs top level HTTP Filters. However, the
+		// overrides only know which kind of HTTP Filter it's configuration
+		// applies to from it's name. Thus, persist the Filter Builders in a map
+		// so the filters will know.
+		interceptorBuilders[filter.Name] = ib
 		i, err := ib.BuildServerInterceptor(filter.Config, nil)
 		if err != nil {
-			return nil, fmt.Errorf("error constructing filter: %v", err)
+			return nil, nil, fmt.Errorf("error constructing filter: %v", err)
 		}
 		if i != nil {
-			interceptors = append(interceptors, serverInterceptorWithName{
-				name: filter.Name,
-				interceptor: i,
+			interceptors = append(interceptors, ServerInterceptorWithName{
+				Name: filter.Name,
+				Interceptor: i,
 			})
 		}
 	}
-	return interceptors, nil
+	return interceptors, interceptorBuilders, nil
 }
 
 func convertVirtualHosts(virtualHosts []*VirtualHost, interceptorBuilders map[string]httpfilter.ServerInterceptorBuilder) ([]VirtualHostWithFilters, error) {
@@ -138,10 +177,42 @@ func convertVirtualHosts(virtualHosts []*VirtualHost, interceptorBuilders map[st
 	for i, vh := range virtualHosts {
 		vhs[i].Domains = vh.Domains
 		var err error
-		vhs[i].HTTPFilterOverrides, err = instantiateHTTPFilterOverrides()
-
+		vhs[i].HTTPFilterOverrides, err = instantiateHTTPFilterOverrides(vh.HTTPFilterConfigOverride, interceptorBuilders)
+		if err != nil {
+			return nil, err
+		}
+		vhs[i].Routes, err = convertRoutes(vh.Routes, interceptorBuilders)
 	}
 	return vhs, nil
+}
+
+func convertRoutes(routes []*Route, interceptorBuilders map[string]httpfilter.ServerInterceptorBuilder) ([]RouteWithFilters, error) {
+	rs := make([]RouteWithFilters, len(routes))
+	for i, r := range routes {
+		var err error
+		rs[i].HTTPFilterOverrides, err = instantiateHTTPFilterOverrides(r.HTTPFilterConfigOverride, interceptorBuilders)
+		if err != nil {
+			return nil, err
+		}
+		// "Routes are matched the same as on client-side" - A36.
+		rs[i].M, err = matcher.RouteToMatcher(r)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return rs, nil
+}
+
+func instantiateHTTPFilterOverrides(overrideConfigs map[string]httpfilter.FilterConfig, interceptorBuilders map[string]httpfilter.ServerInterceptorBuilder) (map[string]resolver.ServerInterceptor, error) {
+	oCfgs := make(map[string]resolver.ServerInterceptor)
+	for name, config := range overrideConfigs {
+		var err error
+		oCfgs[name], err = interceptorBuilders[name].BuildServerInterceptor(nil, config)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return oCfgs, nil
 }
 
 // SourceType specifies the connection source IP match type.
