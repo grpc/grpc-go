@@ -292,6 +292,33 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			conn.Close()
 			continue
 		}
+
+		// If fc doesn't have http filters etc., build it
+
+		// fc.Something
+
+		// If it does, get that information from that
+
+		// Pipe that information into conn below VVV
+
+
+
+
+
+
+
+
+
+
+
+
+		fc.HTTPFilters
+		fc.RouteConfigName // If it's this, pull it from the map
+		fc.InlineRouteConfig // InlineRouteConfig
+		fc.InlineRouteConfig.VirtualHosts // All this does
+		// It's literally HTTP Filters and []VirtualHosts, I think it makes sense to convert it here on a conn accept
+		// Domain match using a helper function, pull that functionality into a common place
+
 		// TODO: once matched an accepted connection to a filter chain,
 		// instantiate the HTTP filters in the filter chain + the filter
 		// overrides, pipe filters and route into connection, which will
@@ -300,6 +327,11 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
 	}
 }
+
+// Have this similar to xds resolver
+// Get normal filter config + filter overrides and then build in xds(Unary|Stream)interceptors
+// convert route
+// leave domains as is, and add something to findBestMatchingVirtualHost to support this one
 
 type virtualHost struct {
 	domains []string
@@ -537,6 +569,12 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 		l.goodUpdate.Fire()
 	}
 }
+
+// Persist built filters in filter chain, persist for life of listener
+
+// Every 30 minutes, disconnecting things from a receive from traffic director
+
+// Atomic instead of lock on an update
 
 func (l *listenerWrapper) switchMode(fcs *xdsclient.FilterChainManager, newMode ServingMode, err error) {
 	l.mu.Lock()

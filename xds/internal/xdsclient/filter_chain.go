@@ -21,6 +21,9 @@ package xdsclient
 import (
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/xds/internal/httpfilter"
+	"google.golang.org/grpc/xds/internal/matcher"
 	"net"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -65,6 +68,80 @@ type FilterChain struct {
 	//
 	// Only one of RouteConfigName and InlineRouteConfig is set.
 	InlineRouteConfig *RouteConfigUpdate
+
+	// InstantiatedFilters represents whether the xds client data has been
+	// converted to something usable for routing.
+	InstantiatedFilters bool // Any mutexes?
+	// InstantiatedHTTPFilters are the top level HTTP Filters built using
+	// their top level configuration.
+	InstantiatedHTTPFilters []serverInterceptorWithName
+	// VirtualHosts are the virtual hosts ready to be used in the xds interceptors.
+	// It contains a way to match routes using a matcher and also instantiates
+	// HTTPFilter overrides to simply run incoming RPC's through if they are selected.
+	VirtualHosts []
+}
+
+type serverInterceptorWithName struct {
+	name string // Will be used for finding filter overrides (which will already be instantiated)
+	interceptor resolver.ServerInterceptor
+}
+
+type VirtualHostWithFilters struct {
+	Domains []string
+	routes []RouteWithFilters
+	HTTPFilterOverrides map[string]resolver.ServerInterceptor
+}
+
+type RouteWithFilters struct {
+	M *matcher.CompositeMatcher
+	HTTPFilterOverrides map[string]resolver.ServerInterceptor
+}
+
+// ConstructUsableRouteConfiguration
+func (f *FilterChain) ConstructUsableRouteConfiguration() /*Error to signify?*/ {
+	f.HTTPFilters // Persist filters and also virtual host here
+}
+
+func convertHTTPFilters(filters []HTTPFilter) ([]serverInterceptorWithName, error) {
+	interceptors := make([]serverInterceptorWithName, 0, len(filters))
+	// We also need a map with [name]InstantiatedFilter here so overrides know which one to instantitate
+	var interceptorBuilder map[string]httpfilter.ServerInterceptorBuilder
+	for _, filter := range filters {
+		ib, ok := filter.Filter.(httpfilter.ServerInterceptorBuilder)
+		if !ok {
+			// Should not happen if passed xdsClient validation.
+			return nil, fmt.Errorf("filter does not support use in server")
+		}
+		// This is building out top level HTTP Filters. However, the overrides
+		// only know which kind of HTTP Filter it's configuration applies to
+		// from it's name. Thus, persist the Filter Builders in a map so the
+		// filters will know.
+		interceptorBuilder[filter.Name] = ib
+		i, err := ib.BuildServerInterceptor(filter.Config, nil)
+		if err != nil {
+			return nil, fmt.Errorf("error constructing filter: %v", err)
+		}
+		if i != nil {
+			interceptors = append(interceptors, serverInterceptorWithName{
+				name: filter.Name,
+				interceptor: i,
+			})
+		}
+	}
+	return interceptors, nil
+}
+
+func convertVirtualHosts(virtualHosts []*VirtualHost, interceptorBuilders map[string]httpfilter.ServerInterceptorBuilder) ([]VirtualHostWithFilters, error) {
+	vhs := make([]VirtualHostWithFilters, len(virtualHosts))
+	// Note: on the server side, this will be mapped by the :authority header
+	// set in any incoming RPC's.
+	for i, vh := range virtualHosts {
+		vhs[i].Domains = vh.Domains
+		var err error
+		vhs[i].HTTPFilterOverrides, err = instantiateHTTPFilterOverrides()
+
+	}
+	return vhs, nil
 }
 
 // SourceType specifies the connection source IP match type.

@@ -322,6 +322,7 @@ func (s *GRPCServer) GracefulStop() {
 //
 // This is a no-op at this point.
 func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	// This one is kind of logical, happens once
 	return handler(ctx, req)
 }
 
@@ -330,5 +331,10 @@ func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServ
 //
 // This is a no-op at this point.
 func xdsStreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	return handler(srv, ss)
+	// How does routing even work here?
+	// How often does this even get invoked, is it once for the whole stream
+	// Can return an error at any point, up here
+	return handler(srv, ss) // from here
+	// intercept error
+	// return error after intercepted
 }
