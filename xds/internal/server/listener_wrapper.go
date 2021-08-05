@@ -211,9 +211,14 @@ type listenerWrapper struct {
 	// rdsHandler is used for any dynamic RDS resources specified in a LDS
 	// update.
 	rdsHandler *rdsHandler
+	// rdsMu guards access to the rdsUpdates. The reason for using an rw lock
+	// here is that these fields are read in Accept() for all incoming
+	// connections, but writes happen rarely (when we get all the RDS resources
+	// needed).
+	rdsMu sync.RWMutex
 	// rdsUpdates are the RDS resources received from the management
 	// server, keyed on the RouteName of the RDS resource.
-	rdsUpdates map[string]xdsclient.RouteConfigUpdate // TODO: if this will be read in accept, this will need a read lock as well.
+	rdsUpdates map[string]xdsclient.RouteConfigUpdate
 	// ldsUpdateCh is a channel for XDSClient LDS updates.
 	ldsUpdateCh chan ldsUpdateWithError
 	// rdsUpdateCh is a channel for XDSClient RDS updates.
@@ -297,11 +302,20 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			conn.Close()
 			continue
 		}
-		// TODO: once matched an accepted connection to a filter chain,
-		// instantiate the HTTP filters in the filter chain + the filter
-		// overrides, pipe filters and route into connection, which will
-		// eventually be passed to xdsUnary/Stream interceptors.
-		return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
+		var rc xdsclient.RouteConfigUpdate
+		if fc.InlineRouteConfig != nil {
+			rc = *fc.InlineRouteConfig
+		} else {
+			l.rdsMu.RLock()
+			rc = l.rdsUpdates[fc.RouteConfigName]
+			l.rdsMu.RUnlock()
+		}
+
+		if err := fc.ConstructUsableRouteConfiguration(rc); err != nil {
+			// TODO: is this correct? Will this invoke the right behavior in GRPCServer?
+			return nil, fmt.Errorf("error constructing usable route configuration: %v", err)
+		}
+		return &connWrapper{Conn: conn, filterChain: fc, parent: l, virtualHosts: fc.VirtualHosts}, nil
 	}
 }
 

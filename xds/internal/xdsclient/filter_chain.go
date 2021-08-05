@@ -28,6 +28,8 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -65,6 +67,96 @@ type FilterChain struct {
 	//
 	// Only one of RouteConfigName and InlineRouteConfig is set.
 	InlineRouteConfig *RouteConfigUpdate
+
+	// InstantiatedFilters represents whether the xds client data has been
+	// converted to something usable for routing. Since this usable data will be
+	// used for any accepted connections that match to this filter chain, it is
+	// best to persist here.
+	InstantiatedFilters bool // Any mutexes?
+	// VirtualHosts are the virtual hosts ready to be used in the xds interceptors.
+	// It contains a way to match routes using a matcher and also instantiates
+	// HTTPFilter overrides to simply run incoming RPC's through if they are selected.
+	VirtualHosts []VirtualHostWithInterceptors
+}
+
+// VirtualHostWithInterceptors captures information present in a VirtualHost
+// update, and also contains routes with instantiated HTTP Filters.
+type VirtualHostWithInterceptors struct {
+	// Domains are the domain names which map to this Virtual Host. On the
+	// server side, this will be dictated by the :authority header of the
+	// incoming RPC.
+	Domains []string
+	// Routes are the Routes for this Virtual Host.
+	Routes []RouteWithInterceptors
+}
+
+// RouteWithInterceptors captures information in a Route, and contains
+// a usable matcher and also instantiated HTTP Filters.
+type RouteWithInterceptors struct {
+	// M is the matcher used to match to this route.
+	M *CompositeMatcher
+	// Interceptors are interceptors instantiated for this route. These will be
+	// constructed from a combination of the top level configuration and any
+	// HTTP Filter overrides present in Virtual Host or Route.
+	Interceptors []resolver.ServerInterceptor
+}
+
+// ConstructUsableRouteConfiguration uses the HTTP Filters persisted and Route
+// Configuration from Listener (since configuration may come from RDS) and
+// converts it into usable route configuration, including Instantiating any HTTP
+// Filters for each Route.
+func (f *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdate) error {
+	if f.InstantiatedFilters {
+		return nil
+	}
+	f.InstantiatedFilters = true
+
+	vhs := make([]VirtualHostWithInterceptors, len(config.VirtualHosts))
+	for _, vh := range config.VirtualHosts {
+		vhwi, err := f.convertVirtualHost(vh)
+		if err != nil {
+			return fmt.Errorf("error constructing virtual host: %v", err)
+		}
+		vhs = append(vhs, vhwi)
+	}
+	f.VirtualHosts = vhs
+	return nil
+}
+
+func (f *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHostWithInterceptors, error) {
+	var vh VirtualHostWithInterceptors
+	vh.Domains = virtualHost.Domains
+	rs := make([]RouteWithInterceptors, len(virtualHost.Routes))
+	var err error
+	for i, r := range virtualHost.Routes {
+		rs[i].M, err = RouteToMatcher(r)
+		if err != nil {
+			return VirtualHostWithInterceptors{}, fmt.Errorf("error constructing matcher: %v", err)
+		}
+		for _, filter := range f.HTTPFilters {
+			// Route is highest priority on Server Side, as there is no concept
+			// of an upstream cluster on server side.
+			override := r.HTTPFilterConfigOverride[filter.Name]
+			if override == nil {
+				// Virtual Host is second priority.
+				override = virtualHost.HTTPFilterConfigOverride[filter.Name]
+			}
+			sb, ok := filter.Filter.(httpfilter.ServerInterceptorBuilder)
+			if !ok {
+				// Should not happen if it passed xdsClient validation.
+				return VirtualHostWithInterceptors{}, fmt.Errorf("filter does not support use in server")
+			}
+			si, err := sb.BuildServerInterceptor(filter.Config, override)
+			if err != nil {
+				return VirtualHostWithInterceptors{}, fmt.Errorf("error constructing filter: %v", err)
+			}
+			if si != nil {
+				rs[i].Interceptors = append(rs[i].Interceptors, si)
+			}
+		}
+	}
+	vh.Routes = rs
+	return vh, nil
 }
 
 // SourceType specifies the connection source IP match type.

@@ -16,7 +16,7 @@
  *
  */
 
-package resolver
+package xdsclient
 
 import (
 	"fmt"
@@ -27,10 +27,10 @@ import (
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
-func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
+// RouteToMatcher converts a route to a Matcher to match incoming RPC's against.
+func RouteToMatcher(r *Route) (*CompositeMatcher, error) {
 	var pm pathMatcher
 	switch {
 	case r.Regex != nil:
@@ -75,18 +75,20 @@ func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
 	return newCompositeMatcher(pm, headerMatchers, fractionMatcher), nil
 }
 
-// compositeMatcher.match returns true if all matchers return true.
-type compositeMatcher struct {
+// CompositeMatcher is a matcher that holds onto many matchers and aggregates
+// the matching results.
+type CompositeMatcher struct {
 	pm  pathMatcher
 	hms []matcher.HeaderMatcher
 	fm  *fractionMatcher
 }
 
-func newCompositeMatcher(pm pathMatcher, hms []matcher.HeaderMatcher, fm *fractionMatcher) *compositeMatcher {
-	return &compositeMatcher{pm: pm, hms: hms, fm: fm}
+func newCompositeMatcher(pm pathMatcher, hms []matcher.HeaderMatcher, fm *fractionMatcher) *CompositeMatcher {
+	return &CompositeMatcher{pm: pm, hms: hms, fm: fm}
 }
 
-func (a *compositeMatcher) match(info iresolver.RPCInfo) bool {
+// Match returns true if all matchers return true.
+func (a *CompositeMatcher) Match(info iresolver.RPCInfo) bool {
 	if a.pm != nil && !a.pm.match(info.Method) {
 		return false
 	}
@@ -119,7 +121,7 @@ func (a *compositeMatcher) match(info iresolver.RPCInfo) bool {
 	return true
 }
 
-func (a *compositeMatcher) String() string {
+func (a *CompositeMatcher) String() string {
 	var ret string
 	if a.pm != nil {
 		ret += a.pm.String()
@@ -141,10 +143,11 @@ func newFractionMatcher(fraction uint32) *fractionMatcher {
 	return &fractionMatcher{fraction: int64(fraction)}
 }
 
-var grpcrandInt63n = grpcrand.Int63n
+// GrpcrandInt63n overwrites grpcrand for control in tests.
+var GrpcrandInt63n = grpcrand.Int63n
 
 func (fm *fractionMatcher) match() bool {
-	t := grpcrandInt63n(1000000)
+	t := GrpcrandInt63n(1000000)
 	return t <= fm.fraction
 }
 
