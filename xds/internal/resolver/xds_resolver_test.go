@@ -1393,13 +1393,13 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 
 func replaceRandNumGenerator(start int64) func() {
 	nextInt := start
-	grpcrandInt63n = func(int64) (ret int64) {
+	xdsclient.GrpcrandInt63n = func(int64) (ret int64) {
 		ret = nextInt
 		nextInt++
 		return
 	}
 	return func() {
-		grpcrandInt63n = grpcrand.Int63n
+		xdsclient.GrpcrandInt63n = grpcrand.Int63n
 	}
 }
 
