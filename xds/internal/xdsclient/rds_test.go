@@ -76,6 +76,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 					Routes: []*Route{{
 						Prefix:           newStringP("/"),
 						WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}},
+						RouteAction:      RouteActionRoute,
 					}},
 					HTTPFilterConfigOverride: cfgs,
 				}},
@@ -178,7 +179,10 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP("/"), CaseInsensitive: true, WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}}},
+						Routes: []*Route{{Prefix: newStringP("/"),
+							CaseInsensitive:  true,
+							WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}},
+							RouteAction:      RouteActionRoute}},
 					},
 				},
 			},
@@ -220,11 +224,15 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{uninterestingDomain},
-						Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+						Routes: []*Route{{Prefix: newStringP(""),
+							WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+							RouteAction:      RouteActionRoute}},
 					},
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}}},
+						Routes: []*Route{{Prefix: newStringP(""),
+							WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}},
+							RouteAction:      RouteActionRoute}},
 					},
 				},
 			},
@@ -254,7 +262,9 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				VirtualHosts: []*VirtualHost{
 					{
 						Domains: []string{ldsTarget},
-						Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}}},
+						Routes: []*Route{{Prefix: newStringP("/"),
+							WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}},
+							RouteAction:      RouteActionRoute}},
 					},
 				},
 			},
@@ -331,6 +341,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 								"b": {Weight: 3},
 								"c": {Weight: 5},
 							},
+							RouteAction: RouteActionRoute,
 						}},
 					},
 				},
@@ -365,6 +376,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 							Prefix:            newStringP("/"),
 							WeightedClusters:  map[string]WeightedCluster{clusterName: {Weight: 1}},
 							MaxStreamDuration: newDurationP(time.Second),
+							RouteAction:       RouteActionRoute,
 						}},
 					},
 				},
@@ -399,6 +411,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 							Prefix:            newStringP("/"),
 							WeightedClusters:  map[string]WeightedCluster{clusterName: {Weight: 1}},
 							MaxStreamDuration: newDurationP(time.Second),
+							RouteAction:       RouteActionRoute,
 						}},
 					},
 				},
@@ -433,6 +446,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 							Prefix:            newStringP("/"),
 							WeightedClusters:  map[string]WeightedCluster{clusterName: {Weight: 1}},
 							MaxStreamDuration: newDurationP(0),
+							RouteAction:       RouteActionRoute,
 						}},
 					},
 				},
@@ -621,11 +635,15 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+								RouteAction:      RouteActionRoute}},
 						},
 						{
 							Domains: []string{ldsTarget},
-							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}}}},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}},
+								RouteAction:      RouteActionRoute}},
 						},
 					},
 					Raw: v2RouteConfig,
@@ -644,11 +662,15 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+								RouteAction:      RouteActionRoute}},
 						},
 						{
 							Domains: []string{ldsTarget},
-							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}}}},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}},
+								RouteAction:      RouteActionRoute}},
 						},
 					},
 					Raw: v3RouteConfig,
@@ -667,11 +689,15 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+								RouteAction:      RouteActionRoute}},
 						},
 						{
 							Domains: []string{ldsTarget},
-							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}}}},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}},
+								RouteAction:      RouteActionRoute}},
 						},
 					},
 					Raw: v3RouteConfig,
@@ -680,11 +706,15 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+								RouteAction:      RouteActionRoute}},
 						},
 						{
 							Domains: []string{ldsTarget},
-							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}}}},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}},
+								RouteAction:      RouteActionRoute}},
 						},
 					},
 					Raw: v2RouteConfig,
@@ -714,11 +744,15 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+								RouteAction:      RouteActionRoute}},
 						},
 						{
 							Domains: []string{ldsTarget},
-							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}}}},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}},
+								RouteAction:      RouteActionRoute}},
 						},
 					},
 					Raw: v3RouteConfig,
@@ -727,11 +761,15 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}}}},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+								RouteAction:      RouteActionRoute}},
 						},
 						{
 							Domains: []string{ldsTarget},
-							Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}}}},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}},
+								RouteAction:      RouteActionRoute}},
 						},
 					},
 					Raw: v2RouteConfig,
@@ -794,6 +832,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 				CaseInsensitive:          true,
 				WeightedClusters:         map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60, HTTPFilterConfigOverride: cfgs}},
 				HTTPFilterConfigOverride: cfgs,
+				RouteAction:              RouteActionRoute,
 			}}
 		}
 	)
@@ -833,6 +872,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 				Prefix:           newStringP("/"),
 				CaseInsensitive:  true,
 				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
+				RouteAction:      RouteActionRoute,
 			}},
 		},
 		{
@@ -880,6 +920,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 				},
 				Fraction:         newUInt32P(10000),
 				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
+				RouteAction:      RouteActionRoute,
 			}},
 			wantErr: false,
 		},
@@ -925,6 +966,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 				},
 				Fraction:         newUInt32P(10000),
 				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
+				RouteAction:      RouteActionRoute,
 			}},
 			wantErr: false,
 		},
@@ -959,6 +1001,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantRoutes: []*Route{{
 				Prefix:           newStringP("/a/"),
 				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
+				RouteAction:      RouteActionRoute,
 			}},
 			wantErr: false,
 		},
@@ -1126,6 +1169,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantRoutes: []*Route{{
 				Prefix:           newStringP("/a/"),
 				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 40}, "B": {Weight: 60}},
+				RouteAction:      RouteActionRoute,
 			}},
 			wantErr: false,
 		},
@@ -1151,6 +1195,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantRoutes: []*Route{{
 				Prefix:           newStringP("/a/"),
 				WeightedClusters: map[string]WeightedCluster{"A": {Weight: 20}, "B": {Weight: 30}},
+				RouteAction:      RouteActionRoute,
 			}},
 			wantErr: false,
 		},
@@ -1206,6 +1251,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 				HashPolicies: []*HashPolicy{
 					{HashPolicyType: HashPolicyTypeChannelID},
 				},
+				RouteAction: RouteActionRoute,
 			}},
 			wantErr: false,
 		},
@@ -1264,6 +1310,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 					{HashPolicyType: HashPolicyTypeHeader,
 						HeaderName: ":path"},
 				},
+				RouteAction: RouteActionRoute,
 			}},
 			wantErr: false,
 		},

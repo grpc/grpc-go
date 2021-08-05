@@ -493,7 +493,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					InlineRouteConfig: &RouteConfigUpdate{
 						VirtualHosts: []*VirtualHost{{
 							Domains: []string{v3LDSTarget},
-							Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}}},
+							Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}, RouteAction: RouteActionRoute}},
 						}}},
 					MaxStreamDuration: time.Second,
 					Raw:               v3LisWithInlineRoute,
@@ -563,11 +563,30 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 	)
 
 	var (
+		routeConfig = &v3routepb.RouteConfiguration{
+			Name: "routeName",
+			VirtualHosts: []*v3routepb.VirtualHost{{
+				Domains: []string{"lds.target.good:3333"},
+				Routes: []*v3routepb.Route{{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+					},
+					Action: &v3routepb.Route_NonForwardingAction{},
+				}}}}}
+		inlineRouteConfig = &RouteConfigUpdate{
+			VirtualHosts: []*VirtualHost{{
+				Domains: []string{"lds.target.good:3333"},
+				Routes:  []*Route{{Prefix: newStringP("/"), RouteAction: RouteActionNonForwardingAction}},
+			}}}
 		emptyValidNetworkFilters = []*v3listenerpb.Filter{
 			{
 				Name: "filter-1",
 				ConfigType: &v3listenerpb.Filter_TypedConfig{
-					TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+					TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+						RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+							RouteConfig: routeConfig,
+						},
+					}),
 				},
 			},
 		}
@@ -806,13 +825,21 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							{
 								Name: "name",
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
-									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+											RouteConfig: routeConfig,
+										},
+									}),
 								},
 							},
 							{
 								Name: "name",
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
-									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{}),
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+											RouteConfig: routeConfig,
+										},
+									}),
 								},
 							},
 						},
@@ -1051,7 +1078,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 											srcPrefixMap: map[string]*sourcePrefixEntry{
 												unspecifiedPrefixMapKey: {
 													srcPortMap: map[int]*FilterChain{
-														0: {},
+														0: {InlineRouteConfig: inlineRouteConfig},
 													},
 												},
 											},
@@ -1144,6 +1171,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 																IdentityInstanceName: "identityPluginInstance",
 																IdentityCertName:     "identityCertName",
 															},
+															InlineRouteConfig: inlineRouteConfig,
 														},
 													},
 												},
@@ -1157,6 +1185,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									IdentityInstanceName: "defaultIdentityPluginInstance",
 									IdentityCertName:     "defaultIdentityCertName",
 								},
+								InlineRouteConfig: inlineRouteConfig,
 							},
 						},
 					},
@@ -1192,6 +1221,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 																IdentityCertName:     "identityCertName",
 																RequireClientCert:    true,
 															},
+															InlineRouteConfig: inlineRouteConfig,
 														},
 													},
 												},
@@ -1208,6 +1238,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									IdentityCertName:     "defaultIdentityCertName",
 									RequireClientCert:    true,
 								},
+								InlineRouteConfig: inlineRouteConfig,
 							},
 						},
 					},

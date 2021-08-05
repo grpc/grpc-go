@@ -294,6 +294,25 @@ type HashPolicy struct {
 	RegexSubstitution string
 }
 
+// RouteAction is the action of the route from a received RDS response.
+type RouteAction int
+
+const (
+	// RouteActionUnsupported are routing types currently unsupported by grpc.
+	// According to A36, "A Route with an inappropriate action causes RPCs
+	// matching that route to fail."
+	RouteActionUnsupported RouteAction = iota
+	// RouteActionRoute is the expected route type on the client side. Route
+	// represents routing a request to some upstream cluster. On the client
+	// side, if an RPC matches to a route that is not RouteActionRoute, the RPC
+	// will fail according to A36.
+	RouteActionRoute
+	// RouteActionNonForwardingAction is the expected route type on the server
+	// side. NonForwardingAction represents when a route will generate a
+	// response directly, without forwarding to an upstream host.
+	RouteActionNonForwardingAction
+)
+
 // Route is both a specification of how to match a request as well as an
 // indication of the action to take upon match.
 type Route struct {
@@ -321,6 +340,8 @@ type Route struct {
 	// unused if the matching WeightedCluster contains an override for that
 	// filter.
 	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
+
+	RouteAction RouteAction
 }
 
 // WeightedCluster contains settings for an xds RouteAction.WeightedCluster.
