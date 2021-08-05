@@ -78,7 +78,7 @@ func (s ServingMode) String() string {
 	}
 }
 
-// ServingModeCallback is the callback that users can register to get notified
+// ServingModeCallback is the callback that servers can register to get notified
 // about the server's serving mode changes. The callback is invoked with the
 // address of the listener and its new mode. The err parameter is set to a
 // non-nil error if the server has transitioned into not-serving mode.
@@ -347,7 +347,7 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 // configuration (both LDS and RDS) has been received.
 func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 	if l.closed.HasFired() {
-		l.logger.Warningf("RDS received update: %v with error: %v, after listener was closed", update.rdsUpdates, update.err)
+		l.logger.Warningf("RDS received update: %v with error: %v, after listener was closed", update.updates, update.err)
 		return
 	}
 	if update.err != nil {
@@ -359,7 +359,7 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 		// continue to use the old configuration.
 		return
 	}
-	l.rdsUpdates = update.rdsUpdates
+	l.rdsUpdates = update.updates
 
 	l.switchMode(l.filterChains, ServingModeServing, nil)
 	l.goodUpdate.Fire()

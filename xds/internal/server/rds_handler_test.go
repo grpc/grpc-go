@@ -71,11 +71,11 @@ func (s) TestSuccessCaseOneRDSWatch(t *testing.T) {
 	// Invoke callback with the xds client with a certain route update. Due to
 	// this route update updating every route name that rds handler handles,
 	// this should write to the update channel to send to the listener.
-	fakeClient.InvokeWatchRouteConfigCallback(rdsUpdate, nil)
+	fakeClient.InvokeWatchRouteConfigCallback(route1, rdsUpdate, nil)
 	rhuWant := map[string]xdsclient.RouteConfigUpdate{route1: rdsUpdate}
 	select {
 	case rhu := <-rh.updateChannel:
-		if diff := cmp.Diff(rhu.rdsUpdates, rhuWant); diff != "" {
+		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
 			t.Fatalf("got unexpected route update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -130,7 +130,7 @@ func (s) TestSuccessCaseTwoUpdates(t *testing.T) {
 	rdsUpdate1 := xdsclient.RouteConfigUpdate{
 		RouteName: route1,
 	}
-	fakeClient.InvokeWatchRouteConfigCallback(rdsUpdate1, nil)
+	fakeClient.InvokeWatchRouteConfigCallback(route1, rdsUpdate1, nil)
 
 	// The RDS Handler should not send an update.
 	shouldNotHappenCtx, shouldNotHappenCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -147,14 +147,14 @@ func (s) TestSuccessCaseTwoUpdates(t *testing.T) {
 	rdsUpdate2 := xdsclient.RouteConfigUpdate{
 		RouteName: route2,
 	}
-	fakeClient.InvokeWatchRouteConfigCallback(rdsUpdate2, nil)
+	fakeClient.InvokeWatchRouteConfigCallback(route2, rdsUpdate2, nil)
 	// The RDS Handler should then update the listener wrapper with an update
 	// with two route configurations, as both route names the RDS Handler handles
 	// have received an update.
 	rhuWant := map[string]xdsclient.RouteConfigUpdate{route1: rdsUpdate1, route2: rdsUpdate2}
 	select {
 	case rhu := <-rh.updateChannel:
-		if diff := cmp.Diff(rhu.rdsUpdates, rhuWant); diff != "" {
+		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
 			t.Fatalf("got unexpected route update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -222,11 +222,11 @@ func (s) TestSuccessCaseDeletedRoute(t *testing.T) {
 	// Invoke callback with the xds client with a certain route update. Due to
 	// this route update updating every route name that rds handler handles,
 	// this should write to the update channel to send to the listener.
-	fakeClient.InvokeWatchRouteConfigCallback(rdsUpdate, nil)
+	fakeClient.InvokeWatchRouteConfigCallback(route1, rdsUpdate, nil)
 	rhuWant := map[string]xdsclient.RouteConfigUpdate{route1: rdsUpdate}
 	select {
 	case rhu := <-rh.updateChannel:
-		if diff := cmp.Diff(rhu.rdsUpdates, rhuWant); diff != "" {
+		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
 			t.Fatalf("got unexpected route update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -293,7 +293,7 @@ func (s) TestSuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 	rdsUpdate2 := xdsclient.RouteConfigUpdate{
 		RouteName: route2,
 	}
-	fakeClient.InvokeWatchRouteConfigCallback(rdsUpdate2, nil)
+	fakeClient.InvokeWatchRouteConfigCallback(route2, rdsUpdate2, nil)
 
 	// The RDS Handler should not send an update.
 	shouldNotHappenCtx, shouldNotHappenCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -310,14 +310,14 @@ func (s) TestSuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 	rdsUpdate3 := xdsclient.RouteConfigUpdate{
 		RouteName: route3,
 	}
-	fakeClient.InvokeWatchRouteConfigCallback(rdsUpdate3, nil)
+	fakeClient.InvokeWatchRouteConfigCallback(route3, rdsUpdate3, nil)
 	// The RDS Handler should then update the listener wrapper with an update
 	// with two route configurations, as both route names the RDS Handler handles
 	// have received an update.
 	rhuWant := map[string]xdsclient.RouteConfigUpdate{route2: rdsUpdate2, route3: rdsUpdate3}
 	select {
 	case rhu := <-rh.updateChannel:
-		if diff := cmp.Diff(rhu.rdsUpdates, rhuWant); diff != "" {
+		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
 			t.Fatalf("got unexpected route update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -344,6 +344,74 @@ func (s) TestSuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 	}
 }
 
+// A B C
+// A gets update
+// B gets update
+// A B
+// Should send update
+// TestSuccessCaseSecondUpdateMakesRouteFull tests the scenario where the rds handler gets
+// told to watch three rds configurations, gets two successful updates, then gets told to watch
+// only those two. The rds handler should then write an update to update buffer.
+func (s) TestSuccessCaseSecondUpdateMakesRouteFull(t *testing.T) {
+	rh, fakeClient := setupTests(t)
+
+	routeNames := map[string]bool{route1: true, route2: true, route3: true}
+	rh.updateRouteNamesToWatch(routeNames)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err := fakeClient.WaitForWatchRouteConfig(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchRDS failed with error: %v", err)
+	}
+	_, err = fakeClient.WaitForWatchRouteConfig(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchRDS failed with error: %v", err)
+	}
+	_, err = fakeClient.WaitForWatchRouteConfig(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchRDS failed with error: %v", err)
+	}
+
+	// Invoke the callbacks for two of the three watches. Since RDS is not full,
+	// this shouldn't trigger rds handler to write an update to update buffer.
+	fakeClient.InvokeWatchRouteConfigCallback(route1, xdsclient.RouteConfigUpdate{}, nil)
+	fakeClient.InvokeWatchRouteConfigCallback(route2, xdsclient.RouteConfigUpdate{}, nil)
+
+	// The RDS Handler should not send an update.
+	shouldNotHappenCtx, shouldNotHappenCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer shouldNotHappenCtxCancel()
+	select {
+	case <-rh.updateChannel:
+		t.Fatalf("RDS Handler wrote an update to updateChannel when it shouldn't have, as each route name has not received an update yet")
+	case <-shouldNotHappenCtx.Done():
+	}
+
+	// Tell the rds handler to now only watch Route 1 and Route 2. This should
+	// trigger the rds handler to write an update to the update buffer as it now
+	// has full rds configuration.
+	routeNames = map[string]bool{route1: true, route2: true}
+	rh.updateRouteNamesToWatch(routeNames)
+	// Route 3 should be deleted/cancelled watch for, as it is no longer present
+	// in the new RouteName to watch map.
+	routeNameDeleted, err := fakeClient.WaitForCancelRouteConfigWatch(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.CancelRDS failed with error: %v", err)
+	}
+	if routeNameDeleted != route3 {
+		t.Fatalf("xdsClient.CancelRDS called for route %v, want %v", routeNameDeleted, route1)
+	}
+	rhuWant := map[string]xdsclient.RouteConfigUpdate{route1: {}, route2: {}}
+	select {
+	case rhu := <-rh.updateChannel:
+		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
+			t.Fatalf("got unexpected route update, diff (-got, +want): %v", diff)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for the rds handler update to be written to the update buffer.")
+	}
+}
+
 // TestErrorReceived tests the case where the rds handler receives a route name
 // to watch, then receives an update with an error. This error should be then
 // written to the update channel.
@@ -360,7 +428,7 @@ func (s) TestErrorReceived(t *testing.T) {
 	}
 
 	rdsErr := errors.New("some error")
-	fakeClient.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{}, rdsErr)
+	fakeClient.InvokeWatchRouteConfigCallback(route1, xdsclient.RouteConfigUpdate{}, rdsErr)
 	select {
 	case rhu := <-rh.updateChannel:
 		if rhu.err.Error() != "some error" {

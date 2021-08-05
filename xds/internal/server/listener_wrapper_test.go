@@ -372,7 +372,7 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	// should trigger the listener wrapper to fire GoodUpdate, as it has
 	// received both it's LDS Configuration and also RDS Configuration,
 	// specified in LDS Configuration.
-	xdsC.InvokeWatchRouteConfigCallback(xdsclient.RouteConfigUpdate{
+	xdsC.InvokeWatchRouteConfigCallback("route-1", xdsclient.RouteConfigUpdate{
 		RouteName: "route-1",
 	}, nil)
 
