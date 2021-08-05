@@ -1,3 +1,5 @@
+// +build !appengine
+
 /*
  *
  * Copyright 2021 gRPC authors.
@@ -24,7 +26,9 @@ import (
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/grpclog"
@@ -213,7 +217,7 @@ type listenerWrapper struct {
 	rdsHandler *rdsHandler
 	// rdsUpdates are the RDS resources received from the management
 	// server, keyed on the RouteName of the RDS resource.
-	rdsUpdates map[string]xdsclient.RouteConfigUpdate // TODO: if this will be read in accept, this will need a read lock as well.
+	rdsUpdates unsafe.Pointer
 	// ldsUpdateCh is a channel for XDSClient LDS updates.
 	ldsUpdateCh chan ldsUpdateWithError
 	// rdsUpdateCh is a channel for XDSClient RDS updates.
@@ -297,11 +301,22 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			conn.Close()
 			continue
 		}
-		// TODO: once matched an accepted connection to a filter chain,
-		// instantiate the HTTP filters in the filter chain + the filter
-		// overrides, pipe filters and route into connection, which will
-		// eventually be passed to xdsUnary/Stream interceptors.
-		return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
+		var rc xdsclient.RouteConfigUpdate
+		if fc.InlineRouteConfig != nil {
+			rc = *fc.InlineRouteConfig
+		} else {
+			rcPtr := l.rdsUpdates
+			rcuPtr := (*map[string]xdsclient.RouteConfigUpdate)(rcPtr)
+			rcu := *rcuPtr
+			rc = rcu[fc.RouteConfigName]
+		}
+
+		if err := fc.ConstructUsableRouteConfiguration(rc); err != nil {
+			l.logger.Warningf("error constructing usable route configuration: %v", err)
+			conn.Close()
+			continue
+		}
+		return &connWrapper{Conn: conn, filterChain: fc, parent: l, virtualHosts: fc.VirtualHosts}, nil
 	}
 }
 
@@ -367,7 +382,7 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 		// continue to use the old configuration.
 		return
 	}
-	l.rdsUpdates = update.updates
+	atomic.StorePointer(&l.rdsUpdates, unsafe.Pointer(&update.updates))
 
 	l.switchMode(l.filterChains, ServingModeServing, nil)
 	l.goodUpdate.Fire()

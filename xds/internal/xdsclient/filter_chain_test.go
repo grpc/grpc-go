@@ -21,6 +21,8 @@
 package xdsclient
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -37,8 +39,16 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
+)
+
+const (
+	topLevel = "top level"
+	vhLevel  = "virtual host level"
+	rLevel   = "route level"
 )
 
 var (
@@ -2294,6 +2304,202 @@ func TestLookup_Successes(t *testing.T) {
 			}
 			if !cmp.Equal(gotFC, test.wantFC, cmpopts.EquateEmpty()) {
 				t.Fatalf("FilterChainManager.Lookup(%v) = %v, want %v", test.params, gotFC, test.wantFC)
+			}
+		})
+	}
+}
+
+type filterCfg struct {
+	httpfilter.FilterConfig
+	// Level is what differentiates top level filters ("top level") vs. second
+	// level ("virtual host level"), and third level ("route level").
+	level string
+}
+
+type filterBuilder struct {
+	httpfilter.Filter
+}
+
+var _ httpfilter.ServerInterceptorBuilder = &filterBuilder{}
+
+func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+	var level string
+	level = config.(filterCfg).level
+
+	if override != nil {
+		level = override.(filterCfg).level
+	}
+	return &serverInterceptor{level: level}, nil
+}
+
+type serverInterceptor struct {
+	level string
+}
+
+func (si *serverInterceptor) AllowRPC(context.Context) error {
+	return errors.New(si.level)
+}
+
+func TestHTTPFilterInstantiation(t *testing.T) {
+	tests := []struct {
+		name        string
+		filters     []HTTPFilter
+		routeConfig RouteConfigUpdate
+		// A list of strings which will be built from iterating through the
+		// filters ["top level", "vh level", "route level", "route level"...]
+		// wantListOfErrors is the list of error strings that will be
+		// constructed from the deterministic iteration through the vh list and
+		// route list. The error string will be determined by the level of
+		// config that the filter builder receives (i.e. top level, vs. virtual
+		// host level vs. route level).
+		wantListOfErrors []string
+	}{
+		{
+			name: "one http filter no overrides",
+			filters: []HTTPFilter{
+				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+			},
+			routeConfig: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+						},
+						},
+					},
+				}},
+			wantListOfErrors: []string{topLevel},
+		},
+		{
+			name: "one http filter vh override",
+			filters: []HTTPFilter{
+				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+			},
+			routeConfig: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+						},
+						},
+						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+							"server-interceptor": filterCfg{level: vhLevel},
+						},
+					},
+				}},
+			wantListOfErrors: []string{vhLevel},
+		},
+		{
+			name: "one http filter route override",
+			filters: []HTTPFilter{
+				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+			},
+			routeConfig: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+								"server-interceptor": filterCfg{level: rLevel},
+							},
+						},
+						},
+					},
+				}},
+			wantListOfErrors: []string{rLevel},
+		},
+		// This tests the scenario where there are three http filters, and one
+		// gets overridden by route and one by virtual host.
+		{
+			name: "three http filters vh override route override",
+			filters: []HTTPFilter{
+				{Name: "server-interceptor1", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor2", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor3", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+			},
+			routeConfig: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+								"server-interceptor3": filterCfg{level: rLevel},
+							},
+						},
+						},
+						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+							"server-interceptor2": filterCfg{level: vhLevel},
+						},
+					},
+				}},
+			wantListOfErrors: []string{topLevel, vhLevel, rLevel},
+		},
+		// This tests the scenario where there are three http filters, and two
+		// virtual hosts with different vh + route overrides for each virtual
+		// host.
+		{
+			name: "three http filters two vh",
+			filters: []HTTPFilter{
+				{Name: "server-interceptor1", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor2", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor3", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+			},
+			routeConfig: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+								"server-interceptor3": filterCfg{level: rLevel},
+							},
+						},
+						},
+						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+							"server-interceptor2": filterCfg{level: vhLevel},
+						},
+					},
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+								"server-interceptor1": filterCfg{level: rLevel},
+								"server-interceptor2": filterCfg{level: rLevel},
+							},
+						},
+						},
+						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+							"server-interceptor2": filterCfg{level: vhLevel},
+							"server-interceptor3": filterCfg{level: vhLevel},
+						},
+					},
+				}},
+			wantListOfErrors: []string{topLevel, vhLevel, rLevel, rLevel, rLevel, vhLevel},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fc := FilterChain{
+				HTTPFilters: test.filters,
+			}
+			fc.ConstructUsableRouteConfiguration(test.routeConfig)
+			// Build out list of errors by iterating through the virtual hosts and routes,
+			// and running the filters in route configurations.
+			var listOfErrors []string
+			for _, vh := range fc.VirtualHosts {
+				for _, r := range vh.Routes {
+					for _, int := range r.Interceptors {
+						listOfErrors = append(listOfErrors, int.AllowRPC(context.Background()).Error())
+					}
+				}
+			}
+			if !cmp.Equal(listOfErrors, test.wantListOfErrors) {
+				t.Fatalf("List of errors %v, want %v", listOfErrors, test.wantListOfErrors)
 			}
 		})
 	}
