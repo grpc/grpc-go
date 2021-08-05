@@ -269,8 +269,7 @@ func TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
 	const wantErr = "multiple filter chains with overlapping matching rules are defined"
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			_, err := NewFilterChainManager(test.lis)
-			if err == nil || !strings.Contains(err.Error(), wantErr) {
+			if _, err := NewFilterChainManager(test.lis); err == nil || !strings.Contains(err.Error(), wantErr) {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, wantErr)
 			}
 		})
