@@ -343,7 +343,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 		}
 		vhs = append(vhs, vhOut)
 	}
-	return RouteConfigUpdate{RouteName: rc.Name, VirtualHosts: vhs}, nil
+	return RouteConfigUpdate{VirtualHosts: vhs}, nil
 }
 
 func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger, v2 bool) ([]*Route, error) {
