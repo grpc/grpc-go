@@ -547,11 +547,18 @@ func (cc *ClientConn) GetState() connectivity.State {
 }
 
 // Connect causes all subchannels in the ClientConn to attempt to connect if
-// the channel is idle.
+// the channel is idle.  Does not wait for the connection attempts to begin
+// before returning.
+//
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+// release.
 func (cc *ClientConn) Connect() {
 	if cc.GetState() == connectivity.Idle {
 		cc.mu.Lock()
 		for ac := range cc.conns {
+			// TODO: should this be a signal to the LB policy instead?
 			go ac.connect()
 		}
 		cc.mu.Unlock()
@@ -1262,6 +1269,8 @@ func (ac *addrConn) tryAllAddrs(addrs []resolver.Address, connectDeadline time.T
 // createTransport creates a connection to addr. It returns the transport or an
 // error.
 func (ac *addrConn) createTransport(addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
+	// TODO: Delete prefaceReceived and move the logic to wait for it into the
+	// transport.
 	prefaceReceived := grpcsync.NewEvent()
 	connClosed := grpcsync.NewEvent()
 
