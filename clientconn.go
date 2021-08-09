@@ -1228,9 +1228,9 @@ func (ac *addrConn) resetTransport() {
 	ac.mu.Unlock()
 }
 
-// tryAllAddrs tries to creates a connection to the addresses, and stop when at the
-// first successful one. It returns the transport, the address and a Event in
-// the successful case. The Event fires when the returned transport disconnects.
+// tryAllAddrs tries to creates a connection to the addresses, and stop when at
+// the first successful one. It returns an error if no address was successfully
+// connected, or updates ac appropriately with the new transport.
 func (ac *addrConn) tryAllAddrs(addrs []resolver.Address, connectDeadline time.Time) error {
 	var firstConnErr error
 	for _, addr := range addrs {
@@ -1266,8 +1266,9 @@ func (ac *addrConn) tryAllAddrs(addrs []resolver.Address, connectDeadline time.T
 	return firstConnErr
 }
 
-// createTransport creates a connection to addr. It returns the transport or an
-// error.
+// createTransport creates a connection to addr. It returns an error if the
+// address was not successfully connected, or updates ac appropriately with the
+// new transport.
 func (ac *addrConn) createTransport(addr resolver.Address, copts transport.ConnectOptions, connectDeadline time.Time) error {
 	// TODO: Delete prefaceReceived and move the logic to wait for it into the
 	// transport.
