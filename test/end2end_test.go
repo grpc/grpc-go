@@ -7778,26 +7778,17 @@ func unaryInterceptorVerifyConn(ctx context.Context, req interface{}, info *grpc
 // TestUnaryServerInterceptorGetsConnection tests whether the accepted conn on
 // the server gets to any unary interceptors on the server side.
 func (s) TestUnaryServerInterceptorGetsConnection(t *testing.T) {
-	for _, e := range listTestEnv() {
-		// Skip this env due to #619.
-		if e.name == "handler-tls" {
-			continue
-		}
-		testUnaryServerInterceptorGetsConnection(t, e)
+	ss := &stubserver.StubServer{}
+	if err := ss.Start([]grpc.ServerOption{grpc.UnaryInterceptor(unaryInterceptorVerifyConn)}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
 	}
-}
+	defer ss.Stop()
 
-func testUnaryServerInterceptorGetsConnection(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.unaryServerInt = unaryInterceptorVerifyConn
-	te.startServer(&testServer{})
-	defer te.tearDown()
-
-	tc := testpb.NewTestServiceClient(te.clientConn())
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.OK {
-		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, error code %s", tc, err, codes.OK)
+
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.OK {
+		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, error code %s", ss.Client, err, codes.OK)
 	}
 }
 
@@ -7812,22 +7803,12 @@ func streamingInterceptorVerifyConn(srv interface{}, ss grpc.ServerStream, info 
 // TestStreamingServerInterceptorGetsConnection tests whether the accepted conn on
 // the server gets to any streaming interceptors on the server side.
 func (s) TestStreamingServerInterceptorGetsConnection(t *testing.T) {
-	for _, e := range listTestEnv() {
-		// Skip this env due to #619.
-		if e.name == "handler-tls" {
-			continue
-		}
-		testStreamingServerInterceptorGetsConnection(t, e)
+	ss := &stubserver.StubServer{}
+	if err := ss.Start([]grpc.ServerOption{grpc.StreamInterceptor(streamingInterceptorVerifyConn)}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
 	}
-}
+	defer ss.Stop()
 
-func testStreamingServerInterceptorGetsConnection(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.streamServerInt = streamingInterceptorVerifyConn
-	te.startServer(&testServer{})
-	defer te.tearDown()
-
-	tc := testpb.NewTestServiceClient(te.clientConn())
 	respParam := []*testpb.ResponseParameters{
 		{
 			Size: int32(1),
@@ -7844,8 +7825,8 @@ func testStreamingServerInterceptorGetsConnection(t *testing.T, e env) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err = tc.StreamingOutputCall(ctx, req)
+	_, err = ss.Client.StreamingOutputCall(ctx, req)
 	if status.Code(err) != codes.OK {
-		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, error code %s", tc, err, codes.OK)
+		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, error code %s", ss.Client, err, codes.OK)
 	}
 }

@@ -217,7 +217,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	}
 	done := make(chan struct{})
 	t := &http2Server{
-		ctx:               SetConnection(context.Background(), conn),
+		ctx:               setConnection(context.Background(), conn),
 		done:              done,
 		conn:              conn,
 		remoteAddr:        conn.RemoteAddr(),
@@ -1357,6 +1357,6 @@ func GetConnection(ctx context.Context) net.Conn {
 // SetConnection adds the connection to the context to be able to get
 // information about the destination ip and port for an incoming RPC. This also
 // allows any unary or streaming interceptors to see the connection.
-func SetConnection(ctx context.Context, conn net.Conn) context.Context {
+func setConnection(ctx context.Context, conn net.Conn) context.Context {
 	return context.WithValue(ctx, connectionKey{}, conn)
 }

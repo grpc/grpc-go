@@ -38,6 +38,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+var getConnection = transport.GetConnection
+
 // ChainEngine represents a chain of RBAC Engines, used to make authorization
 // decisions on incoming RPCs.
 type ChainEngine struct {
@@ -158,7 +160,7 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 
 	// The connection is needed in order to find the destination address and
 	// port of the incoming RPC Call.
-	conn := transport.GetConnection(ctx)
+	conn := getConnection(ctx)
 	if conn == nil {
 		return nil, errors.New("missing connection in incoming context")
 	}
