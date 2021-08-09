@@ -7788,7 +7788,7 @@ func (s) TestUnaryServerInterceptorGetsConnection(t *testing.T) {
 	defer cancel()
 
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.OK {
-		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, error code %s", ss.Client, err, codes.OK)
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v, want _, error code %s", err, codes.OK)
 	}
 }
 
@@ -7814,9 +7814,9 @@ func (s) TestStreamingServerInterceptorGetsConnection(t *testing.T) {
 
 	s, err := ss.Client.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{})
 	if err != nil {
-		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, <nil>", ss.Client, err)
+		t.Fatalf("ss.Client.StreamingOutputCall(_) = _, %v, want _, <nil>", err)
 	}
 	if _, err := s.Recv(); err != io.EOF {
-		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %v", ss.Client, err, io.EOF)
+		t.Fatalf("ss.Client.StreamingInputCall(_) = _, %v, want _, %v", err, io.EOF)
 	}
 }
