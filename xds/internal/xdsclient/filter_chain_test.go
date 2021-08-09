@@ -21,7 +21,12 @@
 package xdsclient
 
 import (
+	"context"
 	"fmt"
+	"google.golang.org/grpc/codes"
+	iresolver "google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/xds/internal/httpfilter"
 	"net"
 	"strings"
 	"testing"
@@ -2300,6 +2305,128 @@ func TestLookup_Successes(t *testing.T) {
 		})
 	}
 }
+
+// HTTP Filter Config
+type filterCfg struct {
+	httpfilter.FilterConfig
+	/*What stuff can be specific to top level and overrides to differentiate any instantiated filters*/
+	// Level is what differentiates top level Filters vs. second level (virtual host), and third level (route)
+	level string // "top-level", "virtual-host-level", "route-level"
+}
+
+// HTTP Filter Builder
+type filterBuilder struct {
+	httpfilter.Filter // Embedded? What does that mean
+
+}
+
+var _ httpfilter.ServerInterceptorBuilder = &filterBuilder{}
+
+// Do we want to change this API?
+func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+	// Will only get called with one
+}
+
+// HTTP Filter Itself
+// when this gets RPC Data, verify something about it's construction
+type serverInterceptor struct {
+	level string
+	// Error?
+}
+
+func (si *serverInterceptor) AllowedToProceed(_ context.Context) error {
+	return status.Error(codes.OK, si.level)
+}
+
+
+// Has route logic, then builds an override in place filter(A, B, C)
+// What we have is construct A, construct B, construct C, and no route logic, so test will be different
+// Do this in FilterChain, rather than conn, build filter chains with certain parameters, call entrance
+// function with a predefined route config, see what happens?
+
+// Construct FCM, now have (top level), (vh level), and (route level) instantiated filters, then what?
+// Instantiated Filters involve mock filterconfig, mock filterbuilder, and mock filter itself
+// How do we test this?
+
+// What I should do is write the test in FilterChain, just to start it out.
+func TestHTTPFilterInstantiation(t *testing.T) {
+	// get filter chain to a place where you can check it's http filters
+	// verify it was built in some type of way when you run RPCInfo through it
+	tests := []struct {
+		name string
+		lis *v3listenerpb.Listener
+		/*FilterChainFromProto argument*/
+		filterChainConfig *v3listenerpb.FilterChain
+		routeConfigUpdate RouteConfigUpdate
+	}{
+		// AA BB CC
+		{
+			"two-filters-override-both",
+
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// What components do we need up here?
+			// The end goal is have enough stuff everywhere to test filters and filter overrides
+			// I thinkkkkk you just need Filter Chain right?
+			// Construct Filter Chain using lis proto
+			// Ping it with route config (will logically represent a ping from listener wrapper
+			// after it has received full rds config, either fc.Inline or rds gotten dynamically)
+
+			// Error 1, Error 2, Error 3
+
+			// THe thing is, this method is on the filter chain, so perhaps do filterchain from
+			// the single proto
+			// filterchains is multiple from the listener
+
+
+			// do it per filter, instantiate with a filter chain config
+			// filter filter filter (HCM - has HTTP + Route)
+
+			// Check it as such 1 2 3 for each of the levels
+
+			fcm, err := NewFilterChainManager(test.lis)
+			if err != nil {
+				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
+			}
+			// So this happens once you accept the connection lookup, get a FC back
+			fc, err := fcm.filterChainFromProto(test.filterChainConfig)
+			fc.ConstructUsableRouteConfiguration(test.routeConfigUpdate)
+
+
+			// verification top level AA
+			for _, filter := range fc.InstantiatedHTTPFilters {
+				if err := filter.Interceptor.AllowedToProceed(context.Background()); !strings.Contains(err.Error(), "top-level") {
+					t.Fatalf("AllowedToProceed() returned err: %v, wantErr: %v", err, "top-level")
+				}
+			}
+			// verification second level BB
+			for _, vh := range fc.VirtualHosts {
+				for _, filter := range vh.HTTPFilterOverrides {
+					if err := filter.AllowedToProceed(context.Background()); !strings.Contains(err.Error(), "virtual-host-level") {
+						t.Fatalf("AllowedToProceed() returned err: %v, wantErr: %v", err, "top-level")
+					}
+				}
+				for _, route := range vh.Routes {
+					for _, filter := range route.HTTPFilterOverrides {
+						if err := filter.AllowedToProceed(context.Background()); !strings.Contains(err.Error(), "route-level") {
+							t.Fatalf("AllowedToProceed() returned err: %v, wantErr: %v", err, "route-level")
+						}
+					}
+				}
+			}
+
+
+		})
+	}
+}
+
+// Regardless of what happens, having all this stuff declared/thought about is logical and will help
+// even if testing routing in xds(Unary|Stream interceptors)
+
+
+
 
 // The Equal() methods defined below help with using cmp.Equal() on these types
 // which contain all unexported fields.

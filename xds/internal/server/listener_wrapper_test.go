@@ -23,8 +23,12 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
+	iresolver "google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/xds/internal/httpfilter"
 	"net"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,6 +156,74 @@ var listenerWithFilterChains = &v3listenerpb.Listener{
 		},
 	},
 }
+
+// listener with filter chains + route configuration
+var listenerWithFilterChainWithHTTPFilters = &v3listenerpb.Listener{
+	FilterChains: []*v3listenerpb.FilterChain{
+		{
+			FilterChainMatch: &v3listenerpb.FilterChainMatch{
+				PrefixRanges: []*v3corepb.CidrRange{
+					{
+						AddressPrefix: "192.168.0.0",
+						PrefixLen: &wrapperspb.UInt32Value{
+							Value: uint32(16),
+						},
+					},
+				},
+				SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+				SourcePrefixRanges: []*v3corepb.CidrRange{
+					{
+						AddressPrefix: "192.168.0.0",
+						PrefixLen: &wrapperspb.UInt32Value{
+							Value: uint32(16),
+						},
+					},
+				},
+				SourcePorts: []uint32{80},
+			},
+			TransportSocket: &v3corepb.TransportSocket{
+				Name: "envoy.transport_sockets.tls",
+				ConfigType: &v3corepb.TransportSocket_TypedConfig{
+					TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+						CommonTlsContext: &v3tlspb.CommonTlsContext{
+							TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+								InstanceName:    "identityPluginInstance",
+								CertificateName: "identityCertName",
+							},
+						},
+					}),
+				},
+			},
+			Filters: []*v3listenerpb.Filter{
+				{
+					Name: "filter-1",
+					ConfigType: &v3listenerpb.Filter_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							// HTTP Filters...
+							// xdsclient.HTTPFilter in resolver test, for this one you need
+							// declared -> xdsclient.
+							RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+								RouteConfig: &v3routepb.RouteConfiguration{
+									// Plus overrides here...
+									// declared -> xdsclient.HTTPFilter, regardless of where you do this
+									Name: "routeName",
+									VirtualHosts: []*v3routepb.VirtualHost{{
+										Domains: []string{"lds.target.good:3333"},
+										Routes: []*v3routepb.Route{{
+											Match: &v3routepb.RouteMatch{
+												PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+											},
+											Action: &v3routepb.Route_NonForwardingAction{},
+										}}}}},
+							},
+						}),
+					},
+				},
+			},
+		},
+	},
+}
+
 
 type s struct {
 	grpctest.Tester
@@ -385,6 +457,7 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	}
 }
 
+// Either scale this up, or add a new test completly.
 func (s) TestListenerWrapper_Accept(t *testing.T) {
 	boCh := testutils.NewChannel()
 	origBackoffFunc := backoffFunc
@@ -420,7 +493,7 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 
 	// Push a non-temporary error into Accept().
 	nonTempErr := errors.New("a non-temporary error")
-	lis.acceptCh <- connAndErr{err: nonTempErr}
+	lis.acceptCh <- connAndErr{err: nonTempErr} // Mocks what is returned from Accept()
 	if _, err := lw.Accept(); err != nonTempErr {
 		t.Fatalf("listenerWrapper.Accept() returned error: %v, want: %v", err, nonTempErr)
 	}
@@ -469,7 +542,151 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 		closeCh: testutils.NewChannel(),
 	}
 	lis.acceptCh <- connAndErr{conn: fc}
-	if _, err := errCh.Receive(ctx); err != nil {
+	if _, err := errCh.Receive(ctx); err != nil { // Gets to end with a legit conn, blocking wait for the conn
 		t.Fatalf("error when waiting for Accept() to return the conn on filter chain match: %v", err)
+	}
+	// Write the same test, except verify the conn wrapper has the correct stuff in it
+}
+
+// HTTP Filter Config
+type filterCfg struct {
+	httpfilter.FilterConfig
+	/*What stuff can be specific to top level and overrides to differentiate any instantiated filters*/
+	// Level is what differentiates top level Filters vs. second level (virtual host), and third level (route)
+	level string // "top-level", "virtual-host-level", "route-level"
+}
+
+// HTTP Filter Builder
+type filterBuilder struct {
+	httpfilter.Filter // Embedded? What does that mean
+
+}
+
+var _ httpfilter.ServerInterceptorBuilder = &filterBuilder{}
+
+// Do we want to change this API?
+func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+	// Will only get called with one
+}
+
+// HTTP Filter Itself
+// when this gets RPC Data, verify something about it's construction
+type serverInterceptor struct {
+	level string
+	// Error?
+}
+
+// TestListenerWrapperAcceptWithHTTPFilters tests that on a Listener Wrapper
+// Accept() with the accepted conn matching to a filter chain which specifies
+// HTTP Filters, that the accepted Connection has the correct instantiated HTTP
+// Filters present.
+func TestListenerWrapper_Accept(t *testing.T) {
+	// I think you need same fakes, gives you granular control of the components.
+	lw, readyCh, xdsC, lis, cleanup := newListenerWrapper(t)
+	defer cleanup()
+
+	// This Filter Chain Manager should logically be comprised of
+	// a single filter chain, which has HTTP Filters + overrides etc.
+
+	// I think you just need a single test case for filter list (unless they ask for some)?
+	fcm, err := xdsclient.NewFilterChainManager(listenerWithFilterChainWithHTTPFilters)
+	if err != nil {
+		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
+	}
+	xdsC.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
+		InboundListenerCfg: &xdsclient.InboundListenerConfig{
+			Address:      fakeListenerHost,
+			Port:         strconv.Itoa(fakeListenerPort),
+			FilterChains: fcm,
+		}}, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	defer close(lis.acceptCh)
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout waiting for the ready channel to be written to after receipt of a good Listener update")
+	case <-readyCh:
+	}
+
+	// blocking wait, should check this conn for information
+	// conn, err := lw.Accept()
+	errCh := testutils.NewChannel()
+	go func() {
+		// blocking wait, should check this conn for information
+		// conn, err := lw.Accept()
+		/*select {
+		case <-ctx.Done():
+			t.Fatalf("timeout waiting for the acceptance of good connection")
+		case conn, err := lw.Accept():
+			if err != nil {
+				t.Fatalf("Error on listenerWrapper.Accept: %v", err)
+			}
+			if cw, ok := conn.(*connWrapper); !ok {
+				errCh.Send(errors.New("listenerWrapper.Accept() returned a Conn of type %T, want *connWrapper"))
+				return
+			}*/
+			// Verification
+			// If correct instantiated HTTP Filters here, send nil on errCh
+			// if not the correct filters, send on errCh
+		conn, err := lw.Accept()
+		if err != nil {
+			errCh.Send(fmt.Errorf("error on listenerWrapper.Accept(): %v", err))
+			return
+		}
+		cw, ok := conn.(*connWrapper)
+		if !ok {
+			errCh.Send(errors.New("listenerWrapper.Accept() returned a Conn of type %T, want *connWrapper"))
+			return
+		}
+		// Three level verification for the instantiated HTTP Filters. The top level filters all should persist
+		// "top-level" from the Filter Configuration for the top level HTTP Filters.
+		for _, filterWithName := range cw.httpFilters {
+			if err := filterWithName.Interceptor.AllowedToProceed(context.Background()); !strings.Contains(err.Error(), "top-level") {
+				errCh.Send(fmt.Errorf("interceptor.AllowedToProceed() returned err: %v, wantErr: %v", err, "top-level"))
+				return
+			}
+		}
+		for _, vh := range cw.virtualHosts {
+			// The second level, VirtualHost HTTP Filter overrides should all persist "virtual-host-level" from the Filter
+			// Configuration for the HTTP Overrides per Virtual Host.
+			for _, filter := range vh.HTTPFilterOverrides {
+				if err := filter.AllowedToProceed(context.Background()); !strings.Contains(err.Error(), "virtual-host-level") {
+					errCh.Send(fmt.Errorf("interceptor.AllowedToProceed() returned err: %v, wantErr: %v", err, "virtual-host-level"))
+					return
+				}
+			}
+			// The third level, Route HTTP Filter overrides should all persist
+			// "route-level" from the Filter Configuration for the HTTP
+			// Overrides per route.
+			for _, route := range vh.Routes {
+				for _, filter := range route.HTTPFilterOverrides {
+					if err := filter.AllowedToProceed(context.Background()); !strings.Contains(err.Error(), "route-level") {
+						errCh.Send(fmt.Errorf("AllowedToProceed() returned err: %v, wantErr: %v", err, "route-level"))
+						return
+					}
+				}
+			}
+		}
+		// Yayhey, works as expected
+		errCh.Send(nil)
+	}()
+
+	// Push a fakeConn which matches the filter chains configured on the received
+	// Listener resource. Verify that Accept returns, and also that connection has correct
+	// HTTP Filters + Route Configuration.
+	fc := &fakeConn{
+		local:   &net.TCPAddr{IP: net.IPv4(192, 168, 1, 2)},
+		remote:  &net.TCPAddr{IP: net.IPv4(192, 168, 1, 2), Port: 80},
+		closeCh: testutils.NewChannel(),
+	}
+	lis.acceptCh <- connAndErr{conn: fc}
+
+	// Blocking wait for
+
+
+	// TODO: test case for dynamic RDS? This tests inline
+
+	if _, err := errCh.Receive(ctx); err != nil {
+		t.Fatalf("Error on lw.Accept(): %v", err)
 	}
 }
