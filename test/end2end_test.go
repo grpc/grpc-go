@@ -7809,24 +7809,14 @@ func (s) TestStreamingServerInterceptorGetsConnection(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	respParam := []*testpb.ResponseParameters{
-		{
-			Size: int32(1),
-		},
-	}
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(1))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE,
-		ResponseParameters: respParam,
-		Payload:            payload,
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err = ss.Client.StreamingOutputCall(ctx, req)
-	if status.Code(err) != codes.OK {
-		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, error code %s", ss.Client, err, codes.OK)
+
+	s, err := ss.Client.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{})
+	if err != nil {
+		t.Fatalf("%v.StreamingOutputCall(_) = _, %v, want _, <nil>", ss.Client, err)
+	}
+	if _, err := s.Recv(); err != io.EOF {
+		t.Fatalf("%v.StreamingInputCall(_) = _, %v, want _, %v", ss.Client, err, io.EOF)
 	}
 }
