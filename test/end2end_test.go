@@ -7766,3 +7766,57 @@ func (cvd *credentialsVerifyDeadline) Clone() credentials.TransportCredentials {
 func (cvd *credentialsVerifyDeadline) OverrideServerName(s string) error {
 	return nil
 }
+
+func unaryInterceptorVerifyConn(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	conn := transport.GetConnection(ctx)
+	if conn == nil {
+		return nil, status.Error(codes.NotFound, "connection was not in context")
+	}
+	return nil, status.Error(codes.OK, "")
+}
+
+// TestUnaryServerInterceptorGetsConnection tests whether the accepted conn on
+// the server gets to any unary interceptors on the server side.
+func (s) TestUnaryServerInterceptorGetsConnection(t *testing.T) {
+	ss := &stubserver.StubServer{}
+	if err := ss.Start([]grpc.ServerOption{grpc.UnaryInterceptor(unaryInterceptorVerifyConn)}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.OK {
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v, want _, error code %s", err, codes.OK)
+	}
+}
+
+func streamingInterceptorVerifyConn(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	conn := transport.GetConnection(ss.Context())
+	if conn == nil {
+		return status.Error(codes.NotFound, "connection was not in context")
+	}
+	return status.Error(codes.OK, "")
+}
+
+// TestStreamingServerInterceptorGetsConnection tests whether the accepted conn on
+// the server gets to any streaming interceptors on the server side.
+func (s) TestStreamingServerInterceptorGetsConnection(t *testing.T) {
+	ss := &stubserver.StubServer{}
+	if err := ss.Start([]grpc.ServerOption{grpc.StreamInterceptor(streamingInterceptorVerifyConn)}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	s, err := ss.Client.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{})
+	if err != nil {
+		t.Fatalf("ss.Client.StreamingOutputCall(_) = _, %v, want _, <nil>", err)
+	}
+	if _, err := s.Recv(); err != io.EOF {
+		t.Fatalf("ss.Client.StreamingInputCall(_) = _, %v, want _, %v", err, io.EOF)
+	}
+}

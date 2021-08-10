@@ -440,6 +440,9 @@ func (s) TestNewChainEngine(t *testing.T) {
 // different types of data representing incoming RPC's (piped into a context),
 // and verifies that it works as expected.
 func (s) TestChainEngine(t *testing.T) {
+	defer func(gc func(ctx context.Context) net.Conn) {
+		getConnection = gc
+	}(getConnection)
 	tests := []struct {
 		name        string
 		rbacConfigs []*v3rbacpb.RBAC
@@ -882,7 +885,9 @@ func (s) TestChainEngine(t *testing.T) {
 					}
 					conn := <-connCh
 					defer conn.Close()
-					ctx = SetConnection(ctx, conn)
+					getConnection = func(context.Context) net.Conn {
+						return conn
+					}
 					ctx = peer.NewContext(ctx, data.rpcData.peerInfo)
 					stream := &ServerTransportStreamWithMethod{
 						method: data.rpcData.fullMethod,
