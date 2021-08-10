@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	anypb "github.com/golang/protobuf/ptypes/any"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"net"
@@ -157,6 +158,45 @@ var listenerWithFilterChains = &v3listenerpb.Listener{
 	},
 }
 
+// How do I get these configurations to be correct type with string I can define levels at?
+var serverInterceptorFilterConfig = &anypb.Any{
+	TypeUrl: "serverInterceptor.filter",
+	Value: /*?*/,
+	// I need the specific filter configuration type I declared VVV "top-level"
+	// this filter configuration type will also serve as the value in my filter override maps
+}
+
+/*// HTTPFilter constructs an xds HttpFilter with the provided name and config.
+func HTTPFilter(name string, config proto.Message) *v3httppb.HttpFilter {
+	return &v3httppb.HttpFilter{
+		Name: name,
+		ConfigType: &v3httppb.HttpFilter_TypedConfig{
+			TypedConfig: testutils.MarshalAny(config),
+		},
+	}
+}*/
+
+// ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverInterceptorFilterConfig}
+
+// testutils.MarshalAny(config) takes place of the variable I declared right now
+
+// testutils.MarshalAny(serverInterceptorFilterConfig)
+
+var serverInterceptorFilterConfig = testutils.MarshalAny(&filterCfg{level: "top-level"})
+
+var serverInterceptorFilterConfigVHLevel = &anypb.Any{
+	TypeUrl: "serverInterceptor.filter",
+	Value: /*?*/, // "vh-level"
+}
+
+var serverInterceptorFilterConfigRouteLevel = &anypb.Any{
+	TypeUrl: "serverInterceptor.filter",
+	Value: /*?*/, // "route-level"
+} // Have to link somehow to registry? Or something? These configs have to link to registry?
+
+// How do I get from proto -> xdsclient.HTTPFilter, where xdsclient.HTTPFilter is the HTTPFilter that I defined down there
+// string proto
+// proto wrapper of string{} or string directly
 // listener with filter chains + route configuration
 var listenerWithFilterChainWithHTTPFilters = &v3listenerpb.Listener{
 	FilterChains: []*v3listenerpb.FilterChain{
@@ -200,21 +240,51 @@ var listenerWithFilterChainWithHTTPFilters = &v3listenerpb.Listener{
 					ConfigType: &v3listenerpb.Filter_TypedConfig{
 						TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 							// HTTP Filters...
+							// ABC
 							// xdsclient.HTTPFilter in resolver test, for this one you need
 							// declared -> xdsclient.
+							// Filter A, B and C, same type, different name
+							HttpFilters: []*v3httppb.HttpFilter{
+								{
+									Name: "serverInterceptor1",
+									ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverInterceptorFilterConfig/*Same config*/},
+								},
+								{
+									Name: "serverInterceptor2",
+									ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverInterceptorFilterConfig/*Same config*/},
+								},
+								{
+									Name: "serverInterceptor3",
+									ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverInterceptorFilterConfig/*Same config*/}, // Filter overrides are literally name: configuration
+								},
+							},
 							RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 								RouteConfig: &v3routepb.RouteConfiguration{
 									// Plus overrides here...
 									// declared -> xdsclient.HTTPFilter, regardless of where you do this
 									Name: "routeName",
 									VirtualHosts: []*v3routepb.VirtualHost{{
+										// HTTP Filter overrides here BC
+										/*Inline map with serverInterceptor2: override "vh-level", serverInterceptor3: override*/
+										TypedPerFilterConfig: map[string]*anypb.Any{"serverInterceptor2": serverInterceptorFilterConfigVHLevel, "serverInterceptor3": serverInterceptorFilterConfigVHLevel},
 										Domains: []string{"lds.target.good:3333"},
 										Routes: []*v3routepb.Route{{
 											Match: &v3routepb.RouteMatch{
 												PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
 											},
 											Action: &v3routepb.Route_NonForwardingAction{},
-										}}}}},
+											// HTTP Filter Overrides here C (perhaps check xds.go for how these are processed).
+											TypedPerFilterConfig: map[string]*anypb.Any{"serverInterceptor3": serverInterceptorFilterConfigRouteLevel/*override "route-level"*/},
+										},
+										{
+											Match: &v3routepb.RouteMatch{
+												PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+											},
+											Action: &v3routepb.Route_NonForwardingAction{},
+											// More HTTP Filter overrides here AB
+											TypedPerFilterConfig: map[string]*anypb.Any{"serverInterceptor1": serverInterceptorFilterConfigRouteLevel/*override "route-level"*/, "serverInterceptor2": serverInterceptorFilterConfigRouteLevel/*override "route-level"*/},
+										},
+										}}}},
 							},
 						}),
 					},
@@ -553,6 +623,7 @@ type filterCfg struct {
 	httpfilter.FilterConfig
 	/*What stuff can be specific to top level and overrides to differentiate any instantiated filters*/
 	// Level is what differentiates top level Filters vs. second level (virtual host), and third level (route)
+	// Switch this to a proto definition with proto{field with level in iti}
 	level string // "top-level", "virtual-host-level", "route-level"
 }
 
@@ -567,6 +638,14 @@ var _ httpfilter.ServerInterceptorBuilder = &filterBuilder{}
 // Do we want to change this API?
 func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
 	// Will only get called with one
+	// config string determines, override string determines and takes precedence if present
+	var level string
+	// Need nil checks here as well
+	level = config.(filterCfg).level
+	if override != nil {
+		level = override.(filterCfg).level
+	}
+	return &serverInterceptor{level: level}, nil
 }
 
 // HTTP Filter Itself
@@ -576,11 +655,16 @@ type serverInterceptor struct {
 	// Error?
 }
 
+// isAuthorized
+func (si *serverInterceptor) AllowedToProceed(ctx context.Context) error {
+	return errors.New(si.level)
+}
+
 // TestListenerWrapperAcceptWithHTTPFilters tests that on a Listener Wrapper
 // Accept() with the accepted conn matching to a filter chain which specifies
 // HTTP Filters, that the accepted Connection has the correct instantiated HTTP
 // Filters present.
-func TestListenerWrapper_Accept(t *testing.T) {
+func TestListenerWrapper_AcceptWithHTTPFilters(t *testing.T) {
 	// I think you need same fakes, gives you granular control of the components.
 	lw, readyCh, xdsC, lis, cleanup := newListenerWrapper(t)
 	defer cleanup()
@@ -638,6 +722,9 @@ func TestListenerWrapper_Accept(t *testing.T) {
 			errCh.Send(errors.New("listenerWrapper.Accept() returned a Conn of type %T, want *connWrapper"))
 			return
 		}
+
+		// Want: (top level, virtual host, route)      (route route vh)
+
 		// Three level verification for the instantiated HTTP Filters. The top level filters all should persist
 		// "top-level" from the Filter Configuration for the top level HTTP Filters.
 		for _, filterWithName := range cw.httpFilters {
