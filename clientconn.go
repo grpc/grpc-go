@@ -555,14 +555,11 @@ func (cc *ClientConn) GetState() connectivity.State {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 // release.
 func (cc *ClientConn) Connect() {
-	if cc.GetState() == connectivity.Idle {
-		cc.mu.Lock()
-		for ac := range cc.conns {
-			// TODO: should this be a signal to the LB policy instead?
-			go ac.connect()
-		}
-		cc.mu.Unlock()
+	cc.mu.Lock()
+	if cc.balancerWrapper != nil {
+		cc.balancerWrapper.updateCh.Put(exitIdle{})
 	}
+	cc.mu.Unlock()
 }
 
 func (cc *ClientConn) scWatcher() {

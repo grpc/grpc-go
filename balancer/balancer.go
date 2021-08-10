@@ -326,6 +326,15 @@ type Balancer interface {
 	Close()
 }
 
+// ExitIdle is an optional interface for balancers to implement.  If
+// implemented, ExitIdle will be called when ClientConn.Connect is called, if
+// the ClientConn is idle.
+type ExitIdle interface {
+	// ExitIdle instructs the LB policy to reconnect to backends / exit the
+	// IDLE state, if appropriate and possible.
+	ExitIdle()
+}
+
 // SubConnState describes the state of a SubConn.
 type SubConnState struct {
 	// ConnectivityState is the connectivity state of the SubConn.

@@ -124,6 +124,12 @@ func (b *pickfirstBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.S
 func (b *pickfirstBalancer) Close() {
 }
 
+func (b *pickfirstBalancer) ExitIdle() {
+	if b.state == connectivity.Idle {
+		b.sc.Connect()
+	}
+}
+
 type picker struct {
 	result balancer.PickResult
 	err    error

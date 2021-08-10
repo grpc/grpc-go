@@ -37,6 +37,10 @@ type scStateUpdate struct {
 	err   error
 }
 
+// exitIdle contains no data and is just a signal sent on the updateCh in
+// ccBalancerWrapper to instruct the balancer to exit idle.
+type exitIdle struct{}
+
 // ccBalancerWrapper is a wrapper on top of cc for balancers.
 // It implements balancer.ClientConn interface.
 type ccBalancerWrapper struct {
@@ -86,6 +90,22 @@ func (ccb *ccBalancerWrapper) watcher() {
 					ccb.cc.removeAddrConn(u.getAddrConn(), errConnDrain)
 				}
 				ccb.mu.Unlock()
+			case exitIdle:
+				if ccb.cc.GetState() == connectivity.Idle {
+					if ei, ok := ccb.balancer.(balancer.ExitIdle); ok {
+						ccb.balancerMu.Lock()
+						ei.ExitIdle()
+						ccb.balancerMu.Unlock()
+					} else {
+						// Fallback path for LB policies that don't support
+						// ExitIdle.
+						ccb.cc.mu.Lock()
+						for ac := range ccb.cc.conns {
+							go ac.connect()
+						}
+						ccb.cc.mu.Unlock()
+					}
+				}
 			default:
 				logger.Errorf("ccBalancerWrapper.watcher: unknown update %+v, type %T", t, t)
 			}

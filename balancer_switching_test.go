@@ -58,6 +58,8 @@ func (b *magicalLB) UpdateClientConnState(balancer.ClientConnState) error {
 
 func (b *magicalLB) Close() {}
 
+func (b *magicalLB) ExitIdle() {}
+
 func init() {
 	balancer.Register(&magicalLB{})
 }

@@ -115,6 +115,8 @@ type scUpdate struct {
 	state   balancer.SubConnState
 }
 
+type exitIdle struct{}
+
 // clusterResolverBalancer manages xdsClient and the actual EDS balancer implementation that
 // does load balancing.
 //
@@ -279,6 +281,14 @@ func (b *clusterResolverBalancer) run() {
 					break
 				}
 				b.child.UpdateSubConnState(update.subConn, update.state)
+			case exitIdle:
+				if b.child == nil {
+					b.logger.Errorf("xds: received ExitIdle with no child balancer")
+					break
+				}
+				if ei, ok := b.child.(balancer.ExitIdle); ok {
+					ei.ExitIdle()
+				}
 			}
 		case u := <-b.resourceWatcher.updateChannel:
 			b.handleWatchUpdate(u)
@@ -346,6 +356,10 @@ func (b *clusterResolverBalancer) UpdateSubConnState(sc balancer.SubConn, state 
 func (b *clusterResolverBalancer) Close() {
 	b.closed.Fire()
 	<-b.done.Done()
+}
+
+func (b *clusterResolverBalancer) ExitIdle() {
+	b.updateCh.Put(exitIdle{})
 }
 
 // ccWrapper overrides ResolveNow(), so that re-resolution from the child

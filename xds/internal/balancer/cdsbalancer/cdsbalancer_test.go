@@ -1,3 +1,4 @@
+//go:build go1.12
 // +build go1.12
 
 /*
@@ -120,6 +121,10 @@ func (tb *testEDSBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 
 func (tb *testEDSBalancer) Close() {
 	tb.closeCh.Send(struct{}{})
+}
+
+func (tb *testEDSBalancer) ExitIdle() {
+	// TODO: test
 }
 
 // waitForClientConnUpdate verifies if the testEDSBalancer receives the
