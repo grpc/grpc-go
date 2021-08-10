@@ -129,6 +129,11 @@ func (f *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdate
 		return nil
 	}
 	f.InstantiatedFilters = true
+	// xdsclient version of http filters and also []virtual hosts, which all have []route
+	// Does it HAVE TO match to a Virtual Host or a Route?
+	// If it doesn't, I feel like you have to instantiate them at each leve
+	//
+	// Has to match both vh and route
 	sInts, ib, err := convertHTTPFilters(f.HTTPFilters)
 	if err != nil {
 		return fmt.Errorf("error constructing top level HTTP Filters: %v", err)
@@ -185,6 +190,15 @@ func convertVirtualHosts(virtualHosts []*VirtualHost, interceptorBuilders map[st
 	}
 	return vhs, nil
 }
+// Scale this up - make it a method on the filter chain
+// iterate through builders
+// BuildServerInterceptor(nil, override) <- override is determined by whatever is most specific amongst 2
+// top level you have
+// Needs to lookup into Virtual Host, so what you could do is have it inline
+// for virtual host: virtual hosts
+// don't call separate function
+// for route: routes
+// have access to both virtual host filter overrides, and route filter overrides
 
 func convertRoutes(routes []*Route, interceptorBuilders map[string]httpfilter.ServerInterceptorBuilder) ([]RouteWithFilters, error) {
 	rs := make([]RouteWithFilters, len(routes))
