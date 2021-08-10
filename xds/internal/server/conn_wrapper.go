@@ -62,8 +62,7 @@ type connWrapper struct {
 	deadlineMu sync.Mutex
 	deadline   time.Time
 
-	httpFilters []xdsclient.ServerInterceptorWithName
-	virtualHosts []xdsclient.VirtualHostWithFilters
+	virtualHosts []xdsclient.VirtualHostWithInterceptors
 }
 
 // SetDeadline makes a copy of the passed in deadline and forwards the call to
