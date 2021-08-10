@@ -24,8 +24,8 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
-// rdsHandlerUpdate wraps the full RouteConfigUpdate that are dynamically queried for a given
-// server side listener.
+// rdsHandlerUpdate wraps the full RouteConfigUpdate that are dynamically
+// queried for a given server side listener.
 type rdsHandlerUpdate struct {
 	updates map[string]xdsclient.RouteConfigUpdate
 	err     error
@@ -36,10 +36,9 @@ type rdsHandlerUpdate struct {
 type rdsHandler struct {
 	parent *listenerWrapper
 
-	mu sync.Mutex
-
-	rdsUpdates map[string]xdsclient.RouteConfigUpdate
-	rdsCancels map[string]func()
+	mu      sync.Mutex
+	updates map[string]xdsclient.RouteConfigUpdate
+	cancels map[string]func()
 
 	// For a rdsHandler update, the only update wrapped listener cares about is
 	// most recent one, so this channel will be opportunistically drained before
@@ -47,16 +46,15 @@ type rdsHandler struct {
 	updateChannel chan rdsHandlerUpdate
 }
 
-// newRDSHandler is expected to called once on instantiation of a wrapped
-// listener. On any LDS updates the wrapped listener receives, the listener
-// should update the handler with the route names (which specify dynamic RDS)
-// using the function below.
+// newRDSHandler creates a new rdsHandler to watch for RDS resources.
+// listenerWrapper updates the list of route names to watch by calling
+// updateRouteNamesToWatch() upon receipt of new Listener configuration.
 func newRDSHandler(parent *listenerWrapper) *rdsHandler {
 	return &rdsHandler{
 		parent:        parent,
 		updateChannel: make(chan rdsHandlerUpdate, 1),
-		rdsUpdates:    make(map[string]xdsclient.RouteConfigUpdate),
-		rdsCancels:    make(map[string]func()),
+		updates:       make(map[string]xdsclient.RouteConfigUpdate),
+		cancels:       make(map[string]func()),
 	}
 }
 
@@ -67,11 +65,12 @@ func newRDSHandler(parent *listenerWrapper) *rdsHandler {
 func (rh *rdsHandler) updateRouteNamesToWatch(routeNamesToWatch map[string]bool) {
 	rh.mu.Lock()
 	defer rh.mu.Unlock()
-	// Add and start watches for any routes for any new routes in routeNamesToWatch.
+	// Add and start watches for any routes for any new routes in
+	// routeNamesToWatch.
 	for routeName := range routeNamesToWatch {
-		if _, ok := rh.rdsCancels[routeName]; !ok {
+		if _, ok := rh.cancels[routeName]; !ok {
 			func(routeName string) {
-				rh.rdsCancels[routeName] = rh.parent.xdsC.WatchRouteConfig(routeName, func(update xdsclient.RouteConfigUpdate, err error) {
+				rh.cancels[routeName] = rh.parent.xdsC.WatchRouteConfig(routeName, func(update xdsclient.RouteConfigUpdate, err error) {
 					rh.handleRouteUpdate(routeName, update, err)
 				})
 			}(routeName)
@@ -80,22 +79,18 @@ func (rh *rdsHandler) updateRouteNamesToWatch(routeNamesToWatch map[string]bool)
 
 	// Delete and cancel watches for any routes from persisted routeNamesToWatch
 	// that are no longer present.
-	for routeName := range rh.rdsCancels {
+	for routeName := range rh.cancels {
 		if _, ok := routeNamesToWatch[routeName]; !ok {
-			rh.rdsCancels[routeName]()
-			delete(rh.rdsCancels, routeName)
-			delete(rh.rdsUpdates, routeName)
+			rh.cancels[routeName]()
+			delete(rh.cancels, routeName)
+			delete(rh.updates, routeName)
 		}
 	}
 
 	// If the full list (determined by length) of updates are now successfully
 	// updated, the listener is ready to be updated.
-	if len(rh.rdsUpdates) == len(rh.rdsCancels) && len(routeNamesToWatch) != 0 {
-		select {
-		case <-rh.updateChannel:
-		default:
-		}
-		rh.updateChannel <- rdsHandlerUpdate{updates: rh.rdsUpdates}
+	if len(rh.updates) == len(rh.cancels) && len(routeNamesToWatch) != 0 {
+		drainAndPush(rh.updateChannel, rdsHandlerUpdate{updates: rh.updates})
 	}
 }
 
@@ -104,34 +99,35 @@ func (rh *rdsHandler) updateRouteNamesToWatch(routeNamesToWatch map[string]bool)
 // handler has a full collection of updates.
 func (rh *rdsHandler) handleRouteUpdate(routeName string, update xdsclient.RouteConfigUpdate, err error) {
 	if err != nil {
-		select {
-		case <-rh.updateChannel:
-		default:
-		}
-		rh.updateChannel <- rdsHandlerUpdate{err: err}
+		drainAndPush(rh.updateChannel, rdsHandlerUpdate{err: err})
 		return
 	}
 	rh.mu.Lock()
 	defer rh.mu.Unlock()
-	rh.rdsUpdates[routeName] = update
+	rh.updates[routeName] = update
 
 	// If the full list (determined by length) of updates have successfully
 	// updated, the listener is ready to be updated.
-	if len(rh.rdsUpdates) == len(rh.rdsCancels) {
-		select {
-		case <-rh.updateChannel:
-		default:
-		}
-		rh.updateChannel <- rdsHandlerUpdate{updates: rh.rdsUpdates}
+	if len(rh.updates) == len(rh.cancels) {
+		drainAndPush(rh.updateChannel, rdsHandlerUpdate{updates: rh.updates})
 	}
 }
 
-// close() is meant to be called by wrapped listener when the wrapped listener is closed,
-// and it cleans up resources by canceling all the active RDS watches.
+func drainAndPush(ch chan rdsHandlerUpdate, update rdsHandlerUpdate) {
+	select {
+	case <-ch:
+	default:
+	}
+	ch <- update
+}
+
+// close() is meant to be called by wrapped listener when the wrapped listener
+// is closed, and it cleans up resources by canceling all the active RDS
+// watches.
 func (rh *rdsHandler) close() {
 	rh.mu.Lock()
 	defer rh.mu.Unlock()
-	for _, cancel := range rh.rdsCancels {
+	for _, cancel := range rh.cancels {
 		cancel()
 	}
 }

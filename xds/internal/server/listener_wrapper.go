@@ -84,9 +84,11 @@ func (s ServingMode) String() string {
 // non-nil error if the server has transitioned into not-serving mode.
 type ServingModeCallback func(addr net.Addr, mode ServingMode, err error)
 
-// DrainCallback is the callback that servers can register to get pinged whenever
-// a new listener update gets received, and we want any clients to reconnect to
-// get the updated configuration.
+// DrainCallback is the callback that an xDS-enabled server registers to get
+// notified about updates to the Listener configuration. The server is expected
+// to gracefully shutdown existing connections, thereby forcing clients to
+// reconnect and have the new configuration applied to the newly created
+// connections.
 type DrainCallback func(addr net.Addr)
 
 func prefixLogger(p *listenerWrapper) *internalgrpclog.PrefixLogger {
@@ -114,7 +116,8 @@ type ListenerWrapperParams struct {
 	XDSClient XDSClient
 	// ModeCallback is the callback to invoke when the serving mode changes.
 	ModeCallback ServingModeCallback
-	// DrainCallback is the callback to invoke when the Listener gets a new update.
+	// DrainCallback is the callback to invoke when the Listener gets a LDS
+	// update.
 	DrainCallback DrainCallback
 }
 
@@ -204,11 +207,13 @@ type listenerWrapper struct {
 	mode ServingMode
 	// Filter chains received as part of the last good update.
 	filterChains *xdsclient.FilterChainManager
-
+	// rdsHandler is used for any dynamic RDS resources specified in a LDS
+	// update.
 	rdsHandler *rdsHandler
-
+	// rdsUpdates are the RDS resources received from the management
+	// server, keyed on the RouteName of the RDS resource.
 	rdsUpdates map[string]xdsclient.RouteConfigUpdate // TODO: if this will be read in accept, this will need a read lock as well.
-
+	// updateCh is a channel for XDSClient LDS updates.
 	updateCh chan ldsUpdateWithError
 }
 
@@ -408,7 +413,7 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	l.rdsHandler.updateRouteNamesToWatch(ilc.FilterChains.RouteConfigNames)
 	// If there are no dynamic RDS Configurations still needed to be received
 	// from the management server, this listener has all the configuration
-	// needed, and is ready to be Served on.
+	// needed, and is ready to serve.
 	if len(ilc.FilterChains.RouteConfigNames) == 0 {
 		l.switchMode(ilc.FilterChains, ServingModeServing, nil)
 		l.goodUpdate.Fire()

@@ -250,9 +250,6 @@ type InboundListenerConfig struct {
 // RouteConfigUpdate contains information received in an RDS response, which is
 // of interest to the registered RDS watcher.
 type RouteConfigUpdate struct {
-	// Name is the RDS resource name for this response, which is specified in
-	// LDS Response (RouteConfigName).
-	RouteName    string
 	VirtualHosts []*VirtualHost
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
