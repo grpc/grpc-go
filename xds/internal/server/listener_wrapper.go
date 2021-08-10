@@ -136,9 +136,10 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 		drainCallback:     params.DrainCallback,
 		isUnspecifiedAddr: params.Listener.Addr().(*net.TCPAddr).IP.IsUnspecified(),
 
-		closed:     grpcsync.NewEvent(),
-		goodUpdate: grpcsync.NewEvent(),
-		updateCh:   make(chan ldsUpdateWithError, 1),
+		closed:      grpcsync.NewEvent(),
+		goodUpdate:  grpcsync.NewEvent(),
+		updateCh:    make(chan ldsUpdateWithError, 1),
+		rdsUpdateCh: make(chan rdsHandlerUpdate, 1),
 	}
 	lw.logger = prefixLogger(lw)
 
@@ -147,7 +148,7 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 	lisAddr := lw.Listener.Addr().String()
 	lw.addr, lw.port, _ = net.SplitHostPort(lisAddr)
 
-	lw.rdsHandler = newRDSHandler(lw)
+	lw.rdsHandler = newRDSHandler(lw.xdsC, lw.rdsUpdateCh)
 
 	cancelWatch := lw.xdsC.WatchListener(lw.name, lw.handleListenerUpdate)
 	lw.logger.Infof("Watch started on resource name %v", lw.name)
@@ -215,6 +216,8 @@ type listenerWrapper struct {
 	rdsUpdates map[string]xdsclient.RouteConfigUpdate // TODO: if this will be read in accept, this will need a read lock as well.
 	// updateCh is a channel for XDSClient LDS updates.
 	updateCh chan ldsUpdateWithError
+	// rdsUpdateCh is a channel for XDSClient RDS updates.
+	rdsUpdateCh chan rdsHandlerUpdate
 }
 
 // Accept blocks on an Accept() on the underlying listener, and wraps the
@@ -324,7 +327,7 @@ func (l *listenerWrapper) run() {
 			return
 		case u := <-l.updateCh:
 			l.handleLDSUpdate(u)
-		case u := <-l.rdsHandler.updateChannel:
+		case u := <-l.rdsUpdateCh:
 			l.handleRDSUpdate(u)
 		}
 	}

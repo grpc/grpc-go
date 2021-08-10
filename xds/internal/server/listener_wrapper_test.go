@@ -330,9 +330,12 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	// expected Listener resource name.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err := xdsC.WaitForWatchListener(ctx)
+	name, err := xdsC.WaitForWatchListener(ctx)
 	if err != nil {
 		t.Fatalf("error when waiting for a watch on a Listener resource: %v", err)
+	}
+	if name != testListenerResourceName {
+		t.Fatalf("listenerWrapper registered a lds watch on %s, want %s", name, testListenerResourceName)
 	}
 	fcm, err := xdsclient.NewFilterChainManager(listenerWithRouteConfiguration)
 	if err != nil {

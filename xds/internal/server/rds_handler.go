@@ -34,7 +34,7 @@ type rdsHandlerUpdate struct {
 // rdsHandler handles any RDS queries that need to be started for a given server
 // side listeners Filter Chains (i.e. not inline).
 type rdsHandler struct {
-	parent *listenerWrapper
+	xdsC XDSClient
 
 	mu      sync.Mutex
 	updates map[string]xdsclient.RouteConfigUpdate
@@ -49,10 +49,10 @@ type rdsHandler struct {
 // newRDSHandler creates a new rdsHandler to watch for RDS resources.
 // listenerWrapper updates the list of route names to watch by calling
 // updateRouteNamesToWatch() upon receipt of new Listener configuration.
-func newRDSHandler(parent *listenerWrapper) *rdsHandler {
+func newRDSHandler(xdsC XDSClient, ch chan rdsHandlerUpdate) *rdsHandler {
 	return &rdsHandler{
-		parent:        parent,
-		updateChannel: make(chan rdsHandlerUpdate, 1),
+		xdsC:          xdsC,
+		updateChannel: ch,
 		updates:       make(map[string]xdsclient.RouteConfigUpdate),
 		cancels:       make(map[string]func()),
 	}
@@ -70,7 +70,7 @@ func (rh *rdsHandler) updateRouteNamesToWatch(routeNamesToWatch map[string]bool)
 	for routeName := range routeNamesToWatch {
 		if _, ok := rh.cancels[routeName]; !ok {
 			func(routeName string) {
-				rh.cancels[routeName] = rh.parent.xdsC.WatchRouteConfig(routeName, func(update xdsclient.RouteConfigUpdate, err error) {
+				rh.cancels[routeName] = rh.xdsC.WatchRouteConfig(routeName, func(update xdsclient.RouteConfigUpdate, err error) {
 					rh.handleRouteUpdate(routeName, update, err)
 				})
 			}(routeName)
