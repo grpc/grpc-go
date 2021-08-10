@@ -589,7 +589,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	case v3clusterpb.Cluster_RING_HASH:
 		rhc := cluster.GetRingHashLbConfig()
 		if rhc.GetHashFunction() != v3clusterpb.Cluster_RingHashLbConfig_XX_HASH {
-			return ClusterUpdate{}, fmt.Errorf("unexpected ring_hash hash function %v in response: %+v", rhc.GetHashFunction(), cluster)
+			return ClusterUpdate{}, fmt.Errorf("unsupported ring_hash hash function %v in response: %+v", rhc.GetHashFunction(), cluster)
 		}
 		// Minimum defaults to 1024 entries, and limited to 8M entries Maximum
 		// defaults to 8M entries, and limited to 8M entries
