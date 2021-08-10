@@ -7123,7 +7123,20 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	// Send GO_AWAY to connection 1.
 	go s1.GracefulStop()
 
-	// Wait for connection 2 to be established.
+	// Wait for the ClientConn to enter IDLE state.
+	state := cc.GetState()
+	for ; state != connectivity.Idle && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
+	}
+	if state != connectivity.Idle {
+		t.Fatalf("timed out waiting for IDLE channel state; last state = %v", state)
+	}
+
+	// Initiate another RPC to create another connection.
+	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
+	}
+
+	// Assert that connection 2 has been established.
 	<-conn2Established.Done()
 
 	// Close connection 1.

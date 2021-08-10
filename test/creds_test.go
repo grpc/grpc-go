@@ -165,6 +165,7 @@ func (c *clientTimeoutCreds) Clone() credentials.TransportCredentials {
 func (s) TestNonFailFastRPCSucceedOnTimeoutCreds(t *testing.T) {
 	te := newTest(t, env{name: "timeout-cred", network: "tcp", security: "empty"})
 	te.userAgent = testAppUA
+	te.nonBlockingDial = true
 	te.startServer(&testServer{security: te.e.security})
 	defer te.tearDown()
 

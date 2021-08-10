@@ -75,7 +75,7 @@ func (s) TestStateTransitions_SingleAddress(t *testing.T) {
 			},
 		},
 		{
-			desc: "When the connection is closed, the client enters TRANSIENT FAILURE.",
+			desc: "When the connection is closed before the preface is sent, the client enters TRANSIENT FAILURE.",
 			want: []connectivity.State{
 				connectivity.Connecting,
 				connectivity.TransientFailure,
@@ -167,6 +167,7 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 		t.Fatal(err)
 	}
 	defer client.Close()
+	go stayConnected(client)
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 
@@ -193,11 +194,12 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 	}
 }
 
-// When a READY connection is closed, the client enters CONNECTING.
+// When a READY connection is closed, the client enters IDLE then CONNECTING.
 func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 	want := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
+		connectivity.Idle,
 		connectivity.Connecting,
 	}
 
@@ -240,6 +242,7 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
+	go stayConnected(client)
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 
@@ -359,6 +362,7 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	want := []connectivity.State{
 		connectivity.Connecting,
 		connectivity.Ready,
+		connectivity.Idle,
 		connectivity.Connecting,
 	}
 
@@ -415,6 +419,7 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
+	go stayConnected(client)
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 
