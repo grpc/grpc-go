@@ -251,7 +251,6 @@ type InboundListenerConfig struct {
 // of interest to the registered RDS watcher.
 type RouteConfigUpdate struct {
 	VirtualHosts []*VirtualHost
-
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
 }
