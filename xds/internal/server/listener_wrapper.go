@@ -138,7 +138,7 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 
 		closed:      grpcsync.NewEvent(),
 		goodUpdate:  grpcsync.NewEvent(),
-		updateCh:    make(chan ldsUpdateWithError, 1),
+		ldsUpdateCh: make(chan ldsUpdateWithError, 1),
 		rdsUpdateCh: make(chan rdsHandlerUpdate, 1),
 	}
 	lw.logger = prefixLogger(lw)
@@ -214,8 +214,8 @@ type listenerWrapper struct {
 	// rdsUpdates are the RDS resources received from the management
 	// server, keyed on the RouteName of the RDS resource.
 	rdsUpdates map[string]xdsclient.RouteConfigUpdate // TODO: if this will be read in accept, this will need a read lock as well.
-	// updateCh is a channel for XDSClient LDS updates.
-	updateCh chan ldsUpdateWithError
+	// ldsUpdateCh is a channel for XDSClient LDS updates.
+	ldsUpdateCh chan ldsUpdateWithError
 	// rdsUpdateCh is a channel for XDSClient RDS updates.
 	rdsUpdateCh chan rdsHandlerUpdate
 }
@@ -325,7 +325,7 @@ func (l *listenerWrapper) run() {
 		select {
 		case <-l.closed.Done():
 			return
-		case u := <-l.updateCh:
+		case u := <-l.ldsUpdateCh:
 			l.handleLDSUpdate(u)
 		case u := <-l.rdsUpdateCh:
 			l.handleRDSUpdate(u)
@@ -341,13 +341,13 @@ func (l *listenerWrapper) handleListenerUpdate(update xdsclient.ListenerUpdate, 
 		l.logger.Warningf("Resource %q received update: %v with error: %v, after listener was closed", l.name, update, err)
 		return
 	}
-	// Remove any existing entry in updateCh and replace with the new one, as the only update
+	// Remove any existing entry in ldsUpdateCh and replace with the new one, as the only update
 	// listener cares about is most recent update.
 	select {
-	case <-l.updateCh:
+	case <-l.ldsUpdateCh:
 	default:
 	}
-	l.updateCh <- ldsUpdateWithError{update: update, err: err}
+	l.ldsUpdateCh <- ldsUpdateWithError{update: update, err: err}
 }
 
 // handleRDSUpdate handles a full rds update from rds handler. On a successful
