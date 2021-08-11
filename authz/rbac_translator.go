@@ -23,6 +23,7 @@
 package authz
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -93,7 +94,7 @@ func getStringMatcher(value string) *v3matcherpb.StringMatcher {
 	switch {
 	case value == "*":
 		return &v3matcherpb.StringMatcher{
-			MatchPattern: &v3matcherpb.StringMatcher_Prefix{},
+			MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{},
 		}
 	case strings.HasSuffix(value, "*"):
 		prefix := strings.TrimSuffix(value, "*")
@@ -117,7 +118,7 @@ func getHeaderMatcher(key, value string) *v3routepb.HeaderMatcher {
 	case value == "*":
 		return &v3routepb.HeaderMatcher{
 			Name:                 key,
-			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{},
+			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{},
 		}
 	case strings.HasSuffix(value, "*"):
 		prefix := strings.TrimSuffix(value, "*")
@@ -268,34 +269,39 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 }
 
 // translatePolicy translates SDK authorization policy in JSON format to two
-// Envoy RBAC polices (deny and allow policy). If the policy cannot be parsed
-// or is invalid, an error will be returned.
-func translatePolicy(policyStr string) (*v3rbacpb.RBAC, *v3rbacpb.RBAC, error) {
-	var policy authorizationPolicy
-	if err := json.Unmarshal([]byte(policyStr), &policy); err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal policy: %v", err)
+// Envoy RBAC polices (deny followed by allow policy) or only one Envoy RBAC
+// allow policy. If the input policy cannot be parsed or is invalid, an error
+// will be returned.
+func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
+	policy := &authorizationPolicy{}
+	d := json.NewDecoder(bytes.NewReader([]byte(policyStr)))
+	d.DisallowUnknownFields()
+	if err := d.Decode(policy); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal policy: %v", err)
 	}
 	if policy.Name == "" {
-		return nil, nil, fmt.Errorf(`"name" is not present`)
+		return nil, fmt.Errorf(`"name" is not present`)
 	}
 	if len(policy.AllowRules) == 0 {
-		return nil, nil, fmt.Errorf(`"allow_rules" is not present`)
+		return nil, fmt.Errorf(`"allow_rules" is not present`)
 	}
-	allowPolicies, err := parseRules(policy.AllowRules, policy.Name)
-	if err != nil {
-		return nil, nil, fmt.Errorf(`"allow_rules" %v`, err)
-	}
-	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies}
-	var denyRBAC *v3rbacpb.RBAC
+	var RBACPolicies []*v3rbacpb.RBAC
 	if len(policy.DenyRules) > 0 {
 		denyPolicies, err := parseRules(policy.DenyRules, policy.Name)
 		if err != nil {
-			return nil, nil, fmt.Errorf(`"deny_rules" %v`, err)
+			return nil, fmt.Errorf(`"deny_rules" %v`, err)
 		}
-		denyRBAC = &v3rbacpb.RBAC{
+		denyRBAC := &v3rbacpb.RBAC{
 			Action:   v3rbacpb.RBAC_DENY,
 			Policies: denyPolicies,
 		}
+		RBACPolicies = append(RBACPolicies, denyRBAC)
 	}
-	return denyRBAC, allowRBAC, nil
+	allowPolicies, err := parseRules(policy.AllowRules, policy.Name)
+	if err != nil {
+		return nil, fmt.Errorf(`"allow_rules" %v`, err)
+	}
+	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies}
+	RBACPolicies = append(RBACPolicies, allowRBAC)
+	return RBACPolicies, nil
 }

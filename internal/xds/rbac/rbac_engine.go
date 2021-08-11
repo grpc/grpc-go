@@ -38,7 +38,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var getConnection = transport.GetConnection
+var GetConnection = transport.GetConnection
 
 // ChainEngine represents a chain of RBAC Engines, used to make authorization
 // decisions on incoming RPCs.
@@ -87,6 +87,10 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	// doesn't not match an allow or match a deny engine), the RPC is authorized
 	// to proceed.
 	return status.Error(codes.OK, "")
+}
+
+func (cre *ChainEngine) IsEmpty() bool {
+	return len(cre.chainedEngines) == 0
 }
 
 // engine is used for matching incoming RPCs to policies.
@@ -160,7 +164,7 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 
 	// The connection is needed in order to find the destination address and
 	// port of the incoming RPC Call.
-	conn := getConnection(ctx)
+	conn := GetConnection(ctx)
 	if conn == nil {
 		return nil, errors.New("missing connection in incoming context")
 	}
