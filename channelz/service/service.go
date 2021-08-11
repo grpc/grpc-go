@@ -78,7 +78,7 @@ func channelTraceToProto(ct *channelz.ChannelTrace) *channelzpb.ChannelTrace {
 	if ts, err := ptypes.TimestampProto(ct.CreationTime); err == nil {
 		pbt.CreationTimestamp = ts
 	}
-	var events []*channelzpb.ChannelTraceEvent
+	events := make([]*channelzpb.ChannelTraceEvent, 0, len(ct.Events))
 	for _, e := range ct.Events {
 		cte := &channelzpb.ChannelTraceEvent{
 			Description: e.Desc,

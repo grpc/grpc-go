@@ -242,8 +242,9 @@ func (fci *FilterChainManager) addFilterChains(fcs []*v3listenerpb.FilterChain) 
 }
 
 func (fci *FilterChainManager) addFilterChainsForDestPrefixes(fc *v3listenerpb.FilterChain) error {
-	var dstPrefixes []*net.IPNet
-	for _, pr := range fc.GetFilterChainMatch().GetPrefixRanges() {
+	ranges := fc.GetFilterChainMatch().GetPrefixRanges()
+	dstPrefixes := make([]*net.IPNet, 0, len(ranges))
+	for _, pr := range ranges {
 		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
 		_, ipnet, err := net.ParseCIDR(cidr)
 		if err != nil {
@@ -342,7 +343,8 @@ func (fci *FilterChainManager) addFilterChainsForSourceType(dstEntry *destPrefix
 // structures and delegates control to addFilterChainsForSourcePorts to continue
 // building the internal data structure.
 func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map[string]*sourcePrefixEntry, fc *v3listenerpb.FilterChain) error {
-	var srcPrefixes []*net.IPNet
+	ranges := fc.GetFilterChainMatch().GetSourcePrefixRanges()
+	srcPrefixes := make([]*net.IPNet, 0, len(ranges))
 	for _, pr := range fc.GetFilterChainMatch().GetSourcePrefixRanges() {
 		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
 		_, ipnet, err := net.ParseCIDR(cidr)
@@ -382,8 +384,9 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 // It is here that we determine if there are multiple filter chains with
 // overlapping matching rules.
 func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePrefixEntry, fcProto *v3listenerpb.FilterChain) error {
-	var srcPorts []int
-	for _, port := range fcProto.GetFilterChainMatch().GetSourcePorts() {
+	ports := fcProto.GetFilterChainMatch().GetSourcePorts()
+	srcPorts := make([]int, 0, len(ports))
+	for _, port := range ports {
 		srcPorts = append(srcPorts, int(port))
 	}
 

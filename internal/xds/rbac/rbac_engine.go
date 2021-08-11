@@ -49,7 +49,7 @@ type ChainEngine struct {
 // NewChainEngine returns a chain of RBAC engines, used to make authorization
 // decisions on incoming RPCs. Returns a non-nil error for invalid policies.
 func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainEngine, error) {
-	var engines []*engine
+	engines := make([]*engine, 0, len(policies))
 	for _, policy := range policies {
 		engine, err := newEngine(policy)
 		if err != nil {
