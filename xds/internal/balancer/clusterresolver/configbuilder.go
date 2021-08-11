@@ -207,7 +207,7 @@ func buildClusterImplConfigForEDS(parentPriority int, edsResp xdsclient.Endpoint
 // - map{"p0":[L0, L1], "p1":[L2]}
 func groupLocalitiesByPriority(localities []xdsclient.Locality) ([]string, map[string][]xdsclient.Locality) {
 	var priorityIntSlice []int
-	var priorities map[string][]xdsclient.Locality
+	priorities := make(map[string][]xdsclient.Locality)
 	for _, locality := range localities {
 		if locality.Weight == 0 {
 			continue
