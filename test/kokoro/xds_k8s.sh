@@ -45,10 +45,8 @@ build_test_app_docker_images() {
   docker push "${SERVER_IMAGE_NAME}:${GIT_COMMIT}"
   if [[ -n $KOKORO_JOB_NAME ]]; then
     branch_name=$(echo "$KOKORO_JOB_NAME" | sed -E 's|^grpc/go/([^/]+)/.*|\1|')
-    docker tag "${CLIENT_IMAGE_NAME}:${GIT_COMMIT}" "${CLIENT_IMAGE_NAME}:${branch_name}"
-    docker tag "${SERVER_IMAGE_NAME}:${GIT_COMMIT}" "${SERVER_IMAGE_NAME}:${branch_name}"
-    docker push "${CLIENT_IMAGE_NAME}:${branch_name}"
-    docker push "${SERVER_IMAGE_NAME}:${branch_name}"
+    tag_and_push_docker_image "${CLIENT_IMAGE_NAME}" "${GIT_COMMIT}" "${branch_name}"
+    tag_and_push_docker_image "${SERVER_IMAGE_NAME}" "${GIT_COMMIT}" "${branch_name}"
   fi
 }
 
