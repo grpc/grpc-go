@@ -70,7 +70,9 @@ type builder struct {
 
 type config struct {
 	httpfilter.FilterConfig
-	config *fpb.HTTPFault
+	// In regards to e2e, and http filter registry, this makes sense
+	// Hold onto a config that it is registered by
+	config *fpb.HTTPFault // Holds onto a proto here that it persists from the (normal, override)
 }
 
 func (builder) TypeURLs() []string {

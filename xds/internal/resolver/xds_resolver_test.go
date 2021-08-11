@@ -1200,7 +1200,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 		{
 			name: "no router filter",
 			ldsFilters: []xdsclient.HTTPFilter{
-				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
+				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}}, // Convert to this. Conversion step of management server proto -> xdsclient.httpfilter. Fault injection needed to hold onto a proto in it's config, and also needed to be added to the registry
 			},
 			rpcRes: map[string][][]string{
 				"1": {

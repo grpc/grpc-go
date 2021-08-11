@@ -2338,6 +2338,65 @@ func (si *serverInterceptor) AllowedToProceed(_ context.Context) error {
 	return status.Error(codes.OK, si.level)
 }
 
+func TestHTTPFilterInstantiation(t *testing.T) {
+	tests := []struct {
+		name string
+		// List of HTTP Filters
+		filters []HTTPFilter
+		// A route configuration with overrides
+		routeConfig RouteConfigUpdate
+		// A list of strings which will be built from iterating through the filters ["top-level", "vh-level", "route-level", "route-level"...]
+		// wantListOfErrors is the list of error strings that will be constructed from the determinstic
+		// iteration through the vh list and route list. The error string will be determined by the level
+		// of config that the filter builder receives (i.e. top level, vs. virtual host level vs. route level)
+		wantListOfErrors []string
+	}{
+		// Simple case here - one http filter with no overrides
+		// leaf route should have configuration
+		{
+			name: "one http filter no overrides",
+			filters: []HTTPFilter{
+				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: "top-level"}},
+			},
+			routeConfig: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+						},
+						},
+					},
+				}},
+			wantListOfErrors: []string{"top level"},
+		},
+		// Crazy case I wrote in my notebook
+		{
+
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fc := FilterChain{
+				HTTPFilters: test.filters,
+			}
+			fc.ConstructUsableRouteConfiguration(test.routeConfig)
+			// Build out list of errors by iterating through the virtual hosts and routes,
+			// and running the filters in route configurations.
+			var listOfErrors []string
+			for _, vh := range fc.VirtualHosts {
+				for _, r := range vh.Routes {
+					for _, int := range r.Interceptors {
+						listOfErrors = append(listOfErrors, int.AllowedToProceed(context.Background()).Error())
+					}
+				}
+			}
+			if !cmp.Equal(listOfErrors, test.wantListOfErrors) {
+				t.Fatalf("List of errors %v, want %v", listOfErrors, test.wantListOfErrors)
+			}
+		})
+	}
+}
 
 // Has route logic, then builds an override in place filter(A, B, C)
 // What we have is construct A, construct B, construct C, and no route logic, so test will be different
@@ -2363,10 +2422,13 @@ func TestHTTPFilterInstantiation(t *testing.T) {
 		{
 			"two-filters-override-both",
 
-		},
+1		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			fc := FilterChain{
+				HTTPFilters:
+			}
 			// What components do we need up here?
 			// The end goal is have enough stuff everywhere to test filters and filter overrides
 			// I thinkkkkk you just need Filter Chain right?
@@ -2616,3 +2678,8 @@ func cidrRangeFromAddressAndPrefixLen(address string, len int) *v3corepb.CidrRan
 		},
 	}
 }
+
+// The only thing filter chain has for this helper method is
+// []xdsclient.HTTPFilters (RouteConfiguration)
+// Inline the HTTP Filters right, run context through both
+// I think this makes sense...
