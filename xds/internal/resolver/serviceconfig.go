@@ -117,7 +117,7 @@ type routeCluster struct {
 }
 
 type route struct {
-	m                 *compositeMatcher // converted from route matchers
+	m                 *xdsclient.CompositeMatcher // converted from route matchers
 	clusters          wrr.WRR           // holds *routeCluster entries
 	maxStreamDuration time.Duration
 	// map from filter name to its config
@@ -146,7 +146,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	var rt *route
 	// Loop through routes in order and select first match.
 	for _, r := range cs.routes {
-		if r.m.match(rpcInfo) {
+		if r.m.Match(rpcInfo) {
 			rt = &r
 			break
 		}
@@ -350,7 +350,7 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 		cs.routes[i].clusters = clusters
 
 		var err error
-		cs.routes[i].m, err = routeToMatcher(rt)
+		cs.routes[i].m, err = xdsclient.RouteToMatcher(rt)
 		if err != nil {
 			return nil, err
 		}
