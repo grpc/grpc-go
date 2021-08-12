@@ -1301,6 +1301,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		contentTypeErr = "malformed header: missing HTTP content-type"
 		grpcMessage    string
 		statusGen      *status.Status
+		recvCompress   string
 		httpStatusCode *int
 		httpStatusErr  string
 		rawStatusCode  = codes.Unknown
@@ -1323,7 +1324,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
 			isGRPC = true
 		case "grpc-encoding":
-			s.recvCompress = hf.Value
+			recvCompress = hf.Value
 		case "grpc-status":
 			code, err := strconv.ParseInt(hf.Value, 10, 32)
 			if err != nil {
@@ -1436,6 +1437,7 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			// These values can be set without any synchronization because
 			// stream goroutine will read it only after seeing a closed
 			// headerChan which we'll close after setting this.
+			s.recvCompress = recvCompress
 			if len(mdata) > 0 {
 				s.header = mdata
 			}
