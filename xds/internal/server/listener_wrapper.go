@@ -226,7 +226,7 @@ type listenerWrapper struct {
 }
 
 // Accept blocks on an Accept() on the underlying listener, and wraps the
-// returned net.connWrapper with the configured certificate providers.
+// returned net.ConnWrapper with the configured certificate providers.
 func (l *listenerWrapper) Accept() (net.Conn, error) {
 	var retries int
 	for {
@@ -315,7 +315,7 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			// TODO: is this correct? Will this invoke the right behavior in GRPCServer?
 			return nil, fmt.Errorf("error constructing usable route configuration: %v", err)
 		}
-		return &connWrapper{Conn: conn, filterChain: fc, parent: l, virtualHosts: fc.VirtualHosts}, nil
+		return &ConnWrapper{Conn: conn, filterChain: fc, parent: l, VirtualHosts: fc.VirtualHosts}, nil
 	}
 }
 

@@ -22,6 +22,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/codes"
+	iresolver "google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 	"net"
 	"strings"
 	"sync"
@@ -317,11 +322,108 @@ func (s *GRPCServer) GracefulStop() {
 	}
 }
 
+// Has to match a route
+// Route action has to be non forwarding action
+// RouteAndProcess routes incoming RPC's to routes, and processes them by sending incoming RPCs through all
+// the instantiated HTTP Filters
+func routeAndProcess(ctx context.Context) error {
+	conn := transport.GetConnection(ctx)
+	cw, ok := conn.(*server.ConnWrapper)
+	if !ok {
+		// This shouldn't happen.
+		// WOuld fail RPC's which wouldn't be right
+	}
+	mn, ok := grpc.Method(ctx)
+	if !ok {
+		return errors.New("missing method in incoming context") // Wrong error
+	}
+
+	var rwi xdsclient.RouteWithInterceptors
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return errors.New("missing metadata in incoming context")
+	}
+	// Assuming to just take the first value defined
+	authority := md.Get(":authority")
+
+	vh := xdsclient.FindBestMatchingVirtualHostServer(authority[0], cw.VirtualHosts)
+
+	// Match to a vh
+	// match authority -> cw.VirtualHosts
+	// I think this authority header will be handled in the transport layer, when you get here
+	// just do one at a time
+	// Once gotten a VH, loop through routes and try to find a match
+	for _, r := range vh.Routes { // VirtualHosts[0] is really the selected Virtual Host
+		if r.M.Match(iresolver.RPCInfo{
+			Context: ctx,
+			Method: mn,
+		}) {
+			rwi = r
+		}
+	}
+
+	for _, interceptor := range rwi.Interceptors {
+		if err := interceptor.AllowedToProceed(ctx); err != nil {
+			return status.Errorf(codes.PermissionDenied, "Incoming RPC is not allowed: %v", err)
+		}
+	}
+	return nil
+}
+
 // xdsUnaryInterceptor is the unary interceptor added to the gRPC server to
 // perform any xDS specific functionality on unary RPCs.
 //
 // This is a no-op at this point.
 func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	// Can also return an error from up here, which will logically be error.
+	// this ctx has a bunch of ish in it
+	// connection in context has routing info
+	// also has information that when you pass to interceptor will be used
+
+	// Get the wrapped conn from the context type it to wrappedConn
+	conn := transport.GetConnection(ctx)
+	cw, ok := conn.(*server.ConnWrapper)
+	if !ok {
+		// This shouldn't happen.
+		// WOuld fail RPC's which wouldn't be right
+	}
+	mn, ok := grpc.Method(ctx)
+	if !ok {
+		return nil, errors.New("missing method in incoming context") // Wrong error
+	}
+
+	var rwi xdsclient.RouteWithInterceptors
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, errors.New("missing metadata in incoming context")
+	}
+	// Assuming to just take the first value defined
+	authority := md.Get(":authority")
+
+	vh := xdsclient.FindBestMatchingVirtualHostServer(authority[0], cw.VirtualHosts)
+
+	// Match to a vh
+	// match authority -> cw.VirtualHosts
+	// I think this authority header will be handled in the transport layer, when you get here
+	// just do one at a time
+	// Once gotten a VH, loop through routes and try to find a match
+	for _, r := range vh.Routes { // VirtualHosts[0] is really the selected Virtual Host
+		if r.M.Match(iresolver.RPCInfo{
+			Context: ctx,
+			Method: mn,
+		}) {
+			rwi = r
+		}
+	}
+
+	for _, interceptor := range rwi.Interceptors {
+		if err := interceptor.AllowedToProceed(ctx); err != nil {
+			return nil, status.Errorf(codes.PermissionDenied, "Incoming RPC is not allowed: %v", err)
+		}
+	}
+
 	return handler(ctx, req)
 }
 
@@ -330,5 +432,16 @@ func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServ
 //
 // This is a no-op at this point.
 func xdsStreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	// First create the stream: stream, err := generatedMethod()
+	// msg, err := stream.Recv() // <-- error is supposed to be EOF on a good condition
+	// This second error is the error returned from these for both any error generated here
+	// Gatekeeper using headers?
+	// Headers, Data, Data
+	// connection is now in the connections context
+
+	// Headers
+	// Then body
+	// Body...
+
 	return handler(srv, ss)
 }

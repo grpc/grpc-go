@@ -124,7 +124,7 @@ func runRouteChat(client pb.RouteGuideClient) {
 	waitc := make(chan struct{})
 	go func() {
 		for {
-			in, err := stream.Recv()
+			in, err := stream.Recv() // Blocks on recv
 			if err == io.EOF {
 				// read done.
 				close(waitc)
@@ -137,10 +137,12 @@ func runRouteChat(client pb.RouteGuideClient) {
 		}
 	}()
 	for _, note := range notes {
+		// Send is just an iteration
 		if err := stream.Send(note); err != nil {
 			log.Fatalf("Failed to send a note: %v", err)
 		}
 	}
+	stream
 	stream.CloseSend()
 	<-waitc
 }

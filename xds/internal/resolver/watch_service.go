@@ -261,14 +261,41 @@ func match(domain, host string) (domainMatchType, bool) {
 //  - If two matches are of the same pattern type, the longer match is better
 //    - This is to compare the length of the matching pattern, e.g. “*ABCDE” >
 //    “*ABC”
-func findBestMatchingVirtualHost(host string, vHosts []*xdsclient.VirtualHost) *xdsclient.VirtualHost {
+func findBestMatchingVirtualHost(host string, vHosts []*xdsclient.VirtualHost) *xdsclient.VirtualHost { // Maybe move this crap to client
 	var (
 		matchVh   *xdsclient.VirtualHost
 		matchType = domainMatchTypeInvalid
 		matchLen  int
 	)
 	for _, vh := range vHosts {
-		for _, domain := range vh.Domains {
+		for _, domain := range vh.Domains { // Only thing logically it is is the list of domain strings here
+			typ, matched := match(domain, host)
+			if typ == domainMatchTypeInvalid {
+				// The rds response is invalid.
+				return nil
+			}
+			if matchType.betterThan(typ) || matchType == typ && matchLen >= len(domain) || !matched {
+				// The previous match has better type, or the previous match has
+				// better length, or this domain isn't a match.
+				continue
+			}
+			matchVh = vh
+			matchType = typ
+			matchLen = len(domain)
+		}
+	}
+	return matchVh
+}
+
+// Move all this shit to xds client
+func FindBestMatchingVirtualHostServer(host string, vHosts []xdsclient.VirtualHostWithInterceptors) xdsclient.VirtualHostWithInterceptors {
+	var (
+		matchVh *xdsclient.VirtualHostWithInterceptors
+		matchType = domainMatchTypeInvalid
+		matchLen int
+	)
+	for _, vh := range vHosts {
+		for _, domain := range vh.Domains { // Only thing logically it is is the list of domain strings here
 			typ, matched := match(domain, host)
 			if typ == domainMatchTypeInvalid {
 				// The rds response is invalid.

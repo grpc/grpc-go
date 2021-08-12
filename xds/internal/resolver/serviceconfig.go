@@ -139,6 +139,7 @@ type configSelector struct {
 
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
 
+// VH is chosen before you even get here. However, on server side, you chose VH
 func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RPCConfig, error) {
 	if cs == nil {
 		return nil, status.Errorf(codes.Unavailable, "no valid clusters")

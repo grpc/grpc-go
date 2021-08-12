@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
-// connWrapper is a thin wrapper around a net.Conn returned by Accept(). It
+// ConnWrapper is a thin wrapper around a net.Conn returned by Accept(). It
 // provides the following additional functionality:
 // 1. A way to retrieve the configured deadline. This is required by the
 //    ServerHandshake() method of the xdsCredentials when it attempts to read
@@ -39,7 +39,7 @@ import (
 //    retrieve the configured certificate providers.
 // 3. xDS filter_chain matching logic to select appropriate security
 //    configuration for the incoming connection.
-type connWrapper struct {
+type ConnWrapper struct {
 	net.Conn
 
 	// The specific filter chain picked for handling this connection.
@@ -59,12 +59,12 @@ type connWrapper struct {
 	deadlineMu sync.Mutex
 	deadline   time.Time
 
-	virtualHosts []xdsclient.VirtualHostWithInterceptors
+	VirtualHosts []xdsclient.VirtualHostWithInterceptors
 }
 
 // SetDeadline makes a copy of the passed in deadline and forwards the call to
 // the underlying rawConn.
-func (c *connWrapper) SetDeadline(t time.Time) error {
+func (c *ConnWrapper) SetDeadline(t time.Time) error {
 	c.deadlineMu.Lock()
 	c.deadline = t
 	c.deadlineMu.Unlock()
@@ -74,7 +74,7 @@ func (c *connWrapper) SetDeadline(t time.Time) error {
 // GetDeadline returns the configured deadline. This will be invoked by the
 // ServerHandshake() method of the XdsCredentials, which needs a deadline to
 // pass to the certificate provider.
-func (c *connWrapper) GetDeadline() time.Time {
+func (c *ConnWrapper) GetDeadline() time.Time {
 	c.deadlineMu.Lock()
 	t := c.deadline
 	c.deadlineMu.Unlock()
@@ -84,7 +84,7 @@ func (c *connWrapper) GetDeadline() time.Time {
 // XDSHandshakeInfo returns a HandshakeInfo with appropriate security
 // configuration for this connection. This method is invoked by the
 // ServerHandshake() method of the XdsCredentials.
-func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
+func (c *ConnWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	// Ideally this should never happen, since xdsCredentials are the only ones
 	// which will invoke this method at handshake time. But to be on the safe
 	// side, we avoid acting on the security configuration received from the
@@ -126,7 +126,7 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	return xdsHI, nil
 }
 
-func (c *connWrapper) Close() error {
+func (c *ConnWrapper) Close() error {
 	if c.identityProvider != nil {
 		c.identityProvider.Close()
 	}
