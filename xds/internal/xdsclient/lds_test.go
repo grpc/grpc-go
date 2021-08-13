@@ -302,6 +302,31 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
+			name: "v3 no terminal filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name: v3LDSTarget,
+				ApiListener: &v3listenerpb.ApiListener{
+					ApiListener: testutils.MarshalAny(
+						&v3httppb.HttpConnectionManager{
+							RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+								Rds: &v3httppb.Rds{
+									ConfigSource: &v3corepb.ConfigSource{
+										ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+									},
+									RouteConfigName: v3RouteConfigName,
+								},
+							},
+							CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
+								MaxStreamDuration: durationpb.New(time.Second),
+							},
+						}),
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    true,
+		},
+		{
 			name:      "v3 with custom filter",
 			resources: []*anypb.Any{v3LisWithFilters(customFilter)},
 			wantUpdate: map[string]ListenerUpdate{
@@ -870,6 +895,33 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
 			wantMD:     errMD,
 			wantErr:    "duplicate filter name",
+		},
+		{
+			name: "no terminal filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "name",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+											RouteConfig: routeConfig,
+										},
+									}),
+								},
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "terminal filter not present in HTTP Filter list",
 		},
 		{
 			name: "unsupported oneof in typed config of http filter",
