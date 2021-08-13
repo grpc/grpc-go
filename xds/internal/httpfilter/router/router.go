@@ -34,7 +34,7 @@ import (
 // TypeURL is the message type for the Router configuration.
 const TypeURL = "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
 
-func init() {
+func init() { // Gets registered into registry here.
 	httpfilter.Register(builder{})
 }
 

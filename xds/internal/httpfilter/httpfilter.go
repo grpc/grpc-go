@@ -97,3 +97,6 @@ func Register(b Filter) {
 func Get(typeURL string) Filter {
 	return m[typeURL]
 }
+
+// Do we add an RBAC
+// Perhaps add a no op router

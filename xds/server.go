@@ -330,15 +330,14 @@ func routeAndProcess(ctx context.Context) error {
 	conn := transport.GetConnection(ctx)
 	cw, ok := conn.(*server.ConnWrapper)
 	if !ok {
-		// This shouldn't happen.
-		// WOuld fail RPC's which wouldn't be right
+		return errors.New("missing connection in incoming context")
 	}
 	mn, ok := grpc.Method(ctx)
 	if !ok {
 		return errors.New("missing method in incoming context") // Wrong error
 	}
 
-	var rwi xdsclient.RouteWithInterceptors
+	var rwi *xdsclient.RouteWithInterceptors
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -359,8 +358,16 @@ func routeAndProcess(ctx context.Context) error {
 			Context: ctx,
 			Method: mn,
 		}) {
-			rwi = r
+			if r.RouteAction != xdsclient.RouteActionNonForwardingAction {
+				return status.Error(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding")
+			}
+			rwi = &r
 		}
+	}
+
+	// The RPC has to match a route, otherwise it is an error
+	if rwi == nil {
+		return status.Error(codes.Unavailable, "the incoming RPC did not match a defined route")
 	}
 
 	for _, interceptor := range rwi.Interceptors {
@@ -376,54 +383,9 @@ func routeAndProcess(ctx context.Context) error {
 //
 // This is a no-op at this point.
 func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-	// Can also return an error from up here, which will logically be error.
-	// this ctx has a bunch of ish in it
-	// connection in context has routing info
-	// also has information that when you pass to interceptor will be used
-
-	// Get the wrapped conn from the context type it to wrappedConn
-	conn := transport.GetConnection(ctx)
-	cw, ok := conn.(*server.ConnWrapper)
-	if !ok {
-		// This shouldn't happen.
-		// WOuld fail RPC's which wouldn't be right
+	if err := routeAndProcess(ctx); err != nil {
+		return nil, err
 	}
-	mn, ok := grpc.Method(ctx)
-	if !ok {
-		return nil, errors.New("missing method in incoming context") // Wrong error
-	}
-
-	var rwi xdsclient.RouteWithInterceptors
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, errors.New("missing metadata in incoming context")
-	}
-	// Assuming to just take the first value defined
-	authority := md.Get(":authority")
-
-	vh := xdsclient.FindBestMatchingVirtualHostServer(authority[0], cw.VirtualHosts)
-
-	// Match to a vh
-	// match authority -> cw.VirtualHosts
-	// I think this authority header will be handled in the transport layer, when you get here
-	// just do one at a time
-	// Once gotten a VH, loop through routes and try to find a match
-	for _, r := range vh.Routes { // VirtualHosts[0] is really the selected Virtual Host
-		if r.M.Match(iresolver.RPCInfo{
-			Context: ctx,
-			Method: mn,
-		}) {
-			rwi = r
-		}
-	}
-
-	for _, interceptor := range rwi.Interceptors {
-		if err := interceptor.AllowedToProceed(ctx); err != nil {
-			return nil, status.Errorf(codes.PermissionDenied, "Incoming RPC is not allowed: %v", err)
-		}
-	}
-
 	return handler(ctx, req)
 }
 
@@ -442,6 +404,13 @@ func xdsStreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamS
 	// Headers
 	// Then body
 	// Body...
-
+	if err := routeAndProcess(ss.Context()); err != nil {
+		return err
+	}
 	return handler(srv, ss)
 }
+
+// Right now, we have server interceptors being defined, Router filter inject I think
+// Or I could go fix Router filter being required
+// :authority header logic too
+// add route type to other PR

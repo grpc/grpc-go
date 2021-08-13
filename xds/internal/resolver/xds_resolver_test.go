@@ -359,7 +359,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			wantClusters: map[string]bool{"test-cluster-1": true},
 		},
 		{
-			routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{
+			routes: []*xdsclient.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsclient.WeightedCluster{ // Route that is guaranteed to hit
 				"cluster_1": {Weight: 75},
 				"cluster_2": {Weight: 25},
 			}}},
@@ -444,7 +444,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 		// with the random number generator stubbed out, we can rely on this
 		// to be 100% reproducible.
 		for i := 0; i < 100; i++ {
-			res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
+			res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()}) // Logically, this is testing the routing + picking cluster functionality
 			if err != nil {
 				t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
 			}
