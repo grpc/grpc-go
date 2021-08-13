@@ -505,7 +505,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 			// HTTPConnectionManager must have valid http_filters." - A36
 			filters, err := processHTTPFilters(hcm.GetHttpFilters(), true)
 			if err != nil {
-				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}", filters, hcm.GetHttpFilters())
+				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}: %v", filters, hcm.GetHttpFilters(), err)
 			}
 			if !seenHCM {
 				// TODO: Implement terminal filter logic, as per A36.

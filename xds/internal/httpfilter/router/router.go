@@ -73,6 +73,10 @@ func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fil
 	return config{}, nil
 }
 
+func (builder) IsTerminal() bool {
+	return true
+}
+
 var (
 	_ httpfilter.ClientInterceptorBuilder = builder{}
 	_ httpfilter.ServerInterceptorBuilder = builder{}
@@ -108,3 +112,6 @@ func (builder) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (ir
 type config struct {
 	httpfilter.FilterConfig
 }
+
+// ConfigForTesting exports the config for testing purposes
+type ConfigForTesting = config
