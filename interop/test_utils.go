@@ -20,10 +20,12 @@
 package interop
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -31,6 +33,7 @@ import (
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/metadata"
@@ -670,6 +673,89 @@ func DoPickFirstUnary(tc testgrpc.TestServiceClient) {
 		if serverID != id {
 			logger.Fatalf("iteration %d, got different server ids: %q vs %q", i, serverID, id)
 		}
+	}
+}
+
+type soakIterationResult struct {
+	err     error
+	latency time.Duration
+}
+
+func doOneSoakIteration(tc testgrpc.TestServiceClient, resetChannel bool, serverAddr string, dopts []grpc.DialOption) error {
+	client := tc
+	if resetChannel {
+		conn, err := grpc.Dial(serverAddr, dopts...)
+		if err != nil {
+			return err
+		}
+		defer conn.Close()
+		client = testgrpc.NewTestServiceClient(conn)
+	}
+	// do a large-unary RPC
+	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(largeRespSize),
+		Payload:      pl,
+	}
+	reply, err := client.UnaryCall(context.Background(), req)
+	if err != nil {
+		return fmt.Errorf("/TestService/UnaryCall RPC failed: %s", err)
+	}
+	t := reply.GetPayload().GetType()
+	s := len(reply.GetPayload().GetBody())
+	if t != testpb.PayloadType_COMPRESSABLE || s != largeRespSize {
+		return fmt.Errorf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
+	}
+	return nil
+}
+
+// DoSoakTest runs large unary RPCs in a loop for a configurable number of times, with configurable failure thresholds.
+// If resetChannel is false, then each RPC will be performed on tc. Otherwise, each RPC will be performed on a new
+// stub that is created with the provided server address and dial options.
+func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, perIterationMaxAcceptableLatency time.Duration, overallDeadline time.Time) {
+	start := time.Now()
+	var results []soakIterationResult
+	for i := 0; i < soakIterations; i++ {
+		if time.Now().After(overallDeadline) {
+			break
+		}
+		start := time.Now()
+		err := doOneSoakIteration(tc, resetChannel, serverAddr, dopts)
+		results = append(results, soakIterationResult{err: err, latency: time.Now().Sub(start)})
+	}
+	totalFailures := 0
+	hopts := stats.HistogramOptions{
+		NumBuckets:     20,
+		GrowthFactor:   1,
+		BaseBucketSize: 1,
+		MinValue:       0,
+	}
+	h := stats.NewHistogram(hopts)
+	for i := 0; i < len(results); i++ {
+		err := results[i].err
+		latency := results[i].latency
+		if err != nil {
+			totalFailures++
+			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d failed: %s\n", i, latency.Milliseconds(), err)
+		} else if latency > perIterationMaxAcceptableLatency {
+			totalFailures++
+			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d exceeds max acceptable latency: %d\n", i, latency.Milliseconds(), perIterationMaxAcceptableLatency.Milliseconds())
+		} else {
+			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d succeeded\n", i, latency.Milliseconds())
+		}
+		h.Add(latency.Milliseconds())
+	}
+	var b bytes.Buffer
+	h.Print(&b)
+	fmt.Fprintln(os.Stderr, "Histogram of per-iteration latencies in milliseconds:")
+	fmt.Fprintln(os.Stderr, b.String())
+	if len(results) < soakIterations {
+		fmt.Fprintf(os.Stderr, "soak test consumed all %f seconds of time and quit early, only having ran %d out of desired %d iterations. total failures: %d. max failures threshold: %d. Some or all of the iterations that did run were unexpectedly slow. See breakdown above for which iterations succeeded, failed, and why for more info.\n", overallDeadline.Sub(start).Seconds(), len(results), soakIterations, totalFailures, maxFailures)
+	} else if totalFailures > maxFailures {
+		fmt.Fprintf(os.Stderr, "soak test ran: %d iterations. total failures: %d exceeds max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", soakIterations, totalFailures, maxFailures)
+	} else {
+		fmt.Fprintf(os.Stderr, "soak test ran: %d iterations. total failures: %d is within max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", soakIterations, totalFailures, maxFailures)
 	}
 }
 

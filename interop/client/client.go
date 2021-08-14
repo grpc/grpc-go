@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"net"
 	"strconv"
+	"time"
 
 	"google.golang.org/grpc"
 	_ "google.golang.org/grpc/balancer/grpclb"
@@ -48,20 +49,24 @@ const (
 )
 
 var (
-	caFile                = flag.String("ca_file", "", "The file containning the CA root cert file")
-	useTLS                = flag.Bool("use_tls", false, "Connection uses TLS if true")
-	useALTS               = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
-	customCredentialsType = flag.String("custom_credentials_type", "", "Custom creds to use, excluding TLS or ALTS")
-	altsHSAddr            = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
-	testCA                = flag.Bool("use_test_ca", false, "Whether to replace platform root CAs with test CA as the CA root")
-	serviceAccountKeyFile = flag.String("service_account_key_file", "", "Path to service account json key file")
-	oauthScope            = flag.String("oauth_scope", "", "The scope for OAuth2 tokens")
-	defaultServiceAccount = flag.String("default_service_account", "", "Email of GCE default service account")
-	serverHost            = flag.String("server_host", "localhost", "The server host name")
-	serverPort            = flag.Int("server_port", 10000, "The server port number")
-	serviceConfigJSON     = flag.String("service_config_json", "", "Disables service config lookups and sets the provided string as the default service config.")
-	tlsServerName         = flag.String("server_host_override", "", "The server name used to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
-	testCase              = flag.String("test_case", "large_unary",
+	caFile                                 = flag.String("ca_file", "", "The file containning the CA root cert file")
+	useTLS                                 = flag.Bool("use_tls", false, "Connection uses TLS if true")
+	useALTS                                = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
+	customCredentialsType                  = flag.String("custom_credentials_type", "", "Custom creds to use, excluding TLS or ALTS")
+	altsHSAddr                             = flag.String("alts_handshaker_service_address", "", "ALTS handshaker gRPC service address")
+	testCA                                 = flag.Bool("use_test_ca", false, "Whether to replace platform root CAs with test CA as the CA root")
+	serviceAccountKeyFile                  = flag.String("service_account_key_file", "", "Path to service account json key file")
+	oauthScope                             = flag.String("oauth_scope", "", "The scope for OAuth2 tokens")
+	defaultServiceAccount                  = flag.String("default_service_account", "", "Email of GCE default service account")
+	serverHost                             = flag.String("server_host", "localhost", "The server host name")
+	serverPort                             = flag.Int("server_port", 10000, "The server port number")
+	serviceConfigJSON                      = flag.String("service_config_json", "", "Disables service config lookups and sets the provided string as the default service config.")
+	soakIterations                         = flag.Int("soak_iterations", 0, "The number of iterations to use for the two soak tests: rpc_soak and channel_soak")
+	soakMaxFailures                        = flag.Int("soak_max_failures", 0, "The number of iterations in soak tests that are allowed to fail (either due to non-OK status code or exceeding the per-iteration max acceptable latency).")
+	soakPerIterationMaxAcceptableLatencyMs = flag.Int("soak_per_iteration_max_acceptable_latency_ms", 0, "The number of milliseconds a single iteration in the two soak tests (rpc_soak and channel_soak) should take.")
+	soakOverallTimeoutSeconds              = flag.Int("soak_overall_timeout_seconds", 0, "The overall number of seconds after which a soak test should stop and fail, if the desired number of iterations have not yet completed.")
+	tlsServerName                          = flag.String("server_host_override", "", "The server name used to verify the hostname returned by TLS handshake if it is not empty. Otherwise, --server_host is used.")
+	testCase                               = flag.String("test_case", "large_unary",
 		`Configure different test cases. Valid options are:
         empty_unary : empty (zero bytes) request and response;
         large_unary : single request and (large) response;
@@ -292,6 +297,12 @@ func main() {
 	case "pick_first_unary":
 		interop.DoPickFirstUnary(tc)
 		logger.Infoln("PickFirstUnary done")
+	case "rpc_soak":
+		interop.DoSoakTest(tc, serverAddr, opts, false /* resetChannel */, *soakIterations, *soakMaxFailures, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Now().Add(time.Duration(*soakOverallTimeoutSeconds)*time.Second))
+		logger.Infoln("RpcSoak done")
+	case "channel_soak":
+		interop.DoSoakTest(tc, serverAddr, opts, true /* resetChannel */, *soakIterations, *soakMaxFailures, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Now().Add(time.Duration(*soakOverallTimeoutSeconds)*time.Second))
+		logger.Infoln("ChannelSoak done")
 	default:
 		logger.Fatal("Unsupported test case: ", *testCase)
 	}
