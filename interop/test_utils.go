@@ -751,11 +751,11 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 	fmt.Fprintln(os.Stderr, "Histogram of per-iteration latencies in milliseconds:")
 	fmt.Fprintln(os.Stderr, b.String())
 	if len(results) < soakIterations {
-		fmt.Fprintf(os.Stderr, "soak test consumed all %f seconds of time and quit early, only having ran %d out of desired %d iterations. total failures: %d. max failures threshold: %d. Some or all of the iterations that did run were unexpectedly slow. See breakdown above for which iterations succeeded, failed, and why for more info.\n", overallDeadline.Sub(start).Seconds(), len(results), soakIterations, totalFailures, maxFailures)
+		logger.Fatalf("soak test consumed all %f seconds of time and quit early, only having ran %d out of desired %d iterations. total failures: %d. max failures threshold: %d. Some or all of the iterations that did run were unexpectedly slow. See breakdown above for which iterations succeeded, failed, and why for more info.", overallDeadline.Sub(start).Seconds(), len(results), soakIterations, totalFailures, maxFailures)
 	} else if totalFailures > maxFailures {
-		fmt.Fprintf(os.Stderr, "soak test ran: %d iterations. total failures: %d exceeds max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", soakIterations, totalFailures, maxFailures)
+		logger.Fatalf("soak test ran: %d iterations. total failures: %d exceeds max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.", soakIterations, totalFailures, maxFailures)
 	} else {
-		fmt.Fprintf(os.Stderr, "soak test ran: %d iterations. total failures: %d is within max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", soakIterations, totalFailures, maxFailures)
+		fmt.Fprintln(os.Stderr, "soak test ran: %d iterations. total failures: %d is within max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", soakIterations, totalFailures, maxFailures)
 	}
 }
 
