@@ -755,7 +755,7 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 	} else if totalFailures > maxFailures {
 		logger.Fatalf("soak test ran: %d iterations. total failures: %d exceeds max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.", soakIterations, totalFailures, maxFailures)
 	} else {
-		fmt.Fprintln(os.Stderr, "soak test ran: %d iterations. total failures: %d is within max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", soakIterations, totalFailures, maxFailures)
+		fmt.Fprintf(os.Stderr, "soak test ran: %d iterations. total failures: %d is within max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", soakIterations, totalFailures, maxFailures)
 	}
 }
 
