@@ -734,17 +734,17 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 	h := stats.NewHistogram(hopts)
 	for i := 0; i < len(results); i++ {
 		err := results[i].err
-		latency := results[i].latency
+		latencyMs := int64(results[i].latency / time.Millisecond)
 		if err != nil {
 			totalFailures++
-			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d failed: %s\n", i, latency.Milliseconds(), err)
-		} else if latency > perIterationMaxAcceptableLatency {
+			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d failed: %s\n", i, latencyMs, err)
+		} else if results[i].latency > perIterationMaxAcceptableLatency {
 			totalFailures++
-			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d exceeds max acceptable latency: %d\n", i, latency.Milliseconds(), perIterationMaxAcceptableLatency.Milliseconds())
+			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d exceeds max acceptable latency: %d\n", i, latencyMs, perIterationMaxAcceptableLatency.Milliseconds())
 		} else {
-			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d succeeded\n", i, latency.Milliseconds())
+			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d succeeded\n", i, latencyMs)
 		}
-		h.Add(latency.Milliseconds())
+		h.Add(latencyMs)
 	}
 	var b bytes.Buffer
 	h.Print(&b)
