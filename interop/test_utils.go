@@ -705,7 +705,7 @@ func doOneSoakIteration(tc testgrpc.TestServiceClient, resetChannel bool, server
 	t := reply.GetPayload().GetType()
 	s := len(reply.GetPayload().GetBody())
 	if t != testpb.PayloadType_COMPRESSABLE || s != largeRespSize {
-		return fmt.Errorf("Got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
+		return fmt.Errorf("got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
 	}
 	return nil
 }
@@ -722,7 +722,7 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 		}
 		start := time.Now()
 		err := doOneSoakIteration(tc, resetChannel, serverAddr, dopts)
-		results = append(results, soakIterationResult{err: err, latency: time.Now().Sub(start)})
+		results = append(results, soakIterationResult{err: err, latency: time.Since(start)})
 	}
 	totalFailures := 0
 	hopts := stats.HistogramOptions{
