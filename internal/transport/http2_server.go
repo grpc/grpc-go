@@ -133,6 +133,24 @@ type http2Server struct {
 // underlying conn gets closed before the client preface could be read, it
 // returns a nil transport and a nil error.
 func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
+	var authInfo credentials.AuthInfo
+	rawConn := conn
+	if config.Credentials != nil {
+		var err error
+		conn, authInfo, err = config.Credentials.ServerHandshake(rawConn)
+		if err != nil {
+			// ErrConnDispatched means that the connection was dispatched away from
+			// gRPC; those connections should be left open.
+			if err != credentials.ErrConnDispatched {
+				rawConn.Close()
+			}
+			if err == credentials.ErrConnDispatched {
+				return nil, err
+			}
+			rawConn.SetDeadline(time.Time{})
+			return nil, connectionErrorf(false, err, "ServerHandshake(%q) failed: %v", rawConn.RemoteAddr(), err)
+		}
+	}
 	writeBufSize := config.WriteBufferSize
 	readBufSize := config.ReadBufferSize
 	maxHeaderListSize := defaultServerMaxHeaderListSize
@@ -215,14 +233,15 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	if kep.MinTime == 0 {
 		kep.MinTime = defaultKeepalivePolicyMinTime
 	}
+
 	done := make(chan struct{})
 	t := &http2Server{
-		ctx:               setConnection(context.Background(), conn),
+		ctx:               setConnection(context.Background(), rawConn),
 		done:              done,
 		conn:              conn,
 		remoteAddr:        conn.RemoteAddr(),
 		localAddr:         conn.LocalAddr(),
-		authInfo:          config.AuthInfo,
+		authInfo:          authInfo,
 		framer:            framer,
 		readerDone:        make(chan struct{}),
 		writerDone:        make(chan struct{}),
