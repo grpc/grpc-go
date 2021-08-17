@@ -75,24 +75,29 @@ func Get(name string) Builder {
 	return nil
 }
 
-// SubConn represents a gRPC sub connection.
-// Each sub connection contains a list of addresses. gRPC will
-// try to connect to them (in sequence), and stop trying the
-// remainder once one connection is successful.
+// A SubConn represents a single connection to a gRPC backend service.
+//
+// Each SubConn contains a list of addresses.
+//
+// All SubConns start in IDLE, and will not try to connect. To trigger the
+// connecting, Balancers must call Connect.
+//
+// gRPC will try to connect to the addresses in sequence, and stop trying the
+// remainder once the first connection is successful. If an attempt to connect
+// to all addresses encounters an error, the SubConn will automatically attempt
+// to reconnect after an increasing backoff period.
 //
 // The reconnect backoff will be applied on the list, not a single address.
 // For example, try_on_all_addresses -> backoff -> try_on_all_addresses.
 //
-// All SubConns start in IDLE, and will not try to connect. To trigger
-// the connecting, Balancers must call Connect.
-// When the connection encounters an error, it will reconnect immediately.
-// When the connection becomes IDLE, it will not reconnect unless Connect is
-// called.
+// Once established, if a connection is lost, the SubConn will transition to
+// IDLE. When the connection becomes IDLE, it will not reconnect unless Connect
+// is called.
 //
-// This interface is to be implemented by gRPC. Users should not need a
-// brand new implementation of this interface. For the situations like
-// testing, the new implementation should embed this interface. This allows
-// gRPC to add new methods to this interface.
+// This interface is to be implemented by gRPC. Users should not need their own
+// implementation of this interface. For situations like testing, any
+// implementations should embed this interface. This allows gRPC to add new
+// methods to this interface.
 type SubConn interface {
 	// UpdateAddresses updates the addresses used in this SubConn.
 	// gRPC checks if currently-connected address is still in the new list.
@@ -328,10 +333,15 @@ type Balancer interface {
 
 // ExitIdle is an optional interface for balancers to implement.  If
 // implemented, ExitIdle will be called when ClientConn.Connect is called, if
-// the ClientConn is idle.
+// the ClientConn is idle.  If unimplemented, ClientConn.Connect will cause
+// all SubConns to connect.
+//
+// Notice: it will be required for all balancers to implement this in a future
+// release.
 type ExitIdle interface {
 	// ExitIdle instructs the LB policy to reconnect to backends / exit the
-	// IDLE state, if appropriate and possible.
+	// IDLE state, if appropriate and possible.  Note that SubConns that enter
+	// the IDLE state will not reconnect until SubConn.Connect is called.
 	ExitIdle()
 }
 

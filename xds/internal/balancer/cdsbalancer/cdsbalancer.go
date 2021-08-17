@@ -383,6 +383,10 @@ func (b *cdsBalancer) run() {
 					b.logger.Errorf("xds: received ExitIdle with no child balancer")
 					break
 				}
+				// This implementation assumes the child balancer supports
+				// ExitIdle (but still checks for the interface's existence to
+				// avoid a panic if not).  If the child does not, no subconns
+				// will be connected.
 				if ei, ok := b.childLB.(balancer.ExitIdle); ok {
 					ei.ExitIdle()
 				}

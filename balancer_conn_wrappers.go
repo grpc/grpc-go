@@ -138,6 +138,10 @@ func (ccb *ccBalancerWrapper) close() {
 	<-ccb.done.Done()
 }
 
+func (ccb *ccBalancerWrapper) exitIdle() {
+	cc.balancerWrapper.updateCh.Put(exitIdle{})
+}
+
 func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State, err error) {
 	// When updating addresses for a SubConn, if the address in use is not in
 	// the new addresses, the old ac will be tearDown() and a new ac will be

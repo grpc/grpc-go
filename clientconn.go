@@ -556,10 +556,10 @@ func (cc *ClientConn) GetState() connectivity.State {
 // release.
 func (cc *ClientConn) Connect() {
 	cc.mu.Lock()
+	defer cc.mu.Unlock()
 	if cc.balancerWrapper != nil {
-		cc.balancerWrapper.updateCh.Put(exitIdle{})
+		cc.balancerWrapper.exitIdle()
 	}
-	cc.mu.Unlock()
 }
 
 func (cc *ClientConn) scWatcher() {
