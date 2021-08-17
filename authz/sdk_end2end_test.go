@@ -25,21 +25,17 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	pb "google.golang.org/grpc/test/grpc_testing"
 )
 
-const (
-	message = "Hi"
-)
-
-type server struct {
-	pb.UnimplementedEchoServer
+type testServer struct {
+	pb.UnimplementedTestServiceServer
 }
 
-func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
-	return &pb.EchoResponse{Message: message}, nil
+func (s *testServer) UnaryCall(ctx context.Context, req *pb.SimpleRequest) (*pb.SimpleResponse, error) {
+	return &pb.SimpleResponse{}, nil
 }
 
 func startServer(t *testing.T, policy string) string {
@@ -53,7 +49,7 @@ func startServer(t *testing.T, policy string) string {
 		t.Fatalf("error listening: %v", err)
 	}
 	s := grpc.NewServer(serverOpts...)
-	pb.RegisterEchoServer(s, &server{})
+	pb.RegisterTestServiceServer(s, &testServer{})
 	go func() {
 		if err := s.Serve(lis); err != nil {
 			t.Fatalf("failed to serve %v", err)
@@ -62,7 +58,7 @@ func startServer(t *testing.T, policy string) string {
 	return lis.Addr().String()
 }
 
-func runClient(ctx context.Context, t *testing.T, serverAddr string) (*pb.EchoResponse, error) {
+func runClient(ctx context.Context, t *testing.T, serverAddr string) (*pb.SimpleResponse, error) {
 	dialOptions := []grpc.DialOption{
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
@@ -72,8 +68,8 @@ func runClient(ctx context.Context, t *testing.T, serverAddr string) (*pb.EchoRe
 		t.Fatalf("grpc.Dial(%v, %v) failed: %v", serverAddr, dialOptions, err)
 	}
 	defer clientConn.Close()
-	c := pb.NewEchoClient(clientConn)
-	return c.UnaryEcho(ctx, &pb.EchoRequest{Message: message}, grpc.WaitForReady(true))
+	c := pb.NewTestServiceClient(clientConn)
+	return c.UnaryCall(ctx, &pb.SimpleRequest{}, grpc.WaitForReady(true))
 }
 
 func TestSdkEnd2End(t *testing.T) {
@@ -99,7 +95,7 @@ func TestSdkEnd2End(t *testing.T) {
 						"request": {
 							"paths": 
 							[
-								"/grpc.examples.echo.Echo/UnaryEcho"
+								"/grpc.testing.TestService/UnaryCall"
 							],
 							"headers": 
 							[
@@ -130,7 +126,7 @@ func TestSdkEnd2End(t *testing.T) {
 						{
 							"paths": 
 							[
-								"/grpc.examples.echo.Echo/UnaryEcho"
+								"/grpc.testing.TestService/UnaryCall"
 							]
 						}
 					}
@@ -166,12 +162,9 @@ func TestSdkEnd2End(t *testing.T) {
 			serverAddr := startServer(t, test.authzPolicy)
 			ctx := metadata.NewOutgoingContext(context.Background(), test.md)
 
-			resp, err := runClient(ctx, t, serverAddr)
+			_, err := runClient(ctx, t, serverAddr)
 			if gotStatusCode := status.Code(err); gotStatusCode != test.wantStatusCode {
 				t.Fatalf("unexpected authorization decision. status code want:%v got:%v", test.wantStatusCode, gotStatusCode)
-			}
-			if resp.GetMessage() != test.wantResp {
-				t.Fatalf("unexpected response message want:%v got:%v", test.wantResp, resp.GetMessage())
 			}
 		})
 	}

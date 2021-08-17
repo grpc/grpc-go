@@ -31,6 +31,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const (
+	message = "Hi"
+)
+
 type addr struct {
 	ipAddress string
 }
