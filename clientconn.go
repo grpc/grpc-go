@@ -557,8 +557,11 @@ func (cc *ClientConn) GetState() connectivity.State {
 func (cc *ClientConn) Connect() {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
-	if cc.balancerWrapper != nil {
-		cc.balancerWrapper.exitIdle()
+	if cc.balancerWrapper != nil && cc.balancerWrapper.exitIdle() {
+		return
+	}
+	for ac := range cc.conns {
+		go ac.connect()
 	}
 }
 
