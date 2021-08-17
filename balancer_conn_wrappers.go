@@ -139,7 +139,7 @@ func (ccb *ccBalancerWrapper) close() {
 }
 
 func (ccb *ccBalancerWrapper) exitIdle() {
-	cc.balancerWrapper.updateCh.Put(exitIdle{})
+	ccb.updateCh.Put(exitIdle{})
 }
 
 func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State, err error) {
