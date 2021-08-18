@@ -1,4 +1,4 @@
-// +build !appengine,!go1.14
+// +build !go1.14
 
 /*
  *
@@ -26,7 +26,7 @@ import (
 )
 
 // buildGetCertificates returns the first cert contained in ServerOptions for
-// non-appengine builds before version 1.4.
+// builds before version 1.14.
 func buildGetCertificates(clientHello *tls.ClientHelloInfo, o *ServerOptions) (*tls.Certificate, error) {
 	if o.IdentityOptions.GetIdentityCertificatesForServer == nil {
 		return nil, fmt.Errorf("function GetCertificates must be specified")
