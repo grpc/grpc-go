@@ -1,3 +1,4 @@
+//go:build go1.12
 // +build go1.12
 
 /*
@@ -85,7 +86,8 @@ type testEDSBalancer struct {
 	// resolverErrCh is a channel used to signal a resolver error.
 	resolverErrCh *testutils.Channel
 	// closeCh is a channel used to signal the closing of this balancer.
-	closeCh *testutils.Channel
+	closeCh    *testutils.Channel
+	exitIdleCh *testutils.Channel
 	// parentCC is the balancer.ClientConn passed to this test balancer as part
 	// of the Build() call.
 	parentCC balancer.ClientConn
@@ -102,6 +104,7 @@ func newTestEDSBalancer() *testEDSBalancer {
 		scStateCh:     testutils.NewChannel(),
 		resolverErrCh: testutils.NewChannel(),
 		closeCh:       testutils.NewChannel(),
+		exitIdleCh:    testutils.NewChannel(),
 	}
 }
 
@@ -120,6 +123,10 @@ func (tb *testEDSBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 
 func (tb *testEDSBalancer) Close() {
 	tb.closeCh.Send(struct{}{})
+}
+
+func (tb *testEDSBalancer) ExitIdle() {
+	tb.exitIdleCh.Send(struct{}{})
 }
 
 // waitForClientConnUpdate verifies if the testEDSBalancer receives the
@@ -703,6 +710,35 @@ func (s) TestClose(t *testing.T) {
 	if err := edsB.waitForResolverError(sCtx, rErr); err != context.DeadlineExceeded {
 		t.Fatal("ResolverError() forwarded to EDS balancer after Close()")
 	}
+}
+
+func (s) TestExitIdle(t *testing.T) {
+	// This creates a CDS balancer, pushes a ClientConnState update with a fake
+	// xdsClient, and makes sure that the CDS balancer registers a watch on the
+	// provided xdsClient.
+	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
+	defer func() {
+		cancel()
+		cdsB.Close()
+	}()
+
+	// Here we invoke the watch callback registered on the fake xdsClient. This
+	// will trigger the watch handler on the CDS balancer, which will attempt to
+	// create a new EDS balancer. The fake EDS balancer created above will be
+	// returned to the CDS balancer, because we have overridden the
+	// newChildBalancer function as part of test setup.
+	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
+	wantCCS := edsCCS(serviceName, nil, false, nil)
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
+		t.Fatal(err)
+	}
+
+	// Call ExitIdle on the CDS balancer.
+	cdsB.ExitIdle()
+
+	edsB.exitIdleCh.Receive(ctx)
 }
 
 // TestParseConfig verifies the ParseConfig() method in the CDS balancer.

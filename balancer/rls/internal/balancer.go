@@ -129,6 +129,10 @@ func (lb *rlsBalancer) Close() {
 	}
 }
 
+func (lb *rlsBalancer) ExitIdle() {
+	// TODO: are we 100% sure this should be a nop?
+}
+
 // updateControlChannel updates the RLS client if required.
 // Caller must hold lb.mu.
 func (lb *rlsBalancer) updateControlChannel(newCfg *lbConfig) {

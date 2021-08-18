@@ -141,6 +141,8 @@ type scUpdate struct {
 	state   balancer.SubConnState
 }
 
+type exitIdle struct{}
+
 // cdsBalancer implements a CDS based LB policy. It instantiates a
 // cluster_resolver balancer to further resolve the serviceName received from
 // CDS, into localities and endpoints. Implements the balancer.Balancer
@@ -376,6 +378,18 @@ func (b *cdsBalancer) run() {
 					break
 				}
 				b.childLB.UpdateSubConnState(update.subConn, update.state)
+			case exitIdle:
+				if b.childLB == nil {
+					b.logger.Errorf("xds: received ExitIdle with no child balancer")
+					break
+				}
+				// This implementation assumes the child balancer supports
+				// ExitIdle (but still checks for the interface's existence to
+				// avoid a panic if not).  If the child does not, no subconns
+				// will be connected.
+				if ei, ok := b.childLB.(balancer.ExitIdler); ok {
+					ei.ExitIdle()
+				}
 			}
 		case u := <-b.clusterHandler.updateChannel:
 			b.handleWatchUpdate(u)
@@ -492,6 +506,10 @@ func (b *cdsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 func (b *cdsBalancer) Close() {
 	b.closed.Fire()
 	<-b.done.Done()
+}
+
+func (b *cdsBalancer) ExitIdle() {
+	b.updateCh.Put(exitIdle{})
 }
 
 // ccWrapper wraps the balancer.ClientConn passed to the CDS balancer at

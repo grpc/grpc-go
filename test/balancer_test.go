@@ -116,6 +116,8 @@ func (b *testBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubCon
 
 func (b *testBalancer) Close() {}
 
+func (b *testBalancer) ExitIdle() {}
+
 type picker struct {
 	err error
 	sc  balancer.SubConn
@@ -373,8 +375,9 @@ func (testBalancerKeepAddresses) UpdateSubConnState(sc balancer.SubConn, s balan
 	panic("not used")
 }
 
-func (testBalancerKeepAddresses) Close() {
-}
+func (testBalancerKeepAddresses) Close() {}
+
+func (testBalancerKeepAddresses) ExitIdle() {}
 
 // Make sure that non-grpclb balancers don't get grpclb addresses even if name
 // resolver sends them

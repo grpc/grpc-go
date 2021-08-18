@@ -1,3 +1,4 @@
+//go:build go1.12
 // +build go1.12
 
 /*
@@ -127,6 +128,8 @@ func (f *fakeChildBalancer) UpdateSubConnState(sc balancer.SubConn, state balanc
 }
 
 func (f *fakeChildBalancer) Close() {}
+
+func (f *fakeChildBalancer) ExitIdle() {}
 
 func (f *fakeChildBalancer) waitForClientConnStateChange(ctx context.Context) error {
 	_, err := f.clientConnState.Receive(ctx)
