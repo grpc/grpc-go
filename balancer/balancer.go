@@ -80,19 +80,16 @@ func Get(name string) Builder {
 // Each SubConn contains a list of addresses.
 //
 // All SubConns start in IDLE, and will not try to connect. To trigger the
-// connecting, Balancers must call Connect.
+// connecting, Balancers must call Connect.  If a connection re-enters IDLE,
+// Balancers must call Connect again to trigger a new connection attempt.
 //
 // gRPC will try to connect to the addresses in sequence, and stop trying the
 // remainder once the first connection is successful. If an attempt to connect
-// to all addresses encounters an error, the SubConn will automatically attempt
-// to reconnect after an increasing backoff period.
+// to all addresses encounters an error, the SubConn will enter
+// TRANSIENT_FAILURE for a backoff period, and then transition to IDLE.
 //
-// The reconnect backoff will be applied on the list, not a single address.
-// For example, try_on_all_addresses -> backoff -> try_on_all_addresses.
-//
-// Once established, if a connection is lost, the SubConn will transition to
-// IDLE. When the connection becomes IDLE, it will not reconnect unless Connect
-// is called.
+// Once established, if a connection is lost, the SubConn will transition
+// directly to IDLE.
 //
 // This interface is to be implemented by gRPC. Users should not need their own
 // implementation of this interface. For situations like testing, any
@@ -331,14 +328,14 @@ type Balancer interface {
 	Close()
 }
 
-// ExitIdle is an optional interface for balancers to implement.  If
+// ExitIdler is an optional interface for balancers to implement.  If
 // implemented, ExitIdle will be called when ClientConn.Connect is called, if
 // the ClientConn is idle.  If unimplemented, ClientConn.Connect will cause
 // all SubConns to connect.
 //
 // Notice: it will be required for all balancers to implement this in a future
 // release.
-type ExitIdle interface {
+type ExitIdler interface {
 	// ExitIdle instructs the LB policy to reconnect to backends / exit the
 	// IDLE state, if appropriate and possible.  Note that SubConns that enter
 	// the IDLE state will not reconnect until SubConn.Connect is called.

@@ -109,7 +109,7 @@ func (sbc *subBalancerWrapper) exitIdle() {
 	if b == nil {
 		return
 	}
-	if ei, ok := b.(balancer.ExitIdle); ok {
+	if ei, ok := b.(balancer.ExitIdler); ok {
 		ei.ExitIdle()
 		return
 	}

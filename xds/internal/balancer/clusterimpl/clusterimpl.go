@@ -339,7 +339,7 @@ func (b *clusterImplBalancer) ExitIdle() {
 	if b.childLB == nil {
 		return
 	}
-	if ei, ok := b.childLB.(balancer.ExitIdle); ok {
+	if ei, ok := b.childLB.(balancer.ExitIdler); ok {
 		ei.ExitIdle()
 		return
 	}

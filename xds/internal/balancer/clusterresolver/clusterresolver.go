@@ -290,7 +290,7 @@ func (b *clusterResolverBalancer) run() {
 				// ExitIdle (but still checks for the interface's existence to
 				// avoid a panic if not).  If the child does not, no subconns
 				// will be connected.
-				if ei, ok := b.child.(balancer.ExitIdle); ok {
+				if ei, ok := b.child.(balancer.ExitIdler); ok {
 					ei.ExitIdle()
 				}
 			}

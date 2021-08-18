@@ -66,7 +66,7 @@ func newCCBalancerWrapper(cc *ClientConn, b balancer.Builder, bopts balancer.Bui
 	}
 	go ccb.watcher()
 	ccb.balancer = b.Build(ccb, bopts)
-	_, ccb.hasExitIdle = ccb.balancer.(balancer.ExitIdle)
+	_, ccb.hasExitIdle = ccb.balancer.(balancer.ExitIdler)
 	return ccb
 }
 
@@ -94,7 +94,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 				ccb.mu.Unlock()
 			case exitIdle:
 				if ccb.cc.GetState() == connectivity.Idle {
-					if ei, ok := ccb.balancer.(balancer.ExitIdle); ok {
+					if ei, ok := ccb.balancer.(balancer.ExitIdler); ok {
 						// We already checked that the balancer implements
 						// ExitIdle before pushing the event to updateCh, but
 						// check conditionally again as defensive programming.
