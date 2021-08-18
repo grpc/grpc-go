@@ -1294,6 +1294,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		return nil
 	}
 	ctx := NewContextWithServerTransportStream(stream.Context(), stream)
+	print("about to call handler")
 	reply, appErr := md.Handler(info.serviceImpl, ctx, df, s.opts.unaryInt)
 	if appErr != nil {
 		appStatus, ok := status.FromError(appErr)

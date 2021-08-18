@@ -267,7 +267,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	creds := cc.dopts.copts.TransportCredentials
-	if creds != nil && creds.Info().ServerName != "" {
+	if creds != nil && creds.Info().ServerName != "" { // This is the authority header I believe, figure out what authority is
 		cc.authority = creds.Info().ServerName
 	} else if cc.dopts.insecure && cc.dopts.authority != "" {
 		cc.authority = cc.dopts.authority

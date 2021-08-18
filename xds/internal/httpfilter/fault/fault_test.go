@@ -497,7 +497,7 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 			}
 
 			serviceName := fmt.Sprintf("myservice%d", tcNum)
-			resources := e2e.DefaultClientResources(e2e.ResourceParams{
+			resources := e2e.DefaultClientResources(e2e.ResourceParams{ // Single route, not multiple I want multiple
 				DialTarget: serviceName,
 				NodeID:     nodeID,
 				Host:       "localhost",

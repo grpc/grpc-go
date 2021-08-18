@@ -315,6 +315,7 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			// TODO: is this correct? Will this invoke the right behavior in GRPCServer?
 			return nil, fmt.Errorf("error constructing usable route configuration: %v", err)
 		}
+		print("Returning conn wrapper in wrapped lis")
 		return &ConnWrapper{Conn: conn, filterChain: fc, parent: l, VirtualHosts: fc.VirtualHosts}, nil
 	}
 }

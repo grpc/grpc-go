@@ -173,7 +173,7 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 				},
 			},
 		},
-		FilterChains: []*v3listenerpb.FilterChain{
+		FilterChains: []*v3listenerpb.FilterChain{ // This has two filter chains, you just need one filter chain honestly
 			{
 				Name: "v4-wildcard",
 				FilterChainMatch: &v3listenerpb.FilterChainMatch{
@@ -204,7 +204,7 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",
 										VirtualHosts: []*v3routepb.VirtualHost{{
-											Domains: []string{"lds.target.good:3333"},
+											Domains: []string{"127.0.0.1*", "my-service-fallback*", "*"},
 											Routes: []*v3routepb.Route{{
 												Match: &v3routepb.RouteMatch{
 													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
@@ -242,16 +242,17 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 				Filters: []*v3listenerpb.Filter{
 					{
 						Name: "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{
+						ConfigType: &v3listenerpb.Filter_TypedConfig{ // Incoming RPCs need to match to nfa, this configures route table
+							// Now router is required
 							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",
 										VirtualHosts: []*v3routepb.VirtualHost{{
-											Domains: []string{"lds.target.good:3333"},
+											Domains: []string{"127.0.0.1"}, // matches on authority header (md.Get(:authority)), how do I plumb these in
 											Routes: []*v3routepb.Route{{
 												Match: &v3routepb.RouteMatch{
-													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}, // path starts with /
 												},
 												Action: &v3routepb.Route_NonForwardingAction{},
 											}}}}},
@@ -261,6 +262,112 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 					},
 				},
 				TransportSocket: ts,
+			},
+		},
+	}
+}
+
+// ServerListenerWithInterestingRouteConfiguration returns an xds Listener
+// resource with a usable route configuration to be used on the server side to
+// test routing in xds(Unary|Stream)Interceptors.
+func ServerListenerWithInterestingRouteConfiguration(host string, port uint32) *v3listenerpb.Listener {
+	return &v3listenerpb.Listener{
+		Name: fmt.Sprintf(ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
+		Address: &v3corepb.Address{
+			Address: &v3corepb.Address_SocketAddress{
+				SocketAddress: &v3corepb.SocketAddress{
+					Address: host,
+					PortSpecifier: &v3corepb.SocketAddress_PortValue{
+						PortValue: port,
+					},
+				},
+			},
+		},
+		FilterChains: []*v3listenerpb.FilterChain{
+			// Accepted connections map to these
+			{
+				Name: "v6-wildcard",
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "::",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "::",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{ // Incoming RPCs need to match to nfa, this configures route table
+							// Now router is required
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+									RouteConfig: &v3routepb.RouteConfiguration{
+										Name: "routeName",
+										VirtualHosts: []*v3routepb.VirtualHost{
+											{
+												// Virtual host that will never be matched to to test Virtual Host selection
+												Domains: []string{"this will not match*"},
+												Routes: []*v3routepb.Route{
+													// Same routes here
+													{
+														Match: &v3routepb.RouteMatch{
+															PathSpecifier:
+														}
+													},
+												},
+											},
+											{
+												// Will get matched to
+												Domains: []string{"127.0.0.1"}, // matches on authority header (md.Get(:authority)), how do I plumb these in
+												Routes: []*v3routepb.Route{
+													{
+													Match: &v3routepb.RouteMatch{ // It can't HAVE to match - has to trigger not matching codepath
+														PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}, // path starts with /
+														// /specific-path (this doesn't have to get triggered)
+													},
+													Action: &v3routepb.Route_NonForwardingAction{},
+													},
+													{
+														// ^^^^ selectively hit those two
+
+														// Header matcher which gets selectively triggered...
+
+														// Another routing rule that isn't path but can be selectively triggered
+														Match: &v3routepb.RouteMatch{
+															Headers: []*v3routepb.HeaderMatcher{
+																// :method where exact match is GET
+																{
+																	Name: ":method",
+																	HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{
+																		ExactMatch: "GET",
+																	},
+																},
+															},
+														},
+														// Wrong action so should get denied
+														Action: &v3routepb.Route_Route{},
+													},
+
+													// This has to be able to be triggered - not matching route
+												}},
+										}},
+								},
+							}),
+						},
+					},
+				},
 			},
 		},
 	}

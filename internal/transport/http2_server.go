@@ -216,6 +216,8 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		kep.MinTime = defaultKeepalivePolicyMinTime
 	}
 	done := make(chan struct{})
+	// fmt.Printf("Is the conn a conn wrapper in transport: ", ok)
+	print("about to make out connection in background context")
 	t := &http2Server{
 		ctx:               setConnection(context.Background(), conn),
 		done:              done,

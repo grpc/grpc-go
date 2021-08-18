@@ -17,7 +17,7 @@
  * limitations under the License.
  *
  */
-
+// Can either have it here, or in e2e...seems like it's better e2e
 package xds
 
 import (

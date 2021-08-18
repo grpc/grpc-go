@@ -159,7 +159,9 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	defer cc.Close()
 
 	client := testpb.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+	// What is the :authority and thing that triggers routing matching for this RPC call, has to match with configured
+	// server state from inbound lis config thing
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil { // This one can get connection server side
 		t.Errorf("rpc EmptyCall() failed: %v", err)
 	}
 }
@@ -241,7 +243,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 			defer cc.Close()
 
 			client := testpb.NewTestServiceClient(cc)
-			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {  // Can't get connection on server side from this call
 				t.Fatalf("rpc EmptyCall() failed: %v", err)
 			}
 		})
@@ -334,14 +336,67 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 		Port:       port,
 		SecLevel:   e2e.SecurityLevelMTLS,
 	})
-	inboundLis = e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS)
+	inboundLis = e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS) // This thing prevents the wrapped conn from making its way to transport
 	resources.Listeners = append(resources.Listeners, inboundLis)
 	if err := managementServer.Update(resources); err != nil {
 		t.Fatal(err)
 	}
 
 	// Make another RPC with `waitForReady` set and expect this to succeed.
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil { // This one also can't get conn server side. Why is the correct one correct?
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
+}
+
+
+// Right now, we have tests failing IN THE SCENARIO in which there is security configuration defined
+
+// Add a test that sets up e2e
+// client ------> server (has route configuration with vh and two routes)
+
+
+// client ------> server (has route configuration with two vh (we need to test this functionality) and two routes)
+
+// Route configuration here in regards to two vh and two routes
+
+// Whole end to end setup here as well
+// TestServerSideXDS_RouteConfiguration is an e2e test which verifies routing functionality.
+// The xDS enabled server will be set up with route configuration where the route configuration has
+// some with correct routing actions (NonForwardingAction), which the RPC should proceed as needed.
+//
+func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
+	lis, cleanup := setupGRPCServer(t)
+	defer cleanup()
+
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("failed to retrieve host and port of server: %v", err)
+	}
+	const serviceName = "my-service-fallback"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     xdsClientNodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+
+	/*Instead of default listener resources, define your own here with a certain route configuration*/
+	// two virtual hosts, two routes per virtual host
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithResolvers(xdsResolverBuilder))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testpb.NewTestServiceClient(cc)
+
+	// Don't just need Unary, routing is added for streaming RPC's as well, so need to test that too
+	client. // 6 options, trigger all the codepaths listed below
+
+	// Test both xds(Unary|Stream)Interceptors.
+	// -> Unary (vh - route, route), (vh - route, route)
+	// -> Stream (vh - route, route), (vh - route, route)
 }

@@ -330,6 +330,7 @@ func routeAndProcess(ctx context.Context) error {
 	conn := transport.GetConnection(ctx)
 	cw, ok := conn.(*server.ConnWrapper)
 	if !ok {
+		print("WTF")
 		return errors.New("missing connection in incoming context")
 	}
 	mn, ok := grpc.Method(ctx)
@@ -346,7 +347,12 @@ func routeAndProcess(ctx context.Context) error {
 	// Assuming to just take the first value defined
 	authority := md.Get(":authority")
 
+	print("authority")
+	print(authority[0])
 	vh := xdsclient.FindBestMatchingVirtualHostServer(authority[0], cw.VirtualHosts)
+	if vh == nil {
+		return status.Error(codes.Unavailable, "the incoming RPC did not match a configured Virtual Host")
+	}
 
 	// Match to a vh
 	// match authority -> cw.VirtualHosts
@@ -358,6 +364,8 @@ func routeAndProcess(ctx context.Context) error {
 			Context: ctx,
 			Method: mn,
 		}) {
+			// "NonForwardingAction is expected for all Routes used on server-side; a route with an inappropriate action causes
+			// RPCs matching that route to fail with UNAVAILABLE." - A36
 			if r.RouteAction != xdsclient.RouteActionNonForwardingAction {
 				return status.Error(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding")
 			}
@@ -367,7 +375,7 @@ func routeAndProcess(ctx context.Context) error {
 
 	// The RPC has to match a route, otherwise it is an error
 	if rwi == nil {
-		return status.Error(codes.Unavailable, "the incoming RPC did not match a defined route")
+		return status.Error(codes.Unavailable, "the incoming RPC did not match a configured Route")
 	}
 
 	for _, interceptor := range rwi.Interceptors {
@@ -383,6 +391,7 @@ func routeAndProcess(ctx context.Context) error {
 //
 // This is a no-op at this point.
 func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	print("xdsUnaryInterceptor start")
 	if err := routeAndProcess(ctx); err != nil {
 		return nil, err
 	}

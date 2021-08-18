@@ -257,6 +257,8 @@ func FindBestMatchingVirtualHostServer(host string, vHosts []VirtualHostWithInte
 	)
 	for _, vh := range vHosts {
 		for _, domain := range vh.Domains {
+			print("domain")
+			print(domain)
 			typ, matched := match(domain, host)
 			if typ == domainMatchTypeInvalid {
 				// The rds response is invalid.
@@ -267,7 +269,7 @@ func FindBestMatchingVirtualHostServer(host string, vHosts []VirtualHostWithInte
 				// better length, or this domain isn't a match.
 				continue
 			}
-			matchVh = vh
+			matchVh = &vh
 			matchType = typ
 			matchLen = len(domain)
 		}

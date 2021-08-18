@@ -1,0 +1,1251 @@
+=== RUN   Test
+=== RUN   Test/ServerSideXDS_SecurityConfigChange
+    tlogger.go:99: server.go:108 [xds] [xds-server 0xc0000a2780] Created xds.GRPCServer  (t=+30.189µs)
+    tlogger.go:99: server.go:122 [xds] [xds-server 0xc0000a2780] xDS credentials in use: true  (t=+95.082µs)
+    tlogger.go:99: server.go:183 [xds] [xds-server 0xc0000a2780] Serve() passed a net.Listener on 127.0.0.1:53277  (t=+734.749µs)
+    tlogger.go:99: bootstrap.go:282 [xds] [xds-bootstrap] Bootstrap config for creating xds-client: {
+          "BalancerName": "127.0.0.1:53276",
+          "Creds": {},
+          "TransportAPI": 1,
+          "NodeProto": {
+            "id": "ac066ada-496a-4851-a029-9239e50ed7e9",
+            "user_agent_name": "gRPC Go",
+            "UserAgentVersionType": {
+              "UserAgentVersion": "1.41.0-dev"
+            },
+            "client_features": [
+              "envoy.lb.does_not_support_overprovisioning"
+            ]
+          },
+          "CertProviderConfigs": {
+            "client-side-certificate-provider-instance": {},
+            "server-side-certificate-provider-instance": {}
+          },
+          "ServerListenerResourceNameTemplate": "grpc/server?xds.resource.listening_address=%s"
+        }  (t=+2.925161ms)
+    tlogger.go:99: clientconn.go:252 [core] parsed scheme: ""  (t=+3.001493ms)
+    tlogger.go:99: clientconn.go:258 [core] scheme "" not registered, fallback to default scheme  (t=+3.021645ms)
+    tlogger.go:99: resolver_conn_wrapper.go:100 [core] ccResolverWrapper: sending update to cc: {[{127.0.0.1:53276  <nil> 0 <nil>}] <nil> <nil>}  (t=+3.055667ms)
+    tlogger.go:99: clientconn.go:728 [core] ClientConn switching balancer to "pick_first"  (t=+3.073128ms)
+    tlogger.go:99: clientconn.go:748 [core] Channel switches to new LB policy "pick_first"  (t=+3.083066ms)
+    tlogger.go:99: client.go:610 [xds] [xds-client 0xc000882100] Created ClientConn to xDS management server: 127.0.0.1:53276  (t=+3.120076ms)
+    tlogger.go:99: client.go:622 [xds] [xds-client 0xc000882100] Created  (t=+3.139676ms)
+    tlogger.go:99: server.go:171 [xds] [xds-server 0xc0000a2780] Created an xdsClient  (t=+3.148758ms)
+    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to CONNECTING  (t=+3.148475ms)
+    tlogger.go:99: clientconn.go:1253 [core] Subchannel picks a new address "127.0.0.1:53276" to connect  (t=+3.190398ms)
+    tlogger.go:99: listener_wrapper.go:154 [xds] [xds-server-listener 0xc0005e4000] Watch started on resource name grpc/server?xds.resource.listening_address=127.0.0.1:53277  (t=+3.195441ms)
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to CONNECTING  (t=+3.244707ms)
+    tlogger.go:99: server.go:146 [xds-e2e] Created new resource snapshot...  (t=+3.169286ms)
+    tlogger.go:99: server.go:152 [xds-e2e] Updated snapshot cache with resource snapshot...  (t=+3.269665ms)
+    tlogger.go:99: clientconn.go:252 [core] parsed scheme: "xds"  (t=+3.29477ms)
+    tlogger.go:99: xds_resolver.go:72 [xds] [xds-resolver 0xc000318000] Creating resolver for target: {Scheme:xds Authority: Endpoint:my-service-security-config-change}  (t=+3.318293ms)
+    tlogger.go:99: xds_resolver.go:105 [xds] [xds-resolver 0xc000318000] Watch started on resource name my-service-security-config-change with xds-client 0xc0006b8720  (t=+3.360512ms)
+    tlogger.go:99: syscall_nonlinux.go:38 [core] CPU time info is unavailable on non-linux or appengine environment.  (t=+3.424344ms)
+about to make out connection in background context    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to READY  (t=+3.595775ms)
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to READY  (t=+3.615581ms)
+    tlogger.go:99: transport_helper.go:208 [xds] [xds-client 0xc000882100] ADS stream created  (t=+3.676395ms)
+    tlogger.go:99: simple.go:360 [xds-e2e] respond type.googleapis.com/envoy.config.listener.v3.Listener[grpc/server?xds.resource.listening_address=127.0.0.1:53277 my-service-security-config-change] version "" with version "1"  (t=+4.18922ms)
+    tlogger.go:99: client.go:146 [xds] [xds-client 0xc000882100] ADS response received, type: type.googleapis.com/envoy.config.listener.v3.Listener  (t=+5.769905ms)
+    tlogger.go:99: xds.go:76 [xds] [xds-client 0xc000882100] Resource with name: my-service-security-config-change, type: *envoy_config_listener_v3.Listener, contains: {
+          "name": "my-service-security-config-change",
+          "filterChains": [
+            {
+              "filters": [
+                {
+                  "name": "envoy.filters.network.http_connection_manager",
+                  "typedConfig": {
+                    "@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
+                    "rds": {
+                      "configSource": {
+                        "ads": {
+        
+                        }
+                      },
+                      "routeConfigName": "route-my-service-security-config-change"
+                    },
+                    "httpFilters": [
+                      {
+                        "name": "router",
+                        "typedConfig": {
+                          "@type": "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "name": "filter-chain-name"
+            }
+          ],
+          "apiListener": {
+            "apiListener": {
+              "@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
+              "rds": {
+                "configSource": {
+                  "ads": {
+        
+                  }
+                },
+                "routeConfigName": "route-my-service-security-config-change"
+              },
+              "httpFilters": [
+                {
+                  "name": "router",
+                  "typedConfig": {
+                    "@type": "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
+                  }
+                }
+              ]
+            }
+          }
+        }  (t=+6.447755ms)
+    tlogger.go:99: xds.go:76 [xds] [xds-client 0xc000882100] Resource with name: grpc/server?xds.resource.listening_address=127.0.0.1:53277, type: *envoy_config_listener_v3.Listener, contains: {
+          "name": "grpc/server?xds.resource.listening_address=127.0.0.1:53277",
+          "address": {
+            "socketAddress": {
+              "address": "127.0.0.1",
+              "portValue": 53277
+            }
+          },
+          "filterChains": [
+            {
+              "filterChainMatch": {
+                "prefixRanges": [
+                  {
+                    "addressPrefix": "0.0.0.0",
+                    "prefixLen": 0
+                  }
+                ],
+                "sourceType": "SAME_IP_OR_LOOPBACK",
+                "sourcePrefixRanges": [
+                  {
+                    "addressPrefix": "0.0.0.0",
+                    "prefixLen": 0
+                  }
+                ]
+              },
+              "filters": [
+                {
+                  "name": "filter-1",
+                  "typedConfig": {
+                    "@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
+                    "routeConfig": {
+                      "name": "routeName",
+                      "virtualHosts": [
+                        {
+                          "domains": [
+                            "127.0.0.1*",
+                            "my-service-fallback*",
+                            "*"
+                          ],
+                          "routes": [
+                            {
+                              "match": {
+                                "prefix": "/"
+                              },
+                              "nonForwardingAction": {
+        
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "name": "v4-wildcard"
+            },
+            {
+              "filterChainMatch": {
+                "prefixRanges": [
+                  {
+                    "addressPrefix": "::",
+                    "prefixLen": 0
+                  }
+                ],
+                "sourceType": "SAME_IP_OR_LOOPBACK",
+                "sourcePrefixRanges": [
+                  {
+                    "addressPrefix": "::",
+                    "prefixLen": 0
+                  }
+                ]
+              },
+              "filters": [
+                {
+                  "name": "filter-1",
+                  "typedConfig": {
+                    "@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
+                    "routeConfig": {
+                      "name": "routeName",
+                      "virtualHosts": [
+                        {
+                          "domains": [
+                            "127.0.0.1"
+                          ],
+                          "routes": [
+                            {
+                              "match": {
+                                "prefix": "/"
+                              },
+                              "nonForwardingAction": {
+        
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "name": "v6-wildcard"
+            }
+          ]
+        }  (t=+6.609695ms)
+    tlogger.go:99: transport_helper.go:340 [xds] [xds-client 0xc000882100] Sending ACK for response type: ListenerResource, version: 1, nonce: 1  (t=+6.867937ms)
+    tlogger.go:99: watch_service.go:85 [xds] [xds-resolver 0xc000318000] received LDS update: {
+          "RouteConfigName": "route-my-service-security-config-change",
+          "InlineRouteConfig": null,
+          "MaxStreamDuration": 0,
+          "HTTPFilters": [
+            {
+              "Name": "router",
+              "Filter": {},
+              "Config": {
+                "FilterConfig": null
+              }
+            }
+          ],
+          "InboundListenerCfg": null,
+          "Raw": {
+            "type_url": "type.googleapis.com/envoy.config.listener.v3.Listener",
+            "value": "CiFteS1zZXJ2aWNlLXNlY3VyaXR5LWNvbmZpZy1jaGFuZ2UasAIamgIKLWVudm95LmZpbHRlcnMubmV0d29yay5odHRwX2Nvbm5lY3Rpb25fbWFuYWdlciLoAQpldHlwZS5nb29nbGVhcGlzLmNvbS9lbnZveS5leHRlbnNpb25zLmZpbHRlcnMubmV0d29yay5odHRwX2Nvbm5lY3Rpb25fbWFuYWdlci52My5IdHRwQ29ubmVjdGlvbk1hbmFnZXISfypOCgZyb3V0ZXIiRApCdHlwZS5nb29nbGVhcGlzLmNvbS9lbnZveS5leHRlbnNpb25zLmZpbHRlcnMuaHR0cC5yb3V0ZXIudjMuUm91dGVyGi0KAhoAEidyb3V0ZS1teS1zZXJ2aWNlLXNlY3VyaXR5LWNvbmZpZy1jaGFuZ2U6EWZpbHRlci1jaGFpbi1uYW1lmgHrAQroAQpldHlwZS5nb29nbGVhcGlzLmNvbS9lbnZveS5leHRlbnNpb25zLmZpbHRlcnMubmV0d29yay5odHRwX2Nvbm5lY3Rpb25fbWFuYWdlci52My5IdHRwQ29ubmVjdGlvbk1hbmFnZXISfypOCgZyb3V0ZXIiRApCdHlwZS5nb29nbGVhcGlzLmNvbS9lbnZveS5leHRlbnNpb25zLmZpbHRlcnMuaHR0cC5yb3V0ZXIudjMuUm91dGVyGi0KAhoAEidyb3V0ZS1teS1zZXJ2aWNlLXNlY3VyaXR5LWNvbmZpZy1jaGFuZ2U="
+          }
+        }, err: <nil>  (t=+6.940436ms)
+    tlogger.go:99: simple.go:312 [xds-e2e] open watch 1 for type.googleapis.com/envoy.config.listener.v3.Listener[grpc/server?xds.resource.listening_address=127.0.0.1:53277 my-service-security-config-change] from nodeID "ac066ada-496a-4851-a029-9239e50ed7e9", version "1"  (t=+6.991276ms)
+    tlogger.go:99: simple.go:360 [xds-e2e] respond type.googleapis.com/envoy.config.route.v3.RouteConfiguration[route-my-service-security-config-change] version "" with version "1"  (t=+7.10096ms)
+    tlogger.go:99: listener_wrapper.go:401 [xds] [xds-server-listener 0xc0005e4000] Received update for resource "grpc/server?xds.resource.listening_address=127.0.0.1:53277": {RouteConfigName: InlineRouteConfig:<nil> MaxStreamDuration:0s HTTPFilters:[] InboundListenerCfg:0xc000612930 Raw:[type.googleapis.com/envoy.config.listener.v3.Listener]:{name:"grpc/server?xds.resource.listening_address=127.0.0.1:53277"  address:{socket_address:{address:"127.0.0.1"  port_value:53277}}  filter_chains:{filter_chain_match:{prefix_ranges:{address_prefix:"0.0.0.0"  prefix_len:{}}  source_type:SAME_IP_OR_LOOPBACK  source_prefix_ranges:{address_prefix:"0.0.0.0"  prefix_len:{}}}  filters:{name:"filter-1"  typed_config:{[type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager]:{route_config:{name:"routeName"  virtual_hosts:{domains:"127.0.0.1*"  domains:"my-service-fallback*"  domains:"*"  routes:{match:{prefix:"/"}  non_forwarding_action:{}}}}}}}  name:"v4-wildcard"}  filter_chains:{filter_chain_match:{prefix_ranges:{address_prefix:"::"  prefix_len:{}}  source_type:SAME_IP_OR_LOOPBACK  source_prefix_ranges:{address_prefix:"::"  prefix_len:{}}}  filters:{name:"filter-1"  typed_config:{[type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager]:{route_config:{name:"routeName"  virtual_hosts:{domains:"127.0.0.1"  routes:{match:{prefix:"/"}  non_forwarding_action:{}}}}}}}  name:"v6-wildcard"}}}  (t=+7.145793ms)
+    tlogger.go:99: listener_wrapper.go:450 [xds] [xds-server-listener 0xc0005e4000] Listener "127.0.0.1:53277" entering mode: "serving" due to error: <nil>  (t=+7.168605ms)
+    tlogger.go:99: client.go:146 [xds] [xds-client 0xc000882100] ADS response received, type: type.googleapis.com/envoy.config.route.v3.RouteConfiguration  (t=+7.319782ms)
+    tlogger.go:99: xds.go:298 [xds] [xds-client 0xc000882100] Resource with name: route-my-service-security-config-change, type: *envoy_config_route_v3.RouteConfiguration, contains: {
+          "name": "route-my-service-security-config-change",
+          "virtualHosts": [
+            {
+              "domains": [
+                "my-service-security-config-change"
+              ],
+              "routes": [
+                {
+                  "match": {
+                    "prefix": "/"
+                  },
+                  "route": {
+                    "cluster": "cluster-my-service-security-config-change"
+                  }
+                }
+              ]
+            }
+          ]
+        }.  (t=+7.432062ms)
+    tlogger.go:99: transport_helper.go:340 [xds] [xds-client 0xc000882100] Sending ACK for response type: RouteConfigResource, version: 1, nonce: 2  (t=+7.482147ms)
+    tlogger.go:99: watch_service.go:166 [xds] [xds-resolver 0xc000318000] received RDS update: {
+          "VirtualHosts": [
+            {
+              "Domains": [
+                "my-service-security-config-change"
+              ],
+              "Routes": [
+                {
+                  "Path": null,
+                  "Prefix": "/",
+                  "Regex": null,
+                  "CaseInsensitive": false,
+                  "Headers": null,
+                  "Fraction": null,
+                  "HashPolicies": null,
+                  "WeightedClusters": {
+                    "cluster-my-service-security-config-change": {
+                      "Weight": 1,
+                      "HTTPFilterConfigOverride": null
+                    }
+                  },
+                  "MaxStreamDuration": null,
+                  "HTTPFilterConfigOverride": null,
+                  "RouteAction": 1
+                }
+              ],
+              "HTTPFilterConfigOverride": null
+            }
+          ],
+          "Raw": {
+            "type_url": "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+            "value": "Cidyb3V0ZS1teS1zZXJ2aWNlLXNlY3VyaXR5LWNvbmZpZy1jaGFuZ2USVxIhbXktc2VydmljZS1zZWN1cml0eS1jb25maWctY2hhbmdlGjIKAwoBLxIrCiljbHVzdGVyLW15LXNlcnZpY2Utc2VjdXJpdHktY29uZmlnLWNoYW5nZQ=="
+          }
+        }, err: <nil>  (t=+7.520007ms)
+    tlogger.go:99: simple.go:312 [xds-e2e] open watch 2 for type.googleapis.com/envoy.config.route.v3.RouteConfiguration[route-my-service-security-config-change] from nodeID "ac066ada-496a-4851-a029-9239e50ed7e9", version "1"  (t=+7.569195ms)
+    tlogger.go:99: xds_resolver.go:182 [xds] [xds-resolver 0xc000318000] Received update on resource my-service-security-config-change from xds-client 0xc0006b8720, generated service config: {
+          "loadBalancingConfig": [
+            {
+              "xds_cluster_manager_experimental": {
+                "children": {
+                  "cluster-my-service-security-config-change": {
+                    "childPolicy": [
+                      {
+                        "cds_experimental": {
+                          "cluster": "cluster-my-service-security-config-change"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }  (t=+7.629943ms)
+    tlogger.go:99: resolver_conn_wrapper.go:100 [core] ccResolverWrapper: sending update to cc: {[] 0xc000433c20 0xc000129290}  (t=+7.698044ms)
+    tlogger.go:99: clientconn.go:728 [core] ClientConn switching balancer to "xds_cluster_manager_experimental"  (t=+7.711054ms)
+    tlogger.go:99: clientconn.go:748 [core] Channel switches to new LB policy "xds_cluster_manager_experimental"  (t=+7.725382ms)
+    tlogger.go:99: clustermanager.go:51 [xds] [xds-cluster-manager-lb 0xc000433da0] Created  (t=+7.751665ms)
+    tlogger.go:99: clustermanager.go:119 [xds] [xds-cluster-manager-lb 0xc000433da0] update with config {
+          "LoadBalancingConfig": null,
+          "Children": {
+            "cluster-my-service-security-config-change": {
+              "ChildPolicy": [
+                {
+                  "cds_experimental": {
+                    "LoadBalancingConfig": null,
+                    "Cluster": "cluster-my-service-security-config-change"
+                  }
+                }
+              ]
+            }
+          }
+        }, resolver state {Addresses:[] ServiceConfig:0xc000433c20 Attributes:0xc000129290}  (t=+7.783398ms)
+    tlogger.go:99: cdsbalancer.go:82 [xds] [cds-lb 0xc00027a4b0] Created  (t=+7.803357ms)
+    tlogger.go:99: cdsbalancer.go:93 [xds] [cds-lb 0xc00027a4b0] xDS credentials in use: true  (t=+7.816235ms)
+    tlogger.go:99: balancergroup.go:100 [xds] [xds-cluster-manager-lb 0xc000433da0] Created child policy 0xc00027a4b0 of type cds_experimental  (t=+7.830551ms)
+    tlogger.go:99: cdsbalancer.go:440 [xds] [cds-lb 0xc00027a4b0] Received update from resolver, balancer config: {
+          "LoadBalancingConfig": null,
+          "Cluster": "cluster-my-service-security-config-change"
+        }  (t=+7.852199ms)
+    tlogger.go:99: cluster_handler.go:151 [xds] [cds-lb 0xc00027a4b0] CDS watch started on cluster-my-service-security-config-change  (t=+7.885209ms)
+    tlogger.go:99: simple.go:360 [xds-e2e] respond type.googleapis.com/envoy.config.cluster.v3.Cluster[cluster-my-service-security-config-change] version "" with version "1"  (t=+7.985796ms)
+    tlogger.go:99: client.go:146 [xds] [xds-client 0xc000882100] ADS response received, type: type.googleapis.com/envoy.config.cluster.v3.Cluster  (t=+8.533811ms)
+    tlogger.go:99: xds.go:567 [xds] [xds-client 0xc000882100] Resource with name: cluster-my-service-security-config-change, type: *envoy_config_cluster_v3.Cluster, contains: {
+          "name": "cluster-my-service-security-config-change",
+          "type": "EDS",
+          "edsClusterConfig": {
+            "edsConfig": {
+              "ads": {
+        
+              }
+            },
+            "serviceName": "endpoints-my-service-security-config-change"
+          }
+        }  (t=+8.662935ms)
+    tlogger.go:99: transport_helper.go:340 [xds] [xds-client 0xc000882100] Sending ACK for response type: ClusterResource, version: 1, nonce: 3  (t=+8.754501ms)
+    tlogger.go:99: cdsbalancer.go:277 [xds] [cds-lb 0xc00027a4b0] Watch update from xds-client 0xc0006b8720, content: [
+          {
+            "ClusterType": 0,
+            "ClusterName": "cluster-my-service-security-config-change",
+            "EDSServiceName": "endpoints-my-service-security-config-change",
+            "EnableLRS": false,
+            "SecurityCfg": null,
+            "MaxRequests": null,
+            "DNSHostName": "",
+            "PrioritizedClusterNames": null,
+            "Raw": {
+              "type_url": "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+              "value": "CiljbHVzdGVyLW15LXNlcnZpY2Utc2VjdXJpdHktY29uZmlnLWNoYW5nZRoxCgIaABIrZW5kcG9pbnRzLW15LXNlcnZpY2Utc2VjdXJpdHktY29uZmlnLWNoYW5nZRAD"
+            }
+          }
+        ], security config: null  (t=+8.790149ms)
+    tlogger.go:99: clusterresolver.go:80 [xds] [xds-cluster-resolver-lb 0xc0002aefc0] Created  (t=+8.830111ms)
+    tlogger.go:99: cdsbalancer.go:303 [xds] [cds-lb 0xc00027a4b0] Created child policy 0xc0002aefc0 of type cluster_resolver_experimental  (t=+8.842241ms)
+    tlogger.go:99: simple.go:312 [xds-e2e] open watch 3 for type.googleapis.com/envoy.config.cluster.v3.Cluster[cluster-my-service-security-config-change] from nodeID "ac066ada-496a-4851-a029-9239e50ed7e9", version "1"  (t=+8.878121ms)
+    tlogger.go:99: clusterresolver.go:156 [xds] [xds-cluster-resolver-lb 0xc0002aefc0] Receive update from resolver, balancer config: {
+          "discoveryMechanisms": [
+            {
+              "cluster": "cluster-my-service-security-config-change",
+              "edsServiceName": "endpoints-my-service-security-config-change"
+            }
+          ]
+        }  (t=+8.93032ms)
+    tlogger.go:99: resource_resolver.go:226 [xds] [xds-cluster-resolver-lb 0xc0002aefc0] EDS watch started on endpoints-my-service-security-config-change  (t=+8.94807ms)
+    tlogger.go:99: simple.go:360 [xds-e2e] respond type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment[endpoints-my-service-security-config-change] version "" with version "1"  (t=+9.040478ms)
+    tlogger.go:99: client.go:146 [xds] [xds-client 0xc000882100] ADS response received, type: type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment  (t=+9.211945ms)
+    tlogger.go:99: xds.go:796 [xds] [xds-client 0xc000882100] Resource with name: endpoints-my-service-security-config-change, type: *envoy_config_endpoint_v3.ClusterLoadAssignment, contains: {
+          "clusterName": "endpoints-my-service-security-config-change",
+          "endpoints": [
+            {
+              "locality": {
+                "subZone": "subzone"
+              },
+              "lbEndpoints": [
+                {
+                  "endpoint": {
+                    "address": {
+                      "socketAddress": {
+                        "address": "127.0.0.1",
+                        "portValue": 53277
+                      }
+                    }
+                  }
+                }
+              ],
+              "loadBalancingWeight": 1
+            }
+          ]
+        }  (t=+9.314885ms)
+    tlogger.go:99: transport_helper.go:340 [xds] [xds-client 0xc000882100] Sending ACK for response type: EndpointsResource, version: 1, nonce: 4  (t=+9.410283ms)
+    tlogger.go:99: clusterresolver.go:188 [xds] [xds-cluster-resolver-lb 0xc0002aefc0] resource update: [
+          {}
+        ]  (t=+9.436402ms)
+    tlogger.go:99: balancer.go:65 [xds] [priority-lb 0xc000619c00] Created  (t=+9.475228ms)
+    tlogger.go:99: configbuilder.go:269 [xds] xds lb policy is "ROUND_ROBIN", building config with weighted_target + round_robin  (t=+9.500137ms)
+    tlogger.go:99: simple.go:312 [xds-e2e] open watch 4 for type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment[endpoints-my-service-security-config-change] from nodeID "ac066ada-496a-4851-a029-9239e50ed7e9", version "1"  (t=+9.505866ms)
+    tlogger.go:99: clusterresolver.go:220 [xds] [xds-cluster-resolver-lb 0xc0002aefc0] build balancer config: {
+          "children": {
+            "priority-0-0": {
+              "config": [
+                {
+                  "xds_cluster_impl_experimental": {
+                    "cluster": "cluster-my-service-security-config-change",
+                    "edsServiceName": "endpoints-my-service-security-config-change",
+                    "childPolicy": [
+                      {
+                        "weighted_target_experimental": {
+                          "targets": {
+                            "{\"subZone\":\"subzone\"}": {
+                              "weight": 1,
+                              "childPolicy": [
+                                {
+                                  "round_robin": {}
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "ignoreReresolutionRequests": true
+            }
+          },
+          "priorities": [
+            "priority-0-0"
+          ]
+        }  (t=+9.687361ms)
+    tlogger.go:99: balancer.go:112 [xds] [priority-lb 0xc000619c00] Received update from resolver, balancer config: {
+          "children": {
+            "priority-0-0": {
+              "config": [
+                {
+                  "xds_cluster_impl_experimental": {
+                    "cluster": "cluster-my-service-security-config-change",
+                    "edsServiceName": "endpoints-my-service-security-config-change",
+                    "childPolicy": [
+                      {
+                        "weighted_target_experimental": {
+                          "targets": {
+                            "{\"subZone\":\"subzone\"}": {
+                              "weight": 1,
+                              "childPolicy": [
+                                {
+                                  "round_robin": {}
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "ignoreReresolutionRequests": true
+            }
+          },
+          "priorities": [
+            "priority-0-0"
+          ]
+        }  (t=+9.747071ms)
+    tlogger.go:99: balancer_priority.go:98 [xds] [priority-lb 0xc000619c00] switching to ("priority-0-0", 0) in syncPriority  (t=+9.763237ms)
+    tlogger.go:99: clusterimpl.go:72 [xds] [xds-cluster-impl-lb 0xc0006ba1a0] Created  (t=+9.783816ms)
+    tlogger.go:99: balancergroup.go:100 [xds] [priority-lb 0xc000619c00] Created child policy 0xc0006ba1a0 of type xds_cluster_impl_experimental  (t=+9.795161ms)
+    tlogger.go:99: clusterimpl.go:223 [xds] [xds-cluster-impl-lb 0xc0006ba1a0] Received update from resolver, balancer config: {
+          "cluster": "cluster-my-service-security-config-change",
+          "edsServiceName": "endpoints-my-service-security-config-change",
+          "childPolicy": [
+            {
+              "weighted_target_experimental": {
+                "targets": {
+                  "{\"subZone\":\"subzone\"}": {
+                    "weight": 1,
+                    "childPolicy": [
+                      {
+                        "round_robin": {}
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }  (t=+9.815202ms)
+    tlogger.go:99: weightedtarget.go:57 [xds] [weighted-target-lb 0xc000586980] Created  (t=+9.837469ms)
+    tlogger.go:99: weightedtarget.go:87 [xds] [weighted-target-lb 0xc000586980] Received update from resolver, balancer config: {
+          "targets": {
+            "{\"subZone\":\"subzone\"}": {
+              "weight": 1,
+              "childPolicy": [
+                {
+                  "round_robin": {}
+                }
+              ]
+            }
+          }
+        }  (t=+9.855022ms)
+    tlogger.go:99: balancergroup.go:100 [xds] [weighted-target-lb 0xc000586980] Created child policy 0xc000619e00 of type round_robin  (t=+9.867475ms)
+    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to CONNECTING  (t=+9.901199ms)
+    tlogger.go:99: clientconn.go:1253 [core] Subchannel picks a new address "127.0.0.1:53277" to connect  (t=+9.913509ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [weighted-target-lb 0xc000586980] Balancer state update from locality {"subZone":"subzone"}, new state: {ConnectivityState:CONNECTING Picker:0xc00042bc30}  (t=+9.937177ms)
+    tlogger.go:99: aggregator.go:201 [xds] [weighted-target-lb 0xc000586980] Child pickers with config: map[{"subZone":"subzone"}:weight:1,picker:0xc00042bc30,state:CONNECTING,stateToAggregate:CONNECTING]  (t=+9.964381ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [priority-lb 0xc000619c00] Balancer state update from locality priority-0-0, new state: {ConnectivityState:CONNECTING Picker:0xc0001537c0}  (t=+9.986263ms)
+Returning conn wrapper in wrapped lisabout to make out connection in background context    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to READY  (t=+10.222147ms)
+    tlogger.go:99: roundrobin.go:50 [roundrobin] roundrobinPicker: newPicker called with info: {map[0xc000586ac0:{{127.0.0.1:53277  0xc00067c1f0 0 <nil>}}]}  (t=+10.25925ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [weighted-target-lb 0xc000586980] Balancer state update from locality {"subZone":"subzone"}, new state: {ConnectivityState:READY Picker:0xc000613e00}  (t=+10.275573ms)
+    tlogger.go:99: aggregator.go:201 [xds] [weighted-target-lb 0xc000586980] Child pickers with config: map[{"subZone":"subzone"}:weight:1,picker:0xc000613e00,state:READY,stateToAggregate:READY]  (t=+10.288735ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [priority-lb 0xc000619c00] Balancer state update from locality priority-0-0, new state: {ConnectivityState:READY Picker:0xc000153810}  (t=+10.304536ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [xds-cluster-manager-lb 0xc000433da0] Balancer state update from locality cluster-my-service-security-config-change, new state: {ConnectivityState:READY Picker:0xc000153810}  (t=+10.325977ms)
+    tlogger.go:99: balancerstateaggregator.go:210 [xds] [xds-cluster-manager-lb 0xc000433da0] Child pickers: map[cluster-my-service-security-config-change:picker:0xc000153810,state:READY,stateToAggregate:READY]  (t=+10.35064ms)
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to READY  (t=+10.364621ms)
+about to call handlerxdsUnaryInterceptor startauthoritymy-service-security-config-changedomain127.0.0.1*domainmy-service-fallback*domain*    tlogger.go:99: clientconn.go:252 [core] parsed scheme: ""  (t=+11.686527ms)
+    tlogger.go:99: clientconn.go:258 [core] scheme "" not registered, fallback to default scheme  (t=+11.706544ms)
+    tlogger.go:99: resolver_conn_wrapper.go:100 [core] ccResolverWrapper: sending update to cc: {[{127.0.0.1:53277  <nil> 0 <nil>}] <nil> <nil>}  (t=+11.736868ms)
+    tlogger.go:99: clientconn.go:728 [core] ClientConn switching balancer to "pick_first"  (t=+11.748151ms)
+    tlogger.go:99: clientconn.go:748 [core] Channel switches to new LB policy "pick_first"  (t=+11.756547ms)
+    tlogger.go:99: picker_wrapper.go:161 [core] blockingPicker: the picked transport is not ready, loop back to repick  (t=+11.779959ms)
+    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to CONNECTING  (t=+11.796003ms)
+    tlogger.go:99: clientconn.go:1253 [core] Subchannel picks a new address "127.0.0.1:53277" to connect  (t=+11.815623ms)
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to CONNECTING  (t=+11.837811ms)
+Returning conn wrapper in wrapped lisabout to make out connection in background context    tlogger.go:99: clientconn.go:1320 [core] grpc: addrConn.createTransport failed to connect to {127.0.0.1:53277 x.test.example.com <nil> 0 <nil>}. Err: connection error: desc = "transport: authentication handshake failed: tls: first record does not look like a TLS handshake"  (t=+12.134621ms)
+    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to TRANSIENT_FAILURE  (t=+12.150185ms)
+    tlogger.go:99: server.go:913 [core] grpc: Server.Serve failed to create ServerTransport:  connection error: desc = "transport: http2Server.HandleStreams received bogus greeting from client: \"\\x16\\x03\\x01\\x01\\x12\\x01\\x00\\x01\\x0e\\x03\\x03\\x80\\xd3(nŨBB\\x00D\\x18*\\r\""  (t=+12.134634ms)
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to TRANSIENT_FAILURE  (t=+12.163271ms)
+    tlogger.go:99: server.go:146 [xds-e2e] Created new resource snapshot...  (t=+12.324528ms)
+    tlogger.go:99: simple.go:205 [xds-e2e] respond open watch 1[grpc/server?xds.resource.listening_address=127.0.0.1:53277 my-service-security-config-change] with new version "2"  (t=+12.34352ms)
+    tlogger.go:99: simple.go:360 [xds-e2e] respond type.googleapis.com/envoy.config.listener.v3.Listener[grpc/server?xds.resource.listening_address=127.0.0.1:53277 my-service-security-config-change] version "1" with version "2"  (t=+12.360259ms)
+    tlogger.go:99: simple.go:205 [xds-e2e] respond open watch 2[route-my-service-security-config-change] with new version "2"  (t=+12.373999ms)
+    tlogger.go:99: simple.go:360 [xds-e2e] respond type.googleapis.com/envoy.config.route.v3.RouteConfiguration[route-my-service-security-config-change] version "1" with version "2"  (t=+12.382035ms)
+    tlogger.go:99: simple.go:205 [xds-e2e] respond open watch 3[cluster-my-service-security-config-change] with new version "2"  (t=+12.391465ms)
+    tlogger.go:99: simple.go:360 [xds-e2e] respond type.googleapis.com/envoy.config.cluster.v3.Cluster[cluster-my-service-security-config-change] version "1" with version "2"  (t=+12.404813ms)
+    tlogger.go:99: simple.go:205 [xds-e2e] respond open watch 4[endpoints-my-service-security-config-change] with new version "2"  (t=+12.419947ms)
+    tlogger.go:99: simple.go:360 [xds-e2e] respond type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment[endpoints-my-service-security-config-change] version "1" with version "2"  (t=+12.428506ms)
+    tlogger.go:99: server.go:152 [xds-e2e] Updated snapshot cache with resource snapshot...  (t=+12.436872ms)
+    tlogger.go:99: client.go:146 [xds] [xds-client 0xc000882100] ADS response received, type: type.googleapis.com/envoy.config.listener.v3.Listener  (t=+12.527007ms)
+    tlogger.go:99: xds.go:76 [xds] [xds-client 0xc000882100] Resource with name: my-service-security-config-change, type: *envoy_config_listener_v3.Listener, contains: {
+          "name": "my-service-security-config-change",
+          "filterChains": [
+            {
+              "filters": [
+                {
+                  "name": "envoy.filters.network.http_connection_manager",
+                  "typedConfig": {
+                    "@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
+                    "rds": {
+                      "configSource": {
+                        "ads": {
+        
+                        }
+                      },
+                      "routeConfigName": "route-my-service-security-config-change"
+                    },
+                    "httpFilters": [
+                      {
+                        "name": "router",
+                        "typedConfig": {
+                          "@type": "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "name": "filter-chain-name"
+            }
+          ],
+          "apiListener": {
+            "apiListener": {
+              "@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
+              "rds": {
+                "configSource": {
+                  "ads": {
+        
+                  }
+                },
+                "routeConfigName": "route-my-service-security-config-change"
+              },
+              "httpFilters": [
+                {
+                  "name": "router",
+                  "typedConfig": {
+                    "@type": "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
+                  }
+                }
+              ]
+            }
+          }
+        }  (t=+12.963248ms)
+    tlogger.go:99: xds.go:76 [xds] [xds-client 0xc000882100] Resource with name: grpc/server?xds.resource.listening_address=127.0.0.1:53277, type: *envoy_config_listener_v3.Listener, contains: {
+          "name": "grpc/server?xds.resource.listening_address=127.0.0.1:53277",
+          "address": {
+            "socketAddress": {
+              "address": "127.0.0.1",
+              "portValue": 53277
+            }
+          },
+          "filterChains": [
+            {
+              "filterChainMatch": {
+                "prefixRanges": [
+                  {
+                    "addressPrefix": "0.0.0.0",
+                    "prefixLen": 0
+                  }
+                ],
+                "sourceType": "SAME_IP_OR_LOOPBACK",
+                "sourcePrefixRanges": [
+                  {
+                    "addressPrefix": "0.0.0.0",
+                    "prefixLen": 0
+                  }
+                ]
+              },
+              "filters": [
+                {
+                  "name": "filter-1",
+                  "typedConfig": {
+                    "@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
+                    "routeConfig": {
+                      "name": "routeName",
+                      "virtualHosts": [
+                        {
+                          "domains": [
+                            "127.0.0.1*",
+                            "my-service-fallback*",
+                            "*"
+                          ],
+                          "routes": [
+                            {
+                              "match": {
+                                "prefix": "/"
+                              },
+                              "nonForwardingAction": {
+        
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "transportSocket": {
+                "name": "envoy.transport_sockets.tls",
+                "typedConfig": {
+                  "@type": "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext",
+                  "commonTlsContext": {
+                    "tlsCertificateCertificateProviderInstance": {
+                      "instanceName": "server-side-certificate-provider-instance"
+                    },
+                    "validationContextCertificateProviderInstance": {
+                      "instanceName": "server-side-certificate-provider-instance"
+                    }
+                  },
+                  "requireClientCertificate": true
+                }
+              },
+              "name": "v4-wildcard"
+            },
+            {
+              "filterChainMatch": {
+                "prefixRanges": [
+                  {
+                    "addressPrefix": "::",
+                    "prefixLen": 0
+                  }
+                ],
+                "sourceType": "SAME_IP_OR_LOOPBACK",
+                "sourcePrefixRanges": [
+                  {
+                    "addressPrefix": "::",
+                    "prefixLen": 0
+                  }
+                ]
+              },
+              "filters": [
+                {
+                  "name": "filter-1",
+                  "typedConfig": {
+                    "@type": "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager",
+                    "routeConfig": {
+                      "name": "routeName",
+                      "virtualHosts": [
+                        {
+                          "domains": [
+                            "127.0.0.1"
+                          ],
+                          "routes": [
+                            {
+                              "match": {
+                                "prefix": "/"
+                              },
+                              "nonForwardingAction": {
+        
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              ],
+              "transportSocket": {
+                "name": "envoy.transport_sockets.tls",
+                "typedConfig": {
+                  "@type": "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext",
+                  "commonTlsContext": {
+                    "tlsCertificateCertificateProviderInstance": {
+                      "instanceName": "server-side-certificate-provider-instance"
+                    },
+                    "validationContextCertificateProviderInstance": {
+                      "instanceName": "server-side-certificate-provider-instance"
+                    }
+                  },
+                  "requireClientCertificate": true
+                }
+              },
+              "name": "v6-wildcard"
+            }
+          ]
+        }  (t=+13.126198ms)
+    tlogger.go:99: transport_helper.go:340 [xds] [xds-client 0xc000882100] Sending ACK for response type: ListenerResource, version: 2, nonce: 5  (t=+13.241293ms)
+    tlogger.go:99: client.go:146 [xds] [xds-client 0xc000882100] ADS response received, type: type.googleapis.com/envoy.config.route.v3.RouteConfiguration  (t=+13.255656ms)
+    tlogger.go:99: watch_service.go:85 [xds] [xds-resolver 0xc000318000] received LDS update: {
+          "RouteConfigName": "route-my-service-security-config-change",
+          "InlineRouteConfig": null,
+          "MaxStreamDuration": 0,
+          "HTTPFilters": [
+            {
+              "Name": "router",
+              "Filter": {},
+              "Config": {
+                "FilterConfig": null
+              }
+            }
+          ],
+          "InboundListenerCfg": null,
+          "Raw": {
+            "type_url": "type.googleapis.com/envoy.config.listener.v3.Listener",
+            "value": "CiFteS1zZXJ2aWNlLXNlY3VyaXR5LWNvbmZpZy1jaGFuZ2UasAIamgIKLWVudm95LmZpbHRlcnMubmV0d29yay5odHRwX2Nvbm5lY3Rpb25fbWFuYWdlciLoAQpldHlwZS5nb29nbGVhcGlzLmNvbS9lbnZveS5leHRlbnNpb25zLmZpbHRlcnMubmV0d29yay5odHRwX2Nvbm5lY3Rpb25fbWFuYWdlci52My5IdHRwQ29ubmVjdGlvbk1hbmFnZXISfypOCgZyb3V0ZXIiRApCdHlwZS5nb29nbGVhcGlzLmNvbS9lbnZveS5leHRlbnNpb25zLmZpbHRlcnMuaHR0cC5yb3V0ZXIudjMuUm91dGVyGi0KAhoAEidyb3V0ZS1teS1zZXJ2aWNlLXNlY3VyaXR5LWNvbmZpZy1jaGFuZ2U6EWZpbHRlci1jaGFpbi1uYW1lmgHrAQroAQpldHlwZS5nb29nbGVhcGlzLmNvbS9lbnZveS5leHRlbnNpb25zLmZpbHRlcnMubmV0d29yay5odHRwX2Nvbm5lY3Rpb25fbWFuYWdlci52My5IdHRwQ29ubmVjdGlvbk1hbmFnZXISfypOCgZyb3V0ZXIiRApCdHlwZS5nb29nbGVhcGlzLmNvbS9lbnZveS5leHRlbnNpb25zLmZpbHRlcnMuaHR0cC5yb3V0ZXIudjMuUm91dGVyGi0KAhoAEidyb3V0ZS1teS1zZXJ2aWNlLXNlY3VyaXR5LWNvbmZpZy1jaGFuZ2U="
+          }
+        }, err: <nil>  (t=+13.276077ms)
+    tlogger.go:99: xds_resolver.go:182 [xds] [xds-resolver 0xc000318000] Received update on resource my-service-security-config-change from xds-client 0xc0006b8720, generated service config: {
+          "loadBalancingConfig": [
+            {
+              "xds_cluster_manager_experimental": {
+                "children": {
+                  "cluster-my-service-security-config-change": {
+                    "childPolicy": [
+                      {
+                        "cds_experimental": {
+                          "cluster": "cluster-my-service-security-config-change"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }  (t=+13.328408ms)
+    tlogger.go:99: xds.go:298 [xds] [xds-client 0xc000882100] Resource with name: route-my-service-security-config-change, type: *envoy_config_route_v3.RouteConfiguration, contains: {
+          "name": "route-my-service-security-config-change",
+          "virtualHosts": [
+            {
+              "domains": [
+                "my-service-security-config-change"
+              ],
+              "routes": [
+                {
+                  "match": {
+                    "prefix": "/"
+                  },
+                  "route": {
+                    "cluster": "cluster-my-service-security-config-change"
+                  }
+                }
+              ]
+            }
+          ]
+        }.  (t=+13.33994ms)
+    tlogger.go:99: simple.go:312 [xds-e2e] open watch 5 for type.googleapis.com/envoy.config.listener.v3.Listener[grpc/server?xds.resource.listening_address=127.0.0.1:53277 my-service-security-config-change] from nodeID "ac066ada-496a-4851-a029-9239e50ed7e9", version "2"  (t=+13.355706ms)
+    tlogger.go:99: transport_helper.go:340 [xds] [xds-client 0xc000882100] Sending ACK for response type: RouteConfigResource, version: 2, nonce: 6  (t=+13.377198ms)
+    tlogger.go:99: resolver_conn_wrapper.go:100 [core] ccResolverWrapper: sending update to cc: {[] 0xc0005867a0 0xc00067c0c0}  (t=+13.39713ms)
+    tlogger.go:99: client.go:146 [xds] [xds-client 0xc000882100] ADS response received, type: type.googleapis.com/envoy.config.cluster.v3.Cluster  (t=+13.416535ms)
+    tlogger.go:99: watch_service.go:166 [xds] [xds-resolver 0xc000318000] received RDS update: {
+          "VirtualHosts": [
+            {
+              "Domains": [
+                "my-service-security-config-change"
+              ],
+              "Routes": [
+                {
+                  "Path": null,
+                  "Prefix": "/",
+                  "Regex": null,
+                  "CaseInsensitive": false,
+                  "Headers": null,
+                  "Fraction": null,
+                  "HashPolicies": null,
+                  "WeightedClusters": {
+                    "cluster-my-service-security-config-change": {
+                      "Weight": 1,
+                      "HTTPFilterConfigOverride": null
+                    }
+                  },
+                  "MaxStreamDuration": null,
+                  "HTTPFilterConfigOverride": null,
+                  "RouteAction": 1
+                }
+              ],
+              "HTTPFilterConfigOverride": null
+            }
+          ],
+          "Raw": {
+            "type_url": "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+            "value": "Cidyb3V0ZS1teS1zZXJ2aWNlLXNlY3VyaXR5LWNvbmZpZy1jaGFuZ2USVxIhbXktc2VydmljZS1zZWN1cml0eS1jb25maWctY2hhbmdlGjIKAwoBLxIrCiljbHVzdGVyLW15LXNlcnZpY2Utc2VjdXJpdHktY29uZmlnLWNoYW5nZQ=="
+          }
+        }, err: <nil>  (t=+13.432377ms)
+    tlogger.go:99: clustermanager.go:119 [xds] [xds-cluster-manager-lb 0xc000433da0] update with config {
+          "LoadBalancingConfig": null,
+          "Children": {
+            "cluster-my-service-security-config-change": {
+              "ChildPolicy": [
+                {
+                  "cds_experimental": {
+                    "LoadBalancingConfig": null,
+                    "Cluster": "cluster-my-service-security-config-change"
+                  }
+                }
+              ]
+            }
+          }
+        }, resolver state {Addresses:[] ServiceConfig:0xc0005867a0 Attributes:0xc00067c0c0}  (t=+13.423063ms)
+    tlogger.go:99: cdsbalancer.go:440 [xds] [cds-lb 0xc00027a4b0] Received update from resolver, balancer config: {
+          "LoadBalancingConfig": null,
+          "Cluster": "cluster-my-service-security-config-change"
+        }  (t=+13.485948ms)
+    tlogger.go:99: simple.go:312 [xds-e2e] open watch 6 for type.googleapis.com/envoy.config.route.v3.RouteConfiguration[route-my-service-security-config-change] from nodeID "ac066ada-496a-4851-a029-9239e50ed7e9", version "2"  (t=+13.469957ms)
+    tlogger.go:99: listener_wrapper.go:401 [xds] [xds-server-listener 0xc0005e4000] Received update for resource "grpc/server?xds.resource.listening_address=127.0.0.1:53277": {RouteConfigName: InlineRouteConfig:<nil> MaxStreamDuration:0s HTTPFilters:[] InboundListenerCfg:0xc00058ad80 Raw:[type.googleapis.com/envoy.config.listener.v3.Listener]:{name:"grpc/server?xds.resource.listening_address=127.0.0.1:53277"  address:{socket_address:{address:"127.0.0.1"  port_value:53277}}  filter_chains:{filter_chain_match:{prefix_ranges:{address_prefix:"0.0.0.0"  prefix_len:{}}  source_type:SAME_IP_OR_LOOPBACK  source_prefix_ranges:{address_prefix:"0.0.0.0"  prefix_len:{}}}  filters:{name:"filter-1"  typed_config:{[type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager]:{route_config:{name:"routeName"  virtual_hosts:{domains:"127.0.0.1*"  domains:"my-service-fallback*"  domains:"*"  routes:{match:{prefix:"/"}  non_forwarding_action:{}}}}}}}  transport_socket:{name:"envoy.transport_sockets.tls"  typed_config:{[type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext]:{common_tls_context:{tls_certificate_certificate_provider_instance:{instance_name:"server-side-certificate-provider-instance"}  validation_context_certificate_provider_instance:{instance_name:"server-side-certificate-provider-instance"}}  require_client_certificate:{value:true}}}}  name:"v4-wildcard"}  filter_chains:{filter_chain_match:{prefix_ranges:{address_prefix:"::"  prefix_len:{}}  source_type:SAME_IP_OR_LOOPBACK  source_prefix_ranges:{address_prefix:"::"  prefix_len:{}}}  filters:{name:"filter-1"  typed_config:{[type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager]:{route_config:{name:"routeName"  virtual_hosts:{domains:"127.0.0.1"  routes:{match:{prefix:"/"}  non_forwarding_action:{}}}}}}}  transport_socket:{name:"envoy.transport_sockets.tls"  typed_config:{[type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext]:{common_tls_context:{tls_certificate_certificate_provider_instance:{instance_name:"server-side-certificate-provider-instance"}  validation_context_certificate_provider_instance:{instance_name:"server-side-certificate-provider-instance"}}  require_client_certificate:{value:true}}}}  name:"v6-wildcard"}}}  (t=+13.508652ms)
+    tlogger.go:99: xds_resolver.go:182 [xds] [xds-resolver 0xc000318000] Received update on resource my-service-security-config-change from xds-client 0xc0006b8720, generated service config: {
+          "loadBalancingConfig": [
+            {
+              "xds_cluster_manager_experimental": {
+                "children": {
+                  "cluster-my-service-security-config-change": {
+                    "childPolicy": [
+                      {
+                        "cds_experimental": {
+                          "cluster": "cluster-my-service-security-config-change"
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }  (t=+13.50933ms)
+    tlogger.go:99: listener_wrapper.go:450 [xds] [xds-server-listener 0xc0005e4000] Listener "127.0.0.1:53277" entering mode: "serving" due to error: <nil>  (t=+13.53684ms)
+    tlogger.go:99: resolver_conn_wrapper.go:100 [core] ccResolverWrapper: sending update to cc: {[] 0xc000698dc0 0xc000580200}  (t=+13.573837ms)
+    tlogger.go:99: xds.go:567 [xds] [xds-client 0xc000882100] Resource with name: cluster-my-service-security-config-change, type: *envoy_config_cluster_v3.Cluster, contains: {
+          "name": "cluster-my-service-security-config-change",
+          "type": "EDS",
+          "edsClusterConfig": {
+            "edsConfig": {
+              "ads": {
+        
+              }
+            },
+            "serviceName": "endpoints-my-service-security-config-change"
+          },
+          "transportSocket": {
+            "name": "envoy.transport_sockets.tls",
+            "typedConfig": {
+              "@type": "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext",
+              "commonTlsContext": {
+                "tlsCertificateCertificateProviderInstance": {
+                  "instanceName": "client-side-certificate-provider-instance"
+                },
+                "validationContextCertificateProviderInstance": {
+                  "instanceName": "client-side-certificate-provider-instance"
+                }
+              }
+            }
+          }
+        }  (t=+13.586141ms)
+    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to IDLE  (t=+13.607685ms)
+    tlogger.go:99: clustermanager.go:119 [xds] [xds-cluster-manager-lb 0xc000433da0] update with config {
+          "LoadBalancingConfig": null,
+          "Children": {
+            "cluster-my-service-security-config-change": {
+              "ChildPolicy": [
+                {
+                  "cds_experimental": {
+                    "LoadBalancingConfig": null,
+                    "Cluster": "cluster-my-service-security-config-change"
+                  }
+                }
+              ]
+            }
+          }
+        }, resolver state {Addresses:[] ServiceConfig:0xc000698dc0 Attributes:0xc000580200}  (t=+13.604337ms)
+    tlogger.go:99: simple.go:312 [xds-e2e] open watch 7 for type.googleapis.com/envoy.config.cluster.v3.Cluster[cluster-my-service-security-config-change] from nodeID "ac066ada-496a-4851-a029-9239e50ed7e9", version "2"  (t=+13.72036ms)
+    tlogger.go:99: cdsbalancer.go:440 [xds] [cds-lb 0xc00027a4b0] Received update from resolver, balancer config: {
+          "LoadBalancingConfig": null,
+          "Cluster": "cluster-my-service-security-config-change"
+        }  (t=+13.731448ms)
+    tlogger.go:99: cdsbalancer.go:277 [xds] [cds-lb 0xc00027a4b0] Watch update from xds-client 0xc0006b8720, content: [
+          {
+            "ClusterType": 0,
+            "ClusterName": "cluster-my-service-security-config-change",
+            "EDSServiceName": "endpoints-my-service-security-config-change",
+            "EnableLRS": false,
+            "SecurityCfg": {
+              "RootInstanceName": "client-side-certificate-provider-instance",
+              "RootCertName": "",
+              "IdentityInstanceName": "client-side-certificate-provider-instance",
+              "IdentityCertName": "",
+              "SubjectAltNameMatchers": null,
+              "RequireClientCert": false
+            },
+            "MaxRequests": null,
+            "DNSHostName": "",
+            "PrioritizedClusterNames": null,
+            "Raw": {
+              "type_url": "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+              "value": "CiljbHVzdGVyLW15LXNlcnZpY2Utc2VjdXJpdHktY29uZmlnLWNoYW5nZRoxCgIaABIrZW5kcG9pbnRzLW15LXNlcnZpY2Utc2VjdXJpdHktY29uZmlnLWNoYW5nZcIB0AEKG2Vudm95LnRyYW5zcG9ydF9zb2NrZXRzLnRscxqwAQpQdHlwZS5nb29nbGVhcGlzLmNvbS9lbnZveS5leHRlbnNpb25zLnRyYW5zcG9ydF9zb2NrZXRzLnRscy52My5VcHN0cmVhbVRsc0NvbnRleHQSXApaWisKKWNsaWVudC1zaWRlLWNlcnRpZmljYXRlLXByb3ZpZGVyLWluc3RhbmNlYisKKWNsaWVudC1zaWRlLWNlcnRpZmljYXRlLXByb3ZpZGVyLWluc3RhbmNlEAM="
+            }
+          }
+        ], security config: {
+          "RootInstanceName": "client-side-certificate-provider-instance",
+          "RootCertName": "",
+          "IdentityInstanceName": "client-side-certificate-provider-instance",
+          "IdentityCertName": "",
+          "SubjectAltNameMatchers": null,
+          "RequireClientCert": false
+        }  (t=+13.69679ms)
+    tlogger.go:99: transport_helper.go:340 [xds] [xds-client 0xc000882100] Sending ACK for response type: ClusterResource, version: 2, nonce: 7  (t=+13.651781ms)
+    tlogger.go:99: clusterresolver.go:156 [xds] [xds-cluster-resolver-lb 0xc0002aefc0] Receive update from resolver, balancer config: {
+          "discoveryMechanisms": [
+            {
+              "cluster": "cluster-my-service-security-config-change",
+              "edsServiceName": "endpoints-my-service-security-config-change"
+            }
+          ]
+        }  (t=+13.79427ms)
+    tlogger.go:99: client.go:146 [xds] [xds-client 0xc000882100] ADS response received, type: type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment  (t=+13.827579ms)
+    tlogger.go:99: configbuilder.go:269 [xds] xds lb policy is "ROUND_ROBIN", building config with weighted_target + round_robin  (t=+13.836209ms)
+    tlogger.go:99: xds.go:796 [xds] [xds-client 0xc000882100] Resource with name: endpoints-my-service-security-config-change, type: *envoy_config_endpoint_v3.ClusterLoadAssignment, contains: {
+          "clusterName": "endpoints-my-service-security-config-change",
+          "endpoints": [
+            {
+              "locality": {
+                "subZone": "subzone"
+              },
+              "lbEndpoints": [
+                {
+                  "endpoint": {
+                    "address": {
+                      "socketAddress": {
+                        "address": "127.0.0.1",
+                        "portValue": 53277
+                      }
+                    }
+                  }
+                }
+              ],
+              "loadBalancingWeight": 1
+            }
+          ]
+        }  (t=+13.946512ms)
+    tlogger.go:99: clusterresolver.go:220 [xds] [xds-cluster-resolver-lb 0xc0002aefc0] build balancer config: {
+          "children": {
+            "priority-0-0": {
+              "config": [
+                {
+                  "xds_cluster_impl_experimental": {
+                    "cluster": "cluster-my-service-security-config-change",
+                    "edsServiceName": "endpoints-my-service-security-config-change",
+                    "childPolicy": [
+                      {
+                        "weighted_target_experimental": {
+                          "targets": {
+                            "{\"subZone\":\"subzone\"}": {
+                              "weight": 1,
+                              "childPolicy": [
+                                {
+                                  "round_robin": {}
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "ignoreReresolutionRequests": true
+            }
+          },
+          "priorities": [
+            "priority-0-0"
+          ]
+        }  (t=+13.950744ms)
+    tlogger.go:99: transport_helper.go:340 [xds] [xds-client 0xc000882100] Sending ACK for response type: EndpointsResource, version: 2, nonce: 8  (t=+13.981228ms)
+    tlogger.go:99: balancer.go:112 [xds] [priority-lb 0xc000619c00] Received update from resolver, balancer config: {
+          "children": {
+            "priority-0-0": {
+              "config": [
+                {
+                  "xds_cluster_impl_experimental": {
+                    "cluster": "cluster-my-service-security-config-change",
+                    "edsServiceName": "endpoints-my-service-security-config-change",
+                    "childPolicy": [
+                      {
+                        "weighted_target_experimental": {
+                          "targets": {
+                            "{\"subZone\":\"subzone\"}": {
+                              "weight": 1,
+                              "childPolicy": [
+                                {
+                                  "round_robin": {}
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "ignoreReresolutionRequests": true
+            }
+          },
+          "priorities": [
+            "priority-0-0"
+          ]
+        }  (t=+14.008817ms)
+    tlogger.go:99: balancer_priority.go:98 [xds] [priority-lb 0xc000619c00] switching to ("priority-0-0", 0) in syncPriority  (t=+14.032605ms)
+    tlogger.go:99: simple.go:312 [xds-e2e] open watch 8 for type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment[endpoints-my-service-security-config-change] from nodeID "ac066ada-496a-4851-a029-9239e50ed7e9", version "2"  (t=+14.066732ms)
+    tlogger.go:99: clusterimpl.go:223 [xds] [xds-cluster-impl-lb 0xc0006ba1a0] Received update from resolver, balancer config: {
+          "cluster": "cluster-my-service-security-config-change",
+          "edsServiceName": "endpoints-my-service-security-config-change",
+          "childPolicy": [
+            {
+              "weighted_target_experimental": {
+                "targets": {
+                  "{\"subZone\":\"subzone\"}": {
+                    "weight": 1,
+                    "childPolicy": [
+                      {
+                        "round_robin": {}
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }  (t=+14.067559ms)
+    tlogger.go:99: weightedtarget.go:87 [xds] [weighted-target-lb 0xc000586980] Received update from resolver, balancer config: {
+          "targets": {
+            "{\"subZone\":\"subzone\"}": {
+              "weight": 1,
+              "childPolicy": [
+                {
+                  "round_robin": {}
+                }
+              ]
+            }
+          }
+        }  (t=+14.112138ms)
+    tlogger.go:99: clientconn.go:890 [core] addrConn: tryUpdateAddrs curAddr: {127.0.0.1:53277 my-service-security-config-change 0xc00067c200 0 <nil>}, addrs: [{127.0.0.1:53277  0xc000830070 0 <nil>}]  (t=+14.14157ms)
+    tlogger.go:99: clusterresolver.go:188 [xds] [xds-cluster-resolver-lb 0xc0002aefc0] resource update: [
+          {}
+        ]  (t=+14.163993ms)
+    tlogger.go:99: configbuilder.go:269 [xds] xds lb policy is "ROUND_ROBIN", building config with weighted_target + round_robin  (t=+14.191772ms)
+    tlogger.go:99: clusterresolver.go:220 [xds] [xds-cluster-resolver-lb 0xc0002aefc0] build balancer config: {
+          "children": {
+            "priority-0-0": {
+              "config": [
+                {
+                  "xds_cluster_impl_experimental": {
+                    "cluster": "cluster-my-service-security-config-change",
+                    "edsServiceName": "endpoints-my-service-security-config-change",
+                    "childPolicy": [
+                      {
+                        "weighted_target_experimental": {
+                          "targets": {
+                            "{\"subZone\":\"subzone\"}": {
+                              "weight": 1,
+                              "childPolicy": [
+                                {
+                                  "round_robin": {}
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "ignoreReresolutionRequests": true
+            }
+          },
+          "priorities": [
+            "priority-0-0"
+          ]
+        }  (t=+14.266466ms)
+    tlogger.go:99: balancer.go:112 [xds] [priority-lb 0xc000619c00] Received update from resolver, balancer config: {
+          "children": {
+            "priority-0-0": {
+              "config": [
+                {
+                  "xds_cluster_impl_experimental": {
+                    "cluster": "cluster-my-service-security-config-change",
+                    "edsServiceName": "endpoints-my-service-security-config-change",
+                    "childPolicy": [
+                      {
+                        "weighted_target_experimental": {
+                          "targets": {
+                            "{\"subZone\":\"subzone\"}": {
+                              "weight": 1,
+                              "childPolicy": [
+                                {
+                                  "round_robin": {}
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ],
+              "ignoreReresolutionRequests": true
+            }
+          },
+          "priorities": [
+            "priority-0-0"
+          ]
+        }  (t=+14.294982ms)
+    tlogger.go:99: balancer_priority.go:98 [xds] [priority-lb 0xc000619c00] switching to ("priority-0-0", 0) in syncPriority  (t=+14.308852ms)
+    tlogger.go:99: clusterimpl.go:223 [xds] [xds-cluster-impl-lb 0xc0006ba1a0] Received update from resolver, balancer config: {
+          "cluster": "cluster-my-service-security-config-change",
+          "edsServiceName": "endpoints-my-service-security-config-change",
+          "childPolicy": [
+            {
+              "weighted_target_experimental": {
+                "targets": {
+                  "{\"subZone\":\"subzone\"}": {
+                    "weight": 1,
+                    "childPolicy": [
+                      {
+                        "round_robin": {}
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        }  (t=+14.324681ms)
+    tlogger.go:99: weightedtarget.go:87 [xds] [weighted-target-lb 0xc000586980] Received update from resolver, balancer config: {
+          "targets": {
+            "{\"subZone\":\"subzone\"}": {
+              "weight": 1,
+              "childPolicy": [
+                {
+                  "round_robin": {}
+                }
+              ]
+            }
+          }
+        }  (t=+14.341594ms)
+    tlogger.go:99: clientconn.go:890 [core] addrConn: tryUpdateAddrs curAddr: {127.0.0.1:53277 my-service-security-config-change 0xc00067c200 0 <nil>}, addrs: [{127.0.0.1:53277  0xc0008300a8 0 <nil>}]  (t=+14.357778ms)
+    tlogger.go:99: roundrobin.go:50 [roundrobin] roundrobinPicker: newPicker called with info: {map[]}  (t=+14.379222ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [weighted-target-lb 0xc000586980] Balancer state update from locality {"subZone":"subzone"}, new state: {ConnectivityState:IDLE Picker:0xc0003c74a0}  (t=+14.390645ms)
+    tlogger.go:99: aggregator.go:201 [xds] [weighted-target-lb 0xc000586980] Child pickers with config: map[{"subZone":"subzone"}:weight:1,picker:0xc0003c74a0,state:IDLE,stateToAggregate:IDLE]  (t=+14.401922ms)
+    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to CONNECTING  (t=+14.406893ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [priority-lb 0xc000619c00] Balancer state update from locality priority-0-0, new state: {ConnectivityState:TRANSIENT_FAILURE Picker:0xc0003c3450}  (t=+14.417592ms)
+    tlogger.go:99: clientconn.go:1253 [core] Subchannel picks a new address "127.0.0.1:53277" to connect  (t=+14.42742ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [weighted-target-lb 0xc000586980] Balancer state update from locality {"subZone":"subzone"}, new state: {ConnectivityState:CONNECTING Picker:0xc0003c74a0}  (t=+14.442853ms)
+    tlogger.go:99: aggregator.go:201 [xds] [weighted-target-lb 0xc000586980] Child pickers with config: map[{"subZone":"subzone"}:weight:1,picker:0xc0003c74a0,state:CONNECTING,stateToAggregate:CONNECTING]  (t=+14.463082ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [priority-lb 0xc000619c00] Balancer state update from locality priority-0-0, new state: {ConnectivityState:CONNECTING Picker:0xc000989ea0}  (t=+14.48264ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [xds-cluster-manager-lb 0xc000433da0] Balancer state update from locality cluster-my-service-security-config-change, new state: {ConnectivityState:TRANSIENT_FAILURE Picker:0xc0003c3450}  (t=+14.432311ms)
+    tlogger.go:99: balancerstateaggregator.go:210 [xds] [xds-cluster-manager-lb 0xc000433da0] Child pickers: map[cluster-my-service-security-config-change:picker:0xc0003c3450,state:TRANSIENT_FAILURE,stateToAggregate:TRANSIENT_FAILURE]  (t=+14.521302ms)
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to TRANSIENT_FAILURE  (t=+14.535276ms)
+Returning conn wrapper in wrapped lisabout to make out connection in background context    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to READY  (t=+32.834193ms)
+    tlogger.go:99: roundrobin.go:50 [roundrobin] roundrobinPicker: newPicker called with info: {map[0xc000586ac0:{{127.0.0.1:53277  0xc000830098 0 <nil>}}]}  (t=+32.916486ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [weighted-target-lb 0xc000586980] Balancer state update from locality {"subZone":"subzone"}, new state: {ConnectivityState:READY Picker:0xc0005dbdd0}  (t=+32.971707ms)
+    tlogger.go:99: aggregator.go:201 [xds] [weighted-target-lb 0xc000586980] Child pickers with config: map[{"subZone":"subzone"}:weight:1,picker:0xc0005dbdd0,state:READY,stateToAggregate:READY]  (t=+33.009154ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [priority-lb 0xc000619c00] Balancer state update from locality priority-0-0, new state: {ConnectivityState:READY Picker:0xc00077a0f0}  (t=+33.037911ms)
+    tlogger.go:99: balancergroup.go:453 [xds] [xds-cluster-manager-lb 0xc000433da0] Balancer state update from locality cluster-my-service-security-config-change, new state: {ConnectivityState:READY Picker:0xc00077a0f0}  (t=+33.073653ms)
+    tlogger.go:99: balancerstateaggregator.go:210 [xds] [xds-cluster-manager-lb 0xc000433da0] Child pickers: map[cluster-my-service-security-config-change:picker:0xc00077a0f0,state:READY,stateToAggregate:READY]  (t=+33.100506ms)
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to READY  (t=+33.1539ms)
+    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to IDLE  (t=+1.014357066s)
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to IDLE  (t=+1.014429582s)
+    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to CONNECTING  (t=+1.0145306s)
+    tlogger.go:99: clientconn.go:1253 [core] Subchannel picks a new address "127.0.0.1:53277" to connect  (t=+1.014591642s)
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to CONNECTING  (t=+1.014652683s)
+Returning conn wrapper in wrapped lisabout to make out connection in background context    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to READY  (t=+1.040438778s)
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to READY  (t=+1.040467888s)
+about to call handlerxdsUnaryInterceptor startWTF    xds_server_integration_test.go:347: rpc EmptyCall() failed: rpc error: code = Unknown desc = missing connection in incoming context
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to SHUTDOWN  (t=+1.040736397s)
+    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to SHUTDOWN  (t=+1.040758759s)
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to SHUTDOWN  (t=+1.040772624s)
+    tlogger.go:99: cluster_handler.go:154 [xds] [cds-lb 0xc00027a4b0] CDS watch canceled on cluster-my-service-security-config-change  (t=+1.040789604s)
+    tlogger.go:99: resource_resolver.go:243 [xds] [xds-cluster-resolver-lb 0xc0002aefc0] EDS watch canceled on endpoints-my-service-security-config-change  (t=+1.040816139s)
+    tlogger.go:99: clusterimpl.go:335 [xds] [xds-cluster-impl-lb 0xc0006ba1a0] Shutdown  (t=+1.040837421s)
+    tlogger.go:99: clusterresolver.go:296 [xds] [xds-cluster-resolver-lb 0xc0002aefc0] Shutdown  (t=+1.040853346s)
+    tlogger.go:99: cdsbalancer.go:379 [xds] [cds-lb 0xc00027a4b0] Shutdown  (t=+1.040865305s)
+    tlogger.go:99: clustermanager.go:136 [xds] [xds-cluster-manager-lb 0xc000433da0] Shutdown  (t=+1.04088272s)
+    tlogger.go:99: xds_resolver.go:108 [xds] [xds-resolver 0xc000318000] Watch cancel on resource name my-service-security-config-change with xds-client 0xc0006b8720  (t=+1.040904828s)
+    tlogger.go:99: xds_resolver.go:274 [xds] [xds-resolver 0xc000318000] Shutdown  (t=+1.040922504s)
+    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to SHUTDOWN  (t=+1.040933397s)
+    tlogger.go:99: listener_wrapper.go:157 [xds] [xds-server-listener 0xc0005e4000] Watch cancelled on resource name grpc/server?xds.resource.listening_address=127.0.0.1:53277  (t=+1.040978925s)
+    tlogger.go:99: clientconn.go:436 [core] Channel Connectivity change to SHUTDOWN  (t=+1.04100717s)
+    tlogger.go:99: clientconn.go:1142 [core] Subchannel Connectivity change to SHUTDOWN  (t=+1.041030963s)
+    tlogger.go:99: client.go:664 [xds] [xds-client 0xc000882100] Shutdown  (t=+1.041062713s)
+    tlogger.go:99: transport_helper.go:315 [xds] [xds-client 0xc000882100] ADS stream is closed with error: xds: stream.Recv() failed: rpc error: code = Canceled desc = grpc: the client connection is closing  (t=+1.041092016s)
+    tlogger.go:99: simple.go:312 [xds-e2e] open watch 9 for type.googleapis.com/envoy.config.cluster.v3.Cluster[] from nodeID "ac066ada-496a-4851-a029-9239e50ed7e9", version "2"  (t=+1.041061734s)
+    tlogger.go:99: simple.go:312 [xds-e2e] open watch 10 for type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment[] from nodeID "ac066ada-496a-4851-a029-9239e50ed7e9", version "2"  (t=+1.041453893s)
+--- FAIL: Test (1.10s)
+    --- FAIL: Test/ServerSideXDS_SecurityConfigChange (1.10s)
+FAIL
+FAIL	google.golang.org/grpc/xds/internal/test	1.422s
+FAIL
