@@ -606,6 +606,10 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 	)
 
 	var (
+		serverOnlyCustomFilter = &v3httppb.HttpFilter{
+			Name:       "serverOnlyCustomFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
+		}
 		routeConfig = &v3routepb.RouteConfiguration{
 			Name: "routeName",
 			VirtualHosts: []*v3routepb.VirtualHost{{
@@ -922,6 +926,62 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
 			wantMD:     errMD,
 			wantErr:    "terminal filter not present in HTTP Filter list",
+		},
+		{
+			name: "terminal filter not last",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "name",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+											RouteConfig: routeConfig,
+										},
+										HttpFilters: []*v3httppb.HttpFilter{routerFilterPb, serverOnlyCustomFilter},
+									}),
+								},
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "is a terminal filter but it is not last in the filter chain",
+		},
+		{
+			name: "last not terminal filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "name",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+											RouteConfig: routeConfig,
+										},
+										HttpFilters: []*v3httppb.HttpFilter{serverOnlyCustomFilter},
+									}),
+								},
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "is not a terminal filter",
 		},
 		{
 			name: "unsupported oneof in typed config of http filter",

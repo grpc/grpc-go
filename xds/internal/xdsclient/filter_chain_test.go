@@ -27,6 +27,7 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/google/go-cmp/cmp"
@@ -80,7 +81,9 @@ var (
 		ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
 	}
 	routerFilterPb   = e2e.RouterHTTPFilter
-	routerFilter     = HTTPFilter{Name: "router", Filter: httpfilter.Get(router.TypeURL), Config: router.ConfigForTesting{}}
+	routerB          = httpfilter.Get(router.TypeURL)
+	routerC, _       = routerB.ParseFilterConfig(testutils.MarshalAny(&v3routerpb.Router{}))
+	routerFilter     = HTTPFilter{Name: "router", Filter: httpfilter.Get(router.TypeURL), Config: routerC}
 	routerFilterList = []HTTPFilter{routerFilter}
 )
 

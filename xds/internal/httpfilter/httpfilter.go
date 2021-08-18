@@ -51,9 +51,7 @@ type Filter interface {
 	// passed to Build.
 	ParseFilterConfigOverride(proto.Message) (FilterConfig, error)
 	// IsTerminal returns whether this Filter is terminal or not (i.e. it must
-	// be last filter in the filter chain). Currently, grpc only supports the
-	// router filter as a terminal filter, as per A39, although this may change
-	// in the future.
+	// be last filter in the filter chain).
 	IsTerminal() bool
 }
 

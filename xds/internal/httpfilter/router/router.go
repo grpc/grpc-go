@@ -112,6 +112,3 @@ func (builder) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (ir
 type config struct {
 	httpfilter.FilterConfig
 }
-
-// ConfigForTesting exports the config for testing purposes
-type ConfigForTesting = config
