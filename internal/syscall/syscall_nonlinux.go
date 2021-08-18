@@ -68,8 +68,8 @@ func SetTCPUserTimeout(conn net.Conn, timeout time.Duration) error {
 	return nil
 }
 
-// GetTCPUserTimeout is a no-op function under non-linux environments a negative
-// return value indicates the operation is not supported
+// GetTCPUserTimeout is a no-op function under non-linux environments.
+// A negative return value indicates the operation is not supported
 func GetTCPUserTimeout(conn net.Conn) (int, error) {
 	log()
 	return -1, nil

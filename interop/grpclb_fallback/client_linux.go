@@ -1,5 +1,3 @@
-// +build linux
-
 /*
  *
  * Copyright 2019 gRPC authors.
