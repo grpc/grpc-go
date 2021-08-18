@@ -122,7 +122,7 @@ type ServerInterceptor interface {
 	// AllowedToProceed checks if an incoming RPC is allowed to proceed based on
 	// information about connection RPC was received on, and HTTP Headers. This
 	// information will be piped into context.
-	AllowedToProceed(ctx context.Context) error
+	AllowRPC(ctx context.Context) error // TODO: Make this a real interceptor for filters such as rate limiting.
 }
 
 type csKeyType string

@@ -143,11 +143,11 @@ func newFractionMatcher(fraction uint32) *fractionMatcher {
 	return &fractionMatcher{fraction: int64(fraction)}
 }
 
-// GrpcrandInt63n overwrites grpcrand for control in tests.
-var GrpcrandInt63n = grpcrand.Int63n
+// RandInt63n overwrites grpcrand for control in tests.
+var RandInt63n = grpcrand.Int63n
 
 func (fm *fractionMatcher) match() bool {
-	t := GrpcrandInt63n(1000000)
+	t := RandInt63n(1000000)
 	return t <= fm.fraction
 }
 

@@ -68,11 +68,6 @@ type FilterChain struct {
 	// Only one of RouteConfigName and InlineRouteConfig is set.
 	InlineRouteConfig *RouteConfigUpdate
 
-	// InstantiatedFilters represents whether the xds client data has been
-	// converted to something usable for routing. Since this usable data will be
-	// used for any accepted connections that match to this filter chain, it is
-	// best to persist here.
-	InstantiatedFilters bool // Any mutexes?
 	// VirtualHosts are the virtual hosts ready to be used in the xds interceptors.
 	// It contains a way to match routes using a matcher and also instantiates
 	// HTTPFilter overrides to simply run incoming RPC's through if they are selected.
@@ -106,11 +101,6 @@ type RouteWithInterceptors struct {
 // converts it into usable route configuration, including Instantiating any HTTP
 // Filters for each Route.
 func (f *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdate) error {
-	if f.InstantiatedFilters {
-		return nil
-	}
-	f.InstantiatedFilters = true
-
 	vhs := make([]VirtualHostWithInterceptors, len(config.VirtualHosts))
 	for _, vh := range config.VirtualHosts {
 		vhwi, err := f.convertVirtualHost(vh)
@@ -124,11 +114,9 @@ func (f *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdate
 }
 
 func (f *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHostWithInterceptors, error) {
-	var vh VirtualHostWithInterceptors
-	vh.Domains = virtualHost.Domains
 	rs := make([]RouteWithInterceptors, len(virtualHost.Routes))
-	var err error
 	for i, r := range virtualHost.Routes {
+		var err error
 		rs[i].M, err = RouteToMatcher(r)
 		if err != nil {
 			return VirtualHostWithInterceptors{}, fmt.Errorf("error constructing matcher: %v", err)
@@ -155,8 +143,7 @@ func (f *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHostW
 			}
 		}
 	}
-	vh.Routes = rs
-	return vh, nil
+	return VirtualHostWithInterceptors{Domains: virtualHost.Domains, Routes: rs}, nil
 }
 
 // SourceType specifies the connection source IP match type.

@@ -118,11 +118,11 @@ func TestFractionMatcherMatch(t *testing.T) {
 	const fraction = 500000
 	fm := newFractionMatcher(fraction)
 	defer func() {
-		GrpcrandInt63n = grpcrand.Int63n
+		RandInt63n = grpcrand.Int63n
 	}()
 
 	// rand > fraction, should return false.
-	GrpcrandInt63n = func(n int64) int64 {
+	RandInt63n = func(n int64) int64 {
 		return fraction + 1
 	}
 	if matched := fm.match(); matched {
@@ -130,7 +130,7 @@ func TestFractionMatcherMatch(t *testing.T) {
 	}
 
 	// rand == fraction, should return true.
-	GrpcrandInt63n = func(n int64) int64 {
+	RandInt63n = func(n int64) int64 {
 		return fraction
 	}
 	if matched := fm.match(); !matched {
@@ -138,7 +138,7 @@ func TestFractionMatcherMatch(t *testing.T) {
 	}
 
 	// rand < fraction, should return true.
-	GrpcrandInt63n = func(n int64) int64 {
+	RandInt63n = func(n int64) int64 {
 		return fraction - 1
 	}
 	if matched := fm.match(); !matched {
