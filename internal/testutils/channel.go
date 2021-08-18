@@ -25,20 +25,22 @@ import (
 const DefaultChanBufferSize = 1
 
 // Channel wraps a generic channel and provides a timed receive operation.
+// C is the underlying channel on which values sent using the SendXxx() methods are delivered.
+// Tests which cannot use ReceiveXxx() for whatever reasons can use C to read the values.
 type Channel struct {
-	ch chan interface{}
+	C chan interface{}
 }
 
 // Send sends value on the underlying channel.
 func (c *Channel) Send(value interface{}) {
-	c.ch <- value
+	c.C <- value
 }
 
 // SendContext sends value on the underlying channel, or returns an error if
 // the context expires.
 func (c *Channel) SendContext(ctx context.Context, value interface{}) error {
 	select {
-	case c.ch <- value:
+	case c.C <- value:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -49,7 +51,7 @@ func (c *Channel) SendContext(ctx context.Context, value interface{}) error {
 // if successful or false if the channel was full.
 func (c *Channel) SendOrFail(value interface{}) bool {
 	select {
-	case c.ch <- value:
+	case c.C <- value:
 		return true
 	default:
 		return false
@@ -60,7 +62,7 @@ func (c *Channel) SendOrFail(value interface{}) bool {
 // and false if the channel was empty.
 func (c *Channel) ReceiveOrFail() (interface{}, bool) {
 	select {
-	case got := <-c.ch:
+	case got := <-c.C:
 		return got, true
 	default:
 		return nil, false
@@ -73,7 +75,7 @@ func (c *Channel) Receive(ctx context.Context) (interface{}, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case got := <-c.ch:
+	case got := <-c.C:
 		return got, nil
 	}
 }
@@ -86,9 +88,9 @@ func (c *Channel) Receive(ctx context.Context) (interface{}, error) {
 func (c *Channel) Replace(value interface{}) {
 	for {
 		select {
-		case c.ch <- value:
+		case c.C <- value:
 			return
-		case <-c.ch:
+		case <-c.C:
 		}
 	}
 }
@@ -100,5 +102,5 @@ func NewChannel() *Channel {
 
 // NewChannelWithSize returns a new Channel with a buffer of bufSize.
 func NewChannelWithSize(bufSize int) *Channel {
-	return &Channel{ch: make(chan interface{}, bufSize)}
+	return &Channel{C: make(chan interface{}, bufSize)}
 }
