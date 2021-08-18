@@ -50,11 +50,7 @@ func startServer(t *testing.T, policy string) string {
 	}
 	s := grpc.NewServer(serverOpts...)
 	pb.RegisterTestServiceServer(s, &testServer{})
-	go func() {
-		if err := s.Serve(lis); err != nil {
-			t.Fatalf("failed to serve %v", err)
-		}
-	}()
+	go s.Serve(lis)
 	return lis.Addr().String()
 }
 
@@ -77,7 +73,6 @@ func TestSdkEnd2End(t *testing.T) {
 		authzPolicy    string
 		md             metadata.MD
 		wantStatusCode codes.Code
-		wantResp       string
 	}{
 		"DeniesUnauthorizedRpcRequest": {
 			authzPolicy: `{
@@ -154,14 +149,12 @@ func TestSdkEnd2End(t *testing.T) {
 			}`,
 			md:             metadata.Pairs("key-xyz", "val-xyz"),
 			wantStatusCode: codes.OK,
-			wantResp:       message,
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			serverAddr := startServer(t, test.authzPolicy)
 			ctx := metadata.NewOutgoingContext(context.Background(), test.md)
-
 			_, err := runClient(ctx, t, serverAddr)
 			if gotStatusCode := status.Code(err); gotStatusCode != test.wantStatusCode {
 				t.Fatalf("unexpected authorization decision. status code want:%v got:%v", test.wantStatusCode, gotStatusCode)

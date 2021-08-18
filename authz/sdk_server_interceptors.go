@@ -26,12 +26,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// StaticInterceptor contains engines used to make authorization decisions. It
+// either contains two engines deny engine followed by an allow engine or only
+// one allow engine.
 type StaticInterceptor struct {
-	// Either contains two engines deny engine followed by allow engine or only one allow engine.
 	engines rbac.ChainEngine
 }
 
-// NewStatic returns a new StaticInterceptor from a static authorization policy JSON string.
+// NewStatic returns a new StaticInterceptor from a static authorization policy
+// JSON string.
 func NewStatic(authzPolicy string) (*StaticInterceptor, error) {
 	RBACPolicies, err := translatePolicy(authzPolicy)
 	if err != nil {
@@ -48,7 +51,8 @@ func NewStatic(authzPolicy string) (*StaticInterceptor, error) {
 }
 
 // UnaryInterceptor intercepts incoming Unary RPC request.
-// Only authorized requests are allowed to pass. Otherwise, unauthorized error is returned to client.
+// Only authorized requests are allowed to pass. Otherwise, unauthorized error
+// is returned to client.
 func (i *StaticInterceptor) UnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 	if err := i.engines.IsAuthorized(ctx); status.Code(err) != codes.OK {
 		return nil, err
@@ -57,7 +61,8 @@ func (i *StaticInterceptor) UnaryInterceptor(ctx context.Context, req interface{
 }
 
 // StreamInterceptor intercepts incoming Stream RPC request.
-// Only authorized requests are allowed to pass. Otherwise, unauthorized error is returned to client.
+// Only authorized requests are allowed to pass. Otherwise, unauthorized error
+// is returned to client.
 func (i *StaticInterceptor) StreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
 	if err := i.engines.IsAuthorized(ss.Context()); status.Code(err) != codes.OK {
 		return err
