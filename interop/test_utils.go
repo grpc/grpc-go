@@ -681,7 +681,7 @@ type soakIterationResult struct {
 	latency time.Duration
 }
 
-func doOneSoakIteration(tc testgrpc.TestServiceClient, resetChannel bool, serverAddr string, dopts []grpc.DialOption) error {
+func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, resetChannel bool, serverAddr string, dopts []grpc.DialOption) error {
 	client := tc
 	if resetChannel {
 		conn, err := grpc.Dial(serverAddr, dopts...)
@@ -698,7 +698,7 @@ func doOneSoakIteration(tc testgrpc.TestServiceClient, resetChannel bool, server
 		ResponseSize: int32(largeRespSize),
 		Payload:      pl,
 	}
-	reply, err := client.UnaryCall(context.Background(), req)
+	reply, err := client.UnaryCall(ctx, req)
 	if err != nil {
 		return fmt.Errorf("/TestService/UnaryCall RPC failed: %s", err)
 	}
@@ -716,12 +716,14 @@ func doOneSoakIteration(tc testgrpc.TestServiceClient, resetChannel bool, server
 func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, perIterationMaxAcceptableLatency time.Duration, overallDeadline time.Time) {
 	start := time.Now()
 	var results []soakIterationResult
+	ctx, cancel := context.WithDeadline(context.Background(), overallDeadline)
+	defer cancel()
 	for i := 0; i < soakIterations; i++ {
 		if time.Now().After(overallDeadline) {
 			break
 		}
 		start := time.Now()
-		err := doOneSoakIteration(tc, resetChannel, serverAddr, dopts)
+		err := doOneSoakIteration(ctx, tc, resetChannel, serverAddr, dopts)
 		results = append(results, soakIterationResult{err: err, latency: time.Since(start)})
 	}
 	totalFailures := 0
@@ -735,16 +737,18 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 	for i := 0; i < len(results); i++ {
 		err := results[i].err
 		latencyMs := int64(results[i].latency / time.Millisecond)
+		h.Add(latencyMs)
 		if err != nil {
 			totalFailures++
 			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d failed: %s\n", i, latencyMs, err)
-		} else if results[i].latency > perIterationMaxAcceptableLatency {
+			continue
+		}
+		if results[i].latency > perIterationMaxAcceptableLatency {
 			totalFailures++
 			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d exceeds max acceptable latency: %d\n", i, latencyMs, perIterationMaxAcceptableLatency.Milliseconds())
-		} else {
-			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d succeeded\n", i, latencyMs)
+			continue
 		}
-		h.Add(latencyMs)
+		fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d succeeded\n", i, latencyMs)
 	}
 	var b bytes.Buffer
 	h.Print(&b)
@@ -752,11 +756,11 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 	fmt.Fprintln(os.Stderr, b.String())
 	if len(results) < soakIterations {
 		logger.Fatalf("soak test consumed all %f seconds of time and quit early, only having ran %d out of desired %d iterations. total failures: %d. max failures threshold: %d. Some or all of the iterations that did run were unexpectedly slow. See breakdown above for which iterations succeeded, failed, and why for more info.", overallDeadline.Sub(start).Seconds(), len(results), soakIterations, totalFailures, maxFailures)
-	} else if totalFailures > maxFailures {
-		logger.Fatalf("soak test ran: %d iterations. total failures: %d exceeds max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.", soakIterations, totalFailures, maxFailures)
-	} else {
-		fmt.Fprintf(os.Stderr, "soak test ran: %d iterations. total failures: %d is within max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", soakIterations, totalFailures, maxFailures)
 	}
+	if totalFailures > maxFailures {
+		logger.Fatalf("soak test ran: %d iterations. total failures: %d exceeds max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.", soakIterations, totalFailures, maxFailures)
+	}
+	fmt.Fprintf(os.Stderr, "soak test ran: %d iterations. total failures: %d is within max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", soakIterations, totalFailures, maxFailures)
 }
 
 type testServer struct {
