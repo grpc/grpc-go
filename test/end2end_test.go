@@ -509,10 +509,6 @@ type test struct {
 	customDialOptions           []grpc.DialOption
 	resolverScheme              string
 
-	// All test dialing is blocking by default. Set this to true if dial
-	// should be non-blocking.
-	nonBlockingDial bool
-
 	// These are are set once startServer is called. The common case is to have
 	// only one testServer.
 	srv     stopper
@@ -828,10 +824,6 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	}
 	if te.customCodec != nil {
 		opts = append(opts, grpc.WithDefaultCallOptions(grpc.ForceCodec(te.customCodec)))
-	}
-	if !te.nonBlockingDial && te.srvAddr != "" {
-		// Only do a blocking dial if server is up.
-		opts = append(opts, grpc.WithBlock())
 	}
 	if te.srvAddr == "" {
 		te.srvAddr = "client.side.only.test"
@@ -1872,7 +1864,6 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	defer te1.tearDown()
 
 	te1.resolverScheme = r.Scheme()
-	te1.nonBlockingDial = true
 	te1.startServer(&testServer{security: e.security})
 	cc1 := te1.clientConn(grpc.WithResolvers(r))
 
@@ -1960,7 +1951,6 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	// Case2: Client API set maxReqSize to 1024 (send), maxRespSize to 1024 (recv). Sc sets maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
 	te2 := testServiceConfigSetup(t, e)
 	te2.resolverScheme = r.Scheme()
-	te2.nonBlockingDial = true
 	te2.maxClientReceiveMsgSize = newInt(1024)
 	te2.maxClientSendMsgSize = newInt(1024)
 
@@ -2020,7 +2010,6 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	// Case3: Client API set maxReqSize to 4096 (send), maxRespSize to 4096 (recv). Sc sets maxReqSize to 2048 (send), maxRespSize to 2048 (recv).
 	te3 := testServiceConfigSetup(t, e)
 	te3.resolverScheme = r.Scheme()
-	te3.nonBlockingDial = true
 	te3.maxClientReceiveMsgSize = newInt(4096)
 	te3.maxClientSendMsgSize = newInt(4096)
 
@@ -2113,7 +2102,6 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 
 	te.resolverScheme = r.Scheme()
-	te.nonBlockingDial = true
 	cc := te.clientConn(grpc.WithResolvers(r))
 	tc := testpb.NewTestServiceClient(cc)
 
@@ -5141,8 +5129,7 @@ func (s) TestFlowControlLogicalRace(t *testing.T) {
 
 	go s.Serve(lis)
 
-	ctx := context.Background()
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock())
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
 	}
@@ -5151,7 +5138,7 @@ func (s) TestFlowControlLogicalRace(t *testing.T) {
 
 	failures := 0
 	for i := 0; i < requestCount; i++ {
-		ctx, cancel := context.WithTimeout(ctx, requestTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), requestTimeout)
 		output, err := cl.StreamingOutputCall(ctx, &testpb.StreamingOutputCallRequest{})
 		if err != nil {
 			t.Fatalf("StreamingOutputCall; err = %q", err)
@@ -6572,7 +6559,7 @@ func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
 		close(done)
 	}()
 
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock())
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
 	if err != nil {
 		t.Fatalf("Failed to dial server: %v", err)
 	}
@@ -6791,7 +6778,7 @@ func (s) TestDisabledIOBuffers(t *testing.T) {
 	defer s.Stop()
 	dctx, dcancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer dcancel()
-	cc, err := grpc.DialContext(dctx, lis.Addr().String(), grpc.WithInsecure(), grpc.WithBlock(), grpc.WithWriteBufferSize(0), grpc.WithReadBufferSize(0))
+	cc, err := grpc.DialContext(dctx, lis.Addr().String(), grpc.WithInsecure(), grpc.WithWriteBufferSize(0), grpc.WithReadBufferSize(0))
 	if err != nil {
 		t.Fatalf("Failed to dial server")
 	}
@@ -7180,7 +7167,6 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 
 	te.resolverScheme = r.Scheme()
-	te.nonBlockingDial = true
 	cc := te.clientConn(grpc.WithResolvers(r))
 	tc := testpb.NewTestServiceClient(cc)
 

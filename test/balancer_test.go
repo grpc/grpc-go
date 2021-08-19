@@ -209,9 +209,8 @@ func testPickExtraMetadata(t *testing.T, e env) {
 		// Second RPC has sub-content-type "proto".
 		{"content-type": []string{"application/grpc+proto"}},
 	}
-
-	if !cmp.Equal(b.pickExtraMDs, want) {
-		t.Fatalf("%s", cmp.Diff(b.pickExtraMDs, want))
+	if diff := cmp.Diff(want, b.pickExtraMDs); diff != "" {
+		t.Fatalf("unexpected diff in metadata (-want, +got): %s", diff)
 	}
 }
 
