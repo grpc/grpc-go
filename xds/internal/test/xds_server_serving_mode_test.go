@@ -194,9 +194,10 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Make sure cc1 is still in READY state, while cc2 has moved out of READY.
-	if s := cc1.GetState(); s != connectivity.Ready {
-		t.Fatalf("clientConn1 state is %s, want %s", s, connectivity.Ready)
+	// Make sure cc1 is still in READY state (or IDLE, since we support IDLE
+	// now), while cc2 has moved out of READY.
+	if s := cc1.GetState(); s != connectivity.Ready && s != connectivity.Idle {
+		t.Fatalf("clientConn1 state is %s, want READY or IDLE", s)
 	}
 	if !cc2.WaitForStateChange(ctx, connectivity.Ready) {
 		t.Fatal("clientConn2 failed to move out of READY")
