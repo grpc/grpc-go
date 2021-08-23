@@ -21,7 +21,6 @@ package transport
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -391,21 +390,24 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 
 	if !isGRPC {
-		h, err := json.Marshal(hpack.HeaderField{
-			Name:  "grpc-message",
-			Value: encodeGrpcMessage("unsupported media type"),
+		// write the initial headers
+		t.controlBuf.put(&headerFrame{
+			streamID: streamID,
+			hf: []hpack.HeaderField{
+				{Name: "content-type", Value: "text/plain; charset=utf-8"},
+				{Name: "grpc-message", Value: fmt.Sprintf("unsupported content-type %q", contentType)},
+			},
+			endStream: false,
+			onWrite:   t.setResetPingStrikes,
 		})
-		if err != nil {
-			return false
-		}
-
 		t.controlBuf.put(&dataFrame{
-			streamID:  streamID,
-			endStream: true,
-			h:         h,
-			d:         []byte(fmt.Sprintf("unsupported content-type %q", contentType)),
+			streamID:    streamID,
+			endStream:   true,
+			h:           []byte("oops"),
+			d:           []byte("oops"),
+			onEachWrite: t.setResetPingStrikes,
 		})
-		return false
+		return true
 	}
 
 	if headerError != nil {
@@ -415,6 +417,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		); err != nil && logger.V(logLevel) {
 			logger.Infof("transport: http2Server.operateHeaders failed to write status %v", err)
 		}
+		t.finishStream(s, true, http2.ErrCodeInternal, nil, true)
 		return false
 	}
 
