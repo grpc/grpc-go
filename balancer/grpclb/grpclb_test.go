@@ -1232,6 +1232,65 @@ func (s) TestGRPCLBPickFirst(t *testing.T) {
 	}
 }
 
+func (s) TestGRPCLBBackendConnectionErrorPropagation(t *testing.T) {
+	r := manual.NewBuilderWithScheme("whatever")
+
+	// Start up an LB which will tell the client to fall back
+	// right away.
+	tss, cleanup, err := newLoadBalancer(0, "", nil)
+	if err != nil {
+		t.Fatalf("failed to create new load balancer: %v", err)
+	}
+	defer cleanup()
+
+	// Start a standalone backend, to be used during fallback. The creds
+	// are intentionally misconfigured in order to simulate failure of a
+	// security handshake.
+	beLis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen %v", err)
+	}
+	defer beLis.Close()
+	standaloneBEs := startBackends("arbitrary.invalid.name", true, beLis)
+	defer stopBackends(standaloneBEs)
+
+	creds := serverNameCheckCreds{}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
+		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
+	if err != nil {
+		t.Fatalf("Failed to dial to the backend %v", err)
+	}
+	defer cc.Close()
+	testC := testpb.NewTestServiceClient(cc)
+
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{
+		Addr:       tss.lbAddr,
+		Type:       resolver.GRPCLB,
+		ServerName: lbServerName,
+	}, {
+		Addr: beLis.Addr().String(),
+		Type: resolver.Backend,
+	}}})
+
+	// If https://github.com/grpc/grpc-go/blob/65cabd74d8e18d7347fecd414fa8d83a00035f5f/balancer/grpclb/grpclb_test.go#L103
+	// changes, then expectedErrMsg may need to be updated.
+	const expectedErrMsg = "received unexpected server name"
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		tss.ls.fallbackNow()
+		wg.Done()
+	}()
+	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}); err == nil || !strings.Contains(err.Error(), expectedErrMsg) {
+		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, rpc error containing substring: %q", testC, err, expectedErrMsg)
+	}
+	wg.Wait()
+}
+
 type failPreRPCCred struct{}
 
 func (failPreRPCCred) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {

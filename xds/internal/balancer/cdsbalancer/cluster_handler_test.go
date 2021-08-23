@@ -53,20 +53,34 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 		name          string
 		clusterName   string
 		clusterUpdate xdsclient.ClusterUpdate
+		lbPolicy      *xdsclient.ClusterLBPolicyRingHash
 	}{
-		{name: "test-update-root-cluster-EDS-success",
+		{
+			name:        "test-update-root-cluster-EDS-success",
 			clusterName: edsService,
 			clusterUpdate: xdsclient.ClusterUpdate{
 				ClusterType: xdsclient.ClusterTypeEDS,
 				ClusterName: edsService,
-			}},
+			},
+		},
+		{
+			name:        "test-update-root-cluster-EDS-with-ring-hash",
+			clusterName: logicalDNSService,
+			clusterUpdate: xdsclient.ClusterUpdate{
+				ClusterType: xdsclient.ClusterTypeLogicalDNS,
+				ClusterName: logicalDNSService,
+				LBPolicy:    &xdsclient.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
+			},
+			lbPolicy: &xdsclient.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
+		},
 		{
 			name:        "test-update-root-cluster-Logical-DNS-success",
 			clusterName: logicalDNSService,
 			clusterUpdate: xdsclient.ClusterUpdate{
 				ClusterType: xdsclient.ClusterTypeLogicalDNS,
 				ClusterName: logicalDNSService,
-			}},
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -95,8 +109,11 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 			fakeClient.InvokeWatchClusterCallback(test.clusterUpdate, nil)
 			select {
 			case chu := <-ch.updateChannel:
-				if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{test.clusterUpdate}); diff != "" {
+				if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{test.clusterUpdate}); diff != "" {
 					t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
+				}
+				if diff := cmp.Diff(chu.lbPolicy, test.lbPolicy); diff != "" {
+					t.Fatalf("got unexpected lb policy in cluster update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
 				t.Fatal("Timed out waiting for update from update channel.")
@@ -189,7 +206,7 @@ func (s) TestSuccessCaseLeafNodeThenNewUpdate(t *testing.T) {
 			fakeClient.InvokeWatchClusterCallback(test.newClusterUpdate, nil)
 			select {
 			case chu := <-ch.updateChannel:
-				if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{test.newClusterUpdate}); diff != "" {
+				if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{test.newClusterUpdate}); diff != "" {
 					t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
@@ -305,7 +322,7 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	// ordered as per the cluster update.
 	select {
 	case chu := <-ch.updateChannel:
-		if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{{
+		if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{{
 			ClusterType: xdsclient.ClusterTypeEDS,
 			ClusterName: edsService,
 		}, {
@@ -412,7 +429,7 @@ func (s) TestUpdateRootClusterAggregateThenChangeChild(t *testing.T) {
 
 	select {
 	case chu := <-ch.updateChannel:
-		if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{{
+		if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{{
 			ClusterType: xdsclient.ClusterTypeEDS,
 			ClusterName: edsService,
 		}, {
@@ -658,7 +675,7 @@ func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
 	// Then an update should successfully be written to the update buffer.
 	select {
 	case chu := <-ch.updateChannel:
-		if diff := cmp.Diff(chu.chu, []xdsclient.ClusterUpdate{{
+		if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{{
 			ClusterType: xdsclient.ClusterTypeEDS,
 			ClusterName: edsService2,
 		}}); diff != "" {

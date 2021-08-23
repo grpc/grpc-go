@@ -52,7 +52,7 @@ type Client struct {
 	bootstrapCfg *bootstrap.Config
 
 	ldsCb  func(xdsclient.ListenerUpdate, error)
-	rdsCb  func(xdsclient.RouteConfigUpdate, error)
+	rdsCbs map[string]func(xdsclient.RouteConfigUpdate, error)
 	cdsCbs map[string]func(xdsclient.ClusterUpdate, error)
 	edsCbs map[string]func(xdsclient.EndpointsUpdate, error)
 
@@ -95,10 +95,10 @@ func (xdsC *Client) WaitForCancelListenerWatch(ctx context.Context) error {
 
 // WatchRouteConfig registers a RDS watch.
 func (xdsC *Client) WatchRouteConfig(routeName string, callback func(xdsclient.RouteConfigUpdate, error)) func() {
-	xdsC.rdsCb = callback
+	xdsC.rdsCbs[routeName] = callback
 	xdsC.rdsWatchCh.Send(routeName)
 	return func() {
-		xdsC.rdsCancelCh.Send(nil)
+		xdsC.rdsCancelCh.Send(routeName)
 	}
 }
 
@@ -116,15 +116,28 @@ func (xdsC *Client) WaitForWatchRouteConfig(ctx context.Context) (string, error)
 //
 // Not thread safe with WatchRouteConfig. Only call this after
 // WaitForWatchRouteConfig.
-func (xdsC *Client) InvokeWatchRouteConfigCallback(update xdsclient.RouteConfigUpdate, err error) {
-	xdsC.rdsCb(update, err)
+func (xdsC *Client) InvokeWatchRouteConfigCallback(name string, update xdsclient.RouteConfigUpdate, err error) {
+	if len(xdsC.rdsCbs) != 1 {
+		xdsC.rdsCbs[name](update, err)
+		return
+	}
+	// Keeps functionality with previous usage of this on client side, if single
+	// callback call that callback.
+	var routeName string
+	for route := range xdsC.rdsCbs {
+		routeName = route
+	}
+	xdsC.rdsCbs[routeName](update, err)
 }
 
 // WaitForCancelRouteConfigWatch waits for a RDS watch to be cancelled  and returns
 // context.DeadlineExceeded otherwise.
-func (xdsC *Client) WaitForCancelRouteConfigWatch(ctx context.Context) error {
-	_, err := xdsC.rdsCancelCh.Receive(ctx)
-	return err
+func (xdsC *Client) WaitForCancelRouteConfigWatch(ctx context.Context) (string, error) {
+	val, err := xdsC.rdsCancelCh.Receive(ctx)
+	if err != nil {
+		return "", err
+	}
+	return val.(string), err
 }
 
 // WatchCluster registers a CDS watch.
@@ -293,16 +306,17 @@ func NewClientWithName(name string) *Client {
 	return &Client{
 		name:         name,
 		ldsWatchCh:   testutils.NewChannel(),
-		rdsWatchCh:   testutils.NewChannel(),
+		rdsWatchCh:   testutils.NewChannelWithSize(10),
 		cdsWatchCh:   testutils.NewChannelWithSize(10),
 		edsWatchCh:   testutils.NewChannelWithSize(10),
 		ldsCancelCh:  testutils.NewChannel(),
-		rdsCancelCh:  testutils.NewChannel(),
+		rdsCancelCh:  testutils.NewChannelWithSize(10),
 		cdsCancelCh:  testutils.NewChannelWithSize(10),
 		edsCancelCh:  testutils.NewChannelWithSize(10),
 		loadReportCh: testutils.NewChannel(),
 		lrsCancelCh:  testutils.NewChannel(),
 		loadStore:    load.NewStore(),
+		rdsCbs:       make(map[string]func(xdsclient.RouteConfigUpdate, error)),
 		cdsCbs:       make(map[string]func(xdsclient.ClusterUpdate, error)),
 		edsCbs:       make(map[string]func(xdsclient.EndpointsUpdate, error)),
 		Closed:       grpcsync.NewEvent(),

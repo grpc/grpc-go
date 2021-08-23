@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
 	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
 	"google.golang.org/grpc/internal/envconfig"
@@ -748,7 +750,7 @@ func testDNSResolver(t *testing.T) {
 		if cnt == 0 {
 			t.Fatalf("UpdateState not called after 2s; aborting")
 		}
-		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
+		if !cmp.Equal(a.addrWant, state.Addresses, cmpopts.EquateEmpty()) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", a.target, state.Addresses, a.addrWant)
 		}
 		sc := scFromState(state)
@@ -976,7 +978,7 @@ func testDNSResolverWithSRV(t *testing.T) {
 		if cnt == 0 {
 			t.Fatalf("UpdateState not called after 2s; aborting")
 		}
-		if !reflect.DeepEqual(a.addrWant, state.Addresses) {
+		if !cmp.Equal(a.addrWant, state.Addresses, cmpopts.EquateEmpty()) {
 			t.Errorf("Resolved addresses of target: %q = %+v, want %+v", a.target, state.Addresses, a.addrWant)
 		}
 		gs := grpclbstate.Get(state)

@@ -1689,8 +1689,22 @@ func (s) TestCZSubChannelPickedNewAddress(t *testing.T) {
 	}
 	te.srvs[0].Stop()
 	te.srvs[1].Stop()
-	// Here, we just wait for all sockets to be up. In the future, if we implement
-	// IDLE, we may need to make several rpc calls to create the sockets.
+	// Here, we just wait for all sockets to be up. Make several rpc calls to
+	// create the sockets since we do not automatically reconnect.
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			tc.EmptyCall(ctx, &testpb.Empty{})
+			cancel()
+			select {
+			case <-time.After(10 * time.Millisecond):
+			case <-done:
+				return
+			}
+		}
+	}()
 	if err := verifyResultWithDelay(func() (bool, error) {
 		tcs, _ := channelz.GetTopChannels(0, 0)
 		if len(tcs) != 1 {

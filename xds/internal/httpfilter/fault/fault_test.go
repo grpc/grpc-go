@@ -608,7 +608,7 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	streams := make(chan testpb.TestService_FullDuplexCallClient)
+	streams := make(chan testpb.TestService_FullDuplexCallClient, 5) // startStream() is called 5 times
 	startStream := func() {
 		str, err := client.FullDuplexCall(ctx)
 		if err != nil {
@@ -620,7 +620,7 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 		str := <-streams
 		str.CloseSend()
 		if _, err := str.Recv(); err != io.EOF {
-			t.Fatal("stream error:", err)
+			t.Error("stream error:", err)
 		}
 	}
 	releaseStream := func() {

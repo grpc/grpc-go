@@ -43,7 +43,7 @@ func routeToMatcher(r *xdsclient.Route) (*compositeMatcher, error) {
 		return nil, fmt.Errorf("illegal route: missing path_matcher")
 	}
 
-	var headerMatchers []matcher.HeaderMatcher
+	headerMatchers := make([]matcher.HeaderMatcher, 0, len(r.Headers))
 	for _, h := range r.Headers {
 		var matcherT matcher.HeaderMatcher
 		switch {

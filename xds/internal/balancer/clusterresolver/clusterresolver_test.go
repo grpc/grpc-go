@@ -1,3 +1,4 @@
+//go:build go1.12
 // +build go1.12
 
 /*
@@ -21,23 +22,17 @@
 package clusterresolver
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpctest"
-	scpb "google.golang.org/grpc/internal/proto/grpc_service_config"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -48,8 +43,8 @@ import (
 const (
 	defaultTestTimeout      = 1 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
-	testServiceName         = "test/foo"
-	testClusterName         = "test/cluster"
+	testEDSServcie          = "test-eds-service-name"
+	testClusterName         = "test-cluster-name"
 )
 
 var (
@@ -105,7 +100,7 @@ func (t *noopTestClientConn) NewSubConn([]resolver.Address, balancer.NewSubConnO
 	return nil, nil
 }
 
-func (noopTestClientConn) Target() string { return testServiceName }
+func (noopTestClientConn) Target() string { return testEDSServcie }
 
 type scStateChange struct {
 	sc    balancer.SubConn
@@ -133,6 +128,8 @@ func (f *fakeChildBalancer) UpdateSubConnState(sc balancer.SubConn, state balanc
 }
 
 func (f *fakeChildBalancer) Close() {}
+
+func (f *fakeChildBalancer) ExitIdle() {}
 
 func (f *fakeChildBalancer) waitForClientConnStateChange(ctx context.Context) error {
 	_, err := f.clientConnState.Receive(ctx)
@@ -213,7 +210,7 @@ func (s) TestSubConnStateChange(t *testing.T) {
 	defer cleanup()
 
 	builder := balancer.Get(Name)
-	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
+	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
 	if edsB == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
@@ -221,7 +218,7 @@ func (s) TestSubConnStateChange(t *testing.T) {
 
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
+		BalancerConfig: newLBConfigWithOneEDS(testEDSServcie),
 	}); err != nil {
 		t.Fatalf("edsB.UpdateClientConnState() failed: %v", err)
 	}
@@ -259,7 +256,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	defer cleanup()
 
 	builder := balancer.Get(Name)
-	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
+	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
 	if edsB == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
@@ -269,7 +266,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	defer cancel()
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
+		BalancerConfig: newLBConfigWithOneEDS(testEDSServcie),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +320,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	// An update with the same service name should not trigger a new watch.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
+		BalancerConfig: newLBConfigWithOneEDS(testEDSServcie),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +344,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	defer cleanup()
 
 	builder := balancer.Get(Name)
-	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
+	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
 	if edsB == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
@@ -357,7 +354,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	defer cancel()
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
+		BalancerConfig: newLBConfigWithOneEDS(testEDSServcie),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +405,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	// the previous watch was canceled.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{EDSServiceName: testServiceName},
+		BalancerConfig: newLBConfigWithOneEDS(testEDSServcie),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -449,7 +446,7 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	defer cleanup()
 
 	builder := balancer.Get(Name)
-	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
+	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
 	if edsB == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
@@ -460,7 +457,7 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	// If eds service name is not set, should watch for cluster name.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{ClusterName: "cluster-1"},
+		BalancerConfig: newLBConfigWithOneEDS("cluster-1"),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -472,7 +469,7 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	// the same.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{EDSServiceName: "foobar-1"},
+		BalancerConfig: newLBConfigWithOneEDS("foobar-1"),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -486,7 +483,7 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	// with no resource names being sent to the server.
 	if err := edsB.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{EDSServiceName: "foobar-2"},
+		BalancerConfig: newLBConfigWithOneEDS("foobar-2"),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -495,184 +492,12 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	}
 }
 
-const (
-	fakeBalancerA = "fake_balancer_A"
-	fakeBalancerB = "fake_balancer_B"
-)
-
-// Install two fake balancers for service config update tests.
-//
-// ParseConfig only accepts the json if the balancer specified is registered.
-func init() {
-	balancer.Register(&fakeBalancerBuilder{name: fakeBalancerA})
-	balancer.Register(&fakeBalancerBuilder{name: fakeBalancerB})
-}
-
-type fakeBalancerBuilder struct {
-	name string
-}
-
-func (b *fakeBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &fakeBalancer{cc: cc}
-}
-
-func (b *fakeBalancerBuilder) Name() string {
-	return b.name
-}
-
-type fakeBalancer struct {
-	cc balancer.ClientConn
-}
-
-func (b *fakeBalancer) ResolverError(error) {
-	panic("implement me")
-}
-
-func (b *fakeBalancer) UpdateClientConnState(balancer.ClientConnState) error {
-	panic("implement me")
-}
-
-func (b *fakeBalancer) UpdateSubConnState(balancer.SubConn, balancer.SubConnState) {
-	panic("implement me")
-}
-
-func (b *fakeBalancer) Close() {}
-
-func (s) TestBalancerConfigParsing(t *testing.T) {
-	const testEDSName = "eds.service"
-	var testLRSName = "lrs.server"
-	b := bytes.NewBuffer(nil)
-	if err := (&jsonpb.Marshaler{}).Marshal(b, &scpb.XdsConfig{
-		ChildPolicy: []*scpb.LoadBalancingConfig{
-			{Policy: &scpb.LoadBalancingConfig_Xds{}},
-			{Policy: &scpb.LoadBalancingConfig_RoundRobin{
-				RoundRobin: &scpb.RoundRobinConfig{},
-			}},
-		},
-		FallbackPolicy: []*scpb.LoadBalancingConfig{
-			{Policy: &scpb.LoadBalancingConfig_Xds{}},
-			{Policy: &scpb.LoadBalancingConfig_PickFirst{
-				PickFirst: &scpb.PickFirstConfig{},
-			}},
-		},
-		EdsServiceName:             testEDSName,
-		LrsLoadReportingServerName: &wrapperspb.StringValue{Value: testLRSName},
-	}); err != nil {
-		t.Fatalf("%v", err)
-	}
-
-	var testMaxConcurrentRequests uint32 = 123
-	tests := []struct {
-		name    string
-		js      json.RawMessage
-		want    serviceconfig.LoadBalancingConfig
-		wantErr bool
-	}{
-		{
-			name:    "bad json",
-			js:      json.RawMessage(`i am not JSON`),
-			wantErr: true,
-		},
-		{
-			name: "empty",
-			js:   json.RawMessage(`{}`),
-			want: &EDSConfig{},
-		},
-		{
-			name: "jsonpb-generated",
-			js:   b.Bytes(),
-			want: &EDSConfig{
-				ChildPolicy: &loadBalancingConfig{
-					Name:   "round_robin",
-					Config: json.RawMessage("{}"),
-				},
-				FallBackPolicy: &loadBalancingConfig{
-					Name:   "pick_first",
-					Config: json.RawMessage("{}"),
-				},
-				EDSServiceName:             testEDSName,
-				LrsLoadReportingServerName: &testLRSName,
-			},
-		},
-		{
-			// json with random balancers, and the first is not registered.
-			name: "manually-generated",
-			js: json.RawMessage(`
-{
-  "childPolicy": [
-    {"fake_balancer_C": {}},
-    {"fake_balancer_A": {}},
-    {"fake_balancer_B": {}}
-  ],
-  "fallbackPolicy": [
-    {"fake_balancer_C": {}},
-    {"fake_balancer_B": {}},
-    {"fake_balancer_A": {}}
-  ],
-  "edsServiceName": "eds.service",
-  "maxConcurrentRequests": 123,
-  "lrsLoadReportingServerName": "lrs.server"
-}`),
-			want: &EDSConfig{
-				ChildPolicy: &loadBalancingConfig{
-					Name:   "fake_balancer_A",
-					Config: json.RawMessage("{}"),
-				},
-				FallBackPolicy: &loadBalancingConfig{
-					Name:   "fake_balancer_B",
-					Config: json.RawMessage("{}"),
-				},
-				EDSServiceName:             testEDSName,
-				MaxConcurrentRequests:      &testMaxConcurrentRequests,
-				LrsLoadReportingServerName: &testLRSName,
-			},
-		},
-		{
-			// json with no lrs server name, LoadReportingServerName should
-			// be nil (not an empty string).
-			name: "no-lrs-server-name",
-			js: json.RawMessage(`
-{
-  "edsServiceName": "eds.service"
-}`),
-			want: &EDSConfig{
-				EDSServiceName:             testEDSName,
-				LrsLoadReportingServerName: nil,
-			},
-		},
-		{
-			name: "good child policy",
-			js:   json.RawMessage(`{"childPolicy":[{"pick_first":{}}]}`),
-			want: &EDSConfig{
-				ChildPolicy: &loadBalancingConfig{
-					Name:   "pick_first",
-					Config: json.RawMessage(`{}`),
-				},
-			},
-		},
-		{
-			name: "multiple good child policies",
-			js:   json.RawMessage(`{"childPolicy":[{"round_robin":{}},{"pick_first":{}}]}`),
-			want: &EDSConfig{
-				ChildPolicy: &loadBalancingConfig{
-					Name:   "round_robin",
-					Config: json.RawMessage(`{}`),
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := bb{}.ParseConfig(tt.js)
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("edsBalancerBuilder.ParseConfig() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if tt.wantErr {
-				return
-			}
-			if !cmp.Equal(got, tt.want) {
-				t.Errorf(cmp.Diff(got, tt.want))
-			}
-		})
+func newLBConfigWithOneEDS(edsServiceName string) *LBConfig {
+	return &LBConfig{
+		DiscoveryMechanisms: []DiscoveryMechanism{{
+			Cluster:        testClusterName,
+			Type:           DiscoveryMechanismTypeEDS,
+			EDSServiceName: edsServiceName,
+		}},
 	}
 }

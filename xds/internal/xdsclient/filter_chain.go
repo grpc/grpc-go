@@ -24,9 +24,10 @@ import (
 	"net"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/golang/protobuf/proto"
-
+	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/xds/internal/version"
 )
 
@@ -50,14 +51,20 @@ const (
 
 // FilterChain captures information from within a FilterChain message in a
 // Listener resource.
-//
-// Currently, this simply contains the security configuration found in the
-// 'transport_socket' field of the filter chain. The actual set of filters
-// associated with this filter chain are not captured here, since we do not
-// support these filters on the server-side yet.
 type FilterChain struct {
 	// SecurityCfg contains transport socket security configuration.
 	SecurityCfg *SecurityConfig
+	// HTTPFilters represent the HTTP Filters that comprise this FilterChain.
+	HTTPFilters []HTTPFilter
+	// RouteConfigName is the route configuration name for this FilterChain.
+	//
+	// Only one of RouteConfigName and InlineRouteConfig is set.
+	RouteConfigName string
+	// InlineRouteConfig is the inline route configuration (RDS response)
+	// returned for this filter chain.
+	//
+	// Only one of RouteConfigName and InlineRouteConfig is set.
+	InlineRouteConfig *RouteConfigUpdate
 }
 
 // SourceType specifies the connection source IP match type.
@@ -113,6 +120,11 @@ type FilterChainManager struct {
 	dstPrefixes []*destPrefixEntry
 
 	def *FilterChain // Default filter chain, if specified.
+
+	// RouteConfigNames are the route configuration names which need to be
+	// dynamically queried for RDS Configuration for any FilterChains which
+	// specify to load RDS Configuration dynamically.
+	RouteConfigNames map[string]bool
 }
 
 // destPrefixEntry is the value type of the map indexed on destination prefixes.
@@ -162,7 +174,10 @@ type sourcePrefixEntry struct {
 // create a FilterChainManager.
 func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, error) {
 	// Parse all the filter chains and build the internal data structures.
-	fci := &FilterChainManager{dstPrefixMap: make(map[string]*destPrefixEntry)}
+	fci := &FilterChainManager{
+		dstPrefixMap:     make(map[string]*destPrefixEntry),
+		RouteConfigNames: make(map[string]bool),
+	}
 	if err := fci.addFilterChains(lis.GetFilterChains()); err != nil {
 		return nil, err
 	}
@@ -191,7 +206,7 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 	var def *FilterChain
 	if dfc := lis.GetDefaultFilterChain(); dfc != nil {
 		var err error
-		if def, err = filterChainFromProto(dfc); err != nil {
+		if def, err = fci.filterChainFromProto(dfc); err != nil {
 			return nil, err
 		}
 	}
@@ -227,8 +242,9 @@ func (fci *FilterChainManager) addFilterChains(fcs []*v3listenerpb.FilterChain) 
 }
 
 func (fci *FilterChainManager) addFilterChainsForDestPrefixes(fc *v3listenerpb.FilterChain) error {
-	var dstPrefixes []*net.IPNet
-	for _, pr := range fc.GetFilterChainMatch().GetPrefixRanges() {
+	ranges := fc.GetFilterChainMatch().GetPrefixRanges()
+	dstPrefixes := make([]*net.IPNet, 0, len(ranges))
+	for _, pr := range ranges {
 		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
 		_, ipnet, err := net.ParseCIDR(cidr)
 		if err != nil {
@@ -327,7 +343,8 @@ func (fci *FilterChainManager) addFilterChainsForSourceType(dstEntry *destPrefix
 // structures and delegates control to addFilterChainsForSourcePorts to continue
 // building the internal data structure.
 func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map[string]*sourcePrefixEntry, fc *v3listenerpb.FilterChain) error {
-	var srcPrefixes []*net.IPNet
+	ranges := fc.GetFilterChainMatch().GetSourcePrefixRanges()
+	srcPrefixes := make([]*net.IPNet, 0, len(ranges))
 	for _, pr := range fc.GetFilterChainMatch().GetSourcePrefixRanges() {
 		cidr := fmt.Sprintf("%s/%d", pr.GetAddressPrefix(), pr.GetPrefixLen().GetValue())
 		_, ipnet, err := net.ParseCIDR(cidr)
@@ -367,12 +384,13 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 // It is here that we determine if there are multiple filter chains with
 // overlapping matching rules.
 func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePrefixEntry, fcProto *v3listenerpb.FilterChain) error {
-	var srcPorts []int
-	for _, port := range fcProto.GetFilterChainMatch().GetSourcePorts() {
+	ports := fcProto.GetFilterChainMatch().GetSourcePorts()
+	srcPorts := make([]int, 0, len(ports))
+	for _, port := range ports {
 		srcPorts = append(srcPorts, int(port))
 	}
 
-	fc, err := filterChainFromProto(fcProto)
+	fc, err := fci.filterChainFromProto(fcProto)
 	if err != nil {
 		return err
 	}
@@ -395,16 +413,26 @@ func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePre
 }
 
 // filterChainFromProto extracts the relevant information from the FilterChain
-// proto and stores it in our internal representation. Currently, we only
-// process the security configuration stored in the transport_socket field.
-func filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
+// proto and stores it in our internal representation. It also persists any
+// RouteNames which need to be queried dynamically via RDS.
+func (fci *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
+	filterChain, err := processNetworkFilters(fc.GetFilters())
+	if err != nil {
+		return nil, err
+	}
+	// These route names will be dynamically queried via RDS in the wrapped
+	// listener, which receives the LDS response, if specified for the filter
+	// chain.
+	if filterChain.RouteConfigName != "" {
+		fci.RouteConfigNames[filterChain.RouteConfigName] = true
+	}
 	// If the transport_socket field is not specified, it means that the control
 	// plane has not sent us any security config. This is fine and the server
 	// will use the fallback credentials configured as part of the
 	// xdsCredentials.
 	ts := fc.GetTransportSocket()
 	if ts == nil {
-		return &FilterChain{}, nil
+		return filterChain, nil
 	}
 	if name := ts.GetName(); name != transportSocketName {
 		return nil, fmt.Errorf("transport_socket field has unexpected name: %s", name)
@@ -431,7 +459,95 @@ func filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
 	if sc.RequireClientCert && sc.RootInstanceName == "" {
 		return nil, errors.New("security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set")
 	}
-	return &FilterChain{SecurityCfg: sc}, nil
+	filterChain.SecurityCfg = sc
+	return filterChain, nil
+}
+
+func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error) {
+	filterChain := &FilterChain{}
+	seenNames := make(map[string]bool, len(filters))
+	seenHCM := false
+	for _, filter := range filters {
+		name := filter.GetName()
+		if name == "" {
+			return nil, fmt.Errorf("network filters {%+v} is missing name field in filter: {%+v}", filters, filter)
+		}
+		if seenNames[name] {
+			return nil, fmt.Errorf("network filters {%+v} has duplicate filter name %q", filters, name)
+		}
+		seenNames[name] = true
+
+		// Network filters have a oneof field named `config_type` where we
+		// only support `TypedConfig` variant.
+		switch typ := filter.GetConfigType().(type) {
+		case *v3listenerpb.Filter_TypedConfig:
+			// The typed_config field has an `anypb.Any` proto which could
+			// directly contain the serialized bytes of the actual filter
+			// configuration, or it could be encoded as a `TypedStruct`.
+			// TODO: Add support for `TypedStruct`.
+			tc := filter.GetTypedConfig()
+
+			// The only network filter that we currently support is the v3
+			// HttpConnectionManager. So, we can directly check the type_url
+			// and unmarshal the config.
+			// TODO: Implement a registry of supported network filters (like
+			// we have for HTTP filters), when we have to support network
+			// filters other than HttpConnectionManager.
+			if tc.GetTypeUrl() != version.V3HTTPConnManagerURL {
+				return nil, fmt.Errorf("network filters {%+v} has unsupported network filter %q in filter {%+v}", filters, tc.GetTypeUrl(), filter)
+			}
+			hcm := &v3httppb.HttpConnectionManager{}
+			if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
+				return nil, fmt.Errorf("network filters {%+v} failed unmarshaling of network filter {%+v}: %v", filters, filter, err)
+			}
+			// "Any filters after HttpConnectionManager should be ignored during
+			// connection processing but still be considered for validity.
+			// HTTPConnectionManager must have valid http_filters." - A36
+			filters, err := processHTTPFilters(hcm.GetHttpFilters(), true)
+			if err != nil {
+				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}", filters, hcm.GetHttpFilters())
+			}
+			if !seenHCM {
+				// TODO: Implement terminal filter logic, as per A36.
+				filterChain.HTTPFilters = filters
+				seenHCM = true
+				switch hcm.RouteSpecifier.(type) {
+				case *v3httppb.HttpConnectionManager_Rds:
+					if hcm.GetRds().GetConfigSource().GetAds() == nil {
+						return nil, fmt.Errorf("ConfigSource is not ADS: %+v", hcm)
+					}
+					name := hcm.GetRds().GetRouteConfigName()
+					if name == "" {
+						return nil, fmt.Errorf("empty route_config_name: %+v", hcm)
+					}
+					filterChain.RouteConfigName = name
+				case *v3httppb.HttpConnectionManager_RouteConfig:
+					// "RouteConfiguration validation logic inherits all
+					// previous validations made for client-side usage as RDS
+					// does not distinguish between client-side and
+					// server-side." - A36
+					// Can specify v3 here, as will never get to this function
+					// if v2.
+					routeU, err := generateRDSUpdateFromRouteConfiguration(hcm.GetRouteConfig(), nil, false)
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
+					}
+					filterChain.InlineRouteConfig = &routeU
+				case nil:
+					// No-op, as no route specifier is a valid configuration on
+					// the server side.
+				default:
+					return nil, fmt.Errorf("unsupported type %T for RouteSpecifier", hcm.RouteSpecifier)
+				}
+			}
+		default:
+			return nil, fmt.Errorf("network filters {%+v} has unsupported config_type %T in filter %s", filters, typ, filter.GetName())
+		}
+	}
+	if !seenHCM {
+		return nil, fmt.Errorf("network filters {%+v} missing HttpConnectionManager filter", filters)
+	}
+	return filterChain, nil
 }
 
 // FilterChainLookupParams wraps parameters to be passed to Lookup.

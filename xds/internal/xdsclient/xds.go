@@ -268,13 +268,6 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 			Port:    strconv.Itoa(int(sockAddr.GetPortValue())),
 		},
 	}
-	chains := lis.GetFilterChains()
-	if def := lis.GetDefaultFilterChain(); def != nil {
-		chains = append(chains, def)
-	}
-	if err := validateNetworkFilterChains(chains); err != nil {
-		return nil, err
-	}
 
 	fcMgr, err := NewFilterChainManager(lis)
 	if err != nil {
@@ -282,61 +275,6 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 	}
 	lu.InboundListenerCfg.FilterChains = fcMgr
 	return lu, nil
-}
-
-func validateNetworkFilterChains(filterChains []*v3listenerpb.FilterChain) error {
-	for _, filterChain := range filterChains {
-		seenNames := make(map[string]bool, len(filterChain.GetFilters()))
-		seenHCM := false
-		for _, filter := range filterChain.GetFilters() {
-			name := filter.GetName()
-			if name == "" {
-				return fmt.Errorf("filter chain {%+v} is missing name field in filter: {%+v}", filterChain, filter)
-			}
-			if seenNames[name] {
-				return fmt.Errorf("filter chain {%+v} has duplicate filter name %q", filterChain, name)
-			}
-			seenNames[name] = true
-
-			// Network filters have a oneof field named `config_type` where we
-			// only support `TypedConfig` variant.
-			switch typ := filter.GetConfigType().(type) {
-			case *v3listenerpb.Filter_TypedConfig:
-				// The typed_config field has an `anypb.Any` proto which could
-				// directly contain the serialized bytes of the actual filter
-				// configuration, or it could be encoded as a `TypedStruct`.
-				// TODO: Add support for `TypedStruct`.
-				tc := filter.GetTypedConfig()
-
-				// The only network filter that we currently support is the v3
-				// HttpConnectionManager. So, we can directly check the type_url
-				// and unmarshal the config.
-				// TODO: Implement a registry of supported network filters (like
-				// we have for HTTP filters), when we have to support network
-				// filters other than HttpConnectionManager.
-				if tc.GetTypeUrl() != version.V3HTTPConnManagerURL {
-					return fmt.Errorf("filter chain {%+v} has unsupported network filter %q in filter {%+v}", filterChain, tc.GetTypeUrl(), filter)
-				}
-				hcm := &v3httppb.HttpConnectionManager{}
-				if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
-					return fmt.Errorf("filter chain {%+v} failed unmarshaling of network filter {%+v}: %v", filterChain, filter, err)
-				}
-				// We currently don't support HTTP filters on the server-side.
-				// We will be adding support for it in the future. So, we want
-				// to make sure that the http_filters configuration is valid.
-				if _, err := processHTTPFilters(hcm.GetHttpFilters(), true); err != nil {
-					return err
-				}
-				seenHCM = true
-			default:
-				return fmt.Errorf("filter chain {%+v} has unsupported config_type %T in filter %s", filterChain, typ, filter.GetName())
-			}
-		}
-		if !seenHCM {
-			return fmt.Errorf("filter chain {%+v} missing HttpConnectionManager filter", filterChain)
-		}
-	}
-	return nil
 }
 
 // UnmarshalRouteConfig processes resources received in an RDS response,
@@ -386,7 +324,7 @@ func unmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (s
 // message, the cluster field will contain the clusterName or weighted clusters
 // we are looking for.
 func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, logger *grpclog.PrefixLogger, v2 bool) (RouteConfigUpdate, error) {
-	var vhs []*VirtualHost
+	vhs := make([]*VirtualHost, 0, len(rc.GetVirtualHosts()))
 	for _, vh := range rc.GetVirtualHosts() {
 		routes, err := routesProtoToSlice(vh.Routes, logger, v2)
 		if err != nil {
@@ -410,7 +348,6 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 
 func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger, v2 bool) ([]*Route, error) {
 	var routesRet []*Route
-
 	for _, r := range routes {
 		match := r.GetMatch()
 		if match == nil {
@@ -494,65 +431,74 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 			route.Fraction = &n
 		}
 
-		route.WeightedClusters = make(map[string]WeightedCluster)
-		action := r.GetRoute()
+		switch r.GetAction().(type) {
+		case *v3routepb.Route_Route:
+			route.WeightedClusters = make(map[string]WeightedCluster)
+			action := r.GetRoute()
 
-		// Hash Policies are only applicable for a Ring Hash LB.
-		if env.RingHashSupport {
-			hp, err := hashPoliciesProtoToSlice(action.HashPolicy, logger)
-			if err != nil {
-				return nil, err
-			}
-			route.HashPolicies = hp
-		}
-
-		switch a := action.GetClusterSpecifier().(type) {
-		case *v3routepb.RouteAction_Cluster:
-			route.WeightedClusters[a.Cluster] = WeightedCluster{Weight: 1}
-		case *v3routepb.RouteAction_WeightedClusters:
-			wcs := a.WeightedClusters
-			var totalWeight uint32
-			for _, c := range wcs.Clusters {
-				w := c.GetWeight().GetValue()
-				if w == 0 {
-					continue
+			// Hash Policies are only applicable for a Ring Hash LB.
+			if env.RingHashSupport {
+				hp, err := hashPoliciesProtoToSlice(action.HashPolicy, logger)
+				if err != nil {
+					return nil, err
 				}
-				wc := WeightedCluster{Weight: w}
-				if !v2 {
-					cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
-					if err != nil {
-						return nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
+				route.HashPolicies = hp
+			}
+
+			switch a := action.GetClusterSpecifier().(type) {
+			case *v3routepb.RouteAction_Cluster:
+				route.WeightedClusters[a.Cluster] = WeightedCluster{Weight: 1}
+			case *v3routepb.RouteAction_WeightedClusters:
+				wcs := a.WeightedClusters
+				var totalWeight uint32
+				for _, c := range wcs.Clusters {
+					w := c.GetWeight().GetValue()
+					if w == 0 {
+						continue
 					}
-					wc.HTTPFilterConfigOverride = cfgs
+					wc := WeightedCluster{Weight: w}
+					if !v2 {
+						cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
+						if err != nil {
+							return nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
+						}
+						wc.HTTPFilterConfigOverride = cfgs
+					}
+					route.WeightedClusters[c.GetName()] = wc
+					totalWeight += w
 				}
-				route.WeightedClusters[c.GetName()] = wc
-				totalWeight += w
+				// envoy xds doc
+				// default TotalWeight https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto.html#envoy-v3-api-field-config-route-v3-weightedcluster-total-weight
+				wantTotalWeight := uint32(100)
+				if tw := wcs.GetTotalWeight(); tw != nil {
+					wantTotalWeight = tw.GetValue()
+				}
+				if totalWeight != wantTotalWeight {
+					return nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, expected total weight from response: %v", r, a, totalWeight, wantTotalWeight)
+				}
+				if totalWeight == 0 {
+					return nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
+				}
+			case *v3routepb.RouteAction_ClusterHeader:
+				continue
 			}
-			// envoy xds doc
-			// default TotalWeight https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto.html#envoy-v3-api-field-config-route-v3-weightedcluster-total-weight
-			wantTotalWeight := uint32(100)
-			if tw := wcs.GetTotalWeight(); tw != nil {
-				wantTotalWeight = tw.GetValue()
-			}
-			if totalWeight != wantTotalWeight {
-				return nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, expected total weight from response: %v", r, a, totalWeight, wantTotalWeight)
-			}
-			if totalWeight == 0 {
-				return nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
-			}
-		case *v3routepb.RouteAction_ClusterHeader:
-			continue
-		}
 
-		msd := action.GetMaxStreamDuration()
-		// Prefer grpc_timeout_header_max, if set.
-		dur := msd.GetGrpcTimeoutHeaderMax()
-		if dur == nil {
-			dur = msd.GetMaxStreamDuration()
-		}
-		if dur != nil {
-			d := dur.AsDuration()
-			route.MaxStreamDuration = &d
+			msd := action.GetMaxStreamDuration()
+			// Prefer grpc_timeout_header_max, if set.
+			dur := msd.GetGrpcTimeoutHeaderMax()
+			if dur == nil {
+				dur = msd.GetMaxStreamDuration()
+			}
+			if dur != nil {
+				d := dur.AsDuration()
+				route.MaxStreamDuration = &d
+			}
+			route.RouteAction = RouteActionRoute
+		case *v3routepb.Route_NonForwardingAction:
+			// Expected to be used on server side.
+			route.RouteAction = RouteActionNonForwardingAction
+		default:
+			route.RouteAction = RouteActionUnsupported
 		}
 
 		if !v2 {
@@ -628,8 +574,42 @@ func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (strin
 	return cluster.GetName(), cu, nil
 }
 
+const (
+	defaultRingHashMinSize = 1024
+	defaultRingHashMaxSize = 8 * 1024 * 1024 // 8M
+	ringHashSizeUpperBound = 8 * 1024 * 1024 // 8M
+)
+
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
-	if cluster.GetLbPolicy() != v3clusterpb.Cluster_ROUND_ROBIN {
+	var lbPolicy *ClusterLBPolicyRingHash
+	switch cluster.GetLbPolicy() {
+	case v3clusterpb.Cluster_ROUND_ROBIN:
+		lbPolicy = nil // The default is round_robin, and there's no config to set.
+	case v3clusterpb.Cluster_RING_HASH:
+		rhc := cluster.GetRingHashLbConfig()
+		if rhc.GetHashFunction() != v3clusterpb.Cluster_RingHashLbConfig_XX_HASH {
+			return ClusterUpdate{}, fmt.Errorf("unsupported ring_hash hash function %v in response: %+v", rhc.GetHashFunction(), cluster)
+		}
+		// Minimum defaults to 1024 entries, and limited to 8M entries Maximum
+		// defaults to 8M entries, and limited to 8M entries
+		var minSize, maxSize uint64 = defaultRingHashMinSize, defaultRingHashMaxSize
+		if min := rhc.GetMinimumRingSize(); min != nil {
+			if min.GetValue() > ringHashSizeUpperBound {
+				return ClusterUpdate{}, fmt.Errorf("unexpected ring_hash mininum ring size %v in response: %+v", min.GetValue(), cluster)
+			}
+			minSize = min.GetValue()
+		}
+		if max := rhc.GetMaximumRingSize(); max != nil {
+			if max.GetValue() > ringHashSizeUpperBound {
+				return ClusterUpdate{}, fmt.Errorf("unexpected ring_hash maxinum ring size %v in response: %+v", max.GetValue(), cluster)
+			}
+			maxSize = max.GetValue()
+		}
+		if minSize > maxSize {
+			return ClusterUpdate{}, fmt.Errorf("ring_hash config min size %v is greater than max %v", minSize, maxSize)
+		}
+		lbPolicy = &ClusterLBPolicyRingHash{MinimumRingSize: minSize, MaximumRingSize: maxSize}
+	default:
 		return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
@@ -648,6 +628,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
 		SecurityCfg: sc,
 		MaxRequests: circuitBreakersFromCluster(cluster),
+		LBPolicy:    lbPolicy,
 	}
 
 	// Validate and set cluster type from the response.

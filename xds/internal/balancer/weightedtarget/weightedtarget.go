@@ -81,7 +81,7 @@ type weightedTargetBalancer struct {
 }
 
 // UpdateClientConnState takes the new targets in balancer group,
-// creates/deletes sub-balancers and sends them update. Addresses are split into
+// creates/deletes sub-balancers and sends them update. addresses are split into
 // groups based on hierarchy path.
 func (b *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(s.BalancerConfig))
@@ -137,7 +137,7 @@ func (b *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 		}
 
 		// Forwards all the update:
-		// - Addresses are from the map after splitting with hierarchy path,
+		// - addresses are from the map after splitting with hierarchy path,
 		// - Top level service config and attributes are the same,
 		// - Balancer config comes from the targets map.
 		//
@@ -171,4 +171,8 @@ func (b *weightedTargetBalancer) UpdateSubConnState(sc balancer.SubConn, state b
 func (b *weightedTargetBalancer) Close() {
 	b.stateAggregator.Stop()
 	b.bg.Close()
+}
+
+func (b *weightedTargetBalancer) ExitIdle() {
+	b.bg.ExitIdle()
 }
