@@ -186,7 +186,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Make sure RPCs succeed on cc1 and fail on cc2.
-	waitForSuccessfulRPC(ctx, t, cc2)
+	waitForSuccessfulRPC(ctx, t, cc1)
 	waitForFailedRPC(ctx, t, cc2)
 
 	// Update the management server to remove the first listener resource as
