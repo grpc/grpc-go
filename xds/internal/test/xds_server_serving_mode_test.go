@@ -30,9 +30,7 @@ import (
 	"testing"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/testutils"
@@ -159,7 +157,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Create a ClientConn to the first listener and make a successful RPCs.
-	cc1, err := grpc.DialContext(ctx, lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc1, err := grpc.Dial(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -171,7 +169,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Create a ClientConn to the second listener and make a successful RPCs.
-	cc2, err := grpc.DialContext(ctx, lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	cc2, err := grpc.Dial(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -194,15 +192,6 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Make sure cc1 is still in READY state (or IDLE, since we support IDLE
-	// now), while cc2 has moved out of READY.
-	if s := cc1.GetState(); s != connectivity.Ready && s != connectivity.Idle {
-		t.Fatalf("clientConn1 state is %s, want READY or IDLE", s)
-	}
-	if !cc2.WaitForStateChange(ctx, connectivity.Ready) {
-		t.Fatal("clientConn2 failed to move out of READY")
-	}
-
 	// Make sure RPCs succeed on cc1 and fail on cc2.
 	if _, err := client1.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
@@ -222,11 +211,6 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 	if err := waitForModeChange(ctx, modeTracker, lis1.Addr(), xds.ServingModeNotServing); err != nil {
 		t.Fatal(err)
-	}
-
-	// Make sure cc1 has moved out of READY.
-	if !cc1.WaitForStateChange(ctx, connectivity.Ready) {
-		t.Fatal("clientConn1 failed to move out of READY")
 	}
 
 	// Make sure RPCs fail on both.
