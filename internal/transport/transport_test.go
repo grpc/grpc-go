@@ -2031,7 +2031,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				},
 			},
 			wantStatus: status.New(
-				codes.OK,
+				codes.Unknown,
 				"malformed header: missing HTTP content-type",
 			),
 		},
