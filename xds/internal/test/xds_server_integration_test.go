@@ -381,10 +381,21 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 		SecLevel:   e2e.SecurityLevelNone,
 	})
 
+	// Create an inbound xDS listener resource with route configuration which selectively
+	// will allow RPC's through or not.
+	inboundLis := e2e.ServerListenerWithInterestingRouteConfiguration(host, port)
+	resources.Listeners = append(resources.Listeners, inboundLis)
+
+	// Setup the management server with client and server-side resources.
+	if err := managementServer.Update(resources); err != nil {
+		t.Fatal(err)
+	}
+
 	/*Instead of default listener resources, define your own here with a certain route configuration*/
 	// two virtual hosts, two routes per virtual host
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	// Which one of these will end up being authority? I think it's service name.
 	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithResolvers(xdsResolverBuilder))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
@@ -393,8 +404,61 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 
 	client := testpb.NewTestServiceClient(cc)
 
+	// Right now, just figure out where these three VVV end up with regards to path header
+
 	// Don't just need Unary, routing is added for streaming RPC's as well, so need to test that too
-	client. // 6 options, trigger all the codepaths listed below
+	// 6 options, trigger all the codepaths listed below
+	// Do we need this wait for ready thing?
+
+
+	// This Empty Call should match to a route with a correct action (NonForwardingAction). Thus, this RPC should proceed and work
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+	// This Unary Call should match to a route with an incorrect action. Thus, this RPC should not go through as per A36, and
+	// this should receive an error with codes.Unavailable.
+	if _, err = client.UnaryCall(ctx, &testpb.SimpleRequest{/*We could trigger a route here?*/}, /*Wait For Ready?*/); status.Code(err) != codes.Unavailable {
+		t.Fatalf("client.UnaryCall() = _, %v, want _, error code %s", err, codes.Unavailable)
+	}
+
+
+	stream, err := client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf("StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+
+	// This
+	// Does error come from stream.Send() or stream.Recv()?
+	// Gonna guess this could get error
+	// Streaming RPC should have been denied to the the route rule, of the path of
+	// the streaming RPC.
+	_, err = stream.CloseAndRecv()
+	if status.Code(err) != codes.Unavailable /*Check error text - should be "the incoming RPC matched to a route that was of action type non forwarding"*/ {
+		t.Fatalf("streaming RPC should have been denied")
+	}
+
+	// Clean this guy up,
+
+	// Also need to invoke the situation where no routes were matched
+	// empty, unary, streaming
+	dStream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall(_) = _, %v, want <nil>", err)
+	}
+
+	dStream.Recv()
+	if status.Code(err) != codes.Unavailable /*Check error text - should be "the incoming RPC did not match a configured Route"*/ {
+
+	}
+
+
+	// ^^^ End up invoking unary interceptor? vvv stream interceptor?
+
+	// WHEN YOU GET BACK...FILL THE REST OF THIS OUT
+
+	// Figure out the syntax of this based on other places in codebase.
+	// client.StreamingInputCall(ctx) // I want this to return an error, no reason to try and send things on it
+	// Once you set this up with the example from the e2e tests, where does this end up logically up with regards to route configuration?
 
 	// Test both xds(Unary|Stream)Interceptors.
 	// -> Unary (vh - route, route), (vh - route, route)

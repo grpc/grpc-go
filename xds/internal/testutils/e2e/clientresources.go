@@ -97,6 +97,9 @@ func DefaultClientResources(params ResourceParams) UpdateOptions {
 	}
 }
 
+// RouterHTTPFilter is the HTTP Filter configuration for the Router filter.
+var RouterHTTPFilter = HTTPFilter("router", &v3routerpb.Router{})
+
 // DefaultClientListener returns a basic xds Listener resource to be used on
 // the client side.
 func DefaultClientListener(target, routeName string) *v3listenerpb.Listener {
@@ -284,9 +287,8 @@ func ServerListenerWithInterestingRouteConfiguration(host string, port uint32) *
 			},
 		},
 		FilterChains: []*v3listenerpb.FilterChain{
-			// Accepted connections map to these
 			{
-				Name: "v6-wildcard",
+				Name: "v6-wildcard", // WIll this match if I write a test (not ipv4)
 				FilterChainMatch: &v3listenerpb.FilterChainMatch{
 					PrefixRanges: []*v3corepb.CidrRange{
 						{
@@ -309,9 +311,9 @@ func ServerListenerWithInterestingRouteConfiguration(host string, port uint32) *
 				Filters: []*v3listenerpb.Filter{
 					{
 						Name: "filter-1",
-						ConfigType: &v3listenerpb.Filter_TypedConfig{ // Incoming RPCs need to match to nfa, this configures route table
-							// Now router is required
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
 							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+								HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
 								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",
@@ -323,44 +325,53 @@ func ServerListenerWithInterestingRouteConfiguration(host string, port uint32) *
 													// Same routes here
 													{
 														Match: &v3routepb.RouteMatch{
-															PathSpecifier:
-														}
+															PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+														},
+														Action: &v3routepb.Route_NonForwardingAction{},
 													},
 												},
 											},
 											{
-												// Will get matched to
-												Domains: []string{"127.0.0.1"}, // matches on authority header (md.Get(:authority)), how do I plumb these in
+												// This Virtual Host will actually get matched to.
+												Domains: []string{"127.0.0.1"}, // matches on authority header (md.Get(:authority)), how do I plumb this in (trigger it)?
 												Routes: []*v3routepb.Route{
+													// A routing rule that can be selectively triggered based on properties about incoming RPC.
 													{
-													Match: &v3routepb.RouteMatch{ // It can't HAVE to match - has to trigger not matching codepath
-														PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}, // path starts with /
-														// /specific-path (this doesn't have to get triggered)
+													Match: &v3routepb.RouteMatch{
+														PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/EmptyCall"}, // How do I plumb this in? Method name I thinkkkk
+														// "Fully-qualified RPC method name with leading slash. Same as :path header".
+
+														// So for the three calls in my integration test:
+														// /EmptyCall?
+														// /UnaryCall?
+														// /StreamingInputCall?
+
 													},
 													Action: &v3routepb.Route_NonForwardingAction{},
 													},
 													{
-														// ^^^^ selectively hit those two
-
-														// Header matcher which gets selectively triggered...
 
 														// Another routing rule that isn't path but can be selectively triggered
+														// based on incoming RPC.
+
 														Match: &v3routepb.RouteMatch{
-															Headers: []*v3routepb.HeaderMatcher{
-																// :method where exact match is GET
-																{
-																	Name: ":method",
-																	HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{
-																		ExactMatch: "GET",
-																	},
-																},
-															},
+															PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/UnaryCall"},
 														},
-														// Wrong action so should get denied
+														// Wrong action (!Non_Forwarding_Action) so RPC's that match this route should get denied.
 														Action: &v3routepb.Route_Route{},
 													},
+													{
+														// Another routing rule that isn't path but can be selectively triggered
+														// based on incoming RPC.
 
-													// This has to be able to be triggered - not matching route
+														Match: &v3routepb.RouteMatch{
+															PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/StreamingInputCall"},
+														},
+														// Wrong action (!Non_Forwarding_Action) so RPC's that match this route should get denied.
+														Action: &v3routepb.Route_NonForwardingAction{},
+													},
+
+													// Not matching route, this should be able to get invoked logically (i.e. doesn't have to match the two Route configurations above).
 												}},
 										}},
 								},

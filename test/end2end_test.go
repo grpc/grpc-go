@@ -4254,7 +4254,7 @@ func testClientStreaming(t *testing.T, e env, sizes []int) {
 	defer te.tearDown()
 	tc := testpb.NewTestServiceClient(te.clientConn())
 
-	ctx, cancel := context.WithTimeout(te.ctx, time.Second*30)
+	ctx, cancel := context.WithTimeout(te.ctx, time.Second*30) // EXAMPLE OF HOW TO TEST STREAMING COME BACK HERE
 	defer cancel()
 	stream, err := tc.StreamingInputCall(ctx)
 	if err != nil {
