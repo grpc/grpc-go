@@ -163,9 +163,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc1.Close()
-	if err := waitForSuccessfulRPC(ctx, cc1); err != nil {
-		t.Fatal(err)
-	}
+	waitForSuccessfulRPC(ctx, t, cc1)
 
 	// Create a ClientConn to the second listener and make a successful RPCs.
 	cc2, err := grpc.Dial(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -173,9 +171,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc2.Close()
-	if err := waitForSuccessfulRPC(ctx, cc2); err != nil {
-		t.Fatal(err)
-	}
+	waitForSuccessfulRPC(ctx, t, cc2)
 
 	// Update the management server to remove the second listener resource. This
 	// should push only the second listener into "not-serving" mode.
@@ -190,12 +186,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Make sure RPCs succeed on cc1 and fail on cc2.
-	if err := waitForSuccessfulRPC(ctx, cc1); err != nil {
-		t.Fatal(err)
-	}
-	if err := waitForFailedRPC(ctx, cc2); err != nil {
-		t.Fatal(err)
-	}
+	waitForSuccessfulRPC(ctx, t, cc2)
+	waitForFailedRPC(ctx, t, cc2)
 
 	// Update the management server to remove the first listener resource as
 	// well. This should push the first listener into "not-serving" mode. Second
@@ -211,12 +203,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Make sure RPCs fail on both.
-	if err := waitForFailedRPC(ctx, cc1); err != nil {
-		t.Fatal(err)
-	}
-	if err := waitForFailedRPC(ctx, cc2); err != nil {
-		t.Fatal(err)
-	}
+	waitForFailedRPC(ctx, t, cc1)
+	waitForFailedRPC(ctx, t, cc2)
 
 	// Make sure new connection attempts to "not-serving" servers fail. We use a
 	// short timeout since we expect this to fail.
@@ -243,12 +231,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// The clientConns created earlier should be able to make RPCs now.
-	if err := waitForSuccessfulRPC(ctx, cc1); err != nil {
-		t.Fatal(err)
-	}
-	if err := waitForSuccessfulRPC(ctx, cc2); err != nil {
-		t.Fatal(err)
-	}
+	waitForSuccessfulRPC(ctx, t, cc1)
+	waitForSuccessfulRPC(ctx, t, cc2)
 }
 
 func waitForModeChange(ctx context.Context, modeTracker *modeTracker, addr net.Addr, wantMode xds.ServingMode) error {
@@ -262,25 +246,28 @@ func waitForModeChange(ctx context.Context, modeTracker *modeTracker, addr net.A
 	}
 }
 
-func waitForSuccessfulRPC(ctx context.Context, cc *grpc.ClientConn) error {
+func waitForSuccessfulRPC(ctx context.Context, t *testing.T, cc *grpc.ClientConn) {
+	t.Helper()
+
 	c := testpb.NewTestServiceClient(cc)
 	if _, err := c.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		return fmt.Errorf("rpc EmptyCall() failed: %v", err)
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
-	return nil
 }
 
-func waitForFailedRPC(ctx context.Context, cc *grpc.ClientConn) error {
+func waitForFailedRPC(ctx context.Context, t *testing.T, cc *grpc.ClientConn) {
+	t.Helper()
+
 	c := testpb.NewTestServiceClient(cc)
 	ticker := time.NewTimer(10 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("failure when waiting for RPCs to fail: %v", ctx.Err())
+			t.Fatalf("failure when waiting for RPCs to fail: %v", ctx.Err())
 		case <-ticker.C:
 			if _, err := c.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-				return nil
+				return
 			}
 		}
 	}
