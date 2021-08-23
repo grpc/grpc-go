@@ -835,12 +835,11 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 
 	// Finish handshaking (HTTP2)
 	st := s.newHTTP2Transport(rawConn)
-
+	rawConn.SetDeadline(time.Time{})
 	if st == nil {
 		return
 	}
 
-	rawConn.SetDeadline(time.Time{})
 	if !s.addConn(lisAddr, st) {
 		return
 	}
