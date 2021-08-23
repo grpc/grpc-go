@@ -29,7 +29,7 @@ import (
 // Child is a child of priority balancer.
 type Child struct {
 	Config                     *internalserviceconfig.BalancerConfig `json:"config,omitempty"`
-	IgnoreReresolutionRequests bool
+	IgnoreReresolutionRequests bool                                  `json:"ignoreReresolutionRequests,omitempty"`
 }
 
 // LBConfig represents priority balancer's config.

@@ -32,7 +32,10 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
@@ -50,6 +53,67 @@ const (
 	defaultTestShortTimeout                = 10 * time.Millisecond
 	testServerListenerResourceNameTemplate = "/path/to/resource/%s/%s"
 )
+
+var listenerWithFilterChains = &v3listenerpb.Listener{
+	FilterChains: []*v3listenerpb.FilterChain{
+		{
+			FilterChainMatch: &v3listenerpb.FilterChainMatch{
+				PrefixRanges: []*v3corepb.CidrRange{
+					{
+						AddressPrefix: "192.168.0.0",
+						PrefixLen: &wrapperspb.UInt32Value{
+							Value: uint32(16),
+						},
+					},
+				},
+				SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+				SourcePrefixRanges: []*v3corepb.CidrRange{
+					{
+						AddressPrefix: "192.168.0.0",
+						PrefixLen: &wrapperspb.UInt32Value{
+							Value: uint32(16),
+						},
+					},
+				},
+				SourcePorts: []uint32{80},
+			},
+			TransportSocket: &v3corepb.TransportSocket{
+				Name: "envoy.transport_sockets.tls",
+				ConfigType: &v3corepb.TransportSocket_TypedConfig{
+					TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+						CommonTlsContext: &v3tlspb.CommonTlsContext{
+							TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+								InstanceName:    "identityPluginInstance",
+								CertificateName: "identityCertName",
+							},
+						},
+					}),
+				},
+			},
+			Filters: []*v3listenerpb.Filter{
+				{
+					Name: "filter-1",
+					ConfigType: &v3listenerpb.Filter_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+							RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+								RouteConfig: &v3routepb.RouteConfiguration{
+									Name: "routeName",
+									VirtualHosts: []*v3routepb.VirtualHost{{
+										Domains: []string{"lds.target.good:3333"},
+										Routes: []*v3routepb.Route{{
+											Match: &v3routepb.RouteMatch{
+												PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+											},
+											Action: &v3routepb.Route_NonForwardingAction{},
+										}}}}},
+							},
+						}),
+					},
+				},
+			},
+		},
+	},
+}
 
 type s struct {
 	grpctest.Tester
@@ -71,9 +135,10 @@ func (f *fakeGRPCServer) RegisterService(*grpc.ServiceDesc, interface{}) {
 	f.registerServiceCh.Send(nil)
 }
 
-func (f *fakeGRPCServer) Serve(net.Listener) error {
+func (f *fakeGRPCServer) Serve(lis net.Listener) error {
 	f.serveCh.Send(nil)
 	<-f.done
+	lis.Close()
 	return nil
 }
 
@@ -375,12 +440,17 @@ func (s) TestServeSuccess(t *testing.T) {
 
 	// Push a good LDS response, and wait for Serve() to be invoked on the
 	// underlying grpc.Server.
+	fcm, err := xdsclient.NewFilterChainManager(listenerWithFilterChains)
+	if err != nil {
+		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
+	}
 	addr, port := splitHostPort(lis.Addr().String())
 	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
 		RouteConfigName: "routeconfig",
 		InboundListenerCfg: &xdsclient.InboundListenerConfig{
-			Address: addr,
-			Port:    port,
+			Address:      addr,
+			Port:         port,
+			FilterChains: fcm,
 		},
 	}, nil)
 	if _, err := fs.serveCh.Receive(ctx); err != nil {
@@ -402,8 +472,9 @@ func (s) TestServeSuccess(t *testing.T) {
 	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
 		RouteConfigName: "routeconfig",
 		InboundListenerCfg: &xdsclient.InboundListenerConfig{
-			Address: "10.20.30.40",
-			Port:    "666",
+			Address:      "10.20.30.40",
+			Port:         "666",
+			FilterChains: fcm,
 		},
 	}, nil)
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -681,6 +752,27 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 								},
 							},
 						}),
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+									RouteConfig: &v3routepb.RouteConfiguration{
+										Name: "routeName",
+										VirtualHosts: []*v3routepb.VirtualHost{{
+											Domains: []string{"lds.target.good:3333"},
+											Routes: []*v3routepb.Route{{
+												Match: &v3routepb.RouteMatch{
+													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+												},
+												Action: &v3routepb.Route_NonForwardingAction{},
+											}}}}},
+								},
+							}),
+						},
 					},
 				},
 			},

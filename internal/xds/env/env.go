@@ -50,13 +50,13 @@ const (
 var (
 	// BootstrapFileName holds the name of the file which contains xDS bootstrap
 	// configuration. Users can specify the location of the bootstrap file by
-	// setting the environment variable "GRPC_XDS_BOOSTRAP".
+	// setting the environment variable "GRPC_XDS_BOOTSTRAP".
 	//
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileName = os.Getenv(BootstrapFileNameEnv)
 	// BootstrapFileContent holds the content of the xDS bootstrap
 	// configuration. Users can specify the bootstrap config by
-	// setting the environment variable "GRPC_XDS_BOOSTRAP_CONFIG".
+	// setting the environment variable "GRPC_XDS_BOOTSTRAP_CONFIG".
 	//
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileContent = os.Getenv(BootstrapFileContentEnv)

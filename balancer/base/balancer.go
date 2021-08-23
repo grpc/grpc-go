@@ -251,6 +251,11 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 func (b *baseBalancer) Close() {
 }
 
+// ExitIdle is a nop because the base balancer attempts to stay connected to
+// all SubConns at all times.
+func (b *baseBalancer) ExitIdle() {
+}
+
 // NewErrPicker returns a Picker that always returns err on Pick().
 func NewErrPicker(err error) balancer.Picker {
 	return &errPicker{err: err}

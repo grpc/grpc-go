@@ -21,15 +21,14 @@ package clusterresolver
 import (
 	"sync"
 
-	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfig"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
 // resourceUpdate is a combined update from all the resources, in the order of
 // priority. For example, it can be {EDS, EDS, DNS}.
 type resourceUpdate struct {
-	p   []balancerconfig.PriorityConfig
-	err error
+	priorities []priorityConfig
+	err        error
 }
 
 type discoveryMechanism interface {
@@ -43,7 +42,7 @@ type discoveryMechanism interface {
 // mechanisms, both for the same EDS resource, but has different circuit
 // breaking config.
 type discoveryMechanismKey struct {
-	typ  balancerconfig.DiscoveryMechanismType
+	typ  DiscoveryMechanismType
 	name string
 }
 
@@ -52,7 +51,7 @@ type discoveryMechanismKey struct {
 // mechanism for fields like circuit breaking, LRS etc when generating the
 // balancer config.
 type resolverMechanismTuple struct {
-	dm    balancerconfig.DiscoveryMechanism
+	dm    DiscoveryMechanism
 	dmKey discoveryMechanismKey
 	r     discoveryMechanism
 }
@@ -63,7 +62,7 @@ type resourceResolver struct {
 
 	// mu protects the slice and map, and content of the resolvers in the slice.
 	mu          sync.Mutex
-	mechanisms  []balancerconfig.DiscoveryMechanism
+	mechanisms  []DiscoveryMechanism
 	children    []resolverMechanismTuple
 	childrenMap map[discoveryMechanismKey]discoveryMechanism
 }
@@ -76,7 +75,7 @@ func newResourceResolver(parent *clusterResolverBalancer) *resourceResolver {
 	}
 }
 
-func equalDiscoveryMechanisms(a, b []balancerconfig.DiscoveryMechanism) bool {
+func equalDiscoveryMechanisms(a, b []DiscoveryMechanism) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -89,7 +88,7 @@ func equalDiscoveryMechanisms(a, b []balancerconfig.DiscoveryMechanism) bool {
 	return true
 }
 
-func (rr *resourceResolver) updateMechanisms(mechanisms []balancerconfig.DiscoveryMechanism) {
+func (rr *resourceResolver) updateMechanisms(mechanisms []DiscoveryMechanism) {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 	if equalDiscoveryMechanisms(rr.mechanisms, mechanisms) {
@@ -102,7 +101,7 @@ func (rr *resourceResolver) updateMechanisms(mechanisms []balancerconfig.Discove
 	// Start one watch for each new discover mechanism {type+resource_name}.
 	for i, dm := range mechanisms {
 		switch dm.Type {
-		case balancerconfig.DiscoveryMechanismTypeEDS:
+		case DiscoveryMechanismTypeEDS:
 			// If EDSServiceName is not set, use the cluster name as EDS service
 			// name to watch.
 			nameToWatch := dm.EDSServiceName
@@ -118,7 +117,7 @@ func (rr *resourceResolver) updateMechanisms(mechanisms []balancerconfig.Discove
 				rr.childrenMap[dmKey] = r
 			}
 			rr.children[i] = resolverMechanismTuple{dm: dm, dmKey: dmKey, r: r}
-		case balancerconfig.DiscoveryMechanismTypeLogicalDNS:
+		case DiscoveryMechanismTypeLogicalDNS:
 			// Name to resolve in DNS is the hostname, not the ClientConn
 			// target.
 			dmKey := discoveryMechanismKey{typ: dm.Type, name: dm.DNSHostname}
@@ -172,7 +171,7 @@ func (rr *resourceResolver) stop() {
 //
 // caller must hold rr.mu.
 func (rr *resourceResolver) generate() {
-	var ret []balancerconfig.PriorityConfig
+	var ret []priorityConfig
 	for _, rDM := range rr.children {
 		r, ok := rr.childrenMap[rDM.dmKey]
 		if !ok {
@@ -188,16 +187,16 @@ func (rr *resourceResolver) generate() {
 		}
 		switch uu := u.(type) {
 		case xdsclient.EndpointsUpdate:
-			ret = append(ret, balancerconfig.PriorityConfig{Mechanism: rDM.dm, EDSResp: uu})
+			ret = append(ret, priorityConfig{mechanism: rDM.dm, edsResp: uu})
 		case []string:
-			ret = append(ret, balancerconfig.PriorityConfig{Mechanism: rDM.dm, Addresses: uu})
+			ret = append(ret, priorityConfig{mechanism: rDM.dm, addresses: uu})
 		}
 	}
 	select {
 	case <-rr.updateChannel:
 	default:
 	}
-	rr.updateChannel <- &resourceUpdate{p: ret}
+	rr.updateChannel <- &resourceUpdate{priorities: ret}
 }
 
 type edsDiscoveryMechanism struct {

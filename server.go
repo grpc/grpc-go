@@ -863,6 +863,7 @@ func (s *Server) handleRawConn(lisAddr string, rawConn net.Conn) {
 	// Finish handshaking (HTTP2)
 	st := s.newHTTP2Transport(conn, authInfo)
 	if st == nil {
+		conn.Close()
 		return
 	}
 
@@ -908,7 +909,6 @@ func (s *Server) newHTTP2Transport(c net.Conn, authInfo credentials.AuthInfo) tr
 		s.mu.Lock()
 		s.errorf("NewServerTransport(%q) failed: %v", c.RemoteAddr(), err)
 		s.mu.Unlock()
-		c.Close()
 		channelz.Warning(logger, s.channelzID, "grpc: Server.Serve failed to create ServerTransport: ", err)
 		return nil
 	}

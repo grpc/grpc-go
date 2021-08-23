@@ -140,7 +140,7 @@ func getHeaderMatcher(key, value string) *v3routepb.HeaderMatcher {
 }
 
 func parsePrincipalNames(principalNames []string) []*v3rbacpb.Principal {
-	var ps []*v3rbacpb.Principal
+	ps := make([]*v3rbacpb.Principal, 0, len(principalNames))
 	for _, principalName := range principalNames {
 		newPrincipalName := &v3rbacpb.Principal{
 			Identifier: &v3rbacpb.Principal_Authenticated_{
@@ -165,7 +165,7 @@ func parsePeer(source peer) (*v3rbacpb.Principal, error) {
 }
 
 func parsePaths(paths []string) []*v3rbacpb.Permission {
-	var ps []*v3rbacpb.Permission
+	ps := make([]*v3rbacpb.Permission, 0, len(paths))
 	for _, path := range paths {
 		newPath := &v3rbacpb.Permission{
 			Rule: &v3rbacpb.Permission_UrlPath{
@@ -177,7 +177,7 @@ func parsePaths(paths []string) []*v3rbacpb.Permission {
 }
 
 func parseHeaderValues(key string, values []string) []*v3rbacpb.Permission {
-	var vs []*v3rbacpb.Permission
+	vs := make([]*v3rbacpb.Permission, 0, len(values))
 	for _, value := range values {
 		newHeader := &v3rbacpb.Permission{
 			Rule: &v3rbacpb.Permission_Header{
@@ -204,7 +204,7 @@ func unsupportedHeader(key string) bool {
 }
 
 func parseHeaders(headers []header) ([]*v3rbacpb.Permission, error) {
-	var hs []*v3rbacpb.Permission
+	hs := make([]*v3rbacpb.Permission, 0, len(headers))
 	for i, header := range headers {
 		if header.Key == "" {
 			return nil, fmt.Errorf(`"headers" %d: "key" is not present`, i)

@@ -845,7 +845,7 @@ func (s) TestBalancerGroup_locality_caching_not_readd_within_timeout(t *testing.
 	defer replaceDefaultSubBalancerCloseTimeout(time.Second)()
 	_, _, cc, addrToSC := initBalancerGroupForCachingTest(t)
 
-	// The sub-balancer is not re-added withtin timeout. The subconns should be
+	// The sub-balancer is not re-added within timeout. The subconns should be
 	// removed.
 	removeTimeout := time.After(DefaultSubBalancerCloseTimeout)
 	scToRemove := map[balancer.SubConn]int{

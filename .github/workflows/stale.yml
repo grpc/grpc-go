@@ -13,7 +13,7 @@ jobs:
       pull-requests: write
 
     steps:
-    - uses: actions/stale@v3
+    - uses: actions/stale@v4
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
         days-before-stale: 6
@@ -21,7 +21,7 @@ jobs:
         only-labels: 'Status: Requires Reporter Clarification'
         stale-issue-label: 'stale'
         stale-pr-label: 'stale'
-        operations-per-run: 60
+        operations-per-run: 999
         stale-issue-message: >
           This issue is labeled as requiring an update from the reporter, and no update has been received
           after 6 days.  If no update is provided in the next 7 days, this issue will be automatically closed.

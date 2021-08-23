@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2019 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,111 +18,166 @@
 package clusterresolver
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 
-	"google.golang.org/grpc/balancer"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
 )
 
-// EDSConfig represents the loadBalancingConfig section of the service config
-// for EDS balancers.
-type EDSConfig struct {
-	serviceconfig.LoadBalancingConfig
-	// ChildPolicy represents the load balancing config for the child
-	// policy.
-	ChildPolicy *loadBalancingConfig
-	// FallBackPolicy represents the load balancing config for the
-	// fallback.
-	FallBackPolicy *loadBalancingConfig
-	// ClusterName is the cluster name.
-	ClusterName string
-	// EDSServiceName is the name to use in EDS query. If not set, use
-	// ClusterName.
-	EDSServiceName string
-	// MaxConcurrentRequests is the max number of concurrent request allowed for
-	// this service. If unset, default value 1024 is used.
+// DiscoveryMechanismType is the type of discovery mechanism.
+type DiscoveryMechanismType int
+
+const (
+	// DiscoveryMechanismTypeEDS is eds.
+	DiscoveryMechanismTypeEDS DiscoveryMechanismType = iota // `json:"EDS"`
+	// DiscoveryMechanismTypeLogicalDNS is DNS.
+	DiscoveryMechanismTypeLogicalDNS // `json:"LOGICAL_DNS"`
+)
+
+// MarshalJSON marshals a DiscoveryMechanismType to a quoted json string.
+//
+// This is necessary to handle enum (as strings) from JSON.
+//
+// Note that this needs to be defined on the type not pointer, otherwise the
+// variables of this type will marshal to int not string.
+func (t DiscoveryMechanismType) MarshalJSON() ([]byte, error) {
+	buffer := bytes.NewBufferString(`"`)
+	switch t {
+	case DiscoveryMechanismTypeEDS:
+		buffer.WriteString("EDS")
+	case DiscoveryMechanismTypeLogicalDNS:
+		buffer.WriteString("LOGICAL_DNS")
+	}
+	buffer.WriteString(`"`)
+	return buffer.Bytes(), nil
+}
+
+// UnmarshalJSON unmarshals a quoted json string to the DiscoveryMechanismType.
+func (t *DiscoveryMechanismType) UnmarshalJSON(b []byte) error {
+	var s string
+	err := json.Unmarshal(b, &s)
+	if err != nil {
+		return err
+	}
+	switch s {
+	case "EDS":
+		*t = DiscoveryMechanismTypeEDS
+	case "LOGICAL_DNS":
+		*t = DiscoveryMechanismTypeLogicalDNS
+	default:
+		return fmt.Errorf("unable to unmarshal string %q to type DiscoveryMechanismType", s)
+	}
+	return nil
+}
+
+// DiscoveryMechanism is the discovery mechanism, can be either EDS or DNS.
+//
+// For DNS, the ClientConn target will be used for name resolution.
+//
+// For EDS, if EDSServiceName is not empty, it will be used for watching. If
+// EDSServiceName is empty, Cluster will be used.
+type DiscoveryMechanism struct {
+	// Cluster is the cluster name.
+	Cluster string `json:"cluster,omitempty"`
+	// LoadReportingServerName is the LRS server to send load reports to. If
+	// not present, load reporting will be disabled. If set to the empty string,
+	// load reporting will be sent to the same server that we obtained CDS data
+	// from.
+	LoadReportingServerName *string `json:"lrsLoadReportingServerName,omitempty"`
+	// MaxConcurrentRequests is the maximum number of outstanding requests can
+	// be made to the upstream cluster. Default is 1024.
+	MaxConcurrentRequests *uint32 `json:"maxConcurrentRequests,omitempty"`
+	// Type is the discovery mechanism type.
+	Type DiscoveryMechanismType `json:"type,omitempty"`
+	// EDSServiceName is the EDS service name, as returned in CDS. May be unset
+	// if not specified in CDS. For type EDS only.
 	//
-	// Note that this is not defined in the service config proto. And the reason
-	// is, we are dropping EDS and moving the features into cluster_impl. But in
-	// the mean time, to keep things working, we need to add this field. And it
-	// should be fine to add this extra field here, because EDS is only used in
-	// CDS today, so we have full control.
-	MaxConcurrentRequests *uint32
-	// LRS server to send load reports to.  If not present, load reporting
-	// will be disabled.  If set to the empty string, load reporting will
-	// be sent to the same server that we obtained CDS data from.
-	LrsLoadReportingServerName *string
+	// This is used for EDS watch if set. If unset, Cluster is used for EDS
+	// watch.
+	EDSServiceName string `json:"edsServiceName,omitempty"`
+	// DNSHostname is the DNS name to resolve in "host:port" form. For type
+	// LOGICAL_DNS only.
+	DNSHostname string `json:"dnsHostname,omitempty"`
 }
 
-// edsConfigJSON is the intermediate unmarshal result of EDSConfig. ChildPolicy
-// and Fallbackspolicy are post-processed, and for each, the first installed
-// policy is kept.
-type edsConfigJSON struct {
-	ChildPolicy                []*loadBalancingConfig
-	FallbackPolicy             []*loadBalancingConfig
-	ClusterName                string
-	EDSServiceName             string
-	MaxConcurrentRequests      *uint32
-	LRSLoadReportingServerName *string
-}
-
-// UnmarshalJSON parses the JSON-encoded byte slice in data and stores it in l.
-// When unmarshalling, we iterate through the childPolicy/fallbackPolicy lists
-// and select the first LB policy which has been registered.
-func (l *EDSConfig) UnmarshalJSON(data []byte) error {
-	var configJSON edsConfigJSON
-	if err := json.Unmarshal(data, &configJSON); err != nil {
-		return err
+// Equal returns whether the DiscoveryMechanism is the same with the parameter.
+func (dm DiscoveryMechanism) Equal(b DiscoveryMechanism) bool {
+	switch {
+	case dm.Cluster != b.Cluster:
+		return false
+	case !equalStringP(dm.LoadReportingServerName, b.LoadReportingServerName):
+		return false
+	case !equalUint32P(dm.MaxConcurrentRequests, b.MaxConcurrentRequests):
+		return false
+	case dm.Type != b.Type:
+		return false
+	case dm.EDSServiceName != b.EDSServiceName:
+		return false
+	case dm.DNSHostname != b.DNSHostname:
+		return false
 	}
-
-	l.ClusterName = configJSON.ClusterName
-	l.EDSServiceName = configJSON.EDSServiceName
-	l.MaxConcurrentRequests = configJSON.MaxConcurrentRequests
-	l.LrsLoadReportingServerName = configJSON.LRSLoadReportingServerName
-
-	for _, lbcfg := range configJSON.ChildPolicy {
-		if balancer.Get(lbcfg.Name) != nil {
-			l.ChildPolicy = lbcfg
-			break
-		}
-	}
-
-	for _, lbcfg := range configJSON.FallbackPolicy {
-		if balancer.Get(lbcfg.Name) != nil {
-			l.FallBackPolicy = lbcfg
-			break
-		}
-	}
-	return nil
+	return true
 }
 
-// MarshalJSON returns a JSON encoding of l.
-func (l *EDSConfig) MarshalJSON() ([]byte, error) {
-	return nil, fmt.Errorf("EDSConfig.MarshalJSON() is unimplemented")
-}
-
-// loadBalancingConfig represents a single load balancing config,
-// stored in JSON format.
-type loadBalancingConfig struct {
-	Name   string
-	Config json.RawMessage
-}
-
-// MarshalJSON returns a JSON encoding of l.
-func (l *loadBalancingConfig) MarshalJSON() ([]byte, error) {
-	return nil, fmt.Errorf("loadBalancingConfig.MarshalJSON() is unimplemented")
-}
-
-// UnmarshalJSON parses the JSON-encoded byte slice in data and stores it in l.
-func (l *loadBalancingConfig) UnmarshalJSON(data []byte) error {
-	var cfg map[string]json.RawMessage
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return err
+func equalStringP(a, b *string) bool {
+	if a == nil && b == nil {
+		return true
 	}
-	for name, config := range cfg {
-		l.Name = name
-		l.Config = config
+	if a == nil || b == nil {
+		return false
 	}
-	return nil
+	return *a == *b
+}
+
+func equalUint32P(a, b *uint32) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+// LBConfig is the config for cluster resolver balancer.
+type LBConfig struct {
+	serviceconfig.LoadBalancingConfig `json:"-"`
+	// DiscoveryMechanisms is an ordered list of discovery mechanisms.
+	//
+	// Must have at least one element. Results from each discovery mechanism are
+	// concatenated together in successive priorities.
+	DiscoveryMechanisms []DiscoveryMechanism `json:"discoveryMechanisms,omitempty"`
+
+	// XDSLBPolicy specifies the policy for locality picking and endpoint picking.
+	//
+	// Note that it's not normal balancing policy, and it can only be either
+	// ROUND_ROBIN or RING_HASH.
+	//
+	// For ROUND_ROBIN, the policy name will be "ROUND_ROBIN", and the config
+	// will be empty. This sets the locality-picking policy to weighted_target
+	// and the endpoint-picking policy to round_robin.
+	//
+	// For RING_HASH, the policy name will be "RING_HASH", and the config will
+	// be lb config for the ring_hash_experimental LB Policy. ring_hash policy
+	// is responsible for both locality picking and endpoint picking.
+	XDSLBPolicy *internalserviceconfig.BalancerConfig `json:"xdsLbPolicy,omitempty"`
+}
+
+const (
+	rrName = "ROUND_ROBIN"
+	rhName = "RING_HASH"
+)
+
+func parseConfig(c json.RawMessage) (*LBConfig, error) {
+	var cfg LBConfig
+	if err := json.Unmarshal(c, &cfg); err != nil {
+		return nil, err
+	}
+	if lbp := cfg.XDSLBPolicy; lbp != nil && !strings.EqualFold(lbp.Name, rrName) && !strings.EqualFold(lbp.Name, rhName) {
+		return nil, fmt.Errorf("unsupported child policy with name %q, not one of {%q,%q}", lbp.Name, rrName, rhName)
+	}
+	return &cfg, nil
 }

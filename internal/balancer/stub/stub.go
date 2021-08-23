@@ -33,6 +33,7 @@ type BalancerFuncs struct {
 	ResolverError         func(*BalancerData, error)
 	UpdateSubConnState    func(*BalancerData, balancer.SubConn, balancer.SubConnState)
 	Close                 func(*BalancerData)
+	ExitIdle              func(*BalancerData)
 }
 
 // BalancerData contains data relevant to a stub balancer.
@@ -72,6 +73,12 @@ func (b *bal) UpdateSubConnState(sc balancer.SubConn, scs balancer.SubConnState)
 func (b *bal) Close() {
 	if b.bf.Close != nil {
 		b.bf.Close(b.bd)
+	}
+}
+
+func (b *bal) ExitIdle() {
+	if b.bf.ExitIdle != nil {
+		b.bf.ExitIdle(b.bd)
 	}
 }
 

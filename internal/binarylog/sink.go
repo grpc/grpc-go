@@ -133,12 +133,12 @@ func (fs *bufferedSink) startFlushGoroutine() {
 }
 
 func (fs *bufferedSink) Close() error {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
 	if fs.writeTicker != nil {
 		fs.writeTicker.Stop()
 	}
 	close(fs.done)
-	fs.mu.Lock()
-	defer fs.mu.Unlock()
 	if err := fs.buf.Flush(); err != nil {
 		grpclogLogger.Warningf("failed to flush to Sink: %v", err)
 	}

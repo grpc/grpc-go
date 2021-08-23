@@ -28,9 +28,8 @@ import (
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/balancer/stub"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
@@ -59,11 +58,11 @@ func init() {
 	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond * 100
 }
 
-func setupTestEDS(t *testing.T, initChild *loadBalancingConfig) (balancer.Balancer, *testutils.TestClientConn, *fakeclient.Client, func()) {
+func setupTestEDS(t *testing.T, initChild *internalserviceconfig.BalancerConfig) (balancer.Balancer, *testutils.TestClientConn, *fakeclient.Client, func()) {
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
 	cc := testutils.NewTestClientConn(t)
 	builder := balancer.Get(Name)
-	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testServiceName}})
+	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
 	if edsb == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
@@ -71,9 +70,11 @@ func setupTestEDS(t *testing.T, initChild *loadBalancingConfig) (balancer.Balanc
 	defer cancel()
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
-		BalancerConfig: &EDSConfig{
-			ClusterName: testClusterName,
-			ChildPolicy: initChild,
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []DiscoveryMechanism{{
+				Cluster: testClusterName,
+				Type:    DiscoveryMechanismTypeEDS,
+			}},
 		},
 	}); err != nil {
 		edsb.Close()
@@ -454,128 +455,23 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	}
 }
 
-// Create XDS balancer, and update sub-balancer before handling eds responses.
-// Then switch between round-robin and a test stub-balancer after handling first
-// eds response.
-func (s) TestEDS_UpdateSubBalancerName(t *testing.T) {
-	const balancerName = "stubBalancer-TestEDS_UpdateSubBalancerName"
-
-	stub.Register(balancerName, stub.BalancerFuncs{
-		UpdateClientConnState: func(bd *stub.BalancerData, s balancer.ClientConnState) error {
-			if len(s.ResolverState.Addresses) == 0 {
-				return nil
-			}
-			bd.ClientConn.NewSubConn(s.ResolverState.Addresses, balancer.NewSubConnOptions{})
-			return nil
-		},
-		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
-			bd.ClientConn.UpdateState(balancer.State{
-				ConnectivityState: state.ConnectivityState,
-				Picker:            &testutils.TestConstPicker{Err: testutils.ErrTestConstPicker},
-			})
-		},
-	})
-
-	t.Logf("initialize with sub-balancer: stub-balancer")
-	edsb, cc, xdsC, cleanup := setupTestEDS(t, &loadBalancingConfig{Name: balancerName})
-	defer cleanup()
-
-	// Two localities, each with one backend.
-	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
-	clab1.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2], nil)
-	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
-
-	for i := 0; i < 2; i++ {
-		sc := <-cc.NewSubConnCh
-		edsb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	}
-
-	if err := testErrPickerFromCh(cc.NewPickerCh, testutils.ErrTestConstPicker); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Logf("update sub-balancer to round-robin")
-	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName, ChildPolicy: &loadBalancingConfig{Name: roundrobin.Name}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 2; i++ {
-		<-cc.RemoveSubConnCh
-	}
-
-	sc1 := <-cc.NewSubConnCh
-	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	sc2 := <-cc.NewSubConnCh
-	edsb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	edsb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
-
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1, sc2}); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Logf("update sub-balancer to stub-balancer")
-	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName, ChildPolicy: &loadBalancingConfig{Name: balancerName}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 2; i++ {
-		scToRemove := <-cc.RemoveSubConnCh
-		if !cmp.Equal(scToRemove, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) &&
-			!cmp.Equal(scToRemove, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
-			t.Fatalf("RemoveSubConn, want (%v or %v), got %v", sc1, sc2, scToRemove)
-		}
-		edsb.UpdateSubConnState(scToRemove, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
-	}
-
-	for i := 0; i < 2; i++ {
-		sc := <-cc.NewSubConnCh
-		edsb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	}
-
-	if err := testErrPickerFromCh(cc.NewPickerCh, testutils.ErrTestConstPicker); err != nil {
-		t.Fatal(err)
-	}
-
-	t.Logf("update sub-balancer to round-robin")
-	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{ClusterName: testClusterName, ChildPolicy: &loadBalancingConfig{Name: roundrobin.Name}},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 2; i++ {
-		<-cc.RemoveSubConnCh
-	}
-
-	sc3 := <-cc.NewSubConnCh
-	edsb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	edsb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	sc4 := <-cc.NewSubConnCh
-	edsb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	edsb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Ready})
-
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc3, sc4}); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	edsb, cc, xdsC, cleanup := setupTestEDS(t, nil)
 	defer cleanup()
 
 	var maxRequests uint32 = 50
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{
-			ChildPolicy:           &loadBalancingConfig{Name: roundrobin.Name},
-			ClusterName:           testClusterName,
-			MaxConcurrentRequests: &maxRequests,
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []DiscoveryMechanism{{
+				Cluster:               testClusterName,
+				MaxConcurrentRequests: &maxRequests,
+				Type:                  DiscoveryMechanismTypeEDS,
+			}},
 		},
 	}); err != nil {
 		t.Fatal(err)
 	}
+
 	// One locality with one backend.
 	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
@@ -628,14 +524,17 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	// update afterwards). Make sure the new picker uses the new configs.
 	var maxRequests2 uint32 = 10
 	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
-		BalancerConfig: &EDSConfig{
-			ChildPolicy:           &loadBalancingConfig{Name: roundrobin.Name},
-			ClusterName:           testClusterName,
-			MaxConcurrentRequests: &maxRequests2,
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []DiscoveryMechanism{{
+				Cluster:               testClusterName,
+				MaxConcurrentRequests: &maxRequests2,
+				Type:                  DiscoveryMechanismTypeEDS,
+			}},
 		},
 	}); err != nil {
 		t.Fatal(err)
 	}
+
 	// Picks with drops.
 	dones = []func(){}
 	p2 := <-cc.NewPickerCh

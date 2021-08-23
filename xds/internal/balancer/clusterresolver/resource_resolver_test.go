@@ -28,7 +28,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/xds/internal/balancer/clusterresolver/balancerconfig"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	xdsclient "google.golang.org/grpc/xds/internal/xdsclient"
@@ -58,20 +57,20 @@ func (s) TestResourceResolverOneEDSResource(t *testing.T) {
 		clusterName, edsName string
 		wantName             string
 		edsUpdate            xdsclient.EndpointsUpdate
-		want                 []balancerconfig.PriorityConfig
+		want                 []priorityConfig
 	}{
 		{name: "watch EDS",
 			clusterName: testClusterName,
-			edsName:     testServiceName,
-			wantName:    testServiceName,
+			edsName:     testEDSServcie,
+			wantName:    testEDSServcie,
 			edsUpdate:   testEDSUpdates[0],
-			want: []balancerconfig.PriorityConfig{{
-				Mechanism: balancerconfig.DiscoveryMechanism{
-					Type:           balancerconfig.DiscoveryMechanismTypeEDS,
+			want: []priorityConfig{{
+				mechanism: DiscoveryMechanism{
+					Type:           DiscoveryMechanismTypeEDS,
 					Cluster:        testClusterName,
-					EDSServiceName: testServiceName,
+					EDSServiceName: testEDSServcie,
 				},
-				EDSResp: testEDSUpdates[0],
+				edsResp: testEDSUpdates[0],
 			}},
 		},
 		{
@@ -79,20 +78,20 @@ func (s) TestResourceResolverOneEDSResource(t *testing.T) {
 			clusterName: testClusterName,
 			wantName:    testClusterName,
 			edsUpdate:   testEDSUpdates[1],
-			want: []balancerconfig.PriorityConfig{{
-				Mechanism: balancerconfig.DiscoveryMechanism{
-					Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			want: []priorityConfig{{
+				mechanism: DiscoveryMechanism{
+					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterName,
 				},
-				EDSResp: testEDSUpdates[1],
+				edsResp: testEDSUpdates[1],
 			}},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			fakeClient := fakeclient.NewClient()
 			rr := newResourceResolver(&clusterResolverBalancer{xdsClient: fakeClient})
-			rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{{
-				Type:           balancerconfig.DiscoveryMechanismTypeEDS,
+			rr.updateMechanisms([]DiscoveryMechanism{{
+				Type:           DiscoveryMechanismTypeEDS,
 				Cluster:        test.clusterName,
 				EDSServiceName: test.edsName,
 			}})
@@ -110,7 +109,7 @@ func (s) TestResourceResolverOneEDSResource(t *testing.T) {
 			fakeClient.InvokeWatchEDSCallback("", test.edsUpdate, nil)
 			select {
 			case u := <-rr.updateChannel:
-				if diff := cmp.Diff(u.p, test.want); diff != "" {
+				if diff := cmp.Diff(u.priorities, test.want, cmp.AllowUnexported(priorityConfig{})); diff != "" {
 					t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
@@ -123,7 +122,7 @@ func (s) TestResourceResolverOneEDSResource(t *testing.T) {
 				t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
 			}
 			if edsNameCanceled != test.wantName {
-				t.Fatalf("xdsClient.CancelEDS called for %v, want: %v", edsNameCanceled, testServiceName)
+				t.Fatalf("xdsClient.CancelEDS called for %v, want: %v", edsNameCanceled, testEDSServcie)
 			}
 		})
 	}
@@ -152,19 +151,19 @@ func (s) TestResourceResolverOneDNSResource(t *testing.T) {
 		target     string
 		wantTarget resolver.Target
 		addrs      []resolver.Address
-		want       []balancerconfig.PriorityConfig
+		want       []priorityConfig
 	}{
 		{
 			name:       "watch DNS",
 			target:     testDNSTarget,
 			wantTarget: resolver.Target{Scheme: "dns", Endpoint: testDNSTarget},
 			addrs:      []resolver.Address{{Addr: "1.1.1.1"}, {Addr: "2.2.2.2"}},
-			want: []balancerconfig.PriorityConfig{{
-				Mechanism: balancerconfig.DiscoveryMechanism{
-					Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
+			want: []priorityConfig{{
+				mechanism: DiscoveryMechanism{
+					Type:        DiscoveryMechanismTypeLogicalDNS,
 					DNSHostname: testDNSTarget,
 				},
-				Addresses: []string{"1.1.1.1", "2.2.2.2"},
+				addresses: []string{"1.1.1.1", "2.2.2.2"},
 			}},
 		},
 	} {
@@ -173,8 +172,8 @@ func (s) TestResourceResolverOneDNSResource(t *testing.T) {
 			defer cleanup()
 			fakeClient := fakeclient.NewClient()
 			rr := newResourceResolver(&clusterResolverBalancer{xdsClient: fakeClient})
-			rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{{
-				Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
+			rr.updateMechanisms([]DiscoveryMechanism{{
+				Type:        DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname: test.target,
 			}})
 			ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -192,7 +191,7 @@ func (s) TestResourceResolverOneDNSResource(t *testing.T) {
 			dnsR.UpdateState(resolver.State{Addresses: test.addrs})
 			select {
 			case u := <-rr.updateChannel:
-				if diff := cmp.Diff(u.p, test.want); diff != "" {
+				if diff := cmp.Diff(u.priorities, test.want, cmp.AllowUnexported(priorityConfig{})); diff != "" {
 					t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
@@ -221,10 +220,10 @@ func (s) TestResourceResolverOneDNSResource(t *testing.T) {
 func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 	fakeClient := fakeclient.NewClient()
 	rr := newResourceResolver(&clusterResolverBalancer{xdsClient: fakeClient})
-	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{{
-		Type:           balancerconfig.DiscoveryMechanismTypeEDS,
+	rr.updateMechanisms([]DiscoveryMechanism{{
+		Type:           DiscoveryMechanismTypeEDS,
 		Cluster:        testClusterName,
-		EDSServiceName: testServiceName,
+		EDSServiceName: testEDSServcie,
 	}})
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -232,22 +231,22 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
-	if gotEDSName1 != testServiceName {
-		t.Fatalf("xdsClient.WatchEDS called for cluster: %v, want: %v", gotEDSName1, testServiceName)
+	if gotEDSName1 != testEDSServcie {
+		t.Fatalf("xdsClient.WatchEDS called for cluster: %v, want: %v", gotEDSName1, testEDSServcie)
 	}
 
 	// Invoke callback, should get an update.
 	fakeClient.InvokeWatchEDSCallback(gotEDSName1, testEDSUpdates[0], nil)
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{{
-			Mechanism: balancerconfig.DiscoveryMechanism{
-				Type:           balancerconfig.DiscoveryMechanismTypeEDS,
+		if diff := cmp.Diff(u.priorities, []priorityConfig{{
+			mechanism: DiscoveryMechanism{
+				Type:           DiscoveryMechanismTypeEDS,
 				Cluster:        testClusterName,
-				EDSServiceName: testServiceName,
+				EDSServiceName: testEDSServcie,
 			},
-			EDSResp: testEDSUpdates[0],
-		}}); diff != "" {
+			edsResp: testEDSUpdates[0],
+		}}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -255,8 +254,8 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 	}
 
 	// Change name to watch.
-	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{{
-		Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+	rr.updateMechanisms([]DiscoveryMechanism{{
+		Type:    DiscoveryMechanismTypeEDS,
 		Cluster: testClusterName,
 	}})
 	edsNameCanceled1, err := fakeClient.WaitForCancelEDSWatch(ctx)
@@ -264,7 +263,7 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 		t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
 	}
 	if edsNameCanceled1 != gotEDSName1 {
-		t.Fatalf("xdsClient.CancelEDS called for %v, want: %v", edsNameCanceled1, testServiceName)
+		t.Fatalf("xdsClient.CancelEDS called for %v, want: %v", edsNameCanceled1, testEDSServcie)
 	}
 	gotEDSName2, err := fakeClient.WaitForWatchEDS(ctx)
 	if err != nil {
@@ -287,13 +286,13 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 	fakeClient.InvokeWatchEDSCallback(gotEDSName2, testEDSUpdates[1], nil)
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{{
-			Mechanism: balancerconfig.DiscoveryMechanism{
-				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+		if diff := cmp.Diff(u.priorities, []priorityConfig{{
+			mechanism: DiscoveryMechanism{
+				Type:    DiscoveryMechanismTypeEDS,
 				Cluster: testClusterName,
 			},
-			EDSResp: testEDSUpdates[1],
-		}}); diff != "" {
+			edsResp: testEDSUpdates[1],
+		}}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -302,8 +301,8 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 
 	// Change circuit breaking count, should get an update with new circuit
 	// breaking count, but shouldn't trigger new watch.
-	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{{
-		Type:                  balancerconfig.DiscoveryMechanismTypeEDS,
+	rr.updateMechanisms([]DiscoveryMechanism{{
+		Type:                  DiscoveryMechanismTypeEDS,
 		Cluster:               testClusterName,
 		MaxConcurrentRequests: newUint32(123),
 	}})
@@ -314,14 +313,14 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 	}
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{{
-			Mechanism: balancerconfig.DiscoveryMechanism{
-				Type:                  balancerconfig.DiscoveryMechanismTypeEDS,
+		if diff := cmp.Diff(u.priorities, []priorityConfig{{
+			mechanism: DiscoveryMechanism{
+				Type:                  DiscoveryMechanismTypeEDS,
 				Cluster:               testClusterName,
 				MaxConcurrentRequests: newUint32(123),
 			},
-			EDSResp: testEDSUpdates[1],
-		}}); diff != "" {
+			edsResp: testEDSUpdates[1],
+		}}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -344,13 +343,13 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 func (s) TestResourceResolverNoChangeNoUpdate(t *testing.T) {
 	fakeClient := fakeclient.NewClient()
 	rr := newResourceResolver(&clusterResolverBalancer{xdsClient: fakeClient})
-	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{
+	rr.updateMechanisms([]DiscoveryMechanism{
 		{
-			Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			Type:    DiscoveryMechanismTypeEDS,
 			Cluster: testClusterNames[0],
 		},
 		{
-			Type:                  balancerconfig.DiscoveryMechanismTypeEDS,
+			Type:                  DiscoveryMechanismTypeEDS,
 			Cluster:               testClusterNames[1],
 			MaxConcurrentRequests: newUint32(100),
 		},
@@ -385,23 +384,23 @@ func (s) TestResourceResolverNoChangeNoUpdate(t *testing.T) {
 	fakeClient.InvokeWatchEDSCallback(gotEDSName2, testEDSUpdates[1], nil)
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{
+		if diff := cmp.Diff(u.priorities, []priorityConfig{
 			{
-				Mechanism: balancerconfig.DiscoveryMechanism{
-					Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+				mechanism: DiscoveryMechanism{
+					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterNames[0],
 				},
-				EDSResp: testEDSUpdates[0],
+				edsResp: testEDSUpdates[0],
 			},
 			{
-				Mechanism: balancerconfig.DiscoveryMechanism{
-					Type:                  balancerconfig.DiscoveryMechanismTypeEDS,
+				mechanism: DiscoveryMechanism{
+					Type:                  DiscoveryMechanismTypeEDS,
 					Cluster:               testClusterNames[1],
 					MaxConcurrentRequests: newUint32(100),
 				},
-				EDSResp: testEDSUpdates[1],
+				edsResp: testEDSUpdates[1],
 			},
-		}); diff != "" {
+		}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -409,13 +408,13 @@ func (s) TestResourceResolverNoChangeNoUpdate(t *testing.T) {
 	}
 
 	// Send the same resources with the same priorities, shouldn't any change.
-	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{
+	rr.updateMechanisms([]DiscoveryMechanism{
 		{
-			Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			Type:    DiscoveryMechanismTypeEDS,
 			Cluster: testClusterNames[0],
 		},
 		{
-			Type:                  balancerconfig.DiscoveryMechanismTypeEDS,
+			Type:                  DiscoveryMechanismTypeEDS,
 			Cluster:               testClusterNames[1],
 			MaxConcurrentRequests: newUint32(100),
 		},
@@ -457,13 +456,13 @@ func (s) TestResourceResolverNoChangeNoUpdate(t *testing.T) {
 func (s) TestResourceResolverChangePriority(t *testing.T) {
 	fakeClient := fakeclient.NewClient()
 	rr := newResourceResolver(&clusterResolverBalancer{xdsClient: fakeClient})
-	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{
+	rr.updateMechanisms([]DiscoveryMechanism{
 		{
-			Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			Type:    DiscoveryMechanismTypeEDS,
 			Cluster: testClusterNames[0],
 		},
 		{
-			Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			Type:    DiscoveryMechanismTypeEDS,
 			Cluster: testClusterNames[1],
 		},
 	})
@@ -497,22 +496,22 @@ func (s) TestResourceResolverChangePriority(t *testing.T) {
 	fakeClient.InvokeWatchEDSCallback(gotEDSName2, testEDSUpdates[1], nil)
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{
+		if diff := cmp.Diff(u.priorities, []priorityConfig{
 			{
-				Mechanism: balancerconfig.DiscoveryMechanism{
-					Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+				mechanism: DiscoveryMechanism{
+					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterNames[0],
 				},
-				EDSResp: testEDSUpdates[0],
+				edsResp: testEDSUpdates[0],
 			},
 			{
-				Mechanism: balancerconfig.DiscoveryMechanism{
-					Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+				mechanism: DiscoveryMechanism{
+					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterNames[1],
 				},
-				EDSResp: testEDSUpdates[1],
+				edsResp: testEDSUpdates[1],
 			},
-		}); diff != "" {
+		}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -521,13 +520,13 @@ func (s) TestResourceResolverChangePriority(t *testing.T) {
 
 	// Send the same resources with different priorities, shouldn't trigger
 	// watch, but should trigger an update with the new priorities.
-	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{
+	rr.updateMechanisms([]DiscoveryMechanism{
 		{
-			Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			Type:    DiscoveryMechanismTypeEDS,
 			Cluster: testClusterNames[1],
 		},
 		{
-			Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			Type:    DiscoveryMechanismTypeEDS,
 			Cluster: testClusterNames[0],
 		},
 	})
@@ -538,22 +537,22 @@ func (s) TestResourceResolverChangePriority(t *testing.T) {
 	}
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{
+		if diff := cmp.Diff(u.priorities, []priorityConfig{
 			{
-				Mechanism: balancerconfig.DiscoveryMechanism{
-					Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+				mechanism: DiscoveryMechanism{
+					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterNames[1],
 				},
-				EDSResp: testEDSUpdates[1],
+				edsResp: testEDSUpdates[1],
 			},
 			{
-				Mechanism: balancerconfig.DiscoveryMechanism{
-					Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+				mechanism: DiscoveryMechanism{
+					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterNames[0],
 				},
-				EDSResp: testEDSUpdates[0],
+				edsResp: testEDSUpdates[0],
 			},
-		}); diff != "" {
+		}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -584,13 +583,13 @@ func (s) TestResourceResolverEDSAndDNS(t *testing.T) {
 	defer cleanup()
 	fakeClient := fakeclient.NewClient()
 	rr := newResourceResolver(&clusterResolverBalancer{xdsClient: fakeClient})
-	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{
+	rr.updateMechanisms([]DiscoveryMechanism{
 		{
-			Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			Type:    DiscoveryMechanismTypeEDS,
 			Cluster: testClusterName,
 		},
 		{
-			Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
+			Type:        DiscoveryMechanismTypeLogicalDNS,
 			DNSHostname: testDNSTarget,
 		},
 	})
@@ -625,22 +624,22 @@ func (s) TestResourceResolverEDSAndDNS(t *testing.T) {
 	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "1.1.1.1"}, {Addr: "2.2.2.2"}}})
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{
+		if diff := cmp.Diff(u.priorities, []priorityConfig{
 			{
-				Mechanism: balancerconfig.DiscoveryMechanism{
-					Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+				mechanism: DiscoveryMechanism{
+					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterName,
 				},
-				EDSResp: testEDSUpdates[0],
+				edsResp: testEDSUpdates[0],
 			},
 			{
-				Mechanism: balancerconfig.DiscoveryMechanism{
-					Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
+				mechanism: DiscoveryMechanism{
+					Type:        DiscoveryMechanismTypeLogicalDNS,
 					DNSHostname: testDNSTarget,
 				},
-				Addresses: []string{"1.1.1.1", "2.2.2.2"},
+				addresses: []string{"1.1.1.1", "2.2.2.2"},
 			},
-		}); diff != "" {
+		}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -669,8 +668,8 @@ func (s) TestResourceResolverChangeFromEDSToDNS(t *testing.T) {
 	defer cleanup()
 	fakeClient := fakeclient.NewClient()
 	rr := newResourceResolver(&clusterResolverBalancer{xdsClient: fakeClient})
-	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{{
-		Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+	rr.updateMechanisms([]DiscoveryMechanism{{
+		Type:    DiscoveryMechanismTypeEDS,
 		Cluster: testClusterName,
 	}})
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -687,13 +686,13 @@ func (s) TestResourceResolverChangeFromEDSToDNS(t *testing.T) {
 	fakeClient.InvokeWatchEDSCallback(gotEDSName1, testEDSUpdates[0], nil)
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{{
-			Mechanism: balancerconfig.DiscoveryMechanism{
-				Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+		if diff := cmp.Diff(u.priorities, []priorityConfig{{
+			mechanism: DiscoveryMechanism{
+				Type:    DiscoveryMechanismTypeEDS,
 				Cluster: testClusterName,
 			},
-			EDSResp: testEDSUpdates[0],
-		}}); diff != "" {
+			edsResp: testEDSUpdates[0],
+		}}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -701,8 +700,8 @@ func (s) TestResourceResolverChangeFromEDSToDNS(t *testing.T) {
 	}
 
 	// Update to watch DNS instead. Should cancel EDS, and start DNS.
-	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{{
-		Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
+	rr.updateMechanisms([]DiscoveryMechanism{{
+		Type:        DiscoveryMechanismTypeLogicalDNS,
 		DNSHostname: testDNSTarget,
 	}})
 	select {
@@ -724,13 +723,13 @@ func (s) TestResourceResolverChangeFromEDSToDNS(t *testing.T) {
 	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "1.1.1.1"}, {Addr: "2.2.2.2"}}})
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{{
-			Mechanism: balancerconfig.DiscoveryMechanism{
-				Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
+		if diff := cmp.Diff(u.priorities, []priorityConfig{{
+			mechanism: DiscoveryMechanism{
+				Type:        DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname: testDNSTarget,
 			},
-			Addresses: []string{"1.1.1.1", "2.2.2.2"},
-		}}); diff != "" {
+			addresses: []string{"1.1.1.1", "2.2.2.2"},
+		}}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -752,13 +751,13 @@ func (s) TestResourceResolverError(t *testing.T) {
 	defer cleanup()
 	fakeClient := fakeclient.NewClient()
 	rr := newResourceResolver(&clusterResolverBalancer{xdsClient: fakeClient})
-	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{
+	rr.updateMechanisms([]DiscoveryMechanism{
 		{
-			Type:    balancerconfig.DiscoveryMechanismTypeEDS,
+			Type:    DiscoveryMechanismTypeEDS,
 			Cluster: testClusterName,
 		},
 		{
-			Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
+			Type:        DiscoveryMechanismTypeLogicalDNS,
 			DNSHostname: testDNSTarget,
 		},
 	})
@@ -826,8 +825,8 @@ func (s) TestResourceResolverDNSResolveNow(t *testing.T) {
 	defer cleanup()
 	fakeClient := fakeclient.NewClient()
 	rr := newResourceResolver(&clusterResolverBalancer{xdsClient: fakeClient})
-	rr.updateMechanisms([]balancerconfig.DiscoveryMechanism{{
-		Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
+	rr.updateMechanisms([]DiscoveryMechanism{{
+		Type:        DiscoveryMechanismTypeLogicalDNS,
 		DNSHostname: testDNSTarget,
 	}})
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -845,13 +844,13 @@ func (s) TestResourceResolverDNSResolveNow(t *testing.T) {
 	dnsR.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "1.1.1.1"}, {Addr: "2.2.2.2"}}})
 	select {
 	case u := <-rr.updateChannel:
-		if diff := cmp.Diff(u.p, []balancerconfig.PriorityConfig{{
-			Mechanism: balancerconfig.DiscoveryMechanism{
-				Type:        balancerconfig.DiscoveryMechanismTypeLogicalDNS,
+		if diff := cmp.Diff(u.priorities, []priorityConfig{{
+			mechanism: DiscoveryMechanism{
+				Type:        DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname: testDNSTarget,
 			},
-			Addresses: []string{"1.1.1.1", "2.2.2.2"},
-		}}); diff != "" {
+			addresses: []string{"1.1.1.1", "2.2.2.2"},
+		}}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
