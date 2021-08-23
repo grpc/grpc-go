@@ -144,7 +144,6 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 			if err == credentials.ErrConnDispatched {
 				return nil, err
 			}
-			rawConn.Close()
 			return nil, connectionErrorf(false, err, "ServerHandshake(%q) failed: %v", rawConn.RemoteAddr(), err)
 		}
 	}
