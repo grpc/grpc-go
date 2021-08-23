@@ -28,6 +28,7 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	"google.golang.org/grpc"
@@ -162,10 +163,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc1.Close()
-
-	client1 := testpb.NewTestServiceClient(cc1)
-	if _, err := client1.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	if err := waitForSuccessfulRPC(ctx, cc1); err != nil {
+		t.Fatal(err)
 	}
 
 	// Create a ClientConn to the second listener and make a successful RPCs.
@@ -174,10 +173,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc2.Close()
-
-	client2 := testpb.NewTestServiceClient(cc2)
-	if _, err := client2.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	if err := waitForSuccessfulRPC(ctx, cc2); err != nil {
+		t.Fatal(err)
 	}
 
 	// Update the management server to remove the second listener resource. This
@@ -193,11 +190,11 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Make sure RPCs succeed on cc1 and fail on cc2.
-	if _, err := client1.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	if err := waitForSuccessfulRPC(ctx, cc1); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := client2.EmptyCall(ctx, &testpb.Empty{}); err == nil {
-		t.Fatal("rpc EmptyCall() succeeded when expected to fail")
+	if err := waitForFailedRPC(ctx, cc2); err != nil {
+		t.Fatal(err)
 	}
 
 	// Update the management server to remove the first listener resource as
@@ -214,11 +211,11 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Make sure RPCs fail on both.
-	if _, err := client1.EmptyCall(ctx, &testpb.Empty{}); err == nil {
-		t.Fatal("rpc EmptyCall() succeeded when expected to fail")
+	if err := waitForFailedRPC(ctx, cc1); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := client2.EmptyCall(ctx, &testpb.Empty{}); err == nil {
-		t.Fatal("rpc EmptyCall() succeeded when expected to fail")
+	if err := waitForFailedRPC(ctx, cc2); err != nil {
+		t.Fatal(err)
 	}
 
 	// Make sure new connection attempts to "not-serving" servers fail. We use a
@@ -246,11 +243,11 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// The clientConns created earlier should be able to make RPCs now.
-	if _, err := client1.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	if err := waitForSuccessfulRPC(ctx, cc1); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := client2.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	if err := waitForSuccessfulRPC(ctx, cc2); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -261,6 +258,30 @@ func waitForModeChange(ctx context.Context, modeTracker *modeTracker, addr net.A
 		}
 		if err := modeTracker.waitForUpdate(ctx); err != nil {
 			return err
+		}
+	}
+}
+
+func waitForSuccessfulRPC(ctx context.Context, cc *grpc.ClientConn) error {
+	c := testpb.NewTestServiceClient(cc)
+	if _, err := c.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		return fmt.Errorf("rpc EmptyCall() failed: %v", err)
+	}
+	return nil
+}
+
+func waitForFailedRPC(ctx context.Context, cc *grpc.ClientConn) error {
+	c := testpb.NewTestServiceClient(cc)
+	ticker := time.NewTimer(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("failure when waiting for RPCs to fail: %v", ctx.Err())
+		case <-ticker.C:
+			if _, err := c.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+				return nil
+			}
 		}
 	}
 }
