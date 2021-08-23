@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
@@ -87,7 +88,7 @@ func (b *testBalancer) UpdateClientConnState(state balancer.ClientConnState) err
 			logger.Errorf("testBalancer: failed to NewSubConn: %v", err)
 			return nil
 		}
-		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: &picker{sc: b.sc, bal: b}})
+		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: &picker{err: balancer.ErrNoSubConnAvailable, bal: b}})
 		b.sc.Connect()
 	}
 	return nil
@@ -105,8 +106,10 @@ func (b *testBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubCon
 	}
 
 	switch s.ConnectivityState {
-	case connectivity.Ready, connectivity.Idle:
+	case connectivity.Ready:
 		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{sc: sc, bal: b}})
+	case connectivity.Idle:
+		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{sc: sc, bal: b, idle: true}})
 	case connectivity.Connecting:
 		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{err: balancer.ErrNoSubConnAvailable, bal: b}})
 	case connectivity.TransientFailure:
@@ -117,14 +120,18 @@ func (b *testBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubCon
 func (b *testBalancer) Close() {}
 
 type picker struct {
-	err error
-	sc  balancer.SubConn
-	bal *testBalancer
+	err  error
+	sc   balancer.SubConn
+	bal  *testBalancer
+	idle bool
 }
 
 func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	if p.err != nil {
 		return balancer.PickResult{}, p.err
+	}
+	if p.idle {
+		p.sc.Connect()
 	}
 	extraMD, _ := grpcutil.ExtraMetadata(info.Ctx)
 	info.Ctx = nil // Do not validate context.
@@ -194,14 +201,14 @@ func testPickExtraMetadata(t *testing.T, e env) {
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
 
-	// The RPCs will fail, but we don't care. We just need the pick to happen.
-	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
-	defer cancel1()
-	tc.EmptyCall(ctx1, &testpb.Empty{})
-
-	ctx2, cancel2 := context.WithTimeout(context.Background(), time.Second)
-	defer cancel2()
-	tc.EmptyCall(ctx2, &testpb.Empty{}, grpc.CallContentSubtype(testSubContentType))
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, nil)
+	}
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.CallContentSubtype(testSubContentType)); err != nil {
+		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %v", err, nil)
+	}
 
 	want := []metadata.MD{
 		// First RPC doesn't have sub-content-type.
