@@ -441,8 +441,8 @@ func (s) TestNewChainEngine(t *testing.T) {
 // and verifies that it works as expected.
 func (s) TestChainEngine(t *testing.T) {
 	defer func(gc func(ctx context.Context) net.Conn) {
-		GetConnection = gc
-	}(GetConnection)
+		getConnection = gc
+	}(getConnection)
 	tests := []struct {
 		name        string
 		rbacConfigs []*v3rbacpb.RBAC
@@ -885,7 +885,7 @@ func (s) TestChainEngine(t *testing.T) {
 					}
 					conn := <-connCh
 					defer conn.Close()
-					GetConnection = func(context.Context) net.Conn {
+					getConnection = func(context.Context) net.Conn {
 						return conn
 					}
 					ctx = peer.NewContext(ctx, data.rpcData.peerInfo)

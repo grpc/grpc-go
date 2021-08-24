@@ -38,8 +38,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// GetConnection allows tests to inject fake connection.
-var GetConnection = transport.GetConnection
+var getConnection = transport.GetConnection
 
 // ChainEngine represents a chain of RBAC Engines, used to make authorization
 // decisions on incoming RPCs.
@@ -59,11 +58,6 @@ func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainEngine, error) {
 		engines = append(engines, engine)
 	}
 	return &ChainEngine{chainedEngines: engines}, nil
-}
-
-// IsEmpty returns true if ChainEngine contains zero engine.
-func (cre *ChainEngine) IsEmpty() bool {
-	return len(cre.chainedEngines) == 0
 }
 
 // IsAuthorized determines if an incoming RPC is authorized based on the chain of RBAC
@@ -166,7 +160,7 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 
 	// The connection is needed in order to find the destination address and
 	// port of the incoming RPC Call.
-	conn := GetConnection(ctx)
+	conn := getConnection(ctx)
 	if conn == nil {
 		return nil, errors.New("missing connection in incoming context")
 	}

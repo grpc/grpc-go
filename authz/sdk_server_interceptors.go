@@ -18,7 +18,6 @@ package authz
 
 import (
 	"context"
-	"fmt"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -36,36 +35,41 @@ type StaticInterceptor struct {
 // NewStatic returns a new StaticInterceptor from a static authorization policy
 // JSON string.
 func NewStatic(authzPolicy string) (*StaticInterceptor, error) {
-	RBACPolicies, err := translatePolicy(authzPolicy)
+	rbacs, err := translatePolicy(authzPolicy)
 	if err != nil {
 		return nil, err
 	}
-	chainEngine, err := rbac.NewChainEngine(RBACPolicies)
+	chainEngine, err := rbac.NewChainEngine(rbacs)
 	if err != nil {
 		return nil, err
-	}
-	if chainEngine.IsEmpty() {
-		return nil, fmt.Errorf("failed to initialize RBAC engines")
 	}
 	return &StaticInterceptor{*chainEngine}, nil
 }
 
-// UnaryInterceptor intercepts incoming Unary RPC request.
-// Only authorized requests are allowed to pass. Otherwise, unauthorized error
-// is returned to client.
-func (i *StaticInterceptor) UnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-	if err := i.engines.IsAuthorized(ctx); status.Code(err) != codes.OK {
+// UnaryInterceptor intercepts incoming Unary RPC requests.
+// Only authorized requests are allowed to pass. Otherwise, an unauthorized
+// error is returned to the client.
+func (i *StaticInterceptor) UnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	err := i.engines.IsAuthorized(ctx)
+	if status.Code(err) == codes.InvalidArgument {
 		return nil, err
+	}
+	if status.Code(err) != codes.OK {
+		return nil, status.Errorf(codes.PermissionDenied, "Unauthorized RPC request rejected.")
 	}
 	return handler(ctx, req)
 }
 
-// StreamInterceptor intercepts incoming Stream RPC request.
-// Only authorized requests are allowed to pass. Otherwise, unauthorized error
-// is returned to client.
-func (i *StaticInterceptor) StreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) (err error) {
-	if err := i.engines.IsAuthorized(ss.Context()); status.Code(err) != codes.OK {
+// StreamInterceptor intercepts incoming Stream RPC requests.
+// Only authorized requests are allowed to pass. Otherwise, an unauthorized
+// error is returned to the client.
+func (i *StaticInterceptor) StreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	err := i.engines.IsAuthorized(ss.Context())
+	if status.Code(err) == codes.InvalidArgument {
 		return err
+	}
+	if status.Code(err) != codes.OK {
+		return status.Errorf(codes.PermissionDenied, "Unauthorized RPC request rejected.")
 	}
 	return handler(srv, ss)
 }
