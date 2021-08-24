@@ -19,6 +19,7 @@
 package test
 
 import (
+
 	"context"
 	"errors"
 	"fmt"
@@ -132,6 +133,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}
 	if p.idle {
 		p.sc.Connect()
+		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
 	extraMD, _ := grpcutil.ExtraMetadata(info.Ctx)
 	info.Ctx = nil // Do not validate context.
