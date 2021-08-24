@@ -528,7 +528,7 @@ func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 	fakeServer.XDSResponseChan <- &fakeserver.Response{Err: errors.New("RPC error")}
 	t.Log("Bad LDS response pushed to fakeServer...")
 
-	timer := time.NewTimer(defaultTestShortTimeout)
+	timer := time.NewTimer(defaultTestTimeout)
 	select {
 	case <-timer.C:
 		t.Fatal("Timeout when expecting LDS update")
