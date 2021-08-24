@@ -68,9 +68,6 @@ jobs:
           - type: tests
             goversion: 1.14
 
-          - type: tests  # Keep until interop tests no longer require Go1.11
-            goversion: 1.11
-
     steps:
       # Setup the environment.
       - name: Setup GOARCH
