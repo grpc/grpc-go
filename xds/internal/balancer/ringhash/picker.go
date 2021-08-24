@@ -19,6 +19,8 @@
 package ringhash
 
 import (
+	"log"
+
 	"fmt"
 
 	"google.golang.org/grpc/balancer"
@@ -29,6 +31,10 @@ import (
 
 type picker struct {
 	ring *ring
+}
+
+func newPicker(ring *ring) *picker {
+	return &picker{ring: ring}
 }
 
 // handleRICSResult is the return type of handleRICS. It's needed to wrap the
@@ -75,6 +81,7 @@ func handleRICS(e *ringEntry) (handleRICSResult, bool) {
 
 func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	e := p.ring.pick(getRequestHash(info.Ctx))
+	log.Printf(" * first item sc %p effinitive state: %v, state: %v", e.sc, e.sc.effectiveState(), e.sc.state)
 	if hr, ok := handleRICS(e); ok {
 		return hr.pr, hr.err
 	}

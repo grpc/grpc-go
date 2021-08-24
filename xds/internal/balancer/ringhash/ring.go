@@ -20,6 +20,7 @@ package ringhash
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"sort"
 	"strconv"
@@ -66,10 +67,13 @@ type ringEntry struct {
 // and first item with hash >= given hash will be returned.
 func newRing(subConns map[resolver.Address]*subConn, minRingSize, maxRingSize uint64) (*ring, error) {
 	// https://github.com/envoyproxy/envoy/blob/765c970f06a4c962961a0e03a467e165b276d50f/source/common/upstream/ring_hash_lb.cc#L114
+	log.Printf(" - min size: %v, max size: %v", minRingSize, maxRingSize)
+	log.Printf(" - subConns: %v", subConns)
 	normalizedWeights, minWeight, err := normalizeWeights(subConns)
 	if err != nil {
 		return nil, err
 	}
+	log.Printf(" - normalized: %v, minWeight: %v", normalizedWeights, minWeight)
 	// Normalized weights for {3,3,4} is {0.3,0.3,0.4}.
 
 	// Scale up the size of the ring such that the least-weighted host gets a
@@ -78,6 +82,7 @@ func newRing(subConns map[resolver.Address]*subConn, minRingSize, maxRingSize ui
 	// Note that size is limited by the input max/min.
 	scale := math.Min(math.Ceil(minWeight*float64(minRingSize))/minWeight, float64(maxRingSize))
 	ringSize := math.Ceil(scale)
+	log.Printf(" - ringSize: %v", ringSize)
 	items := make([]*ringEntry, 0, int(ringSize))
 
 	// For each entry, scale*weight nodes are generated in the ring.
@@ -94,7 +99,9 @@ func newRing(subConns map[resolver.Address]*subConn, minRingSize, maxRingSize ui
 	)
 	for _, scw := range normalizedWeights {
 		targetIdx += scale * scw.weight
+		log.Printf(" -- targetIdx: %v = prev + %v * %v", targetIdx, scale, scw.weight)
 		for float64(idx) < targetIdx {
+			log.Printf(" --- idx %v, addr: %v, targetIdx %v", idx, scw.sc.addr, targetIdx)
 			h := xxhash.Sum64String(scw.sc.addr + strconv.Itoa(len(items)))
 			items = append(items, &ringEntry{idx: idx, hash: h, sc: scw.sc})
 			idx++
@@ -105,6 +112,10 @@ func newRing(subConns map[resolver.Address]*subConn, minRingSize, maxRingSize ui
 	sort.Slice(items, func(i, j int) bool { return items[i].hash < items[j].hash })
 	for i, ii := range items {
 		ii.idx = i
+	}
+	log.Printf(" - ring: \n")
+	for i, ii := range items {
+		log.Printf(" -- %v: %+v, %v\n", i, ii, ii.sc.addr)
 	}
 	return &ring{items: items}, nil
 }

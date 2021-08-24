@@ -20,6 +20,7 @@ package ringhash
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"testing"
 
@@ -46,6 +47,7 @@ func TestRingNew(t *testing.T) {
 	for _, min := range []uint64{3, 4, 6, 8} {
 		for _, max := range []uint64{20, 8} {
 			t.Run(fmt.Sprintf("size-min-%v-max-%v", min, max), func(t *testing.T) {
+				log.Println(" ---- ")
 				r, _ := newRing(testSubConnMap, min, max)
 				totalCount := len(r.items)
 				if totalCount < int(min) || totalCount > int(max) {
@@ -64,6 +66,7 @@ func TestRingNew(t *testing.T) {
 						t.Fatalf("unexpected item weight in ring: %v != %v", got, want)
 					}
 				}
+				log.Println(" ---- ")
 			})
 		}
 	}
