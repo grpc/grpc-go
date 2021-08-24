@@ -96,16 +96,14 @@ type RouteWithInterceptors struct {
 	Interceptors []resolver.ServerInterceptor
 }
 
-// ConstructUsableRouteConfiguration uses the HTTP Filters persisted and Route
-// Configuration from Listener (since configuration may come from RDS) and
-// converts it into usable route configuration, including Instantiating any HTTP
-// Filters for each Route.
+// ConstructUsableRouteConfiguration takes Route Configuration and converts it
+// into matchable route configuration, with instantiated HTTP Filters per route.
 func (f *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdate) error {
 	vhs := make([]VirtualHostWithInterceptors, len(config.VirtualHosts))
 	for _, vh := range config.VirtualHosts {
 		vhwi, err := f.convertVirtualHost(vh)
 		if err != nil {
-			return fmt.Errorf("error constructing virtual host: %v", err)
+			return fmt.Errorf("virtual host construction: %v", err)
 		}
 		vhs = append(vhs, vhwi)
 	}
@@ -119,10 +117,10 @@ func (f *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHostW
 		var err error
 		rs[i].M, err = RouteToMatcher(r)
 		if err != nil {
-			return VirtualHostWithInterceptors{}, fmt.Errorf("error constructing matcher: %v", err)
+			return VirtualHostWithInterceptors{}, fmt.Errorf("matcher construction: %v", err)
 		}
 		for _, filter := range f.HTTPFilters {
-			// Route is highest priority on Server Side, as there is no concept
+			// Route is highest priority on server side, as there is no concept
 			// of an upstream cluster on server side.
 			override := r.HTTPFilterConfigOverride[filter.Name]
 			if override == nil {
@@ -136,7 +134,7 @@ func (f *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHostW
 			}
 			si, err := sb.BuildServerInterceptor(filter.Config, override)
 			if err != nil {
-				return VirtualHostWithInterceptors{}, fmt.Errorf("error constructing filter: %v", err)
+				return VirtualHostWithInterceptors{}, fmt.Errorf("filter construction: %v", err)
 			}
 			if si != nil {
 				rs[i].Interceptors = append(rs[i].Interceptors, si)

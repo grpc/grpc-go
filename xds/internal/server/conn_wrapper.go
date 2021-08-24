@@ -59,6 +59,8 @@ type connWrapper struct {
 	deadlineMu sync.Mutex
 	deadline   time.Time
 
+	// The virtual hosts with matchable routes and instantiated HTTP Filters per
+	// route.
 	virtualHosts []xdsclient.VirtualHostWithInterceptors
 }
 

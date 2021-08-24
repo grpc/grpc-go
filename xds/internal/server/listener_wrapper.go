@@ -212,12 +212,13 @@ type listenerWrapper struct {
 	mode ServingMode
 	// Filter chains received as part of the last good update.
 	filterChains *xdsclient.FilterChainManager
+
 	// rdsHandler is used for any dynamic RDS resources specified in a LDS
 	// update.
 	rdsHandler *rdsHandler
 	// rdsUpdates are the RDS resources received from the management
 	// server, keyed on the RouteName of the RDS resource.
-	rdsUpdates unsafe.Pointer
+	rdsUpdates unsafe.Pointer // map[string]xdsclient.RouteConfigUpdate
 	// ldsUpdateCh is a channel for XDSClient LDS updates.
 	ldsUpdateCh chan ldsUpdateWithError
 	// rdsUpdateCh is a channel for XDSClient RDS updates.
@@ -312,7 +313,7 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		}
 
 		if err := fc.ConstructUsableRouteConfiguration(rc); err != nil {
-			l.logger.Warningf("error constructing usable route configuration: %v", err)
+			l.logger.Warningf("route configuration construction: %v", err)
 			conn.Close()
 			continue
 		}
