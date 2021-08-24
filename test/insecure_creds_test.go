@@ -197,7 +197,7 @@ func (s) TestInsecureCredsWithPerRPCCredentials(t *testing.T) {
 			}
 			defer cc.Close()
 
-			wantErr := "transport: cannot send secure credentials on an insecure connection"
+			const wantErr = "transport: cannot send secure credentials on an insecure connection"
 			c := testpb.NewTestServiceClient(cc)
 			if _, err = c.EmptyCall(ctx, &testpb.Empty{}, copts...); err == nil || !strings.Contains(err.Error(), wantErr) {
 				t.Fatalf("InsecureCredsWithPerRPCCredentials/send_PerRPCCredentials_via_CallOptions  = %v; want %s", err, wantErr)
