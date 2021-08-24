@@ -437,8 +437,8 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 			errCh.Send(err)
 			return
 		}
-		if _, ok := conn.(*connWrapper); !ok {
-			errCh.Send(errors.New("listenerWrapper.Accept() returned a Conn of type %T, want *connWrapper"))
+		if _, ok := conn.(*ConnWrapper); !ok {
+			errCh.Send(errors.New("listenerWrapper.Accept() returned a Conn of type %T, want *ConnWrapper"))
 			return
 		}
 		errCh.Send(nil)
