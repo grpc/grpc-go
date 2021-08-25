@@ -249,15 +249,13 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 	if len(ret) == 0 {
 		return nil, fmt.Errorf("terminal filter not present in HTTP Filter list")
 	}
-	for i, filter := range ret {
-		if i == len(ret)-1 {
-			continue
-		}
-		if filter.Filter.IsTerminal() {
-			return nil, fmt.Errorf("http filter %q is a terminal filter but it is not last in the filter chain", filter.Name)
+	var i int
+	for ; i < len(ret)-1; i++ {
+		if ret[i].Filter.IsTerminal() {
+			return nil, fmt.Errorf("http filter %q is a terminal filter but it is not last in the filter chain", ret[i].Name)
 		}
 	}
-	if !ret[len(ret)-1].Filter.IsTerminal() {
+	if !ret[i].Filter.IsTerminal() {
 		return nil, fmt.Errorf("http filter %q is not a terminal filter", ret[len(ret)-1].Name)
 	}
 	return ret, nil

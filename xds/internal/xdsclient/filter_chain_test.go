@@ -83,7 +83,7 @@ var (
 	routerFilterPb   = e2e.RouterHTTPFilter
 	routerB          = httpfilter.Get(router.TypeURL)
 	routerC, _       = routerB.ParseFilterConfig(testutils.MarshalAny(&v3routerpb.Router{}))
-	routerFilter     = HTTPFilter{Name: "router", Filter: httpfilter.Get(router.TypeURL), Config: routerC}
+	routerFilter     = HTTPFilter{Name: "router", Filter: routerB, Config: routerC}
 	routerFilterList = []HTTPFilter{routerFilter}
 )
 
