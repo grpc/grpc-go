@@ -29,7 +29,6 @@ import (
 	"io"
 	"net"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz"
@@ -286,9 +285,10 @@ func TestSDKEnd2End(t *testing.T) {
 			defer clientConn.Close()
 			client := pb.NewTestServiceClient(clientConn)
 
+			ctx := metadata.NewOutgoingContext(context.Background(), test.md)
+
 			// Verifying Unary RPC.
-			unaryCtx := metadata.NewOutgoingContext(context.Background(), test.md)
-			_, err = client.UnaryCall(unaryCtx, &pb.SimpleRequest{}, grpc.WaitForReady(true))
+			_, err = client.UnaryCall(ctx, &pb.SimpleRequest{}, grpc.WaitForReady(true))
 			gotStatus, _ := status.FromError(err)
 			if gotStatus.Code() != test.wantStatusCode {
 				t.Fatalf("[UnaryCall] status code want:%v got:%v", test.wantStatusCode, gotStatus.Code())
@@ -298,10 +298,7 @@ func TestSDKEnd2End(t *testing.T) {
 			}
 
 			// Verifying Streaming RPC.
-			streamCtx, cancel := context.WithTimeout(context.Background(), time.Second*2)
-			defer cancel()
-			streamCtx = metadata.NewOutgoingContext(streamCtx, test.md)
-			stream, err := client.StreamingInputCall(streamCtx, grpc.WaitForReady(true))
+			stream, err := client.StreamingInputCall(ctx, grpc.WaitForReady(true))
 			if err != nil {
 				t.Fatalf("Failed StreamingInputCall err:%v", err)
 			}
