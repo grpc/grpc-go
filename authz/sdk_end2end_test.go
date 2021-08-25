@@ -29,6 +29,7 @@ import (
 	"io"
 	"net"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz"
@@ -71,11 +72,10 @@ func TestSDKEnd2End(t *testing.T) {
 				"allow_rules": 
 				[
 					{
-						"name": "allow_TestServiceCalls",
+						"name": "allow_StreamingOutputCall",
 						"request": {
 							"paths":
 							[
-								"/grpc.testing.TestService/UnaryCall",
 								"/grpc.testing.TestService/StreamingOutputCall"
 							]
 						}
@@ -286,7 +286,7 @@ func TestSDKEnd2End(t *testing.T) {
 			defer clientConn.Close()
 			client := pb.NewTestServiceClient(clientConn)
 
-			// Verifying Unary RPC
+			// Verifying Unary RPC.
 			unaryCtx := metadata.NewOutgoingContext(context.Background(), test.md)
 			_, err = client.UnaryCall(unaryCtx, &pb.SimpleRequest{}, grpc.WaitForReady(true))
 			gotStatus, _ := status.FromError(err)
@@ -297,14 +297,15 @@ func TestSDKEnd2End(t *testing.T) {
 				t.Fatalf("[UnaryCall] error message want:%v got:%v", test.wantErr, gotStatus.Message())
 			}
 
-			// Verifying Streaming RPC
-			streamCtx := metadata.NewOutgoingContext(context.Background(), test.md)
+			// Verifying Streaming RPC.
+			streamCtx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+			defer cancel()
+			streamCtx = metadata.NewOutgoingContext(streamCtx, test.md)
 			stream, err := client.StreamingInputCall(streamCtx, grpc.WaitForReady(true))
 			if err != nil {
 				t.Fatalf("Failed StreamingInputCall err:%v", err)
 			}
-			req := &pb.StreamingInputCallRequest{}
-			if err := stream.Send(req); err != nil {
+			if err := stream.Send(&pb.StreamingInputCallRequest{Payload: &pb.Payload{Body: []byte("hi")}}); err != nil {
 				t.Fatalf("stream.Send failed err: %v", err)
 			}
 			_, err = stream.CloseAndRecv()
