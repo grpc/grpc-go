@@ -288,7 +288,12 @@ var filterError = func(err error) error {
 }
 
 func handleDNSError(err error, lookupType string) error {
-	err = filterError(err)
+	if dnsErr, ok := err.(*net.DNSError); ok && !dnsErr.IsTimeout && !dnsErr.IsTemporary {
+		// Timeouts and temporary errors should be communicated to gRPC to
+		// attempt another DNS query (with backoff).  Other errors should be
+		// suppressed (they may represent the absence of a TXT record).
+		return nil
+	}
 	if err != nil {
 		err = fmt.Errorf("dns: %v record lookup error: %v", lookupType, err)
 		logger.Info(err)
