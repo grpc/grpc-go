@@ -141,7 +141,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 											ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
 										}}}}}}},
 					},
-					HttpFilters: []*v3httppb.HttpFilter{routerFilterPb},
+					HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 					CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
 						MaxStreamDuration: durationpb.New(time.Second),
 					},
@@ -149,7 +149,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		})
 		v3LisWithFilters = func(fs ...*v3httppb.HttpFilter) *anypb.Any {
-			fs = append(fs, routerFilterPb)
+			fs = append(fs, emptyRouterFilter)
 			return testutils.MarshalAny(&v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
@@ -877,7 +877,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
 										},
-										HttpFilters: []*v3httppb.HttpFilter{routerFilterPb},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
@@ -888,7 +888,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
 										},
-										HttpFilters: []*v3httppb.HttpFilter{routerFilterPb},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
@@ -925,7 +925,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
 			wantMD:     errMD,
-			wantErr:    "terminal filter not present in HTTP Filter list",
+			wantErr:    "http filters list is empty",
 		},
 		{
 			name: "terminal filter not last",
@@ -943,7 +943,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
 										},
-										HttpFilters: []*v3httppb.HttpFilter{routerFilterPb, serverOnlyCustomFilter},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter, serverOnlyCustomFilter},
 									}),
 								},
 							},

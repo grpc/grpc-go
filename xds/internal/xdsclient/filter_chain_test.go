@@ -67,7 +67,7 @@ var (
 					RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 						RouteConfig: routeConfig,
 					},
-					HttpFilters: []*v3httppb.HttpFilter{routerFilterPb},
+					HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 				}),
 			},
 		},
@@ -80,11 +80,11 @@ var (
 		Name:       "serverOnlyCustomFilter2",
 		ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
 	}
-	routerFilterPb   = e2e.RouterHTTPFilter
-	routerB          = httpfilter.Get(router.TypeURL)
-	routerC, _       = routerB.ParseFilterConfig(testutils.MarshalAny(&v3routerpb.Router{}))
-	routerFilter     = HTTPFilter{Name: "router", Filter: routerB, Config: routerC}
-	routerFilterList = []HTTPFilter{routerFilter}
+	emptyRouterFilter = e2e.RouterHTTPFilter
+	routerBuilder     = httpfilter.Get(router.TypeURL)
+	routerConfig, _   = routerBuilder.ParseFilterConfig(testutils.MarshalAny(&v3routerpb.Router{}))
+	routerFilter      = HTTPFilter{Name: "router", Filter: routerBuilder, Config: routerConfig}
+	routerFilterList  = []HTTPFilter{routerFilter}
 )
 
 // TestNewFilterChainImpl_Failure_BadMatchFields verifies cases where we have a
@@ -471,7 +471,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 												RouteConfigName: "route-1",
 											},
 										},
-										HttpFilters: []*v3httppb.HttpFilter{routerFilterPb},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
@@ -492,7 +492,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 											RouteConfigName: "route-1",
 										},
 									},
-									HttpFilters: []*v3httppb.HttpFilter{routerFilterPb},
+									HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 								}),
 							},
 						},
@@ -539,7 +539,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
 										},
-										HttpFilters: []*v3httppb.HttpFilter{routerFilterPb},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
@@ -555,7 +555,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
 									},
-									HttpFilters: []*v3httppb.HttpFilter{routerFilterPb},
+									HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 								}),
 							},
 						},
@@ -608,7 +608,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 												RouteConfigName: "route-1",
 											},
 										},
-										HttpFilters: []*v3httppb.HttpFilter{routerFilterPb},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
@@ -629,7 +629,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 											RouteConfigName: "route-2",
 										},
 									},
-									HttpFilters: []*v3httppb.HttpFilter{routerFilterPb},
+									HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 								}),
 							},
 						},
@@ -704,7 +704,7 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 												RouteConfigName: "route-1",
 											},
 										},
-										HttpFilters: []*v3httppb.HttpFilter{routerFilterPb},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
@@ -722,7 +722,7 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 											RouteConfigName: "route-1",
 										},
 									},
-									HttpFilters: []*v3httppb.HttpFilter{routerFilterPb},
+									HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 								}),
 							},
 						},
@@ -743,7 +743,7 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
 									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 										RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
-										HttpFilters:    []*v3httppb.HttpFilter{routerFilterPb},
+										HttpFilters:    []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
@@ -757,7 +757,7 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 							ConfigType: &v3listenerpb.Filter_TypedConfig{
 								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 									RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
-									HttpFilters:    []*v3httppb.HttpFilter{routerFilterPb},
+									HttpFilters:    []*v3httppb.HttpFilter{emptyRouterFilter},
 								}),
 							},
 						},
@@ -873,7 +873,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 										HttpFilters: []*v3httppb.HttpFilter{
 											validServerSideHTTPFilter1,
-											routerFilterPb,
+											emptyRouterFilter,
 										},
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
@@ -892,7 +892,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 									HttpFilters: []*v3httppb.HttpFilter{
 										validServerSideHTTPFilter1,
-										routerFilterPb,
+										emptyRouterFilter,
 									},
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
@@ -955,7 +955,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 										HttpFilters: []*v3httppb.HttpFilter{
 											validServerSideHTTPFilter1,
 											validServerSideHTTPFilter2,
-											routerFilterPb,
+											emptyRouterFilter,
 										},
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
@@ -975,7 +975,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 									HttpFilters: []*v3httppb.HttpFilter{
 										validServerSideHTTPFilter1,
 										validServerSideHTTPFilter2,
-										routerFilterPb,
+										emptyRouterFilter,
 									},
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
@@ -1049,7 +1049,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 										HttpFilters: []*v3httppb.HttpFilter{
 											validServerSideHTTPFilter1,
 											validServerSideHTTPFilter2,
-											routerFilterPb,
+											emptyRouterFilter,
 										},
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
@@ -1063,7 +1063,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 										HttpFilters: []*v3httppb.HttpFilter{
 											validServerSideHTTPFilter1,
-											routerFilterPb,
+											emptyRouterFilter,
 										},
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
@@ -1083,7 +1083,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 									HttpFilters: []*v3httppb.HttpFilter{
 										validServerSideHTTPFilter1,
 										validServerSideHTTPFilter2,
-										routerFilterPb,
+										emptyRouterFilter,
 									},
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
@@ -1097,7 +1097,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 									HttpFilters: []*v3httppb.HttpFilter{
 										validServerSideHTTPFilter1,
-										routerFilterPb,
+										emptyRouterFilter,
 									},
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
