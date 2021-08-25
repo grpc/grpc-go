@@ -277,16 +277,6 @@ func (d *dnsResolver) lookupSRV() ([]resolver.Address, error) {
 	return newAddrs, nil
 }
 
-var filterError = func(err error) error {
-	if dnsErr, ok := err.(*net.DNSError); ok && !dnsErr.IsTimeout && !dnsErr.IsTemporary {
-		// Timeouts and temporary errors should be communicated to gRPC to
-		// attempt another DNS query (with backoff).  Other errors should be
-		// suppressed (they may represent the absence of a TXT record).
-		return nil
-	}
-	return err
-}
-
 func handleDNSError(err error, lookupType string) error {
 	if dnsErr, ok := err.(*net.DNSError); ok && !dnsErr.IsTimeout && !dnsErr.IsTemporary {
 		// Timeouts and temporary errors should be communicated to gRPC to
