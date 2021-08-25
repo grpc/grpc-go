@@ -260,7 +260,7 @@ func TestSDKEnd2End(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-
+			// Start a gRPC server with SDK unary and stream server interceptors.
 			i, _ := authz.NewStatic(test.authzPolicy)
 			serverOpts := []grpc.ServerOption{
 				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
@@ -274,6 +274,7 @@ func TestSDKEnd2End(t *testing.T) {
 			pb.RegisterTestServiceServer(s, &testServer{})
 			go s.Serve(lis)
 
+			// Establish a connection to the server.
 			dialOptions := []grpc.DialOption{
 				grpc.WithInsecure(),
 				grpc.WithBlock(),
@@ -287,7 +288,7 @@ func TestSDKEnd2End(t *testing.T) {
 
 			ctx := metadata.NewOutgoingContext(context.Background(), test.md)
 
-			// Verifying Unary RPC.
+			// Verifying authorization decision for Unary RPC.
 			_, err = client.UnaryCall(ctx, &pb.SimpleRequest{}, grpc.WaitForReady(true))
 			gotStatus, _ := status.FromError(err)
 			if gotStatus.Code() != test.wantStatusCode {
@@ -297,13 +298,18 @@ func TestSDKEnd2End(t *testing.T) {
 				t.Fatalf("[UnaryCall] error message want:%v got:%v", test.wantErr, gotStatus.Message())
 			}
 
-			// Verifying Streaming RPC.
+			// Verifying authorization decision for Streaming RPC.
 			stream, err := client.StreamingInputCall(ctx, grpc.WaitForReady(true))
 			if err != nil {
-				t.Fatalf("Failed StreamingInputCall err:%v", err)
+				t.Fatalf("failed StreamingInputCall err: %v", err)
 			}
-			if err := stream.Send(&pb.StreamingInputCallRequest{Payload: &pb.Payload{Body: []byte("hi")}}); err != nil {
-				t.Fatalf("stream.Send failed err: %v", err)
+			req := &pb.StreamingInputCallRequest{
+				Payload: &pb.Payload{
+					Body: []byte("hi"),
+				},
+			}
+			if err := stream.Send(req); err != nil {
+				t.Fatalf("failed stream.Send err: %v", err)
 			}
 			_, err = stream.CloseAndRecv()
 			gotStatus, _ = status.FromError(err)
