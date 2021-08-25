@@ -86,7 +86,7 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	// If the incoming RPC gets through all of the engines successfully (i.e.
 	// doesn't not match an allow or match a deny engine), the RPC is authorized
 	// to proceed.
-	return status.Error(codes.OK, "")
+	return nil
 }
 
 // engine is used for matching incoming RPCs to policies.
