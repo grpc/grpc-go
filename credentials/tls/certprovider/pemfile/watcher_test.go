@@ -1,5 +1,3 @@
-// +build go1.12
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -24,7 +22,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"os"
 	"path"
 	"testing"
@@ -32,7 +29,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -59,17 +55,15 @@ func Test(t *testing.T) {
 }
 
 func compareKeyMaterial(got, want *certprovider.KeyMaterial) error {
-	// x509.Certificate type defines an Equal() method, but does not check for
-	// nil. This has been fixed in
-	// https://github.com/golang/go/commit/89865f8ba64ccb27f439cce6daaa37c9aa38f351,
-	// but this is only available starting go1.14.
-	// TODO(easwars): Remove this check once we remove support for go1.13.
-	if (got.Certs == nil && want.Certs != nil) || (want.Certs == nil && got.Certs != nil) {
+	if len(got.Certs) != len(want.Certs) {
 		return fmt.Errorf("keyMaterial certs = %+v, want %+v", got, want)
 	}
-	if !cmp.Equal(got.Certs, want.Certs, cmp.AllowUnexported(big.Int{})) {
-		return fmt.Errorf("keyMaterial certs = %+v, want %+v", got, want)
+	for i := 0; i < len(got.Certs); i++ {
+		if !got.Certs[i].Leaf.Equal(want.Certs[i].Leaf) {
+			return fmt.Errorf("keyMaterial certs = %+v, want %+v", got, want)
+		}
 	}
+
 	// x509.CertPool contains only unexported fields some of which contain other
 	// unexported fields. So usage of cmp.AllowUnexported() or
 	// cmpopts.IgnoreUnexported() does not help us much here. Also, the standard
