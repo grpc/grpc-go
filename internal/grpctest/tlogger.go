@@ -49,11 +49,11 @@ const (
 
 type tLogger struct {
 	v           int
-	t           *testing.T
-	start       time.Time
 	initialized bool
 
-	m      sync.Mutex // protects errors
+	mu     sync.Mutex // guards t, start, and errors
+	t      *testing.T
+	start  time.Time
 	errors map[*regexp.Regexp]int
 }
 
@@ -76,6 +76,8 @@ func getCallingPrefix(depth int) (string, error) {
 
 // log logs the message with the specified parameters to the tLogger.
 func (g *tLogger) log(ltype logType, depth int, format string, args ...interface{}) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	prefix, err := getCallingPrefix(callingFrame + depth)
 	if err != nil {
 		g.t.Error(err)
@@ -119,14 +121,14 @@ func (g *tLogger) log(ltype logType, depth int, format string, args ...interface
 // Update updates the testing.T that the testing logger logs to. Should be done
 // before every test. It also initializes the tLogger if it has not already.
 func (g *tLogger) Update(t *testing.T) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	if !g.initialized {
 		grpclog.SetLoggerV2(TLogger)
 		g.initialized = true
 	}
 	g.t = t
 	g.start = time.Now()
-	g.m.Lock()
-	defer g.m.Unlock()
 	g.errors = map[*regexp.Regexp]int{}
 }
 
@@ -141,20 +143,20 @@ func (g *tLogger) ExpectError(expr string) {
 
 // ExpectErrorN declares an error to be expected n times.
 func (g *tLogger) ExpectErrorN(expr string, n int) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	re, err := regexp.Compile(expr)
 	if err != nil {
 		g.t.Error(err)
 		return
 	}
-	g.m.Lock()
-	defer g.m.Unlock()
 	g.errors[re] += n
 }
 
 // EndTest checks if expected errors were not encountered.
 func (g *tLogger) EndTest(t *testing.T) {
-	g.m.Lock()
-	defer g.m.Unlock()
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	for re, count := range g.errors {
 		if count > 0 {
 			t.Errorf("Expected error '%v' not encountered", re.String())
@@ -165,8 +167,6 @@ func (g *tLogger) EndTest(t *testing.T) {
 
 // expected determines if the error string is protected or not.
 func (g *tLogger) expected(s string) bool {
-	g.m.Lock()
-	defer g.m.Unlock()
 	for re, count := range g.errors {
 		if re.FindStringIndex(s) != nil {
 			g.errors[re]--
