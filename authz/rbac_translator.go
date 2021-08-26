@@ -285,7 +285,7 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 	if len(policy.AllowRules) == 0 {
 		return nil, fmt.Errorf(`"allow_rules" is not present`)
 	}
-	var rbacs []*v3rbacpb.RBAC
+	rbacs := make([]*v3rbacpb.RBAC, 0, 2)
 	if len(policy.DenyRules) > 0 {
 		denyPolicies, err := parseRules(policy.DenyRules, policy.Name)
 		if err != nil {
@@ -302,6 +302,5 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 		return nil, fmt.Errorf(`"allow_rules" %v`, err)
 	}
 	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies}
-	rbacs = append(rbacs, allowRBAC)
-	return rbacs, nil
+	return append(rbacs, allowRBAC), nil
 }

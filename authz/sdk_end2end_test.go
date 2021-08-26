@@ -16,12 +16,6 @@
  *
  */
 
-// Package authz_test contains tests for authz.
-//
-// Experimental
-//
-// Notice: This package is EXPERIMENTAL and may be changed or removed
-// in a later release.
 package authz_test
 
 import (
@@ -107,7 +101,7 @@ func TestSDKEnd2End(t *testing.T) {
 			}`,
 			md:             metadata.Pairs("key-abc", "val-abc"),
 			wantStatusCode: codes.PermissionDenied,
-			wantErr:        "Unauthorized RPC request rejected.",
+			wantErr:        "unauthorized RPC request rejected",
 		},
 		"DeniesRpcRequestMatchInDenyAndAllow": {
 			authzPolicy: `{
@@ -138,7 +132,7 @@ func TestSDKEnd2End(t *testing.T) {
 				]
 			}`,
 			wantStatusCode: codes.PermissionDenied,
-			wantErr:        "Unauthorized RPC request rejected.",
+			wantErr:        "unauthorized RPC request rejected",
 		},
 		"AllowsRpcRequestNoMatchInDenyMatchInAllow": {
 			authzPolicy: `{
@@ -206,7 +200,7 @@ func TestSDKEnd2End(t *testing.T) {
 				]
 			}`,
 			wantStatusCode: codes.PermissionDenied,
-			wantErr:        "Unauthorized RPC request rejected.",
+			wantErr:        "unauthorized RPC request rejected",
 		},
 		"AllowsRpcRequestEmptyDenyMatchInAllow": {
 			authzPolicy: `{
@@ -255,33 +249,27 @@ func TestSDKEnd2End(t *testing.T) {
 				]
 			}`,
 			wantStatusCode: codes.PermissionDenied,
-			wantErr:        "Unauthorized RPC request rejected.",
+			wantErr:        "unauthorized RPC request rejected",
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			// Start a gRPC server with SDK unary and stream server interceptors.
 			i, _ := authz.NewStatic(test.authzPolicy)
-			serverOpts := []grpc.ServerOption{
-				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
-				grpc.ChainStreamInterceptor(i.StreamInterceptor),
-			}
-			lis, err := net.Listen("tcp", ":0")
+			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
 				t.Fatalf("error listening: %v", err)
 			}
-			s := grpc.NewServer(serverOpts...)
+			s := grpc.NewServer(
+				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
+				grpc.ChainStreamInterceptor(i.StreamInterceptor))
 			pb.RegisterTestServiceServer(s, &testServer{})
 			go s.Serve(lis)
 
 			// Establish a connection to the server.
-			dialOptions := []grpc.DialOption{
-				grpc.WithInsecure(),
-				grpc.WithBlock(),
-			}
-			clientConn, err := grpc.Dial(lis.Addr().String(), dialOptions...)
+			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
 			if err != nil {
-				t.Fatalf("grpc.Dial(%v, %v) failed: %v", lis.Addr().String(), dialOptions, err)
+				t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 			}
 			defer clientConn.Close()
 			client := pb.NewTestServiceClient(clientConn)
@@ -289,17 +277,13 @@ func TestSDKEnd2End(t *testing.T) {
 			ctx := metadata.NewOutgoingContext(context.Background(), test.md)
 
 			// Verifying authorization decision for Unary RPC.
-			_, err = client.UnaryCall(ctx, &pb.SimpleRequest{}, grpc.WaitForReady(true))
-			gotStatus, _ := status.FromError(err)
-			if gotStatus.Code() != test.wantStatusCode {
-				t.Fatalf("[UnaryCall] status code want:%v got:%v", test.wantStatusCode, gotStatus.Code())
-			}
-			if gotStatus.Message() != test.wantErr {
-				t.Fatalf("[UnaryCall] error message want:%v got:%v", test.wantErr, gotStatus.Message())
+			_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
+			if got := status.Convert(err); got.Code() != test.wantStatusCode || got.Message() != test.wantErr {
+				t.Fatalf("[UnaryCall] error want:{%v %v} got:{%v %v}", test.wantStatusCode, test.wantErr, got.Code(), got.Message())
 			}
 
 			// Verifying authorization decision for Streaming RPC.
-			stream, err := client.StreamingInputCall(ctx, grpc.WaitForReady(true))
+			stream, err := client.StreamingInputCall(ctx)
 			if err != nil {
 				t.Fatalf("failed StreamingInputCall err: %v", err)
 			}
@@ -312,14 +296,9 @@ func TestSDKEnd2End(t *testing.T) {
 				t.Fatalf("failed stream.Send err: %v", err)
 			}
 			_, err = stream.CloseAndRecv()
-			gotStatus, _ = status.FromError(err)
-			if gotStatus.Code() != test.wantStatusCode {
-				t.Fatalf("[StreamingCall] status code want:%v got:%v", test.wantStatusCode, gotStatus.Code())
+			if got := status.Convert(err); got.Code() != test.wantStatusCode || got.Message() != test.wantErr {
+				t.Fatalf("[StreamingCall] error want:{%v %v} got:{%v %v}", test.wantStatusCode, test.wantErr, got.Code(), got.Message())
 			}
-			if gotStatus.Message() != test.wantErr {
-				t.Fatalf("[StreamingCall] error message want:%v got:%v", test.wantErr, gotStatus.Message())
-			}
-
 		})
 	}
 }

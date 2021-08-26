@@ -55,7 +55,7 @@ func (i *StaticInterceptor) UnaryInterceptor(ctx context.Context, req interface{
 		return handler(ctx, req)
 	}
 	if status.Code(err) == codes.PermissionDenied {
-		return nil, status.Errorf(codes.PermissionDenied, "Unauthorized RPC request rejected.")
+		return nil, status.Errorf(codes.PermissionDenied, "unauthorized RPC request rejected")
 	}
 	return nil, err
 }
@@ -69,7 +69,7 @@ func (i *StaticInterceptor) StreamInterceptor(srv interface{}, ss grpc.ServerStr
 		return handler(srv, ss)
 	}
 	if status.Code(err) == codes.PermissionDenied {
-		return status.Errorf(codes.PermissionDenied, "Unauthorized RPC request rejected.")
+		return status.Errorf(codes.PermissionDenied, "unauthorized RPC request rejected")
 	}
 	return err
 }
