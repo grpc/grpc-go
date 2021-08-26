@@ -196,6 +196,9 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 	oldAggregateAndDNSSupportEnv := env.AggregateAndDNSSupportEnv
 	env.AggregateAndDNSSupportEnv = true
 	defer func() { env.AggregateAndDNSSupportEnv = oldAggregateAndDNSSupportEnv }()
+	oldRingHashSupport := env.RingHashSupport
+	env.RingHashSupport = true
+	defer func() { env.RingHashSupport = oldRingHashSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if update, err := validateClusterAndConstructClusterUpdate(test.cluster); err == nil {
@@ -413,6 +416,9 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	oldAggregateAndDNSSupportEnv := env.AggregateAndDNSSupportEnv
 	env.AggregateAndDNSSupportEnv = true
 	defer func() { env.AggregateAndDNSSupportEnv = oldAggregateAndDNSSupportEnv }()
+	oldRingHashSupport := env.RingHashSupport
+	env.RingHashSupport = true
+	defer func() { env.RingHashSupport = oldRingHashSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
