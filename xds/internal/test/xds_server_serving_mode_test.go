@@ -42,8 +42,9 @@ import (
 
 // A convenience typed used to keep track of mode changes on multiple listeners.
 type modeTracker struct {
-	mu       sync.Mutex
-	modes    map[string]xds.ServingMode
+	mu    sync.Mutex
+	modes map[string]xds.ServingMode
+
 	updateCh *testutils.Channel
 }
 
@@ -56,9 +57,9 @@ func newModeTracker() *modeTracker {
 
 func (mt *modeTracker) updateMode(ctx context.Context, addr net.Addr, mode xds.ServingMode) {
 	mt.mu.Lock()
-	defer mt.mu.Unlock()
-
 	mt.modes[addr.String()] = mode
+	mt.mu.Unlock()
+
 	// Sometimes we could get state updates which are not expected by the test.
 	// Using `Send()` here would block in that case and cause the whole test to
 	// hang and will eventually only timeout when the `-timeout` passed to `go
