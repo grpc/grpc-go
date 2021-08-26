@@ -113,7 +113,8 @@ func (s) TestRetryUnary(t *testing.T) {
 }
 
 func (s) TestRetryDisabledByDefault(t *testing.T) {
-	if strings.EqualFold(os.Getenv("GRPC_GO_RETRY"), "on") {
+	if strings.EqualFold(os.Getenv("GRPC_GO_RETRY"), "on") ||
+		strings.EqualFold(os.Getenv("GRPC_XDS_EXPERIMENTAL_ENABLE_RETRY"), "true") {
 		return
 	}
 	i := -1

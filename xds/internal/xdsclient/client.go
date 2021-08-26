@@ -33,6 +33,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
@@ -269,6 +270,24 @@ type VirtualHost struct {
 	// may be unused if the matching Route contains an override for that
 	// filter.
 	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
+	RetryConfig              *RetryConfig
+}
+
+// RetryConfig contains all retry-related configuration in either a VirtualHost
+// or Route.
+type RetryConfig struct {
+	// RetryOn is a set of status codes on which to retry.  Only Canceled,
+	// DeadlineExceeded, Internal, ResourceExhausted, and Unavailable are
+	// supported; any other values will be omitted.
+	RetryOn      map[codes.Code]bool
+	NumRetries   uint32       // maximum number of retry attempts
+	RetryBackoff RetryBackoff // retry backoff policy
+}
+
+// RetryBackoff describes the backoff policy for retries.
+type RetryBackoff struct {
+	BaseInterval time.Duration // initial backoff duration between attempts
+	MaxInterval  time.Duration // maximum backoff duration
 }
 
 // HashPolicyType specifies the type of HashPolicy from a received RDS Response.
@@ -339,6 +358,7 @@ type Route struct {
 	// unused if the matching WeightedCluster contains an override for that
 	// filter.
 	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
+	RetryConfig              *RetryConfig
 
 	RouteAction RouteAction
 }
