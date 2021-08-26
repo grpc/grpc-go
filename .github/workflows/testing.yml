@@ -41,36 +41,32 @@ jobs:
       matrix:
         include:
           - type: vet+tests
-            goversion: 1.16
+            goversion: 1.17
 
           - type: tests
-            goversion: 1.16
+            goversion: 1.17
             testflags: -race
 
           - type: tests
-            goversion: 1.16
+            goversion: 1.17
             grpcenv: GRPC_GO_RETRY=on
 
           - type: extras
-            goversion: 1.16
-          - type: extras
-            goversion: 1.15
-          - type: extras
-            goversion: 1.14
+            goversion: 1.17
 
           - type: tests
-            goversion: 1.16
+            goversion: 1.17
             goarch: 386
 
           - type: tests
-            goversion: 1.16
+            goversion: 1.17
             goarch: arm64
 
           - type: tests
-            goversion: 1.15
+            goversion: 1.16
 
           - type: tests
-            goversion: 1.14
+            goversion: 1.15
 
     steps:
       # Setup the environment.
@@ -108,6 +104,9 @@ jobs:
         run: |
           go version
           go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc/...
+          cd ${GITHUB_WORKSPACE}/security/advancedtls && go test ${{ matrix.testflags }} -timeout 2m google.golang.org/grpc/security/advancedtls/...
+          cd ${GITHUB_WORKSPACE}/security/authorization && go test ${{ matrix.testflags }} -timeout 2m google.golang.org/grpc/security/authorization/...
+
 
       # Non-core gRPC tests (examples, interop, etc)
       - name: Run extras tests
@@ -117,5 +116,3 @@ jobs:
           examples/examples_test.sh
           security/advancedtls/examples/examples_test.sh
           interop/interop_test.sh
-          cd ${GITHUB_WORKSPACE}/security/advancedtls && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/advancedtls/...
-          cd ${GITHUB_WORKSPACE}/security/authorization && go test -cpu 1,4 -timeout 7m google.golang.org/grpc/security/authorization/...
