@@ -53,6 +53,10 @@ jobs:
 
           - type: extras
             goversion: 1.16
+          - type: extras
+            goversion: 1.15
+          - type: extras
+            goversion: 1.14
 
           - type: tests
             goversion: 1.16
