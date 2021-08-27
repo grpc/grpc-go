@@ -77,7 +77,7 @@ func NewJWTAccessFromKey(jsonKey []byte) (credentials.PerRPCCredentials, error) 
 }
 
 func (j jwtAccess) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	aud, err := credinternal.RemoveServiceNameFromJwtUri(uri[0])
+	aud, err := credinternal.RemoveServiceNameFromJwtURI(uri[0])
 	if err != nil {
 		return nil, err
 	}

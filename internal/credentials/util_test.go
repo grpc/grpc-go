@@ -59,7 +59,7 @@ func (s) TestAppendH2ToNextProtos(t *testing.T) {
 	}
 }
 
-func (s) TestRemoveServiceNameFromJwtUri(t *testing.T) {
+func (s) TestRemoveServiceNameFromJwtURI(t *testing.T) {
 	tests := []struct {
 		name string
 		uri  string
@@ -78,8 +78,8 @@ func (s) TestRemoveServiceNameFromJwtUri(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got, _ := RemoveServiceNameFromJwtUri(tt.uri); got != tt.want {
-				t.Errorf("RemoveServiceNameFromJwtUri() = %v, want %v", got, tt.want)
+			if got, _ := RemoveServiceNameFromJwtURI(tt.uri); got != tt.want {
+				t.Errorf("RemoveServiceNameFromJwtURI() = %v, want %v", got, tt.want)
 			}
 		})
 	}

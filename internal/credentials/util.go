@@ -52,10 +52,10 @@ func CloneTLSConfig(cfg *tls.Config) *tls.Config {
 	return cfg.Clone()
 }
 
-// RemoveServiceNameFromJwtUri removes RPC service name
+// RemoveServiceNameFromJwtURI removes RPC service name
 // from URI that will be used as audience in a self-signed
 // JWT token. It follows https://google.aip.dev/auth/4111.
-func RemoveServiceNameFromJwtUri(uri string) (string, error) {
+func RemoveServiceNameFromJwtURI(uri string) (string, error) {
 	parsed, err := url.Parse(uri)
 	if err != nil {
 		return "", err
