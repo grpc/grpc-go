@@ -51,13 +51,13 @@ func NewStatic(authzPolicy string) (*StaticInterceptor, error) {
 // error is returned to the client.
 func (i *StaticInterceptor) UnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	err := i.engines.IsAuthorized(ctx)
-	if err == nil {
-		return handler(ctx, req)
+	if err != nil {
+		if status.Code(err) == codes.PermissionDenied {
+			return nil, status.Errorf(codes.PermissionDenied, "unauthorized RPC request rejected")
+		}
+		return nil, err
 	}
-	if status.Code(err) == codes.PermissionDenied {
-		return nil, status.Errorf(codes.PermissionDenied, "unauthorized RPC request rejected")
-	}
-	return nil, err
+	return handler(ctx, req)
 }
 
 // StreamInterceptor intercepts incoming Stream RPC requests.
@@ -65,11 +65,11 @@ func (i *StaticInterceptor) UnaryInterceptor(ctx context.Context, req interface{
 // error is returned to the client.
 func (i *StaticInterceptor) StreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	err := i.engines.IsAuthorized(ss.Context())
-	if err == nil {
-		return handler(srv, ss)
+	if err != nil {
+		if status.Code(err) == codes.PermissionDenied {
+			return status.Errorf(codes.PermissionDenied, "unauthorized RPC request rejected")
+		}
+		return err
 	}
-	if status.Code(err) == codes.PermissionDenied {
-		return status.Errorf(codes.PermissionDenied, "unauthorized RPC request rejected")
-	}
-	return err
+	return handler(srv, ss)
 }

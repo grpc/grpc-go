@@ -23,6 +23,7 @@ import (
 	"io"
 	"net"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz"
@@ -274,7 +275,9 @@ func TestSDKEnd2End(t *testing.T) {
 			defer clientConn.Close()
 			client := pb.NewTestServiceClient(clientConn)
 
-			ctx := metadata.NewOutgoingContext(context.Background(), test.md)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			ctx = metadata.NewOutgoingContext(ctx, test.md)
 
 			// Verifying authorization decision for Unary RPC.
 			_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
