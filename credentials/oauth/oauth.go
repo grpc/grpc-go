@@ -29,6 +29,8 @@ import (
 	"golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/jwt"
 	"google.golang.org/grpc/credentials"
+
+	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
 // TokenSource supplies PerRPCCredentials from an oauth2.TokenSource.
@@ -75,9 +77,13 @@ func NewJWTAccessFromKey(jsonKey []byte) (credentials.PerRPCCredentials, error) 
 }
 
 func (j jwtAccess) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
+	aud, err := credinternal.RemoveServiceNameFromJwtUri(uri[0])
+	if err != nil {
+		return nil, err
+	}
 	// TODO: the returned TokenSource is reusable. Store it in a sync.Map, with
 	// uri as the key, to avoid recreating for every RPC.
-	ts, err := google.JWTAccessTokenSourceFromJSON(j.jsonKey, uri[0])
+	ts, err := google.JWTAccessTokenSourceFromJSON(j.jsonKey, aud)
 	if err != nil {
 		return nil, err
 	}
