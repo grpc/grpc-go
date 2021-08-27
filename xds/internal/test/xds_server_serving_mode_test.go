@@ -24,7 +24,6 @@ package xds_test
 import (
 	"context"
 	"net"
-	"sync"
 	"testing"
 	"time"
 
@@ -32,7 +31,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
-	"google.golang.org/grpc/internal/testutils"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/xds"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
@@ -62,8 +60,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Create a couple of channels on which mode updates will be pushed.
-	updateCh1 := testutils.NewChannel()
-	updateCh2 := testutils.NewChannel()
+	updateCh1 := make(chan xds.ServingMode, 1)
+	updateCh2 := make(chan xds.ServingMode, 1)
 
 	// Create a server option to get notified about serving mode changes, and
 	// push the updated mode on the channels created above.
@@ -73,9 +71,9 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
 		switch addr.String() {
 		case lis1.Addr().String():
-			updateCh1.Send(args.Mode)
+			updateCh1 <- args.Mode
 		case lis2.Addr().String():
-			updateCh2.Send(args.Mode)
+			updateCh2 <- args.Mode
 		default:
 			t.Logf("serving mode callback invoked for unknown listener address: %q", addr.String())
 		}
@@ -118,21 +116,20 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}()
 
 	// Wait for both listeners to move to "serving" mode.
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		if mode, err := updateCh1.Receive(ctx); err != nil || mode != xds.ServingModeServing {
-			t.Fatal(err)
+	for i := 0; i < 2; i++ {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for a mode change update: %v", err)
+		case mode := <-updateCh1:
+			if mode != xds.ServingModeServing {
+				t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+			}
+		case mode := <-updateCh2:
+			if mode != xds.ServingModeServing {
+				t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+			}
 		}
-	}()
-	go func() {
-		defer wg.Done()
-		if mode, err := updateCh2.Receive(ctx); err != nil || mode != xds.ServingModeServing {
-			t.Fatal(err)
-		}
-	}()
-	wg.Wait()
+	}
 
 	// Create a ClientConn to the first listener and make a successful RPCs.
 	cc1, err := grpc.Dial(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -159,21 +156,23 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Wait for lis2 to move to "not-serving" mode.
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		if mode, err := updateCh1.Receive(ctx); err != nil || mode != xds.ServingModeServing {
-			t.Fatal(err)
+	// Wait for lis2 to move to "not-serving" mode. lis1 also receives an update
+	// here even though it stays in "serving" mode.
+	// See https://github.com/grpc/grpc-go/issues/4695.
+	for i := 0; i < 2; i++ {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for a mode change update: %v", err)
+		case mode := <-updateCh1:
+			if mode != xds.ServingModeServing {
+				t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+			}
+		case mode := <-updateCh2:
+			if mode != xds.ServingModeNotServing {
+				t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeNotServing)
+			}
 		}
-	}()
-	go func() {
-		defer wg.Done()
-		if mode, err := updateCh2.Receive(ctx); err != nil || mode != xds.ServingModeNotServing {
-			t.Fatal(err)
-		}
-	}()
-	wg.Wait()
+	}
 
 	// Make sure RPCs succeed on cc1 and fail on cc2.
 	waitForSuccessfulRPC(ctx, t, cc1)
@@ -192,8 +191,13 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// Wait for lis1 to move to "not-serving" mode. lis2 was already removed
 	// from the xdsclient's resource cache. So, lis2's callback will not be
 	// invoked this time around.
-	if mode, err := updateCh1.Receive(ctx); err != nil || mode != xds.ServingModeNotServing {
-		t.Fatal(err)
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for a mode change update: %v", err)
+	case mode := <-updateCh1:
+		if mode != xds.ServingModeNotServing {
+			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeNotServing)
+		}
 	}
 
 	// Make sure RPCs fail on both.
@@ -217,20 +221,20 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Wait for both listeners to move to "serving" mode.
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		if mode, err := updateCh1.Receive(ctx); err != nil || mode != xds.ServingModeServing {
-			t.Fatal(err)
+	for i := 0; i < 2; i++ {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("timed out waiting for a mode change update: %v", err)
+		case mode := <-updateCh1:
+			if mode != xds.ServingModeServing {
+				t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+			}
+		case mode := <-updateCh2:
+			if mode != xds.ServingModeServing {
+				t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+			}
 		}
-	}()
-	go func() {
-		defer wg.Done()
-		if mode, err := updateCh2.Receive(ctx); err != nil || mode != xds.ServingModeServing {
-			t.Fatal(err)
-		}
-	}()
-	wg.Wait()
+	}
 
 	// The clientConns created earlier should be able to make RPCs now.
 	waitForSuccessfulRPC(ctx, t, cc1)
