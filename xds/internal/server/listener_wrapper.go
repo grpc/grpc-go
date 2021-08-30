@@ -1,5 +1,3 @@
-// +build !appengine
-
 /*
  *
  * Copyright 2021 gRPC authors.
@@ -23,6 +21,7 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -306,8 +305,12 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		if fc.InlineRouteConfig != nil {
 			rc = *fc.InlineRouteConfig
 		} else {
-			rcPtr := l.rdsUpdates
+			rcPtr := atomic.LoadPointer(&l.rdsUpdates)
 			rcuPtr := (*map[string]xdsclient.RouteConfigUpdate)(rcPtr)
+			// This shouldn't happen, but this error protects against a panic.
+			if rcuPtr == nil {
+				return nil, errors.New("route configuration pointer is nil")
+			}
 			rcu := *rcuPtr
 			rc = rcu[fc.RouteConfigName]
 		}
