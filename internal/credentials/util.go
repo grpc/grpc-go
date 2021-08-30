@@ -20,7 +20,6 @@ package credentials
 
 import (
 	"crypto/tls"
-	"net/url"
 )
 
 const alpnProtoStrH2 = "h2"
@@ -50,15 +49,4 @@ func CloneTLSConfig(cfg *tls.Config) *tls.Config {
 	}
 
 	return cfg.Clone()
-}
-
-// RemoveServiceNameFromJwtURI removes RPC service name
-// from URI that will be used as audience in a self-signed
-// JWT token. It follows https://google.aip.dev/auth/4111.
-func RemoveServiceNameFromJwtURI(uri string) (string, error) {
-	parsed, err := url.Parse(uri)
-	if err != nil {
-		return "", err
-	}
-	return parsed.Scheme + "://" + parsed.Host + "/", nil
 }

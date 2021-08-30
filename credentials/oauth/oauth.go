@@ -23,14 +23,13 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"sync"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"golang.org/x/oauth2/jwt"
 	"google.golang.org/grpc/credentials"
-
-	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
 // TokenSource supplies PerRPCCredentials from an oauth2.TokenSource.
@@ -58,6 +57,16 @@ func (ts TokenSource) RequireTransportSecurity() bool {
 	return true
 }
 
+// removeServiceNameFromJWTURI removes RPC service name from URI.
+func removeServiceNameFromJWTURI(uri string) (string, error) {
+	parsed, err := url.Parse(uri)
+	if err != nil {
+		return "", err
+	}
+	parsed.Path = "/"
+	return parsed.String(), nil
+}
+
 type jwtAccess struct {
 	jsonKey []byte
 }
@@ -77,7 +86,9 @@ func NewJWTAccessFromKey(jsonKey []byte) (credentials.PerRPCCredentials, error) 
 }
 
 func (j jwtAccess) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	aud, err := credinternal.RemoveServiceNameFromJwtURI(uri[0])
+	// Remove RPC service name from URI that will be used as audience
+	// in a self-signed JWT token. It follows https://google.aip.dev/auth/4111.
+	aud, err := removeServiceNameFromJWTURI(uri[0])
 	if err != nil {
 		return nil, err
 	}
