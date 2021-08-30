@@ -2489,12 +2489,12 @@ func TestHTTPFilterInstantiation(t *testing.T) {
 		routeConfig RouteConfigUpdate
 		// A list of strings which will be built from iterating through the
 		// filters ["top level", "vh level", "route level", "route level"...]
-		// wantListOfErrors is the list of error strings that will be
-		// constructed from the deterministic iteration through the vh list and
-		// route list. The error string will be determined by the level of
-		// config that the filter builder receives (i.e. top level, vs. virtual
-		// host level vs. route level).
-		wantListOfErrors []string
+		// wantErrs is the list of error strings that will be constructed from
+		// the deterministic iteration through the vh list and route list. The
+		// error string will be determined by the level of config that the
+		// filter builder receives (i.e. top level, vs. virtual host level vs.
+		// route level).
+		wantErrs []string
 	}{
 		{
 			name: "one http filter no overrides",
@@ -2511,7 +2511,7 @@ func TestHTTPFilterInstantiation(t *testing.T) {
 						},
 					},
 				}},
-			wantListOfErrors: []string{topLevel},
+			wantErrs: []string{topLevel},
 		},
 		{
 			name: "one http filter vh override",
@@ -2531,7 +2531,7 @@ func TestHTTPFilterInstantiation(t *testing.T) {
 						},
 					},
 				}},
-			wantListOfErrors: []string{vhLevel},
+			wantErrs: []string{vhLevel},
 		},
 		{
 			name: "one http filter route override",
@@ -2551,7 +2551,7 @@ func TestHTTPFilterInstantiation(t *testing.T) {
 						},
 					},
 				}},
-			wantListOfErrors: []string{rLevel},
+			wantErrs: []string{rLevel},
 		},
 		// This tests the scenario where there are three http filters, and one
 		// gets overridden by route and one by virtual host.
@@ -2578,7 +2578,7 @@ func TestHTTPFilterInstantiation(t *testing.T) {
 						},
 					},
 				}},
-			wantListOfErrors: []string{topLevel, vhLevel, rLevel},
+			wantErrs: []string{topLevel, vhLevel, rLevel},
 		},
 		// This tests the scenario where there are three http filters, and two
 		// virtual hosts with different vh + route overrides for each virtual
@@ -2621,7 +2621,7 @@ func TestHTTPFilterInstantiation(t *testing.T) {
 						},
 					},
 				}},
-			wantListOfErrors: []string{topLevel, vhLevel, rLevel, rLevel, rLevel, vhLevel},
+			wantErrs: []string{topLevel, vhLevel, rLevel, rLevel, rLevel, vhLevel},
 		},
 	}
 	for _, test := range tests {
@@ -2632,16 +2632,16 @@ func TestHTTPFilterInstantiation(t *testing.T) {
 			fc.ConstructUsableRouteConfiguration(test.routeConfig)
 			// Build out list of errors by iterating through the virtual hosts and routes,
 			// and running the filters in route configurations.
-			var listOfErrors []string
+			var errs []string
 			for _, vh := range fc.VirtualHosts {
 				for _, r := range vh.Routes {
 					for _, int := range r.Interceptors {
-						listOfErrors = append(listOfErrors, int.AllowRPC(context.Background()).Error())
+						errs = append(errs, int.AllowRPC(context.Background()).Error())
 					}
 				}
 			}
-			if !cmp.Equal(listOfErrors, test.wantListOfErrors) {
-				t.Fatalf("List of errors %v, want %v", listOfErrors, test.wantListOfErrors)
+			if !cmp.Equal(errs, test.wantErrs) {
+				t.Fatalf("List of errors %v, want %v", errs, test.wantErrs)
 			}
 		})
 	}

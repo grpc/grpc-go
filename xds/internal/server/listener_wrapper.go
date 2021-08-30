@@ -314,7 +314,16 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			rcu := *rcuPtr
 			rc = rcu[fc.RouteConfigName]
 		}
-
+		// The filter chain will construct a usuable route table on each
+		// connection accept. This is done because preinstantiating every route
+		// table before it is needed for a connection would potentially lead to
+		// a lot of cpu time and memory allocated for route tables that will
+		// never be used. There was also a thought to cache this configuration,
+		// and reuse it for the next accepted connection. However, this would
+		// lead to a lot of code complexity (RDS Updates for a given route name
+		// can come it at any time), and connections aren't accepted too often,
+		// so this reinstantation of the Route Configuration is an acceptable
+		// tradeoff for simplicity.
 		if err := fc.ConstructUsableRouteConfiguration(rc); err != nil {
 			l.logger.Warningf("route configuration construction: %v", err)
 			conn.Close()
