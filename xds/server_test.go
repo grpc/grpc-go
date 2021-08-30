@@ -40,7 +40,9 @@ import (
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -105,6 +107,7 @@ var listenerWithFilterChains = &v3listenerpb.Listener{
 											Action: &v3routepb.Route_NonForwardingAction{},
 										}}}}},
 							},
+							HttpFilters: []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
 						}),
 					},
 				},
@@ -769,6 +772,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 												Action: &v3routepb.Route_NonForwardingAction{},
 											}}}}},
 								},
+								HttpFilters: []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
 							}),
 						},
 					},

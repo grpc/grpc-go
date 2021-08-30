@@ -244,6 +244,20 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 		// Save name/config
 		ret = append(ret, HTTPFilter{Name: name, Filter: httpFilter, Config: config})
 	}
+	// "Validation will fail if a terminal filter is not the last filter in the
+	// chain or if a non-terminal filter is the last filter in the chain." - A39
+	if len(ret) == 0 {
+		return nil, fmt.Errorf("http filters list is empty")
+	}
+	var i int
+	for ; i < len(ret)-1; i++ {
+		if ret[i].Filter.IsTerminal() {
+			return nil, fmt.Errorf("http filter %q is a terminal filter but it is not last in the filter chain", ret[i].Name)
+		}
+	}
+	if !ret[i].Filter.IsTerminal() {
+		return nil, fmt.Errorf("http filter %q is not a terminal filter", ret[len(ret)-1].Name)
+	}
 	return ret, nil
 }
 

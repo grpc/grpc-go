@@ -33,6 +33,8 @@ import (
 
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/httpfilter"
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
+	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/version"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -139,6 +141,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 											ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
 										}}}}}}},
 					},
+					HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 					CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
 						MaxStreamDuration: durationpb.New(time.Second),
 					},
@@ -146,6 +149,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		})
 		v3LisWithFilters = func(fs ...*v3httppb.HttpFilter) *anypb.Any {
+			fs = append(fs, emptyRouterFilter)
 			return testutils.MarshalAny(&v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
@@ -290,7 +294,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			name:      "v3 with no filters",
 			resources: []*anypb.Any{v3LisWithFilters()},
 			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters()},
+				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList, Raw: v3LisWithFilters()},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -298,16 +302,44 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
+			name: "v3 no terminal filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name: v3LDSTarget,
+				ApiListener: &v3listenerpb.ApiListener{
+					ApiListener: testutils.MarshalAny(
+						&v3httppb.HttpConnectionManager{
+							RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+								Rds: &v3httppb.Rds{
+									ConfigSource: &v3corepb.ConfigSource{
+										ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+									},
+									RouteConfigName: v3RouteConfigName,
+								},
+							},
+							CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
+								MaxStreamDuration: durationpb.New(time.Second),
+							},
+						}),
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    true,
+		},
+		{
 			name:      "v3 with custom filter",
 			resources: []*anypb.Any{v3LisWithFilters(customFilter)},
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
-					HTTPFilters: []HTTPFilter{{
-						Name:   "customFilter",
-						Filter: httpFilter{},
-						Config: filterConfig{Cfg: customFilterConfig},
-					}},
+					HTTPFilters: []HTTPFilter{
+						{
+							Name:   "customFilter",
+							Filter: httpFilter{},
+							Config: filterConfig{Cfg: customFilterConfig},
+						},
+						routerFilter,
+					},
 					Raw: v3LisWithFilters(customFilter),
 				},
 			},
@@ -322,11 +354,14 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
-					HTTPFilters: []HTTPFilter{{
-						Name:   "customFilter",
-						Filter: httpFilter{},
-						Config: filterConfig{Cfg: customFilterTypedStructConfig},
-					}},
+					HTTPFilters: []HTTPFilter{
+						{
+							Name:   "customFilter",
+							Filter: httpFilter{},
+							Config: filterConfig{Cfg: customFilterTypedStructConfig},
+						},
+						routerFilter,
+					},
 					Raw: v3LisWithFilters(typedStructFilter),
 				},
 			},
@@ -341,11 +376,14 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
-					HTTPFilters: []HTTPFilter{{
-						Name:   "customFilter",
-						Filter: httpFilter{},
-						Config: filterConfig{Cfg: customFilterConfig},
-					}},
+					HTTPFilters: []HTTPFilter{
+						{
+							Name:   "customFilter",
+							Filter: httpFilter{},
+							Config: filterConfig{Cfg: customFilterConfig},
+						},
+						routerFilter,
+					},
 					Raw: v3LisWithFilters(customOptionalFilter),
 				},
 			},
@@ -375,7 +413,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						Name:   "customFilter2",
 						Filter: httpFilter{},
 						Config: filterConfig{Cfg: customFilterConfig},
-					}},
+					},
+						routerFilter,
+					},
 					Raw: v3LisWithFilters(customFilter, customFilter2),
 				},
 			},
@@ -399,6 +439,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					RouteConfigName:   v3RouteConfigName,
 					MaxStreamDuration: time.Second,
 					Raw:               v3LisWithFilters(serverOnlyOptionalCustomFilter),
+					HTTPFilters:       routerFilterList,
 				},
 			},
 			wantMD: UpdateMetadata{
@@ -412,11 +453,13 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
-					HTTPFilters: []HTTPFilter{{
-						Name:   "clientOnlyCustomFilter",
-						Filter: clientOnlyHTTPFilter{},
-						Config: filterConfig{Cfg: clientOnlyCustomFilterConfig},
-					}},
+					HTTPFilters: []HTTPFilter{
+						{
+							Name:   "clientOnlyCustomFilter",
+							Filter: clientOnlyHTTPFilter{},
+							Config: filterConfig{Cfg: clientOnlyCustomFilterConfig},
+						},
+						routerFilter},
 					Raw: v3LisWithFilters(clientOnlyCustomFilter),
 				},
 			},
@@ -453,6 +496,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				v3LDSTarget: {
 					RouteConfigName:   v3RouteConfigName,
 					MaxStreamDuration: time.Second,
+					HTTPFilters:       routerFilterList,
 					Raw:               v3LisWithFilters(unknownOptionalFilter),
 				},
 			},
@@ -476,7 +520,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			name:      "v3 listener resource",
 			resources: []*anypb.Any{v3LisWithFilters()},
 			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters()},
+				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList, Raw: v3LisWithFilters()},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -495,6 +539,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						}}},
 					MaxStreamDuration: time.Second,
 					Raw:               v3LisWithInlineRoute,
+					HTTPFilters:       routerFilterList,
 				},
 			},
 			wantMD: UpdateMetadata{
@@ -507,7 +552,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			resources: []*anypb.Any{v2Lis, v3LisWithFilters()},
 			wantUpdate: map[string]ListenerUpdate{
 				v2LDSTarget: {RouteConfigName: v2RouteConfigName, Raw: v2Lis},
-				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters()},
+				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters(), HTTPFilters: routerFilterList},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -530,7 +575,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 			wantUpdate: map[string]ListenerUpdate{
 				v2LDSTarget: {RouteConfigName: v2RouteConfigName, Raw: v2Lis},
-				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters()},
+				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters(), HTTPFilters: routerFilterList},
 				"bad":       {},
 			},
 			wantMD:  errMD,
@@ -561,6 +606,10 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 	)
 
 	var (
+		serverOnlyCustomFilter = &v3httppb.HttpFilter{
+			Name:       "serverOnlyCustomFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
+		}
 		routeConfig = &v3routepb.RouteConfiguration{
 			Name: "routeName",
 			VirtualHosts: []*v3routepb.VirtualHost{{
@@ -584,6 +633,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 							RouteConfig: routeConfig,
 						},
+						HttpFilters: []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
 					}),
 				},
 			},
@@ -827,9 +877,38 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
 										},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
+							{
+								Name: "name",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+											RouteConfig: routeConfig,
+										},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
+									}),
+								},
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "duplicate filter name",
+		},
+		{
+			name: "no terminal filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
 							{
 								Name: "name",
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
@@ -846,7 +925,63 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			})},
 			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
 			wantMD:     errMD,
-			wantErr:    "duplicate filter name",
+			wantErr:    "http filters list is empty",
+		},
+		{
+			name: "terminal filter not last",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "name",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+											RouteConfig: routeConfig,
+										},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter, serverOnlyCustomFilter},
+									}),
+								},
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "is a terminal filter but it is not last in the filter chain",
+		},
+		{
+			name: "last not terminal filter",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "name",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+											RouteConfig: routeConfig,
+										},
+										HttpFilters: []*v3httppb.HttpFilter{serverOnlyCustomFilter},
+									}),
+								},
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "is not a terminal filter",
 		},
 		{
 			name: "unsupported oneof in typed config of http filter",
@@ -1076,7 +1211,10 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 											srcPrefixMap: map[string]*sourcePrefixEntry{
 												unspecifiedPrefixMapKey: {
 													srcPortMap: map[int]*FilterChain{
-														0: {InlineRouteConfig: inlineRouteConfig},
+														0: {
+															InlineRouteConfig: inlineRouteConfig,
+															HTTPFilters:       routerFilterList,
+														},
 													},
 												},
 											},
@@ -1170,6 +1308,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 																IdentityCertName:     "identityCertName",
 															},
 															InlineRouteConfig: inlineRouteConfig,
+															HTTPFilters:       routerFilterList,
 														},
 													},
 												},
@@ -1184,6 +1323,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									IdentityCertName:     "defaultIdentityCertName",
 								},
 								InlineRouteConfig: inlineRouteConfig,
+								HTTPFilters:       routerFilterList,
 							},
 						},
 					},
@@ -1220,6 +1360,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 																RequireClientCert:    true,
 															},
 															InlineRouteConfig: inlineRouteConfig,
+															HTTPFilters:       routerFilterList,
 														},
 													},
 												},
@@ -1237,6 +1378,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									RequireClientCert:    true,
 								},
 								InlineRouteConfig: inlineRouteConfig,
+								HTTPFilters:       routerFilterList,
 							},
 						},
 					},
@@ -1291,6 +1433,10 @@ func (httpFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.
 	return filterConfig{Override: override}, nil
 }
 
+func (httpFilter) IsTerminal() bool {
+	return false
+}
+
 // errHTTPFilter returns errors no matter what is passed to ParseFilterConfig.
 type errHTTPFilter struct {
 	httpfilter.ClientInterceptorBuilder
@@ -1304,6 +1450,10 @@ func (errHTTPFilter) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConf
 
 func (errHTTPFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
 	return nil, fmt.Errorf("error from ParseFilterConfigOverride")
+}
+
+func (errHTTPFilter) IsTerminal() bool {
+	return false
 }
 
 func init() {
@@ -1328,6 +1478,10 @@ func (serverOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message) (h
 	return filterConfig{Override: override}, nil
 }
 
+func (serverOnlyHTTPFilter) IsTerminal() bool {
+	return false
+}
+
 // clientOnlyHTTPFilter does not implement ServerInterceptorBuilder
 type clientOnlyHTTPFilter struct {
 	httpfilter.ClientInterceptorBuilder
@@ -1341,6 +1495,10 @@ func (clientOnlyHTTPFilter) ParseFilterConfig(cfg proto.Message) (httpfilter.Fil
 
 func (clientOnlyHTTPFilter) ParseFilterConfigOverride(override proto.Message) (httpfilter.FilterConfig, error) {
 	return filterConfig{Override: override}, nil
+}
+
+func (clientOnlyHTTPFilter) IsTerminal() bool {
+	return false
 }
 
 var customFilterConfig = &anypb.Any{
