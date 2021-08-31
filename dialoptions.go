@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/envconfig"
@@ -50,7 +51,6 @@ type dialOptions struct {
 	bs              internalbackoff.Strategy
 	block           bool
 	returnLastError bool
-	insecure        bool
 	timeout         time.Duration
 	scChan          <-chan ServiceConfig
 	authority       string
@@ -303,7 +303,7 @@ func WithReturnConnectionError() DialOption {
 // set.
 func WithInsecure() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.insecure = true
+		o.copts.TransportCredentials = insecure.NewCredentials()
 	})
 }
 

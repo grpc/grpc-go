@@ -490,27 +490,36 @@ func (s) TestDialContextFailFast(t *testing.T) {
 }
 
 // securePerRPCCredentials always requires transport security.
-type securePerRPCCredentials struct{}
-
-func (c securePerRPCCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	return nil, nil
+type securePerRPCCredentials struct {
+	credentials.PerRPCCredentials
 }
 
 func (c securePerRPCCredentials) RequireTransportSecurity() bool {
 	return true
 }
 
+type fakeBundleCreds struct {
+	credentials.Bundle
+}
+
 func (s) TestCredentialsMisuse(t *testing.T) {
-	tlsCreds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
+	// Use of no transport creds and no creds bundle must fail.
+	if _, err := Dial("passthrough:///Non-Existent.Server:80"); err != errNoTransportSecurity {
+		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errNoTransportSecurity)
+	}
+
+	// Use of both transport creds and creds bundle must fail.
+	creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
 	if err != nil {
 		t.Fatalf("Failed to create authenticator %v", err)
 	}
-	// Two conflicting credential configurations
-	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithTransportCredentials(tlsCreds), WithBlock(), WithInsecure()); err != errCredentialsConflict {
-		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errCredentialsConflict)
+	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithTransportCredentials(creds), WithCredentialsBundle(&fakeBundleCreds{})); err != errTransportCredsAndBundle {
+		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredsAndBundle)
 	}
-	// security info on insecure connection
-	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithPerRPCCredentials(securePerRPCCredentials{}), WithBlock(), WithInsecure()); err != errTransportCredentialsMissing {
+
+	// Use of perRPC creds requiring transport security over an insecure
+	// transport must fail.
+	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithPerRPCCredentials(securePerRPCCredentials{}), WithInsecure()); err != errTransportCredentialsMissing {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredentialsMissing)
 	}
 }

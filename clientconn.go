@@ -87,9 +87,6 @@ var (
 	// information (e.g., OAuth2 token) which requires secure connection on an insecure
 	// connection.
 	errTransportCredentialsMissing = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportCredentials() to set)")
-	// errCredentialsConflict indicates that grpc.WithTransportCredentials()
-	// and grpc.WithInsecure() are both called for a connection.
-	errCredentialsConflict = errors.New("grpc: transport credentials are set for an insecure connection (grpc.WithTransportCredentials() and grpc.WithInsecure() are both called)")
 )
 
 const (
@@ -177,17 +174,17 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		cc.csMgr.channelzID = cc.channelzID
 	}
 
-	if !cc.dopts.insecure {
-		if cc.dopts.copts.TransportCredentials == nil && cc.dopts.copts.CredsBundle == nil {
-			return nil, errNoTransportSecurity
-		}
-		if cc.dopts.copts.TransportCredentials != nil && cc.dopts.copts.CredsBundle != nil {
-			return nil, errTransportCredsAndBundle
-		}
-	} else {
-		if cc.dopts.copts.TransportCredentials != nil || cc.dopts.copts.CredsBundle != nil {
-			return nil, errCredentialsConflict
-		}
+	if cc.dopts.copts.TransportCredentials == nil && cc.dopts.copts.CredsBundle == nil {
+		return nil, errNoTransportSecurity
+	}
+	if cc.dopts.copts.TransportCredentials != nil && cc.dopts.copts.CredsBundle != nil {
+		return nil, errTransportCredsAndBundle
+	}
+	transportCreds := cc.dopts.copts.TransportCredentials
+	if transportCreds == nil {
+		transportCreds = cc.dopts.copts.CredsBundle.TransportCredentials()
+	}
+	if transportCreds != nil && transportCreds.Info().SecurityProtocol == "insecure" {
 		for _, cd := range cc.dopts.copts.PerRPCCredentials {
 			if cd.RequireTransportSecurity() {
 				return nil, errTransportCredentialsMissing
