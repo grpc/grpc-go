@@ -21,10 +21,13 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/grpclog"
@@ -208,12 +211,13 @@ type listenerWrapper struct {
 	mode ServingMode
 	// Filter chains received as part of the last good update.
 	filterChains *xdsclient.FilterChainManager
+
 	// rdsHandler is used for any dynamic RDS resources specified in a LDS
 	// update.
 	rdsHandler *rdsHandler
 	// rdsUpdates are the RDS resources received from the management
 	// server, keyed on the RouteName of the RDS resource.
-	rdsUpdates map[string]xdsclient.RouteConfigUpdate // TODO: if this will be read in accept, this will need a read lock as well.
+	rdsUpdates unsafe.Pointer // map[string]xdsclient.RouteConfigUpdate
 	// ldsUpdateCh is a channel for XDSClient LDS updates.
 	ldsUpdateCh chan ldsUpdateWithError
 	// rdsUpdateCh is a channel for XDSClient RDS updates.
@@ -297,11 +301,35 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			conn.Close()
 			continue
 		}
-		// TODO: once matched an accepted connection to a filter chain,
-		// instantiate the HTTP filters in the filter chain + the filter
-		// overrides, pipe filters and route into connection, which will
-		// eventually be passed to xdsUnary/Stream interceptors.
-		return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
+		var rc xdsclient.RouteConfigUpdate
+		if fc.InlineRouteConfig != nil {
+			rc = *fc.InlineRouteConfig
+		} else {
+			rcPtr := atomic.LoadPointer(&l.rdsUpdates)
+			rcuPtr := (*map[string]xdsclient.RouteConfigUpdate)(rcPtr)
+			// This shouldn't happen, but this error protects against a panic.
+			if rcuPtr == nil {
+				return nil, errors.New("route configuration pointer is nil")
+			}
+			rcu := *rcuPtr
+			rc = rcu[fc.RouteConfigName]
+		}
+		// The filter chain will construct a usuable route table on each
+		// connection accept. This is done because preinstantiating every route
+		// table before it is needed for a connection would potentially lead to
+		// a lot of cpu time and memory allocated for route tables that will
+		// never be used. There was also a thought to cache this configuration,
+		// and reuse it for the next accepted connection. However, this would
+		// lead to a lot of code complexity (RDS Updates for a given route name
+		// can come it at any time), and connections aren't accepted too often,
+		// so this reinstantation of the Route Configuration is an acceptable
+		// tradeoff for simplicity.
+		if err := fc.ConstructUsableRouteConfiguration(rc); err != nil {
+			l.logger.Warningf("route configuration construction: %v", err)
+			conn.Close()
+			continue
+		}
+		return &connWrapper{Conn: conn, filterChain: fc, parent: l, virtualHosts: fc.VirtualHosts}, nil
 	}
 }
 
@@ -367,7 +395,7 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 		// continue to use the old configuration.
 		return
 	}
-	l.rdsUpdates = update.updates
+	atomic.StorePointer(&l.rdsUpdates, unsafe.Pointer(&update.updates))
 
 	l.switchMode(l.filterChains, ServingModeServing, nil)
 	l.goodUpdate.Fire()
