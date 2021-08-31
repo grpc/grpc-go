@@ -32,52 +32,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func (s) TestMatchTypeForDomain(t *testing.T) {
-	tests := []struct {
-		d    string
-		want domainMatchType
-	}{
-		{d: "", want: domainMatchTypeInvalid},
-		{d: "*", want: domainMatchTypeUniversal},
-		{d: "bar.*", want: domainMatchTypePrefix},
-		{d: "*.abc.com", want: domainMatchTypeSuffix},
-		{d: "foo.bar.com", want: domainMatchTypeExact},
-		{d: "foo.*.com", want: domainMatchTypeInvalid},
-	}
-	for _, tt := range tests {
-		if got := matchTypeForDomain(tt.d); got != tt.want {
-			t.Errorf("matchTypeForDomain(%q) = %v, want %v", tt.d, got, tt.want)
-		}
-	}
-}
-
-func (s) TestMatch(t *testing.T) {
-	tests := []struct {
-		name        string
-		domain      string
-		host        string
-		wantTyp     domainMatchType
-		wantMatched bool
-	}{
-		{name: "invalid-empty", domain: "", host: "", wantTyp: domainMatchTypeInvalid, wantMatched: false},
-		{name: "invalid", domain: "a.*.b", host: "", wantTyp: domainMatchTypeInvalid, wantMatched: false},
-		{name: "universal", domain: "*", host: "abc.com", wantTyp: domainMatchTypeUniversal, wantMatched: true},
-		{name: "prefix-match", domain: "abc.*", host: "abc.123", wantTyp: domainMatchTypePrefix, wantMatched: true},
-		{name: "prefix-no-match", domain: "abc.*", host: "abcd.123", wantTyp: domainMatchTypePrefix, wantMatched: false},
-		{name: "suffix-match", domain: "*.123", host: "abc.123", wantTyp: domainMatchTypeSuffix, wantMatched: true},
-		{name: "suffix-no-match", domain: "*.123", host: "abc.1234", wantTyp: domainMatchTypeSuffix, wantMatched: false},
-		{name: "exact-match", domain: "foo.bar", host: "foo.bar", wantTyp: domainMatchTypeExact, wantMatched: true},
-		{name: "exact-no-match", domain: "foo.bar.com", host: "foo.bar", wantTyp: domainMatchTypeExact, wantMatched: false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if gotTyp, gotMatched := match(tt.domain, tt.host); gotTyp != tt.wantTyp || gotMatched != tt.wantMatched {
-				t.Errorf("match() = %v, %v, want %v, %v", gotTyp, gotMatched, tt.wantTyp, tt.wantMatched)
-			}
-		})
-	}
-}
-
 func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 	var (
 		oneExactMatch = &xdsclient.VirtualHost{
@@ -121,7 +75,7 @@ func (s) TestFindBestMatchingVirtualHost(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := findBestMatchingVirtualHost(tt.host, tt.vHosts); !cmp.Equal(got, tt.want, cmp.Comparer(proto.Equal)) {
+			if got := xdsclient.FindBestMatchingVirtualHost(tt.host, tt.vHosts); !cmp.Equal(got, tt.want, cmp.Comparer(proto.Equal)) {
 				t.Errorf("findBestMatchingxdsclient.VirtualHost() = %v, want %v", got, tt.want)
 			}
 		})
