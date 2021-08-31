@@ -27,6 +27,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -352,5 +353,84 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	// Make another RPC with `waitForReady` set and expect this to succeed.
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+}
+
+// TestServerSideXDS_RouteConfiguration is an e2e test which verifies routing
+// functionality. The xDS enabled server will be set up with route configuration
+// where the route configuration has routes with the correct routing actions
+// (NonForwardingAction), and the RPC's matching those routes should proceed as
+// normal.
+func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
+	lis, cleanup := setupGRPCServer(t)
+	defer cleanup()
+
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("failed to retrieve host and port of server: %v", err)
+	}
+	const serviceName = "my-service-fallback"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     xdsClientNodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+
+	// Create an inbound xDS listener resource with route configuration which
+	// selectively will allow RPC's through or not.
+	inboundLis := e2e.ServerListenerWithInterestingRouteConfiguration(host, port)
+	resources.Listeners = append(resources.Listeners, inboundLis)
+
+	// Setup the management server with client and server-side resources.
+	if err := managementServer.Update(resources); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithInsecure(), grpc.WithResolvers(xdsResolverBuilder))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testpb.NewTestServiceClient(cc)
+
+	// This Empty Call should match to a route with a correct action
+	// (NonForwardingAction). Thus, this RPC should proceed as normal.
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+
+	// This Unary Call should match to a route with an incorrect action. Thus,
+	// this RPC should not go through as per A36, and this call should receive
+	// an error with codes.Unavailable.
+	if _, err = client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("client.UnaryCall() = _, %v, want _, error code %s", err, codes.Unavailable)
+	}
+
+	// This Streaming Call should match to a route with an incorrect action.
+	// Thus, this RPC should not go through as per A36, and this call should
+	// receive an error with codes.Unavailable.
+	stream, err := client.StreamingInputCall(ctx)
+	if err != nil {
+		t.Fatalf("StreamingInputCall(_) = _, %v, want <nil>", err)
+	}
+	_, err = stream.CloseAndRecv()
+	if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "the incoming RPC matched to a route that was not of action type non forwarding") {
+		t.Fatalf("streaming RPC should have been denied")
+	}
+
+	// This Full Duplex should not match to a route, and thus should return an
+	// error and not proceed.
+	dStream, err := client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("FullDuplexCall(_) = _, %v, want <nil>", err)
+	}
+	_, err = dStream.Recv()
+	if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "the incoming RPC did not match a configured Route") {
+		t.Fatalf("streaming RPC should have been denied")
 	}
 }
