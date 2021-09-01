@@ -67,11 +67,6 @@ type FilterChain struct {
 	//
 	// Only one of RouteConfigName and InlineRouteConfig is set.
 	InlineRouteConfig *RouteConfigUpdate
-
-	// VirtualHosts are the virtual hosts ready to be used in the xds interceptors.
-	// It contains a way to match routes using a matcher and also instantiates
-	// HTTPFilter overrides to simply run incoming RPC's through if they are selected.
-	VirtualHosts []VirtualHostWithInterceptors
 }
 
 // VirtualHostWithInterceptors captures information present in a VirtualHost
@@ -98,17 +93,16 @@ type RouteWithInterceptors struct {
 
 // ConstructUsableRouteConfiguration takes Route Configuration and converts it
 // into matchable route configuration, with instantiated HTTP Filters per route.
-func (f *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdate) error {
+func (f *FilterChain) ConstructUsableRouteConfiguration(config RouteConfigUpdate) ([]VirtualHostWithInterceptors, error) {
 	vhs := make([]VirtualHostWithInterceptors, len(config.VirtualHosts))
 	for _, vh := range config.VirtualHosts {
 		vhwi, err := f.convertVirtualHost(vh)
 		if err != nil {
-			return fmt.Errorf("virtual host construction: %v", err)
+			return nil, fmt.Errorf("virtual host construction: %v", err)
 		}
 		vhs = append(vhs, vhwi)
 	}
-	f.VirtualHosts = vhs
-	return nil
+	return vhs, nil
 }
 
 func (f *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHostWithInterceptors, error) {
