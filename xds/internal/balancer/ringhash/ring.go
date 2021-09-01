@@ -144,7 +144,7 @@ func normalizeWeights(subConns map[resolver.Address]*subConn) (_ []subConnWithWe
 	}
 	// Sort the addresses to return consistent results.
 	//
-	// Note: this might not be necessary? But this makes sure the ring is
+	// Note: this might not be necessary, but this makes sure the ring is
 	// consistent as long as the addresses are the same, for example, in cases
 	// where an address is added and then removed, the RPCs will still pick the
 	// same old SubConn.
