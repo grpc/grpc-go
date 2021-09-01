@@ -97,6 +97,9 @@ func DefaultClientResources(params ResourceParams) UpdateOptions {
 	}
 }
 
+// RouterHTTPFilter is the HTTP Filter configuration for the Router filter.
+var RouterHTTPFilter = HTTPFilter("router", &v3routerpb.Router{})
+
 // DefaultClientListener returns a basic xds Listener resource to be used on
 // the client side.
 func DefaultClientListener(target, routeName string) *v3listenerpb.Listener {
@@ -212,6 +215,7 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 												Action: &v3routepb.Route_NonForwardingAction{},
 											}}}}},
 								},
+								HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
 							}),
 						},
 					},
@@ -256,6 +260,7 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 												Action: &v3routepb.Route_NonForwardingAction{},
 											}}}}},
 								},
+								HttpFilters: []*v3httppb.HttpFilter{RouterHTTPFilter},
 							}),
 						},
 					},

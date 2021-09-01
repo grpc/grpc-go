@@ -1122,7 +1122,10 @@ func stayConnected(cc *ClientConn) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	for state := cc.GetState(); state != connectivity.Shutdown && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
+	for {
 		cc.Connect()
+		if state := cc.GetState(); state == connectivity.Shutdown || !cc.WaitForStateChange(ctx, state) {
+			return
+		}
 	}
 }

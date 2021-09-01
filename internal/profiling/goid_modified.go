@@ -1,3 +1,4 @@
+//go:build grpcgoid
 // +build grpcgoid
 
 /*

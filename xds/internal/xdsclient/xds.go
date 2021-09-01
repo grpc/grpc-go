@@ -244,6 +244,20 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 		// Save name/config
 		ret = append(ret, HTTPFilter{Name: name, Filter: httpFilter, Config: config})
 	}
+	// "Validation will fail if a terminal filter is not the last filter in the
+	// chain or if a non-terminal filter is the last filter in the chain." - A39
+	if len(ret) == 0 {
+		return nil, fmt.Errorf("http filters list is empty")
+	}
+	var i int
+	for ; i < len(ret)-1; i++ {
+		if ret[i].Filter.IsTerminal() {
+			return nil, fmt.Errorf("http filter %q is a terminal filter but it is not last in the filter chain", ret[i].Name)
+		}
+	}
+	if !ret[i].Filter.IsTerminal() {
+		return nil, fmt.Errorf("http filter %q is not a terminal filter", ret[len(ret)-1].Name)
+	}
 	return ret, nil
 }
 
@@ -586,6 +600,9 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	case v3clusterpb.Cluster_ROUND_ROBIN:
 		lbPolicy = nil // The default is round_robin, and there's no config to set.
 	case v3clusterpb.Cluster_RING_HASH:
+		if !env.RingHashSupport {
+			return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+		}
 		rhc := cluster.GetRingHashLbConfig()
 		if rhc.GetHashFunction() != v3clusterpb.Cluster_RingHashLbConfig_XX_HASH {
 			return ClusterUpdate{}, fmt.Errorf("unsupported ring_hash hash function %v in response: %+v", rhc.GetHashFunction(), cluster)

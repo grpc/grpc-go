@@ -1,5 +1,3 @@
-// +build go1.13
-
 /*
  *
  * Copyright 2020 gRPC authors.
@@ -27,10 +25,11 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/testdata"
@@ -154,15 +153,23 @@ func readAndVerifyKeyMaterial(ctx context.Context, kmr kmReader, wantKM *KeyMate
 }
 
 func compareKeyMaterial(got, want *KeyMaterial) error {
-	// TODO(easwars): Remove all references to reflect.DeepEqual and use
-	// cmp.Equal instead. Currently, the later panics because x509.Certificate
-	// type defines an Equal method, but does not check for nil. This has been
-	// fixed in
-	// https://github.com/golang/go/commit/89865f8ba64ccb27f439cce6daaa37c9aa38f351,
-	// but this is only available starting go1.14. So, once we remove support
-	// for go1.13, we can make the switch.
-	if !reflect.DeepEqual(got, want) {
-		return fmt.Errorf("provider.KeyMaterial() = %+v, want %+v", got, want)
+	if len(got.Certs) != len(want.Certs) {
+		return fmt.Errorf("keyMaterial certs = %+v, want %+v", got, want)
+	}
+	for i := 0; i < len(got.Certs); i++ {
+		if !got.Certs[i].Leaf.Equal(want.Certs[i].Leaf) {
+			return fmt.Errorf("keyMaterial certs = %+v, want %+v", got, want)
+		}
+	}
+
+	// x509.CertPool contains only unexported fields some of which contain other
+	// unexported fields. So usage of cmp.AllowUnexported() or
+	// cmpopts.IgnoreUnexported() does not help us much here. Also, the standard
+	// library does not provide a way to compare CertPool values. Comparing the
+	// subjects field of the certs in the CertPool seems like a reasonable
+	// approach.
+	if gotR, wantR := got.Roots.Subjects(), want.Roots.Subjects(); !cmp.Equal(gotR, wantR, cmpopts.EquateEmpty()) {
+		return fmt.Errorf("keyMaterial roots = %v, want %v", gotR, wantR)
 	}
 	return nil
 }
