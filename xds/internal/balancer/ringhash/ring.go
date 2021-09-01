@@ -43,6 +43,7 @@ type subConnWithWeight struct {
 	sc     *subConn
 	weight float64
 }
+
 type ringEntry struct {
 	idx  int
 	hash uint64
@@ -76,7 +77,7 @@ func newRing(subConns map[resolver.Address]*subConn, minRingSize, maxRingSize ui
 	if err != nil {
 		return nil, err
 	}
-	// Normalized weightes for {3,3,4} is {0.3,0.3,0.4}.
+	// Normalized weights for {3,3,4} is {0.3,0.3,0.4}.
 
 	// Scale up the size of the ring such that the least-weighted host gets a
 	// whole number of hashes on the ring.
@@ -133,15 +134,10 @@ func normalizeWeights(subConns map[resolver.Address]*subConn) (_ []subConnWithWe
 	}
 	weightSumF := float64(weightSum)
 	ret := make([]subConnWithWeight, 0, len(subConns))
-	first := true
+	min = math.MaxFloat64
 	for a, sc := range subConns {
 		nw := float64(a.Metadata.(uint32)) / weightSumF
 		ret = append(ret, subConnWithWeight{sc: sc, weight: nw})
-		if first {
-			min = nw
-			first = false
-			continue
-		}
 		if nw < min {
 			min = nw
 		}
