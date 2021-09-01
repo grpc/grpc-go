@@ -32,11 +32,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
+
+var logger = grpclog.Component("rbac")
 
 var getConnection = transport.GetConnection
 
@@ -69,6 +72,7 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	// and then be used for the whole chain of RBAC Engines.
 	rpcData, err := newRPCData(ctx)
 	if err != nil {
+		logger.Errorf("missing fields in ctx %+v: %v", ctx, err)
 		return status.Errorf(codes.Internal, "missing fields in ctx %+v: %v", ctx, err)
 	}
 	for _, engine := range cre.chainedEngines {
