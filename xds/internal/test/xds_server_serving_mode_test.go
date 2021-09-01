@@ -86,7 +86,7 @@ func (mt *modeTracker) waitForUpdate(ctx context.Context) error {
 // xDS enabled gRPC servers. It verifies that appropriate mode changes happen in
 // the server, and also verifies behavior of clientConns under these modes.
 func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, resolver, cleanup := setupManagementServer(t)
+	managementServer, nodeID, bootstrapContents, _, cleanup := setupManagementServer(t)
 	defer cleanup()
 
 	// Configure xDS credentials to be used on the server-side.
@@ -161,7 +161,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Create a ClientConn to the first listener and make a successful RPCs.
-	cc1, err := grpc.Dial(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc1, err := grpc.Dial(lis1.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -169,7 +169,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	waitForSuccessfulRPC(ctx, t, cc1)
 
 	// Create a ClientConn to the second listener and make a successful RPCs.
-	cc2, err := grpc.Dial(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	cc2, err := grpc.Dial(lis2.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
@@ -213,7 +213,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// short timeout since we expect this to fail.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if _, err := grpc.DialContext(sCtx, lis1.Addr().String(), grpc.WithBlock(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver)); err == nil {
+	if _, err := grpc.DialContext(sCtx, lis1.Addr().String(), grpc.WithBlock(), grpc.WithTransportCredentials(insecure.NewCredentials())); err == nil {
 		t.Fatal("successfully created clientConn to a server in \"not-serving\" state")
 	}
 
