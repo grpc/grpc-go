@@ -70,6 +70,10 @@ func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, er
 	return &testpb.Empty{}, nil
 }
 
+func (*testService) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	return &testpb.SimpleResponse{}, nil
+}
+
 var (
 	// Globals corresponding to the single instance of the xDS management server
 	// which is spawned for all the tests in this package.
