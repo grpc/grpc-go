@@ -86,6 +86,9 @@ func (mt *modeTracker) waitForUpdate(ctx context.Context) error {
 // xDS enabled gRPC servers. It verifies that appropriate mode changes happen in
 // the server, and also verifies behavior of clientConns under these modes.
 func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
+	managementServer, nodeID, bootstrapContents, _, cleanup := setupManagementServer(t)
+	defer cleanup()
+
 	// Configure xDS credentials to be used on the server-side.
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{
 		FallbackCreds: insecure.NewCredentials(),
@@ -131,7 +134,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 	listener2 := e2e.DefaultServerListener(host2, port2, e2e.SecurityLevelNone)
 	resources := e2e.UpdateOptions{
-		NodeID:    xdsClientNodeID,
+		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener1, listener2},
 	}
 	if err := managementServer.Update(resources); err != nil {
@@ -176,7 +179,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// Update the management server to remove the second listener resource. This
 	// should push only the second listener into "not-serving" mode.
 	if err := managementServer.Update(e2e.UpdateOptions{
-		NodeID:    xdsClientNodeID,
+		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener1},
 	}); err != nil {
 		t.Error(err)
@@ -193,7 +196,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// well. This should push the first listener into "not-serving" mode. Second
 	// listener is already in "not-serving" mode.
 	if err := managementServer.Update(e2e.UpdateOptions{
-		NodeID:    xdsClientNodeID,
+		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{},
 	}); err != nil {
 		t.Error(err)
@@ -216,7 +219,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 
 	// Update the management server with both listener resources.
 	if err := managementServer.Update(e2e.UpdateOptions{
-		NodeID:    xdsClientNodeID,
+		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener1, listener2},
 	}); err != nil {
 		t.Error(err)
