@@ -295,7 +295,7 @@ func TestSDKEnd2End(t *testing.T) {
 					Body: []byte("hi"),
 				},
 			}
-			if err := stream.Send(req); err != nil {
+			if err := stream.Send(req); err != nil && err != io.EOF {
 				t.Fatalf("failed stream.Send err: %v", err)
 			}
 			_, err = stream.CloseAndRecv()
