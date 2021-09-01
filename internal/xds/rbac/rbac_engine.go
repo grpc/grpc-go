@@ -72,8 +72,8 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	// and then be used for the whole chain of RBAC Engines.
 	rpcData, err := newRPCData(ctx)
 	if err != nil {
-		logger.Errorf("missing fields in ctx %+v: %v", ctx, err)
-		return status.Errorf(codes.Internal, "missing fields in ctx %+v: %v", ctx, err)
+		logger.Errorf("newRPCData: %v", err)
+		return status.Errorf(codes.Internal, "gRPC RBAC: %v", err)
 	}
 	for _, engine := range cre.chainedEngines {
 		matchingPolicyName, ok := engine.findMatchingPolicy(rpcData)
