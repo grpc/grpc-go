@@ -1,6 +1,3 @@
-//go:build go1.12
-// +build go1.12
-
 /*
  *
  * Copyright 2019 gRPC authors.
@@ -210,7 +207,7 @@ func (s) TestSubConnStateChange(t *testing.T) {
 	defer cleanup()
 
 	builder := balancer.Get(Name)
-	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
+	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{})
 	if edsB == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
@@ -256,7 +253,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	defer cleanup()
 
 	builder := balancer.Get(Name)
-	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
+	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{})
 	if edsB == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
@@ -344,7 +341,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	defer cleanup()
 
 	builder := balancer.Get(Name)
-	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
+	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{})
 	if edsB == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
@@ -446,7 +443,7 @@ func (s) TestClientWatchEDS(t *testing.T) {
 	defer cleanup()
 
 	builder := balancer.Get(Name)
-	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
+	edsB := builder.Build(newNoopTestClientConn(), balancer.BuildOptions{})
 	if edsB == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}

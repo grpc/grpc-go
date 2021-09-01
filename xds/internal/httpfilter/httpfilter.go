@@ -50,6 +50,9 @@ type Filter interface {
 	// not accept a custom type.  The resulting FilterConfig will later be
 	// passed to Build.
 	ParseFilterConfigOverride(proto.Message) (FilterConfig, error)
+	// IsTerminal returns whether this Filter is terminal or not (i.e. it must
+	// be last filter in the filter chain).
+	IsTerminal() bool
 }
 
 // ClientInterceptorBuilder constructs a Client Interceptor.  If this type is

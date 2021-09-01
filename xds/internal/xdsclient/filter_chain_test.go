@@ -1,5 +1,3 @@
-// +build go1.12
-
 /*
  *
  * Copyright 2021 gRPC authors.
@@ -21,6 +19,8 @@
 package xdsclient
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -29,6 +29,7 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/google/go-cmp/cmp"
@@ -37,8 +38,18 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
+	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/xds/internal/httpfilter"
+	"google.golang.org/grpc/xds/internal/httpfilter/router"
+	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/version"
+)
+
+const (
+	topLevel = "top level"
+	vhLevel  = "virtual host level"
+	rLevel   = "route level"
 )
 
 var (
@@ -65,6 +76,7 @@ var (
 					RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 						RouteConfig: routeConfig,
 					},
+					HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 				}),
 			},
 		},
@@ -77,6 +89,11 @@ var (
 		Name:       "serverOnlyCustomFilter2",
 		ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: serverOnlyCustomFilterConfig},
 	}
+	emptyRouterFilter = e2e.RouterHTTPFilter
+	routerBuilder     = httpfilter.Get(router.TypeURL)
+	routerConfig, _   = routerBuilder.ParseFilterConfig(testutils.MarshalAny(&v3routerpb.Router{}))
+	routerFilter      = HTTPFilter{Name: "router", Filter: routerBuilder, Config: routerConfig}
+	routerFilterList  = []HTTPFilter{routerFilter}
 )
 
 // TestNewFilterChainImpl_Failure_BadMatchFields verifies cases where we have a
@@ -463,6 +480,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 												RouteConfigName: "route-1",
 											},
 										},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
@@ -483,6 +501,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 											RouteConfigName: "route-1",
 										},
 									},
+									HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 								}),
 							},
 						},
@@ -499,6 +518,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												RouteConfigName: "route-1",
+												HTTPFilters:     routerFilterList,
 											},
 										},
 									},
@@ -509,6 +529,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 				},
 				def: &FilterChain{
 					RouteConfigName: "route-1",
+					HTTPFilters:     routerFilterList,
 				},
 				RouteConfigNames: map[string]bool{"route-1": true},
 			},
@@ -527,6 +548,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
 										},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
@@ -542,6 +564,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
 									},
+									HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 								}),
 							},
 						},
@@ -558,6 +581,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
 											},
 										},
 									},
@@ -568,6 +592,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 				},
 				def: &FilterChain{
 					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
 				},
 			},
 		},
@@ -592,6 +617,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 												RouteConfigName: "route-1",
 											},
 										},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
@@ -612,6 +638,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 											RouteConfigName: "route-2",
 										},
 									},
+									HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 								}),
 							},
 						},
@@ -628,6 +655,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 										srcPortMap: map[int]*FilterChain{
 											0: {
 												RouteConfigName: "route-1",
+												HTTPFilters:     routerFilterList,
 											},
 										},
 									},
@@ -638,6 +666,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 				},
 				def: &FilterChain{
 					RouteConfigName: "route-2",
+					HTTPFilters:     routerFilterList,
 				},
 				RouteConfigNames: map[string]bool{
 					"route-1": true,
@@ -677,12 +706,14 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 							{
 								Name: "hcm",
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
+
 									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 										RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
 											Rds: &v3httppb.Rds{
 												RouteConfigName: "route-1",
 											},
 										},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
@@ -700,6 +731,7 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 											RouteConfigName: "route-1",
 										},
 									},
+									HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
 								}),
 							},
 						},
@@ -720,6 +752,7 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 								ConfigType: &v3listenerpb.Filter_TypedConfig{
 									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 										RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
+										HttpFilters:    []*v3httppb.HttpFilter{emptyRouterFilter},
 									}),
 								},
 							},
@@ -733,6 +766,7 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 							ConfigType: &v3listenerpb.Filter_TypedConfig{
 								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 									RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
+									HttpFilters:    []*v3httppb.HttpFilter{emptyRouterFilter},
 								}),
 							},
 						},
@@ -848,6 +882,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 										HttpFilters: []*v3httppb.HttpFilter{
 											validServerSideHTTPFilter1,
+											emptyRouterFilter,
 										},
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
@@ -866,6 +901,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 									HttpFilters: []*v3httppb.HttpFilter{
 										validServerSideHTTPFilter1,
+										emptyRouterFilter,
 									},
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
@@ -890,6 +926,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 													Filter: serverOnlyHTTPFilter{},
 													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
 												},
+												routerFilter,
 											},
 												InlineRouteConfig: inlineRouteConfig,
 											},
@@ -901,11 +938,14 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 					},
 				},
 				def: &FilterChain{
-					HTTPFilters: []HTTPFilter{{
-						Name:   "serverOnlyCustomFilter",
-						Filter: serverOnlyHTTPFilter{},
-						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
-					}},
+					HTTPFilters: []HTTPFilter{
+						{
+							Name:   "serverOnlyCustomFilter",
+							Filter: serverOnlyHTTPFilter{},
+							Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
+						},
+						routerFilter,
+					},
 					InlineRouteConfig: inlineRouteConfig,
 				},
 			},
@@ -924,6 +964,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 										HttpFilters: []*v3httppb.HttpFilter{
 											validServerSideHTTPFilter1,
 											validServerSideHTTPFilter2,
+											emptyRouterFilter,
 										},
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
@@ -943,6 +984,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 									HttpFilters: []*v3httppb.HttpFilter{
 										validServerSideHTTPFilter1,
 										validServerSideHTTPFilter2,
+										emptyRouterFilter,
 									},
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
@@ -972,6 +1014,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 													Filter: serverOnlyHTTPFilter{},
 													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
 												},
+												routerFilter,
 											},
 												InlineRouteConfig: inlineRouteConfig,
 											},
@@ -993,6 +1036,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 						Filter: serverOnlyHTTPFilter{},
 						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
 					},
+					routerFilter,
 				},
 					InlineRouteConfig: inlineRouteConfig,
 				},
@@ -1014,6 +1058,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 										HttpFilters: []*v3httppb.HttpFilter{
 											validServerSideHTTPFilter1,
 											validServerSideHTTPFilter2,
+											emptyRouterFilter,
 										},
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
@@ -1027,6 +1072,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 										HttpFilters: []*v3httppb.HttpFilter{
 											validServerSideHTTPFilter1,
+											emptyRouterFilter,
 										},
 										RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 											RouteConfig: routeConfig,
@@ -1046,6 +1092,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 									HttpFilters: []*v3httppb.HttpFilter{
 										validServerSideHTTPFilter1,
 										validServerSideHTTPFilter2,
+										emptyRouterFilter,
 									},
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
@@ -1059,6 +1106,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 									HttpFilters: []*v3httppb.HttpFilter{
 										validServerSideHTTPFilter1,
+										emptyRouterFilter,
 									},
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
@@ -1088,6 +1136,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 													Filter: serverOnlyHTTPFilter{},
 													Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
 												},
+												routerFilter,
 											},
 												InlineRouteConfig: inlineRouteConfig,
 											},
@@ -1109,6 +1158,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 						Filter: serverOnlyHTTPFilter{},
 						Config: filterConfig{Cfg: serverOnlyCustomFilterConfig},
 					},
+					routerFilter,
 				},
 					InlineRouteConfig: inlineRouteConfig,
 				},
@@ -1158,7 +1208,10 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1166,7 +1219,10 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 						},
 					},
 				},
-				def: &FilterChain{InlineRouteConfig: inlineRouteConfig},
+				def: &FilterChain{
+					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
+				},
 			},
 		},
 		{
@@ -1221,6 +1277,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 													IdentityCertName:     "identityCertName",
 												},
 												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
 											},
 										},
 									},
@@ -1235,6 +1292,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 						IdentityCertName:     "defaultIdentityCertName",
 					},
 					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
 				},
 			},
 		},
@@ -1308,6 +1366,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 													RequireClientCert:    true,
 												},
 												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
 											},
 										},
 									},
@@ -1325,6 +1384,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 						RequireClientCert:    true,
 					},
 					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
 				},
 			},
 		},
@@ -1355,7 +1415,10 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 				srcPrefixMap: map[string]*sourcePrefixEntry{
 					unspecifiedPrefixMapKey: {
 						srcPortMap: map[int]*FilterChain{
-							0: {InlineRouteConfig: inlineRouteConfig},
+							0: {
+								InlineRouteConfig: inlineRouteConfig,
+								HTTPFilters:       routerFilterList,
+							},
 						},
 					},
 				},
@@ -1391,7 +1454,10 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 				dstPrefixMap: map[string]*destPrefixEntry{
 					unspecifiedPrefixMapKey: unspecifiedEntry,
 				},
-				def: &FilterChain{InlineRouteConfig: inlineRouteConfig},
+				def: &FilterChain{
+					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
+				},
 			},
 		},
 		{
@@ -1420,7 +1486,10 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 						net: ipNetFromCIDR("192.168.2.2/16"),
 					},
 				},
-				def: &FilterChain{InlineRouteConfig: inlineRouteConfig},
+				def: &FilterChain{
+					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
+				},
 			},
 		},
 		{
@@ -1449,7 +1518,10 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 						net: ipNetFromCIDR("192.168.2.2/16"),
 					},
 				},
-				def: &FilterChain{InlineRouteConfig: inlineRouteConfig},
+				def: &FilterChain{
+					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
+				},
 			},
 		},
 		{
@@ -1478,7 +1550,10 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 						net: ipNetFromCIDR("192.168.2.2/16"),
 					},
 				},
-				def: &FilterChain{InlineRouteConfig: inlineRouteConfig},
+				def: &FilterChain{
+					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
+				},
 			},
 		},
 	}
@@ -1548,7 +1623,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1564,7 +1642,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1580,7 +1661,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1594,7 +1678,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1608,7 +1695,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1616,7 +1706,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						},
 					},
 				},
-				def: &FilterChain{InlineRouteConfig: inlineRouteConfig},
+				def: &FilterChain{
+					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
+				},
 			},
 		},
 		{
@@ -1646,7 +1739,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1662,7 +1758,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1670,7 +1769,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						},
 					},
 				},
-				def: &FilterChain{InlineRouteConfig: inlineRouteConfig},
+				def: &FilterChain{
+					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
+				},
 			},
 		},
 		{
@@ -1700,7 +1802,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 									"10.0.0.0/8": {
 										net: ipNetFromCIDR("10.0.0.0/8"),
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1715,7 +1820,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 									"192.168.0.0/16": {
 										net: ipNetFromCIDR("192.168.0.0/16"),
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1723,7 +1831,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						},
 					},
 				},
-				def: &FilterChain{InlineRouteConfig: inlineRouteConfig},
+				def: &FilterChain{
+					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
+				},
 			},
 		},
 		{
@@ -1754,9 +1865,18 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
-											1: {InlineRouteConfig: inlineRouteConfig},
-											2: {InlineRouteConfig: inlineRouteConfig},
-											3: {InlineRouteConfig: inlineRouteConfig},
+											1: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
+											2: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
+											3: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1773,9 +1893,18 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 									"192.168.0.0/16": {
 										net: ipNetFromCIDR("192.168.0.0/16"),
 										srcPortMap: map[int]*FilterChain{
-											1: {InlineRouteConfig: inlineRouteConfig},
-											2: {InlineRouteConfig: inlineRouteConfig},
-											3: {InlineRouteConfig: inlineRouteConfig},
+											1: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
+											2: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
+											3: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1783,7 +1912,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						},
 					},
 				},
-				def: &FilterChain{InlineRouteConfig: inlineRouteConfig},
+				def: &FilterChain{
+					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
+				},
 			},
 		},
 		{
@@ -1857,7 +1989,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1871,7 +2006,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1885,7 +2023,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 								srcPrefixMap: map[string]*sourcePrefixEntry{
 									unspecifiedPrefixMapKey: {
 										srcPortMap: map[int]*FilterChain{
-											0: {InlineRouteConfig: inlineRouteConfig},
+											0: {
+												InlineRouteConfig: inlineRouteConfig,
+												HTTPFilters:       routerFilterList,
+											},
 										},
 									},
 								},
@@ -1905,7 +2046,10 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 						srcTypeArr: [3]*sourcePrefixes{},
 					},
 				},
-				def: &FilterChain{InlineRouteConfig: inlineRouteConfig},
+				def: &FilterChain{
+					InlineRouteConfig: inlineRouteConfig,
+					HTTPFilters:       routerFilterList,
+				},
 			},
 		},
 	}
@@ -2180,6 +2324,7 @@ func TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "default"},
 				InlineRouteConfig: inlineRouteConfig,
+				HTTPFilters:       routerFilterList,
 			},
 		},
 		{
@@ -2194,6 +2339,7 @@ func TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "unspecified-dest-and-source-prefix"},
 				InlineRouteConfig: inlineRouteConfig,
+				HTTPFilters:       routerFilterList,
 			},
 		},
 		{
@@ -2208,6 +2354,7 @@ func TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "wildcard-prefixes-v4"},
 				InlineRouteConfig: inlineRouteConfig,
+				HTTPFilters:       routerFilterList,
 			},
 		},
 		{
@@ -2222,6 +2369,7 @@ func TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "wildcard-source-prefix-v6"},
 				InlineRouteConfig: inlineRouteConfig,
+				HTTPFilters:       routerFilterList,
 			},
 		},
 		{
@@ -2236,6 +2384,7 @@ func TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "specific-destination-prefix-unspecified-source-type"},
 				InlineRouteConfig: inlineRouteConfig,
+				HTTPFilters:       routerFilterList,
 			},
 		},
 		{
@@ -2250,6 +2399,7 @@ func TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "specific-destination-prefix-specific-source-type"},
 				InlineRouteConfig: inlineRouteConfig,
+				HTTPFilters:       routerFilterList,
 			},
 		},
 		{
@@ -2264,6 +2414,7 @@ func TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "specific-destination-prefix-specific-source-type-specific-source-prefix"},
 				InlineRouteConfig: inlineRouteConfig,
+				HTTPFilters:       routerFilterList,
 			},
 		},
 		{
@@ -2278,6 +2429,7 @@ func TestLookup_Successes(t *testing.T) {
 			wantFC: &FilterChain{
 				SecurityCfg:       &SecurityConfig{IdentityInstanceName: "specific-destination-prefix-specific-source-type-specific-source-prefix-specific-source-port"},
 				InlineRouteConfig: inlineRouteConfig,
+				HTTPFilters:       routerFilterList,
 			},
 		},
 	}
@@ -2294,6 +2446,202 @@ func TestLookup_Successes(t *testing.T) {
 			}
 			if !cmp.Equal(gotFC, test.wantFC, cmpopts.EquateEmpty()) {
 				t.Fatalf("FilterChainManager.Lookup(%v) = %v, want %v", test.params, gotFC, test.wantFC)
+			}
+		})
+	}
+}
+
+type filterCfg struct {
+	httpfilter.FilterConfig
+	// Level is what differentiates top level filters ("top level") vs. second
+	// level ("virtual host level"), and third level ("route level").
+	level string
+}
+
+type filterBuilder struct {
+	httpfilter.Filter
+}
+
+var _ httpfilter.ServerInterceptorBuilder = &filterBuilder{}
+
+func (fb *filterBuilder) BuildServerInterceptor(config httpfilter.FilterConfig, override httpfilter.FilterConfig) (iresolver.ServerInterceptor, error) {
+	var level string
+	level = config.(filterCfg).level
+
+	if override != nil {
+		level = override.(filterCfg).level
+	}
+	return &serverInterceptor{level: level}, nil
+}
+
+type serverInterceptor struct {
+	level string
+}
+
+func (si *serverInterceptor) AllowRPC(context.Context) error {
+	return errors.New(si.level)
+}
+
+func TestHTTPFilterInstantiation(t *testing.T) {
+	tests := []struct {
+		name        string
+		filters     []HTTPFilter
+		routeConfig RouteConfigUpdate
+		// A list of strings which will be built from iterating through the
+		// filters ["top level", "vh level", "route level", "route level"...]
+		// wantErrs is the list of error strings that will be constructed from
+		// the deterministic iteration through the vh list and route list. The
+		// error string will be determined by the level of config that the
+		// filter builder receives (i.e. top level, vs. virtual host level vs.
+		// route level).
+		wantErrs []string
+	}{
+		{
+			name: "one http filter no overrides",
+			filters: []HTTPFilter{
+				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+			},
+			routeConfig: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+						},
+						},
+					},
+				}},
+			wantErrs: []string{topLevel},
+		},
+		{
+			name: "one http filter vh override",
+			filters: []HTTPFilter{
+				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+			},
+			routeConfig: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+						},
+						},
+						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+							"server-interceptor": filterCfg{level: vhLevel},
+						},
+					},
+				}},
+			wantErrs: []string{vhLevel},
+		},
+		{
+			name: "one http filter route override",
+			filters: []HTTPFilter{
+				{Name: "server-interceptor", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+			},
+			routeConfig: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+								"server-interceptor": filterCfg{level: rLevel},
+							},
+						},
+						},
+					},
+				}},
+			wantErrs: []string{rLevel},
+		},
+		// This tests the scenario where there are three http filters, and one
+		// gets overridden by route and one by virtual host.
+		{
+			name: "three http filters vh override route override",
+			filters: []HTTPFilter{
+				{Name: "server-interceptor1", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor2", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor3", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+			},
+			routeConfig: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+								"server-interceptor3": filterCfg{level: rLevel},
+							},
+						},
+						},
+						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+							"server-interceptor2": filterCfg{level: vhLevel},
+						},
+					},
+				}},
+			wantErrs: []string{topLevel, vhLevel, rLevel},
+		},
+		// This tests the scenario where there are three http filters, and two
+		// virtual hosts with different vh + route overrides for each virtual
+		// host.
+		{
+			name: "three http filters two vh",
+			filters: []HTTPFilter{
+				{Name: "server-interceptor1", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor2", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+				{Name: "server-interceptor3", Filter: &filterBuilder{}, Config: filterCfg{level: topLevel}},
+			},
+			routeConfig: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+								"server-interceptor3": filterCfg{level: rLevel},
+							},
+						},
+						},
+						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+							"server-interceptor2": filterCfg{level: vhLevel},
+						},
+					},
+					{
+						Domains: []string{"target"},
+						Routes: []*Route{{
+							Prefix: newStringP("1"),
+							HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+								"server-interceptor1": filterCfg{level: rLevel},
+								"server-interceptor2": filterCfg{level: rLevel},
+							},
+						},
+						},
+						HTTPFilterConfigOverride: map[string]httpfilter.FilterConfig{
+							"server-interceptor2": filterCfg{level: vhLevel},
+							"server-interceptor3": filterCfg{level: vhLevel},
+						},
+					},
+				}},
+			wantErrs: []string{topLevel, vhLevel, rLevel, rLevel, rLevel, vhLevel},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fc := FilterChain{
+				HTTPFilters: test.filters,
+			}
+			fc.ConstructUsableRouteConfiguration(test.routeConfig)
+			// Build out list of errors by iterating through the virtual hosts and routes,
+			// and running the filters in route configurations.
+			var errs []string
+			for _, vh := range fc.VirtualHosts {
+				for _, r := range vh.Routes {
+					for _, int := range r.Interceptors {
+						errs = append(errs, int.AllowRPC(context.Background()).Error())
+					}
+				}
+			}
+			if !cmp.Equal(errs, test.wantErrs) {
+				t.Fatalf("List of errors %v, want %v", errs, test.wantErrs)
 			}
 		})
 	}

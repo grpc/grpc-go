@@ -1,5 +1,3 @@
-// +build go1.12
-
 /*
  *
  * Copyright 2021 gRPC authors.
@@ -36,6 +34,8 @@ import (
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
+	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
@@ -84,6 +84,7 @@ var listenerWithRouteConfiguration = &v3listenerpb.Listener{
 									RouteConfigName: "route-1",
 								},
 							},
+							HttpFilters: []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
 						}),
 					},
 				},
@@ -145,6 +146,7 @@ var listenerWithFilterChains = &v3listenerpb.Listener{
 											Action: &v3routepb.Route_NonForwardingAction{},
 										}}}}},
 							},
+							HttpFilters: []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
 						}),
 					},
 				},

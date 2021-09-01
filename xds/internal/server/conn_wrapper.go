@@ -58,6 +58,10 @@ type connWrapper struct {
 	// completing the HTTP2 handshake.
 	deadlineMu sync.Mutex
 	deadline   time.Time
+
+	// The virtual hosts with matchable routes and instantiated HTTP Filters per
+	// route.
+	virtualHosts []xdsclient.VirtualHostWithInterceptors
 }
 
 // SetDeadline makes a copy of the passed in deadline and forwards the call to

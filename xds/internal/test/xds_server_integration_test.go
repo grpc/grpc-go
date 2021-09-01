@@ -1,4 +1,4 @@
-// +build go1.12
+//go:build !386
 // +build !386
 
 /*

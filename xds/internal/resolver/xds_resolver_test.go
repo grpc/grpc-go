@@ -1,5 +1,3 @@
-// +build go1.12
-
 /*
  *
  * Copyright 2019 gRPC authors.
@@ -1393,13 +1391,13 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 
 func replaceRandNumGenerator(start int64) func() {
 	nextInt := start
-	grpcrandInt63n = func(int64) (ret int64) {
+	xdsclient.RandInt63n = func(int64) (ret int64) {
 		ret = nextInt
 		nextInt++
 		return
 	}
 	return func() {
-		grpcrandInt63n = grpcrand.Int63n
+		xdsclient.RandInt63n = grpcrand.Int63n
 	}
 }
 
