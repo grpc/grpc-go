@@ -3,6 +3,7 @@ package consistent
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"strconv"
 	"testing"
 
@@ -168,6 +169,125 @@ func TestBackendBalance(t *testing.T) {
 			// We want the stddev to be less than 10% of the mean with 100 virtual nodes
 			require.Less(stddev, mean*.1)
 		})
+	}
+}
+
+type perturbationKind int
+
+const (
+	add perturbationKind = iota
+	remove
+)
+
+// perturb randomly adds or removes a node from the ring
+// it returns the mapping from before the ring was changed, the way the ring was
+// modified (add/remove/identity), and the member that was affected
+// (added, removed, or none)
+func perturb(require *require.Assertions, ring *Hashring, spread uint8,
+	numTestKeys int) (before map[string][]Member,
+	perturbation perturbationKind, affectedMember member) {
+	before = make(map[string][]Member)
+	for i := 0; i < numTestKeys; i++ {
+		found, err := ring.FindN([]byte(strconv.Itoa(i)), spread)
+		require.NoError(err)
+		require.Len(found, int(spread))
+		before[strconv.Itoa(i)] = found
+	}
+
+	// pick a random perturbation - add or remove a single node
+	perturbation = perturbationKind(rand.Intn(2))
+
+	// don't let the ring dip below the spread
+	if len(ring.Members()) == int(spread) {
+		perturbation = add
+	}
+
+	switch perturbation {
+	case add:
+		affectedMember = member(rand.Int())
+		for err := ring.Add(affectedMember); err != nil; affectedMember = member(rand.Int()) {
+		}
+	case remove:
+		i := rand.Intn(len(ring.Members()))
+		affectedMember = ring.Members()[i].(member)
+		require.NoError(ring.Remove(affectedMember))
+	}
+	return
+}
+
+// verify takes a ring, a change that has already been applied to the ring
+// (add/remove node) and the state of the ring before the change happened, and
+// asserts that the keys were remapped correctly.
+func verify(require *require.Assertions, ring *Hashring,
+	before map[string][]Member, perturbation perturbationKind,
+	affectedMember member, spread uint8, numTestKeys int) {
+	for i := 0; i < numTestKeys; i++ {
+		key := strconv.Itoa(i)
+		found, err := ring.FindN([]byte(key), spread)
+		require.NoError(err)
+		require.Len(found, int(spread))
+
+		switch perturbation {
+		case remove:
+			// any key that didn't map to the removed node remains the same
+			for _, n := range before[key] {
+				if n.Key() == affectedMember.Key() {
+					continue
+				}
+				require.Contains(found, n)
+			}
+		case add:
+			// at most one key should be different,
+			// and it should only differ by the new key
+			foundMinusAffected := make([]Member, 0)
+			affectedCount := 0
+			for _, n := range found {
+				if n == affectedMember {
+					affectedCount++
+					continue
+				}
+				foundMinusAffected = append(foundMinusAffected, n)
+			}
+			require.LessOrEqual(affectedCount, 1)
+			require.Subset(before[key], foundMinusAffected, "before: %#v\nafter: %#v", before[key], found)
+			if len(foundMinusAffected) == len(found) {
+				require.EqualValues(found, before[key])
+			}
+		default:
+			require.Fail("invalid perturbation")
+		}
+	}
+}
+
+func TestConsistency(t *testing.T) {
+	require := require.New(t)
+
+	ring := NewHashring(xxhash.Sum64, 100)
+	for memberNum := 0; memberNum < 5; memberNum++ {
+		require.NoError(ring.Add(member(memberNum)))
+	}
+
+	spread := uint8(3)
+	numTestKeys := 1000
+	for i := 0; i < 10; i++ {
+		before, perturbation, affectedMember := perturb(require, ring, spread, numTestKeys)
+		verify(require, ring, before, perturbation, affectedMember, spread, numTestKeys)
+	}
+}
+
+func BenchmarkRemapping(b *testing.B) {
+	require := require.New(b)
+	numKeys := 1000
+	numMembers := 5
+	ring := NewHashring(xxhash.Sum64, 100)
+	for memberNum := 0; memberNum < numMembers; memberNum++ {
+		require.NoError(ring.Add(member(memberNum)))
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StartTimer()
+		perturb(require, ring, 3, numKeys)
+		b.StopTimer()
 	}
 }
 
