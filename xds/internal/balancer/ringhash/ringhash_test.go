@@ -18,23 +18,21 @@
 
 package ringhash
 
-import "context"
+import (
+	"time"
 
-type clusterKey struct{}
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/xds/internal/testutils"
+)
 
-func getRequestHash(ctx context.Context) uint64 {
-	requestHash, _ := ctx.Value(clusterKey{}).(uint64)
-	return requestHash
-}
+var (
+	cmpOpts = cmp.Options{
+		cmp.AllowUnexported(testutils.TestSubConn{}, ringEntry{}, subConn{}),
+		cmpopts.IgnoreFields(subConn{}, "mu"),
+	}
+)
 
-// GetRequestHashForTesting returns the request hash in the context; to be used
-// for testing only.
-func GetRequestHashForTesting(ctx context.Context) uint64 {
-	return getRequestHash(ctx)
-}
-
-// SetRequestHash adds the request hash to the context for use in Ring Hash Load
-// Balancing.
-func SetRequestHash(ctx context.Context, requestHash uint64) context.Context {
-	return context.WithValue(ctx, clusterKey{}, requestHash)
-}
+const (
+	defaultTestShortTimeout = 10 * time.Millisecond
+)
