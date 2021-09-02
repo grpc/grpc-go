@@ -32,11 +32,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
+
+var logger = grpclog.Component("rbac")
 
 var getConnection = transport.GetConnection
 
@@ -69,7 +72,8 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	// and then be used for the whole chain of RBAC Engines.
 	rpcData, err := newRPCData(ctx)
 	if err != nil {
-		return status.Errorf(codes.InvalidArgument, "missing fields in ctx %+v: %v", ctx, err)
+		logger.Errorf("newRPCData: %v", err)
+		return status.Errorf(codes.Internal, "gRPC RBAC: %v", err)
 	}
 	for _, engine := range cre.chainedEngines {
 		matchingPolicyName, ok := engine.findMatchingPolicy(rpcData)
@@ -86,7 +90,7 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	// If the incoming RPC gets through all of the engines successfully (i.e.
 	// doesn't not match an allow or match a deny engine), the RPC is authorized
 	// to proceed.
-	return status.Error(codes.OK, "")
+	return nil
 }
 
 // engine is used for matching incoming RPCs to policies.
