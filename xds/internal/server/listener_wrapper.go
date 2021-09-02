@@ -324,12 +324,13 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		// can come it at any time), and connections aren't accepted too often,
 		// so this reinstantation of the Route Configuration is an acceptable
 		// tradeoff for simplicity.
-		if err := fc.ConstructUsableRouteConfiguration(rc); err != nil {
+		vhswi, err := fc.ConstructUsableRouteConfiguration(rc)
+		if err != nil {
 			l.logger.Warningf("route configuration construction: %v", err)
 			conn.Close()
 			continue
 		}
-		return &connWrapper{Conn: conn, filterChain: fc, parent: l, virtualHosts: fc.VirtualHosts}, nil
+		return &connWrapper{Conn: conn, filterChain: fc, parent: l, virtualHosts: vhswi}, nil
 	}
 }
 
