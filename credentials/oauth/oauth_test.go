@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ func checkErrorMsg(err error, msg string) bool {
 	return false
 }
 
-func TestRemoveServiceNameFromJwtURI(t *testing.T) {
+func TestRemoveServiceNameFromJWTURI(t *testing.T) {
 	tests := []struct {
 		name         string
 		uri          string
@@ -42,14 +42,12 @@ func TestRemoveServiceNameFromJwtURI(t *testing.T) {
 		{
 			name:         "invalid URI",
 			uri:          "ht tp://foo.com",
-			wantedURI:    "",
 			wantedErrMsg: "first path segment in URL cannot contain colon",
 		},
 		{
-			name:         "valid URI",
-			uri:          "https://foo.com/go/",
-			wantedURI:    "https://foo.com/",
-			wantedErrMsg: "",
+			name:      "valid URI",
+			uri:       "https://foo.com/go/",
+			wantedURI: "https://foo.com/",
 		},
 	}
 	for _, tt := range tests {
