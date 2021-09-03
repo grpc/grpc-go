@@ -99,7 +99,10 @@ func (sc *subConn) effectiveState() connectivity.State {
 	return sc.state
 }
 
-func (sc *subConn) connect() {
+// queueConnect sets a boolean so that when the SubConn state changes to Idle,
+// it's Connect() will be triggered. If the SubConn state is already Idle, it
+// will just call Connect().
+func (sc *subConn) queueConnect() {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	if sc.state == connectivity.Idle {

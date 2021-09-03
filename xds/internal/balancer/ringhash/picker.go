@@ -61,7 +61,7 @@ func handleRICS(e *ringEntry) (handleRICSResult, bool) {
 		return handleRICSResult{pr: balancer.PickResult{SubConn: e.sc.sc}}, true
 	case connectivity.Idle:
 		// Trigger Connect() and queue the pick.
-		e.sc.connect()
+		e.sc.queueConnect()
 		return handleRICSResult{err: balancer.ErrNoSubConnAvailable}, true
 	case connectivity.Connecting:
 		return handleRICSResult{err: balancer.ErrNoSubConnAvailable}, true
@@ -92,7 +92,7 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 
 func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, error) {
 	// Queue a connect on the first picked SubConn.
-	e.sc.connect()
+	e.sc.queueConnect()
 
 	// Find next entry in the ring, skipping duplicate SubConns.
 	e2 := nextSkippingDuplicates(p.ring, e)
@@ -108,7 +108,7 @@ func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, erro
 	}
 
 	// The second SubConn is also in TransientFailure. Queue a connect on it.
-	e2.sc.connect()
+	e2.sc.queueConnect()
 
 	// If it gets here, this is after the second SubConn, and the second SubConn
 	// was in TransientFailure.
@@ -130,7 +130,7 @@ func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, erro
 		}
 		if scState == connectivity.TransientFailure {
 			// This will queue a connect.
-			ee.sc.connect()
+			ee.sc.queueConnect()
 			continue
 		}
 		// This is a SubConn in a non-failure state. We continue to check the
@@ -140,15 +140,15 @@ func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, erro
 		if scState == connectivity.Idle {
 			// This is the first non-failed SubConn, and it is in a real IDLE
 			// state. Trigger it to Connect().
-			ee.sc.connect()
+			ee.sc.queueConnect()
 		}
 	}
 	return balancer.PickResult{}, fmt.Errorf("no connection is Ready")
 }
 
-func nextSkippingDuplicates(ring *ring, cur *ringEntry) *ringEntry {
-	for next := ring.next(cur); next != cur; next = ring.next(next) {
-		if next.sc != cur.sc {
+func nextSkippingDuplicates(ring *ring, entry *ringEntry) *ringEntry {
+	for next := ring.next(entry); next != entry; next = ring.next(next) {
+		if next.sc != entry.sc {
 			return next
 		}
 	}
