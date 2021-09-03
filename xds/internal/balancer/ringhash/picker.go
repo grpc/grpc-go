@@ -39,6 +39,15 @@ type picker struct {
 // 	return &picker{ring: ring}
 // }
 
+// handleRICSResult is the return type of handleRICS. It's needed to wrap the
+// returned error from Pick() in a struct. With this, if the return values are
+// `balancer.PickResult, error, bool`, linter complains because error is not the
+// last return value.
+type handleRICSResult struct {
+	pr  balancer.PickResult
+	err error
+}
+
 // handleRICS generates pick result if the entry is in Ready, IDLE, Connecting
 // or Shutdown. TransientFailure will be handled specifically after this
 // function returns.
@@ -46,36 +55,36 @@ type picker struct {
 // The first return value indicates if the state is in Ready, IDLE, Connecting
 // or Shutdown. If it's true, the PickResult and error should be returned from
 // Pick() as is.
-func handleRICS(e *ringEntry) (bool, balancer.PickResult, error) {
+func handleRICS(e *ringEntry) (handleRICSResult, bool) {
 	switch state := e.sc.effectiveState(); state {
 	case connectivity.Ready:
-		return true, balancer.PickResult{SubConn: e.sc.sc}, nil
+		return handleRICSResult{pr: balancer.PickResult{SubConn: e.sc.sc}}, true
 	case connectivity.Idle:
 		// Trigger Connect() and queue the pick.
 		e.sc.connect()
-		return true, balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+		return handleRICSResult{err: balancer.ErrNoSubConnAvailable}, true
 	case connectivity.Connecting:
-		return true, balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+		return handleRICSResult{err: balancer.ErrNoSubConnAvailable}, true
 	case connectivity.TransientFailure:
 		// Return ok==false, so TransientFailure will be handled afterwards.
-		return false, balancer.PickResult{}, nil
+		return handleRICSResult{}, false
 	case connectivity.Shutdown:
 		// Shutdown can happen in a race where the old picker is called. A new
 		// picker should already be sent.
-		return true, balancer.PickResult{}, balancer.ErrNoSubConnAvailable
+		return handleRICSResult{err: balancer.ErrNoSubConnAvailable}, true
 	default:
 		// Should never reach this. All the connectivity states are already
 		// handled in the cases.
 		//
 		// FIXME: add an error log.
-		return true, balancer.PickResult{}, status.Errorf(codes.Unavailable, "SubConn has undefined connectivity state: %v", state)
+		return handleRICSResult{err: status.Errorf(codes.Unavailable, "SubConn has undefined connectivity state: %v", state)}, true
 	}
 }
 
 func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	e := p.ring.pick(getRequestHash(info.Ctx))
-	if ok, pr, err := handleRICS(e); ok {
-		return pr, err
+	if hr, ok := handleRICS(e); ok {
+		return hr.pr, hr.err
 	}
 	// ok was false, the entry is in transient failure.
 	return p.handleTransientFailure(e)
@@ -94,8 +103,8 @@ func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, erro
 
 	// For the second SubConn, also check Ready/IDLE/Connecting as if it's the
 	// first entry.
-	if ok, pr, err := handleRICS(e2); ok {
-		return pr, err
+	if hr, ok := handleRICS(e2); ok {
+		return hr.pr, hr.err
 	}
 
 	// The second SubConn is also in TransientFailure. Queue a connect on it.
