@@ -359,10 +359,10 @@ func (b *priorityBalancer) handlePriorityWithNewStateConnecting(child *childBala
 	}
 }
 
-// handlePriorityWithNewStateIdle handles state Ready from a higher or equal
+// handlePriorityWithNewStateIdle handles state Idle from a higher or equal
 // priority.
 //
-// An update with state Ready:
+// An update with state Idle:
 // - If it's from higher priority:
 //   - Do nothing
 //   - It actually shouldn't happen, no balancer switches back to Idle.
