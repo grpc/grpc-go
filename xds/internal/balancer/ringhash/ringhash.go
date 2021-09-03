@@ -64,24 +64,28 @@ type subConn struct {
 	connectQueued bool
 }
 
-// setState updates the state of this SubConn.
+// FIXME: uncomment this. This is commented out because staticcheck complains
+// about unused functions. Keeping this here for completeness. Will be
+// uncommented in a future PR.
 //
-// It also handles the queued Connect(). If the new state is IDLE, and a
-// Connect() was queued, this SubConn will be triggered to Connect().
-func (sc *subConn) setState(s connectivity.State) {
-	sc.mu.Lock()
-	defer sc.mu.Unlock()
-	// Any state change means there was an attempt to connect.
-	if s != connectivity.Idle {
-		sc.attemptedToConnect = true
-	}
-	// Trigger Connect() if new state is IDLE, and there is a queued connect.
-	if s == connectivity.Idle && sc.connectQueued {
-		sc.connectQueued = false
-		sc.sc.Connect()
-	}
-	sc.state = s
-}
+// // setState updates the state of this SubConn.
+// //
+// // It also handles the queued Connect(). If the new state is IDLE, and a
+// // Connect() was queued, this SubConn will be triggered to Connect().
+// func (sc *subConn) setState(s connectivity.State) {
+// 	sc.mu.Lock()
+// 	defer sc.mu.Unlock()
+// 	// Any state change means there was an attempt to connect.
+// 	if s != connectivity.Idle {
+// 		sc.attemptedToConnect = true
+// 	}
+// 	// Trigger Connect() if new state is IDLE, and there is a queued connect.
+// 	if s == connectivity.Idle && sc.connectQueued {
+// 		sc.connectQueued = false
+// 		sc.sc.Connect()
+// 	}
+// 	sc.state = s
+// }
 
 // effectiveState returns the effective state of this SubConn. It can be
 // different from the actual state, e.g. IDLE after any attempt to connect (any

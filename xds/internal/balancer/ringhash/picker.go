@@ -31,9 +31,13 @@ type picker struct {
 	ring *ring
 }
 
-func newPicker(ring *ring) *picker {
-	return &picker{ring: ring}
-}
+// FIXME: uncomment this. This is commented out because staticcheck complains
+// about unused functions. Keeping this here for completeness. Will be
+// uncommented in a future PR.
+//
+// func newPicker(ring *ring) *picker {
+// 	return &picker{ring: ring}
+// }
 
 // handleRICS generates pick result if the entry is in Ready, IDLE, Connecting
 // or Shutdown. TransientFailure will be handled specifically after this
