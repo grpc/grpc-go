@@ -232,7 +232,7 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.S
 	case connectivity.Connecting:
 		b.handlePriorityWithNewStateConnecting(child, priority, oldState)
 	case connectivity.Idle:
-		b.handlePriorityWithNewStateIDLE(child, priority)
+		b.handlePriorityWithNewStateIdle(child, priority)
 	default:
 		// New state is Idle, should never happen. Don't forward.
 	}
@@ -359,20 +359,20 @@ func (b *priorityBalancer) handlePriorityWithNewStateConnecting(child *childBala
 	}
 }
 
-// handlePriorityWithNewStateIDLE handles state Ready from a higher or equal
+// handlePriorityWithNewStateIdle handles state Ready from a higher or equal
 // priority.
 //
 // An update with state Ready:
 // - If it's from higher priority:
 //   - Do nothing
-//   - It actually shouldn't happen, no balancer switches back to IDLE.
+//   - It actually shouldn't happen, no balancer switches back to Idle.
 // - If it's from priorityInUse:
 //   - Forward only
 //
 // Caller must make sure priorityInUse is not higher than priority.
 //
 // Caller must hold mu.
-func (b *priorityBalancer) handlePriorityWithNewStateIDLE(child *childBalancer, priority int) {
+func (b *priorityBalancer) handlePriorityWithNewStateIdle(child *childBalancer, priority int) {
 	// priorityInUse is lower than this priority, do nothing.
 	if b.priorityInUse > priority {
 		return

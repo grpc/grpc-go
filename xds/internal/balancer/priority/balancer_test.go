@@ -1779,17 +1779,17 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 	}
 }
 
-const initIDLEBalancerName = "test-init-IDLE-balancer"
+const initIdleBalancerName = "test-init-Idle-balancer"
 
-var errsTestInitIDLE = []error{
-	fmt.Errorf("init IDLE balancer error 0"),
-	fmt.Errorf("init IDLE balancer error 1"),
+var errsTestInitIdle = []error{
+	fmt.Errorf("init Idle balancer error 0"),
+	fmt.Errorf("init Idle balancer error 1"),
 }
 
 func init() {
 	for i := 0; i < 2; i++ {
 		ii := i
-		stub.Register(fmt.Sprintf("%s-%d", initIDLEBalancerName, ii), stub.BalancerFuncs{
+		stub.Register(fmt.Sprintf("%s-%d", initIdleBalancerName, ii), stub.BalancerFuncs{
 			UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
 				bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
 				return nil
@@ -1797,7 +1797,7 @@ func init() {
 			UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
 				err := fmt.Errorf("wrong picker error")
 				if state.ConnectivityState == connectivity.Idle {
-					err = errsTestInitIDLE[ii]
+					err = errsTestInitIdle[ii]
 				}
 				bd.ClientConn.UpdateState(balancer.State{
 					ConnectivityState: state.ConnectivityState,
@@ -1808,12 +1808,12 @@ func init() {
 	}
 }
 
-// If the high priorities send initial pickers with IDLE state, their pickers
-// should get picks, because policies like ringhash starts in IDLE, and doesn't
+// If the high priorities send initial pickers with Idle state, their pickers
+// should get picks, because policies like ringhash starts in Idle, and doesn't
 // connect.
 //
-// Init 0, 1; 0 is IDLE, use 0; 0 is down, start 1; 1 is IDLE, use 1.
-func (s) TestPriority_HighPriorityInitIDLE(t *testing.T) {
+// Init 0, 1; 0 is Idle, use 0; 0 is down, start 1; 1 is Idle, use 1.
+func (s) TestPriority_HighPriorityInitIdle(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	bb := balancer.Get(Name)
 	pb := bb.Build(cc, balancer.BuildOptions{})
@@ -1829,8 +1829,8 @@ func (s) TestPriority_HighPriorityInitIDLE(t *testing.T) {
 		},
 		BalancerConfig: &LBConfig{
 			Children: map[string]*Child{
-				"child-0": {Config: &internalserviceconfig.BalancerConfig{Name: fmt.Sprintf("%s-%d", initIDLEBalancerName, 0)}},
-				"child-1": {Config: &internalserviceconfig.BalancerConfig{Name: fmt.Sprintf("%s-%d", initIDLEBalancerName, 1)}},
+				"child-0": {Config: &internalserviceconfig.BalancerConfig{Name: fmt.Sprintf("%s-%d", initIdleBalancerName, 0)}},
+				"child-1": {Config: &internalserviceconfig.BalancerConfig{Name: fmt.Sprintf("%s-%d", initIdleBalancerName, 1)}},
 			},
 			Priorities: []string{"child-0", "child-1"},
 		},
@@ -1844,11 +1844,11 @@ func (s) TestPriority_HighPriorityInitIDLE(t *testing.T) {
 	}
 	sc0 := <-cc.NewSubConnCh
 
-	// Send an IDLE state update to trigger an IDLE picker update.
+	// Send an Idle state update to trigger an Idle picker update.
 	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Idle})
 	p0 := <-cc.NewPickerCh
-	if pr, err := p0.Pick(balancer.PickInfo{}); err != errsTestInitIDLE[0] {
-		t.Fatalf("pick returned %v, %v, want _, %v", pr, err, errsTestInitIDLE[0])
+	if pr, err := p0.Pick(balancer.PickInfo{}); err != errsTestInitIdle[0] {
+		t.Fatalf("pick returned %v, %v, want _, %v", pr, err, errsTestInitIdle[0])
 	}
 
 	// Turn p0 down, to start p1.
@@ -1867,10 +1867,10 @@ func (s) TestPriority_HighPriorityInitIDLE(t *testing.T) {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
 	}
 	sc1 := <-cc.NewSubConnCh
-	// IDLE picker from p1 should also be forwarded.
+	// Idle picker from p1 should also be forwarded.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Idle})
 	p2 := <-cc.NewPickerCh
-	if pr, err := p2.Pick(balancer.PickInfo{}); err != errsTestInitIDLE[1] {
-		t.Fatalf("pick returned %v, %v, want _, %v", pr, err, errsTestInitIDLE[1])
+	if pr, err := p2.Pick(balancer.PickInfo{}); err != errsTestInitIdle[1] {
+		t.Fatalf("pick returned %v, %v, want _, %v", pr, err, errsTestInitIdle[1])
 	}
 }
