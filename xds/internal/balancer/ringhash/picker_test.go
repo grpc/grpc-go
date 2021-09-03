@@ -276,6 +276,7 @@ func TestNextSkippingDuplicatesMoreDup(t *testing.T) {
 
 func TestNextSkippingDuplicatesOnlyDup(t *testing.T) {
 	testRing := newTestRing([]connectivity.State{connectivity.Idle})
+	// Make a new ring with only duplicate SubConns.
 	dupTestRing := addDups(testRing, 3)
 	// This ring only has duplicates of items[0], should return nil.
 	if got := nextSkippingDuplicates(dupTestRing, dupTestRing.items[0]); got != nil {

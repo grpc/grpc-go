@@ -19,6 +19,8 @@
 package ringhash
 
 import (
+	"fmt"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -60,6 +62,8 @@ func handleRICS(e *ringEntry) (balancer.PickResult, error, bool) {
 	default:
 		// Should never reach this. All the connectivity states are already
 		// handled in the cases.
+		//
+		// FIXME: add an error log.
 		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "SubConn has undefined connectivity state: %v", state), true
 	}
 }
@@ -81,7 +85,7 @@ func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, erro
 	e2 := nextSkippingDuplicates(p.ring, e)
 	if e2 == nil {
 		// There's no next entry available, fail the pick.
-		return balancer.PickResult{}, status.Errorf(codes.Unavailable, "the only SubConn is not Ready")
+		return balancer.PickResult{}, fmt.Errorf("the only SubConn is in Transient Failure")
 	}
 
 	// For the second SubConn, also check Ready/IDLE/Connecting as if it's the
@@ -126,7 +130,7 @@ func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, erro
 			ee.sc.connect()
 		}
 	}
-	return balancer.PickResult{}, status.Errorf(codes.Unavailable, "no connection is Ready")
+	return balancer.PickResult{}, fmt.Errorf("no connection is Ready")
 }
 
 func nextSkippingDuplicates(ring *ring, cur *ringEntry) *ringEntry {
