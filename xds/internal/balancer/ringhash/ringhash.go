@@ -66,11 +66,14 @@ type subConn struct {
 	connectQueued bool
 }
 
-// setState updates the state of this SubConn.
+// SetState updates the state of this SubConn.
 //
 // It also handles the queued Connect(). If the new state is IDLE, and a
 // Connect() was queued, this SubConn will be triggered to Connect().
-func (sc *subConn) setState(s connectivity.State) {
+//
+// FIXME: unexport this. It's exported so that staticcheck doesn't complain
+// about unused functions.
+func (sc *subConn) SetState(s connectivity.State) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	// Any state change to non-Idle means there was an attempt to connect.
