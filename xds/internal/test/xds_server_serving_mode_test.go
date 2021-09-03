@@ -116,18 +116,20 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}()
 
 	// Wait for both listeners to move to "serving" mode.
-	for i := 0; i < 2; i++ {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("timed out waiting for a mode change update: %v", err)
-		case mode := <-updateCh1:
-			if mode != xds.ServingModeServing {
-				t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
-			}
-		case mode := <-updateCh2:
-			if mode != xds.ServingModeServing {
-				t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
-			}
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for a mode change update: %v", err)
+	case mode := <-updateCh1:
+		if mode != xds.ServingModeServing {
+			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+		}
+	}
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for a mode change update: %v", err)
+	case mode := <-updateCh2:
+		if mode != xds.ServingModeServing {
+			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
 		}
 	}
 
@@ -159,18 +161,20 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// Wait for lis2 to move to "not-serving" mode. lis1 also receives an update
 	// here even though it stays in "serving" mode.
 	// See https://github.com/grpc/grpc-go/issues/4695.
-	for i := 0; i < 2; i++ {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("timed out waiting for a mode change update: %v", err)
-		case mode := <-updateCh1:
-			if mode != xds.ServingModeServing {
-				t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
-			}
-		case mode := <-updateCh2:
-			if mode != xds.ServingModeNotServing {
-				t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeNotServing)
-			}
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for a mode change update: %v", err)
+	case mode := <-updateCh1:
+		if mode != xds.ServingModeServing {
+			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+		}
+	}
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for a mode change update: %v", err)
+	case mode := <-updateCh2:
+		if mode != xds.ServingModeNotServing {
+			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeNotServing)
 		}
 	}
 
@@ -221,18 +225,20 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Wait for both listeners to move to "serving" mode.
-	for i := 0; i < 2; i++ {
-		select {
-		case <-ctx.Done():
-			t.Fatalf("timed out waiting for a mode change update: %v", err)
-		case mode := <-updateCh1:
-			if mode != xds.ServingModeServing {
-				t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
-			}
-		case mode := <-updateCh2:
-			if mode != xds.ServingModeServing {
-				t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
-			}
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for a mode change update: %v", err)
+	case mode := <-updateCh1:
+		if mode != xds.ServingModeServing {
+			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+		}
+	}
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for a mode change update: %v", err)
+	case mode := <-updateCh2:
+		if mode != xds.ServingModeServing {
+			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
 		}
 	}
 
