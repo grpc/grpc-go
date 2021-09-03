@@ -31,14 +31,6 @@ type picker struct {
 	ring *ring
 }
 
-// FIXME: uncomment this. This is commented out because staticcheck complains
-// about unused functions. Keeping this here for completeness. Will be
-// uncommented in a future PR.
-//
-// func newPicker(ring *ring) *picker {
-// 	return &picker{ring: ring}
-// }
-
 // handleRICSResult is the return type of handleRICS. It's needed to wrap the
 // returned error from Pick() in a struct. With this, if the return values are
 // `balancer.PickResult, error, bool`, linter complains because error is not the

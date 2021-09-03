@@ -37,10 +37,12 @@ type subConn struct {
 	// This is the actual state of this SubConn (as updated by the ClientConn).
 	// The effective state can be different, see comment of attemptedToConnect.
 	state connectivity.State
-	// attemptedToConnect is whether this SubConn has attempted to connect.
+	// attemptedToConnect is whether this SubConn has attempted to connect ever.
+	// So that only the initial Idle is Idle, after any attempt to connect,
+	// following Idles are all TransientFailure.
 	//
-	// This affect the effective connectivity state of this SubConn, e.g. if the
-	// actual state is IDLE, but this SubConn has attempted to connect, the
+	// This affects the effective connectivity state of this SubConn, e.g. if
+	// the actual state is IDLE, but this SubConn has attempted to connect, the
 	// effective state is TransientFailure.
 	//
 	// This is used in pick(). E.g. if a subConn is IDLE, but has
@@ -64,28 +66,31 @@ type subConn struct {
 	connectQueued bool
 }
 
-// FIXME: uncomment this. This is commented out because staticcheck complains
-// about unused functions. Keeping this here for completeness. Will be
-// uncommented in a future PR.
+// setState updates the state of this SubConn.
 //
-// // setState updates the state of this SubConn.
-// //
-// // It also handles the queued Connect(). If the new state is IDLE, and a
-// // Connect() was queued, this SubConn will be triggered to Connect().
-// func (sc *subConn) setState(s connectivity.State) {
-// 	sc.mu.Lock()
-// 	defer sc.mu.Unlock()
-// 	// Any state change means there was an attempt to connect.
-// 	if s != connectivity.Idle {
-// 		sc.attemptedToConnect = true
-// 	}
-// 	// Trigger Connect() if new state is IDLE, and there is a queued connect.
-// 	if s == connectivity.Idle && sc.connectQueued {
-// 		sc.connectQueued = false
-// 		sc.sc.Connect()
-// 	}
-// 	sc.state = s
-// }
+// It also handles the queued Connect(). If the new state is IDLE, and a
+// Connect() was queued, this SubConn will be triggered to Connect().
+func (sc *subConn) setState(s connectivity.State) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	// Any state change to non-Idle means there was an attempt to connect.
+	if s != connectivity.Idle {
+		sc.attemptedToConnect = true
+	}
+	switch s {
+	case connectivity.Idle:
+		// Trigger Connect() if new state is IDLE, and there is a queued connect.
+		if sc.connectQueued {
+			sc.connectQueued = false
+			sc.sc.Connect()
+		}
+	case connectivity.Connecting, connectivity.Ready:
+		// Clear connectQueued if the SubConn isn't failing. This state
+		// transition is unlikely to happen, but handle this just in case.
+		sc.connectQueued = false
+	}
+	sc.state = s
+}
 
 // effectiveState returns the effective state of this SubConn. It can be
 // different from the actual state, e.g. IDLE after any attempt to connect (any
