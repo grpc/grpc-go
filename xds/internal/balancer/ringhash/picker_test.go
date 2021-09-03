@@ -68,7 +68,7 @@ func TestPickerPickFirstTwo(t *testing.T) {
 			wantErr: balancer.ErrNoSubConnAvailable,
 		},
 		{
-			name:            "picked is IDLE, connect and queue",
+			name:            "picked is Idle, connect and queue",
 			ring:            newTestRing([]connectivity.State{connectivity.Idle, connectivity.Idle}),
 			hash:            5,
 			wantErr:         balancer.ErrNoSubConnAvailable,
@@ -87,7 +87,7 @@ func TestPickerPickFirstTwo(t *testing.T) {
 			wantErr: balancer.ErrNoSubConnAvailable,
 		},
 		{
-			name:            "picked is TransientFailure, next is IDLE, connect and queue",
+			name:            "picked is TransientFailure, next is Idle, connect and queue",
 			ring:            newTestRing([]connectivity.State{connectivity.TransientFailure, connectivity.Idle}),
 			hash:            5,
 			wantErr:         balancer.ErrNoSubConnAvailable,
@@ -139,7 +139,7 @@ func TestPickerPickTriggerTFConnect(t *testing.T) {
 			t.Errorf("the %d-th SubConn is not queued for connect", i)
 		}
 	}
-	// The other SubConns, after the first IDLE, should not be queued to
+	// The other SubConns, after the first Idle, should not be queued to
 	// connect.
 	for i := 5; i < len(ring.items); i++ {
 		it := ring.items[i]
@@ -174,11 +174,11 @@ func TestPickerPickTriggerTFReturnReady(t *testing.T) {
 	}
 }
 
-// TestPickerPickTriggerTFWithIDLE covers that if the picked SubConn is
-// TransientFailure, SubConn 2 is TransientFailure, 3 is IDLE (init IDLE). Pick
+// TestPickerPickTriggerTFWithIdle covers that if the picked SubConn is
+// TransientFailure, SubConn 2 is TransientFailure, 3 is Idle (init Idle). Pick
 // will be queue, SubConn 3 will Connect(), SubConn 4 and 5 (in TransientFailre)
 // will not queue a Connect.
-func TestPickerPickTriggerTFWithIDLE(t *testing.T) {
+func TestPickerPickTriggerTFWithIdle(t *testing.T) {
 	ring := newTestRing([]connectivity.State{
 		connectivity.TransientFailure, connectivity.TransientFailure, connectivity.Idle, connectivity.TransientFailure, connectivity.TransientFailure,
 	})
@@ -195,13 +195,13 @@ func TestPickerPickTriggerTFWithIDLE(t *testing.T) {
 			t.Errorf("the %d-th SubConn is not queued for connect", i)
 		}
 	}
-	// SubConn 3 was in IDLE, so should Connect()
+	// SubConn 3 was in Idle, so should Connect()
 	select {
 	case <-testutils.TestSubConns[2].ConnectCh:
 	case <-time.After(defaultTestShortTimeout):
 		t.Errorf("timeout waiting for Connect() from SubConn %v", testutils.TestSubConns[2])
 	}
-	// The other SubConns, after the first IDLE, should not be queued to
+	// The other SubConns, after the first Idle, should not be queued to
 	// connect.
 	for i := 3; i < len(ring.items); i++ {
 		it := ring.items[i]

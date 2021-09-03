@@ -40,11 +40,11 @@ type handleRICSResult struct {
 	err error
 }
 
-// handleRICS generates pick result if the entry is in Ready, IDLE, Connecting
+// handleRICS generates pick result if the entry is in Ready, Idle, Connecting
 // or Shutdown. TransientFailure will be handled specifically after this
 // function returns.
 //
-// The first return value indicates if the state is in Ready, IDLE, Connecting
+// The first return value indicates if the state is in Ready, Idle, Connecting
 // or Shutdown. If it's true, the PickResult and error should be returned from
 // Pick() as is.
 func handleRICS(e *ringEntry) (handleRICSResult, bool) {
@@ -93,7 +93,7 @@ func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, erro
 		return balancer.PickResult{}, fmt.Errorf("the only SubConn is in Transient Failure")
 	}
 
-	// For the second SubConn, also check Ready/IDLE/Connecting as if it's the
+	// For the second SubConn, also check Ready/Idle/Connecting as if it's the
 	// first entry.
 	if hr, ok := handleRICS(e2); ok {
 		return hr.pr, hr.err
@@ -130,7 +130,7 @@ func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, erro
 		// seen. After this, Pick() will never trigger any SubConn to Connect().
 		firstNonFailedFound = true
 		if scState == connectivity.Idle {
-			// This is the first non-failed SubConn, and it is in a real IDLE
+			// This is the first non-failed SubConn, and it is in a real Idle
 			// state. Trigger it to Connect().
 			ee.sc.queueConnect()
 		}
