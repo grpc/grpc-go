@@ -32,8 +32,8 @@ in the route guide example [here][route-guide-stream].  Similar to clients,
 multiple services can be registered to the same server.
 
 [helloworld]: https://github.com/grpc/grpc-go/blob/master/examples/helloworld/greeter_client/main.go#L43
-[client-conn]: https://godoc.org/github.com/arshanvit/grpc#ClientConn
-[stream]: https://godoc.org/github.com/arshanvit/grpc#Stream
+[client-conn]: https://godoc.org/github.com/arshanvit/grpc-go#ClientConn
+[stream]: https://godoc.org/github.com/arshanvit/grpc-go#Stream
 [say-hello]: https://github.com/grpc/grpc-go/blob/master/examples/helloworld/greeter_server/main.go#L41
 [route-guide-stream]: https://github.com/grpc/grpc-go/blob/master/examples/route_guide/server/server.go#L126
 [multiplex-example]: https://github.com/grpc/grpc-go/tree/master/examples/features/multiplex

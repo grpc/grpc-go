@@ -24,16 +24,16 @@ import (
 	"net"
 	"time"
 
-	"github.com/arshanvit/grpc/backoff"
-	"github.com/arshanvit/grpc/balancer"
-	"github.com/arshanvit/grpc/credentials"
-	"github.com/arshanvit/grpc/internal"
-	internalbackoff "github.com/arshanvit/grpc/internal/backoff"
-	"github.com/arshanvit/grpc/internal/envconfig"
-	"github.com/arshanvit/grpc/internal/transport"
-	"github.com/arshanvit/grpc/keepalive"
-	"github.com/arshanvit/grpc/resolver"
-	"github.com/arshanvit/grpc/stats"
+	"github.com/arshanvit/grpc-go/backoff"
+	"github.com/arshanvit/grpc-go/balancer"
+	"github.com/arshanvit/grpc-go/credentials"
+	"github.com/arshanvit/grpc-go/internal"
+	internalbackoff "github.com/arshanvit/grpc-go/internal/backoff"
+	"github.com/arshanvit/grpc-go/internal/envconfig"
+	"github.com/arshanvit/grpc-go/internal/transport"
+	"github.com/arshanvit/grpc-go/keepalive"
+	"github.com/arshanvit/grpc-go/resolver"
+	"github.com/arshanvit/grpc-go/stats"
 )
 
 // dialOptions configure a Dial call. dialOptions are set by the DialOption

@@ -25,9 +25,9 @@ authenticated TLS connection to transmit RPC.
 
 In our `grpc/credentials` package, we provide several convenience methods to
 create grpc
-[`credentials.TransportCredentials`](https://godoc.org/github.com/arshanvit/grpc/credentials#TransportCredentials)
+[`credentials.TransportCredentials`](https://godoc.org/github.com/arshanvit/grpc-go/credentials#TransportCredentials)
 base on TLS. Refer to the
-[godoc](https://godoc.org/github.com/arshanvit/grpc/credentials) for details.
+[godoc](https://godoc.org/github.com/arshanvit/grpc-go/credentials) for details.
 
 In our example, we use the public/private keys created ahead: 
 * "server_cert.pem" contains the server certificate (public key). 
@@ -37,20 +37,20 @@ that can verify the server's certificate.
 
 On server side, we provide the paths to "server.pem" and "server.key" to
 configure TLS and create the server credential using
-[`credentials.NewServerTLSFromFile`](https://godoc.org/github.com/arshanvit/grpc/credentials#NewServerTLSFromFile).
+[`credentials.NewServerTLSFromFile`](https://godoc.org/github.com/arshanvit/grpc-go/credentials#NewServerTLSFromFile).
 
 On client side, we provide the path to the "ca_cert.pem" to configure TLS and create
 the client credential using
-[`credentials.NewClientTLSFromFile`](https://godoc.org/github.com/arshanvit/grpc/credentials#NewClientTLSFromFile).
+[`credentials.NewClientTLSFromFile`](https://godoc.org/github.com/arshanvit/grpc-go/credentials#NewClientTLSFromFile).
 Note that we override the server name with "x.test.example.com", as the server
 certificate is valid for *.test.example.com but not localhost. It is solely for
 the convenience of making an example.
 
 Once the credentials have been created at both sides, we can start the server
 with the just created server credential (by calling
-[`grpc.Creds`](https://godoc.org/github.com/arshanvit/grpc#Creds)) and let client dial
+[`grpc.Creds`](https://godoc.org/github.com/arshanvit/grpc-go#Creds)) and let client dial
 to the server with the created client credential (by calling
-[`grpc.WithTransportCredentials`](https://godoc.org/github.com/arshanvit/grpc#WithTransportCredentials))
+[`grpc.WithTransportCredentials`](https://godoc.org/github.com/arshanvit/grpc-go#WithTransportCredentials))
 
 And finally we make an RPC call over the created `grpc.ClientConn` to test the secure
 connection based upon TLS is successfully up.
@@ -69,15 +69,15 @@ Unlike TLS, ALTS makes certificate/key management transparent to user. So it is
 easier to set up.
 
 On server side, first call
-[`alts.DefaultServerOptions`](https://godoc.org/github.com/arshanvit/grpc/credentials/alts#DefaultServerOptions)
+[`alts.DefaultServerOptions`](https://godoc.org/github.com/arshanvit/grpc-go/credentials/alts#DefaultServerOptions)
 to get the configuration for alts and then provide the configuration to
-[`alts.NewServerCreds`](https://godoc.org/github.com/arshanvit/grpc/credentials/alts#NewServerCreds)
+[`alts.NewServerCreds`](https://godoc.org/github.com/arshanvit/grpc-go/credentials/alts#NewServerCreds)
 to create the server credential based upon alts.
 
 On client side, first call
-[`alts.DefaultClientOptions`](https://godoc.org/github.com/arshanvit/grpc/credentials/alts#DefaultClientOptions)
+[`alts.DefaultClientOptions`](https://godoc.org/github.com/arshanvit/grpc-go/credentials/alts#DefaultClientOptions)
 to get the configuration for alts and then provide the configuration to
-[`alts.NewClientCreds`](https://godoc.org/github.com/arshanvit/grpc/credentials/alts#NewClientCreds)
+[`alts.NewClientCreds`](https://godoc.org/github.com/arshanvit/grpc-go/credentials/alts#NewClientCreds)
 to create the client credential based upon alts.
 
 Next, same as TLS, start the server with the server credential and let client

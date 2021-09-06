@@ -6,7 +6,7 @@ The service implemented is defined in: https://github.com/grpc/grpc/blob/master/
 
 To register server reflection on a gRPC server:
 ```go
-import "github.com/arshanvit/grpc/reflection"
+import "github.com/arshanvit/grpc-go/reflection"
 
 s := grpc.NewServer()
 pb.RegisterYourOwnServer(s, &server{})

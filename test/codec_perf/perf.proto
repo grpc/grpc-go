@@ -16,7 +16,7 @@
 // reasons of import cycles.
 syntax = "proto3";
 
-option go_package = "github.com/arshanvit/grpc/test/codec_perf";
+option go_package = "github.com/arshanvit/grpc-go/test/codec_perf";
 
 package codec.perf;
 

@@ -24,7 +24,7 @@ for the bootstrap format.
 The client application needs to import the xDS package to install the resolver and balancers:
 
 ```go
-_ "github.com/arshanvit/grpc/xds" // To install the xds resolvers and balancers.
+_ "github.com/arshanvit/grpc-go/xds" // To install the xds resolvers and balancers.
 ```
 
 Then, use `xds` target scheme for the ClientConn.

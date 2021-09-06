@@ -175,7 +175,7 @@ done
 # Build server and client
 out_dir=$(mktemp -d oss_benchXXX)
 
-go build -o ${out_dir}/server $GOPATH/src/github.com/arshanvit/grpc/benchmark/server/main.go && go build -o ${out_dir}/client $GOPATH/src/github.com/arshanvit/grpc/benchmark/client/main.go
+go build -o ${out_dir}/server $GOPATH/src/github.com/arshanvit/grpc-go/benchmark/server/main.go && go build -o ${out_dir}/client $GOPATH/src/github.com/arshanvit/grpc-go/benchmark/client/main.go
 if [ $? != 0 ]; then
   clean_and_die 1
 fi

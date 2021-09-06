@@ -58,11 +58,11 @@ receives an error with details:
 exit status 1
 ```
 
-[status]:       https://godoc.org/github.com/arshanvit/grpc/status#Status
-[new-status]:   https://godoc.org/github.com/arshanvit/grpc/status#New
-[code]:         https://godoc.org/github.com/arshanvit/grpc/codes#Code
-[with-details]: https://godoc.org/github.com/arshanvit/grpc/internal/status#Status.WithDetails
-[details]:      https://godoc.org/github.com/arshanvit/grpc/internal/status#Status.Details
-[status-err]:   https://godoc.org/github.com/arshanvit/grpc/internal/status#Status.Err
-[status-error]: https://godoc.org/github.com/arshanvit/grpc/status#Error
+[status]:       https://godoc.org/github.com/arshanvit/grpc-go/status#Status
+[new-status]:   https://godoc.org/github.com/arshanvit/grpc-go/status#New
+[code]:         https://godoc.org/github.com/arshanvit/grpc-go/codes#Code
+[with-details]: https://godoc.org/github.com/arshanvit/grpc-go/internal/status#Status.WithDetails
+[details]:      https://godoc.org/github.com/arshanvit/grpc-go/internal/status#Status.Details
+[status-err]:   https://godoc.org/github.com/arshanvit/grpc-go/internal/status#Status.Err
+[status-error]: https://godoc.org/github.com/arshanvit/grpc-go/status#Error
 [example]:      https://github.com/grpc/grpc-go/tree/master/examples/features/errors

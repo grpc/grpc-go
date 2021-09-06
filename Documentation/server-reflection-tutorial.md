@@ -19,9 +19,9 @@ make the following changes:
 --- a/examples/helloworld/greeter_server/main.go
 +++ b/examples/helloworld/greeter_server/main.go
 @@ -40,6 +40,7 @@ import (
-        "github.com/arshanvit/grpc"
-        pb "github.com/arshanvit/grpc/examples/helloworld/helloworld"
-+       "github.com/arshanvit/grpc/reflection"
+        "github.com/arshanvit/grpc-go"
+        pb "github.com/arshanvit/grpc-go/examples/helloworld/helloworld"
++       "github.com/arshanvit/grpc-go/reflection"
  )
 
  const (

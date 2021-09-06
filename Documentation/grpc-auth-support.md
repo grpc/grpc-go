@@ -29,33 +29,33 @@ For an example of how to configure client and server to use OAuth2 tokens, see
 ## Validating a token on the server
 
 Clients may use
-[metadata.MD](https://godoc.org/github.com/arshanvit/grpc/metadata#MD)
+[metadata.MD](https://godoc.org/github.com/arshanvit/grpc-go/metadata#MD)
 to store tokens and other authentication-related data. To gain access to the
 `metadata.MD` object, a server may use
-[metadata.FromIncomingContext](https://godoc.org/github.com/arshanvit/grpc/metadata#FromIncomingContext).
+[metadata.FromIncomingContext](https://godoc.org/github.com/arshanvit/grpc-go/metadata#FromIncomingContext).
 With a reference to `metadata.MD` on the server, one needs to simply lookup the
 `authorization` key. Note, all keys stored within `metadata.MD` are normalized
-to lowercase. See [here](https://godoc.org/github.com/arshanvit/grpc/metadata#New).
+to lowercase. See [here](https://godoc.org/github.com/arshanvit/grpc-go/metadata#New).
 
 It is possible to configure token validation for all RPCs using an interceptor.
 A server may configure either a
-[grpc.UnaryInterceptor](https://godoc.org/github.com/arshanvit/grpc#UnaryInterceptor)
+[grpc.UnaryInterceptor](https://godoc.org/github.com/arshanvit/grpc-go#UnaryInterceptor)
 or a
-[grpc.StreamInterceptor](https://godoc.org/github.com/arshanvit/grpc#StreamInterceptor).
+[grpc.StreamInterceptor](https://godoc.org/github.com/arshanvit/grpc-go#StreamInterceptor).
 
 ## Adding a token to all outgoing client RPCs
 
 To send an OAuth2 token with each RPC, a client may configure the
 `grpc.DialOption`
-[grpc.WithPerRPCCredentials](https://godoc.org/github.com/arshanvit/grpc#WithPerRPCCredentials).
+[grpc.WithPerRPCCredentials](https://godoc.org/github.com/arshanvit/grpc-go#WithPerRPCCredentials).
 Alternatively, a client may also use the `grpc.CallOption`
-[grpc.PerRPCCredentials](https://godoc.org/github.com/arshanvit/grpc#PerRPCCredentials)
+[grpc.PerRPCCredentials](https://godoc.org/github.com/arshanvit/grpc-go#PerRPCCredentials)
 on each invocation of an RPC.
 
 To create a `credentials.PerRPCCredentials`, use
-[oauth.NewOauthAccess](https://godoc.org/github.com/arshanvit/grpc/credentials/oauth#NewOauthAccess).
+[oauth.NewOauthAccess](https://godoc.org/github.com/arshanvit/grpc-go/credentials/oauth#NewOauthAccess).
 Note, the OAuth2 implementation of `grpc.PerRPCCredentials` requires a client to use
-[grpc.WithTransportCredentials](https://godoc.org/github.com/arshanvit/grpc#WithTransportCredentials)
+[grpc.WithTransportCredentials](https://godoc.org/github.com/arshanvit/grpc-go#WithTransportCredentials)
 to prevent any insecure transmission of tokens.
 
 # Authenticating with Google

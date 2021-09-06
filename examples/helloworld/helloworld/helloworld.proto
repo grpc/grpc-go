@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-option go_package = "github.com/arshanvit/grpc/examples/helloworld/helloworld";
+option go_package = "github.com/arshanvit/grpc-go/examples/helloworld/helloworld";
 option java_multiple_files = true;
 option java_package = "io.grpc.examples.helloworld";
 option java_outer_classname = "HelloWorldProto";

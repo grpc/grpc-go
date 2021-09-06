@@ -14,7 +14,7 @@
 
 syntax = "proto2";
 
-option go_package = "github.com/arshanvit/grpc/reflection/grpc_testing";
+option go_package = "github.com/arshanvit/grpc-go/reflection/grpc_testing";
 
 package grpc.testing;
 

@@ -22,7 +22,7 @@ How to get your contributions merged smoothly and quickly.
 
 - The grpc package should only depend on standard Go packages and a small number
   of exceptions. If your contribution introduces new dependencies which are NOT
-  in the [list](https://godoc.org/github.com/arshanvit/grpc?imports), you need a
+  in the [list](https://godoc.org/github.com/arshanvit/grpc-go?imports), you need a
   discussion with gRPC-Go authors and consultants.
 
 - For speculative changes, consider opening an issue and discussing it first. If

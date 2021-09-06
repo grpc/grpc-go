@@ -16,7 +16,7 @@
 // of unary/streaming requests/responses.
 syntax = "proto3";
 
-option go_package = "github.com/arshanvit/grpc/test/grpc_testing";
+option go_package = "github.com/arshanvit/grpc-go/test/grpc_testing";
 
 package grpc.testing;
 
