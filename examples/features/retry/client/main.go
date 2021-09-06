@@ -25,8 +25,8 @@ import (
 	"log"
 	"time"
 
-	"google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/features/proto/echo"
+	"github.com/arshanvit/grpc"
+	pb "github.com/arshanvit/grpc/examples/features/proto/echo"
 )
 
 var (

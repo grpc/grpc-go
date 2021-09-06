@@ -38,7 +38,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc/internal/profiling/buffer"
+	"github.com/arshanvit/grpc/internal/profiling/buffer"
 )
 
 // 0 or 1 representing profiling off and on, respectively. Use IsEnabled and
@@ -190,7 +190,7 @@ var statsInitialized int32
 
 // Stats for the last defaultStreamStatsBufsize RPCs will be stored in memory.
 // This is can be configured by the registering server at profiling service
-// initialization with google.golang.org/grpc/profiling/service.ProfilingConfig
+// initialization with github.com/arshanvit/grpc/profiling/service.ProfilingConfig
 const defaultStreamStatsSize uint32 = 16 << 10
 
 // StreamStats is a CircularBuffer containing data from the last N RPC calls

@@ -25,9 +25,9 @@ import (
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	anypb "github.com/golang/protobuf/ptypes/any"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/xds/internal/version"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc/internal/testutils"
+	"github.com/arshanvit/grpc/xds/internal/version"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient"
 )
 
 const (

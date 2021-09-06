@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sync"
 
-	"google.golang.org/grpc/internal/grpcrand"
+	"github.com/arshanvit/grpc/internal/grpcrand"
 )
 
 // weightedItem is a wrapped weighted item that is used to implement weighted random algorithm.

@@ -29,16 +29,16 @@ import (
 	"strconv"
 	"testing"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds"
-	"google.golang.org/grpc/xds/internal/testutils/e2e"
+	"github.com/arshanvit/grpc"
+	"github.com/arshanvit/grpc/codes"
+	"github.com/arshanvit/grpc/credentials/insecure"
+	"github.com/arshanvit/grpc/status"
+	"github.com/arshanvit/grpc/xds"
+	"github.com/arshanvit/grpc/xds/internal/testutils/e2e"
 
-	xdscreds "google.golang.org/grpc/credentials/xds"
-	testpb "google.golang.org/grpc/test/grpc_testing"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
+	xdscreds "github.com/arshanvit/grpc/credentials/xds"
+	testpb "github.com/arshanvit/grpc/test/grpc_testing"
+	xdstestutils "github.com/arshanvit/grpc/xds/internal/testutils"
 )
 
 const (

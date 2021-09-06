@@ -19,11 +19,11 @@
 package priority
 
 import (
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/base"
-	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/serviceconfig"
+	"github.com/arshanvit/grpc/balancer"
+	"github.com/arshanvit/grpc/balancer/base"
+	"github.com/arshanvit/grpc/connectivity"
+	"github.com/arshanvit/grpc/resolver"
+	"github.com/arshanvit/grpc/serviceconfig"
 )
 
 type childBalancer struct {

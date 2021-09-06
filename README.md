@@ -1,7 +1,7 @@
 # gRPC-Go
 
 [![Build Status](https://travis-ci.org/grpc/grpc-go.svg)](https://travis-ci.org/grpc/grpc-go)
-[![GoDoc](https://pkg.go.dev/badge/google.golang.org/grpc)][API]
+[![GoDoc](https://pkg.go.dev/badge/github.com/arshanvit/grpc)][API]
 [![GoReportCard](https://goreportcard.com/badge/grpc/grpc-go)](https://goreportcard.com/report/github.com/grpc/grpc-go)
 
 The [Go][] implementation of [gRPC][]: A high performance, open source, general
@@ -17,7 +17,7 @@ RPC framework that puts mobile and HTTP/2 first. For more information see the
 With [Go module][] support (Go 1.11+), simply add the following import
 
 ```go
-import "google.golang.org/grpc"
+import "github.com/arshanvit/grpc"
 ```
 
 to your code, and then `go [build|run|test]` will automatically fetch the
@@ -26,7 +26,7 @@ necessary dependencies.
 Otherwise, to install the `grpc-go` package, run the following command:
 
 ```console
-$ go get -u google.golang.org/grpc
+$ go get -u github.com/arshanvit/grpc
 ```
 
 > **Note:** If you are trying to access `grpc-go` from **China**, see the
@@ -48,8 +48,8 @@ The `golang.org` domain may be blocked from some countries. `go get` usually
 produces an error like the following when this happens:
 
 ```console
-$ go get -u google.golang.org/grpc
-package google.golang.org/grpc: unrecognized import path "google.golang.org/grpc" (https fetch: Get https://google.golang.org/grpc?go-get=1: dial tcp 216.239.37.1:443: i/o timeout)
+$ go get -u github.com/arshanvit/grpc
+package github.com/arshanvit/grpc: unrecognized import path "github.com/arshanvit/grpc" (https fetch: Get https://github.com/arshanvit/grpc?go-get=1: dial tcp 216.239.37.1:443: i/o timeout)
 ```
 
 To build Go code, there are several options:
@@ -59,7 +59,7 @@ To build Go code, there are several options:
 - Without Go module support: `git clone` the repo manually:
 
   ```sh
-  git clone https://github.com/grpc/grpc-go.git $GOPATH/src/google.golang.org/grpc
+  git clone https://github.com/grpc/grpc-go.git $GOPATH/src/github.com/arshanvit/grpc
   ```
 
   You will need to do the same for all of grpc's dependencies in `golang.org`,
@@ -69,7 +69,7 @@ To build Go code, there are several options:
   mod` to create aliases for golang.org packages.  In your project's directory:
 
   ```sh
-  go mod edit -replace=google.golang.org/grpc=github.com/grpc/grpc-go@latest
+  go mod edit -replace=github.com/arshanvit/grpc=github.com/grpc/grpc-go@latest
   go mod tidy
   go mod vendor
   go build -mod=vendor
@@ -90,7 +90,7 @@ the same module containing the generated `.pb.go` files.  For example,
 module <your module name>
 
 require (
-    google.golang.org/grpc v1.27.0
+    github.com/arshanvit/grpc v1.27.0
 )
 ```
 
@@ -100,7 +100,7 @@ Update the `proto` package, gRPC package, and rebuild the `.proto` files:
 
 ```sh
 go get -u github.com/golang/protobuf/{proto,protoc-gen-go}
-go get -u google.golang.org/grpc
+go get -u github.com/arshanvit/grpc
 protoc --go_out=plugins=grpc:. *.proto
 ```
 
@@ -123,7 +123,7 @@ possible reasons, including:
  1. server shutdown
  1. Keepalive parameters caused connection shutdown, for example if you have configured
     your server to terminate connections regularly to [trigger DNS lookups](https://github.com/grpc/grpc-go/issues/3170#issuecomment-552517779).
-    If this is the case, you may want to increase your [MaxConnectionAgeGrace](https://pkg.go.dev/google.golang.org/grpc/keepalive?tab=doc#ServerParameters),
+    If this is the case, you may want to increase your [MaxConnectionAgeGrace](https://pkg.go.dev/github.com/arshanvit/grpc/keepalive?tab=doc#ServerParameters),
     to allow longer RPC calls to finish.
 
 It can be tricky to debug this because the error happens on the client side but
@@ -131,7 +131,7 @@ the root cause of the connection being closed is on the server side. Turn on
 logging on __both client and server__, and see if there are any transport
 errors.
 
-[API]: https://pkg.go.dev/google.golang.org/grpc
+[API]: https://pkg.go.dev/github.com/arshanvit/grpc
 [Go]: https://golang.org
 [Go module]: https://github.com/golang/go/wiki/Modules
 [gRPC]: https://grpc.io

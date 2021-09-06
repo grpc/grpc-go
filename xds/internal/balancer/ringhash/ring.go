@@ -24,8 +24,8 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/arshanvit/grpc/resolver"
 	xxhash "github.com/cespare/xxhash/v2"
-	"google.golang.org/grpc/resolver"
 )
 
 // subConn is a placeholder struct needed by the ring. It will be moved to the

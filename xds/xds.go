@@ -35,18 +35,18 @@ package xds
 import (
 	"fmt"
 
+	"github.com/arshanvit/grpc"
+	internaladmin "github.com/arshanvit/grpc/internal/admin"
+	"github.com/arshanvit/grpc/resolver"
+	"github.com/arshanvit/grpc/xds/csds"
 	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
-	"google.golang.org/grpc"
-	internaladmin "google.golang.org/grpc/internal/admin"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/csds"
 
-	_ "google.golang.org/grpc/credentials/tls/certprovider/pemfile" // Register the file watcher certificate provider plugin.
-	_ "google.golang.org/grpc/xds/internal/balancer"                // Register the balancers.
-	_ "google.golang.org/grpc/xds/internal/httpfilter/fault"        // Register the fault injection filter.
-	xdsresolver "google.golang.org/grpc/xds/internal/resolver"      // Register the xds_resolver.
-	_ "google.golang.org/grpc/xds/internal/xdsclient/v2"            // Register the v2 xDS API client.
-	_ "google.golang.org/grpc/xds/internal/xdsclient/v3"            // Register the v3 xDS API client.
+	_ "github.com/arshanvit/grpc/credentials/tls/certprovider/pemfile" // Register the file watcher certificate provider plugin.
+	_ "github.com/arshanvit/grpc/xds/internal/balancer"                // Register the balancers.
+	_ "github.com/arshanvit/grpc/xds/internal/httpfilter/fault"        // Register the fault injection filter.
+	xdsresolver "github.com/arshanvit/grpc/xds/internal/resolver"      // Register the xds_resolver.
+	_ "github.com/arshanvit/grpc/xds/internal/xdsclient/v2"            // Register the v2 xDS API client.
+	_ "github.com/arshanvit/grpc/xds/internal/xdsclient/v3"            // Register the v3 xDS API client.
 )
 
 func init() {

@@ -21,8 +21,8 @@ package priority
 import (
 	"fmt"
 
-	"google.golang.org/grpc/grpclog"
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
+	"github.com/arshanvit/grpc/grpclog"
+	internalgrpclog "github.com/arshanvit/grpc/internal/grpclog"
 )
 
 const prefix = "[priority-lb %p] "

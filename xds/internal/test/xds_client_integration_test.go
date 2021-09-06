@@ -27,12 +27,12 @@ import (
 	"net"
 	"testing"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/e2e"
+	"github.com/arshanvit/grpc"
+	"github.com/arshanvit/grpc/credentials/insecure"
+	"github.com/arshanvit/grpc/xds/internal/testutils"
+	"github.com/arshanvit/grpc/xds/internal/testutils/e2e"
 
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	testpb "github.com/arshanvit/grpc/test/grpc_testing"
 )
 
 // clientSetup performs a bunch of steps common to all xDS client tests here:

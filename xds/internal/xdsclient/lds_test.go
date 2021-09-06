@@ -31,11 +31,11 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/types/known/durationpb"
 
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/xds/internal/httpfilter"
-	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
-	"google.golang.org/grpc/xds/internal/testutils/e2e"
-	"google.golang.org/grpc/xds/internal/version"
+	"github.com/arshanvit/grpc/internal/testutils"
+	"github.com/arshanvit/grpc/xds/internal/httpfilter"
+	_ "github.com/arshanvit/grpc/xds/internal/httpfilter/router"
+	"github.com/arshanvit/grpc/xds/internal/testutils/e2e"
+	"github.com/arshanvit/grpc/xds/internal/version"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"

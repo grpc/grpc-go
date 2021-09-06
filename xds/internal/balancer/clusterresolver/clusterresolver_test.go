@@ -25,16 +25,16 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc/balancer"
+	"github.com/arshanvit/grpc/connectivity"
+	"github.com/arshanvit/grpc/internal/grpctest"
+	"github.com/arshanvit/grpc/internal/testutils"
+	"github.com/arshanvit/grpc/resolver"
+	"github.com/arshanvit/grpc/xds/internal"
+	"github.com/arshanvit/grpc/xds/internal/testutils/fakeclient"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient"
 
-	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // V2 client registration.
+	_ "github.com/arshanvit/grpc/xds/internal/xdsclient/v2" // V2 client registration.
 )
 
 const (

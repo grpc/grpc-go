@@ -30,13 +30,13 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/tls/certprovider"
-	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
-	"google.golang.org/grpc/security/advancedtls/internal/testutils"
-	"google.golang.org/grpc/security/advancedtls/testdata"
+	"github.com/arshanvit/grpc"
+	"github.com/arshanvit/grpc/credentials"
+	"github.com/arshanvit/grpc/credentials/tls/certprovider"
+	"github.com/arshanvit/grpc/credentials/tls/certprovider/pemfile"
+	pb "github.com/arshanvit/grpc/examples/helloworld/helloworld"
+	"github.com/arshanvit/grpc/security/advancedtls/internal/testutils"
+	"github.com/arshanvit/grpc/security/advancedtls/testdata"
 )
 
 const (

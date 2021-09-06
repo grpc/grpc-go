@@ -22,9 +22,9 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/attributes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/resolver"
+	"github.com/arshanvit/grpc/attributes"
+	"github.com/arshanvit/grpc/metadata"
+	"github.com/arshanvit/grpc/resolver"
 )
 
 func TestGet(t *testing.T) {

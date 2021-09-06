@@ -23,8 +23,8 @@ import (
 	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/metadata"
+	"github.com/arshanvit/grpc/internal/grpctest"
+	"github.com/arshanvit/grpc/metadata"
 )
 
 var (

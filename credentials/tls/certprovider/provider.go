@@ -30,7 +30,7 @@ import (
 	"crypto/x509"
 	"errors"
 
-	"google.golang.org/grpc/internal"
+	"github.com/arshanvit/grpc/internal"
 )
 
 func init() {

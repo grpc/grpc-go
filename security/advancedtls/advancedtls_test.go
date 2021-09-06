@@ -27,10 +27,10 @@ import (
 	"net"
 	"testing"
 
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/tls/certprovider"
-	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/security/advancedtls/internal/testutils"
+	"github.com/arshanvit/grpc/credentials"
+	"github.com/arshanvit/grpc/credentials/tls/certprovider"
+	"github.com/arshanvit/grpc/internal/grpctest"
+	"github.com/arshanvit/grpc/security/advancedtls/internal/testutils"
 )
 
 type s struct {

@@ -21,7 +21,7 @@
 package manual
 
 import (
-	"google.golang.org/grpc/resolver"
+	"github.com/arshanvit/grpc/resolver"
 )
 
 // NewBuilderWithScheme creates a new test resolver builder with the given scheme.

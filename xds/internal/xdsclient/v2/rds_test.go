@@ -25,8 +25,8 @@ import (
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 
-	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc/xds/internal/testutils/fakeserver"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient"
 )
 
 // doLDS makes a LDS watch, and waits for the response and ack to finish.

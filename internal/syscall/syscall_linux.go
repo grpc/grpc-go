@@ -27,7 +27,7 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
-	"google.golang.org/grpc/grpclog"
+	"github.com/arshanvit/grpc/grpclog"
 )
 
 var logger = grpclog.Component("core")

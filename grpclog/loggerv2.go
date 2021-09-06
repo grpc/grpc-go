@@ -25,7 +25,7 @@ import (
 	"os"
 	"strconv"
 
-	"google.golang.org/grpc/internal/grpclog"
+	"github.com/arshanvit/grpc/internal/grpclog"
 )
 
 // LoggerV2 does underlying logging work for grpclog.

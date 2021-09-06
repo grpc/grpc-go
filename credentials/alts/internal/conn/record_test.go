@@ -28,8 +28,8 @@ import (
 	"reflect"
 	"testing"
 
-	core "google.golang.org/grpc/credentials/alts/internal"
-	"google.golang.org/grpc/internal/grpctest"
+	core "github.com/arshanvit/grpc/credentials/alts/internal"
+	"github.com/arshanvit/grpc/internal/grpctest"
 )
 
 type s struct {

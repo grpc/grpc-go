@@ -29,10 +29,10 @@ import (
 	"github.com/google/cel-go/interpreter"
 	"github.com/google/go-cmp/cmp"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
+	"github.com/arshanvit/grpc/codes"
+	"github.com/arshanvit/grpc/internal/grpctest"
+	"github.com/arshanvit/grpc/peer"
+	"github.com/arshanvit/grpc/status"
 )
 
 type s struct {

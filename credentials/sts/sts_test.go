@@ -34,10 +34,10 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"google.golang.org/grpc/credentials"
-	icredentials "google.golang.org/grpc/internal/credentials"
-	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/testutils"
+	"github.com/arshanvit/grpc/credentials"
+	icredentials "github.com/arshanvit/grpc/internal/credentials"
+	"github.com/arshanvit/grpc/internal/grpctest"
+	"github.com/arshanvit/grpc/internal/testutils"
 )
 
 const (

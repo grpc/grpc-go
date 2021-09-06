@@ -27,9 +27,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"google.golang.org/grpc/balancer"
-	_ "google.golang.org/grpc/balancer/grpclb"               // grpclb for config parsing.
-	_ "google.golang.org/grpc/internal/resolver/passthrough" // passthrough resolver.
+	"github.com/arshanvit/grpc/balancer"
+	_ "github.com/arshanvit/grpc/balancer/grpclb"               // grpclb for config parsing.
+	_ "github.com/arshanvit/grpc/internal/resolver/passthrough" // passthrough resolver.
 )
 
 const balancerWithoutConfigParserName = "dummy_balancer"

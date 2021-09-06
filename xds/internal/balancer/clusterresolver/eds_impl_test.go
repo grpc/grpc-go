@@ -25,17 +25,17 @@ import (
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
-	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
-	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
-	"google.golang.org/grpc/xds/internal/balancer/priority"
-	"google.golang.org/grpc/xds/internal/balancer/weightedtarget"
-	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc/balancer"
+	"github.com/arshanvit/grpc/connectivity"
+	internalserviceconfig "github.com/arshanvit/grpc/internal/serviceconfig"
+	"github.com/arshanvit/grpc/resolver"
+	"github.com/arshanvit/grpc/xds/internal/balancer/balancergroup"
+	"github.com/arshanvit/grpc/xds/internal/balancer/clusterimpl"
+	"github.com/arshanvit/grpc/xds/internal/balancer/priority"
+	"github.com/arshanvit/grpc/xds/internal/balancer/weightedtarget"
+	"github.com/arshanvit/grpc/xds/internal/testutils"
+	"github.com/arshanvit/grpc/xds/internal/testutils/fakeclient"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient"
 )
 
 var (

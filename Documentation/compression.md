@@ -2,16 +2,16 @@
 
 The preferred method for configuring message compression on both clients and
 servers is to use
-[`encoding.RegisterCompressor`](https://godoc.org/google.golang.org/grpc/encoding#RegisterCompressor)
+[`encoding.RegisterCompressor`](https://godoc.org/github.com/arshanvit/grpc/encoding#RegisterCompressor)
 to register an implementation of a compression algorithm.  See
 `grpc/encoding/gzip/gzip.go` for an example of how to implement one.
 
 Once a compressor has been registered on the client-side, RPCs may be sent using
 it via the
-[`UseCompressor`](https://godoc.org/google.golang.org/grpc#UseCompressor)
+[`UseCompressor`](https://godoc.org/github.com/arshanvit/grpc#UseCompressor)
 `CallOption`.  Remember that `CallOption`s may be turned into defaults for all
 calls from a `ClientConn` by using the
-[`WithDefaultCallOptions`](https://godoc.org/google.golang.org/grpc#WithDefaultCallOptions)
+[`WithDefaultCallOptions`](https://godoc.org/github.com/arshanvit/grpc#WithDefaultCallOptions)
 `DialOption`.  If `UseCompressor` is used and the corresponding compressor has
 not been installed, an `Internal` error will be returned to the application
 before the RPC is sent.

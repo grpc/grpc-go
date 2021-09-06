@@ -28,13 +28,13 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/rls/internal/cache"
-	"google.golang.org/grpc/balancer/rls/internal/keys"
-	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
-	"google.golang.org/grpc/internal/grpcrand"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/metadata"
+	"github.com/arshanvit/grpc/balancer"
+	"github.com/arshanvit/grpc/balancer/rls/internal/cache"
+	"github.com/arshanvit/grpc/balancer/rls/internal/keys"
+	rlspb "github.com/arshanvit/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
+	"github.com/arshanvit/grpc/internal/grpcrand"
+	"github.com/arshanvit/grpc/internal/testutils"
+	"github.com/arshanvit/grpc/metadata"
 )
 
 const defaultTestMaxAge = 5 * time.Second

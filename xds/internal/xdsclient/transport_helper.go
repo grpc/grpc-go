@@ -23,12 +23,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/arshanvit/grpc/xds/internal/xdsclient/load"
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/grpc/xds/internal/xdsclient/load"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/buffer"
-	"google.golang.org/grpc/internal/grpclog"
+	"github.com/arshanvit/grpc"
+	"github.com/arshanvit/grpc/internal/buffer"
+	"github.com/arshanvit/grpc/internal/grpclog"
 )
 
 // ErrResourceTypeUnsupported is an error used to indicate an unsupported xDS

@@ -26,11 +26,11 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/manual"
+	"github.com/arshanvit/grpc/balancer"
+	"github.com/arshanvit/grpc/connectivity"
+	"github.com/arshanvit/grpc/internal/testutils"
+	"github.com/arshanvit/grpc/resolver"
+	"github.com/arshanvit/grpc/resolver/manual"
 )
 
 const stateRecordingBalancerName = "state_recoding_balancer"

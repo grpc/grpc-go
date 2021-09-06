@@ -24,11 +24,11 @@ import (
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	anypb "github.com/golang/protobuf/ptypes/any"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/xds/internal"
-	xtestutils "google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/version"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc/internal/testutils"
+	"github.com/arshanvit/grpc/xds/internal"
+	xtestutils "github.com/arshanvit/grpc/xds/internal/testutils"
+	"github.com/arshanvit/grpc/xds/internal/version"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient"
 )
 
 var (

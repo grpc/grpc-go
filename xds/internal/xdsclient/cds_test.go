@@ -22,6 +22,10 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/arshanvit/grpc/internal/testutils"
+	"github.com/arshanvit/grpc/internal/xds/env"
+	"github.com/arshanvit/grpc/internal/xds/matcher"
+	"github.com/arshanvit/grpc/xds/internal/version"
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -33,10 +37,6 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/env"
-	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 

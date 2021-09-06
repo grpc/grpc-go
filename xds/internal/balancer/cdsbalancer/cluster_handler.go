@@ -20,7 +20,7 @@ import (
 	"errors"
 	"sync"
 
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient"
 )
 
 var errNotReceivedUpdate = errors.New("tried to construct a cluster update on a cluster that has not received an update")

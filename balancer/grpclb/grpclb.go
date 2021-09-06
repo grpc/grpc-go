@@ -19,7 +19,7 @@
 // Package grpclb defines a grpclb balancer.
 //
 // To install grpclb balancer, import this package as:
-//    import _ "google.golang.org/grpc/balancer/grpclb"
+//    import _ "github.com/arshanvit/grpc/balancer/grpclb"
 package grpclb
 
 import (
@@ -29,19 +29,19 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer"
-	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
-	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/resolver/dns"
-	"google.golang.org/grpc/resolver"
+	"github.com/arshanvit/grpc"
+	"github.com/arshanvit/grpc/balancer"
+	grpclbstate "github.com/arshanvit/grpc/balancer/grpclb/state"
+	"github.com/arshanvit/grpc/connectivity"
+	"github.com/arshanvit/grpc/credentials"
+	"github.com/arshanvit/grpc/grpclog"
+	"github.com/arshanvit/grpc/internal"
+	"github.com/arshanvit/grpc/internal/backoff"
+	"github.com/arshanvit/grpc/internal/resolver/dns"
+	"github.com/arshanvit/grpc/resolver"
 
 	durationpb "github.com/golang/protobuf/ptypes/duration"
-	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
+	lbpb "github.com/arshanvit/grpc/balancer/grpclb/grpc_lb_v1"
 )
 
 const (

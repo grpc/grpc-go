@@ -29,8 +29,8 @@ import (
 
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	"google.golang.org/grpc/internal/grpcutil"
-	"google.golang.org/grpc/status"
+	"github.com/arshanvit/grpc/internal/grpcutil"
+	"github.com/arshanvit/grpc/status"
 )
 
 var updateHeaderTblSize = func(e *hpack.Encoder, v uint32) {

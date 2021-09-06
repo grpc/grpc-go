@@ -30,15 +30,15 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/tls/certprovider"
-	icredentials "google.golang.org/grpc/internal/credentials"
-	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
-	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/testdata"
+	"github.com/arshanvit/grpc/credentials"
+	"github.com/arshanvit/grpc/credentials/tls/certprovider"
+	icredentials "github.com/arshanvit/grpc/internal/credentials"
+	xdsinternal "github.com/arshanvit/grpc/internal/credentials/xds"
+	"github.com/arshanvit/grpc/internal/grpctest"
+	"github.com/arshanvit/grpc/internal/testutils"
+	"github.com/arshanvit/grpc/internal/xds/matcher"
+	"github.com/arshanvit/grpc/resolver"
+	"github.com/arshanvit/grpc/testdata"
 )
 
 const (

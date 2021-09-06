@@ -29,13 +29,13 @@ import (
 	"time"
 	"unsafe"
 
-	"google.golang.org/grpc/backoff"
-	"google.golang.org/grpc/grpclog"
-	internalbackoff "google.golang.org/grpc/internal/backoff"
-	internalgrpclog "google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"github.com/arshanvit/grpc/backoff"
+	"github.com/arshanvit/grpc/grpclog"
+	internalbackoff "github.com/arshanvit/grpc/internal/backoff"
+	internalgrpclog "github.com/arshanvit/grpc/internal/grpclog"
+	"github.com/arshanvit/grpc/internal/grpcsync"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 var (

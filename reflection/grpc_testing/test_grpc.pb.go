@@ -8,9 +8,9 @@ package grpc_testing
 
 import (
 	context "context"
-	grpc "google.golang.org/grpc"
-	codes "google.golang.org/grpc/codes"
-	status "google.golang.org/grpc/status"
+	grpc "github.com/arshanvit/grpc"
+	codes "github.com/arshanvit/grpc/codes"
+	status "github.com/arshanvit/grpc/status"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -20,7 +20,7 @@ const _ = grpc.SupportPackageIsVersion7
 
 // SearchServiceClient is the client API for SearchService service.
 //
-// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/github.com/arshanvit/grpc/?tab=doc#ClientConn.NewStream.
 type SearchServiceClient interface {
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error)
 	StreamingSearch(ctx context.Context, opts ...grpc.CallOption) (SearchService_StreamingSearchClient, error)

@@ -27,19 +27,19 @@ import (
 	"net"
 	"strconv"
 
-	"google.golang.org/grpc"
-	_ "google.golang.org/grpc/balancer/grpclb"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/alts"
-	"google.golang.org/grpc/credentials/google"
-	"google.golang.org/grpc/credentials/oauth"
-	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/interop"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/testdata"
-	_ "google.golang.org/grpc/xds/googledirectpath"
+	"github.com/arshanvit/grpc"
+	_ "github.com/arshanvit/grpc/balancer/grpclb"
+	"github.com/arshanvit/grpc/credentials"
+	"github.com/arshanvit/grpc/credentials/alts"
+	"github.com/arshanvit/grpc/credentials/google"
+	"github.com/arshanvit/grpc/credentials/oauth"
+	"github.com/arshanvit/grpc/grpclog"
+	"github.com/arshanvit/grpc/interop"
+	"github.com/arshanvit/grpc/resolver"
+	"github.com/arshanvit/grpc/testdata"
+	_ "github.com/arshanvit/grpc/xds/googledirectpath"
 
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testgrpc "github.com/arshanvit/grpc/interop/grpc_testing"
 )
 
 const (

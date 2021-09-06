@@ -24,12 +24,12 @@ import (
 	"regexp"
 	"testing"
 
+	iresolver "github.com/arshanvit/grpc/internal/resolver"
+	"github.com/arshanvit/grpc/metadata"
+	_ "github.com/arshanvit/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
+	"github.com/arshanvit/grpc/xds/internal/xdsclient"
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/google/go-cmp/cmp"
-	iresolver "google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/metadata"
-	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
-	"google.golang.org/grpc/xds/internal/xdsclient"
 )
 
 func (s) TestPruneActiveClusters(t *testing.T) {

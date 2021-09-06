@@ -30,10 +30,10 @@ import (
 	"math/rand"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/examples/data"
-	pb "google.golang.org/grpc/examples/route_guide/routeguide"
+	"github.com/arshanvit/grpc"
+	"github.com/arshanvit/grpc/credentials"
+	"github.com/arshanvit/grpc/examples/data"
+	pb "github.com/arshanvit/grpc/examples/route_guide/routeguide"
 )
 
 var (

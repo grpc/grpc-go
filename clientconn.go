@@ -29,26 +29,26 @@ import (
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/base"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/internal/grpcutil"
-	iresolver "google.golang.org/grpc/internal/resolver"
-	"google.golang.org/grpc/internal/transport"
-	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/serviceconfig"
-	"google.golang.org/grpc/status"
+	"github.com/arshanvit/grpc/balancer"
+	"github.com/arshanvit/grpc/balancer/base"
+	"github.com/arshanvit/grpc/codes"
+	"github.com/arshanvit/grpc/connectivity"
+	"github.com/arshanvit/grpc/credentials"
+	"github.com/arshanvit/grpc/internal/backoff"
+	"github.com/arshanvit/grpc/internal/channelz"
+	"github.com/arshanvit/grpc/internal/grpcsync"
+	"github.com/arshanvit/grpc/internal/grpcutil"
+	iresolver "github.com/arshanvit/grpc/internal/resolver"
+	"github.com/arshanvit/grpc/internal/transport"
+	"github.com/arshanvit/grpc/keepalive"
+	"github.com/arshanvit/grpc/resolver"
+	"github.com/arshanvit/grpc/serviceconfig"
+	"github.com/arshanvit/grpc/status"
 
-	_ "google.golang.org/grpc/balancer/roundrobin"           // To register roundrobin.
-	_ "google.golang.org/grpc/internal/resolver/dns"         // To register dns resolver.
-	_ "google.golang.org/grpc/internal/resolver/passthrough" // To register passthrough resolver.
-	_ "google.golang.org/grpc/internal/resolver/unix"        // To register unix resolver.
+	_ "github.com/arshanvit/grpc/balancer/roundrobin"           // To register roundrobin.
+	_ "github.com/arshanvit/grpc/internal/resolver/dns"         // To register dns resolver.
+	_ "github.com/arshanvit/grpc/internal/resolver/passthrough" // To register passthrough resolver.
+	_ "github.com/arshanvit/grpc/internal/resolver/unix"        // To register unix resolver.
 )
 
 const (

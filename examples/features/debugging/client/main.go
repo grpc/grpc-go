@@ -26,12 +26,12 @@ import (
 	"os"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/channelz/service"
-	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/resolver/manual"
+	"github.com/arshanvit/grpc"
+	"github.com/arshanvit/grpc/channelz/service"
+	"github.com/arshanvit/grpc/resolver"
+	"github.com/arshanvit/grpc/resolver/manual"
 
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	pb "github.com/arshanvit/grpc/examples/helloworld/helloworld"
 )
 
 const (

@@ -23,10 +23,10 @@ import (
 	"net"
 	"testing"
 
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/internal"
-	icredentials "google.golang.org/grpc/internal/credentials"
-	"google.golang.org/grpc/resolver"
+	"github.com/arshanvit/grpc/credentials"
+	"github.com/arshanvit/grpc/internal"
+	icredentials "github.com/arshanvit/grpc/internal/credentials"
+	"github.com/arshanvit/grpc/resolver"
 )
 
 type testCreds struct {

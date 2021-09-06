@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"testing"
 
-	"google.golang.org/grpc/attributes"
+	"github.com/arshanvit/grpc/attributes"
 )
 
 func ExampleAttributes() {

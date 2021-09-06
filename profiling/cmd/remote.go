@@ -25,8 +25,8 @@ import (
 	"os"
 	"time"
 
-	"google.golang.org/grpc"
-	ppb "google.golang.org/grpc/profiling/proto"
+	"github.com/arshanvit/grpc"
+	ppb "github.com/arshanvit/grpc/profiling/proto"
 )
 
 func setEnabled(ctx context.Context, c ppb.ProfilingClient, enabled bool) error {

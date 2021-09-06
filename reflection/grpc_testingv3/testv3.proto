@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "google.golang.org/grpc/reflection/grpc_testingv3";
+option go_package = "github.com/arshanvit/grpc/reflection/grpc_testingv3";
 
 package grpc.testingv3;
 

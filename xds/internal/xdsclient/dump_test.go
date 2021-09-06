@@ -34,12 +34,12 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/testutils"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"github.com/arshanvit/grpc"
+	"github.com/arshanvit/grpc/credentials/insecure"
+	"github.com/arshanvit/grpc/internal/testutils"
+	xdstestutils "github.com/arshanvit/grpc/xds/internal/testutils"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const defaultTestWatchExpiryTimeout = 500 * time.Millisecond

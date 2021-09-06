@@ -25,8 +25,8 @@ import (
 	"os"
 	"time"
 
-	"google.golang.org/grpc"
-	pb "google.golang.org/grpc/examples/helloworld/helloworld"
+	"github.com/arshanvit/grpc"
+	pb "github.com/arshanvit/grpc/examples/helloworld/helloworld"
 )
 
 const (

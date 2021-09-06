@@ -20,8 +20,8 @@
 package rls
 
 import (
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/internal/grpcsync"
+	"github.com/arshanvit/grpc/balancer"
+	"github.com/arshanvit/grpc/internal/grpcsync"
 )
 
 const rlsBalancerName = "rls"

@@ -25,12 +25,12 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/authz"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
-	pb "google.golang.org/grpc/test/grpc_testing"
+	"github.com/arshanvit/grpc"
+	"github.com/arshanvit/grpc/authz"
+	"github.com/arshanvit/grpc/codes"
+	"github.com/arshanvit/grpc/metadata"
+	"github.com/arshanvit/grpc/status"
+	pb "github.com/arshanvit/grpc/test/grpc_testing"
 )
 
 type testServer struct {

@@ -31,15 +31,15 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/encoding/proto"
-	"google.golang.org/grpc/internal/transport"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/stats"
-	"google.golang.org/grpc/status"
+	"github.com/arshanvit/grpc/codes"
+	"github.com/arshanvit/grpc/credentials"
+	"github.com/arshanvit/grpc/encoding"
+	"github.com/arshanvit/grpc/encoding/proto"
+	"github.com/arshanvit/grpc/internal/transport"
+	"github.com/arshanvit/grpc/metadata"
+	"github.com/arshanvit/grpc/peer"
+	"github.com/arshanvit/grpc/stats"
+	"github.com/arshanvit/grpc/status"
 )
 
 // Compressor defines the interface gRPC uses to compress a message.

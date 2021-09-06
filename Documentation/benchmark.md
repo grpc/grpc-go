@@ -11,7 +11,7 @@ compression turned on, invoking `benchmain` in the following way may closely
 simulate your application:
 
 ```bash
-$ go run google.golang.org/grpc/benchmark/benchmain/main.go \
+$ go run github.com/arshanvit/grpc/benchmark/benchmain/main.go \
     -workloads=streaming \
   	-reqSizeBytes=1024 \
   	-respSizeBytes=1024 \
@@ -43,7 +43,7 @@ of payload sizes (first two columns) and the weight associated with that range
 Assume that `benchmain` is invoked like so:
 
 ```bash
-$ go run google.golang.org/grpc/benchmark/benchmain/main.go \
+$ go run github.com/arshanvit/grpc/benchmark/benchmain/main.go \
     -workloads=unary \
   	-reqPayloadCurveFiles=/path/to/csv \
   	-respPayloadCurveFiles=/path/to/csv
@@ -59,7 +59,7 @@ execute the benchmark with each combination independently. That is, the
 following command will execute four benchmarks:
 
 ```bash
-$ go run google.golang.org/grpc/benchmark/benchmain/main.go \
+$ go run github.com/arshanvit/grpc/benchmark/benchmain/main.go \
     -workloads=unary \
   	-reqPayloadCurveFiles=/path/to/csv1,/path/to/csv2 \
   	-respPayloadCurveFiles=/path/to/csv3,/path/to/csv4
@@ -68,7 +68,7 @@ $ go run google.golang.org/grpc/benchmark/benchmain/main.go \
 You may also combine `PayloadCurveFiles` with `SizeBytes` options. For example:
 
 ```
-$ go run google.golang.org/grpc/benchmark/benchmain/main.go \
+$ go run github.com/arshanvit/grpc/benchmark/benchmain/main.go \
     -workloads=unary \
   	-reqPayloadCurveFiles=/path/to/csv \
   	-respSizeBytes=1

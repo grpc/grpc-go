@@ -23,7 +23,7 @@
 package hierarchy
 
 import (
-	"google.golang.org/grpc/resolver"
+	"github.com/arshanvit/grpc/resolver"
 )
 
 type pathKeyType string

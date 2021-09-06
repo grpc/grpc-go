@@ -31,12 +31,12 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	"github.com/arshanvit/grpc"
+	"github.com/arshanvit/grpc/codes"
+	"github.com/arshanvit/grpc/internal/stubserver"
+	"github.com/arshanvit/grpc/metadata"
+	"github.com/arshanvit/grpc/status"
+	testpb "github.com/arshanvit/grpc/test/grpc_testing"
 )
 
 func authorityChecker(ctx context.Context, expectedAuthority string) (*testpb.Empty, error) {

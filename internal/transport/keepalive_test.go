@@ -31,8 +31,8 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
-	"google.golang.org/grpc/internal/syscall"
-	"google.golang.org/grpc/keepalive"
+	"github.com/arshanvit/grpc/internal/syscall"
+	"github.com/arshanvit/grpc/keepalive"
 )
 
 const defaultTestTimeout = 10 * time.Second

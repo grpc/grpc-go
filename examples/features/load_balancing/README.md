@@ -29,7 +29,7 @@ Each client picks a different load balancer (using
 `grpc.WithDefaultServiceConfig`): `pick_first` or `round_robin`. (These two
 policies are supported in gRPC by default. To add a custom balancing policy,
 implement the interfaces defined in
-https://godoc.org/google.golang.org/grpc/balancer).
+https://godoc.org/github.com/arshanvit/grpc/balancer).
 
 Note that balancers can also be switched using service config, which allows
 service owners (instead of client owners) to pick the balancer to use. Service

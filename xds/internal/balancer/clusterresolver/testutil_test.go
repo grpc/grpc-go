@@ -27,10 +27,10 @@ import (
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc/balancer"
+	"github.com/arshanvit/grpc/xds/internal"
+	"github.com/arshanvit/grpc/xds/internal/testutils"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient"
 )
 
 // parseEDSRespProtoForTesting parses EDS response, and panic if parsing fails.

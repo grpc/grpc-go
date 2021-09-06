@@ -23,8 +23,8 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/grpc/encoding"
-	"google.golang.org/grpc/test/codec_perf"
+	"github.com/arshanvit/grpc/encoding"
+	"github.com/arshanvit/grpc/test/codec_perf"
 )
 
 func setupBenchmarkProtoCodecInputs(payloadBaseSize uint32) []proto.Message {

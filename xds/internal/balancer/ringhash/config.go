@@ -22,7 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"google.golang.org/grpc/serviceconfig"
+	"github.com/arshanvit/grpc/serviceconfig"
 )
 
 // Name is the name of the ring_hash balancer.

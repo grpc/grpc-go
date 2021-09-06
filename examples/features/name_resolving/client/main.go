@@ -25,9 +25,9 @@ import (
 	"log"
 	"time"
 
-	"google.golang.org/grpc"
-	ecpb "google.golang.org/grpc/examples/features/proto/echo"
-	"google.golang.org/grpc/resolver"
+	"github.com/arshanvit/grpc"
+	ecpb "github.com/arshanvit/grpc/examples/features/proto/echo"
+	"github.com/arshanvit/grpc/resolver"
 )
 
 const (
@@ -85,8 +85,8 @@ func main() {
 }
 
 // Following is an example name resolver. It includes a
-// ResolverBuilder(https://godoc.org/google.golang.org/grpc/resolver#Builder)
-// and a Resolver(https://godoc.org/google.golang.org/grpc/resolver#Resolver).
+// ResolverBuilder(https://godoc.org/github.com/arshanvit/grpc/resolver#Builder)
+// and a Resolver(https://godoc.org/github.com/arshanvit/grpc/resolver#Resolver).
 //
 // A ResolverBuilder is registered for a scheme (in this example, "example" is
 // the scheme). When a ClientConn is created for this scheme, the
@@ -95,7 +95,7 @@ func main() {
 // target, and send updates to the ClientConn.
 
 // exampleResolverBuilder is a
-// ResolverBuilder(https://godoc.org/google.golang.org/grpc/resolver#Builder).
+// ResolverBuilder(https://godoc.org/github.com/arshanvit/grpc/resolver#Builder).
 type exampleResolverBuilder struct{}
 
 func (*exampleResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
@@ -112,7 +112,7 @@ func (*exampleResolverBuilder) Build(target resolver.Target, cc resolver.ClientC
 func (*exampleResolverBuilder) Scheme() string { return exampleScheme }
 
 // exampleResolver is a
-// Resolver(https://godoc.org/google.golang.org/grpc/resolver#Resolver).
+// Resolver(https://godoc.org/github.com/arshanvit/grpc/resolver#Resolver).
 type exampleResolver struct {
 	target     resolver.Target
 	cc         resolver.ClientConn

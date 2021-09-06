@@ -20,13 +20,13 @@ package clusterimpl
 
 import (
 	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/wrr"
-	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"github.com/arshanvit/grpc/balancer"
+	"github.com/arshanvit/grpc/codes"
+	"github.com/arshanvit/grpc/connectivity"
+	"github.com/arshanvit/grpc/internal/wrr"
+	"github.com/arshanvit/grpc/status"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient/load"
 )
 
 // NewRandomWRR is used when calculating drops. It's exported so that tests can

@@ -24,15 +24,15 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/arshanvit/grpc/internal/testutils"
+	"github.com/arshanvit/grpc/xds/internal"
+	"github.com/arshanvit/grpc/xds/internal/version"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/version"
 )
 
 func (s) TestEDSParseRespProto(t *testing.T) {

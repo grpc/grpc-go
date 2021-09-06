@@ -23,8 +23,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/internal/balancer/stub"
-	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	"github.com/arshanvit/grpc/internal/balancer/stub"
+	internalserviceconfig "github.com/arshanvit/grpc/internal/serviceconfig"
 )
 
 func TestDiscoveryMechanismTypeMarshalJSON(t *testing.T) {

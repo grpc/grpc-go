@@ -24,8 +24,8 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/balancer"
-	externalserviceconfig "google.golang.org/grpc/serviceconfig"
+	"github.com/arshanvit/grpc/balancer"
+	externalserviceconfig "github.com/arshanvit/grpc/serviceconfig"
 )
 
 type testBalancerConfigType struct {

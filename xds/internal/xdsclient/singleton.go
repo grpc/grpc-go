@@ -25,7 +25,7 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"github.com/arshanvit/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const defaultWatchExpiryTimeout = 15 * time.Second

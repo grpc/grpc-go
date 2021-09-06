@@ -25,7 +25,7 @@
 package profiling
 
 import (
-	internal "google.golang.org/grpc/internal/profiling"
+	internal "github.com/arshanvit/grpc/internal/profiling"
 )
 
 // Enable turns profiling on and off. This operation is safe for concurrent
