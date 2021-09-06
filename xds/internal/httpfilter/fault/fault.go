@@ -30,17 +30,17 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	"github.com/arshanvit/grpc/codes"
-	"github.com/arshanvit/grpc/internal/grpcrand"
-	iresolver "github.com/arshanvit/grpc/internal/resolver"
-	"github.com/arshanvit/grpc/metadata"
-	"github.com/arshanvit/grpc/status"
-	"github.com/arshanvit/grpc/xds/internal/httpfilter"
+	"github.com/arshanvit/grpc-go/codes"
+	"github.com/arshanvit/grpc-go/internal/grpcrand"
+	iresolver "github.com/arshanvit/grpc-go/internal/resolver"
+	"github.com/arshanvit/grpc-go/metadata"
+	"github.com/arshanvit/grpc-go/status"
+	"github.com/arshanvit/grpc-go/xds/internal/httpfilter"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	cpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/common/fault/v3"
-	fpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/fault/v3"
-	tpb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	cpb "github.com/arshanvit/go-control-plane/envoy/extensions/filters/common/fault/v3"
+	fpb "github.com/arshanvit/go-control-planeenvoy/extensions/filters/http/fault/v3"
+	tpb "github.com/arshanvit/go-control-planeenvoy/type/v3"
 )
 
 const headerAbortHTTPStatus = "x-envoy-fault-abort-request"

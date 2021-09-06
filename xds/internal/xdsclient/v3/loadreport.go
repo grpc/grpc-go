@@ -26,15 +26,15 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	"github.com/arshanvit/grpc/internal/pretty"
-	"github.com/arshanvit/grpc/xds/internal/xdsclient/load"
+	"github.com/arshanvit/grpc-go/internal/pretty"
+	"github.com/arshanvit/grpc-go/xds/internal/xdsclient/load"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
-	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
-	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
-	"github.com/arshanvit/grpc"
-	"github.com/arshanvit/grpc/xds/internal"
+	v3corepb "github.com/arshanvit/go-control-plane/envoy/config/core/v3"
+	v3endpointpb "github.com/arshanvit/go-control-planeenvoy/config/endpoint/v3"
+	lrsgrpc "github.com/arshanvit/go-control-planeenvoy/service/load_stats/v3"
+	lrspb "github.com/arshanvit/go-control-planeenvoy/service/load_stats/v3"
+	"github.com/arshanvit/grpc-go"
+	"github.com/arshanvit/grpc-go/xds/internal"
 )
 
 const clientFeatureLRSSendAllClusters = "envoy.lrs.supports_send_all_clusters"

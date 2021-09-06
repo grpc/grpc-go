@@ -25,16 +25,16 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	statuspb "google.golang.org/genproto/googleapis/rpc/status"
-	"github.com/arshanvit/grpc"
-	"github.com/arshanvit/grpc/codes"
-	"github.com/arshanvit/grpc/internal/grpclog"
-	"github.com/arshanvit/grpc/internal/pretty"
-	"github.com/arshanvit/grpc/xds/internal/version"
-	"github.com/arshanvit/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc-go"
+	"github.com/arshanvit/grpc-go/codes"
+	"github.com/arshanvit/grpc-go/internal/grpclog"
+	"github.com/arshanvit/grpc-go/internal/pretty"
+	"github.com/arshanvit/grpc-go/xds/internal/version"
+	"github.com/arshanvit/grpc-go/xds/internal/xdsclient"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	v3corepb "github.com/arshanvit/go-control-plane/envoy/config/core/v3"
+	v3adsgrpc "github.com/arshanvit/go-control-planeenvoy/service/discovery/v3"
+	v3discoverypb "github.com/arshanvit/go-control-planeenvoy/service/discovery/v3"
 )
 
 func init() {

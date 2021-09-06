@@ -23,18 +23,18 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/arshanvit/grpc/internal/testutils"
-	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
+	"github.com/arshanvit/grpc-go/internal/testutils"
+	"github.com/arshanvit/go-control-plane/pkg/wellknown"
 	"github.com/golang/protobuf/proto"
 
-	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
-	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
-	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	v3clusterpb "github.com/arshanvit/go-control-planeenvoy/config/cluster/v3"
+	v3corepb "github.com/arshanvit/go-control-planeenvoy/config/core/v3"
+	v3endpointpb "github.com/arshanvit/go-control-planeenvoy/config/endpoint/v3"
+	v3listenerpb "github.com/arshanvit/go-control-planeenvoy/config/listener/v3"
+	v3routepb "github.com/arshanvit/go-control-planeenvoy/config/route/v3"
+	v3routerpb "github.com/arshanvit/go-control-planeenvoy/extensions/filters/http/router/v3"
+	v3httppb "github.com/arshanvit/go-control-planeenvoy/extensions/filters/network/http_connection_manager/v3"
+	v3tlspb "github.com/arshanvit/go-control-planeenvoy/extensions/transport_sockets/tls/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 )
 

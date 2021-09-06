@@ -23,12 +23,12 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/arshanvit/grpc/internal/resolver"
-	"github.com/arshanvit/grpc/xds/internal/httpfilter"
-	"github.com/arshanvit/grpc/xds/internal/version"
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
-	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	"github.com/arshanvit/grpc-go/internal/resolver"
+	"github.com/arshanvit/grpc-go/xds/internal/httpfilter"
+	"github.com/arshanvit/grpc-go/xds/internal/version"
+	v3listenerpb "github.com/arshanvit/go-control-plane/envoy/config/listener/v3"
+	v3httppb "github.com/arshanvit/go-control-planeenvoy/extensions/filters/network/http_connection_manager/v3"
+	v3tlspb "github.com/arshanvit/go-control-planeenvoy/extensions/transport_sockets/tls/v3"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 )

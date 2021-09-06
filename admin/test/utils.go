@@ -26,15 +26,15 @@ import (
 	"testing"
 	"time"
 
-	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
-	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	v3statusgrpc "github.com/arshanvit/go-control-plane/envoy/service/status/v3"
+	v3statuspb "github.com/arshanvit/go-control-planeenvoy/service/status/v3"
 	"github.com/google/uuid"
-	"github.com/arshanvit/grpc"
-	"github.com/arshanvit/grpc/admin"
-	channelzpb "github.com/arshanvit/grpc/channelz/grpc_channelz_v1"
-	"github.com/arshanvit/grpc/codes"
-	"github.com/arshanvit/grpc/internal/xds"
-	"github.com/arshanvit/grpc/status"
+	"github.com/arshanvit/grpc-go"
+	"github.com/arshanvit/grpc-go/admin"
+	channelzpb "github.com/arshanvit/grpc-go/channelz/grpc_channelz_v1"
+	"github.com/arshanvit/grpc-go/codes"
+	"github.com/arshanvit/grpc-go/internal/xds"
+	"github.com/arshanvit/grpc-go/status"
 )
 
 const (

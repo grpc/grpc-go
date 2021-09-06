@@ -21,12 +21,12 @@ import (
 	"net"
 	"strconv"
 
-	"github.com/arshanvit/grpc/xds/internal"
-	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	v2endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v2typepb "github.com/envoyproxy/go-control-plane/envoy/type"
+	"github.com/arshanvit/grpc-go/xds/internal"
+	v2xdspb "github.com/arshanvit/go-control-plane/envoy/api/v2"
+	v2corepb "github.com/arshanvit/go-control-planeenvoy/api/v2/core"
+	v2endpointpb "github.com/arshanvit/go-control-planeenvoy/api/v2/endpoint"
+	v3corepb "github.com/arshanvit/go-control-planeenvoy/config/core/v3"
+	v2typepb "github.com/arshanvit/go-control-planeenvoy/type"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 )
 

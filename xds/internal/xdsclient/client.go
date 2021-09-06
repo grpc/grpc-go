@@ -28,24 +28,24 @@ import (
 	"sync"
 	"time"
 
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v2corepb "github.com/arshanvit/go-control-plane/envoy/api/v2/core"
+	v3corepb "github.com/arshanvit/go-control-planeenvoy/config/core/v3"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	"github.com/arshanvit/grpc/internal/xds/matcher"
-	"github.com/arshanvit/grpc/xds/internal/httpfilter"
-	"github.com/arshanvit/grpc/xds/internal/xdsclient/load"
+	"github.com/arshanvit/grpc-go/internal/xds/matcher"
+	"github.com/arshanvit/grpc-go/xds/internal/httpfilter"
+	"github.com/arshanvit/grpc-go/xds/internal/xdsclient/load"
 
-	"github.com/arshanvit/grpc"
-	"github.com/arshanvit/grpc/internal/backoff"
-	"github.com/arshanvit/grpc/internal/buffer"
-	"github.com/arshanvit/grpc/internal/grpclog"
-	"github.com/arshanvit/grpc/internal/grpcsync"
-	"github.com/arshanvit/grpc/keepalive"
-	"github.com/arshanvit/grpc/xds/internal"
-	"github.com/arshanvit/grpc/xds/internal/version"
-	"github.com/arshanvit/grpc/xds/internal/xdsclient/bootstrap"
+	"github.com/arshanvit/grpc-go"
+	"github.com/arshanvit/grpc-go/internal/backoff"
+	"github.com/arshanvit/grpc-go/internal/buffer"
+	"github.com/arshanvit/grpc-go/internal/grpclog"
+	"github.com/arshanvit/grpc-go/internal/grpcsync"
+	"github.com/arshanvit/grpc-go/keepalive"
+	"github.com/arshanvit/grpc-go/xds/internal"
+	"github.com/arshanvit/grpc-go/xds/internal/version"
+	"github.com/arshanvit/grpc-go/xds/internal/xdsclient/bootstrap"
 )
 
 var (

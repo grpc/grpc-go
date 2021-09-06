@@ -28,9 +28,9 @@ import (
 	"fmt"
 	"strings"
 
-	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
+	v3rbacpb "github.com/arshanvit/go-control-plane/envoy/config/rbac/v3"
+	v3routepb "github.com/arshanvit/go-control-plane/envoy/config/route/v3"
+	v3matcherpb "github.com/arshanvit/go-control-plane/envoy/type/matcher/v3"
 )
 
 type header struct {

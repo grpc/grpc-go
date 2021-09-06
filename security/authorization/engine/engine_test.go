@@ -21,7 +21,7 @@ import (
 	"sort"
 	"testing"
 
-	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
+	pb "github.com/arshanvit/go-control-plane/envoy/config/rbac/v2"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
@@ -29,10 +29,10 @@ import (
 	"github.com/google/cel-go/interpreter"
 	"github.com/google/go-cmp/cmp"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
-	"github.com/arshanvit/grpc/codes"
-	"github.com/arshanvit/grpc/internal/grpctest"
-	"github.com/arshanvit/grpc/peer"
-	"github.com/arshanvit/grpc/status"
+	"github.com/arshanvit/grpc-go/codes"
+	"github.com/arshanvit/grpc-go/internal/grpctest"
+	"github.com/arshanvit/grpc-go/peer"
+	"github.com/arshanvit/grpc-go/status"
 )
 
 type s struct {

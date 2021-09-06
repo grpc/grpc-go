@@ -23,8 +23,8 @@ import (
 	"testing"
 	"unicode"
 
-	"github.com/arshanvit/grpc/internal/grpctest"
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	"github.com/arshanvit/grpc-go/internal/grpctest"
+	corepb "github.com/arshanvit/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
 )
 

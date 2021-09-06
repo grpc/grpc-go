@@ -22,12 +22,12 @@ import (
 	"testing"
 	"time"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	xdspb "github.com/arshanvit/go-control-plane/envoy/api/v2"
+	corepb "github.com/arshanvit/go-control-planeenvoy/api/v2/core"
 	anypb "github.com/golang/protobuf/ptypes/any"
-	"github.com/arshanvit/grpc/internal/testutils"
-	"github.com/arshanvit/grpc/xds/internal/version"
-	"github.com/arshanvit/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc-go/internal/testutils"
+	"github.com/arshanvit/grpc-go/xds/internal/version"
+	"github.com/arshanvit/grpc-go/xds/internal/xdsclient"
 )
 
 const (

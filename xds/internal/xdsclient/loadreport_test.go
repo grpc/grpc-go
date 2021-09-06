@@ -23,22 +23,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/arshanvit/grpc"
-	"github.com/arshanvit/grpc/codes"
-	"github.com/arshanvit/grpc/credentials/insecure"
-	"github.com/arshanvit/grpc/status"
-	"github.com/arshanvit/grpc/xds/internal/testutils/fakeserver"
-	"github.com/arshanvit/grpc/xds/internal/version"
-	"github.com/arshanvit/grpc/xds/internal/xdsclient"
-	"github.com/arshanvit/grpc/xds/internal/xdsclient/bootstrap"
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
+	"github.com/arshanvit/grpc-go"
+	"github.com/arshanvit/grpc-go/codes"
+	"github.com/arshanvit/grpc-go/credentials/insecure"
+	"github.com/arshanvit/grpc-go/status"
+	"github.com/arshanvit/grpc-go/xds/internal/testutils/fakeserver"
+	"github.com/arshanvit/grpc-go/xds/internal/version"
+	"github.com/arshanvit/grpc-go/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc-go/xds/internal/xdsclient/bootstrap"
+	v2corepb "github.com/arshanvit/go-control-plane/envoy/api/v2/core"
+	endpointpb "github.com/arshanvit/go-control-planeenvoy/api/v2/endpoint"
+	lrspb "github.com/arshanvit/go-control-planeenvoy/service/load_stats/v2"
 	durationpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	_ "github.com/arshanvit/grpc/xds/internal/xdsclient/v2" // Register the v2 xDS API client.
+	_ "github.com/arshanvit/grpc-go/xds/internal/xdsclient/v2" // Register the v2 xDS API client.
 )
 
 const (

@@ -21,15 +21,15 @@ import (
 	"net"
 	"strconv"
 
-	pb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v2"
+	pb "github.com/arshanvit/go-control-plane/envoy/config/rbac/v2"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/interpreter"
 	expr "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
-	"github.com/arshanvit/grpc/grpclog"
-	"github.com/arshanvit/grpc/metadata"
-	"github.com/arshanvit/grpc/peer"
+	"github.com/arshanvit/grpc-go/grpclog"
+	"github.com/arshanvit/grpc-go/metadata"
+	"github.com/arshanvit/grpc-go/peer"
 	"google.golang.org/protobuf/proto"
 )
 

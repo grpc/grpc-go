@@ -29,19 +29,19 @@ import (
 	"fmt"
 	"time"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	"github.com/arshanvit/grpc"
-	"github.com/arshanvit/grpc/credentials/google"
-	"github.com/arshanvit/grpc/grpclog"
-	"github.com/arshanvit/grpc/internal/googlecloud"
-	internalgrpclog "github.com/arshanvit/grpc/internal/grpclog"
-	"github.com/arshanvit/grpc/internal/grpcrand"
-	"github.com/arshanvit/grpc/internal/xds/env"
-	"github.com/arshanvit/grpc/resolver"
-	_ "github.com/arshanvit/grpc/xds" // To register xds resolvers and balancers.
-	"github.com/arshanvit/grpc/xds/internal/version"
-	"github.com/arshanvit/grpc/xds/internal/xdsclient"
-	"github.com/arshanvit/grpc/xds/internal/xdsclient/bootstrap"
+	v3corepb "github.com/arshanvit/go-control-plane/envoy/config/core/v3"
+	"github.com/arshanvit/grpc-go"
+	"github.com/arshanvit/grpc-go/credentials/google"
+	"github.com/arshanvit/grpc-go/grpclog"
+	"github.com/arshanvit/grpc-go/internal/googlecloud"
+	internalgrpclog "github.com/arshanvit/grpc-go/internal/grpclog"
+	"github.com/arshanvit/grpc-go/internal/grpcrand"
+	"github.com/arshanvit/grpc-go/internal/xds/env"
+	"github.com/arshanvit/grpc-go/resolver"
+	_ "github.com/arshanvit/grpc-go/xds" // To register xds resolvers and balancers.
+	"github.com/arshanvit/grpc-go/xds/internal/version"
+	"github.com/arshanvit/grpc-go/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc-go/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 

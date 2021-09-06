@@ -26,17 +26,17 @@ import (
 	"net"
 	"time"
 
-	"github.com/arshanvit/grpc"
-	"github.com/arshanvit/grpc/codes"
-	"github.com/arshanvit/grpc/credentials/insecure"
-	"github.com/arshanvit/grpc/internal/testutils"
-	"github.com/arshanvit/grpc/status"
+	"github.com/arshanvit/grpc-go"
+	"github.com/arshanvit/grpc-go/codes"
+	"github.com/arshanvit/grpc-go/credentials/insecure"
+	"github.com/arshanvit/grpc-go/internal/testutils"
+	"github.com/arshanvit/grpc-go/status"
 	"github.com/golang/protobuf/proto"
 
-	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
-	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
-	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
+	discoverypb "github.com/arshanvit/go-control-plane/envoy/api/v2"
+	adsgrpc "github.com/arshanvit/go-control-planeenvoy/service/discovery/v2"
+	lrsgrpc "github.com/arshanvit/go-control-planeenvoy/service/load_stats/v2"
+	lrspb "github.com/arshanvit/go-control-planeenvoy/service/load_stats/v2"
 )
 
 const (

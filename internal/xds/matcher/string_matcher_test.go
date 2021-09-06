@@ -22,7 +22,7 @@ import (
 	"regexp"
 	"testing"
 
-	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
+	v3matcherpb "github.com/arshanvit/go-control-plane/envoy/type/matcher/v3"
 	"github.com/google/go-cmp/cmp"
 )
 

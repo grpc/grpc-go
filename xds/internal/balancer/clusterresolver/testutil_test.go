@@ -23,14 +23,14 @@ import (
 	"strconv"
 	"time"
 
-	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
-	"github.com/arshanvit/grpc/balancer"
-	"github.com/arshanvit/grpc/xds/internal"
-	"github.com/arshanvit/grpc/xds/internal/testutils"
-	"github.com/arshanvit/grpc/xds/internal/xdsclient"
+	xdspb "github.com/arshanvit/go-control-plane/envoy/api/v2"
+	corepb "github.com/arshanvit/go-control-planeenvoy/api/v2/core"
+	endpointpb "github.com/arshanvit/go-control-planeenvoy/api/v2/endpoint"
+	typepb "github.com/arshanvit/go-control-planeenvoy/type"
+	"github.com/arshanvit/grpc-go/balancer"
+	"github.com/arshanvit/grpc-go/xds/internal"
+	"github.com/arshanvit/grpc-go/xds/internal/testutils"
+	"github.com/arshanvit/grpc-go/xds/internal/xdsclient"
 )
 
 // parseEDSRespProtoForTesting parses EDS response, and panic if parsing fails.

@@ -24,16 +24,16 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/arshanvit/grpc"
-	"github.com/arshanvit/grpc/codes"
-	"github.com/arshanvit/grpc/internal/grpclog"
-	"github.com/arshanvit/grpc/internal/pretty"
-	"github.com/arshanvit/grpc/xds/internal/version"
-	"github.com/arshanvit/grpc/xds/internal/xdsclient"
+	"github.com/arshanvit/grpc-go"
+	"github.com/arshanvit/grpc-go/codes"
+	"github.com/arshanvit/grpc-go/internal/grpclog"
+	"github.com/arshanvit/grpc-go/internal/pretty"
+	"github.com/arshanvit/grpc-go/xds/internal/version"
+	"github.com/arshanvit/grpc-go/xds/internal/xdsclient"
 
-	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	v2adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
+	v2xdspb "github.com/arshanvit/go-control-plane/envoy/api/v2"
+	v2corepb "github.com/arshanvit/go-control-planeenvoy/api/v2/core"
+	v2adsgrpc "github.com/arshanvit/go-control-planeenvoy/service/discovery/v2"
 	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 )
 

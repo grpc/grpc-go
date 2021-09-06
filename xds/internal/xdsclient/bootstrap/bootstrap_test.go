@@ -25,19 +25,19 @@ import (
 	"os"
 	"testing"
 
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v2corepb "github.com/arshanvit/go-control-plane/envoy/api/v2/core"
+	v3corepb "github.com/arshanvit/go-control-planeenvoy/config/core/v3"
 	"github.com/golang/protobuf/proto"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
 
-	"github.com/arshanvit/grpc"
-	"github.com/arshanvit/grpc/credentials/google"
-	"github.com/arshanvit/grpc/credentials/insecure"
-	"github.com/arshanvit/grpc/credentials/tls/certprovider"
-	"github.com/arshanvit/grpc/internal"
-	"github.com/arshanvit/grpc/internal/xds/env"
-	"github.com/arshanvit/grpc/xds/internal/version"
+	"github.com/arshanvit/grpc-go"
+	"github.com/arshanvit/grpc-go/credentials/google"
+	"github.com/arshanvit/grpc-go/credentials/insecure"
+	"github.com/arshanvit/grpc-go/credentials/tls/certprovider"
+	"github.com/arshanvit/grpc-go/internal"
+	"github.com/arshanvit/grpc-go/internal/xds/env"
+	"github.com/arshanvit/grpc-go/xds/internal/version"
 )
 
 var (

@@ -29,9 +29,9 @@
 package admin
 
 import (
-	"github.com/arshanvit/grpc"
-	channelzservice "github.com/arshanvit/grpc/channelz/service"
-	internaladmin "github.com/arshanvit/grpc/internal/admin"
+	"github.com/arshanvit/grpc-go"
+	channelzservice "github.com/arshanvit/grpc-go/channelz/service"
+	internaladmin "github.com/arshanvit/grpc-go/internal/admin"
 )
 
 func init() {
@@ -51,7 +51,7 @@ func init() {
 // Note that if `s` is not a *grpc.Server or a *xds.GRPCServer, CSDS will not be
 // registered because CSDS generated code is old and doesn't support interface
 // `grpc.ServiceRegistrar`.
-// https://github.com/envoyproxy/go-control-plane/issues/403
+// https://github.com/arshanvit/go-control-plane/issues/403
 func Register(s grpc.ServiceRegistrar) (cleanup func(), _ error) {
 	return internaladmin.Register(s)
 }

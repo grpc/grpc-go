@@ -33,29 +33,29 @@ import (
 
 	"github.com/golang/protobuf/ptypes"
 	"github.com/google/uuid"
-	"github.com/arshanvit/grpc"
-	"github.com/arshanvit/grpc/codes"
-	"github.com/arshanvit/grpc/credentials/insecure"
-	"github.com/arshanvit/grpc/internal/grpcrand"
-	"github.com/arshanvit/grpc/internal/grpctest"
-	"github.com/arshanvit/grpc/internal/testutils"
-	"github.com/arshanvit/grpc/internal/xds"
-	"github.com/arshanvit/grpc/metadata"
-	"github.com/arshanvit/grpc/status"
-	xtestutils "github.com/arshanvit/grpc/xds/internal/testutils"
-	"github.com/arshanvit/grpc/xds/internal/testutils/e2e"
+	"github.com/arshanvit/grpc-go"
+	"github.com/arshanvit/grpc-go/codes"
+	"github.com/arshanvit/grpc-go/credentials/insecure"
+	"github.com/arshanvit/grpc-go/internal/grpcrand"
+	"github.com/arshanvit/grpc-go/internal/grpctest"
+	"github.com/arshanvit/grpc-go/internal/testutils"
+	"github.com/arshanvit/grpc-go/internal/xds"
+	"github.com/arshanvit/grpc-go/metadata"
+	"github.com/arshanvit/grpc-go/status"
+	xtestutils "github.com/arshanvit/grpc-go/xds/internal/testutils"
+	"github.com/arshanvit/grpc-go/xds/internal/testutils/e2e"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	cpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/common/fault/v3"
-	fpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/fault/v3"
-	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
-	tpb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	testpb "github.com/arshanvit/grpc/test/grpc_testing"
+	v3listenerpb "github.com/arshanvit/go-control-plane/envoy/config/listener/v3"
+	cpb "github.com/arshanvit/go-control-planeenvoy/extensions/filters/common/fault/v3"
+	fpb "github.com/arshanvit/go-control-planeenvoy/extensions/filters/http/fault/v3"
+	v3httppb "github.com/arshanvit/go-control-planeenvoy/extensions/filters/network/http_connection_manager/v3"
+	tpb "github.com/arshanvit/go-control-planeenvoy/type/v3"
+	testpb "github.com/arshanvit/grpc-go/test/grpc_testing"
 
-	_ "github.com/arshanvit/grpc/xds/internal/balancer"     // Register the balancers.
-	_ "github.com/arshanvit/grpc/xds/internal/resolver"     // Register the xds_resolver.
-	_ "github.com/arshanvit/grpc/xds/internal/xdsclient/v3" // Register the v3 xDS API client.
+	_ "github.com/arshanvit/grpc-go/xds/internal/balancer"     // Register the balancers.
+	_ "github.com/arshanvit/grpc-go/xds/internal/resolver"     // Register the xds_resolver.
+	_ "github.com/arshanvit/grpc-go/xds/internal/xdsclient/v3" // Register the v3 xDS API client.
 )
 
 type s struct {

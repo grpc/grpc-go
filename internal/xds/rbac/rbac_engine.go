@@ -28,15 +28,15 @@ import (
 	"net"
 	"strconv"
 
-	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
-	"github.com/arshanvit/grpc"
-	"github.com/arshanvit/grpc/codes"
-	"github.com/arshanvit/grpc/credentials"
-	"github.com/arshanvit/grpc/grpclog"
-	"github.com/arshanvit/grpc/internal/transport"
-	"github.com/arshanvit/grpc/metadata"
-	"github.com/arshanvit/grpc/peer"
-	"github.com/arshanvit/grpc/status"
+	v3rbacpb "github.com/arshanvit/go-control-plane/envoy/config/rbac/v3"
+	"github.com/arshanvit/grpc-go"
+	"github.com/arshanvit/grpc-go/codes"
+	"github.com/arshanvit/grpc-go/credentials"
+	"github.com/arshanvit/grpc-go/grpclog"
+	"github.com/arshanvit/grpc-go/internal/transport"
+	"github.com/arshanvit/grpc-go/metadata"
+	"github.com/arshanvit/grpc-go/peer"
+	"github.com/arshanvit/grpc-go/status"
 )
 
 var logger = grpclog.Component("rbac")
