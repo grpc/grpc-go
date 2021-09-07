@@ -225,7 +225,7 @@ type listenerWrapper struct {
 }
 
 // Accept blocks on an Accept() on the underlying listener, and wraps the
-// returned net.ConnWrapper with the configured certificate providers.
+// returned net.connWrapper with the configured certificate providers.
 func (l *listenerWrapper) Accept() (net.Conn, error) {
 	var retries int
 	for {

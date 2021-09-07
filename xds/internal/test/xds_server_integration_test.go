@@ -362,8 +362,11 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 // (NonForwardingAction), and the RPC's matching those routes should proceed as
 // normal.
 func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
-	lis, cleanup := setupGRPCServer(t)
-	defer cleanup()
+	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := setupManagementServer(t)
+	defer cleanup1()
+
+	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
+	defer cleanup2()
 
 	host, port, err := hostPortFromListener(lis)
 	if err != nil {
@@ -372,7 +375,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 	const serviceName = "my-service-fallback"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
-		NodeID:     xdsClientNodeID,
+		NodeID:     nodeID,
 		Host:       host,
 		Port:       port,
 		SecLevel:   e2e.SecurityLevelNone,
@@ -383,14 +386,14 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 	inboundLis := e2e.ServerListenerWithInterestingRouteConfiguration(host, port)
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	// Setup the management server with client and server-side resources.
-	if err := managementServer.Update(resources); err != nil {
+	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithInsecure(), grpc.WithResolvers(xdsResolverBuilder))
+	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithInsecure(), grpc.WithResolvers(resolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}

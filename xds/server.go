@@ -322,11 +322,16 @@ func (s *GRPCServer) GracefulStop() {
 	}
 }
 
+// routeAndProcess routes the incoming RPC to a configured route in the route
+// table and also processes the RPC by running the incoming RPC through any HTTP
+// Filters configured.
 func routeAndProcess(ctx context.Context) error {
 	conn := transport.GetConnection(ctx)
-	cw, ok := conn.(*server.ConnWrapper)
+	cw, ok := conn.(interface {
+		VirtualHosts() []xdsclient.VirtualHostWithInterceptors
+	})
 	if !ok {
-		return errors.New("missing connection wrapper in incoming context")
+		return errors.New("missing virtual hosts in incoming context")
 	}
 	mn, ok := grpc.Method(ctx)
 	if !ok {
@@ -336,25 +341,29 @@ func routeAndProcess(ctx context.Context) error {
 	if !ok {
 		return errors.New("missing metadata in incoming context")
 	}
-	// Assuming to just take the first value defined.
+	// A41 added logic to the core grpc implementation to guarantee that once
+	// the RPC gets to this point, there will be a single, unambiguous authority
+	// present in the header map.
 	authority := md.Get(":authority")
-	vh := xdsclient.FindBestMatchingVirtualHostServer(authority[0], cw.VirtualHosts)
+	vh := xdsclient.FindBestMatchingVirtualHostServer(authority[0], cw.VirtualHosts())
 	if vh == nil {
 		return status.Error(codes.Unavailable, "the incoming RPC did not match a configured Virtual Host")
 	}
 
 	var rwi *xdsclient.RouteWithInterceptors
+	rpcInfo := iresolver.RPCInfo{
+		Context: ctx,
+		Method:  mn,
+	}
 	for _, r := range vh.Routes {
-		if r.M.Match(iresolver.RPCInfo{
-			Context: ctx,
-			Method:  mn,
-		}) {
+		if r.M.Match(rpcInfo) {
 			// "NonForwardingAction is expected for all Routes used on server-side; a route with an inappropriate action causes
 			// RPCs matching that route to fail with UNAVAILABLE." - A36
 			if r.RouteAction != xdsclient.RouteActionNonForwardingAction {
 				return status.Error(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding")
 			}
 			rwi = &r
+			break
 		}
 	}
 	if rwi == nil {
