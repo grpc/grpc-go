@@ -161,7 +161,9 @@ func init() {
 func TestCSDS(t *testing.T) {
 	const retryCount = 10
 
-	xdsC, mgmServer, nodeID, stream, cleanup := commonSetup(t)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	xdsC, mgmServer, nodeID, stream, cleanup := commonSetup(ctx, t)
 	defer cleanup()
 
 	for _, target := range ldsTargets {
@@ -188,7 +190,7 @@ func TestCSDS(t *testing.T) {
 		time.Sleep(time.Millisecond * 100)
 	}
 
-	if err := mgmServer.Update(e2e.UpdateOptions{
+	if err := mgmServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: listeners,
 		Routes:    routes,
@@ -209,7 +211,7 @@ func TestCSDS(t *testing.T) {
 	}
 
 	const nackResourceIdx = 0
-	if err := mgmServer.Update(e2e.UpdateOptions{
+	if err := mgmServer.Update(ctx, e2e.UpdateOptions{
 		NodeID: nodeID,
 		Listeners: []*v3listenerpb.Listener{
 			{Name: ldsTargets[nackResourceIdx], ApiListener: &v3listenerpb.ApiListener{}}, // 0 will be nacked. 1 will stay the same.
@@ -241,7 +243,7 @@ func TestCSDS(t *testing.T) {
 	}
 }
 
-func commonSetup(t *testing.T) (xdsclient.XDSClient, *e2e.ManagementServer, string, v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient, func()) {
+func commonSetup(ctx context.Context, t *testing.T) (xdsclient.XDSClient, *e2e.ManagementServer, string, v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient, func()) {
 	t.Helper()
 
 	// Spin up a xDS management server on a local port.
@@ -292,7 +294,6 @@ func commonSetup(t *testing.T) (xdsclient.XDSClient, *e2e.ManagementServer, stri
 		t.Fatalf("cannot connect to server: %v", err)
 	}
 	c := v3statuspbgrpc.NewClientStatusDiscoveryServiceClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	stream, err := c.StreamClientStatus(ctx, grpc.WaitForReady(true))
 	if err != nil {
 		t.Fatalf("cannot get ServerReflectionInfo: %v", err)
@@ -300,7 +301,6 @@ func commonSetup(t *testing.T) (xdsclient.XDSClient, *e2e.ManagementServer, stri
 
 	return xdsC, fs, nodeID, stream, func() {
 		fs.Stop()
-		cancel()
 		conn.Close()
 		server.Stop()
 		csdss.Close()

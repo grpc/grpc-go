@@ -58,6 +58,8 @@ import (
 	_ "google.golang.org/grpc/xds/internal/xdsclient/v3" // Register the v3 xDS API client.
 )
 
+const defaultTestTimeout = 10 * time.Second
+
 type s struct {
 	grpctest.Tester
 }
@@ -520,7 +522,9 @@ func (s) TestFaultInjection_Unary(t *testing.T) {
 			resources.Listeners[0].ApiListener.ApiListener = hcmAny
 			resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
 
-			if err := fs.Update(resources); err != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			if err := fs.Update(ctx, resources); err != nil {
 				t.Fatal(err)
 			}
 
@@ -593,7 +597,9 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	resources.Listeners[0].ApiListener.ApiListener = hcmAny
 	resources.Listeners[0].FilterChains[0].Filters[0].ConfigType = &v3listenerpb.Filter_TypedConfig{TypedConfig: hcmAny}
 
-	if err := fs.Update(resources); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := fs.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -605,8 +611,6 @@ func (s) TestFaultInjection_MaxActiveFaults(t *testing.T) {
 	defer cc.Close()
 
 	client := testpb.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	streams := make(chan testpb.TestService_FullDuplexCallClient, 5) // startStream() is called 5 times
 	startStream := func() {

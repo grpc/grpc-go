@@ -104,7 +104,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener1, listener2},
 	}
-	if err := managementServer.Update(resources); err != nil {
+	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -155,7 +155,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 
 	// Update the management server to remove the second listener resource. This
 	// should push only the second listener into "not-serving" mode.
-	if err := managementServer.Update(e2e.UpdateOptions{
+	if err := managementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener1},
 	}); err != nil {
@@ -189,7 +189,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	// Update the management server to remove the first listener resource as
 	// well. This should push the first listener into "not-serving" mode. Second
 	// listener is already in "not-serving" mode.
-	if err := managementServer.Update(e2e.UpdateOptions{
+	if err := managementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{},
 	}); err != nil {
@@ -221,7 +221,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Update the management server with both listener resources.
-	if err := managementServer.Update(e2e.UpdateOptions{
+	if err := managementServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener1, listener2},
 	}); err != nil {
