@@ -38,7 +38,6 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
 	"google.golang.org/grpc/xds"
@@ -142,10 +141,6 @@ func createClientTLSCredentials(t *testing.T) credentials.TransportCredentials {
 func setupManagementServer(t *testing.T) (*e2e.ManagementServer, string, []byte, resolver.Builder, func()) {
 	t.Helper()
 
-	// Turn on the env var protection for client-side security.
-	origClientSideSecurityEnvVar := env.ClientSideSecuritySupport
-	env.ClientSideSecuritySupport = true
-
 	// Spin up an xDS management server on a local port.
 	server, err := e2e.StartManagementServer()
 	if err != nil {
@@ -197,8 +192,5 @@ func setupManagementServer(t *testing.T) (*e2e.ManagementServer, string, []byte,
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
 
-	return server, nodeID, bootstrapContents, resolver, func() {
-		server.Stop()
-		env.ClientSideSecuritySupport = origClientSideSecurityEnvVar
-	}
+	return server, nodeID, bootstrapContents, resolver, func() { server.Stop() }
 }
