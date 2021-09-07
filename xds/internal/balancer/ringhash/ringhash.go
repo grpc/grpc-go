@@ -193,6 +193,7 @@ func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 	//
 	// Addresses in this map all have attributes stripped, but metadata set to
 	// the weight. So that weight change can be detected.
+	//
 	// TODO: this won't be necessary if there are ways to compare address
 	// attributes.
 	addrsSet := make(map[resolver.Address]struct{})

@@ -64,13 +64,8 @@ func ctxWithHash(h uint64) context.Context {
 }
 
 // setupTest creates the balancer, and does an initial sanity check.
-//
-// Ring generated from the addresses:
-// - 0: &{idx:0 hash:2320126372778282342 sc:0xc000101540}, 0.0.0.0:0
-// - 1: &{idx:1 hash:8784655576673615208 sc:0xc0001015e0}, 2.2.2.2:2
-// - 2: &{idx:2 hash:11914555407170755292 sc:0xc000101590}, 1.1.1.1:1
 func setupTest(t *testing.T, addrs []resolver.Address) (*testutils.TestClientConn, balancer.Balancer, balancer.Picker) {
-	// t.Helper()
+	t.Helper()
 	cc := testutils.NewTestClientConn(t)
 	builder := balancer.Get(Name)
 	b := builder.Build(cc, balancer.BuildOptions{})
@@ -136,21 +131,6 @@ func TestOneSubConn(t *testing.T) {
 		}
 	}
 }
-
-/*
- */
-
-/*
-done tests
-
-- 3 SubConns, affinity, one Ready. One down, pick another. One back Ready, will be picked again.
-- 3 SubConns, affinity, different header, another backend, two Ready.
-
-- All SubConns start in IDLE, and do not connect
-- Whenever a subchannel's state changes, a new picker will need to be updated
-- If the picked SubConn is in IDLE, it will start to connect, and pick will
-queue re-pick
-*/
 
 // TestThreeBackendsAffinity covers that there are 3 SubConns, RPCs with the
 // same hash always pick the same SubConn. When the one picked is down, another
@@ -424,16 +404,6 @@ func TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
 	case <-time.After(defaultTestShortTimeout):
 	}
 }
-
-/*
-- Whenever the address list changes, a new ring and a new picker will be generated
-  - address change
-  - weights change
-  - no change, no update
-- If the picker SubConn is in IDLE, but was after Ready (and after
-TransientFailure), it will start to connect, and pick will also check the next
-available SubConn (this is different the init IDLE, pick will queue re-pick).
-*/
 
 func TestConnectivityStateEvaluatorRecordTransition(t *testing.T) {
 	tests := []struct {
