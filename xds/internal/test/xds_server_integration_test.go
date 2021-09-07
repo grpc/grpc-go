@@ -140,7 +140,9 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	// Setup the management server with client and server-side resources.
-	if err := managementServer.Update(resources); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -153,8 +155,6 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	}
 
 	// Create a ClientConn with the xds scheme and make a successful RPC.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(resolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
@@ -225,7 +225,9 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 			resources.Listeners = append(resources.Listeners, inboundLis)
 
 			// Setup the management server with client and server resources.
-			if err := managementServer.Update(resources); err != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			if err := managementServer.Update(ctx, resources); err != nil {
 				t.Fatal(err)
 			}
 
@@ -238,8 +240,6 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 			}
 
 			// Create a ClientConn with the xds scheme and make an RPC.
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
 			cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(creds), grpc.WithResolvers(resolver))
 			if err != nil {
 				t.Fatalf("failed to dial local test server: %v", err)
@@ -293,7 +293,9 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	// Setup the management server with client and server-side resources.
-	if err := managementServer.Update(resources); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -306,8 +308,6 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	}
 
 	// Create a ClientConn with the xds scheme and make a successful RPC.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	xdsCC, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(xdsCreds), grpc.WithResolvers(resolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
@@ -345,7 +345,7 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 	})
 	inboundLis = e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS)
 	resources.Listeners = append(resources.Listeners, inboundLis)
-	if err := managementServer.Update(resources); err != nil {
+	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 

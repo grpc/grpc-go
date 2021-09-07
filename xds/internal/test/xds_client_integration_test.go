@@ -79,7 +79,9 @@ func (s) TestClientSideXDS(t *testing.T) {
 		Port:       port,
 		SecLevel:   e2e.SecurityLevelNone,
 	})
-	if err := managementServer.Update(resources); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
@@ -91,8 +93,6 @@ func (s) TestClientSideXDS(t *testing.T) {
 	defer cc.Close()
 
 	client := testpb.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}

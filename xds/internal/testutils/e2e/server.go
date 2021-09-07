@@ -33,6 +33,7 @@ import (
 	v3discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	v3cache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
+	v3resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	v3server "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 
 	"google.golang.org/grpc"
@@ -133,11 +134,21 @@ type UpdateOptions struct {
 
 // Update changes the resource snapshot held by the management server, which
 // updates connected clients as required.
-func (s *ManagementServer) Update(opts UpdateOptions) error {
+func (s *ManagementServer) Update(ctx context.Context, opts UpdateOptions) error {
 	s.version++
 
 	// Create a snapshot with the passed in resources.
-	snapshot := v3cache.NewSnapshot(strconv.Itoa(s.version), resourceSlice(opts.Endpoints), resourceSlice(opts.Clusters), resourceSlice(opts.Routes), resourceSlice(opts.Listeners), nil /*runtimes*/, nil /*secrets*/)
+	resources := map[v3resource.Type][]types.Resource{
+		v3resource.ListenerType: resourceSlice(opts.Listeners),
+		v3resource.RouteType:    resourceSlice(opts.Routes),
+		v3resource.ClusterType:  resourceSlice(opts.Clusters),
+		v3resource.EndpointType: resourceSlice(opts.Endpoints),
+	}
+	snapshot, err := v3cache.NewSnapshot(strconv.Itoa(s.version), resources)
+	if err != nil {
+		return fmt.Errorf("failed to create new snapshot cache: %v", err)
+
+	}
 	if !opts.SkipValidation {
 		if err := snapshot.Consistent(); err != nil {
 			return fmt.Errorf("failed to create new resource snapshot: %v", err)
@@ -146,7 +157,7 @@ func (s *ManagementServer) Update(opts UpdateOptions) error {
 	logger.Infof("Created new resource snapshot...")
 
 	// Update the cache with the new resource snapshot.
-	if err := s.cache.SetSnapshot(opts.NodeID, snapshot); err != nil {
+	if err := s.cache.SetSnapshot(ctx, opts.NodeID, snapshot); err != nil {
 		return fmt.Errorf("failed to update resource snapshot in management server: %v", err)
 	}
 	logger.Infof("Updated snapshot cache with resource snapshot...")
