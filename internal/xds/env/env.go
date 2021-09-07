@@ -39,9 +39,8 @@ const (
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileContentEnv = "GRPC_XDS_BOOTSTRAP_CONFIG"
 
-	ringHashSupportEnv           = "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH"
-	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
-	aggregateAndDNSSupportEnv    = "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER"
+	ringHashSupportEnv        = "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH"
+	aggregateAndDNSSupportEnv = "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER"
 
 	c2pResolverSupportEnv                    = "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER"
 	c2pResolverTestOnlyTrafficDirectorURIEnv = "GRPC_TEST_ONLY_GOOGLE_C2P_RESOLVER_TRAFFIC_DIRECTOR_URI"
@@ -64,13 +63,6 @@ var (
 	// be enabled by setting the environment variable
 	// "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH" to "true".
 	RingHashSupport = strings.EqualFold(os.Getenv(ringHashSupportEnv), "true")
-	// ClientSideSecuritySupport is used to control processing of security
-	// configuration on the client-side.
-	//
-	// Note that there is no env var protection for the server-side because we
-	// have a brand new API on the server-side and users explicitly need to use
-	// the new API to get security integration on the server.
-	ClientSideSecuritySupport = strings.EqualFold(os.Getenv(clientSideSecuritySupportEnv), "true")
 	// AggregateAndDNSSupportEnv indicates whether processing of aggregated
 	// cluster and DNS cluster is enabled, which can be enabled by setting the
 	// environment variable

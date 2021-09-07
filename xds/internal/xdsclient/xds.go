@@ -630,14 +630,10 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
 
-	// Process security configuration received from the control plane iff the
-	// corresponding environment variable is set.
-	var sc *SecurityConfig
-	if env.ClientSideSecuritySupport {
-		var err error
-		if sc, err = securityConfigFromCluster(cluster); err != nil {
-			return ClusterUpdate{}, err
-		}
+	// Process security configuration received from the control plane .
+	sc, err := securityConfigFromCluster(cluster)
+	if err != nil {
+		return ClusterUpdate{}, err
 	}
 
 	ret := ClusterUpdate{

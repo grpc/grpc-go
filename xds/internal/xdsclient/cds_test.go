@@ -432,60 +432,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	}
 }
 
-func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
-	// Turn off the env var protection for client-side security.
-	origClientSideSecurityEnvVar := env.ClientSideSecuritySupport
-	env.ClientSideSecuritySupport = false
-	defer func() { env.ClientSideSecuritySupport = origClientSideSecurityEnvVar }()
-
-	cluster := &v3clusterpb.Cluster{
-		Name:                 clusterName,
-		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
-		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
-			EdsConfig: &v3corepb.ConfigSource{
-				ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
-					Ads: &v3corepb.AggregatedConfigSource{},
-				},
-			},
-			ServiceName: serviceName,
-		},
-		LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
-		TransportSocket: &v3corepb.TransportSocket{
-			Name: "envoy.transport_sockets.tls",
-			ConfigType: &v3corepb.TransportSocket_TypedConfig{
-				TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
-					CommonTlsContext: &v3tlspb.CommonTlsContext{
-						ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextCertificateProviderInstance{
-							ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
-								InstanceName:    "rootInstance",
-								CertificateName: "rootCert",
-							},
-						},
-					},
-				}),
-			},
-		},
-	}
-	wantUpdate := ClusterUpdate{
-		ClusterName:    clusterName,
-		EDSServiceName: serviceName,
-		EnableLRS:      false,
-	}
-	gotUpdate, err := validateClusterAndConstructClusterUpdate(cluster)
-	if err != nil {
-		t.Errorf("validateClusterAndConstructClusterUpdate() failed: %v", err)
-	}
-	if diff := cmp.Diff(wantUpdate, gotUpdate); diff != "" {
-		t.Errorf("validateClusterAndConstructClusterUpdate() returned unexpected diff (-want, got):\n%s", diff)
-	}
-}
-
 func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
-	// Turn on the env var protection for client-side security.
-	origClientSideSecurityEnvVar := env.ClientSideSecuritySupport
-	env.ClientSideSecuritySupport = true
-	defer func() { env.ClientSideSecuritySupport = origClientSideSecurityEnvVar }()
-
 	const (
 		identityPluginInstance = "identityPluginInstance"
 		identityCertName       = "identityCert"
