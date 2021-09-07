@@ -185,7 +185,7 @@ type ringhashBalancer struct {
 // - an address's weight was updated
 //
 // Note that this function doesn't trigger SubConn connecting, so all the new
-// SubConn states are IDLE.
+// SubConn states are Idle.
 func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 	var addrsUpdated bool
 	// addrsSet is the set converted from addrs, it's used for quick lookup of
@@ -397,7 +397,7 @@ type connectivityStateEvaluator struct {
 // - If there is at least one subchannel in READY state, report READY.
 // - If there are 2 or more subchannels in TRANSIENT_FAILURE state, report TRANSIENT_FAILURE.
 // - If there is at least one subchannel in CONNECTING state, report CONNECTING.
-// - If there is at least one subchannel in IDLE state, report IDLE.
+// - If there is at least one subchannel in Idle state, report Idle.
 // - Otherwise, report TRANSIENT_FAILURE.
 //
 // Note that if there are 1 connecting, 2 transient failure, the overall state

@@ -85,7 +85,7 @@ func setupTest(t *testing.T, addrs []resolver.Address) (*testutils.TestClientCon
 			t.Fatalf("got unexpected new subconn addrs: %v", cmp.Diff(addr1, want, cmp.AllowUnexported(attributes.Attributes{})))
 		}
 		sc1 := <-cc.NewSubConnCh
-		// All the SubConns start in IDLE, and should not Connect().
+		// All the SubConns start in Idle, and should not Connect().
 		select {
 		case <-sc1.(*testutils.TestSubConn).ConnectCh:
 			t.Errorf("unexpected Connect() from SubConn %v", sc1)
@@ -93,7 +93,7 @@ func setupTest(t *testing.T, addrs []resolver.Address) (*testutils.TestClientCon
 		}
 	}
 
-	// Should also have a picker, with all SubConns in IDLE.
+	// Should also have a picker, with all SubConns in Idle.
 	p1 := <-cc.NewPickerCh
 	return cc, b, p1
 }
@@ -177,7 +177,7 @@ func TestThreeSubConnsAffinity(t *testing.T) {
 	b.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	p2 := <-cc.NewPickerCh
 	// Pick with the same hash should be queued, because the SubConn after the
-	// first picked is IDLE.
+	// first picked is Idle.
 	if _, err := p2.Pick(balancer.PickInfo{Ctx: ctxWithHash(testHash)}); err != balancer.ErrNoSubConnAvailable {
 		t.Fatalf("first pick returned err %v, want %v", err, balancer.ErrNoSubConnAvailable)
 	}
@@ -202,10 +202,10 @@ func TestThreeSubConnsAffinity(t *testing.T) {
 		}
 	}
 
-	// Now, after backoff, the first picked SubConn will turn IDLE.
+	// Now, after backoff, the first picked SubConn will turn Idle.
 	b.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Idle})
 	// The picks above should have queued Connect() for the first picked
-	// SubConn, so this IDLE state change will trigger a Connect().
+	// SubConn, so this Idle state change will trigger a Connect().
 	select {
 	case <-sc0.(*testutils.TestSubConn).ConnectCh:
 	case <-time.After(defaultTestTimeout):
@@ -365,7 +365,7 @@ func TestAddrWeightChange(t *testing.T) {
 }
 
 // TestSubConnToConnectWhenOverallTransientFailure covers the situation when the
-// overall state is TransientFailure, the SubConns turning IDLE will be
+// overall state is TransientFailure, the SubConns turning Idle will be
 // triggered to Connect(). But not when the overall state is not
 // TransientFailure.
 func TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
@@ -382,7 +382,7 @@ func TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
 		b.UpdateSubConnState(it.sc.sc, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	}
 
-	// The next one turning IDLE should Connect().
+	// The next one turning Idle should Connect().
 	sc0 := ring0.items[0].sc.sc
 	b.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Idle})
 	select {
@@ -391,7 +391,7 @@ func TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
 		t.Errorf("timeout waiting for Connect() from SubConn %v", sc0)
 	}
 
-	// If this SubConn is ready. Other SubConns turning IDLE will not Connect().
+	// If this SubConn is ready. Other SubConns turning Idle will not Connect().
 	b.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	b.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
