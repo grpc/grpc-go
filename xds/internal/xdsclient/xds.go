@@ -386,9 +386,7 @@ func generateRetryConfig(rp *v3routepb.RetryPolicy) (*RetryConfig, error) {
 			cfg.RetryOn[codes.Unavailable] = true
 		}
 	}
-	if len(cfg.RetryOn) == 0 {
-		return &RetryConfig{}, nil
-	}
+
 	if rp.NumRetries == nil {
 		cfg.NumRetries = 1
 	} else {
@@ -414,6 +412,10 @@ func generateRetryConfig(rp *v3routepb.RetryPolicy) (*RetryConfig, error) {
 		if cfg.RetryBackoff.MaxInterval <= 0 {
 			return nil, fmt.Errorf("retry_policy.max_interval = %v; must be > 0", cfg.RetryBackoff.MaxInterval)
 		}
+	}
+
+	if len(cfg.RetryOn) == 0 {
+		return &RetryConfig{}, nil
 	}
 	return cfg, nil
 }

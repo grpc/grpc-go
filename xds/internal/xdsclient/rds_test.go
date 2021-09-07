@@ -565,6 +565,12 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			wantUpdate: goodUpdateIfRetryDisabled(),
 			wantError:  env.RetrySupport,
 		},
+		{
+			name:       "bad-retry-policy-negative-max-interval-no-known-retry-on",
+			rc:         goodRouteConfigWithRetryPolicy(&v3routepb.RetryPolicy{RetryOn: "something", RetryBackOff: &v3routepb.RetryPolicy_RetryBackOff{MaxInterval: durationpb.New(-time.Second)}}, nil),
+			wantUpdate: goodUpdateIfRetryDisabled(),
+			wantError:  env.RetrySupport,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
