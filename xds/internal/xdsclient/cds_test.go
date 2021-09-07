@@ -1151,7 +1151,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,
@@ -1169,7 +1169,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,
@@ -1182,13 +1182,15 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 					ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
 				}),
 			},
-			wantUpdate: map[string]ClusterUpdate{"test": {}},
+			wantUpdate: map[string]ClusterUpdate{
+				"test": {Err: cmpopts.AnyError},
+			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusNACKed,
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,
@@ -1266,14 +1268,14 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 					EDSServiceName: v3Service, EnableLRS: true,
 					Raw: v3ClusterAny,
 				},
-				"bad": {},
+				"bad": {Err: cmpopts.AnyError},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusNACKed,
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,

@@ -211,22 +211,28 @@ func TestCSDS(t *testing.T) {
 	}
 
 	const nackResourceIdx = 0
+	var (
+		nackListeners = listeners
+		nackRoutes    = routes
+		nackClusters  = clusters
+		nackEndpoints = endpoints
+	)
+	nackListeners[0] = &v3listenerpb.Listener{Name: ldsTargets[nackResourceIdx], ApiListener: &v3listenerpb.ApiListener{}} // 0 will be nacked. 1 will stay the same.
+	nackRoutes[0] = &v3routepb.RouteConfiguration{
+		Name: rdsTargets[nackResourceIdx], VirtualHosts: []*v3routepb.VirtualHost{{Routes: []*v3routepb.Route{{}}}},
+	}
+	nackClusters[0] = &v3clusterpb.Cluster{
+		Name: cdsTargets[nackResourceIdx], ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
+	}
+	nackEndpoints[0] = &v3endpointpb.ClusterLoadAssignment{
+		ClusterName: edsTargets[nackResourceIdx], Endpoints: []*v3endpointpb.LocalityLbEndpoints{{}},
+	}
 	if err := mgmServer.Update(ctx, e2e.UpdateOptions{
-		NodeID: nodeID,
-		Listeners: []*v3listenerpb.Listener{
-			{Name: ldsTargets[nackResourceIdx], ApiListener: &v3listenerpb.ApiListener{}}, // 0 will be nacked. 1 will stay the same.
-		},
-		Routes: []*v3routepb.RouteConfiguration{
-			{Name: rdsTargets[nackResourceIdx], VirtualHosts: []*v3routepb.VirtualHost{{
-				Routes: []*v3routepb.Route{{}},
-			}}},
-		},
-		Clusters: []*v3clusterpb.Cluster{
-			{Name: cdsTargets[nackResourceIdx], ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC}},
-		},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{
-			{ClusterName: edsTargets[nackResourceIdx], Endpoints: []*v3endpointpb.LocalityLbEndpoints{{}}},
-		},
+		NodeID:         nodeID,
+		Listeners:      nackListeners,
+		Routes:         nackRoutes,
+		Clusters:       nackClusters,
+		Endpoints:      nackEndpoints,
 		SkipValidation: true,
 	}); err != nil {
 		t.Fatal(err)
@@ -490,7 +496,6 @@ func checkForNACKed(nackResourceIdx int, stream v3statuspbgrpc.ClientStatusDisco
 		ackVersion  = "1"
 		nackVersion = "2"
 	)
-
 	if err := stream.Send(&v3statuspb.ClientStatusRequest{Node: nil}); err != nil {
 		return fmt.Errorf("failed to send: %v", err)
 	}
@@ -514,13 +519,14 @@ func checkForNACKed(nackResourceIdx int, stream v3statuspbgrpc.ClientStatusDisco
 				configDump := &v3adminpb.ListenersConfigDump_DynamicListener{
 					Name: ldsTargets[i],
 					ActiveState: &v3adminpb.ListenersConfigDump_DynamicListenerState{
-						VersionInfo: ackVersion,
+						VersionInfo: nackVersion,
 						Listener:    listenerAnys[i],
 						LastUpdated: nil,
 					},
 					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
 				}
 				if i == nackResourceIdx {
+					configDump.ActiveState.VersionInfo = ackVersion
 					configDump.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
 					configDump.ErrorState = &v3adminpb.UpdateFailureState{
 						Details:     "blahblah",
@@ -540,12 +546,13 @@ func checkForNACKed(nackResourceIdx int, stream v3statuspbgrpc.ClientStatusDisco
 			var wantRoutes []*v3adminpb.RoutesConfigDump_DynamicRouteConfig
 			for i := range rdsTargets {
 				configDump := &v3adminpb.RoutesConfigDump_DynamicRouteConfig{
-					VersionInfo:  ackVersion,
+					VersionInfo:  nackVersion,
 					RouteConfig:  routeAnys[i],
 					LastUpdated:  nil,
 					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
 				}
 				if i == nackResourceIdx {
+					configDump.VersionInfo = ackVersion
 					configDump.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
 					configDump.ErrorState = &v3adminpb.UpdateFailureState{
 						Details:     "blahblah",
@@ -564,12 +571,13 @@ func checkForNACKed(nackResourceIdx int, stream v3statuspbgrpc.ClientStatusDisco
 			var wantCluster []*v3adminpb.ClustersConfigDump_DynamicCluster
 			for i := range cdsTargets {
 				configDump := &v3adminpb.ClustersConfigDump_DynamicCluster{
-					VersionInfo:  ackVersion,
+					VersionInfo:  nackVersion,
 					Cluster:      clusterAnys[i],
 					LastUpdated:  nil,
 					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
 				}
 				if i == nackResourceIdx {
+					configDump.VersionInfo = ackVersion
 					configDump.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
 					configDump.ErrorState = &v3adminpb.UpdateFailureState{
 						Details:     "blahblah",
@@ -589,12 +597,13 @@ func checkForNACKed(nackResourceIdx int, stream v3statuspbgrpc.ClientStatusDisco
 			var wantEndpoint []*v3adminpb.EndpointsConfigDump_DynamicEndpointConfig
 			for i := range cdsTargets {
 				configDump := &v3adminpb.EndpointsConfigDump_DynamicEndpointConfig{
-					VersionInfo:    ackVersion,
+					VersionInfo:    nackVersion,
 					EndpointConfig: endpointAnys[i],
 					LastUpdated:    nil,
 					ClientStatus:   v3adminpb.ClientResourceStatus_ACKED,
 				}
 				if i == nackResourceIdx {
+					configDump.VersionInfo = ackVersion
 					configDump.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
 					configDump.ErrorState = &v3adminpb.UpdateFailureState{
 						Details:     "blahblah",

@@ -21,7 +21,6 @@ package v2
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -285,9 +284,6 @@ var (
 		},
 		TypeUrl: version.V2RouteConfigURL,
 	}
-	// An place holder error. When comparing UpdateErrorMetadata, we only check
-	// if error is nil, and don't compare error content.
-	errPlaceHolder = fmt.Errorf("err place holder")
 )
 
 type watchHandleTestcase struct {
@@ -437,7 +433,7 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 		cmpopts.EquateEmpty(), protocmp.Transform(),
 		cmpopts.IgnoreFields(xdsclient.UpdateMetadata{}, "Timestamp"),
 		cmpopts.IgnoreFields(xdsclient.UpdateErrorMetadata{}, "Timestamp"),
-		cmp.Comparer(func(x, y error) bool { return (x == nil) == (y == nil) }),
+		cmp.FilterValues(func(x, y error) bool { return true }, cmpopts.EquateErrors()),
 	}
 	uErr, err := gotUpdateCh.Receive(ctx)
 	if err == context.DeadlineExceeded {

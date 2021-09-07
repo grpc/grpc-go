@@ -80,11 +80,13 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate, metadata Up
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.ldsVersion = metadata.Version
 	if metadata.ErrState != nil {
-		// On NACK, update overall version to the NACKed resp.
 		c.ldsVersion = metadata.ErrState.Version
-		for name := range updates {
-			if s, ok := c.ldsWatchers[name]; ok {
+	}
+	for name, update := range updates {
+		if s, ok := c.ldsWatchers[name]; ok {
+			if update.Err != nil {
 				// On error, keep previous version for each resource. But update
 				// status and error.
 				mdCopy := c.ldsMD[name]
@@ -92,25 +94,27 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate, metadata Up
 				mdCopy.Status = metadata.Status
 				c.ldsMD[name] = mdCopy
 				for wi := range s {
-					wi.newError(metadata.ErrState.Err)
+					wi.newError(update.Err)
 				}
+				continue
 			}
-		}
-		return
-	}
-
-	// If no error received, the status is ACK.
-	c.ldsVersion = metadata.Version
-	for name, update := range updates {
-		if s, ok := c.ldsWatchers[name]; ok {
-			// Only send the update if this is not an error.
+			// If the resource is valid, send the update.
 			for wi := range s {
 				wi.newUpdate(update)
 			}
 			// Sync cache.
 			c.logger.Debugf("LDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
 			c.ldsCache[name] = update
-			c.ldsMD[name] = metadata
+			// Set status to ACK, and clear error state. The metadata might be a
+			// NACK metadata because some other resources in the same response
+			// are invalid.
+			mdCopy := metadata
+			mdCopy.Status = ServiceStatusACKed
+			mdCopy.ErrState = nil
+			if metadata.ErrState != nil {
+				mdCopy.Version = metadata.ErrState.Version
+			}
+			c.ldsMD[name] = mdCopy
 		}
 	}
 	// Resources not in the new update were removed by the server, so delete
@@ -141,11 +145,14 @@ func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate, metad
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	// If no error received, the status is ACK.
+	c.rdsVersion = metadata.Version
 	if metadata.ErrState != nil {
-		// On NACK, update overall version to the NACKed resp.
 		c.rdsVersion = metadata.ErrState.Version
-		for name := range updates {
-			if s, ok := c.rdsWatchers[name]; ok {
+	}
+	for name, update := range updates {
+		if s, ok := c.rdsWatchers[name]; ok {
+			if update.Err != nil {
 				// On error, keep previous version for each resource. But update
 				// status and error.
 				mdCopy := c.rdsMD[name]
@@ -153,25 +160,27 @@ func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate, metad
 				mdCopy.Status = metadata.Status
 				c.rdsMD[name] = mdCopy
 				for wi := range s {
-					wi.newError(metadata.ErrState.Err)
+					wi.newError(update.Err)
 				}
+				continue
 			}
-		}
-		return
-	}
-
-	// If no error received, the status is ACK.
-	c.rdsVersion = metadata.Version
-	for name, update := range updates {
-		if s, ok := c.rdsWatchers[name]; ok {
-			// Only send the update if this is not an error.
+			// If the resource is valid, send the update.
 			for wi := range s {
 				wi.newUpdate(update)
 			}
 			// Sync cache.
 			c.logger.Debugf("RDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
 			c.rdsCache[name] = update
-			c.rdsMD[name] = metadata
+			// Set status to ACK, and clear error state. The metadata might be a
+			// NACK metadata because some other resources in the same response
+			// are invalid.
+			mdCopy := metadata
+			mdCopy.Status = ServiceStatusACKed
+			mdCopy.ErrState = nil
+			if metadata.ErrState != nil {
+				mdCopy.Version = metadata.ErrState.Version
+			}
+			c.rdsMD[name] = mdCopy
 		}
 	}
 }
@@ -185,11 +194,13 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate, metadata Upda
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.cdsVersion = metadata.Version
 	if metadata.ErrState != nil {
-		// On NACK, update overall version to the NACKed resp.
 		c.cdsVersion = metadata.ErrState.Version
-		for name := range updates {
-			if s, ok := c.cdsWatchers[name]; ok {
+	}
+	for name, update := range updates {
+		if s, ok := c.cdsWatchers[name]; ok {
+			if update.Err != nil {
 				// On error, keep previous version for each resource. But update
 				// status and error.
 				mdCopy := c.cdsMD[name]
@@ -197,25 +208,29 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate, metadata Upda
 				mdCopy.Status = metadata.Status
 				c.cdsMD[name] = mdCopy
 				for wi := range s {
-					wi.newError(metadata.ErrState.Err)
+					// Send the watcher the individual error, instead of the
+					// overall combined error from the metadata.ErrState.
+					wi.newError(update.Err)
 				}
+				continue
 			}
-		}
-		return
-	}
-
-	// If no error received, the status is ACK.
-	c.cdsVersion = metadata.Version
-	for name, update := range updates {
-		if s, ok := c.cdsWatchers[name]; ok {
-			// Only send the update if this is not an error.
+			// If the resource is valid, send the update.
 			for wi := range s {
 				wi.newUpdate(update)
 			}
 			// Sync cache.
 			c.logger.Debugf("CDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
 			c.cdsCache[name] = update
-			c.cdsMD[name] = metadata
+			// Set status to ACK, and clear error state. The metadata might be a
+			// NACK metadata because some other resources in the same response
+			// are invalid.
+			mdCopy := metadata
+			mdCopy.Status = ServiceStatusACKed
+			mdCopy.ErrState = nil
+			if metadata.ErrState != nil {
+				mdCopy.Version = metadata.ErrState.Version
+			}
+			c.cdsMD[name] = mdCopy
 		}
 	}
 	// Resources not in the new update were removed by the server, so delete
@@ -246,11 +261,13 @@ func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate, metadata U
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	c.edsVersion = metadata.Version
 	if metadata.ErrState != nil {
-		// On NACK, update overall version to the NACKed resp.
 		c.edsVersion = metadata.ErrState.Version
-		for name := range updates {
-			if s, ok := c.edsWatchers[name]; ok {
+	}
+	for name, update := range updates {
+		if s, ok := c.edsWatchers[name]; ok {
+			if update.Err != nil {
 				// On error, keep previous version for each resource. But update
 				// status and error.
 				mdCopy := c.edsMD[name]
@@ -258,25 +275,29 @@ func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate, metadata U
 				mdCopy.Status = metadata.Status
 				c.edsMD[name] = mdCopy
 				for wi := range s {
-					wi.newError(metadata.ErrState.Err)
+					// Send the watcher the individual error, instead of the
+					// overall combined error from the metadata.ErrState.
+					wi.newError(update.Err)
 				}
+				continue
 			}
-		}
-		return
-	}
-
-	// If no error received, the status is ACK.
-	c.edsVersion = metadata.Version
-	for name, update := range updates {
-		if s, ok := c.edsWatchers[name]; ok {
-			// Only send the update if this is not an error.
+			// If the resource is valid, send the update.
 			for wi := range s {
 				wi.newUpdate(update)
 			}
 			// Sync cache.
 			c.logger.Debugf("EDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
 			c.edsCache[name] = update
-			c.edsMD[name] = metadata
+			// Set status to ACK, and clear error state. The metadata might be a
+			// NACK metadata because some other resources in the same response
+			// are invalid.
+			mdCopy := metadata
+			mdCopy.Status = ServiceStatusACKed
+			mdCopy.ErrState = nil
+			if metadata.ErrState != nil {
+				mdCopy.Version = metadata.ErrState.Version
+			}
+			c.edsMD[name] = mdCopy
 		}
 	}
 }

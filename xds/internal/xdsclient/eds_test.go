@@ -30,6 +30,7 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/version"
@@ -149,7 +150,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,
@@ -167,7 +168,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,
@@ -180,13 +181,13 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 				clab0.addLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
 				return clab0.Build()
 			}())},
-			wantUpdate: map[string]EndpointsUpdate{"test": {}},
+			wantUpdate: map[string]EndpointsUpdate{"test": {Err: cmpopts.AnyError}},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusNACKed,
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,
@@ -266,14 +267,14 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 					},
 					Raw: v3EndpointsAny,
 				},
-				"bad": {},
+				"bad": {Err: cmpopts.AnyError},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusNACKed,
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,

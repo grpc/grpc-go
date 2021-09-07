@@ -23,6 +23,7 @@ import (
 	"time"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"google.golang.org/grpc/xds/internal/xdsclient"
 )
@@ -48,7 +49,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
-					Err: errPlaceHolder,
+					Err: cmpopts.AnyError,
 				},
 			},
 			wantUpdateErr: false,
@@ -62,7 +63,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
-					Err: errPlaceHolder,
+					Err: cmpopts.AnyError,
 				},
 			},
 			wantUpdateErr: false,
@@ -75,12 +76,12 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			ldsResponse: noAPIListenerLDSResponse,
 			wantErr:     true,
 			wantUpdate: map[string]xdsclient.ListenerUpdate{
-				goodLDSTarget1: {},
+				goodLDSTarget1: {Err: cmpopts.AnyError},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
-					Err: errPlaceHolder,
+					Err: cmpopts.AnyError,
 				},
 			},
 			wantUpdateErr: false,
@@ -122,12 +123,12 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			wantErr:     true,
 			wantUpdate: map[string]xdsclient.ListenerUpdate{
 				goodLDSTarget1: {RouteConfigName: goodRouteName1, Raw: marshaledListener1},
-				goodLDSTarget2: {},
+				goodLDSTarget2: {Err: cmpopts.AnyError},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
-					Err: errPlaceHolder,
+					Err: cmpopts.AnyError,
 				},
 			},
 			wantUpdateErr: false,

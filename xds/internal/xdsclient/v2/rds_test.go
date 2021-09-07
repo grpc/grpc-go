@@ -24,6 +24,7 @@ import (
 	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -62,7 +63,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
-					Err: errPlaceHolder,
+					Err: cmpopts.AnyError,
 				},
 			},
 			wantUpdateErr: false,
@@ -76,7 +77,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
-					Err: errPlaceHolder,
+					Err: cmpopts.AnyError,
 				},
 			},
 			wantUpdateErr: false,

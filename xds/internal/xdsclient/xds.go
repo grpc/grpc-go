@@ -1089,6 +1089,10 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 // processAllResources unmarshals and validates the resources, populates the
 // provided ret (a map), and returns metadata and error.
 //
+// After this function, the ret map will be populated with both valid and
+// invalid updates. Invalid resources will have an entry with the key as the
+// resource name, value as an empty update.
+//
 // The type of the resource is determined by the type of ret. E.g.
 // map[string]ListenerUpdate means this is for LDS.
 func processAllResources(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger, ret interface{}) (UpdateMetadata, error) {
@@ -1115,7 +1119,7 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 			perResourceErrors[name] = err
 			// Add place holder in the map so we know this resource name was in
 			// the response.
-			ret2[name] = ListenerUpdate{}
+			ret2[name] = ListenerUpdate{Err: err}
 		case map[string]RouteConfigUpdate:
 			name, update, err := unmarshalRouteConfigResource(r, logger)
 			if err == nil {
@@ -1129,7 +1133,7 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 			perResourceErrors[name] = err
 			// Add place holder in the map so we know this resource name was in
 			// the response.
-			ret2[name] = RouteConfigUpdate{}
+			ret2[name] = RouteConfigUpdate{Err: err}
 		case map[string]ClusterUpdate:
 			name, update, err := unmarshalClusterResource(r, logger)
 			if err == nil {
@@ -1143,7 +1147,7 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 			perResourceErrors[name] = err
 			// Add place holder in the map so we know this resource name was in
 			// the response.
-			ret2[name] = ClusterUpdate{}
+			ret2[name] = ClusterUpdate{Err: err}
 		case map[string]EndpointsUpdate:
 			name, update, err := unmarshalEndpointsResource(r, logger)
 			if err == nil {
@@ -1157,7 +1161,7 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 			perResourceErrors[name] = err
 			// Add place holder in the map so we know this resource name was in
 			// the response.
-			ret2[name] = EndpointsUpdate{}
+			ret2[name] = EndpointsUpdate{Err: err}
 		}
 	}
 

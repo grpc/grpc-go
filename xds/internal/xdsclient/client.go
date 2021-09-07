@@ -220,6 +220,9 @@ type ListenerUpdate struct {
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
+	// Err is non-nil if the resource in the response is invalid. It contains
+	// the unmarshal error message.
+	Err error
 }
 
 // HTTPFilter represents one HTTP filter from an LDS response's HTTP connection
@@ -254,6 +257,9 @@ type RouteConfigUpdate struct {
 	VirtualHosts []*VirtualHost
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
+	// Err is non-nil if the resource in the response is invalid. It contains
+	// the unmarshal error message.
+	Err error
 }
 
 // VirtualHost contains the routes for a list of Domains.
@@ -514,6 +520,9 @@ type ClusterUpdate struct {
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
+	// Err is non-nil if the resource in the response is invalid. It contains
+	// the unmarshal error message.
+	Err error
 }
 
 // OverloadDropConfig contains the config to drop overloads.
@@ -563,6 +572,9 @@ type EndpointsUpdate struct {
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
+	// Err is non-nil if the resource in the response is invalid. It contains
+	// the unmarshal error message.
+	Err error
 }
 
 // Function to be overridden in tests.

@@ -680,7 +680,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,
@@ -698,7 +698,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,
@@ -857,14 +857,14 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 					},
 					Raw: v2RouteConfig,
 				},
-				"bad": {},
+				"bad": {Err: cmpopts.AnyError},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusNACKed,
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,

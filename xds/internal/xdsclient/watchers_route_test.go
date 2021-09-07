@@ -340,8 +340,74 @@ func (s) TestRouteWatchNACKError(t *testing.T) {
 	}
 
 	wantError := fmt.Errorf("testing error")
-	client.NewRouteConfigs(map[string]RouteConfigUpdate{testCDSName: {}}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
+	client.NewRouteConfigs(map[string]RouteConfigUpdate{testCDSName: {Err: wantError}}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
 	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, RouteConfigUpdate{}, wantError); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestRouteWatchPartialValid covers the case that a response contains both
+// valid and invalid resources. This response will be NACK'ed by the xdsclient.
+// But the watchers with valid resources should receive the update, those with
+// invalida resources should receive an error.
+func (s) TestRouteWatchPartialValid(t *testing.T) {
+	apiClientCh, cleanup := overrideNewAPIClient()
+	defer cleanup()
+
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	c, err := apiClientCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout when waiting for API client to be created: %v", err)
+	}
+	apiClient := c.(*testAPIClient)
+
+	const badResourceName = "bad-resource"
+	updateChs := make(map[string]*testutils.Channel)
+
+	for _, name := range []string{testRDSName, badResourceName} {
+		rdsUpdateCh := testutils.NewChannel()
+		cancelWatch := client.WatchRouteConfig(name, func(update RouteConfigUpdate, err error) {
+			rdsUpdateCh.Send(rdsUpdateErr{u: update, err: err})
+		})
+		defer func() {
+			cancelWatch()
+			if _, err := apiClient.removeWatches[RouteConfigResource].Receive(ctx); err != nil {
+				t.Fatalf("want watch to be canceled, got err: %v", err)
+			}
+		}()
+		if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
+			t.Fatalf("want new watch to start, got error %v", err)
+		}
+		updateChs[name] = rdsUpdateCh
+	}
+
+	wantError := fmt.Errorf("testing error")
+	wantError2 := fmt.Errorf("individual error")
+	client.NewRouteConfigs(map[string]RouteConfigUpdate{
+		testRDSName: {VirtualHosts: []*VirtualHost{{
+			Domains: []string{testLDSName},
+			Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName: {Weight: 1}}}},
+		}}},
+		badResourceName: {Err: wantError2},
+	}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
+
+	// The valid resource should be sent to the watcher.
+	if err := verifyRouteConfigUpdate(ctx, updateChs[testRDSName], RouteConfigUpdate{VirtualHosts: []*VirtualHost{{
+		Domains: []string{testLDSName},
+		Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName: {Weight: 1}}}},
+	}}}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// The failed watcher should receive an error.
+	if err := verifyRouteConfigUpdate(ctx, updateChs[badResourceName], RouteConfigUpdate{}, wantError2); err != nil {
 		t.Fatal(err)
 	}
 }

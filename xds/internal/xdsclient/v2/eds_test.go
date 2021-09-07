@@ -24,6 +24,7 @@ import (
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	anypb "github.com/golang/protobuf/ptypes/any"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
 	xtestutils "google.golang.org/grpc/xds/internal/testutils"
@@ -88,7 +89,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
-					Err: errPlaceHolder,
+					Err: cmpopts.AnyError,
 				},
 			},
 			wantUpdateErr: false,
@@ -102,7 +103,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
-					Err: errPlaceHolder,
+					Err: cmpopts.AnyError,
 				},
 			},
 			wantUpdateErr: false,
