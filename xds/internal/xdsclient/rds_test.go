@@ -100,6 +100,10 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			}
 		}
 		goodUpdateWithRetryPolicy = func(vhrc *RetryConfig, rrc *RetryConfig) RouteConfigUpdate {
+			if !env.RetrySupport {
+				vhrc = nil
+				rrc = nil
+			}
 			return RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{{
 					Domains: []string{ldsTarget},
@@ -113,7 +117,13 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				}},
 			}
 		}
-		defaultRetryBackoff = RetryBackoff{BaseInterval: 25 * time.Millisecond, MaxInterval: 250 * time.Millisecond}
+		defaultRetryBackoff       = RetryBackoff{BaseInterval: 25 * time.Millisecond, MaxInterval: 250 * time.Millisecond}
+		goodUpdateIfRetryDisabled = func() RouteConfigUpdate {
+			if env.RetrySupport {
+				return RouteConfigUpdate{}
+			}
+			return goodUpdateWithRetryPolicy(nil, nil)
+		}
 	)
 
 	tests := []struct {
@@ -538,22 +548,24 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				&RetryConfig{RetryOn: map[codes.Code]bool{codes.ResourceExhausted: true}, NumRetries: 1, RetryBackoff: RetryBackoff{BaseInterval: 10 * time.Millisecond, MaxInterval: 100 * time.Millisecond}}),
 		},
 		{
-			name:      "bad-retry-policy-0-retries",
-			rc:        goodRouteConfigWithRetryPolicy(&v3routepb.RetryPolicy{RetryOn: "cancelled", NumRetries: &wrapperspb.UInt32Value{Value: 0}}, nil),
-			wantError: true,
+			name:       "bad-retry-policy-0-retries",
+			rc:         goodRouteConfigWithRetryPolicy(&v3routepb.RetryPolicy{RetryOn: "cancelled", NumRetries: &wrapperspb.UInt32Value{Value: 0}}, nil),
+			wantUpdate: goodUpdateIfRetryDisabled(),
+			wantError:  env.RetrySupport,
 		},
 		{
-			name:      "bad-retry-policy-0-base-interval",
-			rc:        goodRouteConfigWithRetryPolicy(&v3routepb.RetryPolicy{RetryOn: "cancelled", RetryBackOff: &v3routepb.RetryPolicy_RetryBackOff{BaseInterval: durationpb.New(0)}}, nil),
-			wantError: true,
+			name:       "bad-retry-policy-0-base-interval",
+			rc:         goodRouteConfigWithRetryPolicy(&v3routepb.RetryPolicy{RetryOn: "cancelled", RetryBackOff: &v3routepb.RetryPolicy_RetryBackOff{BaseInterval: durationpb.New(0)}}, nil),
+			wantUpdate: goodUpdateIfRetryDisabled(),
+			wantError:  env.RetrySupport,
 		},
 		{
-			name:      "bad-retry-policy-negative-max-interval",
-			rc:        goodRouteConfigWithRetryPolicy(&v3routepb.RetryPolicy{RetryOn: "cancelled", RetryBackOff: &v3routepb.RetryPolicy_RetryBackOff{MaxInterval: durationpb.New(-time.Second)}}, nil),
-			wantError: true,
+			name:       "bad-retry-policy-negative-max-interval",
+			rc:         goodRouteConfigWithRetryPolicy(&v3routepb.RetryPolicy{RetryOn: "cancelled", RetryBackOff: &v3routepb.RetryPolicy_RetryBackOff{MaxInterval: durationpb.New(-time.Second)}}, nil),
+			wantUpdate: goodUpdateIfRetryDisabled(),
+			wantError:  env.RetrySupport,
 		},
 	}
-
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil, false)
