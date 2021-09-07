@@ -28,13 +28,6 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// subConn is a placeholder struct needed by the ring. It will be moved to the
-// balancer file, and will add more fields (balancer.SubConn, connectivity state
-// and so on).
-type subConn struct {
-	addr string
-}
-
 type ring struct {
 	items []*ringEntry
 }

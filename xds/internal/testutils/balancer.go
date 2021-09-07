@@ -46,21 +46,28 @@ var TestSubConns []*TestSubConn
 func init() {
 	for i := 0; i < TestSubConnsCount; i++ {
 		TestSubConns = append(TestSubConns, &TestSubConn{
-			id: fmt.Sprintf("sc%d", i),
+			id:        fmt.Sprintf("sc%d", i),
+			ConnectCh: make(chan struct{}, 1),
 		})
 	}
 }
 
 // TestSubConn implements the SubConn interface, to be used in tests.
 type TestSubConn struct {
-	id string
+	id        string
+	ConnectCh chan struct{}
 }
 
 // UpdateAddresses is a no-op.
 func (tsc *TestSubConn) UpdateAddresses([]resolver.Address) {}
 
 // Connect is a no-op.
-func (tsc *TestSubConn) Connect() {}
+func (tsc *TestSubConn) Connect() {
+	select {
+	case tsc.ConnectCh <- struct{}{}:
+	default:
+	}
+}
 
 // String implements stringer to print human friendly error message.
 func (tsc *TestSubConn) String() string {

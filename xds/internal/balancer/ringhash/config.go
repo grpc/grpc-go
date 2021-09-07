@@ -25,9 +25,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
-// Name is the name of the ring_hash balancer.
-const Name = "ring_hash_experimental"
-
 // LBConfig is the balancer config for ring_hash balancer.
 type LBConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
