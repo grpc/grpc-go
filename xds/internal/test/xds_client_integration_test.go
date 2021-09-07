@@ -122,30 +122,33 @@ func (s) TestClientSideRetry(t *testing.T) {
 		},
 	}
 
-	port, cleanup := clientSetup(t, ss)
-	defer cleanup()
+	managementServer, nodeID, _, resolver, cleanup1 := setupManagementServer(t)
+	defer cleanup1()
+
+	port, cleanup2 := clientSetup(t, ss)
+	defer cleanup2()
 
 	const serviceName = "my-service-client-side-xds"
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: serviceName,
-		NodeID:     xdsClientNodeID,
+		NodeID:     nodeID,
 		Host:       "localhost",
 		Port:       port,
 		SecLevel:   e2e.SecurityLevelNone,
 	})
-	if err := managementServer.Update(resources); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a ClientConn and make a successful RPC.
-	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(xdsResolverBuilder))
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
 
 	client := testpb.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) != codes.ResourceExhausted {
 		t.Fatalf("rpc EmptyCall() = _, %v; want _, ResourceExhausted", err)
@@ -232,7 +235,7 @@ func (s) TestClientSideRetry(t *testing.T) {
 
 			resources.Routes[0].VirtualHosts[0].RetryPolicy = tc.vhPolicy
 			resources.Routes[0].VirtualHosts[0].Routes[0].GetRoute().RetryPolicy = tc.routePolicy
-			if err := managementServer.Update(resources); err != nil {
+			if err := managementServer.Update(ctx, resources); err != nil {
 				t.Fatal(err)
 			}
 
