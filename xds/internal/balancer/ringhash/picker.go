@@ -24,15 +24,17 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/status"
 )
 
 type picker struct {
-	ring *ring
+	ring   *ring
+	logger *grpclog.PrefixLogger
 }
 
-func newPicker(ring *ring) *picker {
-	return &picker{ring: ring}
+func newPicker(ring *ring, logger *grpclog.PrefixLogger) *picker {
+	return &picker{ring: ring, logger: logger}
 }
 
 // handleRICSResult is the return type of handleRICS. It's needed to wrap the
@@ -51,7 +53,7 @@ type handleRICSResult struct {
 // The first return value indicates if the state is in Ready, Idle, Connecting
 // or Shutdown. If it's true, the PickResult and error should be returned from
 // Pick() as is.
-func handleRICS(e *ringEntry) (handleRICSResult, bool) {
+func handleRICS(e *ringEntry, logger *grpclog.PrefixLogger) (handleRICSResult, bool) {
 	switch state := e.sc.effectiveState(); state {
 	case connectivity.Ready:
 		return handleRICSResult{pr: balancer.PickResult{SubConn: e.sc.sc}}, true
@@ -71,15 +73,14 @@ func handleRICS(e *ringEntry) (handleRICSResult, bool) {
 	default:
 		// Should never reach this. All the connectivity states are already
 		// handled in the cases.
-		//
-		// FIXME: add an error log.
+		logger.Errorf("SubConn has undefined connectivity state: %v", state)
 		return handleRICSResult{err: status.Errorf(codes.Unavailable, "SubConn has undefined connectivity state: %v", state)}, true
 	}
 }
 
 func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	e := p.ring.pick(getRequestHash(info.Ctx))
-	if hr, ok := handleRICS(e); ok {
+	if hr, ok := handleRICS(e, p.logger); ok {
 		return hr.pr, hr.err
 	}
 	// ok was false, the entry is in transient failure.
@@ -99,7 +100,7 @@ func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, erro
 
 	// For the second SubConn, also check Ready/Idle/Connecting as if it's the
 	// first entry.
-	if hr, ok := handleRICS(e2); ok {
+	if hr, ok := handleRICS(e2, p.logger); ok {
 		return hr.pr, hr.err
 	}
 
