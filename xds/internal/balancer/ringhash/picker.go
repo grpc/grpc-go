@@ -19,8 +19,6 @@
 package ringhash
 
 import (
-	"log"
-
 	"fmt"
 
 	"google.golang.org/grpc/balancer"
@@ -81,7 +79,6 @@ func handleRICS(e *ringEntry) (handleRICSResult, bool) {
 
 func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	e := p.ring.pick(getRequestHash(info.Ctx))
-	log.Printf(" * first item sc %p effinitive state: %v, state: %v", e.sc, e.sc.effectiveState(), e.sc.state)
 	if hr, ok := handleRICS(e); ok {
 		return hr.pr, hr.err
 	}

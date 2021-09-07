@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
@@ -107,7 +106,6 @@ type subConn struct {
 // It also handles the queued Connect(). If the new state is Idle, and a
 // Connect() was queued, this SubConn will be triggered to Connect().
 func (sc *subConn) setState(s connectivity.State) {
-	log.Printf(" --- updating sc %p to state %v", sc, s)
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	// Any state change to non-Idle means there was an attempt to connect.
