@@ -1778,3 +1778,99 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 		t.Fatalf("timeout waiting for ResolveNow()")
 	}
 }
+
+const initIdleBalancerName = "test-init-Idle-balancer"
+
+var errsTestInitIdle = []error{
+	fmt.Errorf("init Idle balancer error 0"),
+	fmt.Errorf("init Idle balancer error 1"),
+}
+
+func init() {
+	for i := 0; i < 2; i++ {
+		ii := i
+		stub.Register(fmt.Sprintf("%s-%d", initIdleBalancerName, ii), stub.BalancerFuncs{
+			UpdateClientConnState: func(bd *stub.BalancerData, opts balancer.ClientConnState) error {
+				bd.ClientConn.NewSubConn(opts.ResolverState.Addresses, balancer.NewSubConnOptions{})
+				return nil
+			},
+			UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
+				err := fmt.Errorf("wrong picker error")
+				if state.ConnectivityState == connectivity.Idle {
+					err = errsTestInitIdle[ii]
+				}
+				bd.ClientConn.UpdateState(balancer.State{
+					ConnectivityState: state.ConnectivityState,
+					Picker:            &testutils.TestConstPicker{Err: err},
+				})
+			},
+		})
+	}
+}
+
+// If the high priorities send initial pickers with Idle state, their pickers
+// should get picks, because policies like ringhash starts in Idle, and doesn't
+// connect.
+//
+// Init 0, 1; 0 is Idle, use 0; 0 is down, start 1; 1 is Idle, use 1.
+func (s) TestPriority_HighPriorityInitIdle(t *testing.T) {
+	cc := testutils.NewTestClientConn(t)
+	bb := balancer.Get(Name)
+	pb := bb.Build(cc, balancer.BuildOptions{})
+	defer pb.Close()
+
+	// Two children, with priorities [0, 1], each with one backend.
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: []resolver.Address{
+				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
+				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[1]}, []string{"child-1"}),
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Children: map[string]*Child{
+				"child-0": {Config: &internalserviceconfig.BalancerConfig{Name: fmt.Sprintf("%s-%d", initIdleBalancerName, 0)}},
+				"child-1": {Config: &internalserviceconfig.BalancerConfig{Name: fmt.Sprintf("%s-%d", initIdleBalancerName, 1)}},
+			},
+			Priorities: []string{"child-0", "child-1"},
+		},
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	addrs0 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc0 := <-cc.NewSubConnCh
+
+	// Send an Idle state update to trigger an Idle picker update.
+	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	p0 := <-cc.NewPickerCh
+	if pr, err := p0.Pick(balancer.PickInfo{}); err != errsTestInitIdle[0] {
+		t.Fatalf("pick returned %v, %v, want _, %v", pr, err, errsTestInitIdle[0])
+	}
+
+	// Turn p0 down, to start p1.
+	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
+	// will retry.
+	p1 := <-cc.NewPickerCh
+	for i := 0; i < 5; i++ {
+		if _, err := p1.Pick(balancer.PickInfo{}); err != balancer.ErrNoSubConnAvailable {
+			t.Fatalf("want pick error %v, got %v", balancer.ErrNoSubConnAvailable, err)
+		}
+	}
+
+	addrs1 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs1[0].Addr, testBackendAddrStrs[1]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc1 := <-cc.NewSubConnCh
+	// Idle picker from p1 should also be forwarded.
+	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	p2 := <-cc.NewPickerCh
+	if pr, err := p2.Pick(balancer.PickInfo{}); err != errsTestInitIdle[1] {
+		t.Fatalf("pick returned %v, %v, want _, %v", pr, err, errsTestInitIdle[1])
+	}
+}
