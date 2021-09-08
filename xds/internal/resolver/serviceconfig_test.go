@@ -73,7 +73,7 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 			}},
 			requestHashWant: xxhash.Sum64String("/new-products"),
 			rpcInfo: iresolver.RPCInfo{
-				Context: metadata.NewIncomingContext(context.Background(), metadata.Pairs(":path", "/products")),
+				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs(":path", "/products")),
 				Method:  "/some-method",
 			},
 		},
@@ -101,7 +101,7 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 			}},
 			requestHashWant: xxhash.Sum64String("eaebece"),
 			rpcInfo: iresolver.RPCInfo{
-				Context: metadata.NewIncomingContext(context.Background(), metadata.Pairs(":path", "abc")),
+				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs(":path", "abc")),
 				Method:  "/some-method",
 			},
 		},
