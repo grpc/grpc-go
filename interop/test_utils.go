@@ -687,7 +687,7 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 	defer func() { latency = time.Since(start) }()
 	client := tc
 	if resetChannel {
-		var conn grpc.ClientConn
+		var conn *grpc.ClientConn
 		conn, err = grpc.Dial(serverAddr, dopts...)
 		if err != nil {
 			return
@@ -702,7 +702,7 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 		ResponseSize: int32(largeRespSize),
 		Payload:      pl,
 	}
-	var reply testpb.SimpleResponse
+	var reply *testpb.SimpleResponse
 	reply, err = client.UnaryCall(ctx, req)
 	if err != nil {
 		err = fmt.Errorf("/TestService/UnaryCall RPC failed: %s", err)
@@ -723,8 +723,16 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, perIterationMaxAcceptableLatency time.Duration, overallDeadline time.Time) {
 	start := time.Now()
 	ctx, cancel := context.WithDeadline(context.Background(), overallDeadline)
-	iterationsDone := 0
 	defer cancel()
+	iterationsDone := 0
+	totalFailures := 0
+	hopts := stats.HistogramOptions{
+		NumBuckets:     20,
+		GrowthFactor:   1,
+		BaseBucketSize: 1,
+		MinValue:       0,
+	}
+	h := stats.NewHistogram(hopts)
 	for i := 0; i < soakIterations; i++ {
 		if time.Now().After(overallDeadline) {
 			break
@@ -745,20 +753,12 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 		}
 		fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d succeeded\n", i, latencyMs)
 	}
-	totalFailures := 0
-	hopts := stats.HistogramOptions{
-		NumBuckets:     20,
-		GrowthFactor:   1,
-		BaseBucketSize: 1,
-		MinValue:       0,
-	}
-	h := stats.NewHistogram(hopts)
 	var b bytes.Buffer
 	h.Print(&b)
 	fmt.Fprintln(os.Stderr, "Histogram of per-iteration latencies in milliseconds:")
 	fmt.Fprintln(os.Stderr, b.String())
 	fmt.Fprintf(os.Stderr, "soak test ran: %d / %d iterations. total failures: %d. max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", iterationsDone, soakIterations, totalFailures, maxFailures)
-	if len(results) < soakIterations {
+	if iterationsDone < soakIterations {
 		logger.Fatalf("soak test consumed all %f seconds of time and quit early, only having ran %d out of desired %d iterations.", overallDeadline.Sub(start).Seconds(), iterationsDone, soakIterations)
 	}
 	if totalFailures > maxFailures {
