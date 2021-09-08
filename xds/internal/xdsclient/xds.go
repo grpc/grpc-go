@@ -39,6 +39,7 @@ import (
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -344,9 +345,14 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
 		}
+		rc, err := generateRetryConfig(vh.GetRetryPolicy())
+		if err != nil {
+			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
+		}
 		vhOut := &VirtualHost{
-			Domains: vh.GetDomains(),
-			Routes:  routes,
+			Domains:     vh.GetDomains(),
+			Routes:      routes,
+			RetryConfig: rc,
 		}
 		if !v2 {
 			cfgs, err := processHTTPFilterOverrides(vh.GetTypedPerFilterConfig())
@@ -358,6 +364,60 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 		vhs = append(vhs, vhOut)
 	}
 	return RouteConfigUpdate{VirtualHosts: vhs}, nil
+}
+
+func generateRetryConfig(rp *v3routepb.RetryPolicy) (*RetryConfig, error) {
+	if !env.RetrySupport || rp == nil {
+		return nil, nil
+	}
+
+	cfg := &RetryConfig{RetryOn: make(map[codes.Code]bool)}
+	for _, s := range strings.Split(rp.GetRetryOn(), ",") {
+		switch strings.TrimSpace(strings.ToLower(s)) {
+		case "cancelled":
+			cfg.RetryOn[codes.Canceled] = true
+		case "deadline-exceeded":
+			cfg.RetryOn[codes.DeadlineExceeded] = true
+		case "internal":
+			cfg.RetryOn[codes.Internal] = true
+		case "resource-exhausted":
+			cfg.RetryOn[codes.ResourceExhausted] = true
+		case "unavailable":
+			cfg.RetryOn[codes.Unavailable] = true
+		}
+	}
+
+	if rp.NumRetries == nil {
+		cfg.NumRetries = 1
+	} else {
+		cfg.NumRetries = rp.GetNumRetries().Value
+		if cfg.NumRetries < 1 {
+			return nil, fmt.Errorf("retry_policy.num_retries = %v; must be >= 1", cfg.NumRetries)
+		}
+	}
+
+	backoff := rp.GetRetryBackOff()
+	if backoff == nil {
+		cfg.RetryBackoff.BaseInterval = 25 * time.Millisecond
+	} else {
+		cfg.RetryBackoff.BaseInterval = backoff.GetBaseInterval().AsDuration()
+		if cfg.RetryBackoff.BaseInterval <= 0 {
+			return nil, fmt.Errorf("retry_policy.base_interval = %v; must be > 0", cfg.RetryBackoff.BaseInterval)
+		}
+	}
+	if max := backoff.GetMaxInterval(); max == nil {
+		cfg.RetryBackoff.MaxInterval = 10 * cfg.RetryBackoff.BaseInterval
+	} else {
+		cfg.RetryBackoff.MaxInterval = max.AsDuration()
+		if cfg.RetryBackoff.MaxInterval <= 0 {
+			return nil, fmt.Errorf("retry_policy.max_interval = %v; must be > 0", cfg.RetryBackoff.MaxInterval)
+		}
+	}
+
+	if len(cfg.RetryOn) == 0 {
+		return &RetryConfig{}, nil
+	}
+	return cfg, nil
 }
 
 func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger, v2 bool) ([]*Route, error) {
@@ -507,7 +567,15 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 				d := dur.AsDuration()
 				route.MaxStreamDuration = &d
 			}
+
+			var err error
+			route.RetryConfig, err = generateRetryConfig(action.GetRetryPolicy())
+			if err != nil {
+				return nil, fmt.Errorf("route %+v, action %+v: %v", r, action, err)
+			}
+
 			route.RouteAction = RouteActionRoute
+
 		case *v3routepb.Route_NonForwardingAction:
 			// Expected to be used on server side.
 			route.RouteAction = RouteActionNonForwardingAction

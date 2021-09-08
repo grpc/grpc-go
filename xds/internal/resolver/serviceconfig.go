@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpcrand"
 	iresolver "google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/metadata"
@@ -107,6 +108,8 @@ func serviceConfigJSON(activeClusters map[string]*clusterInfo) ([]byte, error) {
 type virtualHost struct {
 	// map from filter name to its config
 	httpFilterConfigOverride map[string]httpfilter.FilterConfig
+	// retry policy present in virtual host
+	retryConfig *xdsclient.RetryConfig
 }
 
 // routeCluster holds information about a cluster as referenced by a route.
@@ -122,6 +125,7 @@ type route struct {
 	maxStreamDuration time.Duration
 	// map from filter name to its config
 	httpFilterConfigOverride map[string]httpfilter.FilterConfig
+	retryConfig              *xdsclient.RetryConfig
 	hashPolicies             []*xdsclient.HashPolicy
 }
 
@@ -195,8 +199,23 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	if rt.maxStreamDuration != 0 {
 		config.MethodConfig.Timeout = &rt.maxStreamDuration
 	}
+	if rt.retryConfig != nil {
+		config.MethodConfig.RetryPolicy = retryConfigToPolicy(rt.retryConfig)
+	} else if cs.virtualHost.retryConfig != nil {
+		config.MethodConfig.RetryPolicy = retryConfigToPolicy(cs.virtualHost.retryConfig)
+	}
 
 	return config, nil
+}
+
+func retryConfigToPolicy(config *xdsclient.RetryConfig) *serviceconfig.RetryPolicy {
+	return &serviceconfig.RetryPolicy{
+		MaxAttempts:          int(config.NumRetries) + 1,
+		InitialBackoff:       config.RetryBackoff.BaseInterval,
+		MaxBackoff:           config.RetryBackoff.MaxInterval,
+		BackoffMultiplier:    2,
+		RetryableStatusCodes: config.RetryOn,
+	}
 }
 
 func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies []*xdsclient.HashPolicy) uint64 {
@@ -322,8 +341,11 @@ var newWRR = wrr.NewRandom
 // r.activeClusters for previously-unseen clusters.
 func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, error) {
 	cs := &configSelector{
-		r:                r,
-		virtualHost:      virtualHost{httpFilterConfigOverride: su.virtualHost.HTTPFilterConfigOverride},
+		r: r,
+		virtualHost: virtualHost{
+			httpFilterConfigOverride: su.virtualHost.HTTPFilterConfigOverride,
+			retryConfig:              su.virtualHost.RetryConfig,
+		},
 		routes:           make([]route, len(su.virtualHost.Routes)),
 		clusters:         make(map[string]*clusterInfo),
 		httpFilterConfig: su.ldsConfig.httpFilterConfig,
@@ -361,6 +383,7 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 		}
 
 		cs.routes[i].httpFilterConfigOverride = rt.HTTPFilterConfigOverride
+		cs.routes[i].retryConfig = rt.RetryConfig
 		cs.routes[i].hashPolicies = rt.HashPolicies
 	}
 

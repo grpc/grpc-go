@@ -41,6 +41,7 @@ const (
 
 	ringHashSupportEnv        = "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH"
 	aggregateAndDNSSupportEnv = "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER"
+	retrySupportEnv           = "GRPC_XDS_EXPERIMENTAL_ENABLE_RETRY"
 
 	c2pResolverSupportEnv                    = "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER"
 	c2pResolverTestOnlyTrafficDirectorURIEnv = "GRPC_TEST_ONLY_GOOGLE_C2P_RESOLVER_TRAFFIC_DIRECTOR_URI"
@@ -69,6 +70,9 @@ var (
 	// "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER" to
 	// "true".
 	AggregateAndDNSSupportEnv = strings.EqualFold(os.Getenv(aggregateAndDNSSupportEnv), "true")
+
+	// RetrySupport indicates whether xDS retry is enabled.
+	RetrySupport = strings.EqualFold(os.Getenv(retrySupportEnv), "true")
 
 	// C2PResolverSupport indicates whether support for C2P resolver is enabled.
 	// This can be enabled by setting the environment variable

@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
@@ -79,6 +80,49 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 					HTTPFilterConfigOverride: cfgs,
 				}},
 			}
+		}
+		goodRouteConfigWithRetryPolicy = func(vhrp *v3routepb.RetryPolicy, rrp *v3routepb.RetryPolicy) *v3routepb.RouteConfiguration {
+			return &v3routepb.RouteConfiguration{
+				Name: routeName,
+				VirtualHosts: []*v3routepb.VirtualHost{{
+					Domains: []string{ldsTarget},
+					Routes: []*v3routepb.Route{{
+						Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+						Action: &v3routepb.Route_Route{
+							Route: &v3routepb.RouteAction{
+								ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
+								RetryPolicy:      rrp,
+							},
+						},
+					}},
+					RetryPolicy: vhrp,
+				}},
+			}
+		}
+		goodUpdateWithRetryPolicy = func(vhrc *RetryConfig, rrc *RetryConfig) RouteConfigUpdate {
+			if !env.RetrySupport {
+				vhrc = nil
+				rrc = nil
+			}
+			return RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{{
+					Domains: []string{ldsTarget},
+					Routes: []*Route{{
+						Prefix:           newStringP("/"),
+						WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}},
+						RouteAction:      RouteActionRoute,
+						RetryConfig:      rrc,
+					}},
+					RetryConfig: vhrc,
+				}},
+			}
+		}
+		defaultRetryBackoff       = RetryBackoff{BaseInterval: 25 * time.Millisecond, MaxInterval: 250 * time.Millisecond}
+		goodUpdateIfRetryDisabled = func() RouteConfigUpdate {
+			if env.RetrySupport {
+				return RouteConfigUpdate{}
+			}
+			return goodUpdateWithRetryPolicy(nil, nil)
 		}
 	)
 
@@ -485,8 +529,49 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("unknown.custom.filter")}),
 			wantUpdate: goodUpdateWithFilterConfigs(nil),
 		},
+		{
+			name: "good-route-config-with-retry-policy",
+			rc: goodRouteConfigWithRetryPolicy(
+				&v3routepb.RetryPolicy{RetryOn: "cancelled"},
+				&v3routepb.RetryPolicy{RetryOn: "deadline-exceeded,unsupported", NumRetries: &wrapperspb.UInt32Value{Value: 2}}),
+			wantUpdate: goodUpdateWithRetryPolicy(
+				&RetryConfig{RetryOn: map[codes.Code]bool{codes.Canceled: true}, NumRetries: 1, RetryBackoff: defaultRetryBackoff},
+				&RetryConfig{RetryOn: map[codes.Code]bool{codes.DeadlineExceeded: true}, NumRetries: 2, RetryBackoff: defaultRetryBackoff}),
+		},
+		{
+			name: "good-route-config-with-retry-backoff",
+			rc: goodRouteConfigWithRetryPolicy(
+				&v3routepb.RetryPolicy{RetryOn: "internal", RetryBackOff: &v3routepb.RetryPolicy_RetryBackOff{BaseInterval: durationpb.New(10 * time.Millisecond), MaxInterval: durationpb.New(10 * time.Millisecond)}},
+				&v3routepb.RetryPolicy{RetryOn: "resource-exhausted", RetryBackOff: &v3routepb.RetryPolicy_RetryBackOff{BaseInterval: durationpb.New(10 * time.Millisecond)}}),
+			wantUpdate: goodUpdateWithRetryPolicy(
+				&RetryConfig{RetryOn: map[codes.Code]bool{codes.Internal: true}, NumRetries: 1, RetryBackoff: RetryBackoff{BaseInterval: 10 * time.Millisecond, MaxInterval: 10 * time.Millisecond}},
+				&RetryConfig{RetryOn: map[codes.Code]bool{codes.ResourceExhausted: true}, NumRetries: 1, RetryBackoff: RetryBackoff{BaseInterval: 10 * time.Millisecond, MaxInterval: 100 * time.Millisecond}}),
+		},
+		{
+			name:       "bad-retry-policy-0-retries",
+			rc:         goodRouteConfigWithRetryPolicy(&v3routepb.RetryPolicy{RetryOn: "cancelled", NumRetries: &wrapperspb.UInt32Value{Value: 0}}, nil),
+			wantUpdate: goodUpdateIfRetryDisabled(),
+			wantError:  env.RetrySupport,
+		},
+		{
+			name:       "bad-retry-policy-0-base-interval",
+			rc:         goodRouteConfigWithRetryPolicy(&v3routepb.RetryPolicy{RetryOn: "cancelled", RetryBackOff: &v3routepb.RetryPolicy_RetryBackOff{BaseInterval: durationpb.New(0)}}, nil),
+			wantUpdate: goodUpdateIfRetryDisabled(),
+			wantError:  env.RetrySupport,
+		},
+		{
+			name:       "bad-retry-policy-negative-max-interval",
+			rc:         goodRouteConfigWithRetryPolicy(&v3routepb.RetryPolicy{RetryOn: "cancelled", RetryBackOff: &v3routepb.RetryPolicy_RetryBackOff{MaxInterval: durationpb.New(-time.Second)}}, nil),
+			wantUpdate: goodUpdateIfRetryDisabled(),
+			wantError:  env.RetrySupport,
+		},
+		{
+			name:       "bad-retry-policy-negative-max-interval-no-known-retry-on",
+			rc:         goodRouteConfigWithRetryPolicy(&v3routepb.RetryPolicy{RetryOn: "something", RetryBackOff: &v3routepb.RetryPolicy_RetryBackOff{MaxInterval: durationpb.New(-time.Second)}}, nil),
+			wantUpdate: goodUpdateIfRetryDisabled(),
+			wantError:  env.RetrySupport,
+		},
 	}
-
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil, false)
