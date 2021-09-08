@@ -681,12 +681,16 @@ type soakIterationResult struct {
 	latency time.Duration
 }
 
-func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, resetChannel bool, serverAddr string, dopts []grpc.DialOption) error {
+func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, resetChannel bool, serverAddr string, dopts []grpc.DialOption) (latency time.Duration, err error) {
+	start := time.Now()
+	// per test spec, don't include channel shutdown in latency measurement
+	defer func() { latency = time.Since(start) }()
 	client := tc
 	if resetChannel {
-		conn, err := grpc.Dial(serverAddr, dopts...)
+		var conn grpc.ClientConn
+		conn, err = grpc.Dial(serverAddr, dopts...)
 		if err != nil {
-			return err
+			return
 		}
 		defer conn.Close()
 		client = testgrpc.NewTestServiceClient(conn)
@@ -698,16 +702,19 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 		ResponseSize: int32(largeRespSize),
 		Payload:      pl,
 	}
-	reply, err := client.UnaryCall(ctx, req)
+	var reply testpb.SimpleResponse
+	reply, err = client.UnaryCall(ctx, req)
 	if err != nil {
-		return fmt.Errorf("/TestService/UnaryCall RPC failed: %s", err)
+		err = fmt.Errorf("/TestService/UnaryCall RPC failed: %s", err)
+		return
 	}
 	t := reply.GetPayload().GetType()
 	s := len(reply.GetPayload().GetBody())
 	if t != testpb.PayloadType_COMPRESSABLE || s != largeRespSize {
-		return fmt.Errorf("got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
+		err = fmt.Errorf("got the reply with type %d len %d; want %d, %d", t, s, testpb.PayloadType_COMPRESSABLE, largeRespSize)
+		return
 	}
-	return nil
+	return
 }
 
 // DoSoakTest runs large unary RPCs in a loop for a configurable number of times, with configurable failure thresholds.
@@ -715,16 +722,28 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 // stub that is created with the provided server address and dial options.
 func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, perIterationMaxAcceptableLatency time.Duration, overallDeadline time.Time) {
 	start := time.Now()
-	var results []soakIterationResult
 	ctx, cancel := context.WithDeadline(context.Background(), overallDeadline)
+	iterationsDone := 0
 	defer cancel()
 	for i := 0; i < soakIterations; i++ {
 		if time.Now().After(overallDeadline) {
 			break
 		}
-		start := time.Now()
-		err := doOneSoakIteration(ctx, tc, resetChannel, serverAddr, dopts)
-		results = append(results, soakIterationResult{err: err, latency: time.Since(start)})
+		iterationsDone++
+		latency, err := doOneSoakIteration(ctx, tc, resetChannel, serverAddr, dopts)
+		latencyMs := int64(latency / time.Millisecond)
+		h.Add(latencyMs)
+		if err != nil {
+			totalFailures++
+			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d failed: %s\n", i, latencyMs, err)
+			continue
+		}
+		if latency > perIterationMaxAcceptableLatency {
+			totalFailures++
+			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d exceeds max acceptable latency: %d\n", i, latencyMs, perIterationMaxAcceptableLatency.Milliseconds())
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d succeeded\n", i, latencyMs)
 	}
 	totalFailures := 0
 	hopts := stats.HistogramOptions{
@@ -734,33 +753,17 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 		MinValue:       0,
 	}
 	h := stats.NewHistogram(hopts)
-	for i := 0; i < len(results); i++ {
-		err := results[i].err
-		latencyMs := int64(results[i].latency / time.Millisecond)
-		h.Add(latencyMs)
-		if err != nil {
-			totalFailures++
-			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d failed: %s\n", i, latencyMs, err)
-			continue
-		}
-		if results[i].latency > perIterationMaxAcceptableLatency {
-			totalFailures++
-			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d exceeds max acceptable latency: %d\n", i, latencyMs, perIterationMaxAcceptableLatency.Milliseconds())
-			continue
-		}
-		fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d succeeded\n", i, latencyMs)
-	}
 	var b bytes.Buffer
 	h.Print(&b)
 	fmt.Fprintln(os.Stderr, "Histogram of per-iteration latencies in milliseconds:")
 	fmt.Fprintln(os.Stderr, b.String())
+	fmt.Fprintf(os.Stderr, "soak test ran: %d / %d iterations. total failures: %d. max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", iterationsDone, soakIterations, totalFailures, maxFailures)
 	if len(results) < soakIterations {
-		logger.Fatalf("soak test consumed all %f seconds of time and quit early, only having ran %d out of desired %d iterations. total failures: %d. max failures threshold: %d. Some or all of the iterations that did run were unexpectedly slow. See breakdown above for which iterations succeeded, failed, and why for more info.", overallDeadline.Sub(start).Seconds(), len(results), soakIterations, totalFailures, maxFailures)
+		logger.Fatalf("soak test consumed all %f seconds of time and quit early, only having ran %d out of desired %d iterations.", overallDeadline.Sub(start).Seconds(), iterationsDone, soakIterations)
 	}
 	if totalFailures > maxFailures {
-		logger.Fatalf("soak test ran: %d iterations. total failures: %d exceeds max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.", soakIterations, totalFailures, maxFailures)
+		logger.Fatalf("soak test total failures: %d exceeds max failures threshold: %d.", totalFailures, maxFailures)
 	}
-	fmt.Fprintf(os.Stderr, "soak test ran: %d iterations. total failures: %d is within max failures threshold: %d. See breakdown above for which iterations succeeded, failed, and why for more info.\n", soakIterations, totalFailures, maxFailures)
 }
 
 type testServer struct {
