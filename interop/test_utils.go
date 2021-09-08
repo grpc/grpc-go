@@ -676,11 +676,6 @@ func DoPickFirstUnary(tc testgrpc.TestServiceClient) {
 	}
 }
 
-type soakIterationResult struct {
-	err     error
-	latency time.Duration
-}
-
 func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, resetChannel bool, serverAddr string, dopts []grpc.DialOption) (latency time.Duration, err error) {
 	start := time.Now()
 	// per test spec, don't include channel shutdown in latency measurement
