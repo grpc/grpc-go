@@ -33,10 +33,17 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
@@ -382,8 +389,145 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 	})
 
 	// Create an inbound xDS listener resource with route configuration which
-	// selectively will allow RPC's through or not.
-	inboundLis := e2e.ServerListenerWithInterestingRouteConfiguration(host, port)
+	// selectively will allow RPC's through or not. This will test routing in
+	// xds(Unary|Stream)Interceptors.
+	vhs := []*v3routepb.VirtualHost{
+		// Virtual host that will never be matched to test Virtual Host selection.
+		{
+			Domains: []string{"this will not match*"},
+			Routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+					},
+					Action: &v3routepb.Route_NonForwardingAction{},
+				},
+			},
+		},
+		// This Virtual Host will actually get matched to.
+		{
+			Domains: []string{"*"},
+			Routes: []*v3routepb.Route{
+				// A routing rule that can be selectively triggered based on properties about incoming RPC.
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"},
+						// "Fully-qualified RPC method name with leading slash. Same as :path header".
+
+					},
+					// Correct Action, so RPC's that match this route should proceed to interceptor processing.
+					Action: &v3routepb.Route_NonForwardingAction{},
+				},
+				// Another routing rule that can be selectively triggered based on incoming RPC.
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/UnaryCall"},
+					},
+					// Wrong action (!Non_Forwarding_Action) so RPC's that match this route should get denied.
+					Action: &v3routepb.Route_Route{},
+				},
+				// Another routing rule that can be selectively triggered based on incoming RPC.
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/StreamingInputCall"},
+					},
+					// Wrong action (!Non_Forwarding_Action) so RPC's that match this route should get denied.
+					Action: &v3routepb.Route_Route{},
+				},
+				// Not matching route, this is be able to get invoked logically (i.e. doesn't have to match the Route configurations above).
+			}},
+	}
+	inboundLis := &v3listenerpb.Listener{
+		Name: fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
+		Address: &v3corepb.Address{
+			Address: &v3corepb.Address_SocketAddress{
+				SocketAddress: &v3corepb.SocketAddress{
+					Address: host,
+					PortSpecifier: &v3corepb.SocketAddress_PortValue{
+						PortValue: port,
+					},
+				},
+			},
+		},
+		FilterChains: []*v3listenerpb.FilterChain{
+			{
+				Name: "v4-wildcard",
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "0.0.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "0.0.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+								HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
+								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+									RouteConfig: &v3routepb.RouteConfiguration{
+										Name:         "routeName",
+										VirtualHosts: vhs,
+									},
+								},
+							}),
+						},
+					},
+				},
+			},
+			{
+				Name: "v6-wildcard",
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "::",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "::",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+								HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
+								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+									RouteConfig: &v3routepb.RouteConfiguration{
+										Name:         "routeName",
+										VirtualHosts: vhs,
+									},
+								},
+							}),
+						},
+					},
+				},
+			},
+		},
+	}
 	resources.Listeners = append(resources.Listeners, inboundLis)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -421,8 +565,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("StreamingInputCall(_) = _, %v, want <nil>", err)
 	}
-	_, err = stream.CloseAndRecv()
-	if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "the incoming RPC matched to a route that was not of action type non forwarding") {
+	if _, err = stream.CloseAndRecv(); status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "the incoming RPC matched to a route that was not of action type non forwarding") {
 		t.Fatalf("streaming RPC should have been denied")
 	}
 
@@ -432,8 +575,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FullDuplexCall(_) = _, %v, want <nil>", err)
 	}
-	_, err = dStream.Recv()
-	if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "the incoming RPC did not match a configured Route") {
+	if _, err = dStream.Recv(); status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "the incoming RPC did not match a configured Route") {
 		t.Fatalf("streaming RPC should have been denied")
 	}
 }
