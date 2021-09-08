@@ -212,10 +212,10 @@ func TestCSDS(t *testing.T) {
 
 	const nackResourceIdx = 0
 	var (
-		nackListeners = listeners
-		nackRoutes    = routes
-		nackClusters  = clusters
-		nackEndpoints = endpoints
+		nackListeners = append([]*v3listenerpb.Listener{}, listeners...)
+		nackRoutes    = append([]*v3routepb.RouteConfiguration{}, routes...)
+		nackClusters  = append([]*v3clusterpb.Cluster{}, clusters...)
+		nackEndpoints = append([]*v3endpointpb.ClusterLoadAssignment{}, endpoints...)
 	)
 	nackListeners[0] = &v3listenerpb.Listener{Name: ldsTargets[nackResourceIdx], ApiListener: &v3listenerpb.ApiListener{}} // 0 will be nacked. 1 will stay the same.
 	nackRoutes[0] = &v3routepb.RouteConfiguration{
