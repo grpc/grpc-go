@@ -678,8 +678,6 @@ func DoPickFirstUnary(tc testgrpc.TestServiceClient) {
 
 func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, resetChannel bool, serverAddr string, dopts []grpc.DialOption) (latency time.Duration, err error) {
 	start := time.Now()
-	// per test spec, don't include channel shutdown in latency measurement
-	defer func() { latency = time.Since(start) }()
 	client := tc
 	if resetChannel {
 		var conn *grpc.ClientConn
@@ -690,6 +688,8 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 		defer conn.Close()
 		client = testgrpc.NewTestServiceClient(conn)
 	}
+	// per test spec, don't include channel shutdown in latency measurement
+	defer func() { latency = time.Since(start) }()
 	// do a large-unary RPC
 	pl := ClientNewPayload(testpb.PayloadType_COMPRESSABLE, largeReqSize)
 	req := &testpb.SimpleRequest{
