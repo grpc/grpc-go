@@ -1139,7 +1139,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 	tests := []struct {
 		name       string
 		resources  []*anypb.Any
-		wantUpdate map[string]ClusterUpdate
+		wantUpdate map[string]ClusterUpdateErr
 		wantMD     UpdateMetadata
 		wantErr    bool
 	}{
@@ -1182,7 +1182,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 					ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
 				}),
 			},
-			wantUpdate: map[string]ClusterUpdate{
+			wantUpdate: map[string]ClusterUpdateErr{
 				"test": {Err: cmpopts.AnyError},
 			},
 			wantMD: UpdateMetadata{
@@ -1198,12 +1198,12 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		{
 			name:      "v2 cluster",
 			resources: []*anypb.Any{v2ClusterAny},
-			wantUpdate: map[string]ClusterUpdate{
-				v2ClusterName: {
+			wantUpdate: map[string]ClusterUpdateErr{
+				v2ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v2ClusterName,
 					EDSServiceName: v2Service, EnableLRS: true,
 					Raw: v2ClusterAny,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -1213,12 +1213,12 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		{
 			name:      "v3 cluster",
 			resources: []*anypb.Any{v3ClusterAny},
-			wantUpdate: map[string]ClusterUpdate{
-				v3ClusterName: {
+			wantUpdate: map[string]ClusterUpdateErr{
+				v3ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v3ClusterName,
 					EDSServiceName: v3Service, EnableLRS: true,
 					Raw: v3ClusterAny,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -1228,17 +1228,17 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		{
 			name:      "multiple clusters",
 			resources: []*anypb.Any{v2ClusterAny, v3ClusterAny},
-			wantUpdate: map[string]ClusterUpdate{
-				v2ClusterName: {
+			wantUpdate: map[string]ClusterUpdateErr{
+				v2ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v2ClusterName,
 					EDSServiceName: v2Service, EnableLRS: true,
 					Raw: v2ClusterAny,
-				},
-				v3ClusterName: {
+				}},
+				v3ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v3ClusterName,
 					EDSServiceName: v3Service, EnableLRS: true,
 					Raw: v3ClusterAny,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -1257,17 +1257,17 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				}),
 				v3ClusterAny,
 			},
-			wantUpdate: map[string]ClusterUpdate{
-				v2ClusterName: {
+			wantUpdate: map[string]ClusterUpdateErr{
+				v2ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v2ClusterName,
 					EDSServiceName: v2Service, EnableLRS: true,
 					Raw: v2ClusterAny,
-				},
-				v3ClusterName: {
+				}},
+				v3ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v3ClusterName,
 					EDSServiceName: v3Service, EnableLRS: true,
 					Raw: v3ClusterAny,
-				},
+				}},
 				"bad": {Err: cmpopts.AnyError},
 			},
 			wantMD: UpdateMetadata{

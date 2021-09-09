@@ -46,11 +46,6 @@ var (
 	}
 )
 
-type endpointsUpdateErr struct {
-	u   EndpointsUpdate
-	err error
-}
-
 // TestEndpointsWatch covers the cases:
 // - an update is received after a watch()
 // - an update for another resource name (which doesn't trigger callback)
@@ -75,20 +70,20 @@ func (s) TestEndpointsWatch(t *testing.T) {
 
 	endpointsUpdateCh := testutils.NewChannel()
 	cancelWatch := client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
-		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
+		endpointsUpdateCh.Send(EndpointsUpdateErr{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	client.NewEndpoints(map[string]EndpointsUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
+	client.NewEndpoints(map[string]EndpointsUpdateErr{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	// Another update for a different resource name.
-	client.NewEndpoints(map[string]EndpointsUpdate{"randomName": {}}, UpdateMetadata{})
+	client.NewEndpoints(map[string]EndpointsUpdateErr{"randomName": {}}, UpdateMetadata{})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := endpointsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
@@ -97,7 +92,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 
 	// Cancel watch, and send update again.
 	cancelWatch()
-	client.NewEndpoints(map[string]EndpointsUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
+	client.NewEndpoints(map[string]EndpointsUpdateErr{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := endpointsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
@@ -134,7 +129,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 		endpointsUpdateCh := testutils.NewChannel()
 		endpointsUpdateChs = append(endpointsUpdateChs, endpointsUpdateCh)
 		cancelLastWatch = client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
-			endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
+			endpointsUpdateCh.Send(EndpointsUpdateErr{Update: update, Err: err})
 		})
 
 		if i == 0 {
@@ -147,7 +142,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	}
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	client.NewEndpoints(map[string]EndpointsUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
+	client.NewEndpoints(map[string]EndpointsUpdateErr{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	for i := 0; i < count; i++ {
 		if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
@@ -156,7 +151,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
-	client.NewEndpoints(map[string]EndpointsUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
+	client.NewEndpoints(map[string]EndpointsUpdateErr{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	for i := 0; i < count-1; i++ {
 		if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
@@ -197,7 +192,7 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 		endpointsUpdateCh := testutils.NewChannel()
 		endpointsUpdateChs = append(endpointsUpdateChs, endpointsUpdateCh)
 		client.WatchEndpoints(testCDSName+"1", func(update EndpointsUpdate, err error) {
-			endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
+			endpointsUpdateCh.Send(EndpointsUpdateErr{Update: update, Err: err})
 		})
 
 		if i == 0 {
@@ -212,7 +207,7 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	// Third watch for a different name.
 	endpointsUpdateCh2 := testutils.NewChannel()
 	client.WatchEndpoints(testCDSName+"2", func(update EndpointsUpdate, err error) {
-		endpointsUpdateCh2.Send(endpointsUpdateErr{u: update, err: err})
+		endpointsUpdateCh2.Send(EndpointsUpdateErr{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
@@ -220,9 +215,9 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 
 	wantUpdate1 := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
 	wantUpdate2 := EndpointsUpdate{Localities: []Locality{testLocalities[1]}}
-	client.NewEndpoints(map[string]EndpointsUpdate{
-		testCDSName + "1": wantUpdate1,
-		testCDSName + "2": wantUpdate2,
+	client.NewEndpoints(map[string]EndpointsUpdateErr{
+		testCDSName + "1": {Update: wantUpdate1},
+		testCDSName + "2": {Update: wantUpdate2},
 	}, UpdateMetadata{})
 
 	for i := 0; i < count; i++ {
@@ -257,14 +252,14 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 
 	endpointsUpdateCh := testutils.NewChannel()
 	client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
-		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
+		endpointsUpdateCh.Send(EndpointsUpdateErr{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	client.NewEndpoints(map[string]EndpointsUpdate{testCDSName: wantUpdate}, UpdateMetadata{})
+	client.NewEndpoints(map[string]EndpointsUpdateErr{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -272,7 +267,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	// Another watch for the resource in cache.
 	endpointsUpdateCh2 := testutils.NewChannel()
 	client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
-		endpointsUpdateCh2.Send(endpointsUpdateErr{u: update, err: err})
+		endpointsUpdateCh2.Send(EndpointsUpdateErr{Update: update, Err: err})
 	})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
@@ -316,7 +311,7 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 
 	endpointsUpdateCh := testutils.NewChannel()
 	client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
-		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
+		endpointsUpdateCh.Send(EndpointsUpdateErr{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
@@ -326,9 +321,9 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for endpoints update: %v", err)
 	}
-	gotUpdate := u.(endpointsUpdateErr)
-	if gotUpdate.err == nil || !cmp.Equal(gotUpdate.u, EndpointsUpdate{}) {
-		t.Fatalf("unexpected endpointsUpdate: (%v, %v), want: (EndpointsUpdate{}, nil)", gotUpdate.u, gotUpdate.err)
+	gotUpdate := u.(EndpointsUpdateErr)
+	if gotUpdate.Err == nil || !cmp.Equal(gotUpdate.Update, EndpointsUpdate{}) {
+		t.Fatalf("unexpected endpointsUpdate: (%v, %v), want: (EndpointsUpdate{}, nil)", gotUpdate.Update, gotUpdate.Err)
 	}
 }
 
@@ -354,7 +349,7 @@ func (s) TestEndpointsWatchNACKError(t *testing.T) {
 
 	endpointsUpdateCh := testutils.NewChannel()
 	cancelWatch := client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
-		endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
+		endpointsUpdateCh.Send(EndpointsUpdateErr{Update: update, Err: err})
 	})
 	defer cancelWatch()
 	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
@@ -362,7 +357,7 @@ func (s) TestEndpointsWatchNACKError(t *testing.T) {
 	}
 
 	wantError := fmt.Errorf("testing error")
-	client.NewEndpoints(map[string]EndpointsUpdate{testCDSName: {Err: wantError}}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
+	client.NewEndpoints(map[string]EndpointsUpdateErr{testCDSName: {Err: wantError}}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
 	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, EndpointsUpdate{}, wantError); err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +391,7 @@ func (s) TestEndpointsWatchPartialValid(t *testing.T) {
 	for _, name := range []string{testCDSName, badResourceName} {
 		endpointsUpdateCh := testutils.NewChannel()
 		cancelWatch := client.WatchEndpoints(name, func(update EndpointsUpdate, err error) {
-			endpointsUpdateCh.Send(endpointsUpdateErr{u: update, err: err})
+			endpointsUpdateCh.Send(EndpointsUpdateErr{Update: update, Err: err})
 		})
 		defer func() {
 			cancelWatch()
@@ -412,8 +407,8 @@ func (s) TestEndpointsWatchPartialValid(t *testing.T) {
 
 	wantError := fmt.Errorf("testing error")
 	wantError2 := fmt.Errorf("individual error")
-	client.NewEndpoints(map[string]EndpointsUpdate{
-		testCDSName:     {Localities: []Locality{testLocalities[0]}},
+	client.NewEndpoints(map[string]EndpointsUpdateErr{
+		testCDSName:     {Update: EndpointsUpdate{Localities: []Locality{testLocalities[0]}}},
 		badResourceName: {Err: wantError2},
 	}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
 

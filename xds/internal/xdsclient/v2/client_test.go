@@ -301,7 +301,7 @@ type testUpdateReceiver struct {
 	f func(rType xdsclient.ResourceType, d map[string]interface{}, md xdsclient.UpdateMetadata)
 }
 
-func (t *testUpdateReceiver) NewListeners(d map[string]xdsclient.ListenerUpdate, metadata xdsclient.UpdateMetadata) {
+func (t *testUpdateReceiver) NewListeners(d map[string]xdsclient.ListenerUpdateErr, metadata xdsclient.UpdateMetadata) {
 	dd := make(map[string]interface{})
 	for k, v := range d {
 		dd[k] = v
@@ -309,7 +309,7 @@ func (t *testUpdateReceiver) NewListeners(d map[string]xdsclient.ListenerUpdate,
 	t.newUpdate(xdsclient.ListenerResource, dd, metadata)
 }
 
-func (t *testUpdateReceiver) NewRouteConfigs(d map[string]xdsclient.RouteConfigUpdate, metadata xdsclient.UpdateMetadata) {
+func (t *testUpdateReceiver) NewRouteConfigs(d map[string]xdsclient.RouteConfigUpdateErr, metadata xdsclient.UpdateMetadata) {
 	dd := make(map[string]interface{})
 	for k, v := range d {
 		dd[k] = v
@@ -317,7 +317,7 @@ func (t *testUpdateReceiver) NewRouteConfigs(d map[string]xdsclient.RouteConfigU
 	t.newUpdate(xdsclient.RouteConfigResource, dd, metadata)
 }
 
-func (t *testUpdateReceiver) NewClusters(d map[string]xdsclient.ClusterUpdate, metadata xdsclient.UpdateMetadata) {
+func (t *testUpdateReceiver) NewClusters(d map[string]xdsclient.ClusterUpdateErr, metadata xdsclient.UpdateMetadata) {
 	dd := make(map[string]interface{})
 	for k, v := range d {
 		dd[k] = v
@@ -325,7 +325,7 @@ func (t *testUpdateReceiver) NewClusters(d map[string]xdsclient.ClusterUpdate, m
 	t.newUpdate(xdsclient.ClusterResource, dd, metadata)
 }
 
-func (t *testUpdateReceiver) NewEndpoints(d map[string]xdsclient.EndpointsUpdate, metadata xdsclient.UpdateMetadata) {
+func (t *testUpdateReceiver) NewEndpoints(d map[string]xdsclient.EndpointsUpdateErr, metadata xdsclient.UpdateMetadata) {
 	dd := make(map[string]interface{})
 	for k, v := range d {
 		dd[k] = v
@@ -363,27 +363,27 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 			if rType == test.rType {
 				switch test.rType {
 				case xdsclient.ListenerResource:
-					dd := make(map[string]xdsclient.ListenerUpdate)
+					dd := make(map[string]xdsclient.ListenerUpdateErr)
 					for n, u := range d {
-						dd[n] = u.(xdsclient.ListenerUpdate)
+						dd[n] = u.(xdsclient.ListenerUpdateErr)
 					}
 					gotUpdateCh.Send(updateErr{dd, md, nil})
 				case xdsclient.RouteConfigResource:
-					dd := make(map[string]xdsclient.RouteConfigUpdate)
+					dd := make(map[string]xdsclient.RouteConfigUpdateErr)
 					for n, u := range d {
-						dd[n] = u.(xdsclient.RouteConfigUpdate)
+						dd[n] = u.(xdsclient.RouteConfigUpdateErr)
 					}
 					gotUpdateCh.Send(updateErr{dd, md, nil})
 				case xdsclient.ClusterResource:
-					dd := make(map[string]xdsclient.ClusterUpdate)
+					dd := make(map[string]xdsclient.ClusterUpdateErr)
 					for n, u := range d {
-						dd[n] = u.(xdsclient.ClusterUpdate)
+						dd[n] = u.(xdsclient.ClusterUpdateErr)
 					}
 					gotUpdateCh.Send(updateErr{dd, md, nil})
 				case xdsclient.EndpointsResource:
-					dd := make(map[string]xdsclient.EndpointsUpdate)
+					dd := make(map[string]xdsclient.EndpointsUpdateErr)
 					for n, u := range d {
-						dd[n] = u.(xdsclient.EndpointsUpdate)
+						dd[n] = u.(xdsclient.EndpointsUpdateErr)
 					}
 					gotUpdateCh.Send(updateErr{dd, md, nil})
 				}
@@ -664,7 +664,7 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 
 	if v, err := callbackCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout when expecting LDS update")
-	} else if _, ok := v.(xdsclient.ListenerUpdate); !ok {
+	} else if _, ok := v.(xdsclient.ListenerUpdateErr); !ok {
 		t.Fatalf("Expect an LDS update from watcher, got %v", v)
 	}
 }

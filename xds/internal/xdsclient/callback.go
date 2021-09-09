@@ -76,7 +76,7 @@ func (c *clientImpl) callCallback(wiu *watcherInfoWithUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate, metadata UpdateMetadata) {
+func (c *clientImpl) NewListeners(updates map[string]ListenerUpdateErr, metadata UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -84,9 +84,9 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate, metadata Up
 	if metadata.ErrState != nil {
 		c.ldsVersion = metadata.ErrState.Version
 	}
-	for name, update := range updates {
+	for name, uErr := range updates {
 		if s, ok := c.ldsWatchers[name]; ok {
-			if update.Err != nil {
+			if uErr.Err != nil {
 				// On error, keep previous version for each resource. But update
 				// status and error.
 				mdCopy := c.ldsMD[name]
@@ -94,17 +94,17 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate, metadata Up
 				mdCopy.Status = metadata.Status
 				c.ldsMD[name] = mdCopy
 				for wi := range s {
-					wi.newError(update.Err)
+					wi.newError(uErr.Err)
 				}
 				continue
 			}
 			// If the resource is valid, send the update.
 			for wi := range s {
-				wi.newUpdate(update)
+				wi.newUpdate(uErr.Update)
 			}
 			// Sync cache.
-			c.logger.Debugf("LDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
-			c.ldsCache[name] = update
+			c.logger.Debugf("LDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(uErr))
+			c.ldsCache[name] = uErr.Update
 			// Set status to ACK, and clear error state. The metadata might be a
 			// NACK metadata because some other resources in the same response
 			// are invalid.
@@ -141,7 +141,7 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdate, metadata Up
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate, metadata UpdateMetadata) {
+func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdateErr, metadata UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -150,9 +150,9 @@ func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate, metad
 	if metadata.ErrState != nil {
 		c.rdsVersion = metadata.ErrState.Version
 	}
-	for name, update := range updates {
+	for name, uErr := range updates {
 		if s, ok := c.rdsWatchers[name]; ok {
-			if update.Err != nil {
+			if uErr.Err != nil {
 				// On error, keep previous version for each resource. But update
 				// status and error.
 				mdCopy := c.rdsMD[name]
@@ -160,17 +160,17 @@ func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate, metad
 				mdCopy.Status = metadata.Status
 				c.rdsMD[name] = mdCopy
 				for wi := range s {
-					wi.newError(update.Err)
+					wi.newError(uErr.Err)
 				}
 				continue
 			}
 			// If the resource is valid, send the update.
 			for wi := range s {
-				wi.newUpdate(update)
+				wi.newUpdate(uErr.Update)
 			}
 			// Sync cache.
-			c.logger.Debugf("RDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
-			c.rdsCache[name] = update
+			c.logger.Debugf("RDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(uErr))
+			c.rdsCache[name] = uErr.Update
 			// Set status to ACK, and clear error state. The metadata might be a
 			// NACK metadata because some other resources in the same response
 			// are invalid.
@@ -190,7 +190,7 @@ func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdate, metad
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate, metadata UpdateMetadata) {
+func (c *clientImpl) NewClusters(updates map[string]ClusterUpdateErr, metadata UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -198,9 +198,9 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate, metadata Upda
 	if metadata.ErrState != nil {
 		c.cdsVersion = metadata.ErrState.Version
 	}
-	for name, update := range updates {
+	for name, uErr := range updates {
 		if s, ok := c.cdsWatchers[name]; ok {
-			if update.Err != nil {
+			if uErr.Err != nil {
 				// On error, keep previous version for each resource. But update
 				// status and error.
 				mdCopy := c.cdsMD[name]
@@ -210,17 +210,17 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate, metadata Upda
 				for wi := range s {
 					// Send the watcher the individual error, instead of the
 					// overall combined error from the metadata.ErrState.
-					wi.newError(update.Err)
+					wi.newError(uErr.Err)
 				}
 				continue
 			}
 			// If the resource is valid, send the update.
 			for wi := range s {
-				wi.newUpdate(update)
+				wi.newUpdate(uErr.Update)
 			}
 			// Sync cache.
-			c.logger.Debugf("CDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
-			c.cdsCache[name] = update
+			c.logger.Debugf("CDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(uErr))
+			c.cdsCache[name] = uErr.Update
 			// Set status to ACK, and clear error state. The metadata might be a
 			// NACK metadata because some other resources in the same response
 			// are invalid.
@@ -257,7 +257,7 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdate, metadata Upda
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate, metadata UpdateMetadata) {
+func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdateErr, metadata UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -265,9 +265,9 @@ func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate, metadata U
 	if metadata.ErrState != nil {
 		c.edsVersion = metadata.ErrState.Version
 	}
-	for name, update := range updates {
+	for name, uErr := range updates {
 		if s, ok := c.edsWatchers[name]; ok {
-			if update.Err != nil {
+			if uErr.Err != nil {
 				// On error, keep previous version for each resource. But update
 				// status and error.
 				mdCopy := c.edsMD[name]
@@ -277,17 +277,17 @@ func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdate, metadata U
 				for wi := range s {
 					// Send the watcher the individual error, instead of the
 					// overall combined error from the metadata.ErrState.
-					wi.newError(update.Err)
+					wi.newError(uErr.Err)
 				}
 				continue
 			}
 			// If the resource is valid, send the update.
 			for wi := range s {
-				wi.newUpdate(update)
+				wi.newUpdate(uErr.Update)
 			}
 			// Sync cache.
-			c.logger.Debugf("EDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(update))
-			c.edsCache[name] = update
+			c.logger.Debugf("EDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(uErr))
+			c.edsCache[name] = uErr.Update
 			// Set status to ACK, and clear error state. The metadata might be a
 			// NACK metadata because some other resources in the same response
 			// are invalid.

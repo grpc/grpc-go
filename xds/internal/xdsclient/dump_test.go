@@ -101,10 +101,10 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 
-	update0 := make(map[string]xdsclient.ListenerUpdate)
+	update0 := make(map[string]xdsclient.ListenerUpdateErr)
 	want0 := make(map[string]xdsclient.UpdateWithMD)
 	for n, r := range listenerRaws {
-		update0[n] = xdsclient.ListenerUpdate{Raw: r}
+		update0[n] = xdsclient.ListenerUpdateErr{Update: xdsclient.ListenerUpdate{Raw: r}}
 		want0[n] = xdsclient.UpdateWithMD{
 			MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
@@ -120,9 +120,9 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	const nackVersion = "lds-version-nack"
 	var nackErr = fmt.Errorf("lds nack error")
 	updateHandler.NewListeners(
-		map[string]xdsclient.ListenerUpdate{
+		map[string]xdsclient.ListenerUpdateErr{
 			ldsTargets[0]: {Err: nackErr},
-			ldsTargets[1]: {Raw: listenerRaws[ldsTargets[1]]},
+			ldsTargets[1]: {Update: xdsclient.ListenerUpdate{Raw: listenerRaws[ldsTargets[1]]}},
 		},
 		xdsclient.UpdateMetadata{
 			Status: xdsclient.ServiceStatusNACKed,
@@ -215,10 +215,10 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 
-	update0 := make(map[string]xdsclient.RouteConfigUpdate)
+	update0 := make(map[string]xdsclient.RouteConfigUpdateErr)
 	want0 := make(map[string]xdsclient.UpdateWithMD)
 	for n, r := range routeRaws {
-		update0[n] = xdsclient.RouteConfigUpdate{Raw: r}
+		update0[n] = xdsclient.RouteConfigUpdateErr{Update: xdsclient.RouteConfigUpdate{Raw: r}}
 		want0[n] = xdsclient.UpdateWithMD{
 			MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
@@ -234,9 +234,9 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	const nackVersion = "rds-version-nack"
 	var nackErr = fmt.Errorf("rds nack error")
 	updateHandler.NewRouteConfigs(
-		map[string]xdsclient.RouteConfigUpdate{
+		map[string]xdsclient.RouteConfigUpdateErr{
 			rdsTargets[0]: {Err: nackErr},
-			rdsTargets[1]: {Raw: routeRaws[rdsTargets[1]]},
+			rdsTargets[1]: {Update: xdsclient.RouteConfigUpdate{Raw: routeRaws[rdsTargets[1]]}},
 		},
 		xdsclient.UpdateMetadata{
 			Status: xdsclient.ServiceStatusNACKed,
@@ -329,10 +329,10 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 
-	update0 := make(map[string]xdsclient.ClusterUpdate)
+	update0 := make(map[string]xdsclient.ClusterUpdateErr)
 	want0 := make(map[string]xdsclient.UpdateWithMD)
 	for n, r := range clusterRaws {
-		update0[n] = xdsclient.ClusterUpdate{Raw: r}
+		update0[n] = xdsclient.ClusterUpdateErr{Update: xdsclient.ClusterUpdate{Raw: r}}
 		want0[n] = xdsclient.UpdateWithMD{
 			MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
@@ -348,9 +348,9 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	const nackVersion = "cds-version-nack"
 	var nackErr = fmt.Errorf("cds nack error")
 	updateHandler.NewClusters(
-		map[string]xdsclient.ClusterUpdate{
+		map[string]xdsclient.ClusterUpdateErr{
 			cdsTargets[0]: {Err: nackErr},
-			cdsTargets[1]: {Raw: clusterRaws[cdsTargets[1]]},
+			cdsTargets[1]: {Update: xdsclient.ClusterUpdate{Raw: clusterRaws[cdsTargets[1]]}},
 		},
 		xdsclient.UpdateMetadata{
 			Status: xdsclient.ServiceStatusNACKed,
@@ -429,10 +429,10 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 
-	update0 := make(map[string]xdsclient.EndpointsUpdate)
+	update0 := make(map[string]xdsclient.EndpointsUpdateErr)
 	want0 := make(map[string]xdsclient.UpdateWithMD)
 	for n, r := range endpointRaws {
-		update0[n] = xdsclient.EndpointsUpdate{Raw: r}
+		update0[n] = xdsclient.EndpointsUpdateErr{Update: xdsclient.EndpointsUpdate{Raw: r}}
 		want0[n] = xdsclient.UpdateWithMD{
 			MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
@@ -448,9 +448,9 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	const nackVersion = "eds-version-nack"
 	var nackErr = fmt.Errorf("eds nack error")
 	updateHandler.NewEndpoints(
-		map[string]xdsclient.EndpointsUpdate{
+		map[string]xdsclient.EndpointsUpdateErr{
 			edsTargets[0]: {Err: nackErr},
-			edsTargets[1]: {Raw: endpointRaws[edsTargets[1]]},
+			edsTargets[1]: {Update: xdsclient.EndpointsUpdate{Raw: endpointRaws[edsTargets[1]]}},
 		},
 		xdsclient.UpdateMetadata{
 			Status: xdsclient.ServiceStatusNACKed,

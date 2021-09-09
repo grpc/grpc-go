@@ -76,7 +76,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 		name          string
 		edsResponse   *v2xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    map[string]xdsclient.EndpointsUpdate
+		wantUpdate    map[string]xdsclient.EndpointsUpdateErr
 		wantUpdateMD  xdsclient.UpdateMetadata
 		wantUpdateErr bool
 	}{
@@ -113,8 +113,8 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			name:        "one-uninterestring-assignment",
 			edsResponse: goodEDSResponse2,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.EndpointsUpdate{
-				"not-goodEDSName": {
+			wantUpdate: map[string]xdsclient.EndpointsUpdateErr{
+				"not-goodEDSName": {Update: xdsclient.EndpointsUpdate{
 					Localities: []xdsclient.Locality{
 						{
 							Endpoints: []xdsclient.Endpoint{{Address: "addr1:314"}},
@@ -124,7 +124,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 						},
 					},
 					Raw: marshaledGoodCLA2,
-				},
+				}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusACKed,
@@ -136,8 +136,8 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			name:        "one-good-assignment",
 			edsResponse: goodEDSResponse1,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.EndpointsUpdate{
-				goodEDSName: {
+			wantUpdate: map[string]xdsclient.EndpointsUpdateErr{
+				goodEDSName: {Update: xdsclient.EndpointsUpdate{
 					Localities: []xdsclient.Locality{
 						{
 							Endpoints: []xdsclient.Endpoint{{Address: "addr1:314"}},
@@ -153,7 +153,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 						},
 					},
 					Raw: marshaledGoodCLA1,
-				},
+				}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusACKed,

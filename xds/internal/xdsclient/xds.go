@@ -58,8 +58,8 @@ const transportSocketName = "envoy.transport_sockets.tls"
 // UnmarshalListener processes resources received in an LDS response, validates
 // them, and transforms them into a native struct which contains only fields we
 // are interested in.
-func UnmarshalListener(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ListenerUpdate, UpdateMetadata, error) {
-	update := make(map[string]ListenerUpdate)
+func UnmarshalListener(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ListenerUpdateErr, UpdateMetadata, error) {
+	update := make(map[string]ListenerUpdateErr)
 	md, err := processAllResources(version, resources, logger, update)
 	return update, md, err
 }
@@ -296,8 +296,8 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 // validates them, and transforms them into a native struct which contains only
 // fields we are interested in. The provided hostname determines the route
 // configuration resources of interest.
-func UnmarshalRouteConfig(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdate, UpdateMetadata, error) {
-	update := make(map[string]RouteConfigUpdate)
+func UnmarshalRouteConfig(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdateErr, UpdateMetadata, error) {
+	update := make(map[string]RouteConfigUpdateErr)
 	md, err := processAllResources(version, resources, logger, update)
 	return update, md, err
 }
@@ -631,8 +631,8 @@ func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy, logg
 // UnmarshalCluster processes resources received in an CDS response, validates
 // them, and transforms them into a native struct which contains only fields we
 // are interested in.
-func UnmarshalCluster(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ClusterUpdate, UpdateMetadata, error) {
-	update := make(map[string]ClusterUpdate)
+func UnmarshalCluster(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ClusterUpdateErr, UpdateMetadata, error) {
+	update := make(map[string]ClusterUpdateErr)
 	md, err := processAllResources(version, resources, logger, update)
 	return update, md, err
 }
@@ -991,8 +991,8 @@ func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) *uint32 {
 // UnmarshalEndpoints processes resources received in an EDS response,
 // validates them, and transforms them into a native struct which contains only
 // fields we are interested in.
-func UnmarshalEndpoints(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]EndpointsUpdate, UpdateMetadata, error) {
-	update := make(map[string]EndpointsUpdate)
+func UnmarshalEndpoints(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]EndpointsUpdateErr, UpdateMetadata, error) {
+	update := make(map[string]EndpointsUpdateErr)
 	md, err := processAllResources(version, resources, logger, update)
 	return update, md, err
 }
@@ -1086,6 +1086,30 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 	return ret, nil
 }
 
+// ListenerUpdateErr is a tuple with the update and error.
+type ListenerUpdateErr struct {
+	Update ListenerUpdate
+	Err    error
+}
+
+// RouteConfigUpdateErr is a tuple with the update and error.
+type RouteConfigUpdateErr struct {
+	Update RouteConfigUpdate
+	Err    error
+}
+
+// ClusterUpdateErr is a tuple with the update and error.
+type ClusterUpdateErr struct {
+	Update ClusterUpdate
+	Err    error
+}
+
+// EndpointsUpdateErr is a tuple with the update and error.
+type EndpointsUpdateErr struct {
+	Update EndpointsUpdate
+	Err    error
+}
+
 // processAllResources unmarshals and validates the resources, populates the
 // provided ret (a map), and returns metadata and error.
 //
@@ -1106,10 +1130,10 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 
 	for _, r := range resources {
 		switch ret2 := ret.(type) {
-		case map[string]ListenerUpdate:
+		case map[string]ListenerUpdateErr:
 			name, update, err := unmarshalListenerResource(r, logger)
 			if err == nil {
-				ret2[name] = update
+				ret2[name] = ListenerUpdateErr{Update: update}
 				continue
 			}
 			if name == "" {
@@ -1119,11 +1143,11 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 			perResourceErrors[name] = err
 			// Add place holder in the map so we know this resource name was in
 			// the response.
-			ret2[name] = ListenerUpdate{Err: err}
-		case map[string]RouteConfigUpdate:
+			ret2[name] = ListenerUpdateErr{Err: err}
+		case map[string]RouteConfigUpdateErr:
 			name, update, err := unmarshalRouteConfigResource(r, logger)
 			if err == nil {
-				ret2[name] = update
+				ret2[name] = RouteConfigUpdateErr{Update: update}
 				continue
 			}
 			if name == "" {
@@ -1133,11 +1157,11 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 			perResourceErrors[name] = err
 			// Add place holder in the map so we know this resource name was in
 			// the response.
-			ret2[name] = RouteConfigUpdate{Err: err}
-		case map[string]ClusterUpdate:
+			ret2[name] = RouteConfigUpdateErr{Err: err}
+		case map[string]ClusterUpdateErr:
 			name, update, err := unmarshalClusterResource(r, logger)
 			if err == nil {
-				ret2[name] = update
+				ret2[name] = ClusterUpdateErr{Update: update}
 				continue
 			}
 			if name == "" {
@@ -1147,11 +1171,11 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 			perResourceErrors[name] = err
 			// Add place holder in the map so we know this resource name was in
 			// the response.
-			ret2[name] = ClusterUpdate{Err: err}
-		case map[string]EndpointsUpdate:
+			ret2[name] = ClusterUpdateErr{Err: err}
+		case map[string]EndpointsUpdateErr:
 			name, update, err := unmarshalEndpointsResource(r, logger)
 			if err == nil {
-				ret2[name] = update
+				ret2[name] = EndpointsUpdateErr{Update: update}
 				continue
 			}
 			if name == "" {
@@ -1161,7 +1185,7 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 			perResourceErrors[name] = err
 			// Add place holder in the map so we know this resource name was in
 			// the response.
-			ret2[name] = EndpointsUpdate{Err: err}
+			ret2[name] = EndpointsUpdateErr{Err: err}
 		}
 	}
 

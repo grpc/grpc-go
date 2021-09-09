@@ -50,7 +50,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 		name          string
 		rdsResponse   *xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    map[string]xdsclient.RouteConfigUpdate
+		wantUpdate    map[string]xdsclient.RouteConfigUpdateErr
 		wantUpdateMD  xdsclient.UpdateMetadata
 		wantUpdateErr bool
 	}{
@@ -89,11 +89,11 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			name:        "no-virtual-hosts-in-response",
 			rdsResponse: noVirtualHostsInRDSResponse,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.RouteConfigUpdate{
-				goodRouteName1: {
+			wantUpdate: map[string]xdsclient.RouteConfigUpdateErr{
+				goodRouteName1: {Update: xdsclient.RouteConfigUpdate{
 					VirtualHosts: nil,
 					Raw:          marshaledNoVirtualHostsRouteConfig,
-				},
+				}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusACKed,
@@ -105,8 +105,8 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			name:        "one-uninteresting-route-config",
 			rdsResponse: goodRDSResponse2,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.RouteConfigUpdate{
-				goodRouteName2: {
+			wantUpdate: map[string]xdsclient.RouteConfigUpdateErr{
+				goodRouteName2: {Update: xdsclient.RouteConfigUpdate{
 					VirtualHosts: []*xdsclient.VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -123,7 +123,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 						},
 					},
 					Raw: marshaledGoodRouteConfig2,
-				},
+				}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusACKed,
@@ -135,8 +135,8 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			name:        "one-good-route-config",
 			rdsResponse: goodRDSResponse1,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.RouteConfigUpdate{
-				goodRouteName1: {
+			wantUpdate: map[string]xdsclient.RouteConfigUpdateErr{
+				goodRouteName1: {Update: xdsclient.RouteConfigUpdate{
 					VirtualHosts: []*xdsclient.VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -153,7 +153,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 						},
 					},
 					Raw: marshaledGoodRouteConfig1,
-				},
+				}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusACKed,

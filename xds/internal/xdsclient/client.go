@@ -134,14 +134,14 @@ type loadReportingOptions struct {
 // resource updates from an APIClient for a specific version.
 type UpdateHandler interface {
 	// NewListeners handles updates to xDS listener resources.
-	NewListeners(map[string]ListenerUpdate, UpdateMetadata)
+	NewListeners(map[string]ListenerUpdateErr, UpdateMetadata)
 	// NewRouteConfigs handles updates to xDS RouteConfiguration resources.
-	NewRouteConfigs(map[string]RouteConfigUpdate, UpdateMetadata)
+	NewRouteConfigs(map[string]RouteConfigUpdateErr, UpdateMetadata)
 	// NewClusters handles updates to xDS Cluster resources.
-	NewClusters(map[string]ClusterUpdate, UpdateMetadata)
+	NewClusters(map[string]ClusterUpdateErr, UpdateMetadata)
 	// NewEndpoints handles updates to xDS ClusterLoadAssignment (or tersely
 	// referred to as Endpoints) resources.
-	NewEndpoints(map[string]EndpointsUpdate, UpdateMetadata)
+	NewEndpoints(map[string]EndpointsUpdateErr, UpdateMetadata)
 	// NewConnectionError handles connection errors from the xDS stream. The
 	// error will be reported to all the resource watchers.
 	NewConnectionError(err error)
@@ -220,9 +220,6 @@ type ListenerUpdate struct {
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
-	// Err is non-nil if the resource in the response is invalid. It contains
-	// the unmarshal error message.
-	Err error
 }
 
 // HTTPFilter represents one HTTP filter from an LDS response's HTTP connection
@@ -257,9 +254,6 @@ type RouteConfigUpdate struct {
 	VirtualHosts []*VirtualHost
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
-	// Err is non-nil if the resource in the response is invalid. It contains
-	// the unmarshal error message.
-	Err error
 }
 
 // VirtualHost contains the routes for a list of Domains.
@@ -520,9 +514,6 @@ type ClusterUpdate struct {
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
-	// Err is non-nil if the resource in the response is invalid. It contains
-	// the unmarshal error message.
-	Err error
 }
 
 // OverloadDropConfig contains the config to drop overloads.
@@ -572,9 +563,6 @@ type EndpointsUpdate struct {
 
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
-	// Err is non-nil if the resource in the response is invalid. It contains
-	// the unmarshal error message.
-	Err error
 }
 
 // Function to be overridden in tests.
