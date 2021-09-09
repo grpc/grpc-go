@@ -136,6 +136,23 @@ func (s *Status) Details() []interface{} {
 	return details
 }
 
+// ValidDetails returns a slice of details messages attached to the status.
+// If a detail cannot be decoded, it is omitted from the returned slice and
+// the corresponding error is ignored.
+func (s *Status) ValidDetails() []proto.Message {
+	if s == nil || s.s == nil {
+		return nil
+	}
+	details := make([]proto.Message, 0, len(s.s.Details))
+	for _, any := range s.s.Details {
+		detail := &ptypes.DynamicAny{}
+		if err := ptypes.UnmarshalAny(any, detail); err == nil {
+			details = append(details, detail.Message)
+		}
+	}
+	return details
+}
+
 func (s *Status) String() string {
 	return fmt.Sprintf("rpc error: code = %s desc = %s", s.Code(), s.Message())
 }

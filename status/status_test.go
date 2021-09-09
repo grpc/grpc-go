@@ -261,9 +261,13 @@ func (s) TestStatus_ErrorDetails(t *testing.T) {
 			t.Fatalf("(%v).WithDetails(%+v) failed: %v", str(s), tc.details, err)
 		}
 		details := s.Details()
+		validDetails := s.ValidDetails()
 		for i := range details {
 			if !proto.Equal(details[i].(proto.Message), tc.details[i]) {
 				t.Fatalf("(%v).Details()[%d] = %+v, want %+v", str(s), i, details[i], tc.details[i])
+			}
+			if !proto.Equal(validDetails[i].(proto.Message), tc.details[i]) {
+				t.Fatalf("(%v).ValidDetails()[%d] = %+v, want %+v", str(s), i, validDetails[i], tc.details[i])
 			}
 		}
 	}
@@ -325,9 +329,24 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 		},
 	}
 	for _, tc := range tests {
-		got := tc.s.Details()
-		if !cmp.Equal(got, tc.i, cmp.Comparer(proto.Equal), cmp.Comparer(equalError)) {
-			t.Errorf("(%v).Details() = %+v, want %+v", str(tc.s), got, tc.i)
+		actualDetails := tc.s.Details()
+		if !cmp.Equal(actualDetails, tc.i, cmp.Comparer(proto.Equal), cmp.Comparer(equalError)) {
+			t.Errorf("(%v).Details() = %+v, want %+v", str(tc.s), actualDetails, tc.i)
+		}
+
+		var validDetails []proto.Message
+		if tc.i != nil {
+			validDetails = make([]proto.Message, 0, len(tc.i))
+			for _, detail := range tc.i {
+				if _, ok := detail.(error); !ok {
+					validDetails = append(validDetails, proto.MessageV1(detail))
+				}
+			}
+		}
+
+		actualValidDetails := tc.s.ValidDetails()
+		if !cmp.Equal(actualValidDetails, validDetails, cmp.Comparer(proto.Equal)) {
+			t.Errorf("(%v).ValidDetails() = %+v, want %+v", str(tc.s), actualValidDetails, validDetails)
 		}
 	}
 }
