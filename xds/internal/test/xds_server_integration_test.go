@@ -413,10 +413,22 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 					Match: &v3routepb.RouteMatch{
 						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"},
 						// "Fully-qualified RPC method name with leading slash. Same as :path header".
-
 					},
 					// Correct Action, so RPC's that match this route should proceed to interceptor processing.
 					Action: &v3routepb.Route_NonForwardingAction{},
+				},
+				// This routing rule is matched the same way as the one above,
+				// except has an incorrect action for the server side. However,
+				// since routing chooses the first route which matches an
+				// incoming RPC, this should never get invoked (iteration
+				// through this route slice is deterministic).
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/EmptyCall"},
+						// "Fully-qualified RPC method name with leading slash. Same as :path header".
+					},
+					// Incorrect Action, so RPC's that match this route should get denied.
+					Action: &v3routepb.Route_Route{},
 				},
 				// Another routing rule that can be selectively triggered based on incoming RPC.
 				{
@@ -546,7 +558,10 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 	client := testpb.NewTestServiceClient(cc)
 
 	// This Empty Call should match to a route with a correct action
-	// (NonForwardingAction). Thus, this RPC should proceed as normal.
+	// (NonForwardingAction). Thus, this RPC should proceed as normal. There is
+	// a routing rule that this RPC would match to that has an incorrect action,
+	// but the server should only use the first route matched to with the
+	// correct action.
 	if _, err = client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}
