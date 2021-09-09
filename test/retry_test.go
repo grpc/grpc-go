@@ -22,9 +22,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
+	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -548,5 +552,168 @@ func (s) TestRetryStreaming(t *testing.T) {
 				t.Errorf("%v: serverOpIter = %v; want %v", tc.desc, serverOpIter, len(serverOps))
 			}
 		}()
+	}
+}
+
+type retryStatsHandler struct {
+	mu sync.Mutex
+	s  []stats.RPCStats
+}
+
+func (*retryStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
+	return ctx
+}
+func (h *retryStatsHandler) HandleRPC(_ context.Context, s stats.RPCStats) {
+	h.mu.Lock()
+	h.s = append(h.s, s)
+	h.mu.Unlock()
+}
+func (*retryStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
+	return ctx
+}
+func (*retryStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
+
+func (s) TestRetryStats(t *testing.T) {
+	defer enableRetry()()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen. Err: %v", err)
+	}
+	defer lis.Close()
+	server := &httpServer{
+		responses: []httpServerResponse{{
+			trailers: [][]string{{
+				":status", "200",
+				"content-type", "application/grpc",
+				"grpc-status", "14", // UNAVAILABLE
+				"grpc-message", "unavailable retry",
+				"grpc-retry-pushback-ms", "10",
+			}},
+		}, {
+			headers: [][]string{{
+				":status", "200",
+				"content-type", "application/grpc",
+			}},
+			payload: []byte{0, 0, 0, 0, 0}, // header for 0-byte response message.
+			trailers: [][]string{{
+				"grpc-status", "0", // OK
+			}},
+		}},
+		refuseStream: func(i uint32) bool {
+			return i == 1
+		},
+	}
+	server.start(t, lis)
+	handler := &retryStatsHandler{}
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure(), grpc.WithStatsHandler(handler),
+		grpc.WithDefaultServiceConfig((`{
+    "methodConfig": [{
+      "name": [{"service": "grpc.testing.TestService"}],
+      "retryPolicy": {
+          "MaxAttempts": 4,
+          "InitialBackoff": ".01s",
+          "MaxBackoff": ".01s",
+          "BackoffMultiplier": 1.0,
+          "RetryableStatusCodes": [ "UNAVAILABLE" ]
+      }
+    }]}`)))
+	if err != nil {
+		t.Fatalf("failed to dial due to err: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	client := testpb.NewTestServiceClient(cc)
+
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("unexpected EmptyCall error: %v", err)
+	}
+	handler.mu.Lock()
+	want := []stats.RPCStats{
+		&stats.Begin{},
+		&stats.OutHeader{FullMethod: "/grpc.testing.TestService/EmptyCall"},
+		&stats.OutPayload{WireLength: 5},
+		&stats.End{},
+
+		&stats.Begin{IsTransparentRetryAttempt: true},
+		&stats.OutHeader{FullMethod: "/grpc.testing.TestService/EmptyCall"},
+		&stats.OutPayload{WireLength: 5},
+		&stats.InTrailer{Trailer: metadata.Pairs("content-type", "application/grpc", "grpc-retry-pushback-ms", "10")},
+		&stats.End{},
+
+		&stats.Begin{},
+		&stats.OutHeader{FullMethod: "/grpc.testing.TestService/EmptyCall"},
+		&stats.OutPayload{WireLength: 5},
+		&stats.InHeader{},
+		&stats.InPayload{WireLength: 5},
+		&stats.InTrailer{},
+		&stats.End{},
+	}
+
+	// There is a race between noticing the RST_STREAM during the first RPC
+	// attempt and writing the payload.  If we detect that the client did not
+	// send the OutPayload, we remove it from want.
+	if _, ok := handler.s[2].(*stats.End); ok {
+		want = append(want[:2], want[3:]...)
+	}
+
+	toString := func(ss []stats.RPCStats) (ret []string) {
+		for _, s := range ss {
+			ret = append(ret, fmt.Sprintf("%T - %v", s, s))
+		}
+		return ret
+	}
+	t.Logf("Handler received frames:\n%v\n---\nwant:\n%v\n",
+		strings.Join(toString(handler.s), "\n"),
+		strings.Join(toString(want), "\n"))
+
+	if len(handler.s) != len(want) {
+		t.Fatalf("received unexpected number of RPCStats: got %v; want %v", len(handler.s), len(want))
+	}
+
+	// There is a race between receiving the payload (triggered by the
+	// application / gRPC library) and receiving the trailer (triggered at the
+	// transport layer).  Adjust the received stats accordingly if necessary.
+	// Note: we measure from the end of the RPCStats due to the race above.
+	tIdx, pIdx := len(handler.s)-3, len(handler.s)-2
+	_, okT := handler.s[tIdx].(*stats.InTrailer)
+	_, okP := handler.s[pIdx].(*stats.InPayload)
+	if okT && okP {
+		handler.s[pIdx], handler.s[tIdx] = handler.s[tIdx], handler.s[pIdx]
+	}
+
+	for i := range handler.s {
+		w, s := want[i], handler.s[i]
+
+		// Validate the event type
+		if reflect.TypeOf(w) != reflect.TypeOf(s) {
+			t.Fatalf("at position %v: got %T; want %T", i, s, w)
+		}
+		wv, sv := reflect.ValueOf(w).Elem(), reflect.ValueOf(s).Elem()
+
+		// Validate that Client is always true
+		if sv.FieldByName("Client").Interface().(bool) != true {
+			t.Fatalf("at position %v: got Client=false; want true", i)
+		}
+
+		// Validate any set fields in want
+		for i := 0; i < wv.NumField(); i++ {
+			if !wv.Field(i).IsZero() {
+				if got, want := sv.Field(i).Interface(), wv.Field(i).Interface(); !reflect.DeepEqual(got, want) {
+					name := reflect.TypeOf(w).Elem().Field(i).Name
+					t.Fatalf("at position %v, field %v: got %v; want %v", i, name, got, want)
+				}
+			}
+		}
+	}
+
+	// Validate timings between last Begin and preceding End.
+	end := handler.s[len(handler.s)-8].(*stats.End)
+	begin := handler.s[len(handler.s)-7].(*stats.Begin)
+	diff := begin.BeginTime.Sub(end.EndTime)
+	if diff < 10*time.Millisecond || diff > 50*time.Millisecond {
+		t.Fatalf("pushback time before final attempt = %v; want ~10ms", diff)
 	}
 }
