@@ -727,6 +727,43 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "invalid-regex-in-matching-SAN-with-new-fields",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+										DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+											MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+												{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: sanRegexBad}}},
+											},
+											CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+												InstanceName:    rootPluginInstance,
+												CertificateName: rootCertName,
+											},
+										},
+									},
+								},
+							},
+						}),
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "happy-case-with-no-identity-certs-using-deprecated-fields",
 			cluster: &v3clusterpb.Cluster{
 				Name:                 clusterName,

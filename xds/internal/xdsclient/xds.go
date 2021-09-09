@@ -817,8 +817,10 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 
 // common is expected to be not nil.
 func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext, server bool) (*SecurityConfig, error) {
-	sc := securityConfigFromCommonTLSContextUsingNewFields(common)
-	var err error
+	sc, err := securityConfigFromCommonTLSContextUsingNewFields(common)
+	if err != nil {
+		return nil, err
+	}
 	if sc == nil || sc.Equal(&SecurityConfig{}) {
 		// If we can't get a valid security config from the new fields, we
 		// fallback to the old deprecated fields.
@@ -903,7 +905,7 @@ func securityConfigFromCommonTLSContextWithDeprecatedFields(common *v3tlspb.Comm
 //
 // This helper function attempts to fetch security configuration from the
 // `CertificateProviderPluginInstance` message, given a CommonTlsContext.
-func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsContext) *SecurityConfig {
+func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsContext) (*SecurityConfig, error) {
 	// The `tls_certificate_provider_instance` field of type
 	// `CertificateProviderPluginInstance` is used to fetch the identity
 	// certificate provider.
@@ -944,12 +946,12 @@ func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsC
 		validationCtx = common.GetCombinedValidationContext().GetDefaultValidationContext()
 	case nil:
 		// It is valid for the validation context to be nil on the server side.
-		return sc
+		return sc, nil
 	}
 	if validationCtx == nil || validationCtx.GetCaCertificateProviderInstance() == nil {
 		// Bail out if the `CertificateProviderPluginInstance` message is not
 		// found through one of the way detailed above.
-		return nil
+		return nil, nil
 	}
 
 	if rootProvider := validationCtx.GetCaCertificateProviderInstance(); rootProvider != nil {
@@ -960,12 +962,12 @@ func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsC
 	for _, m := range validationCtx.GetMatchSubjectAltNames() {
 		matcher, err := matcher.StringMatcherFromProto(m)
 		if err != nil {
-			return nil
+			return nil, err
 		}
 		matchers = append(matchers, matcher)
 	}
 	sc.SubjectAltNameMatchers = matchers
-	return sc
+	return sc, nil
 }
 
 // circuitBreakersFromCluster extracts the circuit breakers configuration from
