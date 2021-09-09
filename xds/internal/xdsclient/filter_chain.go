@@ -519,12 +519,14 @@ func (fci *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain
 	if downstreamCtx.GetCommonTlsContext() == nil {
 		return nil, errors.New("DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
 	}
-	sc, err := securityConfigFromCommonTLSContext(downstreamCtx.GetCommonTlsContext())
+	sc, err := securityConfigFromCommonTLSContext(downstreamCtx.GetCommonTlsContext(), true)
 	if err != nil {
 		return nil, err
 	}
-	if sc.IdentityInstanceName == "" {
-		return nil, errors.New("security configuration on the server-side does not contain identity certificate provider instance name")
+	if sc == nil {
+		// sc == nil is a valid case where the control plane has not sent us any
+		// security configuration. xDS creds will use fallback creds.
+		return filterChain, nil
 	}
 	sc.RequireClientCert = downstreamCtx.GetRequireClientCertificate().GetValue()
 	if sc.RequireClientCert && sc.RootInstanceName == "" {

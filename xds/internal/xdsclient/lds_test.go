@@ -658,7 +658,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 		})
-		listenerNoValidationContext = testutils.MarshalAny(&v3listenerpb.Listener{
+		listenerNoValidationContextDeprecatedFields = testutils.MarshalAny(&v3listenerpb.Listener{
 			Name:    v3LDSTarget,
 			Address: localSocketAddress,
 			FilterChains: []*v3listenerpb.FilterChain{
@@ -698,7 +698,47 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 		})
-		listenerWithValidationContext = testutils.MarshalAny(&v3listenerpb.Listener{
+		listenerNoValidationContextNewFields = testutils.MarshalAny(&v3listenerpb.Listener{
+			Name:    v3LDSTarget,
+			Address: localSocketAddress,
+			FilterChains: []*v3listenerpb.FilterChain{
+				{
+					Name:    "filter-chain-1",
+					Filters: emptyValidNetworkFilters,
+					TransportSocket: &v3corepb.TransportSocket{
+						Name: "envoy.transport_sockets.tls",
+						ConfigType: &v3corepb.TransportSocket_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+								CommonTlsContext: &v3tlspb.CommonTlsContext{
+									TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+										InstanceName:    "identityPluginInstance",
+										CertificateName: "identityCertName",
+									},
+								},
+							}),
+						},
+					},
+				},
+			},
+			DefaultFilterChain: &v3listenerpb.FilterChain{
+				Name:    "default-filter-chain-1",
+				Filters: emptyValidNetworkFilters,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+									InstanceName:    "defaultIdentityPluginInstance",
+									CertificateName: "defaultIdentityCertName",
+								},
+							},
+						}),
+					},
+				},
+			},
+		})
+		listenerWithValidationContextDeprecatedFields = testutils.MarshalAny(&v3listenerpb.Listener{
 			Name:    v3LDSTarget,
 			Address: localSocketAddress,
 			FilterChains: []*v3listenerpb.FilterChain{
@@ -744,6 +784,66 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
 										InstanceName:    "defaultRootPluginInstance",
 										CertificateName: "defaultRootCertName",
+									},
+								},
+							},
+						}),
+					},
+				},
+			},
+		})
+		listenerWithValidationContextNewFields = testutils.MarshalAny(&v3listenerpb.Listener{
+			Name:    v3LDSTarget,
+			Address: localSocketAddress,
+			FilterChains: []*v3listenerpb.FilterChain{
+				{
+					Name:    "filter-chain-1",
+					Filters: emptyValidNetworkFilters,
+					TransportSocket: &v3corepb.TransportSocket{
+						Name: "envoy.transport_sockets.tls",
+						ConfigType: &v3corepb.TransportSocket_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+								RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+								CommonTlsContext: &v3tlspb.CommonTlsContext{
+									TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+										InstanceName:    "identityPluginInstance",
+										CertificateName: "identityCertName",
+									},
+									ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+										ValidationContext: &v3tlspb.CertificateValidationContext{
+											CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+												InstanceName:    "rootPluginInstance",
+												CertificateName: "rootCertName",
+											},
+										},
+									},
+								},
+							}),
+						},
+					},
+				},
+			},
+			DefaultFilterChain: &v3listenerpb.FilterChain{
+				Name:    "default-filter-chain-1",
+				Filters: emptyValidNetworkFilters,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+							RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+									InstanceName:    "defaultIdentityPluginInstance",
+									CertificateName: "defaultIdentityCertName",
+								},
+								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+										DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+											CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+												InstanceName:    "defaultRootPluginInstance",
+												CertificateName: "defaultRootCertName",
+											},
+										},
 									},
 								},
 							},
@@ -1233,7 +1333,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			},
 		},
 		{
-			name: "no identity and root certificate providers",
+			name: "no identity and root certificate providers using deprecated fields",
 			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
 				Name:    v3LDSTarget,
 				Address: localSocketAddress,
@@ -1248,6 +1348,36 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
 									CommonTlsContext: &v3tlspb.CommonTlsContext{
 										TlsCertificateCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
+											InstanceName:    "identityPluginInstance",
+											CertificateName: "identityCertName",
+										},
+									},
+								}),
+							},
+						},
+					},
+				},
+			})},
+			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantMD:     errMD,
+			wantErr:    "security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set",
+		},
+		{
+			name: "no identity and root certificate providers using new fields",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
+				Name:    v3LDSTarget,
+				Address: localSocketAddress,
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name:    "filter-chain-1",
+						Filters: emptyValidNetworkFilters,
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+									RequireClientCertificate: &wrapperspb.BoolValue{Value: true},
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
 											InstanceName:    "identityPluginInstance",
 											CertificateName: "identityCertName",
 										},
@@ -1287,8 +1417,8 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantErr:    "security configuration on the server-side does not contain identity certificate provider instance name",
 		},
 		{
-			name:      "happy case with no validation context",
-			resources: []*anypb.Any{listenerNoValidationContext},
+			name:      "happy case with no validation context using deprecated fields",
+			resources: []*anypb.Any{listenerNoValidationContextDeprecatedFields},
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					InboundListenerCfg: &InboundListenerConfig{
@@ -1327,7 +1457,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							},
 						},
 					},
-					Raw: listenerNoValidationContext,
+					Raw: listenerNoValidationContextDeprecatedFields,
 				},
 			},
 			wantMD: UpdateMetadata{
@@ -1336,8 +1466,57 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			},
 		},
 		{
-			name:      "happy case with validation context provider instance",
-			resources: []*anypb.Any{listenerWithValidationContext},
+			name:      "happy case with no validation context using new fields",
+			resources: []*anypb.Any{listenerNoValidationContextNewFields},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {
+					InboundListenerCfg: &InboundListenerConfig{
+						Address: "0.0.0.0",
+						Port:    "9999",
+						FilterChains: &FilterChainManager{
+							dstPrefixMap: map[string]*destPrefixEntry{
+								unspecifiedPrefixMapKey: {
+									srcTypeArr: [3]*sourcePrefixes{
+										{
+											srcPrefixMap: map[string]*sourcePrefixEntry{
+												unspecifiedPrefixMapKey: {
+													srcPortMap: map[int]*FilterChain{
+														0: {
+															SecurityCfg: &SecurityConfig{
+																IdentityInstanceName: "identityPluginInstance",
+																IdentityCertName:     "identityCertName",
+															},
+															InlineRouteConfig: inlineRouteConfig,
+															HTTPFilters:       routerFilterList,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							def: &FilterChain{
+								SecurityCfg: &SecurityConfig{
+									IdentityInstanceName: "defaultIdentityPluginInstance",
+									IdentityCertName:     "defaultIdentityCertName",
+								},
+								InlineRouteConfig: inlineRouteConfig,
+								HTTPFilters:       routerFilterList,
+							},
+						},
+					},
+					Raw: listenerNoValidationContextNewFields,
+				},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			name:      "happy case with validation context provider instance with deprecated fields",
+			resources: []*anypb.Any{listenerWithValidationContextDeprecatedFields},
 			wantUpdate: map[string]ListenerUpdate{
 				v3LDSTarget: {
 					InboundListenerCfg: &InboundListenerConfig{
@@ -1382,7 +1561,62 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							},
 						},
 					},
-					Raw: listenerWithValidationContext,
+					Raw: listenerWithValidationContextDeprecatedFields,
+				},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			name:      "happy case with validation context provider instance with new fields",
+			resources: []*anypb.Any{listenerWithValidationContextNewFields},
+			wantUpdate: map[string]ListenerUpdate{
+				v3LDSTarget: {
+					InboundListenerCfg: &InboundListenerConfig{
+						Address: "0.0.0.0",
+						Port:    "9999",
+						FilterChains: &FilterChainManager{
+							dstPrefixMap: map[string]*destPrefixEntry{
+								unspecifiedPrefixMapKey: {
+									srcTypeArr: [3]*sourcePrefixes{
+										{
+											srcPrefixMap: map[string]*sourcePrefixEntry{
+												unspecifiedPrefixMapKey: {
+													srcPortMap: map[int]*FilterChain{
+														0: {
+															SecurityCfg: &SecurityConfig{
+																RootInstanceName:     "rootPluginInstance",
+																RootCertName:         "rootCertName",
+																IdentityInstanceName: "identityPluginInstance",
+																IdentityCertName:     "identityCertName",
+																RequireClientCert:    true,
+															},
+															InlineRouteConfig: inlineRouteConfig,
+															HTTPFilters:       routerFilterList,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							def: &FilterChain{
+								SecurityCfg: &SecurityConfig{
+									RootInstanceName:     "defaultRootPluginInstance",
+									RootCertName:         "defaultRootCertName",
+									IdentityInstanceName: "defaultIdentityPluginInstance",
+									IdentityCertName:     "defaultIdentityCertName",
+									RequireClientCert:    true,
+								},
+								InlineRouteConfig: inlineRouteConfig,
+								HTTPFilters:       routerFilterList,
+							},
+						},
+					},
+					Raw: listenerWithValidationContextNewFields,
 				},
 			},
 			wantMD: UpdateMetadata{

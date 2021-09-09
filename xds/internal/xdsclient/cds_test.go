@@ -727,7 +727,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "happy-case-with-no-identity-certs",
+			name: "happy-case-with-no-identity-certs-using-deprecated-fields",
 			cluster: &v3clusterpb.Cluster{
 				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -767,7 +767,49 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "happy-case-with-validation-context-provider-instance",
+			name: "happy-case-with-no-identity-certs-using-new-fields",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+									ValidationContext: &v3tlspb.CertificateValidationContext{
+										CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
+									},
+								},
+							},
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				EnableLRS:      false,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName: rootPluginInstance,
+					RootCertName:     rootCertName,
+				},
+			},
+		},
+		{
+			name: "happy-case-with-validation-context-provider-instance-using-deprecated-fields",
 			cluster: &v3clusterpb.Cluster{
 				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -813,7 +855,55 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 			},
 		},
 		{
-			name: "happy-case-with-combined-validation-context",
+			name: "happy-case-with-validation-context-provider-instance-using-new-fields",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+									InstanceName:    identityPluginInstance,
+									CertificateName: identityCertName,
+								},
+								ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+									ValidationContext: &v3tlspb.CertificateValidationContext{
+										CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+											InstanceName:    rootPluginInstance,
+											CertificateName: rootCertName,
+										},
+									},
+								},
+							},
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				EnableLRS:      false,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName:     rootPluginInstance,
+					RootCertName:         rootCertName,
+					IdentityInstanceName: identityPluginInstance,
+					IdentityCertName:     identityCertName,
+				},
+			},
+		},
+		{
+			name: "happy-case-with-combined-validation-context-using-deprecated-fields",
 			cluster: &v3clusterpb.Cluster{
 				Name:                 clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -852,6 +942,73 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 										ValidationContextCertificateProviderInstance: &v3tlspb.CommonTlsContext_CertificateProviderInstance{
 											InstanceName:    rootPluginInstance,
 											CertificateName: rootCertName,
+										},
+									},
+								},
+							},
+						}),
+					},
+				},
+			},
+			wantUpdate: ClusterUpdate{
+				ClusterName:    clusterName,
+				EDSServiceName: serviceName,
+				EnableLRS:      false,
+				SecurityCfg: &SecurityConfig{
+					RootInstanceName:     rootPluginInstance,
+					RootCertName:         rootCertName,
+					IdentityInstanceName: identityPluginInstance,
+					IdentityCertName:     identityCertName,
+					SubjectAltNameMatchers: []matcher.StringMatcher{
+						matcher.StringMatcherForTesting(newStringP(sanExact), nil, nil, nil, nil, true),
+						matcher.StringMatcherForTesting(nil, newStringP(sanPrefix), nil, nil, nil, false),
+						matcher.StringMatcherForTesting(nil, nil, newStringP(sanSuffix), nil, nil, false),
+						matcher.StringMatcherForTesting(nil, nil, nil, nil, sanRE, false),
+						matcher.StringMatcherForTesting(nil, nil, nil, newStringP(sanContains), nil, false),
+					},
+				},
+			},
+		},
+		{
+			name: "happy-case-with-combined-validation-context-using-new-fields",
+			cluster: &v3clusterpb.Cluster{
+				Name:                 clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					Name: "envoy.transport_sockets.tls",
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+									InstanceName:    identityPluginInstance,
+									CertificateName: identityCertName,
+								},
+								ValidationContextType: &v3tlspb.CommonTlsContext_CombinedValidationContext{
+									CombinedValidationContext: &v3tlspb.CommonTlsContext_CombinedCertificateValidationContext{
+										DefaultValidationContext: &v3tlspb.CertificateValidationContext{
+											MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+												{
+													MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: sanExact},
+													IgnoreCase:   true,
+												},
+												{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: sanPrefix}},
+												{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: sanSuffix}},
+												{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: sanRegexGood}}},
+												{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: sanContains}},
+											},
+											CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+												InstanceName:    rootPluginInstance,
+												CertificateName: rootCertName,
+											},
 										},
 									},
 								},

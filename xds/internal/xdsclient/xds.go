@@ -812,18 +812,39 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 		return nil, errors.New("UpstreamTlsContext in CDS response does not contain a CommonTlsContext")
 	}
 
-	sc, err := securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext())
-	if err != nil {
-		return nil, err
+	return securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext(), false)
+}
+
+// common is expected to be not nil.
+func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext, server bool) (*SecurityConfig, error) {
+	sc := securityConfigFromCommonTLSContextUsingNewFields(common)
+	var err error
+	if sc == nil || sc.Equal(&SecurityConfig{}) {
+		// If we can't get a valid security config from the new fields, we
+		// fallback to the old deprecated fields.
+		// TODO(easwars): Remove this once TD starts populating the new fields.
+		sc, err = securityConfigFromCommonTLSContextWithDeprecatedFields(common)
+		if err != nil {
+			return nil, err
+		}
 	}
-	if sc.RootInstanceName == "" {
-		return nil, errors.New("security configuration on the client-side does not contain root certificate provider instance name")
+	if sc != nil {
+		// sc == nil is a valid case where the control plane has not sent us any
+		// security configuration. xDS creds will use fallback creds.
+		if server {
+			if sc.IdentityInstanceName == "" {
+				return nil, errors.New("security configuration on the server-side does not contain identity certificate provider instance name")
+			}
+		} else {
+			if sc.RootInstanceName == "" {
+				return nil, errors.New("security configuration on the client-side does not contain root certificate provider instance name")
+			}
+		}
 	}
 	return sc, nil
 }
 
-// common is expected to be not nil.
-func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*SecurityConfig, error) {
+func securityConfigFromCommonTLSContextWithDeprecatedFields(common *v3tlspb.CommonTlsContext) (*SecurityConfig, error) {
 	// The `CommonTlsContext` contains a
 	// `tls_certificate_certificate_provider_instance` field of type
 	// `CertificateProviderInstance`, which contains the provider instance name
@@ -871,6 +892,80 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext) (*Secu
 		return nil, fmt.Errorf("validation context contains unexpected type: %T", t)
 	}
 	return sc, nil
+}
+
+// gRFC A29 https://github.com/grpc/proposal/blob/master/A29-xds-tls-security.md
+// specifies the new way to fetch security configuration and says the following:
+//
+// Although there are various ways to obtain certificates as per this proto
+// (which are supported by Envoy), gRPC supports only one of them and that is
+// the `CertificateProviderPluginInstance` proto.
+//
+// This helper function attempts to fetch security configuration from the
+// `CertificateProviderPluginInstance` message, given a CommonTlsContext.
+func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsContext) *SecurityConfig {
+	// The `tls_certificate_provider_instance` field of type
+	// `CertificateProviderPluginInstance` is used to fetch the identity
+	// certificate provider.
+	sc := &SecurityConfig{}
+	if identity := common.GetTlsCertificateProviderInstance(); identity != nil {
+		sc.IdentityInstanceName = identity.GetInstanceName()
+		sc.IdentityCertName = identity.GetCertificateName()
+	}
+
+	// The `CommonTlsContext` contains a oneof field `validation_context_type`,
+	// which contains the `CertificateValidationContext` message in one of the
+	// following ways:
+	//  - `validation_context` field
+	//    - this is directly of type `CertificateValidationContext`
+	//  - `combined_validation_context` field
+	//    - this is of type `CombinedCertificateValidationContext` and contains
+	//      a `default validation context` field of type
+	//      `CertificateValidationContext`
+	//
+	// The `CertificateValidationContext` message has the following fields that
+	// we are interested in:
+	//  - `ca_certificate_provider_instance`
+	//    - this is of type `CertificateProviderPluginInstance`
+	//  - `match_subject_alt_names`
+	//    - this is a list of string matchers
+	//
+	// The `CertificateProviderPluginInstance` message contains two fields
+	//  - instance_name
+	//    - this is the certificate provider instance name to be looked up in
+	//      the bootstrap configuration
+	//  - certificate_name
+	//    -  this is an opaque name passed to the certificate provider
+	var validationCtx *v3tlspb.CertificateValidationContext
+	switch common.GetValidationContextType().(type) {
+	case *v3tlspb.CommonTlsContext_ValidationContext:
+		validationCtx = common.GetValidationContext()
+	case *v3tlspb.CommonTlsContext_CombinedValidationContext:
+		validationCtx = common.GetCombinedValidationContext().GetDefaultValidationContext()
+	case nil:
+		// It is valid for the validation context to be nil on the server side.
+		return sc
+	}
+	if validationCtx == nil || validationCtx.GetCaCertificateProviderInstance() == nil {
+		// Bail out if the `CertificateProviderPluginInstance` message is not
+		// found through one of the way detailed above.
+		return nil
+	}
+
+	if rootProvider := validationCtx.GetCaCertificateProviderInstance(); rootProvider != nil {
+		sc.RootInstanceName = rootProvider.GetInstanceName()
+		sc.RootCertName = rootProvider.GetCertificateName()
+	}
+	var matchers []matcher.StringMatcher
+	for _, m := range validationCtx.GetMatchSubjectAltNames() {
+		matcher, err := matcher.StringMatcherFromProto(m)
+		if err != nil {
+			return nil
+		}
+		matchers = append(matchers, matcher)
+	}
+	sc.SubjectAltNameMatchers = matchers
+	return sc
 }
 
 // circuitBreakersFromCluster extracts the circuit breakers configuration from
