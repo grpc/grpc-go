@@ -68,6 +68,10 @@ func (*testService) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, er
 	return &testpb.Empty{}, nil
 }
 
+func (*testService) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	return &testpb.SimpleResponse{}, nil
+}
+
 func createTmpFile(src, dst string) error {
 	data, err := ioutil.ReadFile(src)
 	if err != nil {
