@@ -85,6 +85,8 @@ type VirtualHostWithInterceptors struct {
 type RouteWithInterceptors struct {
 	// M is the matcher used to match to this route.
 	M *CompositeMatcher
+	// RouteAction is the type of routing action to initiate once matched to.
+	RouteAction RouteAction
 	// Interceptors are interceptors instantiated for this route. These will be
 	// constructed from a combination of the top level configuration and any
 	// HTTP Filter overrides present in Virtual Host or Route.
@@ -109,6 +111,7 @@ func (f *FilterChain) convertVirtualHost(virtualHost *VirtualHost) (VirtualHostW
 	rs := make([]RouteWithInterceptors, len(virtualHost.Routes))
 	for i, r := range virtualHost.Routes {
 		var err error
+		rs[i].RouteAction = r.RouteAction
 		rs[i].M, err = RouteToMatcher(r)
 		if err != nil {
 			return VirtualHostWithInterceptors{}, fmt.Errorf("matcher construction: %v", err)

@@ -64,6 +64,11 @@ type connWrapper struct {
 	virtualHosts []xdsclient.VirtualHostWithInterceptors
 }
 
+// VirtualHosts returns the virtual hosts to be used for server side routing.
+func (c *connWrapper) VirtualHosts() []xdsclient.VirtualHostWithInterceptors {
+	return c.virtualHosts
+}
+
 // SetDeadline makes a copy of the passed in deadline and forwards the call to
 // the underlying rawConn.
 func (c *connWrapper) SetDeadline(t time.Time) error {
@@ -128,6 +133,7 @@ func (c *connWrapper) XDSHandshakeInfo() (*xdsinternal.HandshakeInfo, error) {
 	return xdsHI, nil
 }
 
+// Close closes the providers and the underlying connection.
 func (c *connWrapper) Close() error {
 	if c.identityProvider != nil {
 		c.identityProvider.Close()

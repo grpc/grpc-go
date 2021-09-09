@@ -330,7 +330,7 @@ func unmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (s
 // VirtualHost whose domain field matches the server name from the URI passed
 // to the gRPC channel, and it contains a clusterName or a weighted cluster.
 //
-// The RouteConfiguration includes a list of VirtualHosts, which may have zero
+// The RouteConfiguration includes a list of virtualHosts, which may have zero
 // or more elements. We are interested in the element whose domains field
 // matches the server name specified in the "xds:" URI. The only field in the
 // VirtualHost proto that the we are interested in is the list of routes. We

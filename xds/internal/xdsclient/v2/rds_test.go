@@ -81,7 +81,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			},
 			wantUpdateErr: false,
 		},
-		// No VirtualHosts in the response. Just one test case here for a bad
+		// No virtualHosts in the response. Just one test case here for a bad
 		// RouteConfiguration, since the others are covered in
 		// TestGetClusterFromRouteConfiguration.
 		{

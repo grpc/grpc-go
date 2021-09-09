@@ -207,7 +207,10 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",
 										VirtualHosts: []*v3routepb.VirtualHost{{
-											Domains: []string{"lds.target.good:3333"},
+											// This "*" string matches on any incoming authority. This is to ensure any
+											// incoming RPC matches to Route_NonForwardingAction and will proceed as
+											// normal.
+											Domains: []string{"*"},
 											Routes: []*v3routepb.Route{{
 												Match: &v3routepb.RouteMatch{
 													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
@@ -252,7 +255,10 @@ func DefaultServerListener(host string, port uint32, secLevel SecurityLevel) *v3
 									RouteConfig: &v3routepb.RouteConfiguration{
 										Name: "routeName",
 										VirtualHosts: []*v3routepb.VirtualHost{{
-											Domains: []string{"lds.target.good:3333"},
+											// This "*" string matches on any incoming authority. This is to ensure any
+											// incoming RPC matches to Route_NonForwardingAction and will proceed as
+											// normal.
+											Domains: []string{"*"},
 											Routes: []*v3routepb.Route{{
 												Match: &v3routepb.RouteMatch{
 													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
