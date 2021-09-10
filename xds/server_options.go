@@ -69,7 +69,7 @@ type ServingModeChangeArgs struct {
 //
 // Experimental
 //
-// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func BootstrapContentsForTesting(contents []byte) grpc.ServerOption {
 	return &serverOption{apply: func(o *serverOptions) { o.bootstrapContents = contents }}
