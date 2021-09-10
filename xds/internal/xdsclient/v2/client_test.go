@@ -21,7 +21,6 @@ package v2
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -285,9 +284,6 @@ var (
 		},
 		TypeUrl: version.V2RouteConfigURL,
 	}
-	// An place holder error. When comparing UpdateErrorMetadata, we only check
-	// if error is nil, and don't compare error content.
-	errPlaceHolder = fmt.Errorf("err place holder")
 )
 
 type watchHandleTestcase struct {
@@ -305,7 +301,7 @@ type testUpdateReceiver struct {
 	f func(rType xdsclient.ResourceType, d map[string]interface{}, md xdsclient.UpdateMetadata)
 }
 
-func (t *testUpdateReceiver) NewListeners(d map[string]xdsclient.ListenerUpdate, metadata xdsclient.UpdateMetadata) {
+func (t *testUpdateReceiver) NewListeners(d map[string]xdsclient.ListenerUpdateErrTuple, metadata xdsclient.UpdateMetadata) {
 	dd := make(map[string]interface{})
 	for k, v := range d {
 		dd[k] = v
@@ -313,7 +309,7 @@ func (t *testUpdateReceiver) NewListeners(d map[string]xdsclient.ListenerUpdate,
 	t.newUpdate(xdsclient.ListenerResource, dd, metadata)
 }
 
-func (t *testUpdateReceiver) NewRouteConfigs(d map[string]xdsclient.RouteConfigUpdate, metadata xdsclient.UpdateMetadata) {
+func (t *testUpdateReceiver) NewRouteConfigs(d map[string]xdsclient.RouteConfigUpdateErrTuple, metadata xdsclient.UpdateMetadata) {
 	dd := make(map[string]interface{})
 	for k, v := range d {
 		dd[k] = v
@@ -321,7 +317,7 @@ func (t *testUpdateReceiver) NewRouteConfigs(d map[string]xdsclient.RouteConfigU
 	t.newUpdate(xdsclient.RouteConfigResource, dd, metadata)
 }
 
-func (t *testUpdateReceiver) NewClusters(d map[string]xdsclient.ClusterUpdate, metadata xdsclient.UpdateMetadata) {
+func (t *testUpdateReceiver) NewClusters(d map[string]xdsclient.ClusterUpdateErrTuple, metadata xdsclient.UpdateMetadata) {
 	dd := make(map[string]interface{})
 	for k, v := range d {
 		dd[k] = v
@@ -329,7 +325,7 @@ func (t *testUpdateReceiver) NewClusters(d map[string]xdsclient.ClusterUpdate, m
 	t.newUpdate(xdsclient.ClusterResource, dd, metadata)
 }
 
-func (t *testUpdateReceiver) NewEndpoints(d map[string]xdsclient.EndpointsUpdate, metadata xdsclient.UpdateMetadata) {
+func (t *testUpdateReceiver) NewEndpoints(d map[string]xdsclient.EndpointsUpdateErrTuple, metadata xdsclient.UpdateMetadata) {
 	dd := make(map[string]interface{})
 	for k, v := range d {
 		dd[k] = v
@@ -367,27 +363,27 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 			if rType == test.rType {
 				switch test.rType {
 				case xdsclient.ListenerResource:
-					dd := make(map[string]xdsclient.ListenerUpdate)
+					dd := make(map[string]xdsclient.ListenerUpdateErrTuple)
 					for n, u := range d {
-						dd[n] = u.(xdsclient.ListenerUpdate)
+						dd[n] = u.(xdsclient.ListenerUpdateErrTuple)
 					}
 					gotUpdateCh.Send(updateErr{dd, md, nil})
 				case xdsclient.RouteConfigResource:
-					dd := make(map[string]xdsclient.RouteConfigUpdate)
+					dd := make(map[string]xdsclient.RouteConfigUpdateErrTuple)
 					for n, u := range d {
-						dd[n] = u.(xdsclient.RouteConfigUpdate)
+						dd[n] = u.(xdsclient.RouteConfigUpdateErrTuple)
 					}
 					gotUpdateCh.Send(updateErr{dd, md, nil})
 				case xdsclient.ClusterResource:
-					dd := make(map[string]xdsclient.ClusterUpdate)
+					dd := make(map[string]xdsclient.ClusterUpdateErrTuple)
 					for n, u := range d {
-						dd[n] = u.(xdsclient.ClusterUpdate)
+						dd[n] = u.(xdsclient.ClusterUpdateErrTuple)
 					}
 					gotUpdateCh.Send(updateErr{dd, md, nil})
 				case xdsclient.EndpointsResource:
-					dd := make(map[string]xdsclient.EndpointsUpdate)
+					dd := make(map[string]xdsclient.EndpointsUpdateErrTuple)
 					for n, u := range d {
-						dd[n] = u.(xdsclient.EndpointsUpdate)
+						dd[n] = u.(xdsclient.EndpointsUpdateErrTuple)
 					}
 					gotUpdateCh.Send(updateErr{dd, md, nil})
 				}
@@ -437,7 +433,7 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 		cmpopts.EquateEmpty(), protocmp.Transform(),
 		cmpopts.IgnoreFields(xdsclient.UpdateMetadata{}, "Timestamp"),
 		cmpopts.IgnoreFields(xdsclient.UpdateErrorMetadata{}, "Timestamp"),
-		cmp.Comparer(func(x, y error) bool { return (x == nil) == (y == nil) }),
+		cmp.FilterValues(func(x, y error) bool { return true }, cmpopts.EquateErrors()),
 	}
 	uErr, err := gotUpdateCh.Receive(ctx)
 	if err == context.DeadlineExceeded {
@@ -668,7 +664,7 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 
 	if v, err := callbackCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout when expecting LDS update")
-	} else if _, ok := v.(xdsclient.ListenerUpdate); !ok {
+	} else if _, ok := v.(xdsclient.ListenerUpdateErrTuple); !ok {
 		t.Fatalf("Expect an LDS update from watcher, got %v", v)
 	}
 }

@@ -26,11 +26,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 )
 
-type ldsUpdateErr struct {
-	u   ListenerUpdate
-	err error
-}
-
 // TestLDSWatch covers the cases:
 // - an update is received after a watch()
 // - an update for another resource name
@@ -55,21 +50,21 @@ func (s) TestLDSWatch(t *testing.T) {
 
 	ldsUpdateCh := testutils.NewChannel()
 	cancelWatch := client.WatchListener(testLDSName, func(update ListenerUpdate, err error) {
-		ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
+		ldsUpdateCh.Send(ListenerUpdateErrTuple{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	wantUpdate := ListenerUpdate{RouteConfigName: testRDSName}
-	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate}, UpdateMetadata{})
+	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	if err := verifyListenerUpdate(ctx, ldsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	// Another update, with an extra resource for a different resource name.
-	client.NewListeners(map[string]ListenerUpdate{
-		testLDSName:  wantUpdate,
+	client.NewListeners(map[string]ListenerUpdateErrTuple{
+		testLDSName:  {Update: wantUpdate},
 		"randomName": {},
 	}, UpdateMetadata{})
 	if err := verifyListenerUpdate(ctx, ldsUpdateCh, wantUpdate, nil); err != nil {
@@ -78,7 +73,7 @@ func (s) TestLDSWatch(t *testing.T) {
 
 	// Cancel watch, and send update again.
 	cancelWatch()
-	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate}, UpdateMetadata{})
+	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := ldsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
@@ -116,7 +111,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 		ldsUpdateCh := testutils.NewChannel()
 		ldsUpdateChs = append(ldsUpdateChs, ldsUpdateCh)
 		cancelLastWatch = client.WatchListener(testLDSName, func(update ListenerUpdate, err error) {
-			ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
+			ldsUpdateCh.Send(ListenerUpdateErrTuple{Update: update, Err: err})
 		})
 
 		if i == 0 {
@@ -129,7 +124,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 	}
 
 	wantUpdate := ListenerUpdate{RouteConfigName: testRDSName}
-	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate}, UpdateMetadata{})
+	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	for i := 0; i < count; i++ {
 		if err := verifyListenerUpdate(ctx, ldsUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
@@ -138,7 +133,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
-	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate}, UpdateMetadata{})
+	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	for i := 0; i < count-1; i++ {
 		if err := verifyListenerUpdate(ctx, ldsUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
@@ -180,7 +175,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 		ldsUpdateCh := testutils.NewChannel()
 		ldsUpdateChs = append(ldsUpdateChs, ldsUpdateCh)
 		client.WatchListener(testLDSName+"1", func(update ListenerUpdate, err error) {
-			ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
+			ldsUpdateCh.Send(ListenerUpdateErrTuple{Update: update, Err: err})
 		})
 
 		if i == 0 {
@@ -195,7 +190,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 	// Third watch for a different name.
 	ldsUpdateCh2 := testutils.NewChannel()
 	client.WatchListener(testLDSName+"2", func(update ListenerUpdate, err error) {
-		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
+		ldsUpdateCh2.Send(ListenerUpdateErrTuple{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
@@ -203,9 +198,9 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 
 	wantUpdate1 := ListenerUpdate{RouteConfigName: testRDSName + "1"}
 	wantUpdate2 := ListenerUpdate{RouteConfigName: testRDSName + "2"}
-	client.NewListeners(map[string]ListenerUpdate{
-		testLDSName + "1": wantUpdate1,
-		testLDSName + "2": wantUpdate2,
+	client.NewListeners(map[string]ListenerUpdateErrTuple{
+		testLDSName + "1": {Update: wantUpdate1},
+		testLDSName + "2": {Update: wantUpdate2},
 	}, UpdateMetadata{})
 
 	for i := 0; i < count; i++ {
@@ -240,14 +235,14 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 
 	ldsUpdateCh := testutils.NewChannel()
 	client.WatchListener(testLDSName, func(update ListenerUpdate, err error) {
-		ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
+		ldsUpdateCh.Send(ListenerUpdateErrTuple{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	wantUpdate := ListenerUpdate{RouteConfigName: testRDSName}
-	client.NewListeners(map[string]ListenerUpdate{testLDSName: wantUpdate}, UpdateMetadata{})
+	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	if err := verifyListenerUpdate(ctx, ldsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +250,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	// Another watch for the resource in cache.
 	ldsUpdateCh2 := testutils.NewChannel()
 	client.WatchListener(testLDSName, func(update ListenerUpdate, err error) {
-		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
+		ldsUpdateCh2.Send(ListenerUpdateErrTuple{Update: update, Err: err})
 	})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
@@ -302,7 +297,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 
 	ldsUpdateCh1 := testutils.NewChannel()
 	client.WatchListener(testLDSName+"1", func(update ListenerUpdate, err error) {
-		ldsUpdateCh1.Send(ldsUpdateErr{u: update, err: err})
+		ldsUpdateCh1.Send(ListenerUpdateErrTuple{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
@@ -310,7 +305,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	// Another watch for a different name.
 	ldsUpdateCh2 := testutils.NewChannel()
 	client.WatchListener(testLDSName+"2", func(update ListenerUpdate, err error) {
-		ldsUpdateCh2.Send(ldsUpdateErr{u: update, err: err})
+		ldsUpdateCh2.Send(ListenerUpdateErrTuple{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
@@ -318,9 +313,9 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 
 	wantUpdate1 := ListenerUpdate{RouteConfigName: testEDSName + "1"}
 	wantUpdate2 := ListenerUpdate{RouteConfigName: testEDSName + "2"}
-	client.NewListeners(map[string]ListenerUpdate{
-		testLDSName + "1": wantUpdate1,
-		testLDSName + "2": wantUpdate2,
+	client.NewListeners(map[string]ListenerUpdateErrTuple{
+		testLDSName + "1": {Update: wantUpdate1},
+		testLDSName + "2": {Update: wantUpdate2},
 	}, UpdateMetadata{})
 	if err := verifyListenerUpdate(ctx, ldsUpdateCh1, wantUpdate1, nil); err != nil {
 		t.Fatal(err)
@@ -330,10 +325,10 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	}
 
 	// Send another update to remove resource 1.
-	client.NewListeners(map[string]ListenerUpdate{testLDSName + "2": wantUpdate2}, UpdateMetadata{})
+	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName + "2": {Update: wantUpdate2}}, UpdateMetadata{})
 
 	// Watcher 1 should get an error.
-	if u, err := ldsUpdateCh1.Receive(ctx); err != nil || ErrType(u.(ldsUpdateErr).err) != ErrorTypeResourceNotFound {
+	if u, err := ldsUpdateCh1.Receive(ctx); err != nil || ErrType(u.(ListenerUpdateErrTuple).Err) != ErrorTypeResourceNotFound {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
 	}
 
@@ -343,7 +338,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	}
 
 	// Send one more update without resource 1.
-	client.NewListeners(map[string]ListenerUpdate{testLDSName + "2": wantUpdate2}, UpdateMetadata{})
+	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName + "2": {Update: wantUpdate2}}, UpdateMetadata{})
 
 	// Watcher 1 should not see an update.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
@@ -380,7 +375,7 @@ func (s) TestListenerWatchNACKError(t *testing.T) {
 
 	ldsUpdateCh := testutils.NewChannel()
 	cancelWatch := client.WatchListener(testLDSName, func(update ListenerUpdate, err error) {
-		ldsUpdateCh.Send(ldsUpdateErr{u: update, err: err})
+		ldsUpdateCh.Send(ListenerUpdateErrTuple{Update: update, Err: err})
 	})
 	defer cancelWatch()
 	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
@@ -388,8 +383,68 @@ func (s) TestListenerWatchNACKError(t *testing.T) {
 	}
 
 	wantError := fmt.Errorf("testing error")
-	client.NewListeners(map[string]ListenerUpdate{testLDSName: {}}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
+	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Err: wantError}}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
 	if err := verifyListenerUpdate(ctx, ldsUpdateCh, ListenerUpdate{}, wantError); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestListenerWatchPartialValid covers the case that a response contains both
+// valid and invalid resources. This response will be NACK'ed by the xdsclient.
+// But the watchers with valid resources should receive the update, those with
+// invalida resources should receive an error.
+func (s) TestListenerWatchPartialValid(t *testing.T) {
+	apiClientCh, cleanup := overrideNewAPIClient()
+	defer cleanup()
+
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	c, err := apiClientCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout when waiting for API client to be created: %v", err)
+	}
+	apiClient := c.(*testAPIClient)
+
+	const badResourceName = "bad-resource"
+	updateChs := make(map[string]*testutils.Channel)
+
+	for _, name := range []string{testLDSName, badResourceName} {
+		ldsUpdateCh := testutils.NewChannel()
+		cancelWatch := client.WatchListener(name, func(update ListenerUpdate, err error) {
+			ldsUpdateCh.Send(ListenerUpdateErrTuple{Update: update, Err: err})
+		})
+		defer func() {
+			cancelWatch()
+			if _, err := apiClient.removeWatches[ListenerResource].Receive(ctx); err != nil {
+				t.Fatalf("want watch to be canceled, got err: %v", err)
+			}
+		}()
+		if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
+			t.Fatalf("want new watch to start, got error %v", err)
+		}
+		updateChs[name] = ldsUpdateCh
+	}
+
+	wantError := fmt.Errorf("testing error")
+	wantError2 := fmt.Errorf("individual error")
+	client.NewListeners(map[string]ListenerUpdateErrTuple{
+		testLDSName:     {Update: ListenerUpdate{RouteConfigName: testEDSName}},
+		badResourceName: {Err: wantError2},
+	}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
+
+	// The valid resource should be sent to the watcher.
+	if err := verifyListenerUpdate(ctx, updateChs[testLDSName], ListenerUpdate{RouteConfigName: testEDSName}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// The failed watcher should receive an error.
+	if err := verifyListenerUpdate(ctx, updateChs[badResourceName], ListenerUpdate{}, wantError2); err != nil {
 		t.Fatal(err)
 	}
 }

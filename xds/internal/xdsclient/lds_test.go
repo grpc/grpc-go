@@ -29,6 +29,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	spb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	"google.golang.org/grpc/internal/testutils"
@@ -176,7 +177,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			Version: testVersion,
 			ErrState: &UpdateErrorMetadata{
 				Version: testVersion,
-				Err:     errPlaceHolder,
+				Err:     cmpopts.AnyError,
 			},
 		}
 	)
@@ -184,7 +185,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 	tests := []struct {
 		name       string
 		resources  []*anypb.Any
-		wantUpdate map[string]ListenerUpdate
+		wantUpdate map[string]ListenerUpdateErrTuple
 		wantMD     UpdateMetadata
 		wantErr    bool
 	}{
@@ -214,7 +215,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					}(),
 				},
 			},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    true,
 		},
@@ -226,7 +227,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					ApiListener: testutils.MarshalAny(&v2xdspb.Listener{}),
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    true,
 		},
@@ -242,7 +243,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					}),
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    true,
 		},
@@ -256,7 +257,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					}),
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    true,
 		},
@@ -279,7 +280,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					}),
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    true,
 		},
@@ -293,8 +294,8 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:      "v3 with no filters",
 			resources: []*anypb.Any{v3LisWithFilters()},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList, Raw: v3LisWithFilters()},
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList, Raw: v3LisWithFilters()}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -322,15 +323,15 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						}),
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    true,
 		},
 		{
 			name:      "v3 with custom filter",
 			resources: []*anypb.Any{v3LisWithFilters(customFilter)},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 					HTTPFilters: []HTTPFilter{
 						{
@@ -341,7 +342,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						routerFilter,
 					},
 					Raw: v3LisWithFilters(customFilter),
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -351,8 +352,8 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:      "v3 with custom filter in typed struct",
 			resources: []*anypb.Any{v3LisWithFilters(typedStructFilter)},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 					HTTPFilters: []HTTPFilter{
 						{
@@ -363,7 +364,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						routerFilter,
 					},
 					Raw: v3LisWithFilters(typedStructFilter),
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -373,8 +374,8 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:      "v3 with optional custom filter",
 			resources: []*anypb.Any{v3LisWithFilters(customOptionalFilter)},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 					HTTPFilters: []HTTPFilter{
 						{
@@ -385,7 +386,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						routerFilter,
 					},
 					Raw: v3LisWithFilters(customOptionalFilter),
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -395,15 +396,15 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:       "v3 with two filters with same name",
 			resources:  []*anypb.Any{v3LisWithFilters(customFilter, customFilter)},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    true,
 		},
 		{
 			name:      "v3 with two filters - same type different name",
 			resources: []*anypb.Any{v3LisWithFilters(customFilter, customFilter2)},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 					HTTPFilters: []HTTPFilter{{
 						Name:   "customFilter",
@@ -417,7 +418,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						routerFilter,
 					},
 					Raw: v3LisWithFilters(customFilter, customFilter2),
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -427,20 +428,20 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:       "v3 with server-only filter",
 			resources:  []*anypb.Any{v3LisWithFilters(serverOnlyCustomFilter)},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    true,
 		},
 		{
 			name:      "v3 with optional server-only filter",
 			resources: []*anypb.Any{v3LisWithFilters(serverOnlyOptionalCustomFilter)},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					RouteConfigName:   v3RouteConfigName,
 					MaxStreamDuration: time.Second,
 					Raw:               v3LisWithFilters(serverOnlyOptionalCustomFilter),
 					HTTPFilters:       routerFilterList,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -450,8 +451,8 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:      "v3 with client-only filter",
 			resources: []*anypb.Any{v3LisWithFilters(clientOnlyCustomFilter)},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
 					HTTPFilters: []HTTPFilter{
 						{
@@ -461,7 +462,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						},
 						routerFilter},
 					Raw: v3LisWithFilters(clientOnlyCustomFilter),
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -471,34 +472,34 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:       "v3 with err filter",
 			resources:  []*anypb.Any{v3LisWithFilters(errFilter)},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    true,
 		},
 		{
 			name:       "v3 with optional err filter",
 			resources:  []*anypb.Any{v3LisWithFilters(errOptionalFilter)},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    true,
 		},
 		{
 			name:       "v3 with unknown filter",
 			resources:  []*anypb.Any{v3LisWithFilters(unknownFilter)},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    true,
 		},
 		{
 			name:      "v3 with unknown filter (optional)",
 			resources: []*anypb.Any{v3LisWithFilters(unknownOptionalFilter)},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					RouteConfigName:   v3RouteConfigName,
 					MaxStreamDuration: time.Second,
 					HTTPFilters:       routerFilterList,
 					Raw:               v3LisWithFilters(unknownOptionalFilter),
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -508,8 +509,8 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:      "v2 listener resource",
 			resources: []*anypb.Any{v2Lis},
-			wantUpdate: map[string]ListenerUpdate{
-				v2LDSTarget: {RouteConfigName: v2RouteConfigName, Raw: v2Lis},
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v2LDSTarget: {Update: ListenerUpdate{RouteConfigName: v2RouteConfigName, Raw: v2Lis}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -519,8 +520,8 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:      "v3 listener resource",
 			resources: []*anypb.Any{v3LisWithFilters()},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList, Raw: v3LisWithFilters()},
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList, Raw: v3LisWithFilters()}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -530,8 +531,8 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:      "v3 listener with inline route configuration",
 			resources: []*anypb.Any{v3LisWithInlineRoute},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					InlineRouteConfig: &RouteConfigUpdate{
 						VirtualHosts: []*VirtualHost{{
 							Domains: []string{v3LDSTarget},
@@ -540,7 +541,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					MaxStreamDuration: time.Second,
 					Raw:               v3LisWithInlineRoute,
 					HTTPFilters:       routerFilterList,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -550,9 +551,9 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 		{
 			name:      "multiple listener resources",
 			resources: []*anypb.Any{v2Lis, v3LisWithFilters()},
-			wantUpdate: map[string]ListenerUpdate{
-				v2LDSTarget: {RouteConfigName: v2RouteConfigName, Raw: v2Lis},
-				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters(), HTTPFilters: routerFilterList},
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v2LDSTarget: {Update: ListenerUpdate{RouteConfigName: v2RouteConfigName, Raw: v2Lis}},
+				v3LDSTarget: {Update: ListenerUpdate{RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters(), HTTPFilters: routerFilterList}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -573,10 +574,10 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					}}),
 				v3LisWithFilters(),
 			},
-			wantUpdate: map[string]ListenerUpdate{
-				v2LDSTarget: {RouteConfigName: v2RouteConfigName, Raw: v2Lis},
-				v3LDSTarget: {RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters(), HTTPFilters: routerFilterList},
-				"bad":       {},
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v2LDSTarget: {Update: ListenerUpdate{RouteConfigName: v2RouteConfigName, Raw: v2Lis}},
+				v3LDSTarget: {Update: ListenerUpdate{RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, Raw: v3LisWithFilters(), HTTPFilters: routerFilterList}},
+				"bad":       {Err: cmpopts.AnyError},
 			},
 			wantMD:  errMD,
 			wantErr: true,
@@ -857,7 +858,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			Version: testVersion,
 			ErrState: &UpdateErrorMetadata{
 				Version: testVersion,
-				Err:     errPlaceHolder,
+				Err:     cmpopts.AnyError,
 			},
 		}
 	)
@@ -865,7 +866,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 	tests := []struct {
 		name       string
 		resources  []*anypb.Any
-		wantUpdate map[string]ListenerUpdate
+		wantUpdate map[string]ListenerUpdateErrTuple
 		wantMD     UpdateMetadata
 		wantErr    string
 	}{
@@ -877,7 +878,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					{Name: "listener-filter-1"},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "unsupported field 'listener_filters'",
 		},
@@ -887,14 +888,14 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				Name:           v3LDSTarget,
 				UseOriginalDst: &wrapperspb.BoolValue{Value: true},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "unsupported field 'use_original_dst'",
 		},
 		{
 			name:       "no address field",
 			resources:  []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{Name: v3LDSTarget})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "no address field in LDS response",
 		},
@@ -904,7 +905,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				Name:    v3LDSTarget,
 				Address: &v3corepb.Address{},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "no socket_address field in LDS response",
 		},
@@ -920,7 +921,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "no supported filter chains and no default filter chain",
 		},
@@ -935,7 +936,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "missing HttpConnectionManager filter",
 		},
@@ -957,7 +958,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "missing name field in filter",
 		},
@@ -996,7 +997,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "duplicate filter name",
 		},
@@ -1023,7 +1024,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "http filters list is empty",
 		},
@@ -1051,7 +1052,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "is a terminal filter but it is not last in the filter chain",
 		},
@@ -1079,7 +1080,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "is not a terminal filter",
 		},
@@ -1100,7 +1101,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "unsupported config_type",
 		},
@@ -1124,7 +1125,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "multiple filter chains with overlapping matching rules are defined",
 		},
@@ -1147,7 +1148,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "unsupported network filter",
 		},
@@ -1173,7 +1174,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "failed unmarshaling of network filter",
 		},
@@ -1192,7 +1193,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "transport_socket field has unexpected name",
 		},
@@ -1214,7 +1215,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "transport_socket field has unexpected typeURL",
 		},
@@ -1239,7 +1240,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "failed to unmarshal DownstreamTlsContext in LDS response",
 		},
@@ -1261,7 +1262,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "DownstreamTlsContext in LDS response does not contain a CommonTlsContext",
 		},
@@ -1291,15 +1292,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "validation context contains unexpected type",
 		},
 		{
 			name:      "empty transport socket",
 			resources: []*anypb.Any{listenerEmptyTransportSocket},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					InboundListenerCfg: &InboundListenerConfig{
 						Address: "0.0.0.0",
 						Port:    "9999",
@@ -1325,7 +1326,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						},
 					},
 					Raw: listenerEmptyTransportSocket,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -1358,7 +1359,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set",
 		},
@@ -1388,7 +1389,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "security configuration on the server-side does not contain root certificate provider instance name, but require_client_cert field is set",
 		},
@@ -1412,15 +1413,15 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 					},
 				},
 			})},
-			wantUpdate: map[string]ListenerUpdate{v3LDSTarget: {}},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "security configuration on the server-side does not contain identity certificate provider instance name",
 		},
 		{
 			name:      "happy case with no validation context using deprecated fields",
 			resources: []*anypb.Any{listenerNoValidationContextDeprecatedFields},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					InboundListenerCfg: &InboundListenerConfig{
 						Address: "0.0.0.0",
 						Port:    "9999",
@@ -1458,7 +1459,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						},
 					},
 					Raw: listenerNoValidationContextDeprecatedFields,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -1468,8 +1469,8 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		{
 			name:      "happy case with no validation context using new fields",
 			resources: []*anypb.Any{listenerNoValidationContextNewFields},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					InboundListenerCfg: &InboundListenerConfig{
 						Address: "0.0.0.0",
 						Port:    "9999",
@@ -1507,7 +1508,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						},
 					},
 					Raw: listenerNoValidationContextNewFields,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -1517,8 +1518,8 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		{
 			name:      "happy case with validation context provider instance with deprecated fields",
 			resources: []*anypb.Any{listenerWithValidationContextDeprecatedFields},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					InboundListenerCfg: &InboundListenerConfig{
 						Address: "0.0.0.0",
 						Port:    "9999",
@@ -1562,7 +1563,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						},
 					},
 					Raw: listenerWithValidationContextDeprecatedFields,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -1572,8 +1573,8 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		{
 			name:      "happy case with validation context provider instance with new fields",
 			resources: []*anypb.Any{listenerWithValidationContextNewFields},
-			wantUpdate: map[string]ListenerUpdate{
-				v3LDSTarget: {
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
 					InboundListenerCfg: &InboundListenerConfig{
 						Address: "0.0.0.0",
 						Port:    "9999",
@@ -1617,7 +1618,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 						},
 					},
 					Raw: listenerWithValidationContextNewFields,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,

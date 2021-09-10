@@ -25,6 +25,7 @@ import (
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	anypb "github.com/golang/protobuf/ptypes/any"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -100,7 +101,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 		name          string
 		cdsResponse   *xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    map[string]xdsclient.ClusterUpdate
+		wantUpdate    map[string]xdsclient.ClusterUpdateErrTuple
 		wantUpdateMD  xdsclient.UpdateMetadata
 		wantUpdateErr bool
 	}{
@@ -113,7 +114,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
-					Err: errPlaceHolder,
+					Err: cmpopts.AnyError,
 				},
 			},
 			wantUpdateErr: false,
@@ -127,7 +128,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
-					Err: errPlaceHolder,
+					Err: cmpopts.AnyError,
 				},
 			},
 			wantUpdateErr: false,
@@ -148,8 +149,8 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			name:        "one-uninteresting-cluster",
 			cdsResponse: goodCDSResponse2,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.ClusterUpdate{
-				goodClusterName2: {ClusterName: goodClusterName2, EDSServiceName: serviceName2, Raw: marshaledCluster2},
+			wantUpdate: map[string]xdsclient.ClusterUpdateErrTuple{
+				goodClusterName2: {Update: xdsclient.ClusterUpdate{ClusterName: goodClusterName2, EDSServiceName: serviceName2, Raw: marshaledCluster2}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusACKed,
@@ -161,8 +162,8 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			name:        "one-good-cluster",
 			cdsResponse: goodCDSResponse1,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.ClusterUpdate{
-				goodClusterName1: {ClusterName: goodClusterName1, EDSServiceName: serviceName1, EnableLRS: true, Raw: marshaledCluster1},
+			wantUpdate: map[string]xdsclient.ClusterUpdateErrTuple{
+				goodClusterName1: {Update: xdsclient.ClusterUpdate{ClusterName: goodClusterName1, EDSServiceName: serviceName1, EnableLRS: true, Raw: marshaledCluster1}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusACKed,

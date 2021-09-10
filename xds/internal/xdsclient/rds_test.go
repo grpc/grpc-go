@@ -668,7 +668,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 	tests := []struct {
 		name       string
 		resources  []*anypb.Any
-		wantUpdate map[string]RouteConfigUpdate
+		wantUpdate map[string]RouteConfigUpdateErrTuple
 		wantMD     UpdateMetadata
 		wantErr    bool
 	}{
@@ -680,7 +680,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,
@@ -698,7 +698,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,
@@ -713,8 +713,8 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 		{
 			name:      "v2 routeConfig resource",
 			resources: []*anypb.Any{v2RouteConfig},
-			wantUpdate: map[string]RouteConfigUpdate{
-				v2RouteConfigName: {
+			wantUpdate: map[string]RouteConfigUpdateErrTuple{
+				v2RouteConfigName: {Update: RouteConfigUpdate{
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -730,7 +730,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 						},
 					},
 					Raw: v2RouteConfig,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -740,8 +740,8 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 		{
 			name:      "v3 routeConfig resource",
 			resources: []*anypb.Any{v3RouteConfig},
-			wantUpdate: map[string]RouteConfigUpdate{
-				v3RouteConfigName: {
+			wantUpdate: map[string]RouteConfigUpdateErrTuple{
+				v3RouteConfigName: {Update: RouteConfigUpdate{
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -757,7 +757,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 						},
 					},
 					Raw: v3RouteConfig,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -767,8 +767,8 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 		{
 			name:      "multiple routeConfig resources",
 			resources: []*anypb.Any{v2RouteConfig, v3RouteConfig},
-			wantUpdate: map[string]RouteConfigUpdate{
-				v3RouteConfigName: {
+			wantUpdate: map[string]RouteConfigUpdateErrTuple{
+				v3RouteConfigName: {Update: RouteConfigUpdate{
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -784,8 +784,8 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 						},
 					},
 					Raw: v3RouteConfig,
-				},
-				v2RouteConfigName: {
+				}},
+				v2RouteConfigName: {Update: RouteConfigUpdate{
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -801,7 +801,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 						},
 					},
 					Raw: v2RouteConfig,
-				},
+				}},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusACKed,
@@ -822,8 +822,8 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 							}}}}}),
 				v3RouteConfig,
 			},
-			wantUpdate: map[string]RouteConfigUpdate{
-				v3RouteConfigName: {
+			wantUpdate: map[string]RouteConfigUpdateErrTuple{
+				v3RouteConfigName: {Update: RouteConfigUpdate{
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -839,8 +839,8 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 						},
 					},
 					Raw: v3RouteConfig,
-				},
-				v2RouteConfigName: {
+				}},
+				v2RouteConfigName: {Update: RouteConfigUpdate{
 					VirtualHosts: []*VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
@@ -856,15 +856,15 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 						},
 					},
 					Raw: v2RouteConfig,
-				},
-				"bad": {},
+				}},
+				"bad": {Err: cmpopts.AnyError},
 			},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusNACKed,
 				Version: testVersion,
 				ErrState: &UpdateErrorMetadata{
 					Version: testVersion,
-					Err:     errPlaceHolder,
+					Err:     cmpopts.AnyError,
 				},
 			},
 			wantErr: true,

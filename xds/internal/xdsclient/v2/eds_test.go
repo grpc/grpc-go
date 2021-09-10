@@ -24,6 +24,7 @@ import (
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	anypb "github.com/golang/protobuf/ptypes/any"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
 	xtestutils "google.golang.org/grpc/xds/internal/testutils"
@@ -75,7 +76,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 		name          string
 		edsResponse   *v2xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    map[string]xdsclient.EndpointsUpdate
+		wantUpdate    map[string]xdsclient.EndpointsUpdateErrTuple
 		wantUpdateMD  xdsclient.UpdateMetadata
 		wantUpdateErr bool
 	}{
@@ -88,7 +89,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
-					Err: errPlaceHolder,
+					Err: cmpopts.AnyError,
 				},
 			},
 			wantUpdateErr: false,
@@ -102,7 +103,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusNACKed,
 				ErrState: &xdsclient.UpdateErrorMetadata{
-					Err: errPlaceHolder,
+					Err: cmpopts.AnyError,
 				},
 			},
 			wantUpdateErr: false,
@@ -112,8 +113,8 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			name:        "one-uninterestring-assignment",
 			edsResponse: goodEDSResponse2,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.EndpointsUpdate{
-				"not-goodEDSName": {
+			wantUpdate: map[string]xdsclient.EndpointsUpdateErrTuple{
+				"not-goodEDSName": {Update: xdsclient.EndpointsUpdate{
 					Localities: []xdsclient.Locality{
 						{
 							Endpoints: []xdsclient.Endpoint{{Address: "addr1:314"}},
@@ -123,7 +124,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 						},
 					},
 					Raw: marshaledGoodCLA2,
-				},
+				}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusACKed,
@@ -135,8 +136,8 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			name:        "one-good-assignment",
 			edsResponse: goodEDSResponse1,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.EndpointsUpdate{
-				goodEDSName: {
+			wantUpdate: map[string]xdsclient.EndpointsUpdateErrTuple{
+				goodEDSName: {Update: xdsclient.EndpointsUpdate{
 					Localities: []xdsclient.Locality{
 						{
 							Endpoints: []xdsclient.Endpoint{{Address: "addr1:314"}},
@@ -152,7 +153,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 						},
 					},
 					Raw: marshaledGoodCLA1,
-				},
+				}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
 				Status: xdsclient.ServiceStatusACKed,
