@@ -1331,12 +1331,12 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	case <-prefaceReceived.Done():
 		// We got the preface - huzzah! things are good.
 		ac.mu.Lock()
+		defer ac.mu.Unlock()
 		if connClosed.HasFired() {
 			// onClose called first; go idle but do nothing else.
 			if ac.state != connectivity.Shutdown {
 				ac.updateConnectivityState(connectivity.Idle, nil)
 			}
-			ac.mu.Unlock()
 			return nil
 		}
 		if ac.state == connectivity.Shutdown {
@@ -1344,11 +1344,10 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 			// state. tearDown() would have set the state to `Shutdown`, but
 			// would not have closed the transport since ac.transport would not
 			// been set at that point.
-			err := fmt.Errorf("subConn closed before receiving preface")
-			// We have to unlock here because newTr.Close() calls onClose()
+			err := fmt.Errorf("subConn shutdown initiated by balancer before receiving server preface")
+			// We run this in a goroutine because newTr.Close() calls onClose()
 			// inline, which requires locking ac.mu.
-			ac.mu.Unlock()
-			newTr.Close(err)
+			go newTr.Close(err)
 			channelz.Warningf(logger, ac.channelzID, "grpc: addrConn.createTransport failed to connect to %v: %v", addr, err)
 			return err
 		}
@@ -1356,7 +1355,6 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		ac.transport = newTr
 		hcStarted = true
 		ac.startHealthCheck(hctx) // Will set state to READY if appropriate.
-		ac.mu.Unlock()
 		return nil
 	case <-connClosed.Done():
 		// The transport has already closed.  If we received the preface, too,
