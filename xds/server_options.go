@@ -80,6 +80,11 @@ type ServingModeChangeArgs struct {
 //
 // This function should ONLY be used for testing and may not work with some
 // other features, including the CSDS service.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func BootstrapContentsForTesting(contents []byte) grpc.ServerOption {
 	return &serverOption{apply: func(o *serverOptions) { o.bootstrapContents = contents }}
 }
