@@ -40,11 +40,15 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+const (
+	rekeyRecordProtocol = "ALTSRP_GCM_AES128_REKEY"
+)
+
 var (
-	recordProtocols = []string{"ALTSRP_GCM_AES128_REKEY"}
+	recordProtocols = []string{rekeyRecordProtocol}
 	altsRecordFuncs = map[string]ALTSRecordFunc{
 		// ALTS handshaker protocols.
-		"ALTSRP_GCM_AES128_REKEY": func(s core.Side, keyData []byte) (ALTSRecordCrypto, error) {
+		rekeyRecordProtocol: func(s core.Side, keyData []byte) (ALTSRecordCrypto, error) {
 			return NewAES128GCM(s, keyData)
 		},
 	}
