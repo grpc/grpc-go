@@ -7819,3 +7819,36 @@ func (s) TestStreamingServerInterceptorGetsConnection(t *testing.T) {
 		t.Fatalf("ss.Client.StreamingInputCall(_) = _, %v, want _, %v", err, io.EOF)
 	}
 }
+
+func unaryInterceptorVerifyPost(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.NotFound, "metadata was not in context")
+	}
+	method := md.Get(":method")
+	if len(method) != 1 {
+		return nil, status.Error(codes.NotFound, ":method value had more than one value")
+	}
+	if method[0] != "POST" {
+		return nil, status.Error(codes.NotFound, ":method value was not post")
+	}
+	return nil, status.Error(codes.OK, "")
+}
+
+// TestUnaryInterceptorGetsPost verifies that the server transport adds a
+// :method POST header to metadata, and that that added Header is visibile at
+// the grpc layer.
+func (s) TestUnaryInterceptorGetsPost(t *testing.T) {
+	ss := &stubserver.StubServer{}
+	if err := ss.Start([]grpc.ServerOption{grpc.UnaryInterceptor(unaryInterceptorVerifyPost)}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.OK {
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v, want _, error code %s", err, codes.OK)
+	}
+}
