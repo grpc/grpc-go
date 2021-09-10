@@ -1326,7 +1326,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		// We didn't get the preface in time.
 		newTr.Close(transport.ErrConnClosing)
 		if connectCtx.Err() == context.DeadlineExceeded {
-			err := errors.New("failed to receive server preface")
+			err := errors.New("failed to receive server preface within timeout")
 			channelz.Warningf(logger, ac.channelzID, "grpc: addrConn.createTransport failed to connect to %v: %v", addr, err)
 			return err
 		}
