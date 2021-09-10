@@ -25,11 +25,6 @@
 //
 // See https://github.com/grpc/grpc-go/tree/master/examples/features/xds for
 // example.
-//
-// Experimental
-//
-// Notice: All APIs in this package are experimental and may be removed in a
-// later release.
 package xds
 
 import (
