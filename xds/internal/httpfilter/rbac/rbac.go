@@ -50,7 +50,10 @@ type config struct {
 }
 
 func (builder) TypeURLs() []string {
-	return []string{"type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC"}
+	return []string{
+		"type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC",
+		"type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBACPerRoute",
+	}
 }
 
 // Parsing is the same for the base config and the override config.
@@ -67,8 +70,7 @@ func parseConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
 	if err := ptypes.UnmarshalAny(any, msg); err != nil {
 		return nil, fmt.Errorf("rbac: error parsing config %v: %v", cfg, err)
 	}
-
-	for _, policy := range msg.Rules.Policies {
+	for _, policy := range msg.GetRules().GetPolicies() {
 		// "Policy.condition and Policy.checked_condition must cause a
 		// validation failure if present." - A41
 		if policy.Condition != nil {
@@ -114,7 +116,12 @@ func (builder) ParseFilterConfigOverride(override proto.Message) (httpfilter.Fil
 	if err := ptypes.UnmarshalAny(any, msg); err != nil {
 		return nil, fmt.Errorf("rbac: error parsing override config %v: %v", override, err)
 	}
-	return parseConfig(msg.Rbac)
+	any, err := ptypes.MarshalAny(msg.Rbac)
+	if err != nil {
+		// This shouldn't happen.
+		return nil, fmt.Errorf("rbac: error marshaling override config %v", err)
+	}
+	return parseConfig(any)
 }
 
 func (builder) IsTerminal() bool {
@@ -123,7 +130,8 @@ func (builder) IsTerminal() bool {
 
 var _ httpfilter.ServerInterceptorBuilder = builder{}
 
-// Optional interface builder implements in order to signify it works server side.
+// BuildServerInterceptor is an optional interface builder implements in order
+// to signify it works server side.
 func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override httpfilter.FilterConfig) (resolver.ServerInterceptor, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("rbac: nil config provided")
@@ -144,6 +152,12 @@ func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override http
 	}
 
 	icfg := c.config
+	// "If absent, no enforcing RBAC policy will be applied" - RBAC
+	// Documentation for Rules field.
+	if icfg.Rules == nil {
+		return &interceptor{}, nil
+	}
+
 	ce, err := rbac.NewChainEngine([]*v3rbacpb.RBAC{icfg.Rules})
 	if err != nil {
 		return nil, fmt.Errorf("error constructing matching engine: %v", err)
@@ -156,6 +170,11 @@ type interceptor struct {
 }
 
 func (i *interceptor) AllowRPC(ctx context.Context) error {
+	// "If absent, no enforcing RBAC policy will be applied" - RBAC
+	// Documentation.
+	if i.chainEngine == nil {
+		return nil
+	}
 	// ":method can be hard-coded to POST if unavailable" - A41
 	ctx = metadata.AppendToIncomingContext(ctx, ":method", "POST")
 	return i.chainEngine.IsAuthorized(ctx)
