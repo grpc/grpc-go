@@ -425,6 +425,38 @@ type SecurityConfig struct {
 	RequireClientCert bool
 }
 
+// Equal returns true if sc is equal to other.
+func (sc *SecurityConfig) Equal(other *SecurityConfig) bool {
+	switch {
+	case sc == nil && other == nil:
+		return true
+	case (sc != nil) != (other != nil):
+		return false
+	}
+	switch {
+	case sc.RootInstanceName != other.RootInstanceName:
+		return false
+	case sc.RootCertName != other.RootCertName:
+		return false
+	case sc.IdentityInstanceName != other.IdentityInstanceName:
+		return false
+	case sc.IdentityCertName != other.IdentityCertName:
+		return false
+	case sc.RequireClientCert != other.RequireClientCert:
+		return false
+	default:
+		if len(sc.SubjectAltNameMatchers) != len(other.SubjectAltNameMatchers) {
+			return false
+		}
+		for i := 0; i < len(sc.SubjectAltNameMatchers); i++ {
+			if !sc.SubjectAltNameMatchers[i].Equal(other.SubjectAltNameMatchers[i]) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // ClusterType is the type of cluster from a received CDS response.
 type ClusterType int
 
