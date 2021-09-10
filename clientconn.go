@@ -1329,6 +1329,9 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	select {
 	case <-connectCtx.Done():
 		// We didn't get the preface in time.
+		// The error we pass to Close() is immaterial since there are no open
+		// streams at this point, so no trailers with error details will be sent
+		// out. We just need to pass a non-nil error.
 		newTr.Close(transport.ErrConnClosing)
 		if connectCtx.Err() == context.DeadlineExceeded {
 			err := errors.New("failed to receive server preface within timeout")
@@ -1352,8 +1355,13 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 			// state. tearDown() would have set the state to `Shutdown`, but
 			// would not have closed the transport since ac.transport would not
 			// been set at that point.
+			//
 			// We run this in a goroutine because newTr.Close() calls onClose()
 			// inline, which requires locking ac.mu.
+			//
+			// The error we pass to Close() is immaterial since there are no open
+			// streams at this point, so no trailers with error details will be sent
+			// out. We just need to pass a non-nil error.
 			go newTr.Close(transport.ErrConnClosing)
 			return nil
 		}
