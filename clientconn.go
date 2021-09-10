@@ -1287,9 +1287,14 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		ac.mu.Lock()
 		defer ac.mu.Unlock()
 		defer connClosed.Fire()
-		if !hcStarted {
+		if !hcStarted || hctx.Err() != nil {
 			// We didn't start the health check or set the state to READY, so
 			// no need to do anything else here.
+			//
+			// OR, we have already cancelled the health check context, meaning
+			// we have already called onClose once for this transport.  In this
+			// case it would be dangerous to clear the transport and update the
+			// state, since there may be a new transport in this addrConn.
 			return
 		}
 		hcancel()
