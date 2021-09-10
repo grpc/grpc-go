@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
@@ -231,7 +232,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 		ListenerResourceName: name,
 		XDSCredsInUse:        s.xdsCredsInUse,
 		XDSClient:            s.xdsC,
-		ModeCallback: func(addr net.Addr, mode server.ServingMode, err error) {
+		ModeCallback: func(addr net.Addr, mode connectivity.ServingMode, err error) {
 			modeUpdateCh.Put(&modeChangeArgs{
 				addr: addr,
 				mode: mode,
@@ -261,7 +262,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 // modeChangeArgs wraps argument required for invoking mode change callback.
 type modeChangeArgs struct {
 	addr net.Addr
-	mode server.ServingMode
+	mode connectivity.ServingMode
 	err  error
 }
 
@@ -278,7 +279,7 @@ func (s *GRPCServer) handleServingModeChanges(updateCh *buffer.Unbounded) {
 		case u := <-updateCh.Get():
 			updateCh.Load()
 			args := u.(*modeChangeArgs)
-			if args.mode == ServingModeNotServing {
+			if args.mode == connectivity.ServingModeNotServing {
 				// We type assert our underlying gRPC server to the real
 				// grpc.Server here before trying to initiate the drain
 				// operation. This approach avoids performing the same type

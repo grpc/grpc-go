@@ -35,6 +35,7 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/xds"
@@ -435,8 +436,8 @@ func (s) TestServeSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for serving mode to change: %v", err)
 	}
-	if mode := v.(ServingMode); mode != ServingModeNotServing {
-		t.Fatalf("server mode is %q, want %q", mode, ServingModeNotServing)
+	if mode := v.(connectivity.ServingMode); mode != connectivity.ServingModeNotServing {
+		t.Fatalf("server mode is %q, want %q", mode, connectivity.ServingModeNotServing)
 	}
 
 	// Push a good LDS response, and wait for Serve() to be invoked on the
@@ -463,8 +464,8 @@ func (s) TestServeSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for serving mode to change: %v", err)
 	}
-	if mode := v.(ServingMode); mode != ServingModeServing {
-		t.Fatalf("server mode is %q, want %q", mode, ServingModeServing)
+	if mode := v.(connectivity.ServingMode); mode != connectivity.ServingModeServing {
+		t.Fatalf("server mode is %q, want %q", mode, connectivity.ServingModeServing)
 	}
 
 	// Push an update to the registered listener watch callback with a Listener
@@ -489,8 +490,8 @@ func (s) TestServeSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error when waiting for serving mode to change: %v", err)
 	}
-	if mode := v.(ServingMode); mode != ServingModeNotServing {
-		t.Fatalf("server mode is %q, want %q", mode, ServingModeNotServing)
+	if mode := v.(connectivity.ServingMode); mode != connectivity.ServingModeNotServing {
+		t.Fatalf("server mode is %q, want %q", mode, connectivity.ServingModeNotServing)
 	}
 }
 
