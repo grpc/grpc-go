@@ -7074,11 +7074,11 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 	s2 := grpc.NewServer()
 	defer s2.Stop()
 	testpb.RegisterTestServiceServer(s2, ts)
-	go s2.Serve(lis2)
 
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{
 		{Addr: lis1.Addr().String()},
+		{Addr: lis2.Addr().String()},
 	}})
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithInsecure())
 	if err != nil {
@@ -7102,10 +7102,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 		t.Fatalf("unexpected error from first recv: %v", err)
 	}
 
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{
-		{Addr: lis1.Addr().String()},
-		{Addr: lis2.Addr().String()},
-	}})
+	go s2.Serve(lis2)
 
 	// Send GO_AWAY to connection 1.
 	go s1.GracefulStop()
@@ -7125,6 +7122,9 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 
 	// Assert that connection 2 has been established.
 	<-conn2Established.Done()
+
+	// Close the listener for server2 to prevent it from allowing new connections.
+	lis2.Close()
 
 	// Close connection 1.
 	s1.Stop()
