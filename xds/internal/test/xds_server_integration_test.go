@@ -763,29 +763,6 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 			wantStatusEmptyCall: codes.PermissionDenied,
 			wantStatusUnaryCall: codes.OK,
 		},
-		// This test tests that the RBAC HTTP Filter hard codes the :method
-		// header to POST. Since the RBAC Configuration says to deny every RPC
-		// with a method :POST, every RPC tried should be denied.
-		{
-			name: "deny-post",
-			rbacCfg: &rpb.RBAC{
-				Rules: &v3rbacpb.RBAC{
-					Action: v3rbacpb.RBAC_DENY,
-					Policies: map[string]*v3rbacpb.Policy{
-						"post-method": {
-							Permissions: []*v3rbacpb.Permission{
-								{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "POST"}}}},
-							},
-							Principals: []*v3rbacpb.Principal{
-								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
-							},
-						},
-					},
-				},
-			},
-			wantStatusEmptyCall: codes.PermissionDenied,
-			wantStatusUnaryCall: codes.PermissionDenied,
-		},
 		// This test that a RBAC Config with nil rules means that every RPC is
 		// allowed. This maps to the line "If absent, no enforcing RBAC policy
 		// will be applied" from the RBAC Proto documentation for the Rules
@@ -798,8 +775,6 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 			wantStatusEmptyCall: codes.OK,
 			wantStatusUnaryCall: codes.OK,
 		},
-
-		// Also need to add status checks - Permission denied vs. OK
 	}
 
 	for _, test := range tests {
