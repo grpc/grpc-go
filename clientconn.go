@@ -1324,12 +1324,13 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	select {
 	case <-connectCtx.Done():
 		// We didn't get the preface in time.
-		err := errors.New("failed to receive server preface")
-		newTr.Close(err)
+		newTr.Close(transport.ErrConnClosing)
 		if connectCtx.Err() == context.DeadlineExceeded {
+			err := errors.New("failed to receive server preface")
 			channelz.Warningf(logger, ac.channelzID, "grpc: addrConn.createTransport failed to connect to %v: %v", addr, err)
+			return err
 		}
-		return err
+		return nil
 	case <-prefaceReceived.Done():
 		// We got the preface - huzzah! things are good.
 		ac.mu.Lock()
@@ -1348,9 +1349,8 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 			// been set at that point.
 			// We run this in a goroutine because newTr.Close() calls onClose()
 			// inline, which requires locking ac.mu.
-			err := errors.New("subConn shutdown initiated by balancer")
-			go newTr.Close(err)
-			return err
+			go newTr.Close(transport.ErrConnClosing)
+			return nil
 		}
 		ac.curAddr = addr
 		ac.transport = newTr
