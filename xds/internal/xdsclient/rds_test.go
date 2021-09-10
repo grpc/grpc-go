@@ -668,7 +668,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 	tests := []struct {
 		name       string
 		resources  []*anypb.Any
-		wantUpdate map[string]RouteConfigUpdateErr
+		wantUpdate map[string]RouteConfigUpdateErrTuple
 		wantMD     UpdateMetadata
 		wantErr    bool
 	}{
@@ -713,7 +713,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 		{
 			name:      "v2 routeConfig resource",
 			resources: []*anypb.Any{v2RouteConfig},
-			wantUpdate: map[string]RouteConfigUpdateErr{
+			wantUpdate: map[string]RouteConfigUpdateErrTuple{
 				v2RouteConfigName: {Update: RouteConfigUpdate{
 					VirtualHosts: []*VirtualHost{
 						{
@@ -740,7 +740,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 		{
 			name:      "v3 routeConfig resource",
 			resources: []*anypb.Any{v3RouteConfig},
-			wantUpdate: map[string]RouteConfigUpdateErr{
+			wantUpdate: map[string]RouteConfigUpdateErrTuple{
 				v3RouteConfigName: {Update: RouteConfigUpdate{
 					VirtualHosts: []*VirtualHost{
 						{
@@ -767,7 +767,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 		{
 			name:      "multiple routeConfig resources",
 			resources: []*anypb.Any{v2RouteConfig, v3RouteConfig},
-			wantUpdate: map[string]RouteConfigUpdateErr{
+			wantUpdate: map[string]RouteConfigUpdateErrTuple{
 				v3RouteConfigName: {Update: RouteConfigUpdate{
 					VirtualHosts: []*VirtualHost{
 						{
@@ -822,7 +822,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 							}}}}}),
 				v3RouteConfig,
 			},
-			wantUpdate: map[string]RouteConfigUpdateErr{
+			wantUpdate: map[string]RouteConfigUpdateErrTuple{
 				v3RouteConfigName: {Update: RouteConfigUpdate{
 					VirtualHosts: []*VirtualHost{
 						{

@@ -1139,7 +1139,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 	tests := []struct {
 		name       string
 		resources  []*anypb.Any
-		wantUpdate map[string]ClusterUpdateErr
+		wantUpdate map[string]ClusterUpdateErrTuple
 		wantMD     UpdateMetadata
 		wantErr    bool
 	}{
@@ -1182,7 +1182,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 					ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
 				}),
 			},
-			wantUpdate: map[string]ClusterUpdateErr{
+			wantUpdate: map[string]ClusterUpdateErrTuple{
 				"test": {Err: cmpopts.AnyError},
 			},
 			wantMD: UpdateMetadata{
@@ -1198,7 +1198,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		{
 			name:      "v2 cluster",
 			resources: []*anypb.Any{v2ClusterAny},
-			wantUpdate: map[string]ClusterUpdateErr{
+			wantUpdate: map[string]ClusterUpdateErrTuple{
 				v2ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v2ClusterName,
 					EDSServiceName: v2Service, EnableLRS: true,
@@ -1213,7 +1213,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		{
 			name:      "v3 cluster",
 			resources: []*anypb.Any{v3ClusterAny},
-			wantUpdate: map[string]ClusterUpdateErr{
+			wantUpdate: map[string]ClusterUpdateErrTuple{
 				v3ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v3ClusterName,
 					EDSServiceName: v3Service, EnableLRS: true,
@@ -1228,7 +1228,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 		{
 			name:      "multiple clusters",
 			resources: []*anypb.Any{v2ClusterAny, v3ClusterAny},
-			wantUpdate: map[string]ClusterUpdateErr{
+			wantUpdate: map[string]ClusterUpdateErrTuple{
 				v2ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v2ClusterName,
 					EDSServiceName: v2Service, EnableLRS: true,
@@ -1257,7 +1257,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				}),
 				v3ClusterAny,
 			},
-			wantUpdate: map[string]ClusterUpdateErr{
+			wantUpdate: map[string]ClusterUpdateErrTuple{
 				v2ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v2ClusterName,
 					EDSServiceName: v2Service, EnableLRS: true,

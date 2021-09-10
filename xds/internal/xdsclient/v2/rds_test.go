@@ -50,7 +50,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 		name          string
 		rdsResponse   *xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    map[string]xdsclient.RouteConfigUpdateErr
+		wantUpdate    map[string]xdsclient.RouteConfigUpdateErrTuple
 		wantUpdateMD  xdsclient.UpdateMetadata
 		wantUpdateErr bool
 	}{
@@ -89,7 +89,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			name:        "no-virtual-hosts-in-response",
 			rdsResponse: noVirtualHostsInRDSResponse,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.RouteConfigUpdateErr{
+			wantUpdate: map[string]xdsclient.RouteConfigUpdateErrTuple{
 				goodRouteName1: {Update: xdsclient.RouteConfigUpdate{
 					VirtualHosts: nil,
 					Raw:          marshaledNoVirtualHostsRouteConfig,
@@ -105,7 +105,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			name:        "one-uninteresting-route-config",
 			rdsResponse: goodRDSResponse2,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.RouteConfigUpdateErr{
+			wantUpdate: map[string]xdsclient.RouteConfigUpdateErrTuple{
 				goodRouteName2: {Update: xdsclient.RouteConfigUpdate{
 					VirtualHosts: []*xdsclient.VirtualHost{
 						{
@@ -135,7 +135,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			name:        "one-good-route-config",
 			rdsResponse: goodRDSResponse1,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.RouteConfigUpdateErr{
+			wantUpdate: map[string]xdsclient.RouteConfigUpdateErrTuple{
 				goodRouteName1: {Update: xdsclient.RouteConfigUpdate{
 					VirtualHosts: []*xdsclient.VirtualHost{
 						{

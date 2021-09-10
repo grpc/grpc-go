@@ -101,7 +101,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 		name          string
 		cdsResponse   *xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    map[string]xdsclient.ClusterUpdateErr
+		wantUpdate    map[string]xdsclient.ClusterUpdateErrTuple
 		wantUpdateMD  xdsclient.UpdateMetadata
 		wantUpdateErr bool
 	}{
@@ -149,7 +149,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			name:        "one-uninteresting-cluster",
 			cdsResponse: goodCDSResponse2,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.ClusterUpdateErr{
+			wantUpdate: map[string]xdsclient.ClusterUpdateErrTuple{
 				goodClusterName2: {Update: xdsclient.ClusterUpdate{ClusterName: goodClusterName2, EDSServiceName: serviceName2, Raw: marshaledCluster2}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
@@ -162,7 +162,7 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			name:        "one-good-cluster",
 			cdsResponse: goodCDSResponse1,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.ClusterUpdateErr{
+			wantUpdate: map[string]xdsclient.ClusterUpdateErrTuple{
 				goodClusterName1: {Update: xdsclient.ClusterUpdate{ClusterName: goodClusterName1, EDSServiceName: serviceName1, EnableLRS: true, Raw: marshaledCluster1}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{

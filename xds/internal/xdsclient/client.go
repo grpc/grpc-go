@@ -134,14 +134,14 @@ type loadReportingOptions struct {
 // resource updates from an APIClient for a specific version.
 type UpdateHandler interface {
 	// NewListeners handles updates to xDS listener resources.
-	NewListeners(map[string]ListenerUpdateErr, UpdateMetadata)
+	NewListeners(map[string]ListenerUpdateErrTuple, UpdateMetadata)
 	// NewRouteConfigs handles updates to xDS RouteConfiguration resources.
-	NewRouteConfigs(map[string]RouteConfigUpdateErr, UpdateMetadata)
+	NewRouteConfigs(map[string]RouteConfigUpdateErrTuple, UpdateMetadata)
 	// NewClusters handles updates to xDS Cluster resources.
-	NewClusters(map[string]ClusterUpdateErr, UpdateMetadata)
+	NewClusters(map[string]ClusterUpdateErrTuple, UpdateMetadata)
 	// NewEndpoints handles updates to xDS ClusterLoadAssignment (or tersely
 	// referred to as Endpoints) resources.
-	NewEndpoints(map[string]EndpointsUpdateErr, UpdateMetadata)
+	NewEndpoints(map[string]EndpointsUpdateErrTuple, UpdateMetadata)
 	// NewConnectionError handles connection errors from the xDS stream. The
 	// error will be reported to all the resource watchers.
 	NewConnectionError(err error)

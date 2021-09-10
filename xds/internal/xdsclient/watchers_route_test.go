@@ -52,7 +52,7 @@ func (s) TestRDSWatch(t *testing.T) {
 
 	rdsUpdateCh := testutils.NewChannel()
 	cancelWatch := client.WatchRouteConfig(testRDSName, func(update RouteConfigUpdate, err error) {
-		rdsUpdateCh.Send(RouteConfigUpdateErr{Update: update, Err: err})
+		rdsUpdateCh.Send(RouteConfigUpdateErrTuple{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
@@ -66,13 +66,13 @@ func (s) TestRDSWatch(t *testing.T) {
 			},
 		},
 	}
-	client.NewRouteConfigs(map[string]RouteConfigUpdateErr{testRDSName: {Update: wantUpdate}}, UpdateMetadata{})
+	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{testRDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	// Another update for a different resource name.
-	client.NewRouteConfigs(map[string]RouteConfigUpdateErr{"randomName": {}}, UpdateMetadata{})
+	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{"randomName": {}}, UpdateMetadata{})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := rdsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
@@ -81,7 +81,7 @@ func (s) TestRDSWatch(t *testing.T) {
 
 	// Cancel watch, and send update again.
 	cancelWatch()
-	client.NewRouteConfigs(map[string]RouteConfigUpdateErr{testRDSName: {Update: wantUpdate}}, UpdateMetadata{})
+	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{testRDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := rdsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
@@ -118,7 +118,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 		rdsUpdateCh := testutils.NewChannel()
 		rdsUpdateChs = append(rdsUpdateChs, rdsUpdateCh)
 		cancelLastWatch = client.WatchRouteConfig(testRDSName, func(update RouteConfigUpdate, err error) {
-			rdsUpdateCh.Send(RouteConfigUpdateErr{Update: update, Err: err})
+			rdsUpdateCh.Send(RouteConfigUpdateErrTuple{Update: update, Err: err})
 		})
 
 		if i == 0 {
@@ -138,7 +138,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 			},
 		},
 	}
-	client.NewRouteConfigs(map[string]RouteConfigUpdateErr{testRDSName: {Update: wantUpdate}}, UpdateMetadata{})
+	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{testRDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	for i := 0; i < count; i++ {
 		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
@@ -147,7 +147,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
-	client.NewRouteConfigs(map[string]RouteConfigUpdateErr{testRDSName: {Update: wantUpdate}}, UpdateMetadata{})
+	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{testRDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	for i := 0; i < count-1; i++ {
 		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
@@ -188,7 +188,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 		rdsUpdateCh := testutils.NewChannel()
 		rdsUpdateChs = append(rdsUpdateChs, rdsUpdateCh)
 		client.WatchRouteConfig(testRDSName+"1", func(update RouteConfigUpdate, err error) {
-			rdsUpdateCh.Send(RouteConfigUpdateErr{Update: update, Err: err})
+			rdsUpdateCh.Send(RouteConfigUpdateErrTuple{Update: update, Err: err})
 		})
 
 		if i == 0 {
@@ -203,7 +203,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 	// Third watch for a different name.
 	rdsUpdateCh2 := testutils.NewChannel()
 	client.WatchRouteConfig(testRDSName+"2", func(update RouteConfigUpdate, err error) {
-		rdsUpdateCh2.Send(RouteConfigUpdateErr{Update: update, Err: err})
+		rdsUpdateCh2.Send(RouteConfigUpdateErrTuple{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
@@ -225,7 +225,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 			},
 		},
 	}
-	client.NewRouteConfigs(map[string]RouteConfigUpdateErr{
+	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{
 		testRDSName + "1": {Update: wantUpdate1},
 		testRDSName + "2": {Update: wantUpdate2},
 	}, UpdateMetadata{})
@@ -262,7 +262,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 
 	rdsUpdateCh := testutils.NewChannel()
 	client.WatchRouteConfig(testRDSName, func(update RouteConfigUpdate, err error) {
-		rdsUpdateCh.Send(RouteConfigUpdateErr{Update: update, Err: err})
+		rdsUpdateCh.Send(RouteConfigUpdateErrTuple{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
@@ -276,7 +276,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 			},
 		},
 	}
-	client.NewRouteConfigs(map[string]RouteConfigUpdateErr{testRDSName: {Update: wantUpdate}}, UpdateMetadata{})
+	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{testRDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -284,7 +284,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	// Another watch for the resource in cache.
 	rdsUpdateCh2 := testutils.NewChannel()
 	client.WatchRouteConfig(testRDSName, func(update RouteConfigUpdate, err error) {
-		rdsUpdateCh2.Send(RouteConfigUpdateErr{Update: update, Err: err})
+		rdsUpdateCh2.Send(RouteConfigUpdateErrTuple{Update: update, Err: err})
 	})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
@@ -293,7 +293,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	}
 
 	// New watch should receives the update.
-	if u, err := rdsUpdateCh2.Receive(ctx); err != nil || !cmp.Equal(u, RouteConfigUpdateErr{wantUpdate, nil}, cmp.AllowUnexported(RouteConfigUpdateErr{})) {
+	if u, err := rdsUpdateCh2.Receive(ctx); err != nil || !cmp.Equal(u, RouteConfigUpdateErrTuple{wantUpdate, nil}, cmp.AllowUnexported(RouteConfigUpdateErrTuple{})) {
 		t.Errorf("unexpected RouteConfigUpdate: %v, error receiving from channel: %v", u, err)
 	}
 
@@ -327,7 +327,7 @@ func (s) TestRouteWatchNACKError(t *testing.T) {
 
 	rdsUpdateCh := testutils.NewChannel()
 	cancelWatch := client.WatchRouteConfig(testCDSName, func(update RouteConfigUpdate, err error) {
-		rdsUpdateCh.Send(RouteConfigUpdateErr{Update: update, Err: err})
+		rdsUpdateCh.Send(RouteConfigUpdateErrTuple{Update: update, Err: err})
 	})
 	defer cancelWatch()
 	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
@@ -335,7 +335,7 @@ func (s) TestRouteWatchNACKError(t *testing.T) {
 	}
 
 	wantError := fmt.Errorf("testing error")
-	client.NewRouteConfigs(map[string]RouteConfigUpdateErr{testCDSName: {Err: wantError}}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
+	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{testCDSName: {Err: wantError}}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
 	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, RouteConfigUpdate{}, wantError); err != nil {
 		t.Fatal(err)
 	}
@@ -369,7 +369,7 @@ func (s) TestRouteWatchPartialValid(t *testing.T) {
 	for _, name := range []string{testRDSName, badResourceName} {
 		rdsUpdateCh := testutils.NewChannel()
 		cancelWatch := client.WatchRouteConfig(name, func(update RouteConfigUpdate, err error) {
-			rdsUpdateCh.Send(RouteConfigUpdateErr{Update: update, Err: err})
+			rdsUpdateCh.Send(RouteConfigUpdateErrTuple{Update: update, Err: err})
 		})
 		defer func() {
 			cancelWatch()
@@ -385,7 +385,7 @@ func (s) TestRouteWatchPartialValid(t *testing.T) {
 
 	wantError := fmt.Errorf("testing error")
 	wantError2 := fmt.Errorf("individual error")
-	client.NewRouteConfigs(map[string]RouteConfigUpdateErr{
+	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{
 		testRDSName: {Update: RouteConfigUpdate{VirtualHosts: []*VirtualHost{{
 			Domains: []string{testLDSName},
 			Routes:  []*Route{{Prefix: newStringP(""), WeightedClusters: map[string]WeightedCluster{testCDSName: {Weight: 1}}}},

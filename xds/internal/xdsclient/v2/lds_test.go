@@ -36,7 +36,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 		name          string
 		ldsResponse   *v2xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    map[string]xdsclient.ListenerUpdateErr
+		wantUpdate    map[string]xdsclient.ListenerUpdateErrTuple
 		wantUpdateMD  xdsclient.UpdateMetadata
 		wantUpdateErr bool
 	}{
@@ -75,7 +75,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			name:        "no-apiListener-in-response",
 			ldsResponse: noAPIListenerLDSResponse,
 			wantErr:     true,
-			wantUpdate: map[string]xdsclient.ListenerUpdateErr{
+			wantUpdate: map[string]xdsclient.ListenerUpdateErrTuple{
 				goodLDSTarget1: {Err: cmpopts.AnyError},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
@@ -91,7 +91,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			name:        "one-good-listener",
 			ldsResponse: goodLDSResponse1,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.ListenerUpdateErr{
+			wantUpdate: map[string]xdsclient.ListenerUpdateErrTuple{
 				goodLDSTarget1: {Update: xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener1}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{
@@ -105,7 +105,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			name:        "multiple-good-listener",
 			ldsResponse: ldsResponseWithMultipleResources,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.ListenerUpdateErr{
+			wantUpdate: map[string]xdsclient.ListenerUpdateErrTuple{
 				goodLDSTarget1: {Update: xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener1}},
 				goodLDSTarget2: {Update: xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener2}},
 			},
@@ -121,7 +121,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			name:        "good-bad-ugly-listeners",
 			ldsResponse: goodBadUglyLDSResponse,
 			wantErr:     true,
-			wantUpdate: map[string]xdsclient.ListenerUpdateErr{
+			wantUpdate: map[string]xdsclient.ListenerUpdateErrTuple{
 				goodLDSTarget1: {Update: xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener1}},
 				goodLDSTarget2: {Err: cmpopts.AnyError},
 			},
@@ -138,7 +138,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			name:        "one-uninteresting-listener",
 			ldsResponse: goodLDSResponse2,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.ListenerUpdateErr{
+			wantUpdate: map[string]xdsclient.ListenerUpdateErrTuple{
 				goodLDSTarget2: {Update: xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener2}},
 			},
 			wantUpdateMD: xdsclient.UpdateMetadata{

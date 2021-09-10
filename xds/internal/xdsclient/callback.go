@@ -76,7 +76,7 @@ func (c *clientImpl) callCallback(wiu *watcherInfoWithUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewListeners(updates map[string]ListenerUpdateErr, metadata UpdateMetadata) {
+func (c *clientImpl) NewListeners(updates map[string]ListenerUpdateErrTuple, metadata UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -141,7 +141,7 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdateErr, metadata
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdateErr, metadata UpdateMetadata) {
+func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdateErrTuple, metadata UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -190,7 +190,7 @@ func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdateErr, me
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewClusters(updates map[string]ClusterUpdateErr, metadata UpdateMetadata) {
+func (c *clientImpl) NewClusters(updates map[string]ClusterUpdateErrTuple, metadata UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -257,7 +257,7 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdateErr, metadata U
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdateErr, metadata UpdateMetadata) {
+func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdateErrTuple, metadata UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

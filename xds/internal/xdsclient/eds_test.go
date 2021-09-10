@@ -138,7 +138,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 	tests := []struct {
 		name       string
 		resources  []*anypb.Any
-		wantUpdate map[string]EndpointsUpdateErr
+		wantUpdate map[string]EndpointsUpdateErrTuple
 		wantMD     UpdateMetadata
 		wantErr    bool
 	}{
@@ -181,7 +181,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 				clab0.addLocality("locality-2", 1, 2, []string{"addr2:159"}, nil)
 				return clab0.Build()
 			}())},
-			wantUpdate: map[string]EndpointsUpdateErr{"test": {Err: cmpopts.AnyError}},
+			wantUpdate: map[string]EndpointsUpdateErrTuple{"test": {Err: cmpopts.AnyError}},
 			wantMD: UpdateMetadata{
 				Status:  ServiceStatusNACKed,
 				Version: testVersion,
@@ -195,7 +195,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 		{
 			name:      "v3 endpoints",
 			resources: []*anypb.Any{v3EndpointsAny},
-			wantUpdate: map[string]EndpointsUpdateErr{
+			wantUpdate: map[string]EndpointsUpdateErrTuple{
 				"test": {Update: EndpointsUpdate{
 					Drops: nil,
 					Localities: []Locality{
@@ -240,7 +240,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 					return clab0.Build()
 				}()),
 			},
-			wantUpdate: map[string]EndpointsUpdateErr{
+			wantUpdate: map[string]EndpointsUpdateErrTuple{
 				"test": {Update: EndpointsUpdate{
 					Drops: nil,
 					Localities: []Locality{

@@ -162,7 +162,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	clusterUpdateCh := testutils.NewChannel()
 	firstTime := true
 	client.WatchCluster(testCDSName, func(update ClusterUpdate, err error) {
-		clusterUpdateCh.Send(ClusterUpdateErr{Update: update, Err: err})
+		clusterUpdateCh.Send(ClusterUpdateErrTuple{Update: update, Err: err})
 		// Calls another watch inline, to ensure there's deadlock.
 		client.WatchCluster("another-random-name", func(ClusterUpdate, error) {})
 
@@ -176,13 +176,13 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	}
 
 	wantUpdate := ClusterUpdate{ClusterName: testEDSName}
-	client.NewClusters(map[string]ClusterUpdateErr{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
+	client.NewClusters(map[string]ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	wantUpdate2 := ClusterUpdate{ClusterName: testEDSName + "2"}
-	client.NewClusters(map[string]ClusterUpdateErr{testCDSName: {Update: wantUpdate2}}, UpdateMetadata{})
+	client.NewClusters(map[string]ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate2}}, UpdateMetadata{})
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate2, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for listener update: %v", err)
 	}
-	gotUpdate := u.(ListenerUpdateErr)
+	gotUpdate := u.(ListenerUpdateErrTuple)
 	if wantErr != nil {
 		if gotUpdate.Err != wantErr {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
@@ -211,7 +211,7 @@ func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, w
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for route configuration update: %v", err)
 	}
-	gotUpdate := u.(RouteConfigUpdateErr)
+	gotUpdate := u.(RouteConfigUpdateErrTuple)
 	if wantErr != nil {
 		if gotUpdate.Err != wantErr {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
@@ -229,7 +229,7 @@ func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantU
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for cluster update: %v", err)
 	}
-	gotUpdate := u.(ClusterUpdateErr)
+	gotUpdate := u.(ClusterUpdateErrTuple)
 	if wantErr != nil {
 		if gotUpdate.Err != wantErr {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
@@ -247,7 +247,7 @@ func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wan
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for endpoints update: %v", err)
 	}
-	gotUpdate := u.(EndpointsUpdateErr)
+	gotUpdate := u.(EndpointsUpdateErrTuple)
 	if wantErr != nil {
 		if gotUpdate.Err != wantErr {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)

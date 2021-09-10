@@ -101,10 +101,10 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 
-	update0 := make(map[string]xdsclient.ListenerUpdateErr)
+	update0 := make(map[string]xdsclient.ListenerUpdateErrTuple)
 	want0 := make(map[string]xdsclient.UpdateWithMD)
 	for n, r := range listenerRaws {
-		update0[n] = xdsclient.ListenerUpdateErr{Update: xdsclient.ListenerUpdate{Raw: r}}
+		update0[n] = xdsclient.ListenerUpdateErrTuple{Update: xdsclient.ListenerUpdate{Raw: r}}
 		want0[n] = xdsclient.UpdateWithMD{
 			MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
@@ -120,7 +120,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	const nackVersion = "lds-version-nack"
 	var nackErr = fmt.Errorf("lds nack error")
 	updateHandler.NewListeners(
-		map[string]xdsclient.ListenerUpdateErr{
+		map[string]xdsclient.ListenerUpdateErrTuple{
 			ldsTargets[0]: {Err: nackErr},
 			ldsTargets[1]: {Update: xdsclient.ListenerUpdate{Raw: listenerRaws[ldsTargets[1]]}},
 		},
@@ -215,10 +215,10 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 
-	update0 := make(map[string]xdsclient.RouteConfigUpdateErr)
+	update0 := make(map[string]xdsclient.RouteConfigUpdateErrTuple)
 	want0 := make(map[string]xdsclient.UpdateWithMD)
 	for n, r := range routeRaws {
-		update0[n] = xdsclient.RouteConfigUpdateErr{Update: xdsclient.RouteConfigUpdate{Raw: r}}
+		update0[n] = xdsclient.RouteConfigUpdateErrTuple{Update: xdsclient.RouteConfigUpdate{Raw: r}}
 		want0[n] = xdsclient.UpdateWithMD{
 			MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
@@ -234,7 +234,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	const nackVersion = "rds-version-nack"
 	var nackErr = fmt.Errorf("rds nack error")
 	updateHandler.NewRouteConfigs(
-		map[string]xdsclient.RouteConfigUpdateErr{
+		map[string]xdsclient.RouteConfigUpdateErrTuple{
 			rdsTargets[0]: {Err: nackErr},
 			rdsTargets[1]: {Update: xdsclient.RouteConfigUpdate{Raw: routeRaws[rdsTargets[1]]}},
 		},
@@ -329,10 +329,10 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 
-	update0 := make(map[string]xdsclient.ClusterUpdateErr)
+	update0 := make(map[string]xdsclient.ClusterUpdateErrTuple)
 	want0 := make(map[string]xdsclient.UpdateWithMD)
 	for n, r := range clusterRaws {
-		update0[n] = xdsclient.ClusterUpdateErr{Update: xdsclient.ClusterUpdate{Raw: r}}
+		update0[n] = xdsclient.ClusterUpdateErrTuple{Update: xdsclient.ClusterUpdate{Raw: r}}
 		want0[n] = xdsclient.UpdateWithMD{
 			MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
@@ -348,7 +348,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	const nackVersion = "cds-version-nack"
 	var nackErr = fmt.Errorf("cds nack error")
 	updateHandler.NewClusters(
-		map[string]xdsclient.ClusterUpdateErr{
+		map[string]xdsclient.ClusterUpdateErrTuple{
 			cdsTargets[0]: {Err: nackErr},
 			cdsTargets[1]: {Update: xdsclient.ClusterUpdate{Raw: clusterRaws[cdsTargets[1]]}},
 		},
@@ -429,10 +429,10 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 
-	update0 := make(map[string]xdsclient.EndpointsUpdateErr)
+	update0 := make(map[string]xdsclient.EndpointsUpdateErrTuple)
 	want0 := make(map[string]xdsclient.UpdateWithMD)
 	for n, r := range endpointRaws {
-		update0[n] = xdsclient.EndpointsUpdateErr{Update: xdsclient.EndpointsUpdate{Raw: r}}
+		update0[n] = xdsclient.EndpointsUpdateErrTuple{Update: xdsclient.EndpointsUpdate{Raw: r}}
 		want0[n] = xdsclient.UpdateWithMD{
 			MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
@@ -448,7 +448,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	const nackVersion = "eds-version-nack"
 	var nackErr = fmt.Errorf("eds nack error")
 	updateHandler.NewEndpoints(
-		map[string]xdsclient.EndpointsUpdateErr{
+		map[string]xdsclient.EndpointsUpdateErrTuple{
 			edsTargets[0]: {Err: nackErr},
 			edsTargets[1]: {Update: xdsclient.EndpointsUpdate{Raw: endpointRaws[edsTargets[1]]}},
 		},
