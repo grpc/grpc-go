@@ -133,6 +133,7 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 			}
 			b.subConns[aNoAttrs] = subConnInfo{subConn: sc, attrs: a.Attributes}
 			b.scStates[sc] = connectivity.Idle
+			b.csEvltr.RecordTransition(connectivity.Shutdown, connectivity.Idle)
 			sc.Connect()
 		} else {
 			// Always update the subconn's address in case the attributes
@@ -213,10 +214,14 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 		}
 		return
 	}
-	if oldS == connectivity.TransientFailure && s == connectivity.Connecting {
-		// Once a subconn enters TRANSIENT_FAILURE, ignore subsequent
+	if oldS == connectivity.TransientFailure &&
+		(s == connectivity.Connecting || s == connectivity.Idle) {
+		// Once a subconn enters TRANSIENT_FAILURE, ignore subsequent IDLE or
 		// CONNECTING transitions to prevent the aggregated state from being
 		// always CONNECTING when many backends exist but are all down.
+		if s == connectivity.Idle {
+			sc.Connect()
+		}
 		return
 	}
 	b.scStates[sc] = s
@@ -242,7 +247,6 @@ func (b *baseBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Su
 		b.state == connectivity.TransientFailure {
 		b.regeneratePicker()
 	}
-
 	b.cc.UpdateState(balancer.State{ConnectivityState: b.state, Picker: b.picker})
 }
 
