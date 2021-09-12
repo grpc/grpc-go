@@ -19,19 +19,43 @@
 package authz_test
 
 import (
+	"io/ioutil"
+	"os"
+	"path"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/authz"
 )
 
+func createTmpPolicyFile(t *testing.T, dirSuffix string, policy []byte) string {
+	t.Helper()
+
+	// Create a temp directory. Passing an empty string for the first argument
+	// uses the system temp directory.
+	dir, err := ioutil.TempDir("", dirSuffix)
+	if err != nil {
+		t.Fatalf("ioutil.TempDir() failed: %v", err)
+	}
+	t.Logf("Using tmpdir: %s", dir)
+	// Write policy into file.
+	filename := path.Join(dir, "policy.json")
+	if err := ioutil.WriteFile(filename, policy, os.ModePerm); err != nil {
+		t.Fatalf("ioutil.WriteFile(%q) failed: %v", filename, err)
+	}
+	t.Logf("Wrote file at: %s", filename)
+	t.Logf("%s", string(policy))
+	return dir
+}
+
 func TestNewStatic(t *testing.T) {
 	tests := map[string]struct {
 		authzPolicy string
-		wantErr     bool
+		wantErr     string
 	}{
 		"InvalidPolicyFailsToCreateInterceptor": {
 			authzPolicy: `{}`,
-			wantErr:     true,
+			wantErr:     `"name" is not present`,
 		},
 		"ValidPolicyCreatesInterceptor": {
 			authzPolicy: `{		
@@ -43,13 +67,50 @@ func TestNewStatic(t *testing.T) {
 					}
 				]
 			}`,
-			wantErr: false,
 		},
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			if _, err := authz.NewStatic(test.authzPolicy); (err != nil) != test.wantErr {
+			if _, err := authz.NewStatic(test.authzPolicy); (err != nil) && (err.Error() != test.wantErr) {
 				t.Fatalf("NewStatic(%v) returned err: %v, want err: %v", test.authzPolicy, err, test.wantErr)
+			}
+		})
+	}
+}
+
+func TestNewFileWatcher(t *testing.T) {
+	tests := map[string]struct {
+		authzPolicy     string
+		refreshDuration time.Duration
+		wantErr         string
+	}{
+		"InvalidRefreshDurationFailsToCreateInterceptor": {
+			refreshDuration: time.Duration(0),
+			wantErr:         "requires refresh interval(0s) greater than 0s",
+		},
+		"InvalidPolicyFailsToCreateInterceptor": {
+			authzPolicy:     `{}`,
+			refreshDuration: time.Duration(1),
+			wantErr:         `"name" is not present`,
+		},
+		"ValidPolicyCreatesInterceptor": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules":
+				[
+					{
+						"name": "allow_all"
+					}
+				]
+			}`,
+			refreshDuration: time.Duration(1),
+		},
+	}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			dir := createTmpPolicyFile(t, name+"*", []byte(test.authzPolicy))
+			if _, err := authz.NewFileWatcher(path.Join(dir, "policy.json"), test.refreshDuration); (err != nil) && (err.Error() != test.wantErr) {
+				t.Fatalf("NewFileWatcher(%v) returned err: %v, want err: %v", test.authzPolicy, err, test.wantErr)
 			}
 		})
 	}

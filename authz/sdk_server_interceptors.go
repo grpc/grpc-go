@@ -17,13 +17,22 @@
 package authz
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"io/ioutil"
+	"sync/atomic"
+	"time"
+	"unsafe"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/xds/rbac"
 	"google.golang.org/grpc/status"
 )
+
+var logger = grpclog.Component("sdk")
 
 // StaticInterceptor contains engines used to make authorization decisions. It
 // either contains two engines deny engine followed by an allow engine or only
@@ -72,4 +81,87 @@ func (i *StaticInterceptor) StreamInterceptor(srv interface{}, ss grpc.ServerStr
 		return err
 	}
 	return handler(srv, ss)
+}
+
+// FileWatcherInterceptor contains details used to make authorization decisions
+// by watching a file path that contains authorization policy in JSON format.
+type FileWatcherInterceptor struct {
+	internalInterceptor unsafe.Pointer // *StaticInterceptor
+	policyFile          string
+	policyContents      []byte
+	refreshDuration     time.Duration
+	cancel              context.CancelFunc
+}
+
+// NewFileWatcher returns a new FileWatcherInterceptor from a policy file
+// that contains JSON string of authorization policy and a refresh duration to
+// specify the amount of time between policy refreshes.
+func NewFileWatcher(file string, duration time.Duration) (*FileWatcherInterceptor, error) {
+	if file == "" {
+		return nil, fmt.Errorf("authorization policy file path is empty")
+	}
+	if duration <= time.Duration(0) {
+		return nil, fmt.Errorf("requires refresh interval(%v) greater than 0s", duration)
+	}
+	i := &FileWatcherInterceptor{policyFile: file, refreshDuration: duration}
+	i.updateInternalInterceptor()
+	ctx, cancel := context.WithCancel(context.Background())
+	i.cancel = cancel
+	// Create a background go routine for policy refresh.
+	go i.run(ctx)
+	return i, nil
+}
+
+func (i *FileWatcherInterceptor) run(ctx context.Context) {
+	ticker := time.NewTicker(i.refreshDuration)
+	for {
+		i.updateInternalInterceptor()
+		select {
+		case <-ctx.Done():
+			ticker.Stop()
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// updateInternalInterceptor checks if the policy file that is watching has changed,
+// and if so, updates the internalInterceptor with the policy. Unlike the
+// constructor, if there is an error in reading the file or parsing the policy, the
+// previous internalInterceptors will not be replaced.
+func (i *FileWatcherInterceptor) updateInternalInterceptor() {
+	policyContents, err := ioutil.ReadFile(i.policyFile)
+	if err != nil {
+		logger.Warningf("policyFile(%s) read failed: %v", i.policyFile, err)
+		return
+	}
+	if bytes.Equal(i.policyContents, policyContents) {
+		return
+	}
+	interceptor, err := NewStatic(string(policyContents))
+	if err != nil {
+		logger.Warningf("failed to update authorization engines: %v", err)
+		return
+	}
+	atomic.StorePointer(&i.internalInterceptor, unsafe.Pointer(interceptor))
+	i.policyContents = policyContents
+}
+
+// Close cleans up resources allocated by the interceptors.
+func (i *FileWatcherInterceptor) Close() {
+	i.cancel()
+}
+
+// UnaryInterceptor intercepts incoming Unary RPC requests.
+// Only authorized requests are allowed to pass. Otherwise, an unauthorized
+// error is returned to the client.
+func (i *FileWatcherInterceptor) UnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	return ((*StaticInterceptor)(atomic.LoadPointer(&i.internalInterceptor))).UnaryInterceptor(ctx, req, info, handler)
+}
+
+// StreamInterceptor intercepts incoming Stream RPC requests.
+// Only authorized requests are allowed to pass. Otherwise, an unauthorized
+// error is returned to the client.
+func (i *FileWatcherInterceptor) StreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	return ((*StaticInterceptor)(atomic.LoadPointer(&i.internalInterceptor))).StreamInterceptor(srv, ss, info, handler)
 }
