@@ -36,13 +36,18 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
+	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	rpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/rbac/v3"
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
+	anypb "github.com/golang/protobuf/ptypes/any"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -592,5 +597,233 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 	}
 	if _, err = dStream.Recv(); status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "the incoming RPC did not match a configured Route") {
 		t.Fatalf("streaming RPC should have been denied")
+	}
+}
+
+// serverListenerWithRBACHTTPFilters returns an xds Listener resource with HTTP Filters defined in the HCM, and a route
+// configuration that always matches to a route and a VH.
+func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RBAC) *v3listenerpb.Listener {
+	// Rather than declare typed config inline, take a HCM proto and append the
+	// RBAC Filters to it.
+	hcm := &v3httppb.HttpConnectionManager{
+		RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+			RouteConfig: &v3routepb.RouteConfiguration{
+				Name: "routeName",
+				VirtualHosts: []*v3routepb.VirtualHost{{
+					Domains: []string{"*"},
+					Routes: []*v3routepb.Route{{
+						Match: &v3routepb.RouteMatch{
+							PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+						},
+						Action: &v3routepb.Route_NonForwardingAction{},
+					}},
+					// This tests override parsing + building when RBAC Filter
+					// passed both normal and override config.
+					TypedPerFilterConfig: map[string]*anypb.Any{
+						"rbac": testutils.MarshalAny(&rpb.RBACPerRoute{Rbac: rbacCfg}),
+					},
+				}}},
+		},
+	}
+	hcm.HttpFilters = nil
+	hcm.HttpFilters = append(hcm.HttpFilters, e2e.HTTPFilter("rbac", rbacCfg))
+	hcm.HttpFilters = append(hcm.HttpFilters, e2e.RouterHTTPFilter)
+
+	return &v3listenerpb.Listener{
+		Name: fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
+		Address: &v3corepb.Address{
+			Address: &v3corepb.Address_SocketAddress{
+				SocketAddress: &v3corepb.SocketAddress{
+					Address: host,
+					PortSpecifier: &v3corepb.SocketAddress_PortValue{
+						PortValue: port,
+					},
+				},
+			},
+		},
+		FilterChains: []*v3listenerpb.FilterChain{
+			{
+				Name: "v4-wildcard",
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "0.0.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "0.0.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(hcm),
+						},
+					},
+				},
+			},
+			{
+				Name: "v6-wildcard",
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "::",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "::",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(hcm),
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// TestRBACHTTPFilter tests the xds configured RBAC HTTP Filter. It sets up the
+// full end to end flow, and makes sure certain RPC's are successful and proceed
+// as normal and certain RPC's are denied by the RBAC HTTP Filter which gets
+// called by hooked xds interceptors.
+func (s) TestRBACHTTPFilter(t *testing.T) {
+	tests := []struct {
+		name                string
+		rbacCfg             *rpb.RBAC
+		wantStatusEmptyCall codes.Code
+		wantStatusUnaryCall codes.Code
+	}{
+		// This test tests an RBAC HTTP Filter which is configured to allow any RPC.
+		// Any RPC passing through this RBAC HTTP Filter should proceed as normal.
+		{
+			name: "allow-anything",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"anyone": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.OK,
+			wantStatusUnaryCall: codes.OK,
+		},
+		// This test tests an RBAC HTTP Filter which is configured to allow only
+		// RPC's with certain paths ("UnaryCall"). Only unary calls passing
+		// through this RBAC HTTP Filter should proceed as normal, and any
+		// others should be denied.
+		{
+			name: "allow-certain-path",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"certain-path": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_UrlPath{UrlPath: &v3matcherpb.PathMatcher{Rule: &v3matcherpb.PathMatcher_Path{Path: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "/grpc.testing.TestService/UnaryCall"}}}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.PermissionDenied,
+			wantStatusUnaryCall: codes.OK,
+		},
+		// This test that a RBAC Config with nil rules means that every RPC is
+		// allowed. This maps to the line "If absent, no enforcing RBAC policy
+		// will be applied" from the RBAC Proto documentation for the Rules
+		// field.
+		{
+			name: "absent-rules",
+			rbacCfg: &rpb.RBAC{
+				Rules: nil,
+			},
+			wantStatusEmptyCall: codes.OK,
+			wantStatusUnaryCall: codes.OK,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			func() {
+				managementServer, nodeID, bootstrapContents, resolver, cleanup1 := setupManagementServer(t)
+				defer cleanup1()
+
+				lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
+				defer cleanup2()
+
+				host, port, err := hostPortFromListener(lis)
+				if err != nil {
+					t.Fatalf("failed to retrieve host and port of server: %v", err)
+				}
+				const serviceName = "my-service-fallback"
+				resources := e2e.DefaultClientResources(e2e.ResourceParams{
+					DialTarget: serviceName,
+					NodeID:     nodeID,
+					Host:       host,
+					Port:       port,
+					SecLevel:   e2e.SecurityLevelNone,
+				})
+				inboundLis := serverListenerWithRBACHTTPFilters(host, port, test.rbacCfg)
+				resources.Listeners = append(resources.Listeners, inboundLis)
+
+				ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+				defer cancel()
+				// Setup the management server with client and server-side resources.
+				if err := managementServer.Update(ctx, resources); err != nil {
+					t.Fatal(err)
+				}
+
+				cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithInsecure(), grpc.WithResolvers(resolver))
+				if err != nil {
+					t.Fatalf("failed to dial local test server: %v", err)
+				}
+				defer cc.Close()
+
+				client := testpb.NewTestServiceClient(cc)
+
+				if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); status.Code(err) != test.wantStatusEmptyCall {
+					t.Fatalf("EmptyCall() returned err with status: %v, wantStatusEmptyCall: %v", status.Code(err), test.wantStatusEmptyCall)
+				}
+
+				if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != test.wantStatusUnaryCall {
+					t.Fatalf("UnaryCall() returned err with status: %v, wantStatusUnaryCall: %v", err, test.wantStatusUnaryCall)
+				}
+			}()
+		})
 	}
 }
