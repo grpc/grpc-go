@@ -44,7 +44,7 @@ func (s State) String() string {
 		return "SHUTDOWN"
 	default:
 		logger.Errorf("unknown connectivity state: %d", s)
-		return "Invalid-State"
+		return "INVALID_STATE"
 	}
 }
 
@@ -81,11 +81,14 @@ const (
 
 func (s ServingMode) String() string {
 	switch s {
-	case ServingModeNotServing:
-		return "not-serving"
+	case ServingModeStarting:
+		return "STARTING"
 	case ServingModeServing:
-		return "serving"
+		return "SERVING"
+	case ServingModeNotServing:
+		return "NOT_SERVING"
 	default:
-		return "starting"
+		logger.Errorf("unknown serving mode: %d", s)
+		return "INVALID_MODE"
 	}
 }
