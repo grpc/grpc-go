@@ -642,7 +642,7 @@ func (s) TestSecurityConfigFromCommonTLSContextUsingNewFields_ErrorCases(t *test
 		t.Run(test.name, func(t *testing.T) {
 			_, err := securityConfigFromCommonTLSContextUsingNewFields(test.common, test.server)
 			if err == nil {
-				t.Fatal("securityConfigFromCommonTLSContextUsingNewFields() succeded when expected to fail")
+				t.Fatal("securityConfigFromCommonTLSContextUsingNewFields() succeeded when expected to fail")
 			}
 			if !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("securityConfigFromCommonTLSContextUsingNewFields() returned err: %v, wantErr: %v", err, test.wantErr)

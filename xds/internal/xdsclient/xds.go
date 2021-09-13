@@ -993,7 +993,7 @@ func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsC
 		return nil, fmt.Errorf("unsupported verify_certificate_spki field in CommonTlsContext message: %+v", common)
 	case len(validationCtx.GetVerifyCertificateHash()) != 0:
 		return nil, fmt.Errorf("unsupported verify_certificate_hash field in CommonTlsContext message: %+v", common)
-	case validationCtx.GetRequireSignedCertificateTimestamp().GetValue() == true:
+	case validationCtx.GetRequireSignedCertificateTimestamp().GetValue():
 		return nil, fmt.Errorf("unsupported require_sugned_ceritificate_timestamp field in CommonTlsContext message: %+v", common)
 	case validationCtx.GetCrl() != nil:
 		return nil, fmt.Errorf("unsupported crl field in CommonTlsContext message: %+v", common)

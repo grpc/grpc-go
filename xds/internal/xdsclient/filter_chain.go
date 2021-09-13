@@ -519,7 +519,7 @@ func (fci *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain
 	if err := proto.Unmarshal(any.GetValue(), downstreamCtx); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
 	}
-	if downstreamCtx.GetRequireSni().GetValue() == true {
+	if downstreamCtx.GetRequireSni().GetValue() {
 		return nil, fmt.Errorf("require_sni field set to true in DownstreamTlsContext message: %v", downstreamCtx)
 	}
 	if downstreamCtx.GetOcspStaplePolicy() != v3tlspb.DownstreamTlsContext_LENIENT_STAPLING {
