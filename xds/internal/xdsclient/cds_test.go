@@ -20,6 +20,7 @@ package xdsclient
 
 import (
 	"regexp"
+	"strings"
 	"testing"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -480,6 +481,176 @@ func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 	}
 }
 
+func (s) TestSecurityConfigFromCommonTLSContextUsingNewFields_ErrorCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		common  *v3tlspb.CommonTlsContext
+		server  bool
+		wantErr string
+	}{
+		{
+			name: "unsupported-tls_certificates-field-for-identity-certs",
+			common: &v3tlspb.CommonTlsContext{
+				TlsCertificates: []*v3tlspb.TlsCertificate{
+					{CertificateChain: &v3corepb.DataSource{}},
+				},
+			},
+			wantErr: "unsupported field tls_certificates is set in CommonTlsContext message",
+		},
+		{
+			name: "unsupported-tls_certificates_sds_secret_configs-field-for-identity-certs",
+			common: &v3tlspb.CommonTlsContext{
+				TlsCertificateSdsSecretConfigs: []*v3tlspb.SdsSecretConfig{
+					{Name: "sds-secrets-config"},
+				},
+			},
+			wantErr: "unsupported field tls_certificate_sds_secret_configs is set in CommonTlsContext message",
+		},
+		{
+			name: "unsupported-sds-validation-context",
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
+					ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
+						Name: "foo-sds-secret",
+					},
+				},
+			},
+			wantErr: "validation context contains unexpected type",
+		},
+		{
+			name: "missing-ca_certificate_provider_instance-in-validation-context",
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{},
+				},
+			},
+			wantErr: "expected field ca_certificate_provider_instance is missing in CommonTlsContext message",
+		},
+		{
+			name: "unsupported-field-verify_certificate_spki-in-validation-context",
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{
+						CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+							InstanceName:    "rootPluginInstance",
+							CertificateName: "rootCertName",
+						},
+						VerifyCertificateSpki: []string{"spki"},
+					},
+				},
+			},
+			wantErr: "unsupported verify_certificate_spki field in CommonTlsContext message",
+		},
+		{
+			name: "unsupported-field-verify_certificate_hash-in-validation-context",
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{
+						CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+							InstanceName:    "rootPluginInstance",
+							CertificateName: "rootCertName",
+						},
+						VerifyCertificateHash: []string{"hash"},
+					},
+				},
+			},
+			wantErr: "unsupported verify_certificate_hash field in CommonTlsContext message",
+		},
+		{
+			name: "unsupported-field-require_signed_certificate_timestamp-in-validation-context",
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{
+						CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+							InstanceName:    "rootPluginInstance",
+							CertificateName: "rootCertName",
+						},
+						RequireSignedCertificateTimestamp: &wrapperspb.BoolValue{Value: true},
+					},
+				},
+			},
+			wantErr: "unsupported require_sugned_ceritificate_timestamp field in CommonTlsContext message",
+		},
+		{
+			name: "unsupported-field-crl-in-validation-context",
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{
+						CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+							InstanceName:    "rootPluginInstance",
+							CertificateName: "rootCertName",
+						},
+						Crl: &v3corepb.DataSource{},
+					},
+				},
+			},
+			wantErr: "unsupported crl field in CommonTlsContext message",
+		},
+		{
+			name: "unsupported-field-custom_validator_config-in-validation-context",
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{
+						CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+							InstanceName:    "rootPluginInstance",
+							CertificateName: "rootCertName",
+						},
+						CustomValidatorConfig: &v3corepb.TypedExtensionConfig{},
+					},
+				},
+			},
+			wantErr: "unsupported custom_validator_config field in CommonTlsContext message",
+		},
+		{
+			name: "invalid-match_subject_alt_names-field-in-validation-context",
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{
+						CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+							InstanceName:    "rootPluginInstance",
+							CertificateName: "rootCertName",
+						},
+						MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+							{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: ""}},
+						},
+					},
+				},
+			},
+			wantErr: "empty prefix is not allowed in StringMatcher",
+		},
+		{
+			name: "unsupported-field-matching-subject-alt-names-in-validation-context-of-server",
+			common: &v3tlspb.CommonTlsContext{
+				ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContext{
+					ValidationContext: &v3tlspb.CertificateValidationContext{
+						CaCertificateProviderInstance: &v3tlspb.CertificateProviderPluginInstance{
+							InstanceName:    "rootPluginInstance",
+							CertificateName: "rootCertName",
+						},
+						MatchSubjectAltNames: []*v3matcherpb.StringMatcher{
+							{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "sanPrefix"}},
+						},
+					},
+				},
+			},
+			server:  true,
+			wantErr: "match_subject_alt_names field in validation context is not on the server",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := securityConfigFromCommonTLSContextUsingNewFields(test.common, test.server)
+			if err == nil {
+				t.Fatal("securityConfigFromCommonTLSContextUsingNewFields() succeded when expected to fail")
+			}
+			if !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("securityConfigFromCommonTLSContextUsingNewFields() returned err: %v, wantErr: %v", err, test.wantErr)
+			}
+		})
+	}
+}
+
 func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 	const (
 		identityPluginInstance = "identityPluginInstance"
@@ -503,6 +674,25 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		wantUpdate ClusterUpdate
 		wantErr    bool
 	}{
+		{
+			name: "transport-socket-matches",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocketMatches: []*v3clusterpb.Cluster_TransportSocketMatch{
+					{Name: "transport-socket-match-1"},
+				},
+			},
+			wantErr: true,
+		},
 		{
 			name: "transport-socket-unsupported-name",
 			cluster: &v3clusterpb.Cluster{
@@ -569,6 +759,56 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 							TypeUrl: version.V3UpstreamTLSContextURL,
 							Value:   []byte{1, 2, 3, 4},
 						},
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "transport-socket-unsupported-tls-params-field",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								TlsParams: &v3tlspb.TlsParameters{},
+							},
+						}),
+					},
+				},
+			},
+			wantErr: true,
+		},
+		{
+			name: "transport-socket-unsupported-custom-handshaker-field",
+			cluster: &v3clusterpb.Cluster{
+				ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+				EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+					EdsConfig: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+					ServiceName: serviceName,
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+				TransportSocket: &v3corepb.TransportSocket{
+					ConfigType: &v3corepb.TransportSocket_TypedConfig{
+						TypedConfig: testutils.MarshalAny(&v3tlspb.UpstreamTlsContext{
+							CommonTlsContext: &v3tlspb.CommonTlsContext{
+								CustomHandshaker: &v3corepb.TypedExtensionConfig{},
+							},
+						}),
 					},
 				},
 			},

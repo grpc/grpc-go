@@ -794,6 +794,9 @@ func dnsHostNameFromCluster(cluster *v3clusterpb.Cluster) (string, error) {
 // securityConfigFromCluster extracts the relevant security configuration from
 // the received Cluster resource.
 func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, error) {
+	if tsm := cluster.GetTransportSocketMatches(); len(tsm) != 0 {
+		return nil, fmt.Errorf("unsupport transport_socket_matches field is non-empty: %+v", tsm)
+	}
 	// The Cluster resource contains a `transport_socket` field, which contains
 	// a oneof `typed_config` field of type `protobuf.Any`. The any proto
 	// contains a marshaled representation of an `UpstreamTlsContext` message.
@@ -812,6 +815,10 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 	if err := proto.Unmarshal(any.GetValue(), upstreamCtx); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal UpstreamTlsContext in CDS response: %v", err)
 	}
+	// The following fields from `UpstreamTlsContext` are ignored:
+	// - sni
+	// - allow_renegotiation
+	// - max_session_keys
 	if upstreamCtx.GetCommonTlsContext() == nil {
 		return nil, errors.New("UpstreamTlsContext in CDS response does not contain a CommonTlsContext")
 	}
@@ -820,16 +827,22 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 }
 
 // common is expected to be not nil.
+// The `alpn_protocols` field is ignored.
 func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext, server bool) (*SecurityConfig, error) {
-	sc, err := securityConfigFromCommonTLSContextUsingNewFields(common)
-	if err != nil {
-		return nil, err
+	if common.GetTlsParams() != nil {
+		return nil, fmt.Errorf("unsupported tls_params field in CommonTlsContext message: %+v", common)
 	}
+	if common.GetCustomHandshaker() != nil {
+		return nil, fmt.Errorf("unsupported custom_handshaker field in CommonTlsContext message: %+v", common)
+	}
+
+	// For now, if we can't get a valid security config from the new fields, we
+	// fallback to the old deprecated fields.
+	// TODO: Drop support for deprecated fields. NACK if err != nil here.
+	sc, _ := securityConfigFromCommonTLSContextUsingNewFields(common, server)
 	if sc == nil || sc.Equal(&SecurityConfig{}) {
-		// If we can't get a valid security config from the new fields, we
-		// fallback to the old deprecated fields.
-		// TODO(easwars): Remove this once TD starts populating the new fields.
-		sc, err = securityConfigFromCommonTLSContextWithDeprecatedFields(common)
+		var err error
+		sc, err = securityConfigFromCommonTLSContextWithDeprecatedFields(common, server)
 		if err != nil {
 			return nil, err
 		}
@@ -850,7 +863,7 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext, server
 	return sc, nil
 }
 
-func securityConfigFromCommonTLSContextWithDeprecatedFields(common *v3tlspb.CommonTlsContext) (*SecurityConfig, error) {
+func securityConfigFromCommonTLSContextWithDeprecatedFields(common *v3tlspb.CommonTlsContext, server bool) (*SecurityConfig, error) {
 	// The `CommonTlsContext` contains a
 	// `tls_certificate_certificate_provider_instance` field of type
 	// `CertificateProviderInstance`, which contains the provider instance name
@@ -883,6 +896,9 @@ func securityConfigFromCommonTLSContextWithDeprecatedFields(common *v3tlspb.Comm
 				matchers = append(matchers, matcher)
 			}
 		}
+		if server && len(matchers) != 0 {
+			return nil, fmt.Errorf("match_subject_alt_names field in validation context is not on the server: %v", common)
+		}
 		sc.SubjectAltNameMatchers = matchers
 		if pi := combined.GetValidationContextCertificateProviderInstance(); pi != nil {
 			sc.RootInstanceName = pi.GetInstanceName()
@@ -909,15 +925,20 @@ func securityConfigFromCommonTLSContextWithDeprecatedFields(common *v3tlspb.Comm
 //
 // This helper function attempts to fetch security configuration from the
 // `CertificateProviderPluginInstance` message, given a CommonTlsContext.
-func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsContext) (*SecurityConfig, error) {
+func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsContext, server bool) (*SecurityConfig, error) {
 	// The `tls_certificate_provider_instance` field of type
 	// `CertificateProviderPluginInstance` is used to fetch the identity
 	// certificate provider.
 	sc := &SecurityConfig{}
-	if identity := common.GetTlsCertificateProviderInstance(); identity != nil {
-		sc.IdentityInstanceName = identity.GetInstanceName()
-		sc.IdentityCertName = identity.GetCertificateName()
+	identity := common.GetTlsCertificateProviderInstance()
+	if identity == nil && len(common.GetTlsCertificates()) != 0 {
+		return nil, fmt.Errorf("expected field tls_certificate_provider_instance is not set, while unsupported field tls_certificates is set in CommonTlsContext message: %+v", common)
 	}
+	if identity == nil && common.GetTlsCertificateSdsSecretConfigs() != nil {
+		return nil, fmt.Errorf("expected field tls_certificate_provider_instance is not set, while unsupported field tls_certificate_sds_secret_configs is set in CommonTlsContext message: %+v", common)
+	}
+	sc.IdentityInstanceName = identity.GetInstanceName()
+	sc.IdentityCertName = identity.GetCertificateName()
 
 	// The `CommonTlsContext` contains a oneof field `validation_context_type`,
 	// which contains the `CertificateValidationContext` message in one of the
@@ -943,7 +964,7 @@ func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsC
 	//  - certificate_name
 	//    -  this is an opaque name passed to the certificate provider
 	var validationCtx *v3tlspb.CertificateValidationContext
-	switch common.GetValidationContextType().(type) {
+	switch typ := common.GetValidationContextType().(type) {
 	case *v3tlspb.CommonTlsContext_ValidationContext:
 		validationCtx = common.GetValidationContext()
 	case *v3tlspb.CommonTlsContext_CombinedValidationContext:
@@ -951,11 +972,33 @@ func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsC
 	case nil:
 		// It is valid for the validation context to be nil on the server side.
 		return sc, nil
+	default:
+		return nil, fmt.Errorf("validation context contains unexpected type: %T", typ)
 	}
-	if validationCtx == nil || validationCtx.GetCaCertificateProviderInstance() == nil {
-		// Bail out if the `CertificateProviderPluginInstance` message is not
-		// found through one of the way detailed above.
-		return nil, nil
+	// If we get here, it means that the `CertificateValidationContext` message
+	// was found through one of the supported ways. It is an error if the
+	// validation context is specified, but it does not contain the
+	// ca_certificate_provider_instance field which contains information about
+	// the certificate provider to be used for the root certificates.
+	if validationCtx.GetCaCertificateProviderInstance() == nil {
+		return nil, fmt.Errorf("expected field ca_certificate_provider_instance is missing in CommonTlsContext message: %+v", common)
+	}
+	// The following fields are ignored:
+	// - trusted_ca
+	// - watched_directory
+	// - allow_expired_certificate
+	// - trust_chain_verification
+	switch {
+	case len(validationCtx.GetVerifyCertificateSpki()) != 0:
+		return nil, fmt.Errorf("unsupported verify_certificate_spki field in CommonTlsContext message: %+v", common)
+	case len(validationCtx.GetVerifyCertificateHash()) != 0:
+		return nil, fmt.Errorf("unsupported verify_certificate_hash field in CommonTlsContext message: %+v", common)
+	case validationCtx.GetRequireSignedCertificateTimestamp().GetValue() == true:
+		return nil, fmt.Errorf("unsupported require_sugned_ceritificate_timestamp field in CommonTlsContext message: %+v", common)
+	case validationCtx.GetCrl() != nil:
+		return nil, fmt.Errorf("unsupported crl field in CommonTlsContext message: %+v", common)
+	case validationCtx.GetCustomValidatorConfig() != nil:
+		return nil, fmt.Errorf("unsupported custom_validator_config field in CommonTlsContext message: %+v", common)
 	}
 
 	if rootProvider := validationCtx.GetCaCertificateProviderInstance(); rootProvider != nil {
@@ -969,6 +1012,9 @@ func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsC
 			return nil, err
 		}
 		matchers = append(matchers, matcher)
+	}
+	if server && len(matchers) != 0 {
+		return nil, fmt.Errorf("match_subject_alt_names field in validation context is not on the server: %v", common)
 	}
 	sc.SubjectAltNameMatchers = matchers
 	return sc, nil

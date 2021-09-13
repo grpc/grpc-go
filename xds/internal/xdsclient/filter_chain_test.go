@@ -373,7 +373,70 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 			wantErr: "DownstreamTlsContext in LDS response does not contain a CommonTlsContext",
 		},
 		{
+			desc: "require_sni-set-to-true-in-downstreamTlsContext",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+									RequireSni: &wrapperspb.BoolValue{Value: true},
+								}),
+							},
+						},
+						Filters: emptyValidNetworkFilters,
+					},
+				},
+			},
+			wantErr: "require_sni field set to true in DownstreamTlsContext message",
+		},
+		{
+			desc: "unsupported-ocsp_staple_policy-in-downstreamTlsContext",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+									OcspStaplePolicy: v3tlspb.DownstreamTlsContext_STRICT_STAPLING,
+								}),
+							},
+						},
+						Filters: emptyValidNetworkFilters,
+					},
+				},
+			},
+			wantErr: "ocsp_staple_policy field set to unsupported value in DownstreamTlsContext message",
+		},
+		{
 			desc: "unsupported validation context in transport socket",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						TransportSocket: &v3corepb.TransportSocket{
+							Name: "envoy.transport_sockets.tls",
+							ConfigType: &v3corepb.TransportSocket_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3tlspb.DownstreamTlsContext{
+									CommonTlsContext: &v3tlspb.CommonTlsContext{
+										ValidationContextType: &v3tlspb.CommonTlsContext_ValidationContextSdsSecretConfig{
+											ValidationContextSdsSecretConfig: &v3tlspb.SdsSecretConfig{
+												Name: "foo-sds-secret",
+											},
+										},
+									},
+								}),
+							},
+						},
+						Filters: emptyValidNetworkFilters,
+					},
+				},
+			},
+			wantErr: "validation context contains unexpected type",
+		},
+		{
+			desc: "unsupported match_subject_alt_names field in transport socket",
 			lis: &v3listenerpb.Listener{
 				FilterChains: []*v3listenerpb.FilterChain{
 					{
