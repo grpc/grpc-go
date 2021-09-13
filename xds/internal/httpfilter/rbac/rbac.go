@@ -44,8 +44,15 @@ type builder struct {
 }
 
 type config struct {
-	httpfilter.FilterConfig
 	config *rpb.RBAC
+}
+
+func (c config) Equal(x httpfilter.FilterConfig) bool {
+	other, ok := x.(config)
+	if !ok {
+		return false
+	}
+	return proto.Equal(c.config, other.config)
 }
 
 func (builder) TypeURLs() []string {

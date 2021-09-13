@@ -98,9 +98,13 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdateErrTuple, met
 				}
 				continue
 			}
-			// If the resource is valid, send the update.
-			for wi := range s {
-				wi.newUpdate(uErr.Update)
+			// If we get here, it means that the update is a valid one. Notify
+			// watchers only if this is a first time update or it is different
+			// from the one currently cached.
+			if cur, ok := c.ldsCache[name]; !ok || !cur.Equal(uErr.Update) {
+				for wi := range s {
+					wi.newUpdate(uErr.Update)
+				}
 			}
 			// Sync cache.
 			c.logger.Debugf("LDS resource with name %v, value %+v added to cache", name, pretty.ToJSON(uErr))

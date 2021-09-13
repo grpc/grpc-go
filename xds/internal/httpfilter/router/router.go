@@ -109,6 +109,11 @@ func (builder) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (ir
 
 // The gRPC router filter does not currently support any configuration.  Verify
 // type only.
-type config struct {
-	httpfilter.FilterConfig
+type config struct{}
+
+func (c config) Equal(x httpfilter.FilterConfig) bool {
+	if _, ok := x.(config); !ok {
+		return false
+	}
+	return true
 }

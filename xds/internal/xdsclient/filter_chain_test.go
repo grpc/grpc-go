@@ -33,8 +33,6 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -744,7 +742,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
-			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{}), cmpOpts) {
+			if !gotFC.Equal(test.wantFC) {
 				t.Fatalf("NewFilterChainManager() returned %+v, want: %+v", gotFC, test.wantFC)
 			}
 		})
@@ -1235,7 +1233,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
-			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{}), cmpOpts) {
+			if !gotFC.Equal(test.wantFC) {
 				t.Fatalf("NewFilterChainManager() returned %+v, want: %+v", gotFC, test.wantFC)
 			}
 		})
@@ -1459,7 +1457,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
-			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{}), cmpopts.EquateEmpty()) {
+			if !gotFC.Equal(test.wantFC) {
 				t.Fatalf("NewFilterChainManager() returned %+v, want: %+v", gotFC, test.wantFC)
 			}
 		})
@@ -1627,7 +1625,7 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
-			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{}), cmpopts.EquateEmpty()) {
+			if !gotFC.Equal(test.wantFC) {
 				t.Fatalf("NewFilterChainManager() returned %+v, want: %+v", gotFC, test.wantFC)
 			}
 		})
@@ -2123,7 +2121,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
-			if !cmp.Equal(gotFC, test.wantFC, cmp.AllowUnexported(FilterChainManager{}, destPrefixEntry{}, sourcePrefixes{}, sourcePrefixEntry{})) {
+			if !gotFC.Equal(test.wantFC) {
 				t.Fatalf("NewFilterChainManager() returned %+v, want: %+v", gotFC, test.wantFC)
 			}
 		})
@@ -2507,7 +2505,7 @@ func TestLookup_Successes(t *testing.T) {
 			if err != nil {
 				t.Fatalf("FilterChainManager.Lookup(%v) failed: %v", test.params, err)
 			}
-			if !cmp.Equal(gotFC, test.wantFC, cmpopts.EquateEmpty()) {
+			if !gotFC.Equal(test.wantFC) {
 				t.Fatalf("FilterChainManager.Lookup(%v) = %v, want %v", test.params, gotFC, test.wantFC)
 			}
 		})
@@ -2515,10 +2513,17 @@ func TestLookup_Successes(t *testing.T) {
 }
 
 type filterCfg struct {
-	httpfilter.FilterConfig
 	// Level is what differentiates top level filters ("top level") vs. second
 	// level ("virtual host level"), and third level ("route level").
 	level string
+}
+
+func (fc filterCfg) Equal(x httpfilter.FilterConfig) bool {
+	other, ok := x.(filterCfg)
+	if !ok {
+		return false
+	}
+	return fc.level == other.level
 }
 
 type filterBuilder struct {
@@ -2713,98 +2718,575 @@ func TestHTTPFilterInstantiation(t *testing.T) {
 	}
 }
 
-// The Equal() methods defined below help with using cmp.Equal() on these types
-// which contain all unexported fields.
+func TestFilterChainManager_Equal_WithDifferentInputs(t *testing.T) {
+	tests := []struct {
+		name string
+		x    *v3listenerpb.Listener
+		y    *v3listenerpb.Listener
+	}{
+		{
+			name: "different dest prefixes",
+			x: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+						},
+						Filters: emptyValidNetworkFilters,
+					},
+				},
+			},
+			y: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("::", 0)},
+						},
+						Filters: emptyValidNetworkFilters,
+					},
+				},
+			},
+		},
+		{
+			name: "different source types",
+			x: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+							SourceType:   v3listenerpb.FilterChainMatch_EXTERNAL,
+						},
+						Filters: emptyValidNetworkFilters,
+					},
+				},
+			},
+			y: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+							SourceType:   v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+						},
+						Filters: emptyValidNetworkFilters,
+					},
+				},
+			},
+		},
+		{
+			name: "different source prefixes",
+			x: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:       []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+							SourceType:         v3listenerpb.FilterChainMatch_EXTERNAL,
+							SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 24)},
+						},
+						Filters: emptyValidNetworkFilters,
+					},
+				},
+			},
+			y: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:       []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+							SourceType:         v3listenerpb.FilterChainMatch_EXTERNAL,
+							SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.2.1", 24)},
+						},
+						Filters: emptyValidNetworkFilters,
+					},
+				},
+			},
+		},
+		{
+			name: "different source ports",
+			x: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:       []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+							SourceType:         v3listenerpb.FilterChainMatch_EXTERNAL,
+							SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 24)},
+							SourcePorts:        []uint32{1, 2, 3},
+						},
+						Filters: emptyValidNetworkFilters,
+					},
+				},
+			},
+			y: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:       []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+							SourceType:         v3listenerpb.FilterChainMatch_EXTERNAL,
+							SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 24)},
+							SourcePorts:        []uint32{4, 5, 6},
+						},
+						Filters: emptyValidNetworkFilters,
+					},
+				},
+			},
+		},
+		{
+			name: "different filters",
+			x: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:       []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+							SourceType:         v3listenerpb.FilterChainMatch_EXTERNAL,
+							SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 24)},
+							SourcePorts:        []uint32{1, 2, 3},
+						},
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm1",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+											Rds: &v3httppb.Rds{
+												ConfigSource: &v3corepb.ConfigSource{
+													ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+												},
+												RouteConfigName: "route-1",
+											},
+										},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+			y: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						FilterChainMatch: &v3listenerpb.FilterChainMatch{
+							PrefixRanges:       []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+							SourceType:         v3listenerpb.FilterChainMatch_EXTERNAL,
+							SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 24)},
+							SourcePorts:        []uint32{4, 5, 6},
+						},
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm2",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+											Rds: &v3httppb.Rds{
+												ConfigSource: &v3corepb.ConfigSource{
+													ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+												},
+												RouteConfigName: "route-2",
+											},
+										},
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "different default filter chains",
+			x: &v3listenerpb.Listener{
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					FilterChainMatch: &v3listenerpb.FilterChainMatch{
+						PrefixRanges:       []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+						SourceType:         v3listenerpb.FilterChainMatch_EXTERNAL,
+						SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 24)},
+						SourcePorts:        []uint32{1, 2, 3},
+					},
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm1",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+										Rds: &v3httppb.Rds{
+											ConfigSource: &v3corepb.ConfigSource{
+												ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+											},
+											RouteConfigName: "route-1",
+										},
+									},
+									HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
+								}),
+							},
+						},
+					},
+				},
+			},
+			y: &v3listenerpb.Listener{
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					FilterChainMatch: &v3listenerpb.FilterChainMatch{
+						PrefixRanges:       []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("0.0.0.0", 0)},
+						SourceType:         v3listenerpb.FilterChainMatch_EXTERNAL,
+						SourcePrefixRanges: []*v3corepb.CidrRange{cidrRangeFromAddressAndPrefixLen("192.168.1.1", 24)},
+						SourcePorts:        []uint32{1, 2, 3},
+					},
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm2",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+										Rds: &v3httppb.Rds{
+											ConfigSource: &v3corepb.ConfigSource{
+												ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+											},
+											RouteConfigName: "route-2",
+										},
+									},
+									HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
+								}),
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 
-func (fci *FilterChainManager) Equal(other *FilterChainManager) bool {
-	if (fci == nil) != (other == nil) {
-		return false
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fcm1, err := NewFilterChainManager(test.x)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fcm2, err := NewFilterChainManager(test.y)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if fcm1.Equal(fcm2) {
+				t.Fatalf("FilterChainManager.Equal(%+v, %+v) = true, want false", test.x, test.y)
+			}
+		})
 	}
-	if fci == nil {
-		return true
-	}
-	switch {
-	case !cmp.Equal(fci.dstPrefixMap, other.dstPrefixMap, cmpopts.EquateEmpty()):
-		return false
-	// TODO: Support comparing dstPrefixes slice?
-	case !cmp.Equal(fci.def, other.def, cmpopts.EquateEmpty(), protocmp.Transform()):
-		return false
-	case !cmp.Equal(fci.RouteConfigNames, other.RouteConfigNames, cmpopts.EquateEmpty()):
-		return false
-	}
-	return true
 }
 
-func (dpe *destPrefixEntry) Equal(other *destPrefixEntry) bool {
-	if (dpe == nil) != (other == nil) {
-		return false
+func TestFilterChain_Equal(t *testing.T) {
+	tests := []struct {
+		name string
+		x    *FilterChain
+		y    *FilterChain
+		want bool
+	}{
+		{
+			name: "nils",
+			want: true,
+		},
+		{
+			name: "diff in SecurityCfg field",
+			x:    &FilterChain{SecurityCfg: &SecurityConfig{RootInstanceName: "root1"}},
+			y:    &FilterChain{SecurityCfg: &SecurityConfig{RootInstanceName: "root2"}},
+			want: false,
+		},
+		{
+			name: "diff in HTTPFilters field - different number of elements",
+			x: &FilterChain{
+				SecurityCfg: &SecurityConfig{RootInstanceName: "root"},
+				HTTPFilters: []HTTPFilter{{Config: filterCfg{level: "config1"}}},
+			},
+			y:    &FilterChain{SecurityCfg: &SecurityConfig{RootInstanceName: "root"}},
+			want: false,
+		},
+		{
+			name: "diff in HTTPFilters field - different contents",
+			x: &FilterChain{
+				SecurityCfg: &SecurityConfig{RootInstanceName: "root"},
+				HTTPFilters: []HTTPFilter{{Config: filterCfg{level: "config1"}}},
+			},
+			y: &FilterChain{
+				SecurityCfg: &SecurityConfig{RootInstanceName: "root"},
+				HTTPFilters: []HTTPFilter{{Config: filterCfg{level: "config2"}}},
+			},
+			want: false,
+		},
+		{
+			name: "diff in RouteConfigName field",
+			x: &FilterChain{
+				SecurityCfg:     &SecurityConfig{RootInstanceName: "root"},
+				HTTPFilters:     []HTTPFilter{{Config: filterCfg{level: "config1"}}},
+				RouteConfigName: "route1",
+			},
+			y: &FilterChain{
+				SecurityCfg:     &SecurityConfig{RootInstanceName: "root"},
+				HTTPFilters:     []HTTPFilter{{Config: filterCfg{level: "config1"}}},
+				RouteConfigName: "route2",
+			},
+			want: false,
+		},
+		{
+			name: "diff in InlineRouteConfig field",
+			x: &FilterChain{
+				SecurityCfg:       &SecurityConfig{RootInstanceName: "root"},
+				HTTPFilters:       []HTTPFilter{{Config: filterCfg{level: "config1"}}},
+				RouteConfigName:   "route",
+				InlineRouteConfig: &RouteConfigUpdate{VirtualHosts: []*VirtualHost{{Domains: []string{"foo"}}}},
+			},
+			y: &FilterChain{
+				SecurityCfg:     &SecurityConfig{RootInstanceName: "root"},
+				HTTPFilters:     []HTTPFilter{{Config: filterCfg{level: "config1"}}},
+				RouteConfigName: "route",
+			},
+			want: false,
+		},
+		{
+			name: "equal",
+			x: &FilterChain{
+				SecurityCfg:       &SecurityConfig{RootInstanceName: "root"},
+				HTTPFilters:       []HTTPFilter{{Config: filterCfg{level: "config1"}}},
+				RouteConfigName:   "route",
+				InlineRouteConfig: &RouteConfigUpdate{VirtualHosts: []*VirtualHost{{Domains: []string{"foo"}}}},
+			},
+			y: &FilterChain{
+				SecurityCfg:       &SecurityConfig{RootInstanceName: "root"},
+				HTTPFilters:       []HTTPFilter{{Config: filterCfg{level: "config1"}}},
+				RouteConfigName:   "route",
+				InlineRouteConfig: &RouteConfigUpdate{VirtualHosts: []*VirtualHost{{Domains: []string{"foo"}}}},
+			},
+			want: true,
+		},
 	}
-	if dpe == nil {
-		return true
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.x.Equal(test.y); got != test.want {
+				t.Fatalf("FilterChain.Equal(%+v, %+v) = %v, want %v", test.x, test.y, got, test.want)
+			}
+		})
 	}
-	if !cmp.Equal(dpe.net, other.net) {
-		return false
-	}
-	for i, st := range dpe.srcTypeArr {
-		if !cmp.Equal(st, other.srcTypeArr[i], cmpopts.EquateEmpty()) {
-			return false
-		}
-	}
-	return true
 }
 
-func (sp *sourcePrefixes) Equal(other *sourcePrefixes) bool {
-	if (sp == nil) != (other == nil) {
-		return false
+func TestDestPrefixEntry_Equal(t *testing.T) {
+	tests := []struct {
+		name string
+		x    *destPrefixEntry
+		y    *destPrefixEntry
+		want bool
+	}{
+		{
+			name: "nils",
+			want: true,
+		},
+		{
+			name: "diff in net field",
+			x:    &destPrefixEntry{net: ipNetFromCIDR("192.168.100.1/24")},
+			y:    &destPrefixEntry{net: ipNetFromCIDR("192.168.200.1/24")},
+			want: false,
+		},
+		{
+			name: "diff in srcTypeArr field",
+			x: &destPrefixEntry{
+				net:           ipNetFromCIDR("192.168.100.1/24"),
+				rawBufferSeen: true,
+				srcTypeArr: [3]*sourcePrefixes{{
+					srcPrefixMap: map[string]*sourcePrefixEntry{"net1": {net: ipNetFromCIDR("10.1.0.1/24")}}},
+				},
+			},
+			y: &destPrefixEntry{
+				net:           ipNetFromCIDR("192.168.100.1/24"),
+				rawBufferSeen: true,
+				srcTypeArr: [3]*sourcePrefixes{{
+					srcPrefixMap: map[string]*sourcePrefixEntry{"net2": {net: ipNetFromCIDR("10.2.0.1/24")}}},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "equal",
+			x: &destPrefixEntry{
+				net:           ipNetFromCIDR("192.168.100.1/24"),
+				rawBufferSeen: true,
+				srcTypeArr:    [3]*sourcePrefixes{},
+			},
+			y: &destPrefixEntry{
+				net:           ipNetFromCIDR("192.168.100.1/24"),
+				rawBufferSeen: true,
+				srcTypeArr:    [3]*sourcePrefixes{},
+			},
+			want: true,
+		},
 	}
-	if sp == nil {
-		return true
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.x.Equal(test.y); got != test.want {
+				t.Fatalf("destPrefixEntry.Equal(%+v, %+v) = %v, want %v", test.x, test.y, got, test.want)
+			}
+		})
 	}
-	// TODO: Support comparing srcPrefixes slice?
-	return cmp.Equal(sp.srcPrefixMap, other.srcPrefixMap, cmpopts.EquateEmpty())
 }
 
-func (spe *sourcePrefixEntry) Equal(other *sourcePrefixEntry) bool {
-	if (spe == nil) != (other == nil) {
-		return false
+func TestSourcePrefixes_Equal(t *testing.T) {
+	tests := []struct {
+		name string
+		x    *sourcePrefixes
+		y    *sourcePrefixes
+		want bool
+	}{
+		{
+			name: "nils",
+			want: true,
+		},
+		{
+			name: "diff in srcPrefixes field - different number of elements",
+			x: &sourcePrefixes{
+				srcPrefixMap: map[string]*sourcePrefixEntry{
+					"net1": {net: ipNetFromCIDR("10.1.0.1/24")},
+					"net2": {net: ipNetFromCIDR("10.2.0.1/24")},
+				},
+			},
+			y: &sourcePrefixes{
+				srcPrefixMap: map[string]*sourcePrefixEntry{
+					"net": {net: ipNetFromCIDR("10.1.0.1/24")}},
+			},
+			want: false,
+		},
+		{
+			name: "diff in srcPrefixes field - different contents",
+			x: &sourcePrefixes{
+				srcPrefixMap: map[string]*sourcePrefixEntry{
+					"net1": {net: ipNetFromCIDR("10.1.0.1/24")},
+					"net2": {net: ipNetFromCIDR("10.2.0.1/24")},
+				},
+			},
+			y: &sourcePrefixes{
+				srcPrefixMap: map[string]*sourcePrefixEntry{
+					"net1": {net: ipNetFromCIDR("10.1.0.1/24")}},
+			},
+			want: false,
+		},
+		{
+			name: "equal",
+			x: &sourcePrefixes{
+				srcPrefixMap: map[string]*sourcePrefixEntry{
+					"net": {net: ipNetFromCIDR("10.1.0.1/24")}},
+			},
+			y: &sourcePrefixes{
+				srcPrefixMap: map[string]*sourcePrefixEntry{
+					"net": {net: ipNetFromCIDR("10.1.0.1/24")}},
+			},
+			want: true,
+		},
 	}
-	if spe == nil {
-		return true
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.x.Equal(test.y); got != test.want {
+				t.Fatalf("sourcePrefixes.Equal(%+v, %+v) = %v, want %v", test.x, test.y, got, test.want)
+			}
+		})
 	}
-	switch {
-	case !cmp.Equal(spe.net, other.net):
-		return false
-	case !cmp.Equal(spe.srcPortMap, other.srcPortMap, cmpopts.EquateEmpty(), protocmp.Transform()):
-		return false
+}
+
+func TestSourcePrefixEntry_Equal(t *testing.T) {
+	tests := []struct {
+		name string
+		x    *sourcePrefixEntry
+		y    *sourcePrefixEntry
+		want bool
+	}{
+		{
+			name: "nils",
+			want: true,
+		},
+		{
+			name: "diff in net field",
+			x: &sourcePrefixEntry{
+				net: ipNetFromCIDR("10.1.0.0/24"),
+			},
+			y: &sourcePrefixEntry{
+				net: ipNetFromCIDR("10.2.0.0/24"),
+			},
+			want: false,
+		},
+		{
+			name: "diff in srcPortMap field - different number of contents",
+			x: &sourcePrefixEntry{
+				net: ipNetFromCIDR("10.1.0.0/24"),
+				srcPortMap: map[int]*FilterChain{
+					80: {RouteConfigName: "route1"},
+				},
+			},
+			y: &sourcePrefixEntry{
+				net: ipNetFromCIDR("10.1.0.0/24"),
+			},
+			want: false,
+		},
+		{
+			name: "diff in srcPortMap field - different contents",
+			x: &sourcePrefixEntry{
+				net: ipNetFromCIDR("10.1.0.0/24"),
+				srcPortMap: map[int]*FilterChain{
+					80: {RouteConfigName: "route1"},
+				},
+			},
+			y: &sourcePrefixEntry{
+				net: ipNetFromCIDR("10.1.0.0/24"),
+				srcPortMap: map[int]*FilterChain{
+					80: {RouteConfigName: "route2"},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "equal",
+			x: &sourcePrefixEntry{
+				net: ipNetFromCIDR("10.1.0.0/24"),
+				srcPortMap: map[int]*FilterChain{
+					80: {RouteConfigName: "route1"},
+				},
+			},
+			y: &sourcePrefixEntry{
+				net: ipNetFromCIDR("10.1.0.0/24"),
+				srcPortMap: map[int]*FilterChain{
+					80: {RouteConfigName: "route1"},
+				},
+			},
+			want: true,
+		},
 	}
-	return true
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.x.Equal(test.y); got != test.want {
+				t.Fatalf("sourcePrefixEntry.Equal(%+v, %+v) = %v, want %v", test.x, test.y, got, test.want)
+			}
+		})
+	}
 }
 
 // The String() methods defined below help with debugging test failures as the
 // regular %v or %+v formatting directives do not expands pointer fields inside
 // structs, and these types have a lot of pointers pointing to other structs.
-func (fci *FilterChainManager) String() string {
-	if fci == nil {
+func (fcm *FilterChainManager) String() string {
+	if fcm == nil {
 		return ""
 	}
 
 	var sb strings.Builder
-	if fci.dstPrefixMap != nil {
+	if fcm.dstPrefixMap != nil {
 		sb.WriteString("destination_prefix_map: map {\n")
-		for k, v := range fci.dstPrefixMap {
+		for k, v := range fcm.dstPrefixMap {
 			sb.WriteString(fmt.Sprintf("%q: %v\n", k, v))
 		}
 		sb.WriteString("}\n")
 	}
-	if fci.dstPrefixes != nil {
+	if fcm.dstPrefixes != nil {
 		sb.WriteString("destination_prefixes: [")
-		for _, p := range fci.dstPrefixes {
+		for _, p := range fcm.dstPrefixes {
 			sb.WriteString(fmt.Sprintf("%v ", p))
 		}
 		sb.WriteString("]")
 	}
-	if fci.def != nil {
-		sb.WriteString(fmt.Sprintf("default_filter_chain: %+v ", fci.def))
+	if fcm.def != nil {
+		sb.WriteString(fmt.Sprintf("default_filter_chain: %+v ", fcm.def))
 	}
 	return sb.String()
 }

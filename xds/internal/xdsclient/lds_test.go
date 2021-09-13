@@ -1647,9 +1647,16 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 }
 
 type filterConfig struct {
-	httpfilter.FilterConfig
 	Cfg      proto.Message
 	Override proto.Message
+}
+
+func (fc filterConfig) Equal(x httpfilter.FilterConfig) bool {
+	other, ok := x.(filterConfig)
+	if !ok {
+		return false
+	}
+	return proto.Equal(fc.Cfg, other.Cfg) && proto.Equal(fc.Override, other.Override)
 }
 
 // httpFilter allows testing the http filter registry and parsing functionality.

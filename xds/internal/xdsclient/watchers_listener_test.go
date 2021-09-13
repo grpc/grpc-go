@@ -56,13 +56,14 @@ func (s) TestLDSWatch(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := ListenerUpdate{RouteConfigName: testRDSName}
+	wantUpdate := ListenerUpdate{RouteConfigName: testRDSName + "1"}
 	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	if err := verifyListenerUpdate(ctx, ldsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	// Another update, with an extra resource for a different resource name.
+	wantUpdate = ListenerUpdate{RouteConfigName: testRDSName + "2"}
 	client.NewListeners(map[string]ListenerUpdateErrTuple{
 		testLDSName:  {Update: wantUpdate},
 		"randomName": {},
@@ -123,7 +124,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	wantUpdate := ListenerUpdate{RouteConfigName: testRDSName}
+	wantUpdate := ListenerUpdate{RouteConfigName: testRDSName + "1"}
 	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	for i := 0; i < count; i++ {
 		if err := verifyListenerUpdate(ctx, ldsUpdateChs[i], wantUpdate, nil); err != nil {
@@ -133,6 +134,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 
 	// Cancel the last watch, and send update again.
 	cancelLastWatch()
+	wantUpdate = ListenerUpdate{RouteConfigName: testRDSName + "2"}
 	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	for i := 0; i < count-1; i++ {
 		if err := verifyListenerUpdate(ctx, ldsUpdateChs[i], wantUpdate, nil); err != nil {
@@ -332,24 +334,27 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
 	}
 
-	// Watcher 2 should get the same update again.
-	if err := verifyListenerUpdate(ctx, ldsUpdateCh2, wantUpdate2, nil); err != nil {
-		t.Fatal(err)
+	// Watcher 2 should not get the same update again, since redundant updates
+	// are suppressed.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if u, err := ldsUpdateCh2.Receive(sCtx); err != context.DeadlineExceeded {
+		t.Errorf("unexpected ListenerUpdate: %v, redundant update should have been suppressed", u)
 	}
 
-	// Send one more update without resource 1.
-	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName + "2": {Update: wantUpdate2}}, UpdateMetadata{})
+	// Send one more update without resource 2 as well.
+	client.NewListeners(map[string]ListenerUpdateErrTuple{}, UpdateMetadata{})
 
 	// Watcher 1 should not see an update.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := ldsUpdateCh1.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected ListenerUpdate: %v, want receiving from channel timeout", u)
 	}
 
-	// Watcher 2 should get the same update again.
-	if err := verifyListenerUpdate(ctx, ldsUpdateCh2, wantUpdate2, nil); err != nil {
-		t.Fatal(err)
+	// Watcher 2 should get an error.
+	if u, err := ldsUpdateCh2.Receive(ctx); err != nil || ErrType(u.(ListenerUpdateErrTuple).Err) != ErrorTypeResourceNotFound {
+		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
 	}
 }
 

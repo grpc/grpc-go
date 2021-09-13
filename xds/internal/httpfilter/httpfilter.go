@@ -28,7 +28,7 @@ import (
 // FilterConfig represents an opaque data structure holding configuration for a
 // filter.  Embed this interface to implement it.
 type FilterConfig interface {
-	isFilterConfig()
+	Equal(FilterConfig) bool
 }
 
 // Filter defines the parsing functionality of an HTTP filter.  A Filter may

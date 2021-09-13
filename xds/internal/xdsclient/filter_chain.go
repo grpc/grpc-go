@@ -28,6 +28,8 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
@@ -67,6 +69,33 @@ type FilterChain struct {
 	//
 	// Only one of RouteConfigName and InlineRouteConfig is set.
 	InlineRouteConfig *RouteConfigUpdate
+}
+
+// Equal returns true if f and other are equivalent.
+func (f *FilterChain) Equal(other *FilterChain) bool {
+	if f == other {
+		return true
+	}
+	if f == nil || other == nil {
+		return false
+	}
+	switch {
+	case !f.SecurityCfg.Equal(other.SecurityCfg):
+		return false
+	case f.RouteConfigName != other.RouteConfigName:
+		return false
+	case !f.InlineRouteConfig.Equal(other.InlineRouteConfig):
+		return false
+	}
+	if len(f.HTTPFilters) != len(other.HTTPFilters) {
+		return false
+	}
+	for i := 0; i < len(f.HTTPFilters); i++ {
+		if !f.HTTPFilters[i].Equal(other.HTTPFilters[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // VirtualHostWithInterceptors captures information present in a VirtualHost
@@ -201,6 +230,42 @@ type FilterChainManager struct {
 	RouteConfigNames map[string]bool
 }
 
+// Equal returns true if fcm and other are equivalent.
+func (fcm *FilterChainManager) Equal(other *FilterChainManager) bool {
+	if fcm == other {
+		return true
+	}
+	if fcm == nil || other == nil {
+		return false
+	}
+	if len(fcm.dstPrefixMap) != len(other.dstPrefixMap) {
+		return false
+	}
+	for prefix, dpe1 := range fcm.dstPrefixMap {
+		if dpe2, ok := other.dstPrefixMap[prefix]; !ok || !dpe1.Equal(dpe2) {
+			return false
+		}
+	}
+
+	// The `dstPrefixes` field is meant to be an optimization targeted for
+	// lookup(). It is constructed from the dstPrefixMap. So, ignoring them here
+	// for equality check is totally fine, and it saves us from specifying them
+	// in the `want` section of tests.
+
+	if !fcm.def.Equal(other.def) {
+		return false
+	}
+	if len(fcm.RouteConfigNames) != len(other.RouteConfigNames) {
+		return false
+	}
+	for route := range fcm.RouteConfigNames {
+		if !other.RouteConfigNames[route] {
+			return false
+		}
+	}
+	return true
+}
+
 // destPrefixEntry is the value type of the map indexed on destination prefixes.
 type destPrefixEntry struct {
 	// The actual destination prefix. Set to nil for unspecified prefixes.
@@ -219,8 +284,37 @@ type destPrefixEntry struct {
 	srcTypeArr sourceTypesArray
 }
 
+func (d *destPrefixEntry) Equal(other *destPrefixEntry) bool {
+	if d == other {
+		return true
+	}
+	if d == nil || other == nil {
+		return false
+	}
+	// We do not check the `rawBufferSeen` field here because it is only used
+	// for internal bookkeeping.
+	switch {
+	case !grpcutil.EqualAny(d.net, other.net, func(x, y interface{}) bool {
+		return x.(*net.IPNet).String() == y.(*net.IPNet).String()
+	}):
+		return false
+	case !d.srcTypeArr.Equal(other.srcTypeArr):
+		return false
+	}
+	return true
+}
+
 // An array for the fixed number of source types that we have.
 type sourceTypesArray [3]*sourcePrefixes
+
+func (s sourceTypesArray) Equal(other sourceTypesArray) bool {
+	for i, st := range s {
+		if !st.Equal(other[i]) {
+			return false
+		}
+	}
+	return true
+}
 
 // sourcePrefixes contains source prefix related information specified in the
 // match criteria. These are pointed to by the array of source types.
@@ -231,6 +325,30 @@ type sourcePrefixes struct {
 	srcPrefixes  []*sourcePrefixEntry
 }
 
+func (s *sourcePrefixes) Equal(other *sourcePrefixes) bool {
+	if s == other {
+		return true
+	}
+	if s == nil || other == nil {
+		return false
+	}
+	if len(s.srcPrefixMap) != len(other.srcPrefixMap) {
+		return false
+	}
+	for prefix, spe1 := range s.srcPrefixMap {
+		if spe2, ok := other.srcPrefixMap[prefix]; !ok || !spe1.Equal(spe2) {
+			return false
+		}
+	}
+
+	// The `srcPrefixes` field is meant to be an optimization targeted for
+	// lookup(). It is constructed from the srcPrefixMap. So, ignoring them here
+	// for equality check is totally fine, and it saves us from specifying them
+	// in the `want` section of tests.
+
+	return true
+}
+
 // sourcePrefixEntry contains match criteria per source prefix.
 type sourcePrefixEntry struct {
 	// The actual destination prefix. Set to nil for unspecified prefixes.
@@ -239,6 +357,29 @@ type sourcePrefixEntry struct {
 	// filter chain. Unspecified source port matches en up as a wildcard entry
 	// here with a key of 0.
 	srcPortMap map[int]*FilterChain
+}
+
+func (s *sourcePrefixEntry) Equal(other *sourcePrefixEntry) bool {
+	if s == other {
+		return true
+	}
+	if s == nil || other == nil {
+		return false
+	}
+	if !grpcutil.EqualAny(s.net, other.net, func(x, y interface{}) bool {
+		return x.(*net.IPNet).String() == y.(*net.IPNet).String()
+	}) {
+		return false
+	}
+	if len(s.srcPortMap) != len(other.srcPortMap) {
+		return false
+	}
+	for port, fc1 := range s.srcPortMap {
+		if fc2, ok := other.srcPortMap[port]; !ok || !fc1.Equal(fc2) {
+			return false
+		}
+	}
+	return true
 }
 
 // NewFilterChainManager parses the received Listener resource and builds a
@@ -296,10 +437,9 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 
 // addFilterChains parses the filter chains in fcs and adds the required
 // internal data structures corresponding to the match criteria.
-func (fci *FilterChainManager) addFilterChains(fcs []*v3listenerpb.FilterChain) error {
+func (fcm *FilterChainManager) addFilterChains(fcs []*v3listenerpb.FilterChain) error {
 	for _, fc := range fcs {
-		fcm := fc.GetFilterChainMatch()
-		if fcm.GetDestinationPort().GetValue() != 0 {
+		if match := fc.GetFilterChainMatch(); match.GetDestinationPort().GetValue() != 0 {
 			// Destination port is the first match criteria and we do not
 			// support filter chains which contains this match criteria.
 			logger.Warningf("Dropping filter chain %+v since it contains unsupported destination_port match field", fc)
@@ -307,7 +447,7 @@ func (fci *FilterChainManager) addFilterChains(fcs []*v3listenerpb.FilterChain) 
 		}
 
 		// Build the internal representation of the filter chain match fields.
-		if err := fci.addFilterChainsForDestPrefixes(fc); err != nil {
+		if err := fcm.addFilterChainsForDestPrefixes(fc); err != nil {
 			return err
 		}
 	}
@@ -315,7 +455,7 @@ func (fci *FilterChainManager) addFilterChains(fcs []*v3listenerpb.FilterChain) 
 	return nil
 }
 
-func (fci *FilterChainManager) addFilterChainsForDestPrefixes(fc *v3listenerpb.FilterChain) error {
+func (fcm *FilterChainManager) addFilterChainsForDestPrefixes(fc *v3listenerpb.FilterChain) error {
 	ranges := fc.GetFilterChainMatch().GetPrefixRanges()
 	dstPrefixes := make([]*net.IPNet, 0, len(ranges))
 	for _, pr := range ranges {
@@ -330,24 +470,24 @@ func (fci *FilterChainManager) addFilterChainsForDestPrefixes(fc *v3listenerpb.F
 	if len(dstPrefixes) == 0 {
 		// Use the unspecified entry when destination prefix is unspecified, and
 		// set the `net` field to nil.
-		if fci.dstPrefixMap[unspecifiedPrefixMapKey] == nil {
-			fci.dstPrefixMap[unspecifiedPrefixMapKey] = &destPrefixEntry{}
+		if fcm.dstPrefixMap[unspecifiedPrefixMapKey] == nil {
+			fcm.dstPrefixMap[unspecifiedPrefixMapKey] = &destPrefixEntry{}
 		}
-		return fci.addFilterChainsForServerNames(fci.dstPrefixMap[unspecifiedPrefixMapKey], fc)
+		return fcm.addFilterChainsForServerNames(fcm.dstPrefixMap[unspecifiedPrefixMapKey], fc)
 	}
 	for _, prefix := range dstPrefixes {
 		p := prefix.String()
-		if fci.dstPrefixMap[p] == nil {
-			fci.dstPrefixMap[p] = &destPrefixEntry{net: prefix}
+		if fcm.dstPrefixMap[p] == nil {
+			fcm.dstPrefixMap[p] = &destPrefixEntry{net: prefix}
 		}
-		if err := fci.addFilterChainsForServerNames(fci.dstPrefixMap[p], fc); err != nil {
+		if err := fcm.addFilterChainsForServerNames(fcm.dstPrefixMap[p], fc); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (fci *FilterChainManager) addFilterChainsForServerNames(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
+func (fcm *FilterChainManager) addFilterChainsForServerNames(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
 	// Filter chains specifying server names in their match criteria always fail
 	// a match at connection time. So, these filter chains can be dropped now.
 	if len(fc.GetFilterChainMatch().GetServerNames()) != 0 {
@@ -355,10 +495,10 @@ func (fci *FilterChainManager) addFilterChainsForServerNames(dstEntry *destPrefi
 		return nil
 	}
 
-	return fci.addFilterChainsForTransportProtocols(dstEntry, fc)
+	return fcm.addFilterChainsForTransportProtocols(dstEntry, fc)
 }
 
-func (fci *FilterChainManager) addFilterChainsForTransportProtocols(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
+func (fcm *FilterChainManager) addFilterChainsForTransportProtocols(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
 	tp := fc.GetFilterChainMatch().GetTransportProtocol()
 	switch {
 	case tp != "" && tp != "raw_buffer":
@@ -379,21 +519,21 @@ func (fci *FilterChainManager) addFilterChainsForTransportProtocols(dstEntry *de
 		dstEntry.rawBufferSeen = true
 		dstEntry.srcTypeArr = sourceTypesArray{}
 	}
-	return fci.addFilterChainsForApplicationProtocols(dstEntry, fc)
+	return fcm.addFilterChainsForApplicationProtocols(dstEntry, fc)
 }
 
-func (fci *FilterChainManager) addFilterChainsForApplicationProtocols(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
+func (fcm *FilterChainManager) addFilterChainsForApplicationProtocols(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
 	if len(fc.GetFilterChainMatch().GetApplicationProtocols()) != 0 {
 		logger.Warningf("Dropping filter chain %+v since it contains unsupported application_protocols match field", fc)
 		return nil
 	}
-	return fci.addFilterChainsForSourceType(dstEntry, fc)
+	return fcm.addFilterChainsForSourceType(dstEntry, fc)
 }
 
 // addFilterChainsForSourceType adds source types to the internal data
 // structures and delegates control to addFilterChainsForSourcePrefixes to
 // continue building the internal data structure.
-func (fci *FilterChainManager) addFilterChainsForSourceType(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
+func (fcm *FilterChainManager) addFilterChainsForSourceType(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
 	var srcType SourceType
 	switch st := fc.GetFilterChainMatch().GetSourceType(); st {
 	case v3listenerpb.FilterChainMatch_ANY:
@@ -410,13 +550,13 @@ func (fci *FilterChainManager) addFilterChainsForSourceType(dstEntry *destPrefix
 	if dstEntry.srcTypeArr[st] == nil {
 		dstEntry.srcTypeArr[st] = &sourcePrefixes{srcPrefixMap: make(map[string]*sourcePrefixEntry)}
 	}
-	return fci.addFilterChainsForSourcePrefixes(dstEntry.srcTypeArr[st].srcPrefixMap, fc)
+	return fcm.addFilterChainsForSourcePrefixes(dstEntry.srcTypeArr[st].srcPrefixMap, fc)
 }
 
 // addFilterChainsForSourcePrefixes adds source prefixes to the internal data
 // structures and delegates control to addFilterChainsForSourcePorts to continue
 // building the internal data structure.
-func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map[string]*sourcePrefixEntry, fc *v3listenerpb.FilterChain) error {
+func (fcm *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map[string]*sourcePrefixEntry, fc *v3listenerpb.FilterChain) error {
 	ranges := fc.GetFilterChainMatch().GetSourcePrefixRanges()
 	srcPrefixes := make([]*net.IPNet, 0, len(ranges))
 	for _, pr := range fc.GetFilterChainMatch().GetSourcePrefixRanges() {
@@ -436,7 +576,7 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 				srcPortMap: make(map[int]*FilterChain),
 			}
 		}
-		return fci.addFilterChainsForSourcePorts(srcPrefixMap[unspecifiedPrefixMapKey], fc)
+		return fcm.addFilterChainsForSourcePorts(srcPrefixMap[unspecifiedPrefixMapKey], fc)
 	}
 	for _, prefix := range srcPrefixes {
 		p := prefix.String()
@@ -446,7 +586,7 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 				srcPortMap: make(map[int]*FilterChain),
 			}
 		}
-		if err := fci.addFilterChainsForSourcePorts(srcPrefixMap[p], fc); err != nil {
+		if err := fcm.addFilterChainsForSourcePorts(srcPrefixMap[p], fc); err != nil {
 			return err
 		}
 	}
@@ -457,14 +597,14 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 // structures and completes the process of building the internal data structure.
 // It is here that we determine if there are multiple filter chains with
 // overlapping matching rules.
-func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePrefixEntry, fcProto *v3listenerpb.FilterChain) error {
+func (fcm *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePrefixEntry, fcProto *v3listenerpb.FilterChain) error {
 	ports := fcProto.GetFilterChainMatch().GetSourcePorts()
 	srcPorts := make([]int, 0, len(ports))
 	for _, port := range ports {
 		srcPorts = append(srcPorts, int(port))
 	}
 
-	fc, err := fci.filterChainFromProto(fcProto)
+	fc, err := fcm.filterChainFromProto(fcProto)
 	if err != nil {
 		return err
 	}
@@ -489,7 +629,7 @@ func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePre
 // filterChainFromProto extracts the relevant information from the FilterChain
 // proto and stores it in our internal representation. It also persists any
 // RouteNames which need to be queried dynamically via RDS.
-func (fci *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
+func (fcm *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
 	filterChain, err := processNetworkFilters(fc.GetFilters())
 	if err != nil {
 		return nil, err
@@ -498,7 +638,7 @@ func (fci *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain
 	// listener, which receives the LDS response, if specified for the filter
 	// chain.
 	if filterChain.RouteConfigName != "" {
-		fci.RouteConfigNames[filterChain.RouteConfigName] = true
+		fcm.RouteConfigNames[filterChain.RouteConfigName] = true
 	}
 	// If the transport_socket field is not specified, it means that the control
 	// plane has not sent us any security config. This is fine and the server
@@ -658,11 +798,11 @@ type FilterChainLookupParams struct {
 // Returns a non-nil error if no matching filter chain could be found or
 // multiple matching filter chains were found, and in both cases, the incoming
 // connection must be dropped.
-func (fci *FilterChainManager) Lookup(params FilterChainLookupParams) (*FilterChain, error) {
-	dstPrefixes := filterByDestinationPrefixes(fci.dstPrefixes, params.IsUnspecifiedListener, params.DestAddr)
+func (fcm *FilterChainManager) Lookup(params FilterChainLookupParams) (*FilterChain, error) {
+	dstPrefixes := filterByDestinationPrefixes(fcm.dstPrefixes, params.IsUnspecifiedListener, params.DestAddr)
 	if len(dstPrefixes) == 0 {
-		if fci.def != nil {
-			return fci.def, nil
+		if fcm.def != nil {
+			return fcm.def, nil
 		}
 		return nil, fmt.Errorf("no matching filter chain based on destination prefix match for %+v", params)
 	}
@@ -673,8 +813,8 @@ func (fci *FilterChainManager) Lookup(params FilterChainLookupParams) (*FilterCh
 	}
 	srcPrefixes := filterBySourceType(dstPrefixes, srcType)
 	if len(srcPrefixes) == 0 {
-		if fci.def != nil {
-			return fci.def, nil
+		if fcm.def != nil {
+			return fcm.def, nil
 		}
 		return nil, fmt.Errorf("no matching filter chain based on source type match for %+v", params)
 	}
@@ -685,8 +825,8 @@ func (fci *FilterChainManager) Lookup(params FilterChainLookupParams) (*FilterCh
 	if fc := filterBySourcePorts(srcPrefixEntry, params.SourcePort); fc != nil {
 		return fc, nil
 	}
-	if fci.def != nil {
-		return fci.def, nil
+	if fcm.def != nil {
+		return fcm.def, nil
 	}
 	return nil, fmt.Errorf("no matching filter chain after all match criteria for %+v", params)
 }

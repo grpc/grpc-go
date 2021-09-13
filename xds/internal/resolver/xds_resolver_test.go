@@ -1178,9 +1178,16 @@ type clientStream struct {
 }
 
 type filterCfg struct {
-	httpfilter.FilterConfig
 	s            string
 	newStreamErr error
+}
+
+func (fc filterCfg) Equal(x httpfilter.FilterConfig) bool {
+	other, ok := x.(filterCfg)
+	if !ok {
+		return false
+	}
+	return fc.s == other.s && fc.newStreamErr == other.newStreamErr
 }
 
 func (s) TestXDSResolverHTTPFilters(t *testing.T) {
