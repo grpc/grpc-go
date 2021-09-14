@@ -235,7 +235,7 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.S
 	case connectivity.Connecting:
 		b.handlePriorityWithNewStateConnecting(child, priority, oldState)
 	default:
-		// New state is Idle, should never happen. Don't forward.
+		// New state is Shutdown, should never happen. Don't forward.
 	}
 }
 
