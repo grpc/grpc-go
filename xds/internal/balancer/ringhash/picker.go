@@ -53,7 +53,7 @@ type handleRICSResult struct {
 // The first return value indicates if the state is in Ready, Idle, Connecting
 // or Shutdown. If it's true, the PickResult and error should be returned from
 // Pick() as is.
-func handleRICS(e *ringEntry, logger *grpclog.PrefixLogger) (handleRICSResult, bool) {
+func (p *picker) handleRICS(e *ringEntry) (handleRICSResult, bool) {
 	switch state := e.sc.effectiveState(); state {
 	case connectivity.Ready:
 		return handleRICSResult{pr: balancer.PickResult{SubConn: e.sc.sc}}, true
@@ -73,14 +73,14 @@ func handleRICS(e *ringEntry, logger *grpclog.PrefixLogger) (handleRICSResult, b
 	default:
 		// Should never reach this. All the connectivity states are already
 		// handled in the cases.
-		logger.Errorf("SubConn has undefined connectivity state: %v", state)
+		p.logger.Errorf("SubConn has undefined connectivity state: %v", state)
 		return handleRICSResult{err: status.Errorf(codes.Unavailable, "SubConn has undefined connectivity state: %v", state)}, true
 	}
 }
 
 func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	e := p.ring.pick(getRequestHash(info.Ctx))
-	if hr, ok := handleRICS(e, p.logger); ok {
+	if hr, ok := p.handleRICS(e); ok {
 		return hr.pr, hr.err
 	}
 	// ok was false, the entry is in transient failure.
@@ -100,7 +100,7 @@ func (p *picker) handleTransientFailure(e *ringEntry) (balancer.PickResult, erro
 
 	// For the second SubConn, also check Ready/Idle/Connecting as if it's the
 	// first entry.
-	if hr, ok := handleRICS(e2, p.logger); ok {
+	if hr, ok := p.handleRICS(e2); ok {
 		return hr.pr, hr.err
 	}
 

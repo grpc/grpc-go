@@ -180,8 +180,8 @@ type ringhashBalancer struct {
 //
 // The return value is whether the new address list is different from the
 // previous. True if
-// - an addresses was added
-// - an addresses was removed
+// - an address was added
+// - an address was removed
 // - an address's weight was updated
 //
 // Note that this function doesn't trigger SubConn connecting, so all the new
@@ -336,10 +336,12 @@ func (b *ringhashBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 		if b.state == connectivity.TransientFailure {
 			scs.queueConnect()
 		}
-		// Resend the picker, there's no need to regenerate the picker because
-		// the ring didn't change.
-		sendUpdate = true
-	case connectivity.Connecting, connectivity.Ready:
+		// No need to send an update. No queued RPC can be unblocked. If the
+		// overall state changed because of this, sendUpdate is already true.
+	case connectivity.Connecting:
+		// No need to send an update. No queued RPC can be unblocked. If the
+		// overall state changed because of this, sendUpdate is already true.
+	case connectivity.Ready:
 		// Resend the picker, there's no need to regenerate the picker because
 		// the ring didn't change.
 		sendUpdate = true
