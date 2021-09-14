@@ -23,8 +23,10 @@ import (
 	"fmt"
 	"strings"
 
+	"google.golang.org/grpc/balancer/roundrobin"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 )
 
 // DiscoveryMechanismType is the type of discovery mechanism.
@@ -167,8 +169,8 @@ type LBConfig struct {
 }
 
 const (
-	rrName = "ROUND_ROBIN"
-	rhName = "RING_HASH"
+	rrName = roundrobin.Name
+	rhName = ringhash.Name
 )
 
 func parseConfig(c json.RawMessage) (*LBConfig, error) {

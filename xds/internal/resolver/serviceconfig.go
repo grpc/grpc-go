@@ -226,7 +226,7 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 		var generatedPolicyHash bool
 		switch policy.HashPolicyType {
 		case xdsclient.HashPolicyTypeHeader:
-			md, ok := metadata.FromIncomingContext(rpcInfo.Context)
+			md, ok := metadata.FromOutgoingContext(rpcInfo.Context)
 			if !ok {
 				continue
 			}

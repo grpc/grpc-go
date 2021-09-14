@@ -510,7 +510,7 @@ func (s) TestXDSResolverRequestHash(t *testing.T) {
 	}
 	// Selecting a config when there was a hash policy specified in the route
 	// that will be selected should put a request hash in the config's context.
-	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: metadata.NewIncomingContext(context.Background(), metadata.Pairs(":path", "/products"))})
+	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs(":path", "/products"))})
 	if err != nil {
 		t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
 	}
