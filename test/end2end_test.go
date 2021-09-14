@@ -3724,10 +3724,12 @@ func (s) TestTransparentRetry(t *testing.T) {
 	}
 	defer lis.Close()
 	server := &httpServer{
-		headerFields: [][]string{{
-			":status", "200",
-			"content-type", "application/grpc",
-			"grpc-status", "0",
+		responses: []httpServerResponse{{
+			trailers: [][]string{{
+				":status", "200",
+				"content-type", "application/grpc",
+				"grpc-status", "0",
+			}},
 		}},
 		refuseStream: func(i uint32) bool {
 			switch i {
@@ -7343,9 +7345,15 @@ func (s) TestHTTPHeaderFrameErrorHandlingMoreThanTwoHeaders(t *testing.T) {
 	doHTTPHeaderTest(t, codes.Internal, header, header, header)
 }
 
+type httpServerResponse struct {
+	headers  [][]string
+	payload  []byte
+	trailers [][]string
+}
+
 type httpServer struct {
-	headerFields [][]string
 	refuseStream func(uint32) bool
+	responses    []httpServerResponse
 }
 
 func (s *httpServer) writeHeader(framer *http2.Framer, sid uint32, headerFields []string, endStream bool) error {
@@ -7367,6 +7375,10 @@ func (s *httpServer) writeHeader(framer *http2.Framer, sid uint32, headerFields 
 		EndStream:     endStream,
 		EndHeaders:    true,
 	})
+}
+
+func (s *httpServer) writePayload(framer *http2.Framer, sid uint32, payload []byte) error {
+	return framer.WriteData(sid, false, payload)
 }
 
 func (s *httpServer) start(t *testing.T, lis net.Listener) {
@@ -7394,7 +7406,7 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 
 		var sid uint32
 		// Loop until conn is closed and framer returns io.EOF
-		for {
+		for requestNum := 0; ; requestNum = (requestNum + 1) % len(s.responses) {
 			// Read frames until a header is received.
 			for {
 				frame, err := framer.ReadFrame()
@@ -7413,9 +7425,25 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 					writer.Flush()
 				}
 			}
-			for i, headers := range s.headerFields {
-				if err = s.writeHeader(framer, sid, headers, i == len(s.headerFields)-1); err != nil {
+
+			response := s.responses[requestNum]
+			for _, header := range response.headers {
+				if err = s.writeHeader(framer, sid, header, false); err != nil {
 					t.Errorf("Error at server-side while writing headers. Err: %v", err)
+					return
+				}
+				writer.Flush()
+			}
+			if response.payload != nil {
+				if err = s.writePayload(framer, sid, response.payload); err != nil {
+					t.Errorf("Error at server-side while writing payload. Err: %v", err)
+					return
+				}
+				writer.Flush()
+			}
+			for i, trailer := range response.trailers {
+				if err = s.writeHeader(framer, sid, trailer, i == len(response.trailers)-1); err != nil {
+					t.Errorf("Error at server-side while writing trailers. Err: %v", err)
 					return
 				}
 				writer.Flush()
@@ -7432,7 +7460,7 @@ func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string
 	}
 	defer lis.Close()
 	server := &httpServer{
-		headerFields: headerFields,
+		responses: []httpServerResponse{{trailers: headerFields}},
 	}
 	server.start(t, lis)
 	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
