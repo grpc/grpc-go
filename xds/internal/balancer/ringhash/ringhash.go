@@ -72,26 +72,25 @@ type subConn struct {
 	// This is the actual state of this SubConn (as updated by the ClientConn).
 	// The effective state can be different, see comment of attemptedToConnect.
 	state connectivity.State
-	// attemptedToConnect is whether this SubConn has attempted to connect ever.
-	// So that only the initial Idle is Idle, after any attempt to connect,
-	// following Idles are all TransientFailure.
+	// failing is whether this SubConn is in a failing state. A subConn is
+	// considered to be in a failing state if it was previously in
+	// TransientFailure.
 	//
-	// This affects the effective connectivity state of this SubConn, e.g. if
-	// the actual state is Idle, but this SubConn has attempted to connect, the
-	// effective state is TransientFailure.
+	// This affects the effective connectivity state of this SubConn, e.g.
+	// - if the actual state is Idle or Connecting, but this SubConn is failing,
+	// the effective state is TransientFailure.
 	//
-	// This is used in pick(). E.g. if a subConn is Idle, but has
-	// attemptedToConnect as true, pick() will
+	// This is used in pick(). E.g. if a subConn is Idle, but has failing as
+	// true, pick() will
 	// - consider this SubConn as TransientFailure, and check the state of the
 	// next SubConn.
 	// - trigger Connect() (note that normally a SubConn in real
 	// TransientFailure cannot Connect())
 	//
-	// Note this should only be set when updating the state (from Idle to
-	// anything else), not when Connect() is called, because there's a small
-	// window after the first Connect(), before the state switches to something
-	// else.
-	attemptedToConnect bool
+	// A subConn starts in non-failing (failing is false). A transition to
+	// TransientFailure set failing to true (and it stay true). A transition to
+	// Ready sets failing to false.
+	failing bool
 	// connectQueued is true if a Connect() was queued for this SubConn while
 	// it's not in Idle (most likely was in TransientFailure). A Connect() will
 	// be triggered on this SubConn when it turns Idle.
@@ -108,10 +107,6 @@ type subConn struct {
 func (sc *subConn) setState(s connectivity.State) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	// Any state change to non-Idle means there was an attempt to connect.
-	if s != connectivity.Idle {
-		sc.attemptedToConnect = true
-	}
 	switch s {
 	case connectivity.Idle:
 		// Trigger Connect() if new state is Idle, and there is a queued connect.
@@ -119,21 +114,30 @@ func (sc *subConn) setState(s connectivity.State) {
 			sc.connectQueued = false
 			sc.sc.Connect()
 		}
-	case connectivity.Connecting, connectivity.Ready:
+	case connectivity.Connecting:
 		// Clear connectQueued if the SubConn isn't failing. This state
 		// transition is unlikely to happen, but handle this just in case.
 		sc.connectQueued = false
+	case connectivity.Ready:
+		// Clear connectQueued if the SubConn isn't failing. This state
+		// transition is unlikely to happen, but handle this just in case.
+		sc.connectQueued = false
+		// Set to a non-failing state.
+		sc.failing = false
+	case connectivity.TransientFailure:
+		// Set to a failing state.
+		sc.failing = true
 	}
 	sc.state = s
 }
 
 // effectiveState returns the effective state of this SubConn. It can be
-// different from the actual state, e.g. Idle after any attempt to connect (any
-// Idle other than the initial Idle) is considered TransientFailure.
+// different from the actual state, e.g. Idle while the subConn is failing is
+// considered TransientFailure. Read comment of field failing for other cases.
 func (sc *subConn) effectiveState() connectivity.State {
 	sc.mu.RLock()
 	defer sc.mu.RUnlock()
-	if sc.state == connectivity.Idle && sc.attemptedToConnect {
+	if sc.failing && (sc.state == connectivity.Idle || sc.state == connectivity.Connecting) {
 		return connectivity.TransientFailure
 	}
 	return sc.state
