@@ -23,6 +23,7 @@ package httpfilter
 import (
 	"github.com/golang/protobuf/proto"
 	iresolver "google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/xds/env"
 )
 
 // FilterConfig represents an opaque data structure holding configuration for a
@@ -98,5 +99,12 @@ func Register(b Filter) {
 //
 // If no filter is register with typeURL, nil will be returned.
 func Get(typeURL string) Filter {
+	// Hardcoded here vs. rbac http filter package because rbac HTTP Filter test
+	// is in integration test.
+	if !env.RBACSupport {
+		if typeURL == "type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC" || typeURL == "type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBACPerRoute" {
+			return nil
+		}
+	}
 	return m[typeURL]
 }
