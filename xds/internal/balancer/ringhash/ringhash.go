@@ -219,6 +219,7 @@ func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 			}
 			scs := &subConn{addr: a.Addr, sc: sc}
 			scs.setState(connectivity.Idle)
+			b.state = b.csEvltr.recordTransition(connectivity.Shutdown, connectivity.Idle)
 			b.subConns[aNoAttrs] = scs
 			b.scStates[sc] = scs
 			addrsUpdated = true
