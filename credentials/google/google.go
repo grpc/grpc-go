@@ -59,10 +59,29 @@ func NewDefaultCredentials() credentials.Bundle {
 }
 
 // NewComputeEngineCredentials returns a credentials bundle that is configured to work
+// with google services. This API must only be used when running on GCE. Authentication configured
+// by this API represents the GCE VM's default service account.
+//
+// [Deprecated]: use NewDirectPathCredentials instead.
+// This API is experimental.
+func NewComputeEngineCredentials() credentials.Bundle {
+	c := &creds{
+		newPerRPCCreds: func() credentials.PerRPCCredentials {
+			return oauth.NewComputeEngine()
+		},
+	}
+	bundle, err := c.NewWithMode(internal.CredsBundleModeFallback)
+	if err != nil {
+		logger.Warningf("compute engine creds: failed to create new creds: %v", err)
+	}
+	return bundle
+}
+
+// NewDirectPathCredentials returns a credentials bundle that is configured to work
 // with google services. This API must only be used when running on GCE.
 //
 // This API is experimental.
-func NewComputeEngineCredentials(cc credentials.PerRPCCredentials) credentials.Bundle {
+func NewDirectPathCredentials(cc credentials.PerRPCCredentials) credentials.Bundle {
 	c := &creds{
 		newPerRPCCreds: func() credentials.PerRPCCredentials {
 			if cc != nil {
@@ -73,7 +92,7 @@ func NewComputeEngineCredentials(cc credentials.PerRPCCredentials) credentials.B
 	}
 	bundle, err := c.NewWithMode(internal.CredsBundleModeFallback)
 	if err != nil {
-		logger.Warningf("compute engine creds: failed to create new creds: %v", err)
+		logger.Warningf("direct path creds: failed to create new creds: %v", err)
 	}
 	return bundle
 }
