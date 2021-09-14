@@ -897,7 +897,7 @@ func securityConfigFromCommonTLSContextWithDeprecatedFields(common *v3tlspb.Comm
 			}
 		}
 		if server && len(matchers) != 0 {
-			return nil, fmt.Errorf("match_subject_alt_names field in validation context is not on the server: %v", common)
+			return nil, fmt.Errorf("match_subject_alt_names field in validation context is not supported on the server: %v", common)
 		}
 		sc.SubjectAltNameMatchers = matchers
 		if pi := combined.GetValidationContextCertificateProviderInstance(); pi != nil {
@@ -1014,7 +1014,7 @@ func securityConfigFromCommonTLSContextUsingNewFields(common *v3tlspb.CommonTlsC
 		matchers = append(matchers, matcher)
 	}
 	if server && len(matchers) != 0 {
-		return nil, fmt.Errorf("match_subject_alt_names field in validation context is not on the server: %v", common)
+		return nil, fmt.Errorf("match_subject_alt_names field in validation context is not supported on the server: %v", common)
 	}
 	sc.SubjectAltNameMatchers = matchers
 	return sc, nil
