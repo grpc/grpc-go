@@ -707,6 +707,14 @@ func (s) TestRetryStats(t *testing.T) {
 				}
 			}
 		}
+
+		// Since the above only tests non-zero-value fields, test
+		// IsTransparentRetryAttempt=false explicitly when needed.
+		if wb, ok := w.(*stats.Begin); ok && !wb.IsTransparentRetryAttempt {
+			if s.(*stats.Begin).IsTransparentRetryAttempt {
+				t.Fatalf("at position %v: got IsTransparentRetryAttempt=true; want false", i)
+			}
+		}
 	}
 
 	// Validate timings between last Begin and preceding End.

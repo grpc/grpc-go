@@ -7406,8 +7406,7 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 
 		var sid uint32
 		// Loop until conn is closed and framer returns io.EOF
-		requestNum := 0
-		for {
+		for requestNum := 0; ; requestNum = (requestNum + 1) % len(s.responses) {
 			// Read frames until a header is received.
 			for {
 				frame, err := framer.ReadFrame()
@@ -7448,11 +7447,6 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 					return
 				}
 				writer.Flush()
-			}
-
-			requestNum++
-			if requestNum >= len(s.responses) {
-				requestNum = 0
 			}
 		}
 	}()
