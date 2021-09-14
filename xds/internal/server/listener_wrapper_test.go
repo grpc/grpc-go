@@ -34,6 +34,7 @@ import (
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/env"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
@@ -325,6 +326,11 @@ func (s) TestNewListenerWrapper(t *testing.T) {
 // the update from the rds handler should it move the server to
 // ServingModeServing.
 func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
+	oldRBAC := env.RBACSupport
+	env.RBACSupport = true
+	defer func() {
+		env.RBACSupport = oldRBAC
+	}()
 	_, readyCh, xdsC, _, cleanup := newListenerWrapper(t)
 	defer cleanup()
 

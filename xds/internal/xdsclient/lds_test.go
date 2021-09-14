@@ -33,6 +33,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
@@ -601,6 +602,11 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 }
 
 func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
+	oldRBAC := env.RBACSupport
+	env.RBACSupport = true
+	defer func() {
+		env.RBACSupport = oldRBAC
+	}()
 	const (
 		v3LDSTarget = "grpc/server?xds.resource.listening_address=0.0.0.0:9999"
 		testVersion = "test-version-lds-server"

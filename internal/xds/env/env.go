@@ -43,6 +43,7 @@ const (
 	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
 	aggregateAndDNSSupportEnv    = "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER"
 	retrySupportEnv              = "GRPC_XDS_EXPERIMENTAL_ENABLE_RETRY"
+	rbacSupportEnv               = "GRPC_XDS_EXPERIMENTAL_ENABLE_RBAC"
 
 	c2pResolverSupportEnv                    = "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER"
 	c2pResolverTestOnlyTrafficDirectorURIEnv = "GRPC_TEST_ONLY_GOOGLE_C2P_RESOLVER_TRAFFIC_DIRECTOR_URI"
@@ -81,6 +82,9 @@ var (
 
 	// RetrySupport indicates whether xDS retry is enabled.
 	RetrySupport = strings.EqualFold(os.Getenv(retrySupportEnv), "true")
+
+	// RBACSupport indicates whether xDS configured RBAC HTTP Filter is enabled.
+	RBACSupport = strings.EqualFold(os.Getenv(rbacSupportEnv), "true")
 
 	// C2PResolverSupport indicates whether support for C2P resolver is enabled.
 	// This can be enabled by setting the environment variable

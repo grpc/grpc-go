@@ -28,6 +28,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/internal/xds/rbac"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -37,7 +38,9 @@ import (
 )
 
 func init() {
-	httpfilter.Register(builder{})
+	if env.RBACSupport {
+		httpfilter.Register(builder{})
+	}
 }
 
 type builder struct {
