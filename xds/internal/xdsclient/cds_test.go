@@ -634,7 +634,7 @@ func (s) TestSecurityConfigFromCommonTLSContextUsingNewFields_ErrorCases(t *test
 				},
 			},
 			server:  true,
-			wantErr: "match_subject_alt_names field in validation context is not on the server",
+			wantErr: "match_subject_alt_names field in validation context is not supported on the server",
 		},
 	}
 
