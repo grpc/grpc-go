@@ -18,11 +18,6 @@
 
 // Package xds provides a transport credentials implementation where the
 // security configuration is pushed by a management server using xDS APIs.
-//
-// Experimental
-//
-// Notice: All APIs in this package are EXPERIMENTAL and may be removed in a
-// later release.
 package xds
 
 import (
