@@ -88,8 +88,8 @@ type subConn struct {
 	// TransientFailure cannot Connect())
 	//
 	// A subConn starts in non-failing (failing is false). A transition to
-	// TransientFailure set failing to true (and it stay true). A transition to
-	// Ready sets failing to false.
+	// TransientFailure sets failing to true (and it stays true). A transition
+	// to Ready sets failing to false.
 	failing bool
 	// connectQueued is true if a Connect() was queued for this SubConn while
 	// it's not in Idle (most likely was in TransientFailure). A Connect() will
