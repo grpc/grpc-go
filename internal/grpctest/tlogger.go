@@ -41,8 +41,23 @@ const callingFrame = 4
 
 type logType int
 
+func (l logType) String() string {
+	switch l {
+	case infoLog:
+		return "INFO"
+	case warningLog:
+		return "WARN"
+	case errorLog:
+		return "ERRO"
+	case fatalLog:
+		return "FATA"
+	}
+	return "UNKNOWN"
+}
+
 const (
-	logLog logType = iota
+	infoLog logType = iota
+	warningLog
 	errorLog
 	fatalLog
 )
@@ -83,7 +98,7 @@ func (g *tLogger) log(ltype logType, depth int, format string, args ...interface
 		g.t.Error(err)
 		return
 	}
-	args = append([]interface{}{prefix}, args...)
+	args = append([]interface{}{ltype.String(), prefix}, args...)
 	args = append(args, fmt.Sprintf(" (t=+%s)", time.Since(g.start)))
 
 	if format == "" {
@@ -180,35 +195,35 @@ func (g *tLogger) expected(s string) bool {
 }
 
 func (g *tLogger) Info(args ...interface{}) {
-	g.log(logLog, 0, "", args...)
+	g.log(infoLog, 0, "", args...)
 }
 
 func (g *tLogger) Infoln(args ...interface{}) {
-	g.log(logLog, 0, "", args...)
+	g.log(infoLog, 0, "", args...)
 }
 
 func (g *tLogger) Infof(format string, args ...interface{}) {
-	g.log(logLog, 0, format, args...)
+	g.log(infoLog, 0, format, args...)
 }
 
 func (g *tLogger) InfoDepth(depth int, args ...interface{}) {
-	g.log(logLog, depth, "", args...)
+	g.log(infoLog, depth, "", args...)
 }
 
 func (g *tLogger) Warning(args ...interface{}) {
-	g.log(logLog, 0, "", args...)
+	g.log(warningLog, 0, "", args...)
 }
 
 func (g *tLogger) Warningln(args ...interface{}) {
-	g.log(logLog, 0, "", args...)
+	g.log(warningLog, 0, "", args...)
 }
 
 func (g *tLogger) Warningf(format string, args ...interface{}) {
-	g.log(logLog, 0, format, args...)
+	g.log(warningLog, 0, format, args...)
 }
 
 func (g *tLogger) WarningDepth(depth int, args ...interface{}) {
-	g.log(logLog, depth, "", args...)
+	g.log(warningLog, depth, "", args...)
 }
 
 func (g *tLogger) Error(args ...interface{}) {
