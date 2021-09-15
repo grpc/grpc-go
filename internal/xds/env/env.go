@@ -71,7 +71,7 @@ var (
 	// Note that there is no env var protection for the server-side because we
 	// have a brand new API on the server-side and users explicitly need to use
 	// the new API to get security integration on the server.
-	ClientSideSecuritySupport = strings.EqualFold(os.Getenv(clientSideSecuritySupportEnv), "true")
+	ClientSideSecuritySupport = !strings.EqualFold(os.Getenv(clientSideSecuritySupportEnv), "false")
 	// AggregateAndDNSSupportEnv indicates whether processing of aggregated
 	// cluster and DNS cluster is enabled, which can be enabled by setting the
 	// environment variable
@@ -89,15 +89,3 @@ var (
 	// C2PResolverTestOnlyTrafficDirectorURI is the TD URI for testing.
 	C2PResolverTestOnlyTrafficDirectorURI = os.Getenv(c2pResolverTestOnlyTrafficDirectorURIEnv)
 )
-
-func init() {
-	// Set the env var used to control processing of security configuration on
-	// the client-side to true by default.
-	// TODO(easwars): Remove this env var completely in 1.42.x release.
-	//
-	// If the env var is set explicitly, honor it.
-	ClientSideSecuritySupport = true
-	if val, ok := os.LookupEnv(clientSideSecuritySupportEnv); ok {
-		ClientSideSecuritySupport = strings.EqualFold(val, "true")
-	}
-}
