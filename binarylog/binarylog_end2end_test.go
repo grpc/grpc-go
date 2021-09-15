@@ -869,6 +869,7 @@ func equalLogEntry(entries ...*pb.GrpcLogEntry) (equal bool) {
 				if entry.Key == ":method" {
 					h.Metadata.Entry = append(h.Metadata.Entry[:i], h.Metadata.Entry[i+1:]...)
 				}
+				break
 			}
 		}
 		if h := e.GetTrailer(); h != nil {
