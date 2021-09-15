@@ -850,11 +850,27 @@ func equalLogEntry(entries ...*pb.GrpcLogEntry) (equal bool) {
 			tmp := append(h.Metadata.Entry[:0], h.Metadata.Entry...)
 			h.Metadata.Entry = tmp
 			sort.Slice(h.Metadata.Entry, func(i, j int) bool { return h.Metadata.Entry[i].Key < h.Metadata.Entry[j].Key })
+			// Delete headers that have POST values here since we cannot control
+			// this.
+			for i, entry := range h.Metadata.Entry {
+				if entry.Key == ":method" {
+					h.Metadata.Entry = append(h.Metadata.Entry[:i], h.Metadata.Entry[i+1:]...)
+					break
+				}
+			}
 		}
 		if h := e.GetServerHeader(); h != nil {
 			tmp := append(h.Metadata.Entry[:0], h.Metadata.Entry...)
 			h.Metadata.Entry = tmp
 			sort.Slice(h.Metadata.Entry, func(i, j int) bool { return h.Metadata.Entry[i].Key < h.Metadata.Entry[j].Key })
+			// Delete headers that have POST values here since we cannot control
+			// this.
+			for i, entry := range h.Metadata.Entry {
+				if entry.Key == ":method" {
+					h.Metadata.Entry = append(h.Metadata.Entry[:i], h.Metadata.Entry[i+1:]...)
+					break
+				}
+			}
 		}
 		if h := e.GetTrailer(); h != nil {
 			sort.Slice(h.Metadata.Entry, func(i, j int) bool { return h.Metadata.Entry[i].Key < h.Metadata.Entry[j].Key })
