@@ -7827,19 +7827,23 @@ func unaryInterceptorVerifyPost(ctx context.Context, req interface{}, info *grpc
 	}
 	method := md.Get(":method")
 	if len(method) != 1 {
-		return nil, status.Error(codes.NotFound, ":method value had more than one value")
+		return nil, status.Error(codes.InvalidArgument, ":method value had more than one value")
 	}
 	if method[0] != "POST" {
-		return nil, status.Error(codes.NotFound, ":method value was not post")
+		return nil, status.Error(codes.InvalidArgument, ":method value was not post")
 	}
-	return nil, status.Error(codes.OK, "")
+	return handler(ctx, req)
 }
 
 // TestUnaryInterceptorGetsPost verifies that the server transport adds a
 // :method POST header to metadata, and that that added Header is visibile at
 // the grpc layer.
 func (s) TestUnaryInterceptorGetsPost(t *testing.T) {
-	ss := &stubserver.StubServer{}
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
 	if err := ss.Start([]grpc.ServerOption{grpc.UnaryInterceptor(unaryInterceptorVerifyPost)}); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
