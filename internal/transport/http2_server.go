@@ -366,6 +366,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		timeout    time.Duration
 	)
 
+	var seenAuthority, seenHost bool
 	for _, hf := range frame.Fields {
 		switch hf.Name {
 		case "content-type":
@@ -389,6 +390,41 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			if timeout, err = decodeTimeout(hf.Value); err != nil {
 				headerError = true
 			}
+		// "Transports must consider requests containing the Connection header
+		// as malformed." - A41
+		case "connection":
+			t.controlBuf.put(&cleanupStream{
+				streamID: streamID,
+				rst:      true,
+				rstCode:  http2.ErrCodeProtocol,
+				onWrite:  func() {},
+			})
+			return false
+		// "If multiple Host headers or multiple :authority headers are present,
+		// the request must be rejected by RST_STREAM with HTTP/2 error code
+		// PROTOCOL_ERROR." - A41
+		case ":authority":
+			if seenAuthority {
+				t.controlBuf.put(&cleanupStream{
+					streamID: streamID,
+					rst:      true,
+					rstCode:  http2.ErrCodeProtocol,
+					onWrite:  func() {},
+				})
+				return false
+			}
+			seenAuthority = true
+		case "host":
+			if seenHost {
+				t.controlBuf.put(&cleanupStream{
+					streamID: streamID,
+					rst:      true,
+					rstCode:  http2.ErrCodeProtocol,
+					onWrite:  func() {},
+				})
+				return false
+			}
+			seenHost = true
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
 				break
@@ -402,6 +438,21 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			mdata[hf.Name] = append(mdata[hf.Name], v)
 		}
 	}
+	// "If :authority is missing, Host must be renamed to :authority." - A41
+	if !seenAuthority {
+		// No-op if host isn't present, no eventual :authority header is a valid
+		// RPC.
+		if host, ok := mdata["host"]; ok {
+			mdata["authority"] = host
+			delete(mdata, "host")
+		}
+		delete(mdata, "host")
+	}
+	// "If :authority is present, Host must be discarded" - A41
+	if seenAuthority {
+		delete(mdata, "host")
+	}
+	// No eventual :authority header is a valid RPC.
 
 	if !isGRPC || headerError {
 		t.controlBuf.put(&cleanupStream{
