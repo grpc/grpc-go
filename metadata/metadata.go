@@ -52,8 +52,7 @@ type MD map[string][]string
 func New(m map[string]string) MD {
 	md := MD{}
 	for k, val := range m {
-		key := strings.ToLower(k)
-		md[key] = append(md[key], val)
+		md.Append(k, val)
 	}
 	return md
 }
@@ -76,8 +75,7 @@ func Pairs(kv ...string) MD {
 	}
 	md := MD{}
 	for i := 0; i < len(kv); i += 2 {
-		key := strings.ToLower(kv[i])
-		md[key] = append(md[key], kv[i+1])
+		md.Append(kv[i], kv[i+1])
 	}
 	return md
 }
@@ -184,11 +182,7 @@ func FromIncomingContext(ctx context.Context) (MD, bool) {
 	}
 	out := MD{}
 	for k, v := range md {
-		// We need to manually convert all keys to lower case, because MD is a
-		// map, and there's no guarantee that the MD attached to the context is
-		// created using our helper functions.
-		key := strings.ToLower(k)
-		out[key] = v
+		out.Set(k, v...)
 	}
 	return out, true
 }
@@ -222,11 +216,7 @@ func FromOutgoingContext(ctx context.Context) (MD, bool) {
 
 	out := MD{}
 	for k, v := range raw.md {
-		// We need to manually convert all keys to lower case, because MD is a
-		// map, and there's no guarantee that the MD attached to the context is
-		// created using our helper functions.
-		key := strings.ToLower(k)
-		out[key] = v
+		out.Set(k, v...)
 	}
 	for _, added := range raw.added {
 		if len(added)%2 == 1 {
@@ -234,8 +224,7 @@ func FromOutgoingContext(ctx context.Context) (MD, bool) {
 		}
 
 		for i := 0; i < len(added); i += 2 {
-			key := strings.ToLower(added[i])
-			out[key] = append(out[key], added[i+1])
+			out.Append(added[i], added[i+1])
 		}
 	}
 	return out, ok
