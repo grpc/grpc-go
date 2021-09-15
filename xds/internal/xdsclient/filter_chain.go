@@ -600,7 +600,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 				filterChain.HTTPFilters = filters
 				seenHCM = true
 				if env.RBACSupport {
-					switch hcm.RouteSpecifier.(type) { // Guard this routing parsing...what does this trigger in filter chain and more downstream (no, nil is completly valid all the way...)? Also guard routeAndProcess, this will prevent the logic of a nil route configuration)
+					switch hcm.RouteSpecifier.(type) {
 					case *v3httppb.HttpConnectionManager_Rds:
 						if hcm.GetRds().GetConfigSource().GetAds() == nil {
 							return nil, fmt.Errorf("ConfigSource is not ADS: %+v", hcm)
