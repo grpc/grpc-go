@@ -145,15 +145,22 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	// Cancel the last watch, and send update again.
+	// Cancel the last watch, and send update again. The active watcher should
+	// not receive an update since the new update is the same as the existing
+	// resource.
 	cancelLastWatch()
 	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{testRDSName: {Update: wantUpdate}}, UpdateMetadata{})
 	for i := 0; i < count-1; i++ {
-		if err := verifyRouteConfigUpdate(ctx, rdsUpdateChs[i], wantUpdate, nil); err != nil {
-			t.Fatal(err)
-		}
+		func() {
+			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+			defer sCancel()
+			if u, err := rdsUpdateChs[i].Receive(sCtx); err != context.DeadlineExceeded {
+				t.Errorf("unexpected RouteConfigUpdate: %v, %v, want channel recv timeout", u, err)
+			}
+		}()
 	}
 
+	// There should be no update on the watcher which cancelled its watch.
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := rdsUpdateChs[count-1].Receive(sCtx); err != context.DeadlineExceeded {

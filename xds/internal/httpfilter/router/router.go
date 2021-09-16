@@ -112,8 +112,6 @@ func (builder) BuildServerInterceptor(cfg, override httpfilter.FilterConfig) (ir
 type config struct{}
 
 func (c config) Equal(x httpfilter.FilterConfig) bool {
-	if _, ok := x.(config); !ok {
-		return false
-	}
-	return true
+	_, ok := x.(config)
+	return ok
 }
