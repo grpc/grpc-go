@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -102,69 +101,6 @@ func (s) TestRetryUnary(t *testing.T) {
 		{codes.Internal, 8},
 		{codes.Internal, 11},
 		{codes.AlreadyExists, 15},
-	}
-	for _, tc := range testCases {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
-		cancel()
-		if status.Code(err) != tc.code {
-			t.Fatalf("EmptyCall(_, _) = _, %v; want _, <Code() = %v>", err, tc.code)
-		}
-		if i != tc.count {
-			t.Fatalf("i = %v; want %v", i, tc.count)
-		}
-	}
-}
-
-func (s) TestRetryDisabledByDefault(t *testing.T) {
-	if strings.EqualFold(os.Getenv("GRPC_GO_RETRY"), "on") ||
-		strings.EqualFold(os.Getenv("GRPC_XDS_EXPERIMENTAL_ENABLE_RETRY"), "true") {
-		return
-	}
-	i := -1
-	ss := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-			i++
-			switch i {
-			case 0:
-				return nil, status.New(codes.AlreadyExists, "retryable error").Err()
-			}
-			return &testpb.Empty{}, nil
-		},
-	}
-	if err := ss.Start([]grpc.ServerOption{}); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
-	ss.NewServiceConfig(`{
-    "methodConfig": [{
-      "name": [{"service": "grpc.testing.TestService"}],
-      "waitForReady": true,
-      "retryPolicy": {
-        "MaxAttempts": 4,
-        "InitialBackoff": ".01s",
-        "MaxBackoff": ".01s",
-        "BackoffMultiplier": 1.0,
-        "RetryableStatusCodes": [ "ALREADY_EXISTS" ]
-      }
-    }]}`)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	for {
-		if ctx.Err() != nil {
-			t.Fatalf("Timed out waiting for service config update")
-		}
-		if ss.CC.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	cancel()
-
-	testCases := []struct {
-		code  codes.Code
-		count int
-	}{
-		{codes.AlreadyExists, 0},
 	}
 	for _, tc := range testCases {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
