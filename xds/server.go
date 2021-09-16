@@ -239,11 +239,17 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 				err:  err,
 			})
 		},
-		DrainCallback: func(addr net.Addr) {
-			if gs, ok := s.gs.(*grpc.Server); ok {
-				drainServerTransports(gs, addr.String())
-			}
-		},
+		// TODO: Uncomment after https://github.com/grpc/grpc-go/issues/4695 is
+		// fixed. Without a fix for that issue, we would be draining server
+		// transports everytime we get a Listener resource, even if the control
+		// plane sends the same resource again and again.
+		/*
+			DrainCallback: func(addr net.Addr) {
+				if gs, ok := s.gs.(*grpc.Server); ok {
+					drainServerTransports(gs, addr.String())
+				}
+			},
+		*/
 	})
 
 	// Block until a good LDS response is received or the server is stopped.
