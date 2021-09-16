@@ -46,11 +46,11 @@ func (l logType) String() string {
 	case infoLog:
 		return "INFO"
 	case warningLog:
-		return "WARN"
+		return "WARNING"
 	case errorLog:
-		return "ERRO"
+		return "ERROR"
 	case fatalLog:
-		return "FATA"
+		return "FATAL"
 	}
 	return "UNKNOWN"
 }
