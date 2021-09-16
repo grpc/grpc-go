@@ -26,8 +26,9 @@ import (
 )
 
 // FilterConfig represents an opaque data structure holding configuration for a
-// filter.  Embed this interface to implement it.
+// filter.
 type FilterConfig interface {
+	// Equal returns true for equivalent filter configurations.
 	Equal(FilterConfig) bool
 }
 
