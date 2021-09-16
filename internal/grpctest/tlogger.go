@@ -98,7 +98,7 @@ func (g *tLogger) log(ltype logType, depth int, format string, args ...interface
 		g.t.Error(err)
 		return
 	}
-	args = append([]interface{}{ltype.String(), prefix}, args...)
+	args = append([]interface{}{ltype.String() + " " + prefix}, args...)
 	args = append(args, fmt.Sprintf(" (t=+%s)", time.Since(g.start)))
 
 	if format == "" {
