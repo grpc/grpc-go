@@ -1033,7 +1033,11 @@ func (s) TestRBACToggledOffThenToggledOnWithBadRouteConfiguration(t *testing.T) 
 	// After toggling RBAC support on, all the RPC's should get denied with
 	// status code Unavailable due to not matching to a route of type Non
 	// Forwarding Action (Route Table not configured properly).
+	oldRBAC := env.RBACSupport
 	env.RBACSupport = true
+	defer func() {
+		env.RBACSupport = oldRBAC
+	}()
 	// Update the server with the same configuration, this is blocking on server
 	// side so no raciness here.
 	if err := managementServer.Update(ctx, resources); err != nil {
@@ -1046,6 +1050,4 @@ func (s) TestRBACToggledOffThenToggledOnWithBadRouteConfiguration(t *testing.T) 
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.Unavailable {
 		t.Fatalf("UnaryCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
 	}
-	// Toggle RBACSupport off for next iteration.
-	env.RBACSupport = false
 }

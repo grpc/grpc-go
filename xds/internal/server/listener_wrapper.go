@@ -414,8 +414,10 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	// Server's state to ServingModeNotServing. That prevents new connections
 	// from being accepted, whereas here we simply want the clients to reconnect
 	// to get the updated configuration.
-	if l.drainCallback != nil {
-		l.drainCallback(l.Listener.Addr())
+	if env.RBACSupport {
+		if l.drainCallback != nil {
+			l.drainCallback(l.Listener.Addr())
+		}
 	}
 	l.rdsHandler.updateRouteNamesToWatch(ilc.FilterChains.RouteConfigNames)
 	// If there are no dynamic RDS Configurations still needed to be received
