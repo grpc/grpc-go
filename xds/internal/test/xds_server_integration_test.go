@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
-	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"
+	"google.golang.org/grpc/xds/internal/httpfilter/rbac"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -722,6 +722,8 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 	defer func() {
 		env.RBACSupport = oldRBAC
 	}()
+	rbac.RegisterForTesting()
+	defer rbac.UnregisterForTesting()
 	tests := []struct {
 		name                string
 		rbacCfg             *rpb.RBAC
