@@ -47,10 +47,6 @@ jobs:
             goversion: 1.17
             testflags: -race
 
-          - type: tests
-            goversion: 1.17
-            grpcenv: GRPC_XDS_EXPERIMENTAL_ENABLE_RETRY=true
-
           - type: extras
             goversion: 1.17
 
