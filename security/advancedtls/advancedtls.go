@@ -181,6 +181,9 @@ type ClientOptions struct {
 	RootOptions RootCertificateOptions
 	// VType is the verification type on the client side.
 	VType VerificationType
+	// RevocationConfig is the configurations for certificate revocation checks.
+	// It could be nil if such checks are not needed.
+	RevocationConfig *RevocationConfig
 }
 
 // ServerOptions contains the fields needed to be filled by the server.
@@ -199,6 +202,9 @@ type ServerOptions struct {
 	RequireClientCert bool
 	// VType is the verification type on the server side.
 	VType VerificationType
+	// RevocationConfig is the configurations for certificate revocation checks.
+	// It could be nil if such checks are not needed.
+	RevocationConfig *RevocationConfig
 }
 
 func (o *ClientOptions) config() (*tls.Config, error) {
@@ -356,11 +362,12 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 // advancedTLSCreds is the credentials required for authenticating a connection
 // using TLS.
 type advancedTLSCreds struct {
-	config     *tls.Config
-	verifyFunc CustomVerificationFunc
-	getRootCAs func(params *GetRootCAsParams) (*GetRootCAsResults, error)
-	isClient   bool
-	vType      VerificationType
+	config           *tls.Config
+	verifyFunc       CustomVerificationFunc
+	getRootCAs       func(params *GetRootCAsParams) (*GetRootCAsResults, error)
+	isClient         bool
+	vType            VerificationType
+	revocationConfig *RevocationConfig
 }
 
 func (c advancedTLSCreds) Info() credentials.ProtocolInfo {
@@ -451,6 +458,14 @@ func buildVerifyFunc(c *advancedTLSCreds,
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		chains := verifiedChains
 		var leafCert *x509.Certificate
+		rawCertList := make([]*x509.Certificate, len(rawCerts))
+		for i, asn1Data := range rawCerts {
+			cert, err := x509.ParseCertificate(asn1Data)
+			if err != nil {
+				return err
+			}
+			rawCertList[i] = cert
+		}
 		if c.vType == CertAndHostVerification || c.vType == CertVerification {
 			// perform possible trust credential reloading and certificate check
 			rootCAs := c.config.RootCAs
@@ -469,14 +484,6 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				rootCAs = results.TrustCerts
 			}
 			// Verify peers' certificates against RootCAs and get verifiedChains.
-			certs := make([]*x509.Certificate, len(rawCerts))
-			for i, asn1Data := range rawCerts {
-				cert, err := x509.ParseCertificate(asn1Data)
-				if err != nil {
-					return err
-				}
-				certs[i] = cert
-			}
 			keyUsages := []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
 			if !c.isClient {
 				keyUsages = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
@@ -487,7 +494,7 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				Intermediates: x509.NewCertPool(),
 				KeyUsages:     keyUsages,
 			}
-			for _, cert := range certs[1:] {
+			for _, cert := range rawCertList[1:] {
 				opts.Intermediates.AddCert(cert)
 			}
 			// Perform default hostname check if specified.
@@ -501,11 +508,21 @@ func buildVerifyFunc(c *advancedTLSCreds,
 				opts.DNSName = parsedName
 			}
 			var err error
-			chains, err = certs[0].Verify(opts)
+			chains, err = rawCertList[0].Verify(opts)
 			if err != nil {
 				return err
 			}
-			leafCert = certs[0]
+			leafCert = rawCertList[0]
+		}
+		// Perform certificate revocation check if specified.
+		if c.revocationConfig != nil {
+			verifiedChains := chains
+			if verifiedChains == nil {
+				verifiedChains = [][]*x509.Certificate{rawCertList}
+			}
+			if err := CheckChainRevocation(verifiedChains, *c.revocationConfig); err != nil {
+				return err
+			}
 		}
 		// Perform custom verification check if specified.
 		if c.verifyFunc != nil {
@@ -529,11 +546,12 @@ func NewClientCreds(o *ClientOptions) (credentials.TransportCredentials, error) 
 		return nil, err
 	}
 	tc := &advancedTLSCreds{
-		config:     conf,
-		isClient:   true,
-		getRootCAs: o.RootOptions.GetRootCertificates,
-		verifyFunc: o.VerifyPeer,
-		vType:      o.VType,
+		config:           conf,
+		isClient:         true,
+		getRootCAs:       o.RootOptions.GetRootCertificates,
+		verifyFunc:       o.VerifyPeer,
+		vType:            o.VType,
+		revocationConfig: o.RevocationConfig,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
@@ -547,11 +565,12 @@ func NewServerCreds(o *ServerOptions) (credentials.TransportCredentials, error) 
 		return nil, err
 	}
 	tc := &advancedTLSCreds{
-		config:     conf,
-		isClient:   false,
-		getRootCAs: o.RootOptions.GetRootCertificates,
-		verifyFunc: o.VerifyPeer,
-		vType:      o.VType,
+		config:           conf,
+		isClient:         false,
+		getRootCAs:       o.RootOptions.GetRootCertificates,
+		verifyFunc:       o.VerifyPeer,
+		vType:            o.VType,
+		revocationConfig: o.RevocationConfig,
 	}
 	tc.config.NextProtos = credinternal.AppendH2ToNextProtos(tc.config.NextProtos)
 	return tc, nil
