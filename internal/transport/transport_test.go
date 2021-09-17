@@ -1736,7 +1736,6 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			print("running test casee")
 			server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
 			defer server.stop()
 			// Create a client directly to not tie what you can send to API of

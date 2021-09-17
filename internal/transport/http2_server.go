@@ -414,6 +414,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				return false
 			}
 			seenAuthority = true
+			mdata[":authority"] = append(mdata[":authority"], hf.Value)
 		case "host":
 			if seenHost {
 				t.controlBuf.put(&cleanupStream{
@@ -425,6 +426,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				return false
 			}
 			seenHost = true
+			mdata["host"] = append(mdata["host"], hf.Value)
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
 				break
