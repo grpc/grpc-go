@@ -104,6 +104,12 @@ func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.Prefi
 	if err := proto.Unmarshal(apiLisAny.GetValue(), apiLis); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal api_listner: %v", err)
 	}
+	// "HttpConnectionManager.xff_num_trusted_hops must be unset or zero and
+	// HttpConnectionManager.original_ip_detection_extensions must be empty. If
+	// either field has an incorrect value, the Listener must be NACKed." - A41
+	if apiLis.XffNumTrustedHops != 0 || len(apiLis.OriginalIpDetectionExtensions) != 0 {
+		return nil, fmt.Errorf("xff_num_trusted_hops must be unset or zero and original_ip_detection_extensions must be empty %+v", apiLis)
+	}
 
 	switch apiLis.RouteSpecifier.(type) {
 	case *v3httppb.HttpConnectionManager_Rds:
