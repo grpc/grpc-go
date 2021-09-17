@@ -599,35 +599,36 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 				// TODO: Implement terminal filter logic, as per A36.
 				filterChain.HTTPFilters = filters
 				seenHCM = true
-				if env.RBACSupport {
-					switch hcm.RouteSpecifier.(type) {
-					case *v3httppb.HttpConnectionManager_Rds:
-						if hcm.GetRds().GetConfigSource().GetAds() == nil {
-							return nil, fmt.Errorf("ConfigSource is not ADS: %+v", hcm)
-						}
-						name := hcm.GetRds().GetRouteConfigName()
-						if name == "" {
-							return nil, fmt.Errorf("empty route_config_name: %+v", hcm)
-						}
-						filterChain.RouteConfigName = name
-					case *v3httppb.HttpConnectionManager_RouteConfig:
-						// "RouteConfiguration validation logic inherits all
-						// previous validations made for client-side usage as RDS
-						// does not distinguish between client-side and
-						// server-side." - A36
-						// Can specify v3 here, as will never get to this function
-						// if v2.
-						routeU, err := generateRDSUpdateFromRouteConfiguration(hcm.GetRouteConfig(), nil, false)
-						if err != nil {
-							return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
-						}
-						filterChain.InlineRouteConfig = &routeU
-					case nil:
-						// No-op, as no route specifier is a valid configuration on
-						// the server side.
-					default:
-						return nil, fmt.Errorf("unsupported type %T for RouteSpecifier", hcm.RouteSpecifier)
+				if !env.RBACSupport {
+					continue
+				}
+				switch hcm.RouteSpecifier.(type) {
+				case *v3httppb.HttpConnectionManager_Rds:
+					if hcm.GetRds().GetConfigSource().GetAds() == nil {
+						return nil, fmt.Errorf("ConfigSource is not ADS: %+v", hcm)
 					}
+					name := hcm.GetRds().GetRouteConfigName()
+					if name == "" {
+						return nil, fmt.Errorf("empty route_config_name: %+v", hcm)
+					}
+					filterChain.RouteConfigName = name
+				case *v3httppb.HttpConnectionManager_RouteConfig:
+					// "RouteConfiguration validation logic inherits all
+					// previous validations made for client-side usage as RDS
+					// does not distinguish between client-side and
+					// server-side." - A36
+					// Can specify v3 here, as will never get to this function
+					// if v2.
+					routeU, err := generateRDSUpdateFromRouteConfiguration(hcm.GetRouteConfig(), nil, false)
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
+					}
+					filterChain.InlineRouteConfig = &routeU
+				case nil:
+					// No-op, as no route specifier is a valid configuration on
+					// the server side.
+				default:
+					return nil, fmt.Errorf("unsupported type %T for RouteSpecifier", hcm.RouteSpecifier)
 				}
 			}
 		default:

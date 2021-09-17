@@ -273,37 +273,37 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			conn.Close()
 			continue
 		}
-		var vhswi []xdsclient.VirtualHostWithInterceptors
-		if env.RBACSupport {
-			var rc xdsclient.RouteConfigUpdate
-			if fc.InlineRouteConfig != nil {
-				rc = *fc.InlineRouteConfig
-			} else {
-				rcPtr := atomic.LoadPointer(&l.rdsUpdates)
-				rcuPtr := (*map[string]xdsclient.RouteConfigUpdate)(rcPtr)
-				// This shouldn't happen, but this error protects against a panic.
-				if rcuPtr == nil {
-					return nil, errors.New("route configuration pointer is nil")
-				}
-				rcu := *rcuPtr
-				rc = rcu[fc.RouteConfigName]
+		if !env.RBACSupport {
+			return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
+		}
+		var rc xdsclient.RouteConfigUpdate
+		if fc.InlineRouteConfig != nil {
+			rc = *fc.InlineRouteConfig
+		} else {
+			rcPtr := atomic.LoadPointer(&l.rdsUpdates)
+			rcuPtr := (*map[string]xdsclient.RouteConfigUpdate)(rcPtr)
+			// This shouldn't happen, but this error protects against a panic.
+			if rcuPtr == nil {
+				return nil, errors.New("route configuration pointer is nil")
 			}
-			// The filter chain will construct a usuable route table on each
-			// connection accept. This is done because preinstantiating every route
-			// table before it is needed for a connection would potentially lead to
-			// a lot of cpu time and memory allocated for route tables that will
-			// never be used. There was also a thought to cache this configuration,
-			// and reuse it for the next accepted connection. However, this would
-			// lead to a lot of code complexity (RDS Updates for a given route name
-			// can come it at any time), and connections aren't accepted too often,
-			// so this reinstantation of the Route Configuration is an acceptable
-			// tradeoff for simplicity.
-			vhswi, err = fc.ConstructUsableRouteConfiguration(rc)
-			if err != nil {
-				l.logger.Warningf("route configuration construction: %v", err)
-				conn.Close()
-				continue
-			}
+			rcu := *rcuPtr
+			rc = rcu[fc.RouteConfigName]
+		}
+		// The filter chain will construct a usuable route table on each
+		// connection accept. This is done because preinstantiating every route
+		// table before it is needed for a connection would potentially lead to
+		// a lot of cpu time and memory allocated for route tables that will
+		// never be used. There was also a thought to cache this configuration,
+		// and reuse it for the next accepted connection. However, this would
+		// lead to a lot of code complexity (RDS Updates for a given route name
+		// can come it at any time), and connections aren't accepted too often,
+		// so this reinstantation of the Route Configuration is an acceptable
+		// tradeoff for simplicity.
+		vhswi, err := fc.ConstructUsableRouteConfiguration(rc)
+		if err != nil {
+			l.logger.Warningf("route configuration construction: %v", err)
+			conn.Close()
+			continue
 		}
 		return &connWrapper{Conn: conn, filterChain: fc, parent: l, virtualHosts: vhswi}, nil
 	}
