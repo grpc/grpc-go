@@ -366,7 +366,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		timeout    time.Duration
 	)
 
-	var seenAuthority, seenHost bool
 	for _, hf := range frame.Fields {
 		switch hf.Name {
 		case "content-type":
@@ -393,6 +392,9 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		// "Transports must consider requests containing the Connection header
 		// as malformed." - A41
 		case "connection":
+			if logger.V(logLevel) {
+				logger.Errorf("transport: http2Server.operateHeaders parsed a :connection header which makes a request malformed as per the HTTP/2 spec")
+			}
 			t.controlBuf.put(&cleanupStream{
 				streamID: streamID,
 				rst:      true,
@@ -400,33 +402,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				onWrite:  func() {},
 			})
 			return false
-		// "If multiple Host headers or multiple :authority headers are present,
-		// the request must be rejected by RST_STREAM with HTTP/2 error code
-		// PROTOCOL_ERROR." - A41
-		case ":authority":
-			if seenAuthority {
-				t.controlBuf.put(&cleanupStream{
-					streamID: streamID,
-					rst:      true,
-					rstCode:  http2.ErrCodeProtocol,
-					onWrite:  func() {},
-				})
-				return false
-			}
-			seenAuthority = true
-			mdata[":authority"] = append(mdata[":authority"], hf.Value)
-		case "host":
-			if seenHost {
-				t.controlBuf.put(&cleanupStream{
-					streamID: streamID,
-					rst:      true,
-					rstCode:  http2.ErrCodeProtocol,
-					onWrite:  func() {},
-				})
-				return false
-			}
-			seenHost = true
-			mdata["host"] = append(mdata["host"], hf.Value)
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
 				break
@@ -440,8 +415,40 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			mdata[hf.Name] = append(mdata[hf.Name], v)
 		}
 	}
+	// git commit -m "Implementation changes, still need to test"
+	// what we have here with cleanupStream, tests test a grpc RPC, so would be grpc status
+
+	// "If multiple Host headers or multiple :authority headers are present, the
+	// request must be rejected with an HTTP status code 400 as required by Host
+	// validation in RFC 7230 §5.4, gRPC status code INTERNAL, or RST_STREAM
+	// with HTTP/2 error code PROTOCOL_ERROR." - A41
+	if len(mdata[":authority"]) > 1 || len(mdata["host"]) > 1 {
+		errMsg := fmt.Sprintf("num values of :authority: %v, num values of host: %v, both must only have 1 value as per HTTP/2 spec", len(mdata[":authority"]), len(mdata["host"]))
+		if logger.V(logLevel) {
+			logger.Errorf("transport: %v", errMsg)
+		}
+		// If a client speaks gRPC, we can send back a gRPC status INTERNAL.
+		if isGRPC {
+			t.controlBuf.put(&earlyAbortStream{
+				// TODO: Knob on HTTP status? to make this HTTP status 400?
+				streamID: streamID,
+				contentSubtype: s.contentSubtype,
+				status: status.New(codes.Internal, errMsg),
+			})
+			return false
+		} else { // If not grpc client just go ahead and send back a RST_STREAM to client.
+			t.controlBuf.put(&cleanupStream{
+				streamID: streamID,
+				rst:      true,
+				rstCode:  http2.ErrCodeProtocol,
+				onWrite:  func() {},
+			})
+			return false
+		}
+	}
+
 	// "If :authority is missing, Host must be renamed to :authority." - A41
-	if !seenAuthority {
+	if len(mdata["authority"]) == 0 {
 		// No-op if host isn't present, no eventual :authority header is a valid
 		// RPC.
 		if host, ok := mdata["host"]; ok {
@@ -451,10 +458,11 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		delete(mdata, "host")
 	}
 	// "If :authority is present, Host must be discarded" - A41
-	if seenAuthority {
+	if len(mdata["authority"]) != 0 {
 		delete(mdata, "host")
 	}
 	// No eventual :authority header is a valid RPC.
+	// TEST THIS ^^^^ USING SERVER_TESTER.GO
 
 	if !isGRPC || headerError {
 		t.controlBuf.put(&cleanupStream{
