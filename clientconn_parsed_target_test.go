@@ -108,7 +108,7 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 	}
 }
 
-func TestParsedTarget_WithCustomDialer(t *testing.T) {
+func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 	defScheme := resolver.GetDefaultScheme()
 	tests := []struct {
 		target            string
