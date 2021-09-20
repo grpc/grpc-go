@@ -25,6 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/balancer/stub"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 )
 
 func TestDiscoveryMechanismTypeMarshalJSON(t *testing.T) {
@@ -136,7 +137,7 @@ const (
     "type": "EDS",
     "edsServiceName": "test-eds-service-name"
   }],
-  "xdsLbPolicy":[{"RING_HASH":{}}]
+  "xdsLbPolicy":[{"ring_hash_experimental":{}}]
 }`
 	testJSONConfig5 = `{
   "discoveryMechanisms": [{
@@ -234,7 +235,7 @@ func TestParseConfig(t *testing.T) {
 					},
 				},
 				XDSLBPolicy: &internalserviceconfig.BalancerConfig{
-					Name:   "RING_HASH",
+					Name:   ringhash.Name,
 					Config: nil,
 				},
 			},

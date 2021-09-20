@@ -30,10 +30,12 @@ import (
 	"unsafe"
 
 	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
@@ -51,41 +53,11 @@ var (
 	backoffFunc = bs.Backoff
 )
 
-// ServingMode indicates the current mode of operation of the server.
-//
-// This API exactly mirrors the one in the public xds package. We have to
-// redefine it here to avoid a cyclic dependency.
-type ServingMode int
-
-const (
-	// ServingModeStarting indicates that the serving is starting up.
-	ServingModeStarting ServingMode = iota
-	// ServingModeServing indicates the the server contains all required xDS
-	// configuration is serving RPCs.
-	ServingModeServing
-	// ServingModeNotServing indicates that the server is not accepting new
-	// connections. Existing connections will be closed gracefully, allowing
-	// in-progress RPCs to complete. A server enters this mode when it does not
-	// contain the required xDS configuration to serve RPCs.
-	ServingModeNotServing
-)
-
-func (s ServingMode) String() string {
-	switch s {
-	case ServingModeNotServing:
-		return "not-serving"
-	case ServingModeServing:
-		return "serving"
-	default:
-		return "starting"
-	}
-}
-
 // ServingModeCallback is the callback that users can register to get notified
 // about the server's serving mode changes. The callback is invoked with the
 // address of the listener and its new mode. The err parameter is set to a
 // non-nil error if the server has transitioned into not-serving mode.
-type ServingModeCallback func(addr net.Addr, mode ServingMode, err error)
+type ServingModeCallback func(addr net.Addr, mode connectivity.ServingMode, err error)
 
 // DrainCallback is the callback that an xDS-enabled server registers to get
 // notified about updates to the Listener configuration. The server is expected
@@ -208,7 +180,7 @@ type listenerWrapper struct {
 	// get a Listener resource update).
 	mu sync.RWMutex
 	// Current serving mode.
-	mode ServingMode
+	mode connectivity.ServingMode
 	// Filter chains received as part of the last good update.
 	filterChains *xdsclient.FilterChainManager
 
@@ -267,7 +239,7 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		}
 
 		l.mu.RLock()
-		if l.mode == ServingModeNotServing {
+		if l.mode == connectivity.ServingModeNotServing {
 			// Close connections as soon as we accept them when we are in
 			// "not-serving" mode. Since we accept a net.Listener from the user
 			// in Serve(), we cannot close the listener when we move to
@@ -300,6 +272,9 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			l.logger.Warningf("connection from %s to %s failed to find any matching filter chain", conn.RemoteAddr().String(), conn.LocalAddr().String())
 			conn.Close()
 			continue
+		}
+		if !env.RBACSupport {
+			return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
 		}
 		var rc xdsclient.RouteConfigUpdate
 		if fc.InlineRouteConfig != nil {
@@ -390,7 +365,7 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 	if update.err != nil {
 		l.logger.Warningf("Received error for rds names specified in resource %q: %+v", l.name, update.err)
 		if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
-			l.switchMode(nil, ServingModeNotServing, update.err)
+			l.switchMode(nil, connectivity.ServingModeNotServing, update.err)
 		}
 		// For errors which are anything other than "resource-not-found", we
 		// continue to use the old configuration.
@@ -398,7 +373,7 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 	}
 	atomic.StorePointer(&l.rdsUpdates, unsafe.Pointer(&update.updates))
 
-	l.switchMode(l.filterChains, ServingModeServing, nil)
+	l.switchMode(l.filterChains, connectivity.ServingModeServing, nil)
 	l.goodUpdate.Fire()
 }
 
@@ -406,7 +381,7 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	if update.err != nil {
 		l.logger.Warningf("Received error for resource %q: %+v", l.name, update.err)
 		if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
-			l.switchMode(nil, ServingModeNotServing, update.err)
+			l.switchMode(nil, connectivity.ServingModeNotServing, update.err)
 		}
 		// For errors which are anything other than "resource-not-found", we
 		// continue to use the old configuration.
@@ -428,7 +403,7 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	// what we have decided to do. See gRPC A36 for more details.
 	ilc := update.update.InboundListenerCfg
 	if ilc.Address != l.addr || ilc.Port != l.port {
-		l.switchMode(nil, ServingModeNotServing, fmt.Errorf("address (%s:%s) in Listener update does not match listening address: (%s:%s)", ilc.Address, ilc.Port, l.addr, l.port))
+		l.switchMode(nil, connectivity.ServingModeNotServing, fmt.Errorf("address (%s:%s) in Listener update does not match listening address: (%s:%s)", ilc.Address, ilc.Port, l.addr, l.port))
 		return
 	}
 
@@ -439,20 +414,22 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	// Server's state to ServingModeNotServing. That prevents new connections
 	// from being accepted, whereas here we simply want the clients to reconnect
 	// to get the updated configuration.
-	if l.drainCallback != nil {
-		l.drainCallback(l.Listener.Addr())
+	if env.RBACSupport {
+		if l.drainCallback != nil {
+			l.drainCallback(l.Listener.Addr())
+		}
 	}
 	l.rdsHandler.updateRouteNamesToWatch(ilc.FilterChains.RouteConfigNames)
 	// If there are no dynamic RDS Configurations still needed to be received
 	// from the management server, this listener has all the configuration
 	// needed, and is ready to serve.
 	if len(ilc.FilterChains.RouteConfigNames) == 0 {
-		l.switchMode(ilc.FilterChains, ServingModeServing, nil)
+		l.switchMode(ilc.FilterChains, connectivity.ServingModeServing, nil)
 		l.goodUpdate.Fire()
 	}
 }
 
-func (l *listenerWrapper) switchMode(fcs *xdsclient.FilterChainManager, newMode ServingMode, err error) {
+func (l *listenerWrapper) switchMode(fcs *xdsclient.FilterChainManager, newMode connectivity.ServingMode, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

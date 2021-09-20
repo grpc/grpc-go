@@ -30,6 +30,7 @@ import (
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -64,8 +65,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Create a couple of channels on which mode updates will be pushed.
-	updateCh1 := make(chan xds.ServingMode, 1)
-	updateCh2 := make(chan xds.ServingMode, 1)
+	updateCh1 := make(chan connectivity.ServingMode, 1)
+	updateCh2 := make(chan connectivity.ServingMode, 1)
 
 	// Create a server option to get notified about serving mode changes, and
 	// push the updated mode on the channels created above.
@@ -124,16 +125,16 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh1:
-		if mode != xds.ServingModeServing {
-			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+		if mode != connectivity.ServingModeServing {
+			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
 		}
 	}
 	select {
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh2:
-		if mode != xds.ServingModeServing {
-			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+		if mode != connectivity.ServingModeServing {
+			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
 		}
 	}
 
@@ -169,16 +170,16 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh1:
-		if mode != xds.ServingModeServing {
-			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+		if mode != connectivity.ServingModeServing {
+			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
 		}
 	}
 	select {
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh2:
-		if mode != xds.ServingModeNotServing {
-			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeNotServing)
+		if mode != connectivity.ServingModeNotServing {
+			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeNotServing)
 		}
 	}
 
@@ -203,8 +204,8 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh1:
-		if mode != xds.ServingModeNotServing {
-			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeNotServing)
+		if mode != connectivity.ServingModeNotServing {
+			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeNotServing)
 		}
 	}
 
@@ -233,16 +234,16 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh1:
-		if mode != xds.ServingModeServing {
-			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+		if mode != connectivity.ServingModeServing {
+			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
 		}
 	}
 	select {
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh2:
-		if mode != xds.ServingModeServing {
-			t.Errorf("listener received new mode %v, want %v", mode, xds.ServingModeServing)
+		if mode != connectivity.ServingModeServing {
+			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
 		}
 	}
 

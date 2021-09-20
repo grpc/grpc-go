@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
@@ -36,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/server"
@@ -231,7 +233,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 		ListenerResourceName: name,
 		XDSCredsInUse:        s.xdsCredsInUse,
 		XDSClient:            s.xdsC,
-		ModeCallback: func(addr net.Addr, mode server.ServingMode, err error) {
+		ModeCallback: func(addr net.Addr, mode connectivity.ServingMode, err error) {
 			modeUpdateCh.Put(&modeChangeArgs{
 				addr: addr,
 				mode: mode,
@@ -261,7 +263,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 // modeChangeArgs wraps argument required for invoking mode change callback.
 type modeChangeArgs struct {
 	addr net.Addr
-	mode server.ServingMode
+	mode connectivity.ServingMode
 	err  error
 }
 
@@ -278,7 +280,7 @@ func (s *GRPCServer) handleServingModeChanges(updateCh *buffer.Unbounded) {
 		case u := <-updateCh.Get():
 			updateCh.Load()
 			args := u.(*modeChangeArgs)
-			if args.mode == ServingModeNotServing {
+			if args.mode == connectivity.ServingModeNotServing {
 				// We type assert our underlying gRPC server to the real
 				// grpc.Server here before trying to initiate the drain
 				// operation. This approach avoids performing the same type
@@ -380,8 +382,10 @@ func routeAndProcess(ctx context.Context) error {
 // xdsUnaryInterceptor is the unary interceptor added to the gRPC server to
 // perform any xDS specific functionality on unary RPCs.
 func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-	if err := routeAndProcess(ctx); err != nil {
-		return nil, err
+	if env.RBACSupport {
+		if err := routeAndProcess(ctx); err != nil {
+			return nil, err
+		}
 	}
 	return handler(ctx, req)
 }
@@ -389,8 +393,10 @@ func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServ
 // xdsStreamInterceptor is the stream interceptor added to the gRPC server to
 // perform any xDS specific functionality on streaming RPCs.
 func xdsStreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	if err := routeAndProcess(ss.Context()); err != nil {
-		return err
+	if env.RBACSupport {
+		if err := routeAndProcess(ss.Context()); err != nil {
+			return err
+		}
 	}
 	return handler(srv, ss)
 }

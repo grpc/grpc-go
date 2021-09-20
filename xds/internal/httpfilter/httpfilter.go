@@ -94,6 +94,11 @@ func Register(b Filter) {
 	}
 }
 
+// UnregisterForTesting unregisters the HTTP Filter for testing purposes.
+func UnregisterForTesting(typeURL string) {
+	delete(m, typeURL)
+}
+
 // Get returns the HTTPFilter registered with typeURL.
 //
 // If no filter is register with typeURL, nil will be returned.

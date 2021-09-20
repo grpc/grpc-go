@@ -29,6 +29,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
 )
@@ -519,6 +520,17 @@ func (fci *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain
 	if err := proto.Unmarshal(any.GetValue(), downstreamCtx); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal DownstreamTlsContext in LDS response: %v", err)
 	}
+	if downstreamCtx.GetRequireSni().GetValue() {
+		return nil, fmt.Errorf("require_sni field set to true in DownstreamTlsContext message: %v", downstreamCtx)
+	}
+	if downstreamCtx.GetOcspStaplePolicy() != v3tlspb.DownstreamTlsContext_LENIENT_STAPLING {
+		return nil, fmt.Errorf("ocsp_staple_policy field set to unsupported value in DownstreamTlsContext message: %v", downstreamCtx)
+	}
+	// The following fields from `DownstreamTlsContext` are ignore:
+	// - disable_stateless_session_resumption
+	// - session_ticket_keys
+	// - session_ticket_keys_sds_secret_config
+	// - session_timeout
 	if downstreamCtx.GetCommonTlsContext() == nil {
 		return nil, errors.New("DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
 	}
@@ -587,6 +599,9 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 				// TODO: Implement terminal filter logic, as per A36.
 				filterChain.HTTPFilters = filters
 				seenHCM = true
+				if !env.RBACSupport {
+					continue
+				}
 				switch hcm.RouteSpecifier.(type) {
 				case *v3httppb.HttpConnectionManager_Rds:
 					if hcm.GetRds().GetConfigSource().GetAds() == nil {

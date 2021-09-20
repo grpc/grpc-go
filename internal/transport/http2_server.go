@@ -380,6 +380,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			s.recvCompress = hf.Value
 		case ":method":
 			httpMethod = hf.Value
+			mdata[":method"] = append(mdata[":method"], hf.Value)
 		case ":path":
 			s.method = hf.Value
 		case "grpc-timeout":

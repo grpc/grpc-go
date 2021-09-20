@@ -43,6 +43,7 @@ const (
 	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
 	aggregateAndDNSSupportEnv    = "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER"
 	retrySupportEnv              = "GRPC_XDS_EXPERIMENTAL_ENABLE_RETRY"
+	rbacSupportEnv               = "GRPC_XDS_EXPERIMENTAL_ENABLE_RBAC"
 
 	c2pResolverSupportEnv                    = "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER"
 	c2pResolverTestOnlyTrafficDirectorURIEnv = "GRPC_TEST_ONLY_GOOGLE_C2P_RESOLVER_TRAFFIC_DIRECTOR_URI"
@@ -62,16 +63,16 @@ var (
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	BootstrapFileContent = os.Getenv(BootstrapFileContentEnv)
 	// RingHashSupport indicates whether ring hash support is enabled, which can
-	// be enabled by setting the environment variable
-	// "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH" to "true".
-	RingHashSupport = strings.EqualFold(os.Getenv(ringHashSupportEnv), "true")
+	// be disabled by setting the environment variable
+	// "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH" to "false".
+	RingHashSupport = !strings.EqualFold(os.Getenv(ringHashSupportEnv), "false")
 	// ClientSideSecuritySupport is used to control processing of security
 	// configuration on the client-side.
 	//
 	// Note that there is no env var protection for the server-side because we
 	// have a brand new API on the server-side and users explicitly need to use
 	// the new API to get security integration on the server.
-	ClientSideSecuritySupport = strings.EqualFold(os.Getenv(clientSideSecuritySupportEnv), "true")
+	ClientSideSecuritySupport = !strings.EqualFold(os.Getenv(clientSideSecuritySupportEnv), "false")
 	// AggregateAndDNSSupportEnv indicates whether processing of aggregated
 	// cluster and DNS cluster is enabled, which can be enabled by setting the
 	// environment variable
@@ -80,7 +81,10 @@ var (
 	AggregateAndDNSSupportEnv = strings.EqualFold(os.Getenv(aggregateAndDNSSupportEnv), "true")
 
 	// RetrySupport indicates whether xDS retry is enabled.
-	RetrySupport = strings.EqualFold(os.Getenv(retrySupportEnv), "true")
+	RetrySupport = !strings.EqualFold(os.Getenv(retrySupportEnv), "false")
+
+	// RBACSupport indicates whether xDS configured RBAC HTTP Filter is enabled.
+	RBACSupport = strings.EqualFold(os.Getenv(rbacSupportEnv), "true")
 
 	// C2PResolverSupport indicates whether support for C2P resolver is enabled.
 	// This can be enabled by setting the environment variable
@@ -89,15 +93,3 @@ var (
 	// C2PResolverTestOnlyTrafficDirectorURI is the TD URI for testing.
 	C2PResolverTestOnlyTrafficDirectorURI = os.Getenv(c2pResolverTestOnlyTrafficDirectorURIEnv)
 )
-
-func init() {
-	// Set the env var used to control processing of security configuration on
-	// the client-side to true by default.
-	// TODO(easwars): Remove this env var completely in 1.42.x release.
-	//
-	// If the env var is set explicitly, honor it.
-	ClientSideSecuritySupport = true
-	if val, ok := os.LookupEnv(clientSideSecuritySupportEnv); ok {
-		ClientSideSecuritySupport = strings.EqualFold(val, "true")
-	}
-}
