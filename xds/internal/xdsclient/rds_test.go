@@ -1146,7 +1146,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 						Headers: []*v3routepb.HeaderMatcher{
 							{
 								Name:                 "th",
-								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_HiddenEnvoyDeprecatedRegexMatch{},
+								HeaderMatchSpecifier: &v3routepb.HeaderMatcher_StringMatch{},
 							},
 						},
 					},
