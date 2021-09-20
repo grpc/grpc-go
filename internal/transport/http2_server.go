@@ -331,6 +331,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 
 // operateHeader takes action on the decoded headers.
 func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) (fatal bool) {
+	print("operating Headers")
 	streamID := frame.Header().StreamID
 
 	// frame.Truncated is set to true when framer detects that the current header
@@ -423,18 +424,25 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	// validation in RFC 7230 §5.4, gRPC status code INTERNAL, or RST_STREAM
 	// with HTTP/2 error code PROTOCOL_ERROR." - A41
 	if len(mdata[":authority"]) > 1 || len(mdata["host"]) > 1 {
+		print("UNAMBIOGUOUS AUTHORITY")
 		errMsg := fmt.Sprintf("num values of :authority: %v, num values of host: %v, both must only have 1 value as per HTTP/2 spec", len(mdata[":authority"]), len(mdata["host"]))
 		if logger.V(logLevel) {
 			logger.Errorf("transport: %v", errMsg)
 		}
 		// If a client speaks gRPC, we can send back a gRPC status INTERNAL.
-		if isGRPC {
+		if isGRPC { // We don't even need this check because it blends in with one down below though
+			// What does this actually break down to frame wise...it's a Headers frame
+			// right? Test grpc status and msg
+			// How to test...this two frames being written onto wire, and also eventual :authority header
 			t.controlBuf.put(&earlyAbortStream{
 				// TODO: Knob on HTTP status? to make this HTTP status 400?
 				streamID: streamID,
 				contentSubtype: s.contentSubtype,
 				status: status.New(codes.Internal, errMsg),
-			})
+			}) // Read the headers frame logically representing a trailers-only...check code and msg
+			// Find examples of how they test this...triage and make sure that this actually ends up as a single headers frame on the wire
+			// Yeah, is a single http headers frame, only writes continuation if above a certain length
+			// Same thing as RST_STREAM except now HEADERS frame, does this have content-subtype in it?
 			return false
 		} else { // If not grpc client just go ahead and send back a RST_STREAM to client.
 			t.controlBuf.put(&cleanupStream{
@@ -442,7 +450,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				rst:      true,
 				rstCode:  http2.ErrCodeProtocol,
 				onWrite:  func() {},
-			})
+			}) // Same as before...without content type grpc though
 			return false
 		}
 	}
@@ -464,7 +472,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	// No eventual :authority header is a valid RPC.
 	// TEST THIS ^^^^ USING SERVER_TESTER.GO
 
-	if !isGRPC || headerError {
+	if !isGRPC || headerError { // TODO: Move this upwards
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
 			rst:      true,
@@ -618,6 +626,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		frame, err := t.framer.fr.ReadFrame()
 		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 		if err != nil {
+			print("framer read a stream error server side")
 			if se, ok := err.(http2.StreamError); ok {
 				if logger.V(logLevel) {
 					logger.Warningf("transport: http2Server.HandleStreams encountered http2.StreamError: %v", se)

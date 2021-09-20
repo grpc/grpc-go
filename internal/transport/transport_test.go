@@ -1706,8 +1706,14 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 			},
 		},
 		// multiple :authority or multiple Host headers would make the eventual
-		// :authority ambiguous as per A41.
+		// :authority ambiguous as per A41. Since these headers won't have a
+		// content-type that corresponds to a grpc-client, the server should
+		// simply write a RST_STREAM to the wire.
 		{
+			// Note: multiple authority headers are handled by the framer
+			// itself, which will cause a stream error. Thus, it will never get
+			// to operateHeaders with the check in operateHeaders for stream
+			// error, but the server transport will still send a stream error.
 			name: "Multiple authority headers",
 			headers: []struct {
 				name   string
@@ -1716,7 +1722,6 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 				{name: ":method", values: []string{"POST"}},
 				{name: ":path", values: []string{"foo"}},
 				{name: ":authority", values: []string{"localhost", "localhost2"}},
-				{name: "content-type", values: []string{"application/grpc"}},
 				{name: "host", values: []string{"localhost"}},
 			},
 		},
@@ -1729,7 +1734,6 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 				{name: ":method", values: []string{"POST"}},
 				{name: ":path", values: []string{"foo"}},
 				{name: ":authority", values: []string{"localhost"}},
-				{name: "content-type", values: []string{"application/grpc"}},
 				{name: "host", values: []string{"localhost", "localhost2"}},
 			},
 		},
@@ -1806,6 +1810,153 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 				t.Fatalf("Error in frame server should send: %v. Error receiving from channel: %v", e, err)
 			}
 		})
+	}
+}
+
+// Settings RST_STREAM
+
+// Settings Headers
+// The only way to test this is...send multiple authority and host headers
+// with grpc-status present
+func (s) TestHeadersGRPCRequest(t *testing.T) {
+	tests := []struct {
+		name    string
+		headers []struct {
+			name   string
+			values []string
+		}
+	}{
+		// multiple :authority or multiple Host headers would make the eventual
+		// :authority ambiguous as per A41. On requests where you know that it is
+		// from a grpc client, this should be rejected with grpc-status Internal.
+		/*{
+			name: "Multiple authority headers",
+			headers: []struct {
+				name   string
+				values []string
+			}{
+				{name: ":method", values: []string{"POST"}},
+				{name: ":path", values: []string{"foo"}},
+				{name: ":authority", values: []string{"localhost", "localhost2"}},
+				{name: "content-type", values: []string{"application/grpc"}},
+				{name: "host", values: []string{"localhost"}},
+			},
+		},*/
+		// Note: multiple authority headers are handled by the framer itself,
+		// which will cause a stream error. Thus, it will never get to
+		// operateHeaders with the check in operateHeaders for possible grpc-status sent back.
+		{
+			name: "Multiple host headers",
+			headers: []struct {
+				name   string
+				values []string
+			}{
+				{name: ":method", values: []string{"POST"}},
+				{name: ":path", values: []string{"foo"}},
+				{name: ":authority", values: []string{"localhost"}},
+				{name: "content-type", values: []string{"application/grpc"}}, // What branches in terms of what gets sent back to client
+				{name: "host", values: []string{"localhost", "localhost2"}}, // Is the right in encoding?
+			},
+		},
+	}
+	// Same thing as previous, except this time read a headers frame
+	// instead of RST_STREAM. this headers frame needs to have a certain value
+	// for grpc-statusInternal MSG? Still need knobs on request, so this is still
+	// best place to test it
+	for _, test := range tests {
+		server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
+		defer server.stop()
+		// Create a client directly to not tie what you can send to API of
+		// http2_client.go (i.e. control headers being sent).
+		mconn, err := net.Dial("tcp", server.lis.Addr().String())
+		if err != nil {
+			t.Fatalf("Client failed to dial: %v", err)
+		}
+		defer mconn.Close()
+
+		if n, err := mconn.Write(clientPreface); err != nil || n != len(clientPreface) {
+			t.Fatalf("mconn.Write(clientPreface) = %d, %v, want %d, <nil>", n, err, len(clientPreface))
+		}
+
+		framer := http2.NewFramer(mconn, mconn)
+		framer.ReadMetaHeaders = hpack.NewDecoder(4096, nil)
+		if err := framer.WriteSettings(); err != nil {
+			t.Fatalf("Error while writing settings: %v", err)
+		}
+
+		// success chan indicates that reader received a Headers Frame with
+		// desired grpc status and message from server. An error will be passed
+		// on it if any other frame is received.
+		success := testutils.NewChannel()
+
+		// Launch a reader goroutine.
+		go func() {
+			for {
+				frame, err := framer.ReadFrame()
+				if err != nil {
+					return
+				}
+				switch frame := frame.(type) {
+				case *http2.SettingsFrame:
+					// Do nothing. A settings frame is expected from server preface.
+				case *http2.MetaHeadersFrame:
+					print("got a headers frame")
+					for _, header := range frame.Fields {
+						print(header.Value, header.Name)
+						if header.Name == ":status" {
+							// TODO: This might switch to 400 dependent on the knobs provided.
+							if header.Value != "200" {
+								t.Fatalf("incorrect HTTP Status got %v, want 200", header.Value)
+								return
+							}
+						}
+						if header.Name == "grpc-status" {
+							if header.Value != "13" { // grpc status code internal
+								t.Fatalf("incorrect gRPC Status got %v, want 13", header.Value)
+								return
+							}
+						}
+						if header.Name == "grpc-message" {
+							if !strings.Contains(header.Value, "both must only have 1 value as per HTTP/2 spec") {
+								t.Fatalf("incorrect gRPC message")
+								return
+							}
+						}
+					}
+
+					// Records that client successfully received a HeadersFrame
+					// with expected Trailers-Only response.
+					success.Send(nil)
+					return
+				default:
+					print(frame.Header().Type) // Gets a RST_Stream instead of a Headers frame
+					// The server should send nothing but a single Settings and Headers frame.
+					success.Send(errors.New("the client received a frame other than Settings or Headers"))
+				}
+			}
+		}()
+
+		var buf bytes.Buffer
+		henc := hpack.NewEncoder(&buf)
+
+		// Needs to build headers deterministically to conform to gRPC over
+		// HTTP/2 spec.
+		for _, header := range test.headers {
+			for _, value := range header.values {
+				if err := henc.WriteField(hpack.HeaderField{Name: header.name, Value: value}); err != nil {
+					t.Fatalf("Error while encoding header: %v", err)
+				}
+			}
+		}
+
+		if err := framer.WriteHeaders(http2.HeadersFrameParam{StreamID: 1, BlockFragment: buf.Bytes(), EndHeaders: true}); err != nil {
+			t.Fatalf("Error while writing headers: %v", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		if e, err := success.Receive(ctx); e != nil || err != nil {
+			t.Fatalf("Error in frame server should send: %v. Error receiving from channel: %v", e, err)
+		}
 	}
 }
 
@@ -2083,7 +2234,7 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			metaHeaderFrame: &http2.MetaHeadersFrame{
 				Fields: []hpack.HeaderField{
 					{Name: "content-type", Value: "application/grpc"},
-					{Name: "grpc-status", Value: "0"},
+					{Name: "grpc-status", Value: "0"}, // Does the message gets attached to this?
 					{Name: ":status", Value: "200"},
 				},
 			},

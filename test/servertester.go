@@ -273,3 +273,4 @@ func (st *serverTester) writeRSTStream(streamID uint32, code http2.ErrCode) {
 		st.t.Fatalf("Error writing RST_STREAM: %v", err)
 	}
 }
+// Link this in and test :authority header that gets spit out to the interceptor
