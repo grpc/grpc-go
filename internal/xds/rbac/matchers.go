@@ -392,8 +392,13 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 	// authenticated downstream in a stateful TLS connection will have to
 	// provide a certificate to prove their identity. Thus, you can simply check
 	// if there is a certificate present.
-	if am.stringMatcher == nil {
-		return len(data.certs) != 0
+	if data.authType != "tls" {
+		// Connection is not authenticated.
+		return false
+	}
+	if am.stringMatcher.ExactMatch() == "" {
+		// Allows any authenticated user.
+		return true
 	}
 	// No certificate present, so will never successfully match.
 	if len(data.certs) == 0 {

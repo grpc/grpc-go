@@ -28,9 +28,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	pb "google.golang.org/grpc/test/grpc_testing"
+	"google.golang.org/grpc/testdata"
 )
 
 type testServer struct {
@@ -63,7 +65,7 @@ func TestSDKEnd2End(t *testing.T) {
 		"DeniesRpcRequestMatchInDenyNoMatchInAllow": {
 			authzPolicy: `{
 				"name": "authz",
-				"allow_rules": 
+				"allow_rules":
 				[
 					{
 						"name": "allow_StreamingOutputCall",
@@ -154,11 +156,11 @@ func TestSDKEnd2End(t *testing.T) {
 								"/grpc.testing.TestService/UnaryCall",
 								"/grpc.testing.TestService/StreamingInputCall"
 							],
-							"headers": 
+							"headers":
 							[
 								{
 									"key": "key-abc",
-									"values": 
+									"values":
 									[
 										"val-abc",
 										"val-def"
@@ -239,12 +241,53 @@ func TestSDKEnd2End(t *testing.T) {
 				[
 					{
 						"name": "allow_StreamingOutputCall",
-						"request": 
+						"request":
 						{
 							"paths":
 							[
 								"/grpc.testing.TestService/StreamingOutputCall"
 							]
+						}
+					}
+				]
+			}`,
+			wantStatusCode: codes.PermissionDenied,
+			wantErr:        "unauthorized RPC request rejected",
+		},
+		"DeniesRpcRequestWithPrincipalsFieldOnUnauthenticatedConnection": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules":
+				[
+					{
+						"name": "allow_TestServiceCalls",
+						"source": {
+							"principals":
+							[
+								"foo"
+							]
+						},
+						"request": {
+							"paths":
+							[
+								"/grpc.testing.TestService/*"
+							]
+						}
+					}
+				]
+			}`,
+			wantStatusCode: codes.PermissionDenied,
+			wantErr:        "unauthorized RPC request rejected",
+		},
+		"DeniesRpcRequestWithEmptyPrincipalsOnUnauthenticatedConnection": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules":
+				[
+					{
+						"name": "allow_authenticated",
+						"source": {
+							"principals": []
 						}
 					}
 				]
@@ -303,5 +346,58 @@ func TestSDKEnd2End(t *testing.T) {
 				t.Fatalf("[StreamingCall] error want:{%v %v} got:{%v %v}", test.wantStatusCode, test.wantErr, got.Code(), got.Message())
 			}
 		})
+	}
+}
+
+func TestSDKAuthz_AllowsRpcRequestWithEmptyPrincipalsOnAuthenticatedConnection(t *testing.T) {
+	authzPolicy := `{
+				"name": "authz",
+				"allow_rules":
+				[
+					{
+						"name": "allow_authenticated",
+						"source": {
+							"principals": []
+						}
+					}
+				]
+			}`
+	i, _ := authz.NewStatic(authzPolicy)
+
+	// Start a gRPC server with SDK unary server interceptor.
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("error listening: %v", err)
+	}
+
+	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
+	if err != nil {
+		t.Fatalf("failed to generate credentials: %v", err)
+	}
+	s := grpc.NewServer(
+		grpc.Creds(creds),
+		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
+	pb.RegisterTestServiceServer(s, &testServer{})
+	go s.Serve(lis)
+
+	// Establish a connection to the server.
+	creds, err = credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
+	if err != nil {
+		t.Fatalf("failed to load credentials: %v", err)
+	}
+	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(creds))
+	if err != nil {
+		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
+	}
+	defer clientConn.Close()
+	client := pb.NewTestServiceClient(clientConn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Verifying authorization decision.
+	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
+	if got := status.Convert(err); got.Code() != codes.OK {
+		t.Fatalf("error want:%v got:%v ", codes.OK, got.Code())
 	}
 }

@@ -39,7 +39,7 @@ type header struct {
 }
 
 type peer struct {
-	Principals []string
+	Principals *[]string `json:",omitempty"`
 }
 
 type request struct {
@@ -155,14 +155,23 @@ func parsePrincipalNames(principalNames []string) []*v3rbacpb.Principal {
 }
 
 func parsePeer(source peer) (*v3rbacpb.Principal, error) {
-	if len(source.Principals) > 0 {
-		return principalOr(parsePrincipalNames(source.Principals)), nil
+	if source.Principals == nil {
+		return &v3rbacpb.Principal{
+			Identifier: &v3rbacpb.Principal_Any{
+				Any: true,
+			},
+		}, nil
 	}
-	return &v3rbacpb.Principal{
-		Identifier: &v3rbacpb.Principal_Any{
-			Any: true,
-		},
-	}, nil
+	if len(*source.Principals) == 0 {
+		return &v3rbacpb.Principal{
+			Identifier: &v3rbacpb.Principal_Authenticated_{
+				Authenticated: &v3rbacpb.Principal_Authenticated{
+					PrincipalName: &v3matcherpb.StringMatcher{
+						MatchPattern: &v3matcherpb.StringMatcher_Exact{},
+					}},
+			}}, nil
+	}
+	return principalOr(parsePrincipalNames(*source.Principals)), nil
 }
 
 func parsePaths(paths []string) []*v3rbacpb.Permission {

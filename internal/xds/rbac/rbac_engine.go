@@ -177,10 +177,12 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 		return nil, fmt.Errorf("error parsing local address: %v", err)
 	}
 
+	var authType string
 	var peerCertificates []*x509.Certificate
 	if pi.AuthInfo != nil {
 		tlsInfo, ok := pi.AuthInfo.(credentials.TLSInfo)
 		if ok {
+			authType = pi.AuthInfo.AuthType()
 			peerCertificates = tlsInfo.State.PeerCertificates
 		}
 	}
@@ -191,6 +193,7 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 		fullMethod:      mn,
 		destinationPort: uint32(dp),
 		destinationAddr: conn.LocalAddr(),
+		authType: authType,
 		certs:           peerCertificates,
 	}, nil
 }
@@ -209,6 +212,8 @@ type rpcData struct {
 	destinationPort uint32
 	// destinationAddr is the address that the RPC is being sent to.
 	destinationAddr net.Addr
+	// authType is the type of authentication.
+	authType string
 	// certs are the certificates presented by the peer during a TLS
 	// handshake.
 	certs []*x509.Certificate
