@@ -887,7 +887,10 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 		if err != credentials.ErrConnDispatched {
 			c.Close()
 		}
-		channelz.Warning(logger, s.channelzID, "grpc: Server.Serve failed to create ServerTransport: ", err)
+		// Don't log on ErrConnDispatched and io.EOF to prevent log spam.
+		if err != credentials.ErrConnDispatched && err != io.EOF {
+			channelz.Warning(logger, s.channelzID, "grpc: Server.Serve failed to create ServerTransport: ", err)
+		}
 		return nil
 	}
 
