@@ -153,7 +153,7 @@ func init() {
 		clusterAnys[i] = testutils.MarshalAny(clusters[i])
 	}
 	for i := range edsTargets {
-		endpoints[i] = e2e.DefaultEndpoint(edsTargets[i], ips[i], ports[i])
+		endpoints[i] = e2e.DefaultEndpoint(edsTargets[i], ips[i], ports[i:i+1])
 		endpointAnys[i] = testutils.MarshalAny(endpoints[i])
 	}
 }

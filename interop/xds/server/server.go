@@ -43,15 +43,19 @@ import (
 )
 
 var (
-	port            = flag.Int("port", 8080, "Listening port for test service")
-	maintenancePort = flag.Int("maintenance_port", 8081, "Listening port for maintenance services like health, reflection, channelz etc when -secure_mode is true. When -secure_mode is false, all these services will be registered on -port")
-	serverID        = flag.String("server_id", "go_server", "Server ID included in response")
-	secureMode      = flag.Bool("secure_mode", false, "If true, retrieve security configuration from the management server. Else, use insecure credentials.")
+	port             = flag.Int("port", 8080, "Listening port for test service")
+	maintenancePort  = flag.Int("maintenance_port", 8081, "Listening port for maintenance services like health, reflection, channelz etc when -secure_mode is true. When -secure_mode is false, all these services will be registered on -port")
+	serverID         = flag.String("server_id", "go_server", "Server ID included in response")
+	secureMode       = flag.Bool("secure_mode", false, "If true, retrieve security configuration from the management server. Else, use insecure credentials.")
+	hostNameOverride = flag.String("host_name", "", "If set, use this as the hostname instead of the real hostname")
 
 	logger = grpclog.Component("interop")
 )
 
 func getHostname() string {
+	if *hostNameOverride != "" {
+		return *hostNameOverride
+	}
 	hostname, err := os.Hostname()
 	if err != nil {
 		log.Fatalf("failed to get hostname: %v", err)
