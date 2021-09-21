@@ -7885,5 +7885,124 @@ func (s) TestUnaryInterceptorGetsPost(t *testing.T) {
 	}
 }
 
+// Unary interceptor here that somehow verifies what authority header is - perhaps hardcode what's wanted to localhost
+// unaryInterceptorVerifyAuthority does... and ... and ...
+func unaryInterceptorVerifyAuthority(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.NotFound, "metadata was not in context")
+	}
+	authority := md.Get(":authority")
+	if len(authority) != 1 { // Should be an unambiguous authority by the time it gets to interceptor.
+		return nil, status.Error(codes.NotFound, ":authority value had more than one value")
+	}
+	// Host header shouldn't be present by the time it gets to the interceptor
+	// level (should either be renamed to :authority or explicitly deleted).
+	host := md.Get("host")
+	if len(host) != 0 {
+		return nil, status.Error(codes.NotFound, "host header should not be present in metadata")
+	}
+	return nil, status.Error(codes.OK, authority[0]) // For verification in caller
+	// I think verifying authority makes more sense
+	/*if authority[0] != "locahost" {
+		return nil, status.Error(codes.NotFound, ":authority should be localhost")
+	}
+	return handler(ctx, req)*/ // Would still need to see how this breaks down
+	// VVVVV this breaks down into that headers frame thing, so if you can read frames from
+	// server_tester.go you can verify the error just like we did in transport test
+	// return nil, status.Error(codes.OK, authority[0]) // Can either do it this way or a hardcoded check for "localhost or something" but then would have to receive this and figure out a way to look into it
+}
 
-// Plumb in server_tester.go (see examples
+// Plumb in server_tester.go (see examples)
+// Also link an interceptor to verify since we're simulating RBAC (and also get to the point where it's actually called)
+// Send headers frame with certain headers as knobs
+func (s) TestAuthorityHeader(t testing.T) {
+	te := newTest(t, e)
+	ts := funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+		return &testpb.SimpleResponse{}, nil
+	}}
+	te.unaryServerInt = unaryInterceptorVerifyAuthority
+	te.startServer(ts)
+	defer te.tearDown()
+	success := testutils.NewChannel()
+	te.withServerTester(func(st *serverTester) {
+		// Logically equate to a full RPC
+		// Will this call the unary interceptor if I write certain headers to the server
+
+		// Write headers with certain :authority and host configurations
+
+		// Read metaheaders frame received from the server - see what the grpc-message includes
+
+
+
+
+		// "If :authority is missing, Host must be renamed to :authority." - A41
+		// Headers that match to ^^^
+		// no :authority but with a host
+		// Valid grpc headers frame, :authority is optional
+
+		// Write a grpc headers frame onto wire here that is a normal request but with a switched :authority
+		// Simply look for an API Definition that corresponds to a way to write headers
+		st.writeHeaders(http2.HeadersFrameParam{
+			StreamID: 1,
+			BlockFragment: st.encodeHeader(
+				":method", "POST",
+				":path", "/grpc.testing.TestService/UnaryCall",
+				"content-type", "application/grpc",
+				"te", "trailers", // If this is exposed, RBAC must special case this to treat it as not present
+				"host", "localhost"
+				/*No :authority but with a host, will match to the unaryRPC*/
+			),
+			EndStream: false,
+			EndHeaders: true,
+		})
+		st.writeData(1, true, []byte{0, 0, 0, 0, 0}) // Is that what corresponds to empty proto
+
+		// After writing - expect a meta headers frame off the wire, use this to verify
+		// Figure out what this corresponds to in server_tester.go
+		// This should be a MetaHeadersFrame?
+		frame := st.wantAnyFrame() // Already has readmetaheaders set
+		// Typecast it to MetaHeadersFrame, then verify fields
+		frame.(*http2.MetaHeadersFrame).Fields
+		// This needs to fail if this doesn't happen
+		for _, header := range frame.(*http2.MetaHeadersFrame).Fields {
+			if header.Name == "grpc-message" {
+				// This is the logical verification for what :authority ended up being
+				if header.Value == "localhost" { // Or could even make this a knob in test case
+					// Send on some channel maybe that correct? If it doesn't send it's logically wrong
+					// Testutils.channel, pass it a context
+					success.Send("")
+				}
+			}
+		}
+
+
+
+
+
+
+
+
+		// "If :authority is present, Host must be discarded." - A41
+		// Headers that match to ^^^
+	})
+
+	// full rpc?
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	if _, err := success.Receive(ctx); err != nil {
+		t.Fatalf("Error receiving from channel: %v", err)
+	}
+
+	// Finish this test, then scale it up to two test cases
+}
+
+
+
+
+
+// Test all tests to see if working, could even send this implementation out as a PR
+// No tests fail
+// Get this freaking test working and can move onto other valdiations
+// Reopen this
