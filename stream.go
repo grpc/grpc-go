@@ -547,7 +547,7 @@ func (cs *clientStream) shouldRetry(err error) (bool, error) {
 		// In the event of a non-IO operation error from NewStream, we never
 		// attempted to write anything to the wire, so we can retry
 		// indefinitely.
-		if !nse.PerformedIO {
+		if !nse.DoNotTransparentRetry {
 			return true, nil
 		}
 	}
