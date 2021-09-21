@@ -139,13 +139,10 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		var err error
 		conn, authInfo, err = config.Credentials.ServerHandshake(rawConn)
 		if err != nil {
-			// ErrConnDispatched means that the connection was dispatched away from
-			// gRPC; those connections should be left open.
-			if err == credentials.ErrConnDispatched {
-				return nil, err
-			}
-			// To prevent log spam, return directly.
-			if err == io.EOF {
+			// ErrConnDispatched means that the connection was dispatched away
+			// from gRPC; those connections should be left open. To prevent log
+			// spam, return these errors directly.
+			if err == credentials.ErrConnDispatched || err == io.EOF {
 				return nil, err
 			}
 			return nil, connectionErrorf(false, err, "ServerHandshake(%q) failed: %v", rawConn.RemoteAddr(), err)
