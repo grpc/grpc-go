@@ -7884,3 +7884,6 @@ func (s) TestUnaryInterceptorGetsPost(t *testing.T) {
 		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v, want _, error code %s", err, codes.OK)
 	}
 }
+
+
+// Plumb in server_tester.go (see examples

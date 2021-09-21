@@ -416,6 +416,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			mdata[hf.Name] = append(mdata[hf.Name], v)
 		}
 	}
+
 	// git commit -m "Implementation changes, still need to test"
 	// what we have here with cleanupStream, tests test a grpc RPC, so would be grpc status
 
@@ -430,29 +431,27 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			logger.Errorf("transport: %v", errMsg)
 		}
 		// If a client speaks gRPC, we can send back a gRPC status INTERNAL.
-		if isGRPC { // We don't even need this check because it blends in with one down below though
+		// We don't even need this check because it blends in with one down below though
 			// What does this actually break down to frame wise...it's a Headers frame
 			// right? Test grpc status and msg
 			// How to test...this two frames being written onto wire, and also eventual :authority header
-			t.controlBuf.put(&earlyAbortStream{
+			t.controlBuf.put(&earlyAbortStream{ // So regardless of grpc or not, should hit this
 				// TODO: Knob on HTTP status? to make this HTTP status 400?
-				streamID: streamID,
-				contentSubtype: s.contentSubtype,
-				status: status.New(codes.Internal, errMsg),
-			}) // Read the headers frame logically representing a trailers-only...check code and msg
-			// Find examples of how they test this...triage and make sure that this actually ends up as a single headers frame on the wire
-			// Yeah, is a single http headers frame, only writes continuation if above a certain length
-			// Same thing as RST_STREAM except now HEADERS frame, does this have content-subtype in it?
+				streamID:       streamID,
+				contentSubtype: s.contentSubtype, // Do we want to get this from previous?
+				status:         status.New(codes.Internal, errMsg),
+			})
 			return false
-		} else { // If not grpc client just go ahead and send back a RST_STREAM to client.
-			t.controlBuf.put(&cleanupStream{
-				streamID: streamID,
-				rst:      true,
-				rstCode:  http2.ErrCodeProtocol,
-				onWrite:  func() {},
-			}) // Same as before...without content type grpc though
-			return false
-		}
+	}
+
+	if !isGRPC || headerError { // !gRPC takes less precedence to HTTP/2 error
+		t.controlBuf.put(&cleanupStream{
+			streamID: streamID,
+			rst:      true,
+			rstCode:  http2.ErrCodeProtocol,
+			onWrite:  func() {},
+		})
+		return false
 	}
 
 	// "If :authority is missing, Host must be renamed to :authority." - A41
@@ -471,16 +470,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	// No eventual :authority header is a valid RPC.
 	// TEST THIS ^^^^ USING SERVER_TESTER.GO
-
-	if !isGRPC || headerError { // TODO: Move this upwards
-		t.controlBuf.put(&cleanupStream{
-			streamID: streamID,
-			rst:      true,
-			rstCode:  http2.ErrCodeProtocol,
-			onWrite:  func() {},
-		})
-		return false
-	}
 
 	if frame.StreamEnded() {
 		// s is just created by the caller. No lock needed.

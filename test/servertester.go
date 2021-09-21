@@ -273,4 +273,8 @@ func (st *serverTester) writeRSTStream(streamID uint32, code http2.ErrCode) {
 		st.t.Fatalf("Error writing RST_STREAM: %v", err)
 	}
 }
+
 // Link this in and test :authority header that gets spit out to the interceptor
+// (knobs) headers frame -> (handled in http/2 transport) -> interceptor, a fully fledged RPC because it calls this before it creates a stream?
+// Have it ping enough of a header frame for it to actually call into the interceptor, but have to set up an interceptor to test it, and have the headers frame match to a logical RPC in the service set up
+// Find examples...?

@@ -1678,7 +1678,7 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 		// value other than POST, as specified in the gRPC over HTTP/2
 		// specification, the server should close the stream.
 		{
-			name: "ClientSendingWrongMethod",
+			name: "Client Sending Wrong Method",
 			headers: []struct {
 				name   string
 				values []string
@@ -1723,18 +1723,6 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 				{name: ":path", values: []string{"foo"}},
 				{name: ":authority", values: []string{"localhost", "localhost2"}},
 				{name: "host", values: []string{"localhost"}},
-			},
-		},
-		{
-			name: "Multiple host headers",
-			headers: []struct {
-				name   string
-				values []string
-			}{
-				{name: ":method", values: []string{"POST"}},
-				{name: ":path", values: []string{"foo"}},
-				{name: ":authority", values: []string{"localhost"}},
-				{name: "host", values: []string{"localhost", "localhost2"}},
 			},
 		},
 	}
@@ -1826,27 +1814,16 @@ func (s) TestHeadersGRPCRequest(t *testing.T) {
 			values []string
 		}
 	}{
-		// multiple :authority or multiple Host headers would make the eventual
-		// :authority ambiguous as per A41. On requests where you know that it is
-		// from a grpc client, this should be rejected with grpc-status Internal.
-		/*{
-			name: "Multiple authority headers",
-			headers: []struct {
-				name   string
-				values []string
-			}{
-				{name: ":method", values: []string{"POST"}},
-				{name: ":path", values: []string{"foo"}},
-				{name: ":authority", values: []string{"localhost", "localhost2"}},
-				{name: "content-type", values: []string{"application/grpc"}},
-				{name: "host", values: []string{"localhost"}},
-			},
-		},*/
 		// Note: multiple authority headers are handled by the framer itself,
 		// which will cause a stream error. Thus, it will never get to
 		// operateHeaders with the check in operateHeaders for possible grpc-status sent back.
+
+		// multiple :authority or multiple Host headers would make the eventual
+		// :authority ambiguous as per A41. This takes precedence even over the
+		// fact a request is non grpc. All of these requests should be rejected
+		// with grpc-status Internal.
 		{
-			name: "Multiple host headers",
+			name: "Multiple host headers non grpc",
 			headers: []struct {
 				name   string
 				values []string
@@ -1854,8 +1831,20 @@ func (s) TestHeadersGRPCRequest(t *testing.T) {
 				{name: ":method", values: []string{"POST"}},
 				{name: ":path", values: []string{"foo"}},
 				{name: ":authority", values: []string{"localhost"}},
-				{name: "content-type", values: []string{"application/grpc"}}, // What branches in terms of what gets sent back to client
-				{name: "host", values: []string{"localhost", "localhost2"}}, // Is the right in encoding?
+				{name: "host", values: []string{"localhost", "localhost2"}},
+			},
+		},
+		{
+			name: "Multiple host headers grpc",
+			headers: []struct {
+				name   string
+				values []string
+			}{
+				{name: ":method", values: []string{"POST"}},
+				{name: ":path", values: []string{"foo"}},
+				{name: ":authority", values: []string{"localhost"}},
+				{name: "content-type", values: []string{"application/grpc"}},
+				{name: "host", values: []string{"localhost", "localhost2"}},
 			},
 		},
 	}
