@@ -72,12 +72,20 @@ func getAPIClientBuilder(version version.TransportAPI) APIClientBuilder {
 	return nil
 }
 
+// UpdateValidatorFunc performs validations on update structs using
+// context/logic available at the xdsClient layer. Since these validation are
+// performed on internal update structs, they can be shared between different
+// API clients.
+type UpdateValidatorFunc func(interface{}) error
+
 // BuildOptions contains options to be passed to client builders.
 type BuildOptions struct {
 	// Parent is a top-level xDS client which has the intelligence to take
 	// appropriate action based on xDS responses received from the management
 	// server.
 	Parent UpdateHandler
+	// Validator performs post unmarshal validation checks.
+	Validator UpdateValidatorFunc
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
 	NodeProto proto.Message
@@ -680,6 +688,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 
 	apiClient, err := newAPIClient(config.TransportAPI, cc, BuildOptions{
 		Parent:    c,
+		Validator: c.updateValidator,
 		NodeProto: config.NodeProto,
 		Backoff:   backoff.DefaultExponential.Backoff,
 		Logger:    c.logger,
@@ -731,6 +740,35 @@ func (c *clientImpl) Close() {
 	c.apiClient.Close()
 	c.cc.Close()
 	c.logger.Infof("Shutdown")
+}
+
+func (c *clientImpl) updateValidator(u interface{}) error {
+	switch update := u.(type) {
+	case *SecurityConfig:
+		if update.IdentityInstanceName != "" {
+			found := false
+			for name := range c.config.CertProviderConfigs {
+				if name == update.IdentityInstanceName {
+					found = true
+				}
+			}
+			if !found {
+				return fmt.Errorf("identitiy certificate provider instance name %q missing in bootstrap configuration", update.IdentityInstanceName)
+			}
+		}
+		if update.RootInstanceName != "" {
+			found := false
+			for name := range c.config.CertProviderConfigs {
+				if name == update.RootInstanceName {
+					found = true
+				}
+			}
+			if !found {
+				return fmt.Errorf("root certificate provider instance name %q missing in bootstrap configuration", update.RootInstanceName)
+			}
+		}
+	}
+	return nil
 }
 
 // ResourceType identifies resources in a transport protocol agnostic way. These

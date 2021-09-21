@@ -55,16 +55,29 @@ import (
 // to this value by the management server.
 const transportSocketName = "envoy.transport_sockets.tls"
 
+// UnmarshalOptions wraps the input parameters for `UnmarshalXxx` functions.
+type UnmarshalOptions struct {
+	// Version is the version of the received response.
+	Version string
+	// Resources are the xDS resources resources in the received response.
+	Resources []*anypb.Any
+	// Logger is the prefix logger to be used during unmarshaling.
+	Logger *grpclog.PrefixLogger
+	// UpdateValidator is a post unmarshal validation check provided by the
+	// upper layer.
+	UpdateValidator UpdateValidatorFunc
+}
+
 // UnmarshalListener processes resources received in an LDS response, validates
 // them, and transforms them into a native struct which contains only fields we
 // are interested in.
-func UnmarshalListener(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ListenerUpdateErrTuple, UpdateMetadata, error) {
+func UnmarshalListener(opts *UnmarshalOptions) (map[string]ListenerUpdateErrTuple, UpdateMetadata, error) {
 	update := make(map[string]ListenerUpdateErrTuple)
-	md, err := processAllResources(version, resources, logger, update)
+	md, err := processAllResources(opts, update)
 	return update, md, err
 }
 
-func unmarshalListenerResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, ListenerUpdate, error) {
+func unmarshalListenerResource(r *anypb.Any, f UpdateValidatorFunc, logger *grpclog.PrefixLogger) (string, ListenerUpdate, error) {
 	if !IsListenerResource(r.GetTypeUrl()) {
 		return "", ListenerUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
@@ -76,19 +89,24 @@ func unmarshalListenerResource(r *anypb.Any, logger *grpclog.PrefixLogger) (stri
 	}
 	logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, pretty.ToJSON(lis))
 
-	lu, err := processListener(lis, logger, v2)
+	lu, err := processListener(lis, f, logger, v2)
 	if err != nil {
 		return lis.GetName(), ListenerUpdate{}, err
+	}
+	if f != nil {
+		if err := f(lu); err != nil {
+			return lis.GetName(), ListenerUpdate{}, err
+		}
 	}
 	lu.Raw = r
 	return lis.GetName(), *lu, nil
 }
 
-func processListener(lis *v3listenerpb.Listener, logger *grpclog.PrefixLogger, v2 bool) (*ListenerUpdate, error) {
+func processListener(lis *v3listenerpb.Listener, f UpdateValidatorFunc, logger *grpclog.PrefixLogger, v2 bool) (*ListenerUpdate, error) {
 	if lis.GetApiListener() != nil {
 		return processClientSideListener(lis, logger, v2)
 	}
-	return processServerSideListener(lis)
+	return processServerSideListener(lis, f)
 }
 
 // processClientSideListener checks if the provided Listener proto meets
@@ -262,7 +280,7 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 	return ret, nil
 }
 
-func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
+func processServerSideListener(lis *v3listenerpb.Listener, f UpdateValidatorFunc) (*ListenerUpdate, error) {
 	if n := len(lis.ListenerFilters); n != 0 {
 		return nil, fmt.Errorf("unsupported field 'listener_filters' contains %d entries", n)
 	}
@@ -284,7 +302,7 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 		},
 	}
 
-	fcMgr, err := NewFilterChainManager(lis)
+	fcMgr, err := NewFilterChainManager(lis, f)
 	if err != nil {
 		return nil, err
 	}
@@ -296,9 +314,9 @@ func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, err
 // validates them, and transforms them into a native struct which contains only
 // fields we are interested in. The provided hostname determines the route
 // configuration resources of interest.
-func UnmarshalRouteConfig(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]RouteConfigUpdateErrTuple, UpdateMetadata, error) {
+func UnmarshalRouteConfig(opts *UnmarshalOptions) (map[string]RouteConfigUpdateErrTuple, UpdateMetadata, error) {
 	update := make(map[string]RouteConfigUpdateErrTuple)
-	md, err := processAllResources(version, resources, logger, update)
+	md, err := processAllResources(opts, update)
 	return update, md, err
 }
 
@@ -631,13 +649,13 @@ func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy, logg
 // UnmarshalCluster processes resources received in an CDS response, validates
 // them, and transforms them into a native struct which contains only fields we
 // are interested in.
-func UnmarshalCluster(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]ClusterUpdateErrTuple, UpdateMetadata, error) {
+func UnmarshalCluster(opts *UnmarshalOptions) (map[string]ClusterUpdateErrTuple, UpdateMetadata, error) {
 	update := make(map[string]ClusterUpdateErrTuple)
-	md, err := processAllResources(version, resources, logger, update)
+	md, err := processAllResources(opts, update)
 	return update, md, err
 }
 
-func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, ClusterUpdate, error) {
+func unmarshalClusterResource(r *anypb.Any, f UpdateValidatorFunc, logger *grpclog.PrefixLogger) (string, ClusterUpdate, error) {
 	if !IsClusterResource(r.GetTypeUrl()) {
 		return "", ClusterUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
@@ -647,7 +665,7 @@ func unmarshalClusterResource(r *anypb.Any, logger *grpclog.PrefixLogger) (strin
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 	logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, pretty.ToJSON(cluster))
-	cu, err := validateClusterAndConstructClusterUpdate(cluster)
+	cu, err := validateClusterAndConstructClusterUpdate(cluster, f)
 	if err != nil {
 		return cluster.GetName(), ClusterUpdate{}, err
 	}
@@ -662,7 +680,7 @@ const (
 	ringHashSizeUpperBound = 8 * 1024 * 1024 // 8M
 )
 
-func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
+func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, f UpdateValidatorFunc) (ClusterUpdate, error) {
 	var lbPolicy *ClusterLBPolicyRingHash
 	switch cluster.GetLbPolicy() {
 	case v3clusterpb.Cluster_ROUND_ROBIN:
@@ -703,7 +721,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	var sc *SecurityConfig
 	if env.ClientSideSecuritySupport {
 		var err error
-		if sc, err = securityConfigFromCluster(cluster); err != nil {
+		if sc, err = securityConfigFromCluster(cluster, f); err != nil {
 			return ClusterUpdate{}, err
 		}
 	}
@@ -793,7 +811,7 @@ func dnsHostNameFromCluster(cluster *v3clusterpb.Cluster) (string, error) {
 
 // securityConfigFromCluster extracts the relevant security configuration from
 // the received Cluster resource.
-func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, error) {
+func securityConfigFromCluster(cluster *v3clusterpb.Cluster, f UpdateValidatorFunc) (*SecurityConfig, error) {
 	if tsm := cluster.GetTransportSocketMatches(); len(tsm) != 0 {
 		return nil, fmt.Errorf("unsupport transport_socket_matches field is non-empty: %+v", tsm)
 	}
@@ -823,12 +841,12 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, e
 		return nil, errors.New("UpstreamTlsContext in CDS response does not contain a CommonTlsContext")
 	}
 
-	return securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext(), false)
+	return securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext(), false, f)
 }
 
 // common is expected to be not nil.
 // The `alpn_protocols` field is ignored.
-func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext, server bool) (*SecurityConfig, error) {
+func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext, server bool, f UpdateValidatorFunc) (*SecurityConfig, error) {
 	if common.GetTlsParams() != nil {
 		return nil, fmt.Errorf("unsupported tls_params field in CommonTlsContext message: %+v", common)
 	}
@@ -858,6 +876,11 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext, server
 			if sc.RootInstanceName == "" {
 				return nil, errors.New("security configuration on the client-side does not contain root certificate provider instance name")
 			}
+		}
+	}
+	if f != nil {
+		if err := f(sc); err != nil {
+			return nil, err
 		}
 	}
 	return sc, nil
@@ -1041,9 +1064,9 @@ func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) *uint32 {
 // UnmarshalEndpoints processes resources received in an EDS response,
 // validates them, and transforms them into a native struct which contains only
 // fields we are interested in.
-func UnmarshalEndpoints(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger) (map[string]EndpointsUpdateErrTuple, UpdateMetadata, error) {
+func UnmarshalEndpoints(opts *UnmarshalOptions) (map[string]EndpointsUpdateErrTuple, UpdateMetadata, error) {
 	update := make(map[string]EndpointsUpdateErrTuple)
-	md, err := processAllResources(version, resources, logger, update)
+	md, err := processAllResources(opts, update)
 	return update, md, err
 }
 
@@ -1177,19 +1200,19 @@ type EndpointsUpdateErrTuple struct {
 //
 // The type of the resource is determined by the type of ret. E.g.
 // map[string]ListenerUpdate means this is for LDS.
-func processAllResources(version string, resources []*anypb.Any, logger *grpclog.PrefixLogger, ret interface{}) (UpdateMetadata, error) {
+func processAllResources(opts *UnmarshalOptions, ret interface{}) (UpdateMetadata, error) {
 	timestamp := time.Now()
 	md := UpdateMetadata{
-		Version:   version,
+		Version:   opts.Version,
 		Timestamp: timestamp,
 	}
 	var topLevelErrors []error
 	perResourceErrors := make(map[string]error)
 
-	for _, r := range resources {
+	for _, r := range opts.Resources {
 		switch ret2 := ret.(type) {
 		case map[string]ListenerUpdateErrTuple:
-			name, update, err := unmarshalListenerResource(r, logger)
+			name, update, err := unmarshalListenerResource(r, opts.UpdateValidator, opts.Logger)
 			if err == nil {
 				ret2[name] = ListenerUpdateErrTuple{Update: update}
 				continue
@@ -1203,7 +1226,7 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 			// the response.
 			ret2[name] = ListenerUpdateErrTuple{Err: err}
 		case map[string]RouteConfigUpdateErrTuple:
-			name, update, err := unmarshalRouteConfigResource(r, logger)
+			name, update, err := unmarshalRouteConfigResource(r, opts.Logger)
 			if err == nil {
 				ret2[name] = RouteConfigUpdateErrTuple{Update: update}
 				continue
@@ -1217,7 +1240,7 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 			// the response.
 			ret2[name] = RouteConfigUpdateErrTuple{Err: err}
 		case map[string]ClusterUpdateErrTuple:
-			name, update, err := unmarshalClusterResource(r, logger)
+			name, update, err := unmarshalClusterResource(r, opts.UpdateValidator, opts.Logger)
 			if err == nil {
 				ret2[name] = ClusterUpdateErrTuple{Update: update}
 				continue
@@ -1231,7 +1254,7 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 			// the response.
 			ret2[name] = ClusterUpdateErrTuple{Err: err}
 		case map[string]EndpointsUpdateErrTuple:
-			name, update, err := unmarshalEndpointsResource(r, logger)
+			name, update, err := unmarshalEndpointsResource(r, opts.Logger)
 			if err == nil {
 				ret2[name] = EndpointsUpdateErrTuple{Update: update}
 				continue
@@ -1267,7 +1290,7 @@ func processAllResources(version string, resources []*anypb.Any, logger *grpclog
 	md.Status = ServiceStatusNACKed
 	errRet := combineErrors(typeStr, topLevelErrors, perResourceErrors)
 	md.ErrState = &UpdateErrorMetadata{
-		Version:   version,
+		Version:   opts.Version,
 		Err:       errRet,
 		Timestamp: timestamp,
 	}

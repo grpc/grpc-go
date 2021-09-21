@@ -247,13 +247,13 @@ type sourcePrefixEntry struct {
 //
 // This function is only exported so that tests outside of this package can
 // create a FilterChainManager.
-func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, error) {
+func NewFilterChainManager(lis *v3listenerpb.Listener, f UpdateValidatorFunc) (*FilterChainManager, error) {
 	// Parse all the filter chains and build the internal data structures.
 	fci := &FilterChainManager{
 		dstPrefixMap:     make(map[string]*destPrefixEntry),
 		RouteConfigNames: make(map[string]bool),
 	}
-	if err := fci.addFilterChains(lis.GetFilterChains()); err != nil {
+	if err := fci.addFilterChains(lis.GetFilterChains(), f); err != nil {
 		return nil, err
 	}
 	// Build the source and dest prefix slices used by Lookup().
@@ -281,7 +281,7 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 	var def *FilterChain
 	if dfc := lis.GetDefaultFilterChain(); dfc != nil {
 		var err error
-		if def, err = fci.filterChainFromProto(dfc); err != nil {
+		if def, err = fci.filterChainFromProto(dfc, f); err != nil {
 			return nil, err
 		}
 	}
@@ -297,7 +297,7 @@ func NewFilterChainManager(lis *v3listenerpb.Listener) (*FilterChainManager, err
 
 // addFilterChains parses the filter chains in fcs and adds the required
 // internal data structures corresponding to the match criteria.
-func (fci *FilterChainManager) addFilterChains(fcs []*v3listenerpb.FilterChain) error {
+func (fci *FilterChainManager) addFilterChains(fcs []*v3listenerpb.FilterChain, f UpdateValidatorFunc) error {
 	for _, fc := range fcs {
 		fcm := fc.GetFilterChainMatch()
 		if fcm.GetDestinationPort().GetValue() != 0 {
@@ -308,7 +308,7 @@ func (fci *FilterChainManager) addFilterChains(fcs []*v3listenerpb.FilterChain) 
 		}
 
 		// Build the internal representation of the filter chain match fields.
-		if err := fci.addFilterChainsForDestPrefixes(fc); err != nil {
+		if err := fci.addFilterChainsForDestPrefixes(fc, f); err != nil {
 			return err
 		}
 	}
@@ -316,7 +316,7 @@ func (fci *FilterChainManager) addFilterChains(fcs []*v3listenerpb.FilterChain) 
 	return nil
 }
 
-func (fci *FilterChainManager) addFilterChainsForDestPrefixes(fc *v3listenerpb.FilterChain) error {
+func (fci *FilterChainManager) addFilterChainsForDestPrefixes(fc *v3listenerpb.FilterChain, f UpdateValidatorFunc) error {
 	ranges := fc.GetFilterChainMatch().GetPrefixRanges()
 	dstPrefixes := make([]*net.IPNet, 0, len(ranges))
 	for _, pr := range ranges {
@@ -334,21 +334,21 @@ func (fci *FilterChainManager) addFilterChainsForDestPrefixes(fc *v3listenerpb.F
 		if fci.dstPrefixMap[unspecifiedPrefixMapKey] == nil {
 			fci.dstPrefixMap[unspecifiedPrefixMapKey] = &destPrefixEntry{}
 		}
-		return fci.addFilterChainsForServerNames(fci.dstPrefixMap[unspecifiedPrefixMapKey], fc)
+		return fci.addFilterChainsForServerNames(fci.dstPrefixMap[unspecifiedPrefixMapKey], fc, f)
 	}
 	for _, prefix := range dstPrefixes {
 		p := prefix.String()
 		if fci.dstPrefixMap[p] == nil {
 			fci.dstPrefixMap[p] = &destPrefixEntry{net: prefix}
 		}
-		if err := fci.addFilterChainsForServerNames(fci.dstPrefixMap[p], fc); err != nil {
+		if err := fci.addFilterChainsForServerNames(fci.dstPrefixMap[p], fc, f); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (fci *FilterChainManager) addFilterChainsForServerNames(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
+func (fci *FilterChainManager) addFilterChainsForServerNames(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain, f UpdateValidatorFunc) error {
 	// Filter chains specifying server names in their match criteria always fail
 	// a match at connection time. So, these filter chains can be dropped now.
 	if len(fc.GetFilterChainMatch().GetServerNames()) != 0 {
@@ -356,10 +356,10 @@ func (fci *FilterChainManager) addFilterChainsForServerNames(dstEntry *destPrefi
 		return nil
 	}
 
-	return fci.addFilterChainsForTransportProtocols(dstEntry, fc)
+	return fci.addFilterChainsForTransportProtocols(dstEntry, fc, f)
 }
 
-func (fci *FilterChainManager) addFilterChainsForTransportProtocols(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
+func (fci *FilterChainManager) addFilterChainsForTransportProtocols(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain, f UpdateValidatorFunc) error {
 	tp := fc.GetFilterChainMatch().GetTransportProtocol()
 	switch {
 	case tp != "" && tp != "raw_buffer":
@@ -380,21 +380,21 @@ func (fci *FilterChainManager) addFilterChainsForTransportProtocols(dstEntry *de
 		dstEntry.rawBufferSeen = true
 		dstEntry.srcTypeArr = sourceTypesArray{}
 	}
-	return fci.addFilterChainsForApplicationProtocols(dstEntry, fc)
+	return fci.addFilterChainsForApplicationProtocols(dstEntry, fc, f)
 }
 
-func (fci *FilterChainManager) addFilterChainsForApplicationProtocols(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
+func (fci *FilterChainManager) addFilterChainsForApplicationProtocols(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain, f UpdateValidatorFunc) error {
 	if len(fc.GetFilterChainMatch().GetApplicationProtocols()) != 0 {
 		logger.Warningf("Dropping filter chain %+v since it contains unsupported application_protocols match field", fc)
 		return nil
 	}
-	return fci.addFilterChainsForSourceType(dstEntry, fc)
+	return fci.addFilterChainsForSourceType(dstEntry, fc, f)
 }
 
 // addFilterChainsForSourceType adds source types to the internal data
 // structures and delegates control to addFilterChainsForSourcePrefixes to
 // continue building the internal data structure.
-func (fci *FilterChainManager) addFilterChainsForSourceType(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain) error {
+func (fci *FilterChainManager) addFilterChainsForSourceType(dstEntry *destPrefixEntry, fc *v3listenerpb.FilterChain, f UpdateValidatorFunc) error {
 	var srcType SourceType
 	switch st := fc.GetFilterChainMatch().GetSourceType(); st {
 	case v3listenerpb.FilterChainMatch_ANY:
@@ -411,13 +411,13 @@ func (fci *FilterChainManager) addFilterChainsForSourceType(dstEntry *destPrefix
 	if dstEntry.srcTypeArr[st] == nil {
 		dstEntry.srcTypeArr[st] = &sourcePrefixes{srcPrefixMap: make(map[string]*sourcePrefixEntry)}
 	}
-	return fci.addFilterChainsForSourcePrefixes(dstEntry.srcTypeArr[st].srcPrefixMap, fc)
+	return fci.addFilterChainsForSourcePrefixes(dstEntry.srcTypeArr[st].srcPrefixMap, fc, f)
 }
 
 // addFilterChainsForSourcePrefixes adds source prefixes to the internal data
 // structures and delegates control to addFilterChainsForSourcePorts to continue
 // building the internal data structure.
-func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map[string]*sourcePrefixEntry, fc *v3listenerpb.FilterChain) error {
+func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map[string]*sourcePrefixEntry, fc *v3listenerpb.FilterChain, f UpdateValidatorFunc) error {
 	ranges := fc.GetFilterChainMatch().GetSourcePrefixRanges()
 	srcPrefixes := make([]*net.IPNet, 0, len(ranges))
 	for _, pr := range fc.GetFilterChainMatch().GetSourcePrefixRanges() {
@@ -437,7 +437,7 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 				srcPortMap: make(map[int]*FilterChain),
 			}
 		}
-		return fci.addFilterChainsForSourcePorts(srcPrefixMap[unspecifiedPrefixMapKey], fc)
+		return fci.addFilterChainsForSourcePorts(srcPrefixMap[unspecifiedPrefixMapKey], fc, f)
 	}
 	for _, prefix := range srcPrefixes {
 		p := prefix.String()
@@ -447,7 +447,7 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 				srcPortMap: make(map[int]*FilterChain),
 			}
 		}
-		if err := fci.addFilterChainsForSourcePorts(srcPrefixMap[p], fc); err != nil {
+		if err := fci.addFilterChainsForSourcePorts(srcPrefixMap[p], fc, f); err != nil {
 			return err
 		}
 	}
@@ -458,14 +458,14 @@ func (fci *FilterChainManager) addFilterChainsForSourcePrefixes(srcPrefixMap map
 // structures and completes the process of building the internal data structure.
 // It is here that we determine if there are multiple filter chains with
 // overlapping matching rules.
-func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePrefixEntry, fcProto *v3listenerpb.FilterChain) error {
+func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePrefixEntry, fcProto *v3listenerpb.FilterChain, f UpdateValidatorFunc) error {
 	ports := fcProto.GetFilterChainMatch().GetSourcePorts()
 	srcPorts := make([]int, 0, len(ports))
 	for _, port := range ports {
 		srcPorts = append(srcPorts, int(port))
 	}
 
-	fc, err := fci.filterChainFromProto(fcProto)
+	fc, err := fci.filterChainFromProto(fcProto, f)
 	if err != nil {
 		return err
 	}
@@ -490,7 +490,7 @@ func (fci *FilterChainManager) addFilterChainsForSourcePorts(srcEntry *sourcePre
 // filterChainFromProto extracts the relevant information from the FilterChain
 // proto and stores it in our internal representation. It also persists any
 // RouteNames which need to be queried dynamically via RDS.
-func (fci *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain) (*FilterChain, error) {
+func (fci *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain, f UpdateValidatorFunc) (*FilterChain, error) {
 	filterChain, err := processNetworkFilters(fc.GetFilters())
 	if err != nil {
 		return nil, err
@@ -534,7 +534,7 @@ func (fci *FilterChainManager) filterChainFromProto(fc *v3listenerpb.FilterChain
 	if downstreamCtx.GetCommonTlsContext() == nil {
 		return nil, errors.New("DownstreamTlsContext in LDS response does not contain a CommonTlsContext")
 	}
-	sc, err := securityConfigFromCommonTLSContext(downstreamCtx.GetCommonTlsContext(), true)
+	sc, err := securityConfigFromCommonTLSContext(downstreamCtx.GetCommonTlsContext(), true, f)
 	if err != nil {
 		return nil, err
 	}

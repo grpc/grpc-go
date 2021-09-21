@@ -202,7 +202,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 	defer func() { env.RingHashSupport = oldRingHashSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if update, err := validateClusterAndConstructClusterUpdate(test.cluster); err == nil {
+			if update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil); err == nil {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) = %v, wanted error", test.cluster, update)
 			}
 		})
@@ -422,7 +422,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	defer func() { env.RingHashSupport = oldRingHashSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
+			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
 			if err != nil {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) failed: %v", test.cluster, err)
 			}
@@ -472,7 +472,7 @@ func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 		EDSServiceName: serviceName,
 		EnableLRS:      false,
 	}
-	gotUpdate, err := validateClusterAndConstructClusterUpdate(cluster)
+	gotUpdate, err := validateClusterAndConstructClusterUpdate(cluster, nil)
 	if err != nil {
 		t.Errorf("validateClusterAndConstructClusterUpdate() failed: %v", err)
 	}
@@ -1365,7 +1365,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
+			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("validateClusterAndConstructClusterUpdate() returned err %v wantErr %v)", err, test.wantErr)
 			}
@@ -1571,9 +1571,13 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, md, err := UnmarshalCluster(testVersion, test.resources, nil)
+			opts := &UnmarshalOptions{
+				Version:   testVersion,
+				Resources: test.resources,
+			}
+			update, md, err := UnmarshalCluster(opts)
 			if (err != nil) != test.wantErr {
-				t.Fatalf("UnmarshalCluster(), got err: %v, wantErr: %v", err, test.wantErr)
+				t.Fatalf("UnmarshalCluster(%+v), got err: %v, wantErr: %v", opts, err, test.wantErr)
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
 				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
