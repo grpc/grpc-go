@@ -886,8 +886,9 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 		// gRPC; those connections should be left open.
 		if err != credentials.ErrConnDispatched {
 			c.Close()
+		} else {
+			channelz.Warning(logger, s.channelzID, "grpc: Server.Serve failed to create ServerTransport: ", err)
 		}
-		channelz.Warning(logger, s.channelzID, "grpc: Server.Serve failed to create ServerTransport: ", err)
 		return nil
 	}
 
