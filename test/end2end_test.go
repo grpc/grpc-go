@@ -7885,15 +7885,16 @@ func (s) TestUnaryInterceptorGetsPost(t *testing.T) {
 	}
 }
 
-// Unary interceptor here that somehow verifies what authority header is - perhaps hardcode what's wanted to localhost
-// unaryInterceptorVerifyAuthority does... and ... and ...
+// unaryInterceptorVerifyAuthority verifies there is an unambiguous :authority
+// once the request gets to an interceptor. An unambiguous :authority is defined
+// as at most a single :authority header, and no host header according to A41.
 func unaryInterceptorVerifyAuthority(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, status.Error(codes.NotFound, "metadata was not in context")
 	}
 	authority := md.Get(":authority")
-	if len(authority) != 1 { // Should be an unambiguous authority by the time it gets to interceptor.
+	if len(authority) > 1 { // Should be an unambiguous authority by the time it gets to interceptor.
 		return nil, status.Error(codes.NotFound, ":authority value had more than one value")
 	}
 	// Host header shouldn't be present by the time it gets to the interceptor
@@ -7902,20 +7903,13 @@ func unaryInterceptorVerifyAuthority(ctx context.Context, req interface{}, info 
 	if len(host) != 0 {
 		return nil, status.Error(codes.NotFound, "host header should not be present in metadata")
 	}
-	return nil, status.Error(codes.NotFound, authority[0]) // For verification in caller - NotFound so grpc-message will be avaiable for verification.
-	// I think verifying authority makes more sense
-	/*if authority[0] != "locahost" {
-		return nil, status.Error(codes.NotFound, ":authority should be localhost")
-	}
-	return handler(ctx, req)*/ // Would still need to see how this breaks down
-	// VVVVV this breaks down into that headers frame thing, so if you can read frames from
-	// server_tester.go you can verify the error just like we did in transport test
-	// return nil, status.Error(codes.OK, authority[0]) // Can either do it this way or a hardcoded check for "localhost or something" but then would have to receive this and figure out a way to look into it
+	// Pass back the authority for verification on client - NotFound so
+	// grpc-message will be available to read for verification.
+	return nil, status.Error(codes.NotFound, authority[0])
 }
 
-// Plumb in server_tester.go (see examples)
-// Also link an interceptor to verify since we're simulating RBAC (and also get to the point where it's actually called)
-// Send headers frame with certain headers as knobs
+// TestAuthorityHeader tests that the eventual :authority that reaches the grpc
+// layer is unambiguous due to logic added in A41.
 func (s) TestAuthorityHeader(t *testing.T) {
 	te := newTest(t, tcpClearRREnv)
 	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -7943,7 +7937,6 @@ func (s) TestAuthorityHeader(t *testing.T) {
 			EndStream: false,
 			EndHeaders: true,
 		})
-		// If this is wrong figure out what maps to a UnaryRPC - is this what corresponds to an empty proto?
 		st.writeData(1, true, []byte{0, 0, 0, 0, 0})
 
 		st.wantAnyFrame() // Window Update
@@ -7953,20 +7946,15 @@ func (s) TestAuthorityHeader(t *testing.T) {
 		// This should be a MetaHeadersFrame?
 		frame := st.wantAnyFrame()
 		print(frame.Header().Type)
-		// Typecast it to MetaHeadersFrame, then verify fields
-		mhf, ok := frame.(*http2.MetaHeadersFrame) // Is this really the only frame you'll receive
+		mhf, ok := frame.(*http2.MetaHeadersFrame)
 		if !ok {
 			t.Fatalf("received a wrong frame")
 		}
-		// This needs to fail if this doesn't happen
 		for _, header := range mhf.Fields {
 			print(header.Name)
 			print(header.Value)
 			if header.Name == "grpc-message" {
-				// This is the logical verification for what :authority ended up being
 				if header.Value == "localhost" { // Or could even make this a knob in test case
-					// Send on some channel maybe that correct? If it doesn't send it's logically wrong
-					// Testutils.channel, pass it a context
 					success.Send("")
 				}
 			}
@@ -7991,12 +7979,3 @@ func (s) TestAuthorityHeader(t *testing.T) {
 		t.Fatalf("Error receiving from channel: %v", err)
 	}
 }
-
-
-
-
-
-// Test all tests to see if working, could even send this implementation out as a PR
-// No tests fail
-// Get this freaking test working and can move onto other valdiations
-// Reopen this
