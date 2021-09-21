@@ -68,13 +68,6 @@ func TestStringMatcherFromProto(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			desc: "invalid deprecated regex",
-			inputProto: &v3matcherpb.StringMatcher{
-				MatchPattern: &v3matcherpb.StringMatcher_HiddenEnvoyDeprecatedRegex{},
-			},
-			wantErr: true,
-		},
-		{
 			desc: "happy case exact",
 			inputProto: &v3matcherpb.StringMatcher{
 				MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "exact"},
