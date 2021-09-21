@@ -140,8 +140,9 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		conn, authInfo, err = config.Credentials.ServerHandshake(rawConn)
 		if err != nil {
 			// ErrConnDispatched means that the connection was dispatched away
-			// from gRPC; those connections should be left open. To prevent log
-			// spam, return these errors directly.
+			// from gRPC; those connections should be left open. io.EOF means
+			// the connection was closed before handshaking completed, which can
+			// happen naturally from probers. Return these errors directly.
 			if err == credentials.ErrConnDispatched || err == io.EOF {
 				return nil, err
 			}
