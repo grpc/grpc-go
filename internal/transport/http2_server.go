@@ -455,17 +455,17 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 
 	// "If :authority is missing, Host must be renamed to :authority." - A41
-	if len(mdata["authority"]) == 0 {
+	if len(mdata[":authority"]) == 0 {
 		// No-op if host isn't present, no eventual :authority header is a valid
 		// RPC.
 		if host, ok := mdata["host"]; ok {
-			mdata["authority"] = host
+			mdata[":authority"] = host
 			delete(mdata, "host")
 		}
 		delete(mdata, "host")
 	}
 	// "If :authority is present, Host must be discarded" - A41
-	if len(mdata["authority"]) != 0 {
+	if len(mdata[":authority"]) != 0 {
 		delete(mdata, "host")
 	}
 	// No eventual :authority header is a valid RPC.
