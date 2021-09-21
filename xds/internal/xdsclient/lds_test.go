@@ -1407,14 +1407,14 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			resources:  []*anypb.Any{v3LisToTestRBAC(1, nil)},
 			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
-			wantErr:    "xff_num_trusted_hops must be unset or zero and original_ip_detection_extensions must be empty",
+			wantErr:    "xff_num_trusted_hops must be unset or zero",
 		},
 		{
 			name:       "rbac-allow-equating-direct-remote-ip-and-remote-ip-invalid-original-ip-detection-extension",
 			resources:  []*anypb.Any{v3LisToTestRBAC(0, []*v3corepb.TypedExtensionConfig{{Name: "something"}})},
 			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
-			wantErr:    "xff_num_trusted_hops must be unset or zero and original_ip_detection_extensions must be empty",
+			wantErr:    "original_ip_detection_extensions must be empty",
 		},
 		{
 			name: "unsupported validation context in transport socket",
