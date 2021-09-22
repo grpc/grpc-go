@@ -193,7 +193,7 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 		fullMethod:      mn,
 		destinationPort: uint32(dp),
 		destinationAddr: conn.LocalAddr(),
-		authType: authType,
+		authType:        authType,
 		certs:           peerCertificates,
 	}, nil
 }
