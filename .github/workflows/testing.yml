@@ -18,6 +18,7 @@ jobs:
   # Check generated protos match their source repos (optional for PRs).
   vet-proto:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       # Setup the environment.
       - name: Setup Go
@@ -37,6 +38,7 @@ jobs:
     env:
       VET_SKIP_PROTO: 1
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       matrix:
         include:
