@@ -596,6 +596,18 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 				return nil, fmt.Errorf("network filters {%+v} had invalid server side HTTP Filters {%+v}: %v", filters, hcm.GetHttpFilters(), err)
 			}
 			if !seenHCM {
+				// Validate for RBAC in only the HCM that will be used, since this isn't a logical validation failure,
+				// it's simply a validation to support RBAC HTTP Filter.
+				// "HttpConnectionManager.xff_num_trusted_hops must be unset or zero and
+				// HttpConnectionManager.original_ip_detection_extensions must be empty. If
+				// either field has an incorrect value, the Listener must be NACKed." - A41
+				if hcm.XffNumTrustedHops != 0 {
+					return nil, fmt.Errorf("xff_num_trusted_hops must be unset or zero %+v", hcm)
+				}
+				if len(hcm.OriginalIpDetectionExtensions) != 0 {
+					return nil, fmt.Errorf("original_ip_detection_extensions must be empty %+v", hcm)
+				}
+
 				// TODO: Implement terminal filter logic, as per A36.
 				filterChain.HTTPFilters = filters
 				seenHCM = true
