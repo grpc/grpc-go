@@ -7911,71 +7911,104 @@ func unaryInterceptorVerifyAuthority(ctx context.Context, req interface{}, info 
 // TestAuthorityHeader tests that the eventual :authority that reaches the grpc
 // layer is unambiguous due to logic added in A41.
 func (s) TestAuthorityHeader(t *testing.T) {
-	te := newTest(t, tcpClearRREnv)
-	ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-		return &testpb.SimpleResponse{}, nil
-	}}
-	te.unaryServerInt = unaryInterceptorVerifyAuthority
-	te.startServer(ts)
-	defer te.tearDown()
-	success := testutils.NewChannel()
-	te.withServerTester(func(st *serverTester) {
-
-
-
+	tests := []struct {
+		name    string
+		headers []string
+		wantAuthority string
+	}{
 		// "If :authority is missing, Host must be renamed to :authority." - A41
-		st.writeHeaders(http2.HeadersFrameParam{
-			StreamID: 1,
-			// Codepath triggered by incoming headers with no authority but with a host. (This will be moved to a t test anyway)
-			BlockFragment: st.encodeHeader(
+		{
+			name: "Missing :authority",
+			// Codepath triggered by incoming headers with no authority but with
+			// a host.
+			headers: []string{
 				":method", "POST",
 				":path", "/grpc.testing.TestService/UnaryCall",
 				"content-type", "application/grpc",
 				"te", "trailers",
 				"host", "localhost",
-			),
-			EndStream: false,
-			EndHeaders: true,
-		})
-		st.writeData(1, true, []byte{0, 0, 0, 0, 0})
-
-		st.wantAnyFrame() // Window Update
-		st.wantAnyFrame() // Frame Ping
-
-		// After writing - expect a meta headers frame off the wire, use this to verify
-		// This should be a MetaHeadersFrame?
-		frame := st.wantAnyFrame()
-		print(frame.Header().Type)
-		mhf, ok := frame.(*http2.MetaHeadersFrame)
-		if !ok {
-			t.Fatalf("received a wrong frame")
-		}
-		for _, header := range mhf.Fields {
-			print(header.Name)
-			print(header.Value)
-			if header.Name == "grpc-message" {
-				if header.Value == "localhost" { // Or could even make this a knob in test case
-					success.Send("")
-				}
-			}
-		}
-
-
-
-
-
-
-
-
+			},
+			wantAuthority: "localhost",
+		},
 		// "If :authority is present, Host must be discarded." - A41
-		// Headers that match to ^^^, once scaled up this test to t test add this
-		// Finish this test, then scale it up to two test cases
-	})
+		{
+			name: ":authority and host present",
+			// Codepath triggered by incoming headers with both an authority
+			// header and a host header.
+			headers: []string{
+				":method", "POST",
+				":path", "/grpc.testing.TestService/UnaryCall",
+				"content-type", "application/grpc",
+				"te", "trailers",
+				":authority", "localhost",
+				"host", "localhost2",
+			},
+			wantAuthority: "localhost",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			te := newTest(t, tcpClearRREnv)
+			ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				return &testpb.SimpleResponse{}, nil
+			}}
+			te.unaryServerInt = unaryInterceptorVerifyAuthority
+			te.startServer(ts)
+			defer te.tearDown()
+			success := testutils.NewChannel()
+			te.withServerTester(func(st *serverTester) {
+				st.writeHeaders(http2.HeadersFrameParam{
+					StreamID: 1,
+					BlockFragment: st.encodeHeader(test.headers...),
+					EndStream: false,
+					EndHeaders: true,
+				})
+				st.writeData(1, true, []byte{0, 0, 0, 0, 0})
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+				st.wantAnyFrame() // Window Update
+				st.wantAnyFrame() // Frame Ping
 
-	if _, err := success.Receive(ctx); err != nil {
-		t.Fatalf("Error receiving from channel: %v", err)
+				// After writing - expect a meta headers frame off the wire, use this to verify
+				// This should be a MetaHeadersFrame?
+				for {
+					frame := st.wantAnyFrame()
+					f, ok := frame.(*http2.MetaHeadersFrame)
+					if !ok {
+						continue
+					}
+					for _, header := range f.Fields {
+						print(header.Name)
+						print(header.Value)
+						if header.Name == "grpc-message" {
+							if header.Value == test.wantAuthority {
+								success.Send("")
+							}
+						}
+					}/*
+					switch frame.(type) {
+					case *http2.MetaHeadersFrame: {
+						for _, header := range frame.Fields {
+							print(header.Name)
+							print(header.Value)
+							if header.Name == "grpc-message" {
+								if header.Value == test.wantAuthority {
+									success.Send("")
+								}
+							}
+						}
+					}
+					default:
+						// No op
+					}*/
+				}
+			})
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			if _, err := success.Receive(ctx); err != nil {
+				t.Fatalf("Error receiving from channel: %v", err)
+			}
+		})
 	}
 }
