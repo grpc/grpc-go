@@ -971,7 +971,7 @@ func serverListenerWithBadRouteConfiguration(host string, port uint32) *v3listen
 }
 
 func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
-	// Turn RBAC support off.
+	// Turn RBAC support on.
 	oldRBAC := env.RBACSupport
 	env.RBACSupport = true
 	defer func() {
