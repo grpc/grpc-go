@@ -36,6 +36,7 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 	}{
 		// No scheme is specified.
 		{target: "", wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: ""}},
+		{target: "://", wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "://"}},
 		{target: ":///", wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: ":///"}},
 		{target: "://a/", wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "://a/"}},
 		{target: ":///a", wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: ":///a"}},
@@ -71,11 +72,8 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 		{target: "unix-abstract:///a/b/c", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "/a/b/c"}},
 		{target: "unix-abstract:///", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "/"}},
 		{target: "unix-abstract://authority", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "//authority"}},
-		{target: "passthrough:///unix:///a/b/c", wantParsed: resolver.Target{Scheme: "passthrough", Authority: "", Endpoint: "unix:///a/b/c"}},
-
-		// If we can only parse part of the target.
-		{target: "://", wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "://"}},
 		{target: "unix://domain", wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "unix://domain"}},
+		{target: "passthrough:///unix:///a/b/c", wantParsed: resolver.Target{Scheme: "passthrough", Authority: "", Endpoint: "unix:///a/b/c"}},
 	}
 
 	for _, test := range tests {
@@ -132,6 +130,26 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 			target:            "unix:///a/b/c",
 			wantParsed:        resolver.Target{Scheme: "unix", Authority: "", Endpoint: "/a/b/c"},
 			wantDialerAddress: "unix:///a/b/c",
+		},
+		{
+			target:            "dns:///127.0.0.1:50051",
+			wantParsed:        resolver.Target{Scheme: "dns", Authority: "", Endpoint: "127.0.0.1:50051"},
+			wantDialerAddress: "127.0.0.1:50051",
+		},
+		{
+			target:            ":///127.0.0.1:50051",
+			wantParsed:        resolver.Target{Scheme: defScheme, Authority: "", Endpoint: ":///127.0.0.1:50051"},
+			wantDialerAddress: ":///127.0.0.1:50051",
+		},
+		{
+			target:            "dns://authority/127.0.0.1:50051",
+			wantParsed:        resolver.Target{Scheme: "dns", Authority: "authority", Endpoint: "127.0.0.1:50051"},
+			wantDialerAddress: "127.0.0.1:50051",
+		},
+		{
+			target:            "://authority/127.0.0.1:50051",
+			wantParsed:        resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "://authority/127.0.0.1:50051"},
+			wantDialerAddress: "://authority/127.0.0.1:50051",
 		},
 	}
 
