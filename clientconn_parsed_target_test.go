@@ -20,9 +20,10 @@ package grpc
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc/resolver"
 )
@@ -136,11 +137,10 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.target, func(t *testing.T) {
+			addrCh := make(chan string, 1)
 			dialer := func(ctx context.Context, address string) (net.Conn, error) {
-				if address != test.wantDialerAddress {
-					return nil, fmt.Errorf("address in custom dialer is %q, want %q", address, test.wantDialerAddress)
-				}
-				return (&net.Dialer{}).DialContext(ctx, "", address)
+				addrCh <- address
+				return nil, errors.New("dialer error")
 			}
 
 			cc, err := Dial(test.target, WithInsecure(), WithContextDialer(dialer))
@@ -149,6 +149,14 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 			}
 			defer cc.Close()
 
+			select {
+			case addr := <-addrCh:
+				if addr != test.wantDialerAddress {
+					t.Fatalf("address in custom dialer is %q, want %q", addr, test.wantDialerAddress)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("timeout when waiting for custom dialer to be invoked")
+			}
 			if gotParsed := cc.parsedTarget; gotParsed != test.wantParsed {
 				t.Errorf("cc.parsedTarget for dial target %q = %+v, want %+v", test.target, gotParsed, test.wantParsed)
 			}
