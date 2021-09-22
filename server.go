@@ -141,7 +141,7 @@ type Server struct {
 }
 
 type serverOptions struct {
-	creds                 credentials.TransportCredentials
+	creds                 credentials.TransportCredentials // cred证书
 	codec                 baseCodec
 	cp                    Compressor
 	dc                    Decompressor
