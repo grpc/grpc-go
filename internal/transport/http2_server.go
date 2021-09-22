@@ -129,7 +129,7 @@ type http2Server struct {
 // options from config.
 //
 // It returns a non-nil transport and a nil error on success. On failure, it
-// returns a non-nil transport and a nil-error. For a special case where the
+// returns a nil transport and a non-nil error. For a special case where the
 // underlying conn gets closed before the client preface could be read, it
 // returns a nil transport and a nil error.
 func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
