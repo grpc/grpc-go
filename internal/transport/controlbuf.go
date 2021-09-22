@@ -133,6 +133,7 @@ type cleanupStream struct {
 func (c *cleanupStream) isTransportResponseFrame() bool { return c.rst } // Results in a RST_STREAM
 
 type earlyAbortStream struct {
+	httpStatus     uint32
 	streamID       uint32
 	contentSubtype string
 	status         *status.Status
@@ -773,7 +774,7 @@ func (l *loopyWriter) earlyAbortStreamHandler(eas *earlyAbortStream) error {
 	}
 
 	headerFields := []hpack.HeaderField{
-		{Name: ":status", Value: "200"},
+		{Name: ":status", Value: strconv.Itoa(int(eas.httpStatus))},
 		{Name: "content-type", Value: grpcutil.ContentType(eas.contentSubtype)},
 		{Name: "grpc-status", Value: strconv.Itoa(int(eas.status.Code()))},
 		{Name: "grpc-message", Value: encodeGrpcMessage(eas.status.Message())},

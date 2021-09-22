@@ -7847,3 +7847,109 @@ func (s) TestStreamingServerInterceptorGetsConnection(t *testing.T) {
 		t.Fatalf("ss.Client.StreamingInputCall(_) = _, %v, want _, %v", err, io.EOF)
 	}
 }
+
+// unaryInterceptorVerifyAuthority verifies there is an unambiguous :authority
+// once the request gets to an interceptor. An unambiguous :authority is defined
+// as at most a single :authority header, and no host header according to A41.
+func unaryInterceptorVerifyAuthority(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.NotFound, "metadata was not in context")
+	}
+	authority := md.Get(":authority")
+	if len(authority) > 1 { // Should be an unambiguous authority by the time it gets to interceptor.
+		return nil, status.Error(codes.NotFound, ":authority value had more than one value")
+	}
+	// Host header shouldn't be present by the time it gets to the interceptor
+	// level (should either be renamed to :authority or explicitly deleted).
+	host := md.Get("host")
+	if len(host) != 0 {
+		return nil, status.Error(codes.NotFound, "host header should not be present in metadata")
+	}
+	// Pass back the authority for verification on client - NotFound so
+	// grpc-message will be available to read for verification.
+	return nil, status.Error(codes.NotFound, authority[0])
+}
+
+// TestAuthorityHeader tests that the eventual :authority that reaches the grpc
+// layer is unambiguous due to logic added in A41.
+func (s) TestAuthorityHeader(t *testing.T) {
+	tests := []struct {
+		name          string
+		headers       []string
+		wantAuthority string
+	}{
+		// "If :authority is missing, Host must be renamed to :authority." - A41
+		{
+			name: "Missing :authority",
+			// Codepath triggered by incoming headers with no authority but with
+			// a host.
+			headers: []string{
+				":method", "POST",
+				":path", "/grpc.testing.TestService/UnaryCall",
+				"content-type", "application/grpc",
+				"te", "trailers",
+				"host", "localhost",
+			},
+			wantAuthority: "localhost",
+		},
+		// "If :authority is present, Host must be discarded." - A41
+		{
+			name: ":authority and host present",
+			// Codepath triggered by incoming headers with both an authority
+			// header and a host header.
+			headers: []string{
+				":method", "POST",
+				":path", "/grpc.testing.TestService/UnaryCall",
+				":authority", "localhost",
+				"content-type", "application/grpc",
+				"host", "localhost2",
+			},
+			wantAuthority: "localhost",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			te := newTest(t, tcpClearRREnv)
+			ts := &funcServer{unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+				return &testpb.SimpleResponse{}, nil
+			}}
+			te.unaryServerInt = unaryInterceptorVerifyAuthority
+			te.startServer(ts)
+			defer te.tearDown()
+			success := testutils.NewChannel()
+			te.withServerTester(func(st *serverTester) {
+				st.writeHeaders(http2.HeadersFrameParam{
+					StreamID:      1,
+					BlockFragment: st.encodeHeader(test.headers...),
+					EndStream:     false,
+					EndHeaders:    true,
+				})
+				st.writeData(1, true, []byte{0, 0, 0, 0, 0})
+
+				for {
+					frame := st.wantAnyFrame()
+					f, ok := frame.(*http2.MetaHeadersFrame)
+					if !ok {
+						continue
+					}
+					for _, header := range f.Fields {
+						if header.Name == "grpc-message" {
+							if header.Value == test.wantAuthority {
+								success.Send("")
+								return
+							}
+						}
+					}
+				}
+			})
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			if _, err := success.Receive(ctx); err != nil {
+				t.Fatalf("Error receiving from channel: %v", err)
+			}
+		})
+	}
+}
