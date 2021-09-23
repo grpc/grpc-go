@@ -7420,11 +7420,16 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 					return
 				}
 				sid = 0
-				if hframe, ok := frame.(*http2.HeadersFrame); ok && (!s.waitForEndStream || hframe.StreamEnded()) {
-					sid = hframe.Header().StreamID
-				}
-				if dframe, ok := frame.(*http2.DataFrame); ok && s.waitForEndStream && dframe.Header().Flags.Has(http2.FlagDataEndStream) {
-					sid = dframe.Header().StreamID
+				switch fr := frame.(type) {
+				case *http2.HeadersFrame:
+					if !s.waitForEndStream || fr.StreamEnded() {
+						sid = fr.Header().StreamID
+					}
+
+				case *http2.DataFrame:
+					if s.waitForEndStream && fr.Header().Flags.Has(http2.FlagDataEndStream) {
+						sid = fr.Header().StreamID
+					}
 				}
 				if sid != 0 {
 					if s.refuseStream == nil || !s.refuseStream(sid) {
