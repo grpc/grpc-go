@@ -970,15 +970,71 @@ func serverListenerWithBadRouteConfiguration(host string, port uint32) *v3listen
 	}
 }
 
-// TestRBACToggledOffThenToggledOnWithBadRouteConfiguration tests a scenario
-// where the server gets a listener configuration with a route table that is
-// garbage, with incoming RPC's never matching to a VH/Route of type Non
-// Forwarding Action, thus never proceeding as normal. In the default scenario
-// (RBAC Env Var turned off, thus all logic related to Route Configuration
-// protected), the RPC's should simply proceed as normal due to ignoring the
-// route configuration. Once toggling the route configuration on, the RPC's
-// should all fail after updating the Server.
-func (s) TestRBACToggledOffThenToggledOnWithBadRouteConfiguration(t *testing.T) {
+func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
+	// Turn RBAC support on.
+	oldRBAC := env.RBACSupport
+	env.RBACSupport = true
+	defer func() {
+		env.RBACSupport = oldRBAC
+	}()
+
+	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := setupManagementServer(t)
+	defer cleanup1()
+
+	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
+	defer cleanup2()
+
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("failed to retrieve host and port of server: %v", err)
+	}
+	const serviceName = "my-service-fallback"
+
+	// The inbound listener needs a route table that will never match on a VH,
+	// and thus shouldn't allow incoming RPC's to proceed.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	// Since RBAC support is turned ON, all the RPC's should get denied with
+	// status code Unavailable due to not matching to a route of type Non
+	// Forwarding Action (Route Table not configured properly).
+	inboundLis := serverListenerWithBadRouteConfiguration(host, port)
+	resources.Listeners = append(resources.Listeners, inboundLis)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Setup the management server with client and server-side resources.
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithInsecure(), grpc.WithResolvers(resolver))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testpb.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
+	}
+	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("UnaryCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
+	}
+}
+
+func (s) TestRBACToggledOff_WithBadRouteConfiguration(t *testing.T) {
+	// Turn RBAC support off.
+	oldRBAC := env.RBACSupport
+	env.RBACSupport = false
+	defer func() {
+		env.RBACSupport = oldRBAC
+	}()
+
 	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := setupManagementServer(t)
 	defer cleanup1()
 
@@ -1020,34 +1076,10 @@ func (s) TestRBACToggledOffThenToggledOnWithBadRouteConfiguration(t *testing.T) 
 	defer cc.Close()
 
 	client := testpb.NewTestServiceClient(cc)
-
-	// The default setting of RBAC being disabled should allow any RPC's to
-	// proceed as normal.
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.OK {
 		t.Fatalf("EmptyCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
 	}
 	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.OK {
-		t.Fatalf("UnaryCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
-	}
-
-	// After toggling RBAC support on, all the RPC's should get denied with
-	// status code Unavailable due to not matching to a route of type Non
-	// Forwarding Action (Route Table not configured properly).
-	oldRBAC := env.RBACSupport
-	env.RBACSupport = true
-	defer func() {
-		env.RBACSupport = oldRBAC
-	}()
-	// Update the server with the same configuration, this is blocking on server
-	// side so no raciness here.
-	if err := managementServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
-		t.Fatalf("EmptyCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
-	}
-	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.Unavailable {
 		t.Fatalf("UnaryCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
 	}
 }
