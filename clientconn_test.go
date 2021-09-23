@@ -376,62 +376,6 @@ func (s) TestWithTransportCredentialsTLS(t *testing.T) {
 	}
 }
 
-func (s) TestDefaultAuthority(t *testing.T) {
-	target := "Non-Existent.Server:8080"
-	conn, err := Dial(target, WithInsecure())
-	if err != nil {
-		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
-	}
-	defer conn.Close()
-	if conn.authority != target {
-		t.Fatalf("%v.authority = %v, want %v", conn, conn.authority, target)
-	}
-}
-
-func (s) TestTLSServerNameOverwrite(t *testing.T) {
-	overwriteServerName := "over.write.server.name"
-	creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), overwriteServerName)
-	if err != nil {
-		t.Fatalf("Failed to create credentials %v", err)
-	}
-	conn, err := Dial("passthrough:///Non-Existent.Server:80", WithTransportCredentials(creds))
-	if err != nil {
-		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
-	}
-	defer conn.Close()
-	if conn.authority != overwriteServerName {
-		t.Fatalf("%v.authority = %v, want %v", conn, conn.authority, overwriteServerName)
-	}
-}
-
-func (s) TestWithAuthority(t *testing.T) {
-	overwriteServerName := "over.write.server.name"
-	conn, err := Dial("passthrough:///Non-Existent.Server:80", WithInsecure(), WithAuthority(overwriteServerName))
-	if err != nil {
-		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
-	}
-	defer conn.Close()
-	if conn.authority != overwriteServerName {
-		t.Fatalf("%v.authority = %v, want %v", conn, conn.authority, overwriteServerName)
-	}
-}
-
-func (s) TestWithAuthorityAndTLS(t *testing.T) {
-	overwriteServerName := "over.write.server.name"
-	creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), overwriteServerName)
-	if err != nil {
-		t.Fatalf("Failed to create credentials %v", err)
-	}
-	conn, err := Dial("passthrough:///Non-Existent.Server:80", WithTransportCredentials(creds), WithAuthority("no.effect.authority"))
-	if err != nil {
-		t.Fatalf("Dial(_, _) = _, %v, want _, <nil>", err)
-	}
-	defer conn.Close()
-	if conn.authority != overwriteServerName {
-		t.Fatalf("%v.authority = %v, want %v", conn, conn.authority, overwriteServerName)
-	}
-}
-
 // When creating a transport configured with n addresses, only calculate the
 // backoff once per "round" of attempts instead of once per address (n times
 // per "round" of attempts).
