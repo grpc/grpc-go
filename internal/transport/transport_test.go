@@ -1747,9 +1747,9 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 				t.Fatalf("Error while writing settings: %v", err)
 			}
 
-			// success chan indicates that reader received a RSTStream from server.
+			// result chan indicates that reader received a RSTStream from server.
 			// An error will be passed on it if any other frame is received.
-			success := testutils.NewChannel()
+			result := testutils.NewChannel()
 
 			// Launch a reader goroutine.
 			go func() {
@@ -1764,14 +1764,14 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 					case *http2.RSTStreamFrame:
 						if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeProtocol {
 							// Client only created a single stream, so RST Stream should be for that single stream.
-							t.Errorf("RST stream received with streamID: %d and code %v, want streamID: 1 and code: http.ErrCodeFlowControl", frame.Header().StreamID, http2.ErrCode(frame.ErrCode))
+							result.Send(fmt.Errorf("RST stream received with streamID: %d and code %v, want streamID: 1 and code: http.ErrCodeFlowControl", frame.Header().StreamID, http2.ErrCode(frame.ErrCode)))
 						}
 						// Records that client successfully received RST Stream frame.
-						success.Send(nil)
+						result.Send(nil)
 						return
 					default:
 						// The server should send nothing but a single RST Stream frame.
-						success.Send(errors.New("the client received a frame other than RST Stream"))
+						result.Send(errors.New("the client received a frame other than RST Stream"))
 					}
 				}
 			}()
@@ -1794,8 +1794,12 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			if e, err := success.Receive(ctx); e != nil || err != nil {
-				t.Fatalf("Error in frame server should send: %v. Error receiving from channel: %v", e, err)
+			r, err := result.Receive(ctx)
+			if err != nil {
+				t.Fatalf("Error receiving from channel: %v", err)
+			}
+			if r != nil {
+				t.Fatalf("want nil, got %v", r)
 			}
 		})
 	}
@@ -1867,10 +1871,10 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 			t.Fatalf("Error while writing settings: %v", err)
 		}
 
-		// success chan indicates that reader received a Headers Frame with
+		// result chan indicates that reader received a Headers Frame with
 		// desired grpc status and message from server. An error will be passed
 		// on it if any other frame is received.
-		success := testutils.NewChannel()
+		result := testutils.NewChannel()
 
 		// Launch a reader goroutine.
 		go func() {
@@ -1883,34 +1887,38 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 				case *http2.SettingsFrame:
 					// Do nothing. A settings frame is expected from server preface.
 				case *http2.MetaHeadersFrame:
+					var status, grpcStatus, grpcMessage string
 					for _, header := range frame.Fields {
 						if header.Name == ":status" {
-							if header.Value != "400" {
-								success.Send(fmt.Errorf("incorrect HTTP Status got %v, want 200", header.Value))
-								return
-							}
+							status = header.Value
 						}
 						if header.Name == "grpc-status" {
-							if header.Value != "13" { // grpc status code internal
-								success.Send(fmt.Errorf("incorrect gRPC Status got %v, want 13", header.Value))
-								return
-							}
+							grpcStatus = header.Value
 						}
 						if header.Name == "grpc-message" {
-							if !strings.Contains(header.Value, "both must only have 1 value as per HTTP/2 spec") {
-								success.Send(fmt.Errorf("incorrect gRPC message"))
-								return
-							}
+							grpcMessage = header.Value
 						}
+					}
+					if status != "400" {
+						result.Send(fmt.Errorf("incorrect HTTP Status got %v, want 200", status))
+						return
+					}
+					if grpcStatus != "13" { // grpc status code internal
+						result.Send(fmt.Errorf("incorrect gRPC Status got %v, want 13", grpcStatus))
+						return
+					}
+					if !strings.Contains(grpcMessage, "both must only have 1 value as per HTTP/2 spec") {
+						result.Send(fmt.Errorf("incorrect gRPC message"))
+						return
 					}
 
 					// Records that client successfully received a HeadersFrame
 					// with expected Trailers-Only response.
-					success.Send(nil)
+					result.Send(nil)
 					return
 				default:
 					// The server should send nothing but a single Settings and Headers frame.
-					success.Send(errors.New("the client received a frame other than Settings or Headers"))
+					result.Send(errors.New("the client received a frame other than Settings or Headers"))
 				}
 			}
 		}()
@@ -1933,8 +1941,12 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
-		if e, err := success.Receive(ctx); e != nil || err != nil {
-			t.Fatalf("Error in frame server should send: %v. Error receiving from channel: %v", e, err)
+		r, err := result.Receive(ctx)
+		if err != nil {
+			t.Fatalf("Error receiving from channel: %v", err)
+		}
+		if r != nil {
+			t.Fatalf("want nil, got %v", r)
 		}
 	}
 }

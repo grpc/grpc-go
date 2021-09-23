@@ -7868,6 +7868,10 @@ func unaryInterceptorVerifyAuthority(ctx context.Context, req interface{}, info 
 	}
 	// Pass back the authority for verification on client - NotFound so
 	// grpc-message will be available to read for verification.
+	if len(authority) == 0 {
+		// Represent no :authority header present with an empty string.
+		return nil, status.Error(codes.NotFound, "")
+	}
 	return nil, status.Error(codes.NotFound, authority[0])
 }
 
@@ -7892,6 +7896,18 @@ func (s) TestAuthorityHeader(t *testing.T) {
 				"host", "localhost",
 			},
 			wantAuthority: "localhost",
+		},
+		{
+			name: "Missing :authority and host",
+			// Codepath triggered by incoming headers with no :authority and no
+			// host.
+			headers: []string{
+				":method", "POST",
+				":path", "/grpc.testing.TestService/UnaryCall",
+				"content-type", "application/grpc",
+				"te", "trailers",
+			},
+			wantAuthority: "",
 		},
 		// "If :authority is present, Host must be discarded." - A41
 		{
@@ -7935,10 +7951,8 @@ func (s) TestAuthorityHeader(t *testing.T) {
 					}
 					for _, header := range f.Fields {
 						if header.Name == "grpc-message" {
-							if header.Value == test.wantAuthority {
-								success.Send("")
-								return
-							}
+							success.Send(header.Value)
+							return
 						}
 					}
 				}
@@ -7946,9 +7960,12 @@ func (s) TestAuthorityHeader(t *testing.T) {
 
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-
-			if _, err := success.Receive(ctx); err != nil {
+			gotAuthority, err := success.Receive(ctx)
+			if err != nil {
 				t.Fatalf("Error receiving from channel: %v", err)
+			}
+			if gotAuthority != test.wantAuthority {
+				t.Fatalf("gotAuthority: %v, wantAuthority %v", gotAuthority, test.wantAuthority)
 			}
 		})
 	}
