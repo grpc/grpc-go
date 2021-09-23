@@ -396,13 +396,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			if logger.V(logLevel) {
 				logger.Errorf("transport: http2Server.operateHeaders parsed a :connection header which makes a request malformed as per the HTTP/2 spec")
 			}
-			t.controlBuf.put(&cleanupStream{
-				streamID: streamID,
-				rst:      true,
-				rstCode:  http2.ErrCodeProtocol,
-				onWrite:  func() {},
-			})
-			return false
+			headerError = true
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
 				break
@@ -454,10 +448,8 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			mdata[":authority"] = host
 			delete(mdata, "host")
 		}
-		delete(mdata, "host")
-	}
-	// "If :authority is present, Host must be discarded" - A41
-	if len(mdata[":authority"]) != 0 {
+	} else {
+		// "If :authority is present, Host must be discarded" - A41
 		delete(mdata, "host")
 	}
 	// No eventual :authority header is a valid RPC.
