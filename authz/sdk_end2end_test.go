@@ -24,13 +24,13 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"path"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	pb "google.golang.org/grpc/test/grpc_testing"
@@ -54,6 +54,14 @@ func (s *testServer) StreamingInputCall(stream pb.TestService_StreamingInputCall
 			return err
 		}
 	}
+}
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
 }
 
 var sdkTests = map[string]struct {
@@ -256,21 +264,22 @@ var sdkTests = map[string]struct {
 	},
 }
 
-func TestSDKStaticPolicyEnd2End(t *testing.T) {
+func (s) TestSDKStaticPolicyEnd2End(t *testing.T) {
 	for name, test := range sdkTests {
 		t.Run(name, func(t *testing.T) {
 			// Start a gRPC server with SDK unary and stream server interceptors.
 			i, _ := authz.NewStatic(test.authzPolicy)
+			s := grpc.NewServer(
+				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
+				grpc.ChainStreamInterceptor(i.StreamInterceptor))
+			defer s.Stop()
+			pb.RegisterTestServiceServer(s, &testServer{})
+
 			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
 				t.Fatalf("error listening: %v", err)
 			}
-			s := grpc.NewServer(
-				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
-				grpc.ChainStreamInterceptor(i.StreamInterceptor))
-			pb.RegisterTestServiceServer(s, &testServer{})
 			go s.Serve(lis)
-			defer s.Stop()
 
 			// Establish a connection to the server.
 			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
@@ -311,22 +320,25 @@ func TestSDKStaticPolicyEnd2End(t *testing.T) {
 	}
 }
 
-func TestSDKFileWatcherEnd2End(t *testing.T) {
+func (s) TestSDKFileWatcherEnd2End(t *testing.T) {
 	for name, test := range sdkTests {
 		t.Run(name, func(t *testing.T) {
-			dir := createTmpPolicyFile(t, name+"*", []byte(test.authzPolicy))
-			i, _ := authz.NewFileWatcher(path.Join(dir, "policy.json"), 1*time.Second)
+			file := createTmpPolicyFile(t, name, []byte(test.authzPolicy))
+			i, _ := authz.NewFileWatcher(file, 1*time.Second)
 			defer i.Close()
 
 			// Start a gRPC server with SDK unary and stream server interceptors.
+			s := grpc.NewServer(
+				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
+				grpc.ChainStreamInterceptor(i.StreamInterceptor))
+			defer s.Stop()
+			pb.RegisterTestServiceServer(s, &testServer{})
+
 			lis, err := net.Listen("tcp", "localhost:0")
 			if err != nil {
 				t.Fatalf("error listening: %v", err)
 			}
-			s := grpc.NewServer(
-				grpc.ChainUnaryInterceptor(i.UnaryInterceptor),
-				grpc.ChainStreamInterceptor(i.StreamInterceptor))
-			pb.RegisterTestServiceServer(s, &testServer{})
+			defer lis.Close()
 			go s.Serve(lis)
 
 			// Establish a connection to the server.
@@ -368,20 +380,23 @@ func TestSDKFileWatcherEnd2End(t *testing.T) {
 	}
 }
 
-func TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
+func (s) TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	valid1 := sdkTests["DeniesRpcMatchInDenyAndAllow"]
-	dir := createTmpPolicyFile(t, "valid_policy_refresh*", []byte(valid1.authzPolicy))
-	i, _ := authz.NewFileWatcher(path.Join(dir, "policy.json"), 1*time.Second)
+	file := createTmpPolicyFile(t, "valid_policy_refresh", []byte(valid1.authzPolicy))
+	i, _ := authz.NewFileWatcher(file, 1*time.Second)
 	defer i.Close()
 
 	// Start a gRPC server with SDK unary server interceptor.
+	s := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
+	defer s.Stop()
+	pb.RegisterTestServiceServer(s, &testServer{})
+
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("error listening: %v", err)
 	}
-	s := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
-	pb.RegisterTestServiceServer(s, &testServer{})
+	defer lis.Close()
 	go s.Serve(lis)
 
 	// Establish a connection to the server.
@@ -403,8 +418,8 @@ func TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
 
 	// Rewrite the file with a different valid authorization policy.
 	valid2 := sdkTests["AllowsRpcEmptyDenyMatchInAllow"]
-	if err := ioutil.WriteFile(path.Join(dir, "policy.json"), []byte(valid2.authzPolicy), os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", path.Join(dir, "policy.json"), err)
+	if err := ioutil.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
+		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
 	}
 	// Wait 2 seconds for background go routine to read the updated files.
 	time.Sleep(2 * time.Second)
@@ -416,20 +431,23 @@ func TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	}
 }
 
-func TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
+func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	valid := sdkTests["DeniesRpcMatchInDenyAndAllow"]
-	dir := createTmpPolicyFile(t, "invalid_policy_skip_reload*", []byte(valid.authzPolicy))
-	i, _ := authz.NewFileWatcher(path.Join(dir, "policy.json"), 1*time.Second)
+	file := createTmpPolicyFile(t, "invalid_policy_skip_reload", []byte(valid.authzPolicy))
+	i, _ := authz.NewFileWatcher(file, 1*time.Second)
 	defer i.Close()
 
 	// Start a gRPC server with SDK unary server interceptors.
+	s := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
+	defer s.Stop()
+	pb.RegisterTestServiceServer(s, &testServer{})
+
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("error listening: %v", err)
 	}
-	s := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
-	pb.RegisterTestServiceServer(s, &testServer{})
+	defer lis.Close()
 	go s.Serve(lis)
 
 	// Establish a connection to the server.
@@ -450,8 +468,8 @@ func TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	}
 
 	// Skips the invalid policy update, and continues to use the valid policy.
-	if err := ioutil.WriteFile(path.Join(dir, "policy.json"), []byte("{}"), os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", path.Join(dir, "policy.json"), err)
+	if err := ioutil.WriteFile(file, []byte("{}"), os.ModePerm); err != nil {
+		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
 	}
 	// Wait 2 seconds for background go routine to read the updated files.
 	time.Sleep(2 * time.Second)
@@ -463,20 +481,23 @@ func TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	}
 }
 
-func TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
+func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	valid1 := sdkTests["DeniesRpcMatchInDenyAndAllow"]
-	dir := createTmpPolicyFile(t, "recovers_from_reload_failure*", []byte(valid1.authzPolicy))
-	i, _ := authz.NewFileWatcher(path.Join(dir, "policy.json"), 1*time.Second)
+	file := createTmpPolicyFile(t, "recovers_from_reload_failure", []byte(valid1.authzPolicy))
+	i, _ := authz.NewFileWatcher(file, 1*time.Second)
 	defer i.Close()
 
 	// Start a gRPC server with SDK unary server interceptors.
+	s := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
+	defer s.Stop()
+	pb.RegisterTestServiceServer(s, &testServer{})
+
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("error listening: %v", err)
 	}
-	s := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
-	pb.RegisterTestServiceServer(s, &testServer{})
+	defer lis.Close()
 	go s.Serve(lis)
 
 	// Establish a connection to the server.
@@ -497,8 +518,8 @@ func TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	}
 
 	// Skips the invalid policy update, and continues to use the valid policy.
-	if err := ioutil.WriteFile(path.Join(dir, "policy.json"), []byte("{}"), os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", path.Join(dir, "policy.json"), err)
+	if err := ioutil.WriteFile(file, []byte("{}"), os.ModePerm); err != nil {
+		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
 	}
 	// Wait 2 seconds for background go routine to read the updated files.
 	time.Sleep(2 * time.Second)
@@ -511,8 +532,8 @@ func TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 
 	// Rewrite the file with a different valid authorization policy.
 	valid2 := sdkTests["AllowsRpcEmptyDenyMatchInAllow"]
-	if err := ioutil.WriteFile(path.Join(dir, "policy.json"), []byte(valid2.authzPolicy), os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", path.Join(dir, "policy.json"), err)
+	if err := ioutil.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
+		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
 	}
 	// Wait 2 seconds for background go routine to read the updated files.
 	time.Sleep(2 * time.Second)

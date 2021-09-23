@@ -19,6 +19,7 @@
 package authz_test
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -43,19 +44,18 @@ func createTmpPolicyFile(t *testing.T, dirSuffix string, policy []byte) string {
 	if err := ioutil.WriteFile(filename, policy, os.ModePerm); err != nil {
 		t.Fatalf("ioutil.WriteFile(%q) failed: %v", filename, err)
 	}
-	t.Logf("Wrote file at: %s", filename)
-	t.Logf("%s", string(policy))
-	return dir
+	t.Logf("Wrote policy %s to file at %s", string(policy), filename)
+	return filename
 }
 
 func TestNewStatic(t *testing.T) {
 	tests := map[string]struct {
 		authzPolicy string
-		wantErr     string
+		wantErr     error
 	}{
 		"InvalidPolicyFailsToCreateInterceptor": {
 			authzPolicy: `{}`,
-			wantErr:     `"name" is not present`,
+			wantErr:     fmt.Errorf(`"name" is not present`),
 		},
 		"ValidPolicyCreatesInterceptor": {
 			authzPolicy: `{		
@@ -71,7 +71,7 @@ func TestNewStatic(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			if _, err := authz.NewStatic(test.authzPolicy); (err != nil) && (err.Error() != test.wantErr) {
+			if _, err := authz.NewStatic(test.authzPolicy); fmt.Sprint(err) != fmt.Sprint(test.wantErr) {
 				t.Fatalf("NewStatic(%v) returned err: %v, want err: %v", test.authzPolicy, err, test.wantErr)
 			}
 		})
@@ -82,16 +82,16 @@ func TestNewFileWatcher(t *testing.T) {
 	tests := map[string]struct {
 		authzPolicy     string
 		refreshDuration time.Duration
-		wantErr         string
+		wantErr         error
 	}{
 		"InvalidRefreshDurationFailsToCreateInterceptor": {
 			refreshDuration: time.Duration(0),
-			wantErr:         "requires refresh interval(0s) greater than 0s",
+			wantErr:         fmt.Errorf("requires refresh interval(0s) greater than 0s"),
 		},
 		"InvalidPolicyFailsToCreateInterceptor": {
 			authzPolicy:     `{}`,
 			refreshDuration: time.Duration(1),
-			wantErr:         `"name" is not present`,
+			wantErr:         fmt.Errorf(`failed to update authorization engines: "name" is not present`),
 		},
 		"ValidPolicyCreatesInterceptor": {
 			authzPolicy: `{
@@ -108,8 +108,8 @@ func TestNewFileWatcher(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			dir := createTmpPolicyFile(t, name+"*", []byte(test.authzPolicy))
-			if _, err := authz.NewFileWatcher(path.Join(dir, "policy.json"), test.refreshDuration); (err != nil) && (err.Error() != test.wantErr) {
+			file := createTmpPolicyFile(t, name, []byte(test.authzPolicy))
+			if _, err := authz.NewFileWatcher(file, test.refreshDuration); fmt.Sprint(err) != fmt.Sprint(test.wantErr) {
 				t.Fatalf("NewFileWatcher(%v) returned err: %v, want err: %v", test.authzPolicy, err, test.wantErr)
 			}
 		})

@@ -32,7 +32,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var logger = grpclog.Component("sdk")
+var logger = grpclog.Component("authz")
 
 // StaticInterceptor contains engines used to make authorization decisions. It
 // either contains two engines deny engine followed by an allow engine or only
@@ -104,7 +104,9 @@ func NewFileWatcher(file string, duration time.Duration) (*FileWatcherIntercepto
 		return nil, fmt.Errorf("requires refresh interval(%v) greater than 0s", duration)
 	}
 	i := &FileWatcherInterceptor{policyFile: file, refreshDuration: duration}
-	i.updateInternalInterceptor()
+	if err := i.updateInternalInterceptor(); err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	i.cancel = cancel
 	// Create a background go routine for policy refresh.
@@ -115,7 +117,9 @@ func NewFileWatcher(file string, duration time.Duration) (*FileWatcherIntercepto
 func (i *FileWatcherInterceptor) run(ctx context.Context) {
 	ticker := time.NewTicker(i.refreshDuration)
 	for {
-		i.updateInternalInterceptor()
+		if err := i.updateInternalInterceptor(); err != nil {
+			logger.Warningf("%v", err)
+		}
 		select {
 		case <-ctx.Done():
 			ticker.Stop()
@@ -129,25 +133,24 @@ func (i *FileWatcherInterceptor) run(ctx context.Context) {
 // and if so, updates the internalInterceptor with the policy. Unlike the
 // constructor, if there is an error in reading the file or parsing the policy, the
 // previous internalInterceptors will not be replaced.
-func (i *FileWatcherInterceptor) updateInternalInterceptor() {
+func (i *FileWatcherInterceptor) updateInternalInterceptor() error {
 	policyContents, err := ioutil.ReadFile(i.policyFile)
 	if err != nil {
-		logger.Warningf("policyFile(%s) read failed: %v", i.policyFile, err)
-		return
+		return fmt.Errorf("policyFile(%s) read failed: %v", i.policyFile, err)
 	}
 	if bytes.Equal(i.policyContents, policyContents) {
-		return
+		return nil
 	}
 	interceptor, err := NewStatic(string(policyContents))
 	if err != nil {
-		logger.Warningf("failed to update authorization engines: %v", err)
-		return
+		return fmt.Errorf("failed to update authorization engines: %v", err)
 	}
 	atomic.StorePointer(&i.internalInterceptor, unsafe.Pointer(interceptor))
 	i.policyContents = policyContents
+	return nil
 }
 
-// Close cleans up resources allocated by the interceptors.
+// Close cleans up resources allocated by the interceptor.
 func (i *FileWatcherInterceptor) Close() {
 	i.cancel()
 }
