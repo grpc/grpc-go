@@ -7352,8 +7352,11 @@ type httpServerResponse struct {
 }
 
 type httpServer struct {
-	refuseStream func(uint32) bool
-	responses    []httpServerResponse
+	// If waitForEndStream is set, wait for the client to send a frame with end
+	// stream in it before sending a response/refused stream.
+	waitForEndStream bool
+	refuseStream     func(uint32) bool
+	responses        []httpServerResponse
 }
 
 func (s *httpServer) writeHeader(framer *http2.Framer, sid uint32, headerFields []string, endStream bool) error {
@@ -7416,8 +7419,14 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 					}
 					return
 				}
-				if hframe, ok := frame.(*http2.HeadersFrame); ok {
+				sid = 0
+				if hframe, ok := frame.(*http2.HeadersFrame); ok && (!s.waitForEndStream || hframe.StreamEnded()) {
 					sid = hframe.Header().StreamID
+				}
+				if dframe, ok := frame.(*http2.DataFrame); ok && s.waitForEndStream && dframe.Header().Flags.Has(http2.FlagDataEndStream) {
+					sid = dframe.Header().StreamID
+				}
+				if sid != 0 {
 					if s.refuseStream == nil || !s.refuseStream(sid) {
 						break
 					}
