@@ -517,6 +517,7 @@ func (s) TestRetryStats(t *testing.T) {
 	}
 	defer lis.Close()
 	server := &httpServer{
+		waitForEndStream: true,
 		responses: []httpServerResponse{{
 			trailers: [][]string{{
 				":status", "200",
@@ -588,13 +589,6 @@ func (s) TestRetryStats(t *testing.T) {
 		&stats.End{},
 	}
 
-	// There is a race between noticing the RST_STREAM during the first RPC
-	// attempt and writing the payload.  If we detect that the client did not
-	// send the OutPayload, we remove it from want.
-	if _, ok := handler.s[2].(*stats.End); ok {
-		want = append(want[:2], want[3:]...)
-	}
-
 	toString := func(ss []stats.RPCStats) (ret []string) {
 		for _, s := range ss {
 			ret = append(ret, fmt.Sprintf("%T - %v", s, s))
@@ -612,8 +606,7 @@ func (s) TestRetryStats(t *testing.T) {
 	// There is a race between receiving the payload (triggered by the
 	// application / gRPC library) and receiving the trailer (triggered at the
 	// transport layer).  Adjust the received stats accordingly if necessary.
-	// Note: we measure from the end of the RPCStats due to the race above.
-	tIdx, pIdx := len(handler.s)-3, len(handler.s)-2
+	const tIdx, pIdx = 13, 14
 	_, okT := handler.s[tIdx].(*stats.InTrailer)
 	_, okP := handler.s[pIdx].(*stats.InPayload)
 	if okT && okP {
@@ -654,8 +647,8 @@ func (s) TestRetryStats(t *testing.T) {
 	}
 
 	// Validate timings between last Begin and preceding End.
-	end := handler.s[len(handler.s)-8].(*stats.End)
-	begin := handler.s[len(handler.s)-7].(*stats.Begin)
+	end := handler.s[8].(*stats.End)
+	begin := handler.s[9].(*stats.Begin)
 	diff := begin.BeginTime.Sub(end.EndTime)
 	if diff < 10*time.Millisecond || diff > 50*time.Millisecond {
 		t.Fatalf("pushback time before final attempt = %v; want ~10ms", diff)
