@@ -140,6 +140,12 @@ type TransportCredentials interface {
 	// Additionally, ClientHandshakeInfo data will be available via the context
 	// passed to this call.
 	//
+	// The second argument to this method is the ClientConn's authority, usually
+	// derived from the user's dial target. Implementations should use this as
+	// the server name during the authentication handshake. In rare cases,
+	// implementations may choose to ignore this value and use a value acquired
+	// through other means.
+	//
 	// If the returned net.Conn is closed, it MUST close the net.Conn provided.
 	ClientHandshake(context.Context, string, net.Conn) (net.Conn, AuthInfo, error)
 	// ServerHandshake does the authentication handshake for servers. It returns
@@ -153,9 +159,11 @@ type TransportCredentials interface {
 	Info() ProtocolInfo
 	// Clone makes a copy of this TransportCredentials.
 	Clone() TransportCredentials
-	// OverrideServerName overrides the server name used to verify the hostname on the returned certificates from the server.
-	// gRPC internals also use it to override the virtual hosting name if it is set.
-	// It must be called before dialing. Currently, this is only used by grpclb.
+	// OverrideServerName overrides the server name used to verify the hostname
+	// on the returned certificates from the server.
+	//
+	// This is deprecated. Users are recommended to use the WithAuthority dial
+	// option instead.
 	OverrideServerName(string) error
 }
 

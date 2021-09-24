@@ -22,15 +22,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/ptypes"
 	durationpb "github.com/golang/protobuf/ptypes/duration"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
 	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
-	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -201,7 +202,10 @@ func (*rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig,
 	if lookupService == "" {
 		return nil, fmt.Errorf("rls: empty lookup_service in service config {%+v}", string(c))
 	}
-	parsedTarget := grpcutil.ParseTarget(lookupService, false)
+	parsedTarget, err := url.Parse(lookupService)
+	if err != nil {
+		return nil, fmt.Errorf("rls: invalid target URI in lookup_service {%s}", lookupService)
+	}
 	if parsedTarget.Scheme == "" {
 		parsedTarget.Scheme = resolver.GetDefaultScheme()
 	}

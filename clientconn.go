@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"net/url"
 	"reflect"
 	"strings"
 	"sync"
@@ -37,7 +38,6 @@ import (
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/internal/grpcutil"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
@@ -248,37 +248,30 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	}
 
 	// Determine the resolver to use.
-	cc.parsedTarget = grpcutil.ParseTarget(cc.target, cc.dopts.copts.Dialer != nil)
-	channelz.Infof(logger, cc.channelzID, "parsed scheme: %q", cc.parsedTarget.Scheme)
-	resolverBuilder := cc.getResolver(cc.parsedTarget.Scheme)
-	if resolverBuilder == nil {
-		// If resolver builder is still nil, the parsed target's scheme is
-		// not registered. Fallback to default resolver and set Endpoint to
-		// the original target.
-		channelz.Infof(logger, cc.channelzID, "scheme %q not registered, fallback to default scheme", cc.parsedTarget.Scheme)
-		cc.parsedTarget = resolver.Target{
-			Scheme:   resolver.GetDefaultScheme(),
-			Endpoint: target,
-		}
-		resolverBuilder = cc.getResolver(cc.parsedTarget.Scheme)
-		if resolverBuilder == nil {
-			return nil, fmt.Errorf("could not get resolver for default scheme: %q", cc.parsedTarget.Scheme)
-		}
+	resolverBuilder, err := cc.parseTargetAndFindResolver()
+	if err != nil {
+		return nil, err
 	}
 
-	creds := cc.dopts.copts.TransportCredentials
-	if creds != nil && creds.Info().ServerName != "" {
-		cc.authority = creds.Info().ServerName
-	} else if cc.dopts.insecure && cc.dopts.authority != "" {
-		cc.authority = cc.dopts.authority
-	} else if strings.HasPrefix(cc.target, "unix:") || strings.HasPrefix(cc.target, "unix-abstract:") {
+	// Determine the authority for the channel. For now, we will use the parsed
+	// endpoint from the user's dial target (with a leading "/" stripped), as
+	// the default value. We do have some special handling for targets with unix
+	// scheme and empty hostname (":port").
+	// TODO: Define an optional interface on the name resolver to return the
+	// authority given the user's dial target.
+	cc.authority = strings.TrimPrefix(cc.parsedTarget.Endpoint, "/")
+	if strings.HasPrefix(cc.authority, ":") {
+		cc.authority = "localhost" + cc.authority
+	}
+	if cc.parsedTarget.Scheme == "unix" || cc.parsedTarget.Scheme == "unx-abstract" {
 		cc.authority = "localhost"
-	} else if strings.HasPrefix(cc.parsedTarget.Endpoint, ":") {
-		cc.authority = "localhost" + cc.parsedTarget.Endpoint
-	} else {
-		// Use endpoint from "scheme://authority/endpoint" as the default
-		// authority for ClientConn.
-		cc.authority = cc.parsedTarget.Endpoint
+	}
+	// The only authority override supported at this point in time is the one
+	// using the WithAuthority dial option, and this trumps over any per-address
+	// overrides specified by the name resolver in the
+	// resolver.Address.ServerName field.
+	if cc.dopts.authority != "" {
+		cc.authority = cc.dopts.authority
 	}
 
 	if cc.dopts.scChan != nil && !scSet {
@@ -902,10 +895,7 @@ func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
 	// ac.state is Ready, try to find the connected address.
 	var curAddrFound bool
 	for _, a := range addrs {
-		// a.ServerName takes precedent over ClientConn authority, if present.
-		if a.ServerName == "" {
-			a.ServerName = ac.cc.authority
-		}
+		a.ServerName = ac.getServerName(a)
 		if reflect.DeepEqual(ac.curAddr, a) {
 			curAddrFound = true
 			break
@@ -917,6 +907,25 @@ func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
 	}
 
 	return curAddrFound
+}
+
+// getServerName determines the serverName to be used in the connection
+// handshake. The default value for the serverName is the authority on the
+// ClientConn, which either comes from the user's dial target or through an
+// authority override specified using the WithAuthority dial option. Name
+// resolvers can specify a per-address override for the serverName through the
+// resolver.Address.ServerName field which is used only if the WithAuthority
+// dial option was not used. The rationale is that per-address authority
+// overrides specified by the name resolver can represent a security risk, while
+// an override specified by the user is more dependable since they probably know
+// what they are doing.
+func (ac *addrConn) getServerName(addr resolver.Address) string {
+	if ac.cc.dopts.authority == "" {
+		if addr.ServerName != "" {
+			return addr.ServerName
+		}
+	}
+	return ac.cc.authority
 }
 
 func getMethodConfig(sc *ServiceConfig, method string) MethodConfig {
@@ -1275,11 +1284,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	prefaceReceived := grpcsync.NewEvent()
 	connClosed := grpcsync.NewEvent()
 
-	// addr.ServerName takes precedent over ClientConn authority, if present.
-	if addr.ServerName == "" {
-		addr.ServerName = ac.cc.authority
-	}
-
+	addr.ServerName = ac.getServerName(addr)
 	hctx, hcancel := context.WithCancel(ac.ctx)
 	hcStarted := false // protected by ac.mu
 
@@ -1620,4 +1625,63 @@ func (cc *ClientConn) connectionError() error {
 	cc.lceMu.Lock()
 	defer cc.lceMu.Unlock()
 	return cc.lastConnectionError
+}
+
+func (cc *ClientConn) parseTargetAndFindResolver() (resolver.Builder, error) {
+	channelz.Infof(logger, cc.channelzID, "original dial target is: %q", cc.target)
+	parsedTarget, err := parseTarget(cc.target)
+	if err != nil {
+		channelz.Infof(logger, cc.channelzID, "dial target %q parse failed: %v", cc.target, err)
+	} else {
+		channelz.Infof(logger, cc.channelzID, "parsed dial target is: %+v", parsedTarget)
+	}
+	rb := cc.getResolver(parsedTarget.Scheme)
+	if rb != nil {
+		cc.parsedTarget = parsedTarget
+		return rb, nil
+	}
+
+	// We are here because the user's dial target did not contain a scheme or
+	// specified an unregistered scheme. We should fallback to the default
+	// scheme, except when no scheme was specified in the user's dial target and
+	// a custom dialer was specified. In the latter case, we should always use
+	// passthrough scheme.
+	defScheme := resolver.GetDefaultScheme()
+	if parsedTarget.Scheme == "" && cc.dopts.copts.Dialer != nil {
+		defScheme = "passthrough"
+	}
+	channelz.Infof(logger, cc.channelzID, "fallback to scheme %q", defScheme)
+	canonicalTarget := defScheme + ":///" + cc.target
+
+	parsedTarget, err = parseTarget(canonicalTarget)
+	if err != nil {
+		channelz.Infof(logger, cc.channelzID, "dial target %q parse failed: %v", canonicalTarget, err)
+		return nil, err
+	}
+	channelz.Infof(logger, cc.channelzID, "parsed dial target is: %+v", parsedTarget)
+	rb = cc.getResolver(parsedTarget.Scheme)
+	if rb == nil {
+		return nil, fmt.Errorf("could not get resolver for default scheme: %q", parsedTarget.Scheme)
+	}
+	cc.parsedTarget = parsedTarget
+	return rb, nil
+}
+
+// parseTarget uses RFC 3986 semantics to parse the given target into a
+// resolver.Target struct containing scheme, authority and endpoint. Query
+// params are stripped from the endpoint.
+func parseTarget(target string) (resolver.Target, error) {
+	u, err := url.Parse(target)
+	if err != nil {
+		return resolver.Target{}, err
+	}
+	path := u.Path
+	if path == "" {
+		path = u.Opaque
+	}
+	return resolver.Target{
+		Scheme:    u.Scheme,
+		Authority: u.Host,
+		Endpoint:  path,
+	}, nil
 }

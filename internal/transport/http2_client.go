@@ -25,6 +25,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -146,13 +147,20 @@ func dial(ctx context.Context, fn func(context.Context, string) (net.Conn, error
 	address := addr.Addr
 	networkType, ok := networktype.Get(addr)
 	if fn != nil {
+		// Special handling for unix scheme with custom dialer. Back in the day,
+		// we did not have a unix resolver and therefore targets with a unix
+		// scheme would end up using the passthrough resolver. So, user's used a
+		// custom dialer in this case and expected the original dial target to
+		// be passed to the custom dialer. Now, we have a unix resolver. But if
+		// a custom dialer is specified, we want to retain the old behavior in
+		// terms of the address being passed to the custom dialer.
 		if networkType == "unix" && !strings.HasPrefix(address, "\x00") {
-			// For backward compatibility, if the user dialed "unix:///path",
-			// the passthrough resolver would be used and the user's custom
-			// dialer would see "unix:///path". Since the unix resolver is used
-			// and the address is now "/path", prepend "unix://" so the user's
-			// custom dialer sees the same address.
-			return fn(ctx, "unix://"+address)
+			// Supported unix targets are either "unix://absolute-path" or
+			// "unix:relative-path".
+			if filepath.IsAbs(address) {
+				return fn(ctx, "unix://"+address)
+			}
+			return fn(ctx, "unix:"+address)
 		}
 		return fn(ctx, address)
 	}

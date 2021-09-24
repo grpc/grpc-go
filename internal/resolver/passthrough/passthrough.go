@@ -20,13 +20,18 @@
 // name without scheme back to gRPC as resolved address.
 package passthrough
 
-import "google.golang.org/grpc/resolver"
+import (
+	"strings"
+
+	"google.golang.org/grpc/resolver"
+)
 
 const scheme = "passthrough"
 
 type passthroughBuilder struct{}
 
 func (*passthroughBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+	target.Endpoint = strings.TrimPrefix(target.Endpoint, "/")
 	r := &passthroughResolver{
 		target: target,
 		cc:     cc,

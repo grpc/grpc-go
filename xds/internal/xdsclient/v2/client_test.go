@@ -608,7 +608,7 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 	}
 	defer sCleanup()
 
-	const scheme = "xds_client_test_whatever"
+	const scheme = "xds-client-test-whatever"
 	rb := manual.NewBuilderWithScheme(scheme)
 	rb.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: "no.such.server"}}})
 

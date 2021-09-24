@@ -22,6 +22,7 @@ package resolver
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpclog"
@@ -61,6 +62,7 @@ type xdsResolverBuilder struct {
 // The xds bootstrap process is performed (and a new xds client is built) every
 // time an xds resolver is built.
 func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+	t.Endpoint = strings.TrimPrefix(t.Endpoint, "/")
 	r := &xdsResolver{
 		target:         t,
 		cc:             cc,

@@ -26,6 +26,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -135,7 +136,7 @@ func (b *lbBuilder) Build(cc balancer.ClientConn, opt balancer.BuildOptions) bal
 
 	lb := &lbBalancer{
 		cc:              newLBCacheClientConn(cc),
-		target:          opt.Target.Endpoint,
+		target:          strings.TrimPrefix(opt.Target.Endpoint, "/"),
 		opt:             opt,
 		fallbackTimeout: b.fallbackTimeout,
 		doneCh:          make(chan struct{}),
