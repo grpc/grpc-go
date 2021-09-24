@@ -30,7 +30,7 @@ import (
 	"testing"
 	"time"
 
-	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
+	orcapb "github.com/cncf/xds/go/udpa/data/orca/v1"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 

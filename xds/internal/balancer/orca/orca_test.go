@@ -20,7 +20,7 @@ import (
 	"strings"
 	"testing"
 
-	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
+	orcapb "github.com/cncf/xds/go/udpa/data/orca/v1"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpctest"

@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/cespare/xxhash/v2 v2.1.1
-	github.com/cncf/udpa/go v0.0.0-20201120205902-5459f2c99403
+	github.com/cncf/xds/go v0.0.0-20210922020428-25de7278fc84
 	github.com/envoyproxy/go-control-plane v0.9.10-0.20210907150352-cf90f659a021
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/golang/protobuf v1.4.3

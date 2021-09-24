@@ -27,7 +27,7 @@ import (
 	"strings"
 	"time"
 
-	v1typepb "github.com/cncf/udpa/go/udpa/type/v1"
+	v1typepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"

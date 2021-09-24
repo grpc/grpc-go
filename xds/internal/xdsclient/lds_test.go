@@ -24,7 +24,7 @@ import (
 	"testing"
 	"time"
 
-	v1typepb "github.com/cncf/udpa/go/udpa/type/v1"
+	v1typepb "github.com/cncf/xds/go/udpa/type/v1"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"github.com/golang/protobuf/proto"
 	spb "github.com/golang/protobuf/ptypes/struct"

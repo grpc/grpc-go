@@ -19,7 +19,7 @@
 package clusterimpl
 
 import (
-	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
+	orcapb "github.com/cncf/xds/go/udpa/data/orca/v1"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
