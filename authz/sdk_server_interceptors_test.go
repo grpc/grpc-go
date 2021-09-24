@@ -48,7 +48,7 @@ func createTmpPolicyFile(t *testing.T, dirSuffix string, policy []byte) string {
 	return filename
 }
 
-func TestNewStatic(t *testing.T) {
+func (s) TestNewStatic(t *testing.T) {
 	tests := map[string]struct {
 		authzPolicy string
 		wantErr     error
@@ -78,7 +78,7 @@ func TestNewStatic(t *testing.T) {
 	}
 }
 
-func TestNewFileWatcher(t *testing.T) {
+func (s) TestNewFileWatcher(t *testing.T) {
 	tests := map[string]struct {
 		authzPolicy     string
 		refreshDuration time.Duration
@@ -109,8 +109,12 @@ func TestNewFileWatcher(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			file := createTmpPolicyFile(t, name, []byte(test.authzPolicy))
-			if _, err := authz.NewFileWatcher(file, test.refreshDuration); fmt.Sprint(err) != fmt.Sprint(test.wantErr) {
+			i, err := authz.NewFileWatcher(file, test.refreshDuration)
+			if fmt.Sprint(err) != fmt.Sprint(test.wantErr) {
 				t.Fatalf("NewFileWatcher(%v) returned err: %v, want err: %v", test.authzPolicy, err, test.wantErr)
+			}
+			if i != nil {
+				i.Close()
 			}
 		})
 	}
