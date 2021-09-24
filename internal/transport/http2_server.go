@@ -734,7 +734,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 			s.write(recvMsg{buffer: buffer})
 		}
 	}
-	if f.Header().Flags.Has(http2.FlagDataEndStream) {
+	if f.StreamEnded() {
 		// Received the end of stream from the client.
 		s.compareAndSwapState(streamActive, streamReadDone)
 		s.write(recvMsg{err: io.EOF})

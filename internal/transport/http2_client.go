@@ -1073,7 +1073,7 @@ func (t *http2Client) handleData(f *http2.DataFrame) {
 	}
 	// The server has closed the stream without sending trailers.  Record that
 	// the read direction is closed, and set the status appropriately.
-	if f.FrameHeader.Flags.Has(http2.FlagDataEndStream) {
+	if f.StreamEnded() {
 		t.closeStream(s, io.EOF, false, http2.ErrCodeNo, status.New(codes.Internal, "server closed the stream without sending trailers"), nil, true)
 	}
 }

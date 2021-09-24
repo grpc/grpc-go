@@ -7422,12 +7422,16 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 				sid = 0
 				switch fr := frame.(type) {
 				case *http2.HeadersFrame:
+					// Respond after this if we are not waiting for an end
+					// stream or if this frame ends it.
 					if !s.waitForEndStream || fr.StreamEnded() {
 						sid = fr.Header().StreamID
 					}
 
 				case *http2.DataFrame:
-					if s.waitForEndStream && fr.Header().Flags.Has(http2.FlagDataEndStream) {
+					// Respond after this if we were waiting for an end stream
+					// and this frame ends it.
+					if s.waitForEndStream && fr.StreamEnded() {
 						sid = fr.Header().StreamID
 					}
 				}
