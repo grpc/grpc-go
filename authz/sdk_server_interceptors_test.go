@@ -91,7 +91,7 @@ func (s) TestNewFileWatcher(t *testing.T) {
 		"InvalidPolicyFailsToCreateInterceptor": {
 			authzPolicy:     `{}`,
 			refreshDuration: time.Duration(1),
-			wantErr:         fmt.Errorf(`failed to update authorization engines: "name" is not present`),
+			wantErr:         fmt.Errorf(`"name" is not present`),
 		},
 		"ValidPolicyCreatesInterceptor": {
 			authzPolicy: `{
