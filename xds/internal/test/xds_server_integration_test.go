@@ -788,6 +788,108 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 			wantStatusEmptyCall: codes.OK,
 			wantStatusUnaryCall: codes.OK,
 		},
+		// The two tests below test that configuring the xDS RBAC HTTP Filter
+		// with :authority and host header matchers end up being logically
+		// equivalent. This represents functionality from this line in A41 -
+		// "As documented for HeaderMatcher, Envoy aliases :authority and Host
+		// in its header map implementation, so they should be treated
+		// equivalent for the RBAC matchers; there must be no behavior change
+		// depending on which of the two header names is used in the RBAC
+		// policy."
+
+		// This test tests an xDS RBAC Filter with an :authority header matcher.
+		{
+			name: "match-on-authority",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"match-on-authority": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: ":authority", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "my-service-fallback"}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.OK,
+			wantStatusUnaryCall: codes.OK,
+		},
+		// This test tests that configuring an xDS RBAC Filter with a host
+		// header matcher has the same behavior as if it was configured with
+		// :authority. Since host and authority are aliased, this should still
+		// continue to match on incoming RPC's :authority, just as the test
+		// above.
+		{
+			name: "match-on-host",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"match-on-authority": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: "host", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "my-service-fallback"}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.OK,
+			wantStatusUnaryCall: codes.OK,
+		},
+		// This test tests that the RBAC HTTP Filter hard codes the :method
+		// header to POST. Since the RBAC Configuration says to deny every RPC
+		// with a method :POST, every RPC tried should be denied.
+		{
+			name: "deny-post",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_DENY,
+					Policies: map[string]*v3rbacpb.Policy{
+						"post-method": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "POST"}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.PermissionDenied,
+			wantStatusUnaryCall: codes.PermissionDenied,
+		},
+		// This test tests that RBAC ignores the TE: trailers header (which is
+		// hardcoded in http2_client.go for every RPC). Since the RBAC
+		// Configuration says to only ALLOW RPC's with a TE: Trailers, every RPC
+		// tried should be denied.
+		{
+			name: "allow-only-te",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"post-method": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: "TE", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "trailers"}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.PermissionDenied,
+			wantStatusUnaryCall: codes.PermissionDenied,
+		},
 	}
 
 	for _, test := range tests {

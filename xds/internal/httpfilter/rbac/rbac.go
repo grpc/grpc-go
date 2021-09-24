@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/internal/xds/rbac"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -106,7 +107,6 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 			}
 		}
 	}
-
 	return config{config: rbacCfg}, nil
 }
 
@@ -174,6 +174,31 @@ func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override http
 		return nil, nil
 	}
 
+	// "Envoy aliases :authority and Host in its header map implementation, so
+	// they should be treated equivalent for the RBAC matchers; there must be no
+	// behavior change depending on which of the two header names is used in the
+	// RBAC policy." - A41. Loop through config's principals and policies, change
+	// any header matcher with value "host" to :authority", as that is what
+	// grpc-go shifts both headers to in transport layer.
+	for _, policy := range icfg.Rules.GetPolicies() {
+		for _, principal := range policy.Principals {
+			if principal.GetHeader() != nil {
+				name := principal.GetHeader().GetName()
+				if name == "host" {
+					principal.GetHeader().Name = ":authority"
+				}
+			}
+		}
+		for _, permission := range policy.Permissions {
+			if permission.GetHeader() != nil {
+				name := permission.GetHeader().GetName()
+				if name == "host" {
+					permission.GetHeader().Name = ":authority"
+				}
+			}
+		}
+	}
+
 	ce, err := rbac.NewChainEngine([]*v3rbacpb.RBAC{icfg.Rules})
 	if err != nil {
 		return nil, fmt.Errorf("error constructing matching engine: %v", err)
@@ -186,5 +211,12 @@ type interceptor struct {
 }
 
 func (i *interceptor) AllowRPC(ctx context.Context) error {
+	// ":method can be hard-coded to POST if unavailable" - A41
+	ctx = metadata.AppendToIncomingContext(ctx, ":method", "POST")
+
+	// "If the transport exposes TE in Metadata, then RBAC must special-case the
+	// header to treat it as not present." - A41
+	ctx = metadata.DeleteFromIncomingContext(ctx, "TE")
+
 	return i.chainEngine.IsAuthorized(ctx)
 }
