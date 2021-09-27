@@ -173,6 +173,12 @@ func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override http
 		return nil, nil
 	}
 
+	// "At this time, if the RBAC.action is Action.LOG then the policy will be
+	// completely ignored, as if RBAC was not configurated." - A41
+	if icfg.Rules.Action == v3rbacpb.RBAC_LOG {
+		return nil, nil
+	}
+
 	// "Envoy aliases :authority and Host in its header map implementation, so
 	// they should be treated equivalent for the RBAC matchers; there must be no
 	// behavior change depending on which of the two header names is used in the
