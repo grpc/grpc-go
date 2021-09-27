@@ -487,18 +487,12 @@ func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	// Verifying authorization decision.
 	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 	numRetries := 0
-	skipReload := true
 	for numRetries <= 20 {
 		if got := status.Convert(err); got.Code() != valid.wantStatusCode || got.Message() != valid.wantErr {
-			skipReload = false
-			break
+			t.Fatalf("error want:{%v %v} got:{%v %v}", valid.wantStatusCode, valid.wantErr, got.Code(), got.Message())
 		}
 		time.Sleep(10 * time.Millisecond)
 		numRetries++
-	}
-	if skipReload == false {
-		got := status.Convert(err)
-		t.Fatalf("error want:{%v %v} got:{%v %v}", valid.wantStatusCode, valid.wantErr, got.Code(), got.Message())
 	}
 }
 
@@ -548,18 +542,12 @@ func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	// Verifying authorization decision.
 	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 	numRetries := 0
-	skipReload := true
 	for numRetries <= 20 {
 		if got := status.Convert(err); got.Code() != valid1.wantStatusCode || got.Message() != valid1.wantErr {
-			skipReload = false
-			break
+			t.Fatalf("error want:{%v %v} got:{%v %v}", valid1.wantStatusCode, valid1.wantErr, got.Code(), got.Message())
 		}
 		time.Sleep(10 * time.Millisecond)
 		numRetries++
-	}
-	if skipReload == false {
-		got := status.Convert(err)
-		t.Fatalf("error want:{%v %v} got:{%v %v}", valid1.wantStatusCode, valid1.wantErr, got.Code(), got.Message())
 	}
 
 	// Rewrite the file with a different valid authorization policy.
