@@ -263,7 +263,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if strings.HasPrefix(cc.authority, ":") {
 		cc.authority = "localhost" + cc.authority
 	}
-	if cc.parsedTarget.Scheme == "unix" || cc.parsedTarget.Scheme == "unx-abstract" {
+	if cc.parsedTarget.Scheme == "unix" || cc.parsedTarget.Scheme == "unix-abstract" {
 		cc.authority = "localhost"
 	}
 	// The only authority override supported at this point in time is the one
