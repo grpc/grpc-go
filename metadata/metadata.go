@@ -174,31 +174,6 @@ func AppendToOutgoingContext(ctx context.Context, kv ...string) context.Context 
 	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md.md, added: added})
 }
 
-// AppendToIncomingContext returns a new context with the provided kv merged
-// with any existing metadata in the context. Please refer to the documentation
-// of Pairs for a description of kv.
-func AppendToIncomingContext(ctx context.Context, kv ...string) context.Context {
-	if len(kv)%2 == 1 {
-		panic(fmt.Sprintf("metadata: AppendToIncomingContext got an odd number of input pairs for metadata: %d", len(kv)))
-	}
-	md, _ := ctx.Value(mdIncomingKey{}).(MD)
-	for i := 0; i < len(kv); i += 2 {
-		key := strings.ToLower(kv[i])
-		md[key] = append(md[key], kv[i+1])
-	}
-	return context.WithValue(ctx, mdIncomingKey{}, md)
-}
-
-// DeleteFromIncomingContext returns a new context with metadata that was
-// previously present with the provided values deleted.
-func DeleteFromIncomingContext(ctx context.Context, vs ...string) context.Context {
-	md, _ := ctx.Value(mdIncomingKey{}).(MD)
-	for _, v := range vs {
-		delete(md, v)
-	}
-	return context.WithValue(ctx, mdIncomingKey{}, md)
-}
-
 // FromIncomingContext returns the incoming metadata in ctx if it exists.
 //
 // All keys in the returned MD are lowercase.

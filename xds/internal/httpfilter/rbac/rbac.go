@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/internal/xds/rbac"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -211,12 +210,5 @@ type interceptor struct {
 }
 
 func (i *interceptor) AllowRPC(ctx context.Context) error {
-	// ":method can be hard-coded to POST if unavailable" - A41
-	ctx = metadata.AppendToIncomingContext(ctx, ":method", "POST")
-
-	// "If the transport exposes TE in Metadata, then RBAC must special-case the
-	// header to treat it as not present." - A41
-	ctx = metadata.DeleteFromIncomingContext(ctx, "TE")
-
 	return i.chainEngine.IsAuthorized(ctx)
 }
