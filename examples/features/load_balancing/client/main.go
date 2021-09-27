@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -93,6 +94,7 @@ func main() {
 type exampleResolverBuilder struct{}
 
 func (*exampleResolverBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+	target.Endpoint = strings.TrimPrefix(target.Endpoint, "/")
 	r := &exampleResolver{
 		target: target,
 		cc:     cc,
