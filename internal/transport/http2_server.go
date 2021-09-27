@@ -452,7 +452,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		// "If :authority is present, Host must be discarded" - A41
 		delete(mdata, "host")
 	}
-	// No eventual :authority header is a valid RPC.
 
 	if frame.StreamEnded() {
 		// s is just created by the caller. No lock needed.
