@@ -28,6 +28,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/internal/resolver"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/internal/xds/rbac"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -37,7 +38,25 @@ import (
 )
 
 func init() {
+	if env.RBACSupport {
+		httpfilter.Register(builder{})
+	}
+}
+
+// RegisterForTesting registers the RBAC HTTP Filter for testing purposes, regardless
+// of the RBAC environment variable. This is needed because there is no way to set the RBAC
+// environment variable to true in a test before init() in this package is run.
+func RegisterForTesting() {
 	httpfilter.Register(builder{})
+}
+
+// UnregisterForTesting unregisters the RBAC HTTP Filter for testing purposes. This is needed because
+// there is no way to unregister the HTTP Filter after registering it solely for testing purposes using
+// rbac.RegisterForTesting()
+func UnregisterForTesting() {
+	for _, typeURL := range builder.TypeURLs(builder{}) {
+		httpfilter.UnregisterForTesting(typeURL)
+	}
 }
 
 type builder struct {
@@ -87,7 +106,6 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 			}
 		}
 	}
-
 	return config{config: rbacCfg}, nil
 }
 
@@ -153,6 +171,31 @@ func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override http
 	// Documentation for Rules field.
 	if icfg.Rules == nil {
 		return nil, nil
+	}
+
+	// "Envoy aliases :authority and Host in its header map implementation, so
+	// they should be treated equivalent for the RBAC matchers; there must be no
+	// behavior change depending on which of the two header names is used in the
+	// RBAC policy." - A41. Loop through config's principals and policies, change
+	// any header matcher with value "host" to :authority", as that is what
+	// grpc-go shifts both headers to in transport layer.
+	for _, policy := range icfg.Rules.GetPolicies() {
+		for _, principal := range policy.Principals {
+			if principal.GetHeader() != nil {
+				name := principal.GetHeader().GetName()
+				if name == "host" {
+					principal.GetHeader().Name = ":authority"
+				}
+			}
+		}
+		for _, permission := range policy.Permissions {
+			if permission.GetHeader() != nil {
+				name := permission.GetHeader().GetName()
+				if name == "host" {
+					permission.GetHeader().Name = ":authority"
+				}
+			}
+		}
 	}
 
 	ce, err := rbac.NewChainEngine([]*v3rbacpb.RBAC{icfg.Rules})

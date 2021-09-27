@@ -33,6 +33,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
@@ -168,6 +169,30 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 								MaxStreamDuration: durationpb.New(time.Second),
 							},
 							HttpFilters: fs,
+						}),
+				},
+			})
+		}
+		v3LisToTestRBAC = func(xffNumTrustedHops uint32, originalIpDetectionExtensions []*v3corepb.TypedExtensionConfig) *anypb.Any {
+			return testutils.MarshalAny(&v3listenerpb.Listener{
+				Name: v3LDSTarget,
+				ApiListener: &v3listenerpb.ApiListener{
+					ApiListener: testutils.MarshalAny(
+						&v3httppb.HttpConnectionManager{
+							RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+								Rds: &v3httppb.Rds{
+									ConfigSource: &v3corepb.ConfigSource{
+										ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{Ads: &v3corepb.AggregatedConfigSource{}},
+									},
+									RouteConfigName: v3RouteConfigName,
+								},
+							},
+							CommonHttpProtocolOptions: &v3corepb.HttpProtocolOptions{
+								MaxStreamDuration: durationpb.New(time.Second),
+							},
+							HttpFilters:                   []*v3httppb.HttpFilter{emptyRouterFilter},
+							XffNumTrustedHops:             xffNumTrustedHops,
+							OriginalIpDetectionExtensions: originalIpDetectionExtensions,
 						}),
 				},
 			})
@@ -528,6 +553,49 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				Version: testVersion,
 			},
 		},
+		// "To allow equating RBAC's direct_remote_ip and
+		// remote_ip...HttpConnectionManager.xff_num_trusted_hops must be unset
+		// or zero and HttpConnectionManager.original_ip_detection_extensions
+		// must be empty." - A41
+		{
+			name:      "rbac-allow-equating-direct-remote-ip-and-remote-ip-valid",
+			resources: []*anypb.Any{v3LisToTestRBAC(0, nil)},
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
+					RouteConfigName:   v3RouteConfigName,
+					MaxStreamDuration: time.Second,
+					HTTPFilters:       []HTTPFilter{routerFilter},
+					Raw:               v3LisToTestRBAC(0, nil),
+				}},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		// In order to support xDS Configured RBAC HTTPFilter equating direct
+		// remote ip and remote ip, xffNumTrustedHops cannot be greater than
+		// zero. This is because if you can trust a ingress proxy hop when
+		// determining an origin clients ip address, direct remote ip != remote
+		// ip.
+		{
+			name:       "rbac-allow-equating-direct-remote-ip-and-remote-ip-invalid-num-untrusted-hops",
+			resources:  []*anypb.Any{v3LisToTestRBAC(1, nil)},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
+			wantMD:     errMD,
+			wantErr:    true,
+		},
+		// In order to support xDS Configured RBAC HTTPFilter equating direct
+		// remote ip and remote ip, originalIpDetectionExtensions must be empty.
+		// This is because if you have to ask ip-detection-extension for the
+		// original ip, direct remote ip might not equal remote ip.
+		{
+			name:       "rbac-allow-equating-direct-remote-ip-and-remote-ip-invalid-original-ip-detection-extension",
+			resources:  []*anypb.Any{v3LisToTestRBAC(0, []*v3corepb.TypedExtensionConfig{{Name: "something"}})},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
+			wantMD:     errMD,
+			wantErr:    true,
+		},
 		{
 			name:      "v3 listener with inline route configuration",
 			resources: []*anypb.Any{v3LisWithInlineRoute},
@@ -601,6 +669,11 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 }
 
 func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
+	oldRBAC := env.RBACSupport
+	env.RBACSupport = true
+	defer func() {
+		env.RBACSupport = oldRBAC
+	}()
 	const (
 		v3LDSTarget = "grpc/server?xds.resource.listening_address=0.0.0.0:9999"
 		testVersion = "test-version-lds-server"
@@ -862,6 +935,32 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			},
 		}
 	)
+	v3LisToTestRBAC := func(xffNumTrustedHops uint32, originalIpDetectionExtensions []*v3corepb.TypedExtensionConfig) *anypb.Any {
+		return testutils.MarshalAny(&v3listenerpb.Listener{
+			Name:    v3LDSTarget,
+			Address: localSocketAddress,
+			FilterChains: []*v3listenerpb.FilterChain{
+				{
+					Name: "filter-chain-1",
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "filter-1",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+										RouteConfig: routeConfig,
+									},
+									HttpFilters:                   []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
+									XffNumTrustedHops:             xffNumTrustedHops,
+									OriginalIpDetectionExtensions: originalIpDetectionExtensions,
+								}),
+							},
+						},
+					},
+				},
+			},
+		})
+	}
 
 	tests := []struct {
 		name       string
@@ -1265,6 +1364,57 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "DownstreamTlsContext in LDS response does not contain a CommonTlsContext",
+		},
+		{
+			name:      "rbac-allow-equating-direct-remote-ip-and-remote-ip-valid",
+			resources: []*anypb.Any{v3LisToTestRBAC(0, nil)},
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
+					InboundListenerCfg: &InboundListenerConfig{
+						Address: "0.0.0.0",
+						Port:    "9999",
+						FilterChains: &FilterChainManager{
+							dstPrefixMap: map[string]*destPrefixEntry{
+								unspecifiedPrefixMapKey: {
+									srcTypeArr: [3]*sourcePrefixes{
+										{
+											srcPrefixMap: map[string]*sourcePrefixEntry{
+												unspecifiedPrefixMapKey: {
+													srcPortMap: map[int]*FilterChain{
+														0: {
+															InlineRouteConfig: inlineRouteConfig,
+															HTTPFilters:       routerFilterList,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					Raw: listenerEmptyTransportSocket,
+				}},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			name:       "rbac-allow-equating-direct-remote-ip-and-remote-ip-invalid-num-untrusted-hops",
+			resources:  []*anypb.Any{v3LisToTestRBAC(1, nil)},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
+			wantMD:     errMD,
+			wantErr:    "xff_num_trusted_hops must be unset or zero",
+		},
+		{
+			name:       "rbac-allow-equating-direct-remote-ip-and-remote-ip-invalid-original-ip-detection-extension",
+			resources:  []*anypb.Any{v3LisToTestRBAC(0, []*v3corepb.TypedExtensionConfig{{Name: "something"}})},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
+			wantMD:     errMD,
+			wantErr:    "original_ip_detection_extensions must be empty",
 		},
 		{
 			name: "unsupported validation context in transport socket",

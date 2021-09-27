@@ -34,9 +34,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
-	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"
+	"google.golang.org/grpc/xds/internal/httpfilter/rbac"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -374,6 +375,11 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 // (NonForwardingAction), and the RPC's matching those routes should proceed as
 // normal.
 func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
+	oldRBAC := env.RBACSupport
+	env.RBACSupport = true
+	defer func() {
+		env.RBACSupport = oldRBAC
+	}()
 	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := setupManagementServer(t)
 	defer cleanup1()
 
@@ -711,6 +717,13 @@ func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RB
 // as normal and certain RPC's are denied by the RBAC HTTP Filter which gets
 // called by hooked xds interceptors.
 func (s) TestRBACHTTPFilter(t *testing.T) {
+	oldRBAC := env.RBACSupport
+	env.RBACSupport = true
+	defer func() {
+		env.RBACSupport = oldRBAC
+	}()
+	rbac.RegisterForTesting()
+	defer rbac.UnregisterForTesting()
 	tests := []struct {
 		name                string
 		rbacCfg             *rpb.RBAC
@@ -775,6 +788,108 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 			wantStatusEmptyCall: codes.OK,
 			wantStatusUnaryCall: codes.OK,
 		},
+		// The two tests below test that configuring the xDS RBAC HTTP Filter
+		// with :authority and host header matchers end up being logically
+		// equivalent. This represents functionality from this line in A41 -
+		// "As documented for HeaderMatcher, Envoy aliases :authority and Host
+		// in its header map implementation, so they should be treated
+		// equivalent for the RBAC matchers; there must be no behavior change
+		// depending on which of the two header names is used in the RBAC
+		// policy."
+
+		// This test tests an xDS RBAC Filter with an :authority header matcher.
+		{
+			name: "match-on-authority",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"match-on-authority": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: ":authority", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "my-service-fallback"}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.OK,
+			wantStatusUnaryCall: codes.OK,
+		},
+		// This test tests that configuring an xDS RBAC Filter with a host
+		// header matcher has the same behavior as if it was configured with
+		// :authority. Since host and authority are aliased, this should still
+		// continue to match on incoming RPC's :authority, just as the test
+		// above.
+		{
+			name: "match-on-host",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"match-on-authority": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: "host", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_PrefixMatch{PrefixMatch: "my-service-fallback"}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.OK,
+			wantStatusUnaryCall: codes.OK,
+		},
+		// This test tests that the RBAC HTTP Filter hard codes the :method
+		// header to POST. Since the RBAC Configuration says to deny every RPC
+		// with a method :POST, every RPC tried should be denied.
+		{
+			name: "deny-post",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_DENY,
+					Policies: map[string]*v3rbacpb.Policy{
+						"post-method": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "POST"}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.PermissionDenied,
+			wantStatusUnaryCall: codes.PermissionDenied,
+		},
+		// This test tests that RBAC ignores the TE: trailers header (which is
+		// hardcoded in http2_client.go for every RPC). Since the RBAC
+		// Configuration says to only ALLOW RPC's with a TE: Trailers, every RPC
+		// tried should be denied.
+		{
+			name: "allow-only-te",
+			rbacCfg: &rpb.RBAC{
+				Rules: &v3rbacpb.RBAC{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"post-method": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Header{Header: &v3routepb.HeaderMatcher{Name: "TE", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_ExactMatch{ExactMatch: "trailers"}}}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			wantStatusEmptyCall: codes.PermissionDenied,
+			wantStatusUnaryCall: codes.PermissionDenied,
+		},
 	}
 
 	for _, test := range tests {
@@ -823,7 +938,250 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 				if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != test.wantStatusUnaryCall {
 					t.Fatalf("UnaryCall() returned err with status: %v, wantStatusUnaryCall: %v", err, test.wantStatusUnaryCall)
 				}
+
+				// Toggle the RBAC Env variable off, this should disable RBAC and allow any RPC"s through (will not go through
+				// routing or processed by HTTP Filters and thus will never get denied by RBAC).
+				env.RBACSupport = false
+				if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.OK {
+					t.Fatalf("EmptyCall() returned err with status: %v, once RBAC is disabled all RPC's should proceed as normal", status.Code(err))
+				}
+				if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.OK {
+					t.Fatalf("UnaryCall() returned err with status: %v, once RBAC is disabled all RPC's should proceed as normal", status.Code(err))
+				}
+				// Toggle RBAC back on for next iterations.
+				env.RBACSupport = true
 			}()
 		})
+	}
+}
+
+// serverListenerWithBadRouteConfiguration returns an xds Listener resource with
+// a Route Configuration that will never successfully match in order to test
+// RBAC Environment variable being toggled on and off.
+func serverListenerWithBadRouteConfiguration(host string, port uint32) *v3listenerpb.Listener {
+	return &v3listenerpb.Listener{
+		Name: fmt.Sprintf(e2e.ServerListenerResourceNameTemplate, net.JoinHostPort(host, strconv.Itoa(int(port)))),
+		Address: &v3corepb.Address{
+			Address: &v3corepb.Address_SocketAddress{
+				SocketAddress: &v3corepb.SocketAddress{
+					Address: host,
+					PortSpecifier: &v3corepb.SocketAddress_PortValue{
+						PortValue: port,
+					},
+				},
+			},
+		},
+		FilterChains: []*v3listenerpb.FilterChain{
+			{
+				Name: "v4-wildcard",
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "0.0.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "0.0.0.0",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+									RouteConfig: &v3routepb.RouteConfiguration{
+										Name: "routeName",
+										VirtualHosts: []*v3routepb.VirtualHost{{
+											// Incoming RPC's will try and match to Virtual Hosts based on their :authority header.
+											// Thus, incoming RPC's will never match to a Virtual Host (server side requires matching
+											// to a VH/Route of type Non Forwarding Action to proceed normally), and all incoming RPC's
+											// with this route configuration will be denied.
+											Domains: []string{"will-never-match"},
+											Routes: []*v3routepb.Route{{
+												Match: &v3routepb.RouteMatch{
+													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+												},
+												Action: &v3routepb.Route_NonForwardingAction{},
+											}}}}},
+								},
+								HttpFilters: []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
+							}),
+						},
+					},
+				},
+			},
+			{
+				Name: "v6-wildcard",
+				FilterChainMatch: &v3listenerpb.FilterChainMatch{
+					PrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "::",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+					SourceType: v3listenerpb.FilterChainMatch_SAME_IP_OR_LOOPBACK,
+					SourcePrefixRanges: []*v3corepb.CidrRange{
+						{
+							AddressPrefix: "::",
+							PrefixLen: &wrapperspb.UInt32Value{
+								Value: uint32(0),
+							},
+						},
+					},
+				},
+				Filters: []*v3listenerpb.Filter{
+					{
+						Name: "filter-1",
+						ConfigType: &v3listenerpb.Filter_TypedConfig{
+							TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+									RouteConfig: &v3routepb.RouteConfiguration{
+										Name: "routeName",
+										VirtualHosts: []*v3routepb.VirtualHost{{
+											// Incoming RPC's will try and match to Virtual Hosts based on their :authority header.
+											// Thus, incoming RPC's will never match to a Virtual Host (server side requires matching
+											// to a VH/Route of type Non Forwarding Action to proceed normally), and all incoming RPC's
+											// with this route configuration will be denied.
+											Domains: []string{"will-never-match"},
+											Routes: []*v3routepb.Route{{
+												Match: &v3routepb.RouteMatch{
+													PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+												},
+												Action: &v3routepb.Route_NonForwardingAction{},
+											}}}}},
+								},
+								HttpFilters: []*v3httppb.HttpFilter{e2e.RouterHTTPFilter},
+							}),
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
+	// Turn RBAC support on.
+	oldRBAC := env.RBACSupport
+	env.RBACSupport = true
+	defer func() {
+		env.RBACSupport = oldRBAC
+	}()
+
+	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := setupManagementServer(t)
+	defer cleanup1()
+
+	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
+	defer cleanup2()
+
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("failed to retrieve host and port of server: %v", err)
+	}
+	const serviceName = "my-service-fallback"
+
+	// The inbound listener needs a route table that will never match on a VH,
+	// and thus shouldn't allow incoming RPC's to proceed.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	// Since RBAC support is turned ON, all the RPC's should get denied with
+	// status code Unavailable due to not matching to a route of type Non
+	// Forwarding Action (Route Table not configured properly).
+	inboundLis := serverListenerWithBadRouteConfiguration(host, port)
+	resources.Listeners = append(resources.Listeners, inboundLis)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Setup the management server with client and server-side resources.
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithInsecure(), grpc.WithResolvers(resolver))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testpb.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("EmptyCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
+	}
+	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.Unavailable {
+		t.Fatalf("UnaryCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
+	}
+}
+
+func (s) TestRBACToggledOff_WithBadRouteConfiguration(t *testing.T) {
+	// Turn RBAC support off.
+	oldRBAC := env.RBACSupport
+	env.RBACSupport = false
+	defer func() {
+		env.RBACSupport = oldRBAC
+	}()
+
+	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := setupManagementServer(t)
+	defer cleanup1()
+
+	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
+	defer cleanup2()
+
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("failed to retrieve host and port of server: %v", err)
+	}
+	const serviceName = "my-service-fallback"
+
+	// The inbound listener needs a route table that will never match on a VH,
+	// and thus shouldn't allow incoming RPC's to proceed.
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       host,
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	// This bad route configuration shouldn't affect incoming RPC's from
+	// proceeding as normal, as the configuration shouldn't be parsed due to the
+	// RBAC Environment variable not being set to true.
+	inboundLis := serverListenerWithBadRouteConfiguration(host, port)
+	resources.Listeners = append(resources.Listeners, inboundLis)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Setup the management server with client and server-side resources.
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	cc, err := grpc.DialContext(ctx, fmt.Sprintf("xds:///%s", serviceName), grpc.WithInsecure(), grpc.WithResolvers(resolver))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testpb.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.OK {
+		t.Fatalf("EmptyCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
+	}
+	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); status.Code(err) != codes.OK {
+		t.Fatalf("UnaryCall() returned err with status: %v, if RBAC is disabled all RPC's should proceed as normal", status.Code(err))
 	}
 }

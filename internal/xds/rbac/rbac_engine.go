@@ -148,6 +148,11 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 	if !ok {
 		return nil, errors.New("missing metadata in incoming context")
 	}
+	// ":method can be hard-coded to POST if unavailable" - A41
+	md[":method"] = []string{"POST"}
+	// "If the transport exposes TE in Metadata, then RBAC must special-case the
+	// header to treat it as not present." - A41
+	delete(md, "TE")
 
 	pi, ok := peer.FromContext(ctx)
 	if !ok {
