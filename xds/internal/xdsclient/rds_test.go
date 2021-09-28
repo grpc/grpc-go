@@ -1232,6 +1232,20 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "unsupported cluster specifier",
+			routes: []*v3routepb.Route{
+				{
+					Match: &v3routepb.RouteMatch{
+						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
+					},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{
+							ClusterSpecifier: &v3routepb.RouteAction_ClusterSpecifierPlugin{}}},
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "default totalWeight is 100 in weighted clusters action",
 			routes: []*v3routepb.Route{
 				{

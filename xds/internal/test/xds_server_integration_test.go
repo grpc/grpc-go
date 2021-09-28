@@ -439,7 +439,9 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 						// "Fully-qualified RPC method name with leading slash. Same as :path header".
 					},
 					// Incorrect Action, so RPC's that match this route should get denied.
-					Action: &v3routepb.Route_Route{},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: ""}},
+					},
 				},
 				// Another routing rule that can be selectively triggered based on incoming RPC.
 				{
@@ -447,7 +449,9 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/UnaryCall"},
 					},
 					// Wrong action (!Non_Forwarding_Action) so RPC's that match this route should get denied.
-					Action: &v3routepb.Route_Route{},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: ""}},
+					},
 				},
 				// Another routing rule that can be selectively triggered based on incoming RPC.
 				{
@@ -455,7 +459,9 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/grpc.testing.TestService/StreamingInputCall"},
 					},
 					// Wrong action (!Non_Forwarding_Action) so RPC's that match this route should get denied.
-					Action: &v3routepb.Route_Route{},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: ""}},
+					},
 				},
 				// Not matching route, this is be able to get invoked logically (i.e. doesn't have to match the Route configurations above).
 			}},
