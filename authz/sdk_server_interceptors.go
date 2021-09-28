@@ -117,8 +117,9 @@ func NewFileWatcher(file string, duration time.Duration) (*FileWatcherIntercepto
 func (i *FileWatcherInterceptor) run(ctx context.Context) {
 	ticker := time.NewTicker(i.refreshDuration)
 	for {
-		err := i.updateInternalInterceptor()
-		logger.Infof("authorization policy reload status err: %v", err)
+		if err := i.updateInternalInterceptor(); err != nil {
+			logger.Warningf("authorization policy reload status err: %v", err)
+		}
 		select {
 		case <-ctx.Done():
 			ticker.Stop()
@@ -140,12 +141,14 @@ func (i *FileWatcherInterceptor) updateInternalInterceptor() error {
 	if bytes.Equal(i.policyContents, policyContents) {
 		return nil
 	}
-	interceptor, err := NewStatic(string(policyContents))
+	policyContentsString := string(policyContents)
+	interceptor, err := NewStatic(policyContentsString)
 	if err != nil {
 		return err
 	}
 	atomic.StorePointer(&i.internalInterceptor, unsafe.Pointer(interceptor))
 	i.policyContents = policyContents
+	logger.Infof("authorization policy reload status: successfully loaded new policy %v", policyContentsString)
 	return nil
 }
 
