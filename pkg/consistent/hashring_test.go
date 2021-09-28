@@ -1,6 +1,7 @@
 package consistent
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -90,7 +91,10 @@ func TestHashring(t *testing.T) {
 				toAdd := tc.nodes[len(tc.nodes)-1-i]
 
 				// We intentionally ignore the errors here to get to the same member state
-				reverseRing.Add(toAdd)
+				err := reverseRing.Add(toAdd)
+				if !errors.Is(err, ErrMemberAlreadyExists) {
+					require.Nil(err)
+				}
 			}
 
 			// Check that the findValues match for a few keys in both the reverse built and normal
@@ -141,7 +145,8 @@ func TestBackendBalance(t *testing.T) {
 
 			for memberNum := 0; memberNum < numMembers; memberNum++ {
 				oneMember := member(memberNum)
-				ring.Add(oneMember)
+				err := ring.Add(oneMember)
+				require.Nil(err)
 				memberKeyCount[oneMember] = 0
 			}
 
