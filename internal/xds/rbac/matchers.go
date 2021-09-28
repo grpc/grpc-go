@@ -183,7 +183,9 @@ func matchersFromPrincipals(principals []*v3rbacpb.Principal) ([]matcher, error)
 			// The source ip principal identifier is deprecated. Thus, a
 			// principal typed as a source ip in the identifier will be a no-op.
 			// The config should use DirectRemoteIp instead.
-		case *v3rbacpb.Principal_RemoteIp: // "...allow equating RBAC's direct_remote_ip and remote_ip" - A41
+		case *v3rbacpb.Principal_RemoteIp:
+			// RBAC in gRPC treats direct_remote_ip and remote_ip as logically
+			// equivalent, as per A41.
 			m, err := newSourceIPMatcher(principal.GetRemoteIp())
 			if err != nil {
 				return nil, err
