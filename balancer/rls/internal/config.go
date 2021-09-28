@@ -65,7 +65,7 @@ type lbConfig struct {
 	defaultTarget        string
 
 	childPolicyName        string
-	childPolicyConfig      json.RawMessage
+	childPolicyConfig      map[string]json.RawMessage
 	childPolicyTargetField string
 }
 
@@ -79,7 +79,27 @@ func (lbCfg *lbConfig) Equal(other *lbConfig) bool {
 		lbCfg.defaultTarget == other.defaultTarget &&
 		lbCfg.childPolicyName == other.childPolicyName &&
 		lbCfg.childPolicyTargetField == other.childPolicyTargetField &&
-		bytes.Equal(lbCfg.childPolicyConfig, other.childPolicyConfig)
+		childPolicyConfigEqual(lbCfg.childPolicyConfig, other.childPolicyConfig)
+}
+
+func childPolicyConfigEqual(a, b map[string]json.RawMessage) bool {
+	if (b == nil) != (a == nil) {
+		return false
+	}
+	if len(b) != len(a) {
+		return false
+	}
+
+	for k, jsonA := range a {
+		jsonB, ok := b[k]
+		if !ok {
+			return false
+		}
+		if !bytes.Equal(jsonA, jsonB) {
+			return false
+		}
+	}
+	return true
 }
 
 // This struct resembles the JSON representation of the loadBalancing config
@@ -227,7 +247,7 @@ func parseRLSProto(rlsProto *rlspb.RouteLookupConfig) (*lbConfig, error) {
 
 // parseChildPolicyConfigs iterates through the list of child policies and picks
 // the first registered policy and validates its config.
-func parseChildPolicyConfigs(childPolicies []map[string]json.RawMessage, targetFieldName string) (string, json.RawMessage, error) {
+func parseChildPolicyConfigs(childPolicies []map[string]json.RawMessage, targetFieldName string) (string, map[string]json.RawMessage, error) {
 	for i, config := range childPolicies {
 		if len(config) != 1 {
 			return "", nil, fmt.Errorf("rls: invalid childPolicy: entry %v does not contain exactly 1 policy/config pair: %q", i, config)
@@ -263,7 +283,7 @@ func parseChildPolicyConfigs(childPolicies []map[string]json.RawMessage, targetF
 		if _, err := parser.ParseConfig(jsonCfg); err != nil {
 			return "", nil, fmt.Errorf("rls: childPolicy config validation failed: %v", err)
 		}
-		return name, rawCfg, nil
+		return name, childConfig, nil
 	}
 	return "", nil, fmt.Errorf("rls: invalid childPolicy config: no supported policies found in %+v", childPolicies)
 }

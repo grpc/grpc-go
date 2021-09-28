@@ -19,7 +19,6 @@
 package rls
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -59,10 +58,11 @@ func testEqual(a, b *lbConfig) bool {
 		a.defaultTarget == b.defaultTarget &&
 		a.childPolicyName == b.childPolicyName &&
 		a.childPolicyTargetField == b.childPolicyTargetField &&
-		bytes.Equal(a.childPolicyConfig, b.childPolicyConfig)
+		childPolicyConfigEqual(a.childPolicyConfig, b.childPolicyConfig)
 }
 
 func TestParseConfig(t *testing.T) {
+	childPolicyTargetFieldVal, _ := json.Marshal(dummyChildPolicyTarget)
 	tests := []struct {
 		desc    string
 		input   []byte
@@ -106,7 +106,10 @@ func TestParseConfig(t *testing.T) {
 				defaultTarget:          "passthrough:///default",
 				childPolicyName:        "grpclb",
 				childPolicyTargetField: "service_name",
-				childPolicyConfig:      json.RawMessage(`{"childPolicy": [{"pickfirst": {}}]}`),
+				childPolicyConfig: map[string]json.RawMessage{
+					"childPolicy":  json.RawMessage(`[{"pickfirst": {}}]`),
+					"service_name": json.RawMessage(childPolicyTargetFieldVal),
+				},
 			},
 		},
 		{
@@ -136,7 +139,10 @@ func TestParseConfig(t *testing.T) {
 				defaultTarget:          "passthrough:///default",
 				childPolicyName:        "grpclb",
 				childPolicyTargetField: "service_name",
-				childPolicyConfig:      json.RawMessage(`{"childPolicy": [{"pickfirst": {}}]}`),
+				childPolicyConfig: map[string]json.RawMessage{
+					"childPolicy":  json.RawMessage(`[{"pickfirst": {}}]`),
+					"service_name": json.RawMessage(childPolicyTargetFieldVal),
+				},
 			},
 		},
 	}
