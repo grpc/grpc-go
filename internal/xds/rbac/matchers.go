@@ -106,7 +106,9 @@ func matchersFromPermissions(permissions []*v3rbacpb.Permission) ([]matcher, err
 			}
 			matchers = append(matchers, m)
 		case *v3rbacpb.Permission_DestinationIp:
-			m, err := newDestinationIPMatcher(permission.GetDestinationIp())
+			// Due to this being on server side, the destination IP is the local
+			// IP.
+			m, err := newLocalIPMatcher(permission.GetDestinationIp())
 			if err != nil {
 				return nil, err
 			}
@@ -312,7 +314,7 @@ func (upm *urlPathMatcher) match(data *rpcData) bool {
 	return upm.stringMatcher.Match(data.fullMethod)
 }
 
-// remoteIPMatcher and destinationIPMatcher both are matchers that match against
+// remoteIPMatcher and localIPMatcher both are matchers that match against
 // a CIDR Range. Two different matchers are needed as the remote and destination
 // ip addresses come from different parts of the data about incoming RPC's
 // passed in. Matching a CIDR Range means to determine whether the IP Address
@@ -339,21 +341,21 @@ func (sim *remoteIPMatcher) match(data *rpcData) bool {
 	return sim.ipNet.Contains(net.IP(net.ParseIP(data.peerInfo.Addr.String())))
 }
 
-type destinationIPMatcher struct {
+type localIPMatcher struct {
 	ipNet *net.IPNet
 }
 
-func newDestinationIPMatcher(cidrRange *v3corepb.CidrRange) (*destinationIPMatcher, error) {
+func newLocalIPMatcher(cidrRange *v3corepb.CidrRange) (*localIPMatcher, error) {
 	cidrRangeString := fmt.Sprintf("%s/%d", cidrRange.AddressPrefix, cidrRange.PrefixLen.Value)
 	_, ipNet, err := net.ParseCIDR(cidrRangeString)
 	if err != nil {
 		return nil, err
 	}
-	return &destinationIPMatcher{ipNet: ipNet}, nil
+	return &localIPMatcher{ipNet: ipNet}, nil
 }
 
-func (dim *destinationIPMatcher) match(data *rpcData) bool {
-	return dim.ipNet.Contains(net.IP(net.ParseIP(data.destinationAddr.String())))
+func (dim *localIPMatcher) match(data *rpcData) bool {
+	return dim.ipNet.Contains(net.IP(net.ParseIP(data.localAddr.String())))
 }
 
 // portMatcher matches on whether the destination port of the RPC matches the
