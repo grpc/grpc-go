@@ -155,7 +155,7 @@ func matchersFromPrincipals(principals []*v3rbacpb.Principal) ([]matcher, error)
 			}
 			matchers = append(matchers, authenticatedMatcher)
 		case *v3rbacpb.Principal_DirectRemoteIp:
-			m, err := newSourceIPMatcher(principal.GetDirectRemoteIp())
+			m, err := newRemoteIPMatcher(principal.GetDirectRemoteIp())
 			if err != nil {
 				return nil, err
 			}
@@ -186,7 +186,7 @@ func matchersFromPrincipals(principals []*v3rbacpb.Principal) ([]matcher, error)
 		case *v3rbacpb.Principal_RemoteIp:
 			// RBAC in gRPC treats direct_remote_ip and remote_ip as logically
 			// equivalent, as per A41.
-			m, err := newSourceIPMatcher(principal.GetRemoteIp())
+			m, err := newRemoteIPMatcher(principal.GetRemoteIp())
 			if err != nil {
 				return nil, err
 			}
@@ -312,18 +312,19 @@ func (upm *urlPathMatcher) match(data *rpcData) bool {
 	return upm.stringMatcher.Match(data.fullMethod)
 }
 
-// sourceIPMatcher and destinationIPMatcher both are matchers that match against
-// a CIDR Range. Two different matchers are needed as the source and ip address
-// come from different parts of the data about incoming RPC's passed in.
-// Matching a CIDR Range means to determine whether the IP Address falls within
-// the CIDR Range or not. They both implement the matcher interface.
-type sourceIPMatcher struct {
+// remoteIPMatcher and destinationIPMatcher both are matchers that match against
+// a CIDR Range. Two different matchers are needed as the remote and destination
+// ip addresses come from different parts of the data about incoming RPC's
+// passed in. Matching a CIDR Range means to determine whether the IP Address
+// falls within the CIDR Range or not. They both implement the matcher
+// interface.
+type remoteIPMatcher struct {
 	// ipNet represents the CidrRange that this matcher was configured with.
-	// This is what will source and destination IP's will be matched against.
+	// This is what will remote and destination IP's will be matched against.
 	ipNet *net.IPNet
 }
 
-func newSourceIPMatcher(cidrRange *v3corepb.CidrRange) (*sourceIPMatcher, error) {
+func newRemoteIPMatcher(cidrRange *v3corepb.CidrRange) (*remoteIPMatcher, error) {
 	// Convert configuration to a cidrRangeString, as Go standard library has
 	// methods that parse cidr string.
 	cidrRangeString := fmt.Sprintf("%s/%d", cidrRange.AddressPrefix, cidrRange.PrefixLen.Value)
@@ -331,10 +332,10 @@ func newSourceIPMatcher(cidrRange *v3corepb.CidrRange) (*sourceIPMatcher, error)
 	if err != nil {
 		return nil, err
 	}
-	return &sourceIPMatcher{ipNet: ipNet}, nil
+	return &remoteIPMatcher{ipNet: ipNet}, nil
 }
 
-func (sim *sourceIPMatcher) match(data *rpcData) bool {
+func (sim *remoteIPMatcher) match(data *rpcData) bool {
 	return sim.ipNet.Contains(net.IP(net.ParseIP(data.peerInfo.Addr.String())))
 }
 
