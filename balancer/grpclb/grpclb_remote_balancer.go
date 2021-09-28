@@ -206,6 +206,9 @@ type remoteBalancerCCWrapper struct {
 	backoff backoff.Strategy
 	done    chan struct{}
 
+	streamMu     sync.Mutex
+	streamCancel func()
+
 	// waitgroup to wait for all goroutines to exit.
 	wg sync.WaitGroup
 }
@@ -319,10 +322,8 @@ func (ccw *remoteBalancerCCWrapper) sendLoadReport(s *balanceLoadClientStream, i
 	}
 }
 
-func (ccw *remoteBalancerCCWrapper) callRemoteBalancer() (backoff bool, _ error) {
+func (ccw *remoteBalancerCCWrapper) callRemoteBalancer(ctx context.Context) (backoff bool, _ error) {
 	lbClient := &loadBalancerClient{cc: ccw.cc}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	stream, err := lbClient.BalanceLoad(ctx, grpc.WaitForReady(true))
 	if err != nil {
 		return true, fmt.Errorf("grpclb: failed to perform RPC to the remote balancer %v", err)
@@ -362,11 +363,35 @@ func (ccw *remoteBalancerCCWrapper) callRemoteBalancer() (backoff bool, _ error)
 	return false, ccw.readServerList(stream)
 }
 
+func (ccw *remoteBalancerCCWrapper) restartRemoteBalancerCall() {
+	ccw.streamMu.Lock()
+	if ccw.streamCancel != nil {
+		ccw.streamCancel()
+	}
+	ccw.streamMu.Unlock()
+}
+
 func (ccw *remoteBalancerCCWrapper) watchRemoteBalancer() {
-	defer ccw.wg.Done()
+	defer func() {
+		ccw.wg.Done()
+		if ccw.streamCancel != nil {
+			// This is to make sure that we don't leak the context when we are
+			// directly returning from inside of the below `for` loop.
+			ccw.streamCancel()
+		}
+	}()
+
 	var retryCount int
+	var ctx context.Context
 	for {
-		doBackoff, err := ccw.callRemoteBalancer()
+		ccw.streamMu.Lock()
+		if ccw.streamCancel != nil {
+			ccw.streamCancel()
+		}
+		ctx, ccw.streamCancel = context.WithCancel(context.Background())
+		ccw.streamMu.Unlock()
+
+		doBackoff, err := ccw.callRemoteBalancer(ctx)
 		select {
 		case <-ccw.done:
 			return

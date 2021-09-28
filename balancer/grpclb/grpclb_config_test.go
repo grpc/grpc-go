@@ -20,11 +20,9 @@ package grpclb
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
-	"reflect"
-	"strings"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -32,40 +30,59 @@ import (
 func (s) TestParse(t *testing.T) {
 	tests := []struct {
 		name    string
-		s       string
+		sc      string
 		want    serviceconfig.LoadBalancingConfig
-		wantErr error
+		wantErr bool
 	}{
 		{
 			name:    "empty",
-			s:       "",
+			sc:      "",
 			want:    nil,
-			wantErr: errors.New("unexpected end of JSON input"),
+			wantErr: true,
 		},
 		{
 			name: "success1",
-			s:    `{"childPolicy":[{"pick_first":{}}]}`,
+			sc: `
+{
+	"childPolicy": [
+		{"pick_first":{}}
+	],
+	"targetName": "foo-service"
+}`,
 			want: &grpclbServiceConfig{
 				ChildPolicy: &[]map[string]json.RawMessage{
 					{"pick_first": json.RawMessage("{}")},
 				},
+				TargetName: "foo-service",
 			},
 		},
 		{
 			name: "success2",
-			s:    `{"childPolicy":[{"round_robin":{}},{"pick_first":{}}]}`,
+			sc: `
+{
+	"childPolicy": [
+		{"round_robin":{}},
+		{"pick_first":{}}
+	],
+	"targetName": "foo-service"
+}`,
 			want: &grpclbServiceConfig{
 				ChildPolicy: &[]map[string]json.RawMessage{
 					{"round_robin": json.RawMessage("{}")},
 					{"pick_first": json.RawMessage("{}")},
 				},
+				TargetName: "foo-service",
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got, err := (&lbBuilder{}).ParseConfig(json.RawMessage(tt.s)); !reflect.DeepEqual(got, tt.want) || !strings.Contains(fmt.Sprint(err), fmt.Sprint(tt.wantErr)) {
-				t.Errorf("parseFullServiceConfig() = %+v, %+v, want %+v, <contains %q>", got, err, tt.want, tt.wantErr)
+			got, err := (&lbBuilder{}).ParseConfig(json.RawMessage(tt.sc))
+			if (err != nil) != (tt.wantErr) {
+				t.Fatalf("ParseConfig(%q) returned error: %v, wantErr: %v", tt.sc, err, tt.wantErr)
+			}
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Fatalf("ParseConfig(%q) returned unexpected difference (-want +got):\n%s", tt.sc, diff)
 			}
 		})
 	}
