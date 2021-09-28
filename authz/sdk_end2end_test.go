@@ -382,7 +382,7 @@ func (s) TestSDKFileWatcherEnd2End(t *testing.T) {
 func (s) TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	valid1 := sdkTests["DeniesRpcMatchInDenyAndAllow"]
 	file := createTmpPolicyFile(t, "valid_policy_refresh", []byte(valid1.authzPolicy))
-	i, _ := authz.NewFileWatcher(file, 10*time.Millisecond)
+	i, _ := authz.NewFileWatcher(file, 100*time.Millisecond)
 	defer i.Close()
 
 	// Start a gRPC server with SDK unary server interceptor.
@@ -420,31 +420,29 @@ func (s) TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	if err := os.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
 		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
-	// Wait 30 ms for background go routine to read the updated files.
-	time.Sleep(30 * time.Millisecond)
 
 	// Verifying authorization decision.
-	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 	numRetries := 0
 	reloadSuccess := false
-	got := status.Convert(err)
+	var gotStatus *status.Status
 	for numRetries <= 20 {
-		if got.Code() == valid2.wantStatusCode && got.Message() == valid2.wantErr {
+		_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
+		if gotStatus = status.Convert(err); gotStatus.Code() == valid2.wantStatusCode && gotStatus.Message() == valid2.wantErr {
 			reloadSuccess = true
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		numRetries++
 	}
 	if reloadSuccess == false {
-		t.Fatalf("error want:{%v %v} got:{%v %v}", valid2.wantStatusCode, valid2.wantErr, got.Code(), got.Message())
+		t.Fatalf("error want:{%v %v} got:{%v %v}", valid2.wantStatusCode, valid2.wantErr, gotStatus.Code(), gotStatus.Message())
 	}
 }
 
 func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	valid := sdkTests["DeniesRpcMatchInDenyAndAllow"]
 	file := createTmpPolicyFile(t, "invalid_policy_skip_reload", []byte(valid.authzPolicy))
-	i, _ := authz.NewFileWatcher(file, 10*time.Millisecond)
+	i, _ := authz.NewFileWatcher(file, 100*time.Millisecond)
 	defer i.Close()
 
 	// Start a gRPC server with SDK unary server interceptors.
@@ -481,17 +479,15 @@ func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	if err := os.WriteFile(file, []byte("{}"), os.ModePerm); err != nil {
 		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
-	// Wait 30 ms for background go routine to read the updated files.
-	time.Sleep(30 * time.Millisecond)
 
 	// Verifying authorization decision.
-	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 	numRetries := 0
 	for numRetries <= 20 {
+		_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 		if got := status.Convert(err); got.Code() != valid.wantStatusCode || got.Message() != valid.wantErr {
 			t.Fatalf("error want:{%v %v} got:{%v %v}", valid.wantStatusCode, valid.wantErr, got.Code(), got.Message())
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		numRetries++
 	}
 }
@@ -499,7 +495,7 @@ func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	valid1 := sdkTests["DeniesRpcMatchInDenyAndAllow"]
 	file := createTmpPolicyFile(t, "recovers_from_reload_failure", []byte(valid1.authzPolicy))
-	i, _ := authz.NewFileWatcher(file, 10*time.Millisecond)
+	i, _ := authz.NewFileWatcher(file, 100*time.Millisecond)
 	defer i.Close()
 
 	// Start a gRPC server with SDK unary server interceptors.
@@ -536,17 +532,15 @@ func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	if err := os.WriteFile(file, []byte("{}"), os.ModePerm); err != nil {
 		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
-	// Wait 30 ms for background go routine to read the updated files.
-	time.Sleep(30 * time.Millisecond)
 
 	// Verifying authorization decision.
-	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 	numRetries := 0
 	for numRetries <= 20 {
+		_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 		if got := status.Convert(err); got.Code() != valid1.wantStatusCode || got.Message() != valid1.wantErr {
 			t.Fatalf("error want:{%v %v} got:{%v %v}", valid1.wantStatusCode, valid1.wantErr, got.Code(), got.Message())
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		numRetries++
 	}
 
@@ -555,23 +549,21 @@ func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	if err := os.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
 		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
-	// Wait 30 ms for background go routine to read the updated files.
-	time.Sleep(30 * time.Millisecond)
 
 	// Verifying authorization decision.
-	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 	numRetries = 0
 	reloadSuccess := false
-	got := status.Convert(err)
+	var gotStatus *status.Status
 	for numRetries <= 20 {
-		if got.Code() == valid2.wantStatusCode && got.Message() == valid2.wantErr {
+		_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
+		if gotStatus = status.Convert(err); gotStatus.Code() == valid2.wantStatusCode && gotStatus.Message() == valid2.wantErr {
 			reloadSuccess = true
 			break
 		}
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		numRetries++
 	}
 	if reloadSuccess == false {
-		t.Fatalf("error want:{%v %v} got:{%v %v}", valid2.wantStatusCode, valid2.wantErr, got.Code(), got.Message())
+		t.Fatalf("error want:{%v %v} got:{%v %v}", valid2.wantStatusCode, valid2.wantErr, gotStatus.Code(), gotStatus.Message())
 	}
 }
