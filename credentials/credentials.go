@@ -142,9 +142,10 @@ type TransportCredentials interface {
 	//
 	// The second argument to this method is the ClientConn's authority, usually
 	// derived from the user's dial target. Implementations should use this as
-	// the server name during the authentication handshake. In rare cases,
-	// implementations may choose to ignore this value and use a value acquired
-	// through other means.
+	// the server name during the authentication handshake. Implementations may
+	// choose to ignore this value and use a value acquired through other means,
+	// in which case they must make sure that the value is acquired through
+	// secure means and that a possible attacker cannot tamper with the value.
 	//
 	// If the returned net.Conn is closed, it MUST close the net.Conn provided.
 	ClientHandshake(context.Context, string, net.Conn) (net.Conn, AuthInfo, error)
@@ -162,8 +163,8 @@ type TransportCredentials interface {
 	// OverrideServerName overrides the server name used to verify the hostname
 	// on the returned certificates from the server.
 	//
-	// This is deprecated. Users are recommended to use the WithAuthority dial
-	// option instead.
+	// Deprecated: use grpc.WithAuthority instead. Will be supported
+	// throughout 1.x.
 	OverrideServerName(string) error
 }
 
