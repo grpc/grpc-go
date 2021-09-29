@@ -25,8 +25,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-
 	"google.golang.org/grpc/balancer"
 	_ "google.golang.org/grpc/balancer/grpclb"               // grpclb for config parsing.
 	_ "google.golang.org/grpc/internal/resolver/passthrough" // passthrough resolver.
@@ -58,12 +56,13 @@ func testEqual(a, b *lbConfig) bool {
 		a.staleAge == b.staleAge &&
 		a.cacheSizeBytes == b.cacheSizeBytes &&
 		a.defaultTarget == b.defaultTarget &&
-		a.cpName == b.cpName &&
-		a.cpTargetField == b.cpTargetField &&
-		cmp.Equal(a.cpConfig, b.cpConfig)
+		a.childPolicyName == b.childPolicyName &&
+		a.childPolicyTargetField == b.childPolicyTargetField &&
+		childPolicyConfigEqual(a.childPolicyConfig, b.childPolicyConfig)
 }
 
 func TestParseConfig(t *testing.T) {
+	childPolicyTargetFieldVal, _ := json.Marshal(dummyChildPolicyTarget)
 	tests := []struct {
 		desc    string
 		input   []byte
@@ -85,7 +84,7 @@ func TestParseConfig(t *testing.T) {
 						"names": [{"service": "service", "method": "method"}],
 						"headers": [{"key": "k1", "names": ["v1"]}]
 					}],
-					"lookupService": "passthrough:///target",
+					"lookupService": ":///target",
 					"maxAge" : "500s",
 					"staleAge": "600s",
 					"cacheSizeBytes": 1000,
@@ -99,15 +98,18 @@ func TestParseConfig(t *testing.T) {
 				"childPolicyConfigTargetFieldName": "service_name"
 			}`),
 			wantCfg: &lbConfig{
-				lookupService:        "passthrough:///target",
-				lookupServiceTimeout: 10 * time.Second, // This is the default value.
-				maxAge:               5 * time.Minute,  // This is max maxAge.
-				staleAge:             time.Duration(0), // StaleAge is ignore because it was higher than maxAge.
-				cacheSizeBytes:       1000,
-				defaultTarget:        "passthrough:///default",
-				cpName:               "grpclb",
-				cpTargetField:        "service_name",
-				cpConfig:             map[string]json.RawMessage{"childPolicy": json.RawMessage(`[{"pickfirst": {}}]`)},
+				lookupService:          ":///target",
+				lookupServiceTimeout:   10 * time.Second, // This is the default value.
+				maxAge:                 5 * time.Minute,  // This is max maxAge.
+				staleAge:               time.Duration(0), // StaleAge is ignore because it was higher than maxAge.
+				cacheSizeBytes:         1000,
+				defaultTarget:          "passthrough:///default",
+				childPolicyName:        "grpclb",
+				childPolicyTargetField: "service_name",
+				childPolicyConfig: map[string]json.RawMessage{
+					"childPolicy":  json.RawMessage(`[{"pickfirst": {}}]`),
+					"service_name": json.RawMessage(childPolicyTargetFieldVal),
+				},
 			},
 		},
 		{
@@ -118,7 +120,7 @@ func TestParseConfig(t *testing.T) {
 						"names": [{"service": "service", "method": "method"}],
 						"headers": [{"key": "k1", "names": ["v1"]}]
 					}],
-					"lookupService": "passthrough:///target",
+					"lookupService": "target",
 					"lookupServiceTimeout" : "100s",
 					"maxAge": "60s",
 					"staleAge" : "50s",
@@ -129,15 +131,18 @@ func TestParseConfig(t *testing.T) {
 				"childPolicyConfigTargetFieldName": "service_name"
 			}`),
 			wantCfg: &lbConfig{
-				lookupService:        "passthrough:///target",
-				lookupServiceTimeout: 100 * time.Second,
-				maxAge:               60 * time.Second,
-				staleAge:             50 * time.Second,
-				cacheSizeBytes:       1000,
-				defaultTarget:        "passthrough:///default",
-				cpName:               "grpclb",
-				cpTargetField:        "service_name",
-				cpConfig:             map[string]json.RawMessage{"childPolicy": json.RawMessage(`[{"pickfirst": {}}]`)},
+				lookupService:          "target",
+				lookupServiceTimeout:   100 * time.Second,
+				maxAge:                 60 * time.Second,
+				staleAge:               50 * time.Second,
+				cacheSizeBytes:         1000,
+				defaultTarget:          "passthrough:///default",
+				childPolicyName:        "grpclb",
+				childPolicyTargetField: "service_name",
+				childPolicyConfig: map[string]json.RawMessage{
+					"childPolicy":  json.RawMessage(`[{"pickfirst": {}}]`),
+					"service_name": json.RawMessage(childPolicyTargetFieldVal),
+				},
 			},
 		},
 	}
@@ -191,10 +196,10 @@ func TestParseConfigErrors(t *testing.T) {
 						}]
 					}
 				}`),
-			wantErr: "rls: empty lookup_service in service config",
+			wantErr: "rls: empty lookup_service in route lookup config",
 		},
 		{
-			desc: "invalid lookup service URI",
+			desc: "unregistered scheme in lookup service URI",
 			input: []byte(`{
 					"routeLookupConfig": {
 						"grpcKeybuilders": [{
@@ -204,7 +209,7 @@ func TestParseConfigErrors(t *testing.T) {
 						"lookupService": "badScheme:///target"
 					}
 				}`),
-			wantErr: "rls: invalid target URI in lookup_service",
+			wantErr: "rls: unregistered scheme in lookup_service",
 		},
 		{
 			desc: "invalid lookup service timeout",
@@ -264,7 +269,7 @@ func TestParseConfigErrors(t *testing.T) {
 					"staleAge" : "10s"
 				}
 			}`),
-			wantErr: "rls: stale_age is set, but max_age is not in service config",
+			wantErr: "rls: stale_age is set, but max_age is not in route lookup config",
 		},
 		{
 			desc: "invalid cache size",
@@ -280,7 +285,7 @@ func TestParseConfigErrors(t *testing.T) {
 					"staleAge" : "25s"
 				}
 			}`),
-			wantErr: "rls: cache_size_bytes must be greater than 0 in service config",
+			wantErr: "rls: cache_size_bytes must be greater than 0 in route lookup config",
 		},
 		{
 			desc: "no child policy",
@@ -296,9 +301,10 @@ func TestParseConfigErrors(t *testing.T) {
 					"staleAge" : "25s",
 					"cacheSizeBytes": 1000,
 					"defaultTarget": "passthrough:///default"
-				}
+				},
+				"childPolicyConfigTargetFieldName": "service_name"
 			}`),
-			wantErr: "rls: childPolicy is invalid in service config",
+			wantErr: "rls: invalid childPolicy config: no supported policies found",
 		},
 		{
 			desc: "no known child policy",
@@ -318,9 +324,35 @@ func TestParseConfigErrors(t *testing.T) {
 				"childPolicy": [
 					{"cds_experimental": {"Cluster": "my-fav-cluster"}},
 					{"unknown-policy": {"unknown-field": "unknown-value"}}
-				]
+				],
+				"childPolicyConfigTargetFieldName": "service_name"
 			}`),
-			wantErr: "rls: childPolicy is invalid in service config",
+			wantErr: "rls: invalid childPolicy config: no supported policies found",
+		},
+		{
+			desc: "invalid child policy config - more than one entry in map",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "passthrough:///target",
+					"lookupServiceTimeout" : "10s",
+					"maxAge": "30s",
+					"staleAge" : "25s",
+					"cacheSizeBytes": 1000,
+					"defaultTarget": "passthrough:///default"
+				},
+				"childPolicy": [
+					{
+						"cds_experimental": {"Cluster": "my-fav-cluster"},
+						"unknown-policy": {"unknown-field": "unknown-value"}
+					}
+				],
+				"childPolicyConfigTargetFieldName": "service_name"
+			}`),
+			wantErr: "does not contain exactly 1 policy/config pair",
 		},
 		{
 			desc: "no childPolicyConfigTargetFieldName",
@@ -377,63 +409,6 @@ func TestParseConfigErrors(t *testing.T) {
 			lbCfg, err := builder.ParseConfig(test.input)
 			if lbCfg != nil || !strings.Contains(fmt.Sprint(err), test.wantErr) {
 				t.Errorf("ParseConfig(%s) = {%+v, %v}, want {nil, %s}", string(test.input), lbCfg, err, test.wantErr)
-			}
-		})
-	}
-}
-
-func TestValidateChildPolicyConfig(t *testing.T) {
-	jsonCfg := json.RawMessage(`[{"round_robin" : {}}, {"pick_first" : {}}]`)
-	wantChildConfig := map[string]json.RawMessage{"childPolicy": jsonCfg}
-	cp := &loadBalancingConfig{
-		Name:   "grpclb",
-		Config: []byte(`{"childPolicy": [{"round_robin" : {}}, {"pick_first" : {}}]}`),
-	}
-	cpTargetField := "serviceName"
-
-	gotChildConfig, err := validateChildPolicyConfig(cp, cpTargetField)
-	if err != nil || !cmp.Equal(gotChildConfig, wantChildConfig) {
-		t.Errorf("validateChildPolicyConfig(%v, %v) = {%v, %v}, want {%v, nil}", cp, cpTargetField, gotChildConfig, err, wantChildConfig)
-	}
-}
-
-func TestValidateChildPolicyConfigErrors(t *testing.T) {
-	tests := []struct {
-		desc          string
-		cp            *loadBalancingConfig
-		wantErrPrefix string
-	}{
-		{
-			desc: "unknown child policy",
-			cp: &loadBalancingConfig{
-				Name:   "unknown",
-				Config: []byte(`{}`),
-			},
-			wantErrPrefix: "rls: balancer builder not found for child_policy",
-		},
-		{
-			desc: "balancer builder does not implement ConfigParser",
-			cp: &loadBalancingConfig{
-				Name:   balancerWithoutConfigParserName,
-				Config: []byte(`{}`),
-			},
-			wantErrPrefix: "rls: balancer builder for child_policy does not implement balancer.ConfigParser",
-		},
-		{
-			desc: "child policy config parsing failure",
-			cp: &loadBalancingConfig{
-				Name:   "grpclb",
-				Config: []byte(`{"childPolicy": "not-an-array"}`),
-			},
-			wantErrPrefix: "rls: childPolicy config validation failed",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.desc, func(t *testing.T) {
-			gotChildConfig, gotErr := validateChildPolicyConfig(test.cp, "")
-			if gotChildConfig != nil || !strings.HasPrefix(fmt.Sprint(gotErr), test.wantErrPrefix) {
-				t.Errorf("validateChildPolicyConfig(%v) = {%v, %v}, want {nil, %v}", test.cp, gotChildConfig, gotErr, test.wantErrPrefix)
 			}
 		})
 	}

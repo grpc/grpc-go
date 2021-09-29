@@ -22,15 +22,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/ptypes"
 	durationpb "github.com/golang/protobuf/ptypes/duration"
+
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
 	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
-	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -62,9 +63,10 @@ type lbConfig struct {
 	staleAge             time.Duration
 	cacheSizeBytes       int64
 	defaultTarget        string
-	cpName               string
-	cpTargetField        string
-	cpConfig             map[string]json.RawMessage
+
+	childPolicyName        string
+	childPolicyConfig      map[string]json.RawMessage
+	childPolicyTargetField string
 }
 
 func (lbCfg *lbConfig) Equal(other *lbConfig) bool {
@@ -75,21 +77,21 @@ func (lbCfg *lbConfig) Equal(other *lbConfig) bool {
 		lbCfg.staleAge == other.staleAge &&
 		lbCfg.cacheSizeBytes == other.cacheSizeBytes &&
 		lbCfg.defaultTarget == other.defaultTarget &&
-		lbCfg.cpName == other.cpName &&
-		lbCfg.cpTargetField == other.cpTargetField &&
-		cpConfigEqual(lbCfg.cpConfig, other.cpConfig)
+		lbCfg.childPolicyName == other.childPolicyName &&
+		lbCfg.childPolicyTargetField == other.childPolicyTargetField &&
+		childPolicyConfigEqual(lbCfg.childPolicyConfig, other.childPolicyConfig)
 }
 
-func cpConfigEqual(am, bm map[string]json.RawMessage) bool {
-	if (bm == nil) != (am == nil) {
+func childPolicyConfigEqual(a, b map[string]json.RawMessage) bool {
+	if (b == nil) != (a == nil) {
 		return false
 	}
-	if len(bm) != len(am) {
+	if len(b) != len(a) {
 		return false
 	}
 
-	for k, jsonA := range am {
-		jsonB, ok := bm[k]
+	for k, jsonA := range a {
+		jsonB, ok := b[k]
 		if !ok {
 			return false
 		}
@@ -100,71 +102,18 @@ func cpConfigEqual(am, bm map[string]json.RawMessage) bool {
 	return true
 }
 
-// This struct resembles the JSON respresentation of the loadBalancing config
+// This struct resembles the JSON representation of the loadBalancing config
 // and makes it easier to unmarshal.
 type lbConfigJSON struct {
 	RouteLookupConfig                json.RawMessage
-	ChildPolicy                      []*loadBalancingConfig
+	ChildPolicy                      []map[string]json.RawMessage
 	ChildPolicyConfigTargetFieldName string
-}
-
-// loadBalancingConfig represents a single load balancing config,
-// stored in JSON format.
-//
-// TODO(easwars): This code seems to be repeated in a few places
-// (service_config.go and in the xds code as well). Refactor and re-use.
-type loadBalancingConfig struct {
-	Name   string
-	Config json.RawMessage
-}
-
-// MarshalJSON returns a JSON encoding of l.
-func (l *loadBalancingConfig) MarshalJSON() ([]byte, error) {
-	return nil, fmt.Errorf("rls: loadBalancingConfig.MarshalJSON() is unimplemented")
-}
-
-// UnmarshalJSON parses the JSON-encoded byte slice in data and stores it in l.
-func (l *loadBalancingConfig) UnmarshalJSON(data []byte) error {
-	var cfg map[string]json.RawMessage
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return err
-	}
-	for name, config := range cfg {
-		l.Name = name
-		l.Config = config
-	}
-	return nil
 }
 
 // ParseConfig parses and validates the JSON representation of the service
 // config and returns the loadBalancingConfig to be used by the RLS LB policy.
 //
 // Helps implement the balancer.ConfigParser interface.
-//
-// The following validation checks are performed:
-// * routeLookupConfig:
-//   ** grpc_keybuilders field:
-//      - must have at least one entry
-//      - must not have two entries with the same Name
-//      - must not have any entry with a Name with the service field unset or
-//        empty
-//      - must not have any entries without a Name
-//      - must not have a headers entry that has required_match set
-//      - must not have two headers entries with the same key within one entry
-//   ** lookup_service field:
-//      - must be set and non-empty and must parse as a target URI
-//   ** max_age field:
-//      - if not specified or is greater than maxMaxAge, it will be reset to
-//        maxMaxAge
-//   ** stale_age field:
-//      - if the value is greater than or equal to max_age, it is ignored
-//      - if set, then max_age must also be set
-//   ** valid_targets field:
-//      - will be ignored
-//   ** cache_size_bytes field:
-//      - must be greater than zero
-//      - TODO(easwars): Define a minimum value for this field, to be used when
-//        left unspecified
 // * childPolicy field:
 //  - must find a valid child policy with a valid config (the child policy must
 //    be able to parse the provided config successfully when we pass it a dummy
@@ -178,20 +127,58 @@ func (*rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig,
 		return nil, fmt.Errorf("rls: json unmarshal failed for service config {%+v}: %v", string(c), err)
 	}
 
+	// Unmarshal and validate contents of the RLS proto.
 	m := jsonpb.Unmarshaler{AllowUnknownFields: true}
 	rlsProto := &rlspb.RouteLookupConfig{}
 	if err := m.Unmarshal(bytes.NewReader(cfgJSON.RouteLookupConfig), rlsProto); err != nil {
 		return nil, fmt.Errorf("rls: bad RouteLookupConfig proto {%+v}: %v", string(cfgJSON.RouteLookupConfig), err)
 	}
-
-	var childPolicy *loadBalancingConfig
-	for _, lbcfg := range cfgJSON.ChildPolicy {
-		if balancer.Get(lbcfg.Name) != nil {
-			childPolicy = lbcfg
-			break
-		}
+	lbCfg, err := parseRLSProto(rlsProto)
+	if err != nil {
+		return nil, err
 	}
 
+	// Unmarshal and validate child policy configs.
+	if cfgJSON.ChildPolicyConfigTargetFieldName == "" {
+		return nil, fmt.Errorf("rls: childPolicyConfigTargetFieldName field is not set in service config {%+v}", string(c))
+	}
+	name, config, err := parseChildPolicyConfigs(cfgJSON.ChildPolicy, cfgJSON.ChildPolicyConfigTargetFieldName)
+	if err != nil {
+		return nil, err
+	}
+	lbCfg.childPolicyName = name
+	lbCfg.childPolicyConfig = config
+	lbCfg.childPolicyTargetField = cfgJSON.ChildPolicyConfigTargetFieldName
+	return lbCfg, nil
+}
+
+// parseRLSProto fetches relevant information from the RouteLookupConfig proto
+// and validates the values in the process.
+//
+// The following validation checks are performed:
+// ** grpc_keybuilders field:
+//    - must have at least one entry
+//    - must not have two entries with the same Name
+//    - must not have any entry with a Name with the service field unset or
+//      empty
+//    - must not have any entries without a Name
+//    - must not have a headers entry that has required_match set
+//    - must not have two headers entries with the same key within one entry
+// ** lookup_service field:
+//    - must be set and non-empty and must parse as a target URI
+// ** max_age field:
+//    - if not specified or is greater than maxMaxAge, it will be reset to
+//      maxMaxAge
+// ** stale_age field:
+//    - if the value is greater than or equal to max_age, it is ignored
+//    - if set, then max_age must also be set
+// ** valid_targets field:
+//    - will be ignored
+// ** cache_size_bytes field:
+//    - must be greater than zero
+//    - TODO(easwars): Define a minimum value for this field, to be used when
+//      left unspecified
+func parseRLSProto(rlsProto *rlspb.RouteLookupConfig) (*lbConfig, error) {
 	kbMap, err := keys.MakeBuilderMap(rlsProto)
 	if err != nil {
 		return nil, err
@@ -199,64 +186,54 @@ func (*rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig,
 
 	lookupService := rlsProto.GetLookupService()
 	if lookupService == "" {
-		return nil, fmt.Errorf("rls: empty lookup_service in service config {%+v}", string(c))
+		return nil, fmt.Errorf("rls: empty lookup_service in route lookup config {%+v}", rlsProto)
 	}
-	parsedTarget := grpcutil.ParseTarget(lookupService, false)
+	parsedTarget, err := url.Parse(lookupService)
+	if err != nil {
+		// If the first attempt failed because of a missing scheme, try again
+		// with the default scheme.
+		parsedTarget, err = url.Parse(resolver.GetDefaultScheme() + ":///" + lookupService)
+		if err != nil {
+			return nil, fmt.Errorf("rls: invalid target URI in lookup_service {%s}", lookupService)
+		}
+	}
 	if parsedTarget.Scheme == "" {
 		parsedTarget.Scheme = resolver.GetDefaultScheme()
 	}
 	if resolver.Get(parsedTarget.Scheme) == nil {
-		return nil, fmt.Errorf("rls: invalid target URI in lookup_service {%s}", lookupService)
+		return nil, fmt.Errorf("rls: unregistered scheme in lookup_service {%s}", lookupService)
 	}
 
 	lookupServiceTimeout, err := convertDuration(rlsProto.GetLookupServiceTimeout())
 	if err != nil {
-		return nil, fmt.Errorf("rls: failed to parse lookup_service_timeout in service config {%+v}: %v", string(c), err)
+		return nil, fmt.Errorf("rls: failed to parse lookup_service_timeout in route lookup config {%+v}: %v", rlsProto, err)
 	}
 	if lookupServiceTimeout == 0 {
 		lookupServiceTimeout = defaultLookupServiceTimeout
 	}
 	maxAge, err := convertDuration(rlsProto.GetMaxAge())
 	if err != nil {
-		return nil, fmt.Errorf("rls: failed to parse max_age in service config {%+v}: %v", string(c), err)
+		return nil, fmt.Errorf("rls: failed to parse max_age in route lookup config {%+v}: %v", rlsProto, err)
 	}
 	staleAge, err := convertDuration(rlsProto.GetStaleAge())
 	if err != nil {
-		return nil, fmt.Errorf("rls: failed to parse staleAge in service config {%+v}: %v", string(c), err)
+		return nil, fmt.Errorf("rls: failed to parse staleAge in route lookup config {%+v}: %v", rlsProto, err)
 	}
 	if staleAge != 0 && maxAge == 0 {
-		return nil, fmt.Errorf("rls: stale_age is set, but max_age is not in service config {%+v}", string(c))
+		return nil, fmt.Errorf("rls: stale_age is set, but max_age is not in route lookup config {%+v}", rlsProto)
 	}
 	if staleAge >= maxAge {
 		logger.Info("rls: stale_age {%v} is greater than max_age {%v}, ignoring it", staleAge, maxAge)
 		staleAge = 0
 	}
 	if maxAge == 0 || maxAge > maxMaxAge {
-		logger.Infof("rls: max_age in service config is %v, using %v", maxAge, maxMaxAge)
+		logger.Infof("rls: max_age in route lookup config is %v, using %v", maxAge, maxMaxAge)
 		maxAge = maxMaxAge
 	}
 	cacheSizeBytes := rlsProto.GetCacheSizeBytes()
 	if cacheSizeBytes <= 0 {
-		return nil, fmt.Errorf("rls: cache_size_bytes must be greater than 0 in service config {%+v}", string(c))
+		return nil, fmt.Errorf("rls: cache_size_bytes must be greater than 0 in route lookup config {%+v}", rlsProto)
 	}
-	if childPolicy == nil {
-		return nil, fmt.Errorf("rls: childPolicy is invalid in service config {%+v}", string(c))
-	}
-	if cfgJSON.ChildPolicyConfigTargetFieldName == "" {
-		return nil, fmt.Errorf("rls: childPolicyConfigTargetFieldName field is not set in service config {%+v}", string(c))
-	}
-	// TODO(easwars): When we start instantiating the child policy from the
-	// parent RLS LB policy, we could make this function a method on the
-	// lbConfig object and share the code. We would be parsing the child policy
-	// config again during that time. The only difference betweeen now and then
-	// would be that we would be using real targetField name instead of the
-	// dummy. So, we could make the targetName field a parameter to this
-	// function during the refactor.
-	cpCfg, err := validateChildPolicyConfig(childPolicy, cfgJSON.ChildPolicyConfigTargetFieldName)
-	if err != nil {
-		return nil, err
-	}
-
 	return &lbConfig{
 		kbMap:                kbMap,
 		lookupService:        lookupService,
@@ -265,57 +242,50 @@ func (*rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig,
 		staleAge:             staleAge,
 		cacheSizeBytes:       cacheSizeBytes,
 		defaultTarget:        rlsProto.GetDefaultTarget(),
-		// TODO(easwars): Once we refactor validateChildPolicyConfig and make
-		// it a method on the lbConfig object, we could directly store the
-		// balancer.Builder and/or balancer.ConfigParser here instead of the
-		// Name. That would mean that we would have to create the lbConfig
-		// object here first before validating the childPolicy config, but
-		// that's a minor detail.
-		cpName:        childPolicy.Name,
-		cpTargetField: cfgJSON.ChildPolicyConfigTargetFieldName,
-		cpConfig:      cpCfg,
 	}, nil
 }
 
-// validateChildPolicyConfig validates the child policy config received in the
-// service config. This makes it possible for us to reject service configs
-// which contain invalid child policy configs which we know will fail for sure.
-//
-// It does the following:
-// * Unmarshals the provided child policy config into a map of string to
-//   json.RawMessage. This allows us to add an entry to the map corresponding
-//   to the targetFieldName that we received in the service config.
-// * Marshals the map back into JSON, finds the config parser associated with
-//   the child policy and asks it to validate the config.
-// * If the validation succeeded, removes the dummy entry from the map and
-//   returns it. If any of the above steps failed, it returns an error.
-func validateChildPolicyConfig(cp *loadBalancingConfig, cpTargetField string) (map[string]json.RawMessage, error) {
-	var childConfig map[string]json.RawMessage
-	if err := json.Unmarshal(cp.Config, &childConfig); err != nil {
-		return nil, fmt.Errorf("rls: json unmarshal failed for child policy config {%+v}: %v", cp.Config, err)
-	}
-	childConfig[cpTargetField], _ = json.Marshal(dummyChildPolicyTarget)
+// parseChildPolicyConfigs iterates through the list of child policies and picks
+// the first registered policy and validates its config.
+func parseChildPolicyConfigs(childPolicies []map[string]json.RawMessage, targetFieldName string) (string, map[string]json.RawMessage, error) {
+	for i, config := range childPolicies {
+		if len(config) != 1 {
+			return "", nil, fmt.Errorf("rls: invalid childPolicy: entry %v does not contain exactly 1 policy/config pair: %q", i, config)
+		}
 
-	jsonCfg, err := json.Marshal(childConfig)
-	if err != nil {
-		return nil, fmt.Errorf("rls: json marshal failed for child policy config {%+v}: %v", childConfig, err)
+		var name string
+		var rawCfg json.RawMessage
+		for name, rawCfg = range config {
+		}
+		builder := balancer.Get(name)
+		if builder == nil {
+			continue
+		}
+		parser, ok := builder.(balancer.ConfigParser)
+		if !ok {
+			return "", nil, fmt.Errorf("rls: childPolicy %q with config %q does not support config parsing", name, string(rawCfg))
+		}
+
+		// To validate child policy configs we do the following:
+		// - unmarshal the raw JSON bytes of the child policy config into a map
+		// - add an entry with key set to `target_field_name` and a dummy value
+		// - marshal the map back to JSON and parse the config using the parser
+		// retrieved previously
+		var childConfig map[string]json.RawMessage
+		if err := json.Unmarshal(rawCfg, &childConfig); err != nil {
+			return "", nil, fmt.Errorf("rls: json unmarshal failed for child policy config %q: %v", string(rawCfg), err)
+		}
+		childConfig[targetFieldName], _ = json.Marshal(dummyChildPolicyTarget)
+		jsonCfg, err := json.Marshal(childConfig)
+		if err != nil {
+			return "", nil, fmt.Errorf("rls: json marshal failed for child policy config {%+v}: %v", childConfig, err)
+		}
+		if _, err := parser.ParseConfig(jsonCfg); err != nil {
+			return "", nil, fmt.Errorf("rls: childPolicy config validation failed: %v", err)
+		}
+		return name, childConfig, nil
 	}
-	builder := balancer.Get(cp.Name)
-	if builder == nil {
-		// This should never happen since we already made sure that the child
-		// policy name mentioned in the service config is a valid one.
-		return nil, fmt.Errorf("rls: balancer builder not found for child_policy %v", cp.Name)
-	}
-	parser, ok := builder.(balancer.ConfigParser)
-	if !ok {
-		return nil, fmt.Errorf("rls: balancer builder for child_policy does not implement balancer.ConfigParser: %v", cp.Name)
-	}
-	_, err = parser.ParseConfig(jsonCfg)
-	if err != nil {
-		return nil, fmt.Errorf("rls: childPolicy config validation failed: %v", err)
-	}
-	delete(childConfig, cpTargetField)
-	return childConfig, nil
+	return "", nil, fmt.Errorf("rls: invalid childPolicy config: no supported policies found in %+v", childPolicies)
 }
 
 func convertDuration(d *durationpb.Duration) (time.Duration, error) {
