@@ -379,7 +379,7 @@ func (s) TestSDKFileWatcherEnd2End(t *testing.T) {
 	}
 }
 
-func verifyValidRefresh(ctx context.Context, tsc pb.TestServiceClient, wantCode codes.Code, wantErr string) (lastStatus *status.Status) {
+func verifyValidReload(ctx context.Context, tsc pb.TestServiceClient, wantCode codes.Code, wantErr string) (lastStatus *status.Status) {
 	for numRetries := 0; numRetries <= 20; numRetries++ {
 		_, err := tsc.UnaryCall(ctx, &pb.SimpleRequest{})
 		if lastStatus = status.Convert(err); lastStatus.Code() == wantCode && lastStatus.Message() == wantErr {
@@ -446,7 +446,7 @@ func (s) TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	}
 
 	// Verifying authorization decision.
-	if got := verifyValidRefresh(ctx, client, valid2.wantStatusCode, valid2.wantErr); got != nil {
+	if got := verifyValidReload(ctx, client, valid2.wantStatusCode, valid2.wantErr); got != nil {
 		t.Fatalf("error want:{%v %v} got:{%v %v}", valid2.wantStatusCode, valid2.wantErr, got.Code(), got.Message())
 	}
 }
@@ -551,7 +551,7 @@ func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	}
 
 	// Verifying authorization decision.
-	if got := verifyValidRefresh(ctx, client, valid2.wantStatusCode, valid2.wantErr); got != nil {
+	if got := verifyValidReload(ctx, client, valid2.wantStatusCode, valid2.wantErr); got != nil {
 		t.Fatalf("error want:{%v %v} got:{%v %v}", valid2.wantStatusCode, valid2.wantErr, got.Code(), got.Message())
 	}
 }
