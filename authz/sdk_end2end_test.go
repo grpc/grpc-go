@@ -64,10 +64,9 @@ func Test(t *testing.T) {
 }
 
 var sdkTests = map[string]struct {
-	authzPolicy    string
-	md             metadata.MD
-	wantStatusCode codes.Code
-	wantErr        string
+	authzPolicy string
+	md          metadata.MD
+	wantStatus  *status.Status
 }{
 	"DeniesRpcMatchInDenyNoMatchInAllow": {
 		authzPolicy: `{
@@ -109,9 +108,8 @@ var sdkTests = map[string]struct {
 					}
 				]
 			}`,
-		md:             metadata.Pairs("key-abc", "val-abc"),
-		wantStatusCode: codes.PermissionDenied,
-		wantErr:        "unauthorized RPC request rejected",
+		md:         metadata.Pairs("key-abc", "val-abc"),
+		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
 	},
 	"DeniesRpcMatchInDenyAndAllow": {
 		authzPolicy: `{
@@ -141,8 +139,7 @@ var sdkTests = map[string]struct {
 					}
 				]
 			}`,
-		wantStatusCode: codes.PermissionDenied,
-		wantErr:        "unauthorized RPC request rejected",
+		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
 	},
 	"AllowsRpcNoMatchInDenyMatchInAllow": {
 		authzPolicy: `{
@@ -178,10 +175,10 @@ var sdkTests = map[string]struct {
 					}
 				]
 			}`,
-		md:             metadata.Pairs("key-xyz", "val-xyz"),
-		wantStatusCode: codes.OK,
+		md:         metadata.Pairs("key-xyz", "val-xyz"),
+		wantStatus: status.New(codes.OK, ""),
 	},
-	"AllowsRpcNoMatchInDenyAndAllow": {
+	"DeniesRpcNoMatchInDenyAndAllow": {
 		authzPolicy: `{
 				"name": "authz",
 				"allow_rules":
@@ -209,8 +206,7 @@ var sdkTests = map[string]struct {
 					}
 				]
 			}`,
-		wantStatusCode: codes.PermissionDenied,
-		wantErr:        "unauthorized RPC request rejected",
+		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
 	},
 	"AllowsRpcEmptyDenyMatchInAllow": {
 		authzPolicy: `{
@@ -239,7 +235,7 @@ var sdkTests = map[string]struct {
 					}
 				]
 			}`,
-		wantStatusCode: codes.OK,
+		wantStatus: status.New(codes.OK, ""),
 	},
 	"DeniesRpcEmptyDenyNoMatchInAllow": {
 		authzPolicy: `{
@@ -258,8 +254,7 @@ var sdkTests = map[string]struct {
 					}
 				]
 			}`,
-		wantStatusCode: codes.PermissionDenied,
-		wantErr:        "unauthorized RPC request rejected",
+		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
 	},
 }
 
@@ -294,8 +289,8 @@ func (s) TestSDKStaticPolicyEnd2End(t *testing.T) {
 
 			// Verifying authorization decision for Unary RPC.
 			_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
-			if got := status.Convert(err); got.Code() != test.wantStatusCode || got.Message() != test.wantErr {
-				t.Fatalf("[UnaryCall] error want:{%v %v} got:{%v %v}", test.wantStatusCode, test.wantErr, got.Code(), got.Message())
+			if got := status.Convert(err); got.Code() != test.wantStatus.Code() || got.Message() != test.wantStatus.Message() {
+				t.Fatalf("[UnaryCall] error want:{%v} got:{%v}", test.wantStatus.Err(), got.Err())
 			}
 
 			// Verifying authorization decision for Streaming RPC.
@@ -312,8 +307,8 @@ func (s) TestSDKStaticPolicyEnd2End(t *testing.T) {
 				t.Fatalf("failed stream.Send err: %v", err)
 			}
 			_, err = stream.CloseAndRecv()
-			if got := status.Convert(err); got.Code() != test.wantStatusCode || got.Message() != test.wantErr {
-				t.Fatalf("[StreamingCall] error want:{%v %v} got:{%v %v}", test.wantStatusCode, test.wantErr, got.Code(), got.Message())
+			if got := status.Convert(err); got.Code() != test.wantStatus.Code() || got.Message() != test.wantStatus.Message() {
+				t.Fatalf("[StreamingCall] error want:{%v} got:{%v}", test.wantStatus.Err(), got.Err())
 			}
 		})
 	}
@@ -354,8 +349,8 @@ func (s) TestSDKFileWatcherEnd2End(t *testing.T) {
 
 			// Verifying authorization decision for Unary RPC.
 			_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
-			if got := status.Convert(err); got.Code() != test.wantStatusCode || got.Message() != test.wantErr {
-				t.Fatalf("[UnaryCall] error want:{%v %v} got:{%v %v}", test.wantStatusCode, test.wantErr, got.Code(), got.Message())
+			if got := status.Convert(err); got.Code() != test.wantStatus.Code() || got.Message() != test.wantStatus.Message() {
+				t.Fatalf("[UnaryCall] error want:{%v} got:{%v}", test.wantStatus.Err(), got.Err())
 			}
 
 			// Verifying authorization decision for Streaming RPC.
@@ -372,35 +367,22 @@ func (s) TestSDKFileWatcherEnd2End(t *testing.T) {
 				t.Fatalf("failed stream.Send err: %v", err)
 			}
 			_, err = stream.CloseAndRecv()
-			if got := status.Convert(err); got.Code() != test.wantStatusCode || got.Message() != test.wantErr {
-				t.Fatalf("[StreamingCall] error want:{%v %v} got:{%v %v}", test.wantStatusCode, test.wantErr, got.Code(), got.Message())
+			if got := status.Convert(err); got.Code() != test.wantStatus.Code() || got.Message() != test.wantStatus.Message() {
+				t.Fatalf("[StreamingCall] error want:{%v} got:{%v}", test.wantStatus.Err(), got.Err())
 			}
 		})
 	}
 }
 
-func verifyValidReload(ctx context.Context, tsc pb.TestServiceClient, wantCode codes.Code, wantErr string) (lastStatus *status.Status) {
-	for numRetries := 0; numRetries <= 20; numRetries++ {
-		_, err := tsc.UnaryCall(ctx, &pb.SimpleRequest{})
-		if lastStatus = status.Convert(err); lastStatus.Code() == wantCode && lastStatus.Message() == wantErr {
+func retryUntil(ctx context.Context, tsc pb.TestServiceClient, want *status.Status) (lastErr error) {
+	for ctx.Err() == nil {
+		_, lastErr = tsc.UnaryCall(ctx, &pb.SimpleRequest{})
+		if s := status.Convert(lastErr); s.Code() == want.Code() && s.Message() == want.Message() {
 			return nil
 		}
 		time.Sleep(20 * time.Millisecond)
-		numRetries++
 	}
-	return lastStatus
-}
-
-func verifySkipReload(ctx context.Context, tsc pb.TestServiceClient, wantCode codes.Code, wantErr string) (lastStatus *status.Status) {
-	for numRetries := 0; numRetries <= 20; numRetries++ {
-		_, err := tsc.UnaryCall(ctx, &pb.SimpleRequest{})
-		if lastStatus := status.Convert(err); lastStatus.Code() != wantCode || lastStatus.Message() != wantErr {
-			return lastStatus
-		}
-		time.Sleep(20 * time.Millisecond)
-		numRetries++
-	}
-	return nil
+	return lastErr
 }
 
 func (s) TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
@@ -435,8 +417,8 @@ func (s) TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
 
 	// Verifying authorization decision.
 	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
-	if got := status.Convert(err); got.Code() != valid1.wantStatusCode || got.Message() != valid1.wantErr {
-		t.Fatalf("error want:{%v %v} got:{%v %v}", valid1.wantStatusCode, valid1.wantErr, got.Code(), got.Message())
+	if got := status.Convert(err); got.Code() != valid1.wantStatus.Code() || got.Message() != valid1.wantStatus.Message() {
+		t.Fatalf("error want:{%v} got:{%v}", valid1.wantStatus.Err(), got.Err())
 	}
 
 	// Rewrite the file with a different valid authorization policy.
@@ -446,15 +428,15 @@ func (s) TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	}
 
 	// Verifying authorization decision.
-	if got := verifyValidReload(ctx, client, valid2.wantStatusCode, valid2.wantErr); got != nil {
-		t.Fatalf("error want:{%v %v} got:{%v %v}", valid2.wantStatusCode, valid2.wantErr, got.Code(), got.Message())
+	if got := retryUntil(ctx, client, valid2.wantStatus); got != nil {
+		t.Fatalf("error want:{%v} got:{%v}", valid2.wantStatus.Err(), got)
 	}
 }
 
 func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	valid := sdkTests["DeniesRpcMatchInDenyAndAllow"]
 	file := createTmpPolicyFile(t, "invalid_policy_skip_reload", []byte(valid.authzPolicy))
-	i, _ := authz.NewFileWatcher(file, 100*time.Millisecond)
+	i, _ := authz.NewFileWatcher(file, 20*time.Millisecond)
 	defer i.Close()
 
 	// Start a gRPC server with SDK unary server interceptors.
@@ -483,8 +465,8 @@ func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 
 	// Verifying authorization decision.
 	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
-	if got := status.Convert(err); got.Code() != valid.wantStatusCode || got.Message() != valid.wantErr {
-		t.Fatalf("[UnaryCall] error want:{%v %v} got:{%v %v}", valid.wantStatusCode, valid.wantErr, got.Code(), got.Message())
+	if got := status.Convert(err); got.Code() != valid.wantStatus.Code() || got.Message() != valid.wantStatus.Message() {
+		t.Fatalf("error want:{%v} got:{%v}", valid.wantStatus.Err(), got.Err())
 	}
 
 	// Skips the invalid policy update, and continues to use the valid policy.
@@ -492,9 +474,13 @@ func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
 
+	// Wait 40 ms for background go routine to read updated files.
+	time.Sleep(40 * time.Millisecond)
+
 	// Verifying authorization decision.
-	if got := verifySkipReload(ctx, client, valid.wantStatusCode, valid.wantErr); got != nil {
-		t.Fatalf("error want:{%v %v} got:{%v %v}", valid.wantStatusCode, valid.wantErr, got.Code(), got.Message())
+	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
+	if got := status.Convert(err); got.Code() != valid.wantStatus.Code() || got.Message() != valid.wantStatus.Message() {
+		t.Fatalf("error want:{%v} got:{%v}", valid.wantStatus.Err(), got.Err())
 	}
 }
 
@@ -530,8 +516,8 @@ func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 
 	// Verifying authorization decision.
 	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
-	if got := status.Convert(err); got.Code() != valid1.wantStatusCode || got.Message() != valid1.wantErr {
-		t.Fatalf("[UnaryCall] error want:{%v %v} got:{%v %v}", valid1.wantStatusCode, valid1.wantErr, got.Code(), got.Message())
+	if got := status.Convert(err); got.Code() != valid1.wantStatus.Code() || got.Message() != valid1.wantStatus.Message() {
+		t.Fatalf("error want:{%v} got:{%v}", valid1.wantStatus.Err(), got.Err())
 	}
 
 	// Skips the invalid policy update, and continues to use the valid policy.
@@ -539,9 +525,13 @@ func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
 
+	// Wait 120 ms for background go routine to read updated files.
+	time.Sleep(120 * time.Millisecond)
+
 	// Verifying authorization decision.
-	if got := verifySkipReload(ctx, client, valid1.wantStatusCode, valid1.wantErr); got != nil {
-		t.Fatalf("error want:{%v %v} got:{%v %v}", valid1.wantStatusCode, valid1.wantErr, got.Code(), got.Message())
+	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
+	if got := status.Convert(err); got.Code() != valid1.wantStatus.Code() || got.Message() != valid1.wantStatus.Message() {
+		t.Fatalf("error want:{%v} got:{%v}", valid1.wantStatus.Err(), got.Err())
 	}
 
 	// Rewrite the file with a different valid authorization policy.
@@ -551,7 +541,7 @@ func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	}
 
 	// Verifying authorization decision.
-	if got := verifyValidReload(ctx, client, valid2.wantStatusCode, valid2.wantErr); got != nil {
-		t.Fatalf("error want:{%v %v} got:{%v %v}", valid2.wantStatusCode, valid2.wantErr, got.Code(), got.Message())
+	if got := retryUntil(ctx, client, valid2.wantStatus); got != nil {
+		t.Fatalf("error want:{%v} got:{%v}", valid2.wantStatus.Err(), got)
 	}
 }

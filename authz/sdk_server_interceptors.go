@@ -86,12 +86,11 @@ func (i *StaticInterceptor) StreamInterceptor(srv interface{}, ss grpc.ServerStr
 // FileWatcherInterceptor contains details used to make authorization decisions
 // by watching a file path that contains authorization policy in JSON format.
 type FileWatcherInterceptor struct {
-	internalInterceptor       unsafe.Pointer // *StaticInterceptor
-	policyFile                string
-	policyContents            []byte
-	latestValidPolicyContents []byte
-	refreshDuration           time.Duration
-	cancel                    context.CancelFunc
+	internalInterceptor unsafe.Pointer // *StaticInterceptor
+	policyFile          string
+	policyContents      []byte
+	refreshDuration     time.Duration
+	cancel              context.CancelFunc
 }
 
 // NewFileWatcher returns a new FileWatcherInterceptor from a policy file
@@ -149,7 +148,6 @@ func (i *FileWatcherInterceptor) updateInternalInterceptor() error {
 		return err
 	}
 	atomic.StorePointer(&i.internalInterceptor, unsafe.Pointer(interceptor))
-	i.latestValidPolicyContents = i.policyContents
 	logger.Infof("authorization policy reload status: successfully loaded new policy %v", policyContentsString)
 	return nil
 }
