@@ -123,7 +123,7 @@ func TestAffinity(t *testing.T) {
 		t.Fatalf("failed to start client: %v", err)
 	}
 	defer c.stop()
-	defer func() { t.Logf("----- client logs -----\n%v", clientLog.String()) }()
+	// defer func() { t.Logf("----- client logs -----\n%v", clientLog.String()) }()
 
 	var serverLog bytes.Buffer
 	servers, err := newServers(testName, &serverLog, backendCount)
@@ -135,7 +135,7 @@ func TestAffinity(t *testing.T) {
 			s.stop()
 		}
 	}()
-	defer func() { t.Logf("----- server logs -----\n%v", serverLog.String()) }()
+	// defer func() { t.Logf("----- server logs -----\n%v", serverLog.String()) }()
 
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: testName,

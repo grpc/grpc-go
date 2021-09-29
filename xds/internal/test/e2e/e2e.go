@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+// Package e2e implements xds e2e tests using go-control-plane.
 package e2e
 
 import (
