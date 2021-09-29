@@ -1067,8 +1067,14 @@ func stayConnected(cc *ClientConn) {
 	defer cancel()
 
 	for {
-		cc.Connect()
-		if state := cc.GetState(); state == connectivity.Shutdown || !cc.WaitForStateChange(ctx, state) {
+		state := cc.GetState()
+		switch state {
+		case connectivity.Idle:
+			cc.Connect()
+		case connectivity.Shutdown:
+			return
+		}
+		if !cc.WaitForStateChange(ctx, state) {
 			return
 		}
 	}
