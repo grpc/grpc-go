@@ -895,7 +895,7 @@ func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
 	// ac.state is Ready, try to find the connected address.
 	var curAddrFound bool
 	for _, a := range addrs {
-		a.ServerName = ac.getServerName(a)
+		a.ServerName = ac.cc.getServerName(a)
 		if reflect.DeepEqual(ac.curAddr, a) {
 			curAddrFound = true
 			break
@@ -919,13 +919,14 @@ func (ac *addrConn) tryUpdateAddrs(addrs []resolver.Address) bool {
 // overrides specified by the name resolver can represent a security risk, while
 // an override specified by the user is more dependable since they probably know
 // what they are doing.
-func (ac *addrConn) getServerName(addr resolver.Address) string {
-	if ac.cc.dopts.authority == "" {
-		if addr.ServerName != "" {
-			return addr.ServerName
-		}
+func (cc *ClientConn) getServerName(addr resolver.Address) string {
+	if cc.dopts.authority != "" {
+		return cc.dopts.authority
 	}
-	return ac.cc.authority
+	if addr.ServerName != "" {
+		return addr.ServerName
+	}
+	return cc.authority
 }
 
 func getMethodConfig(sc *ServiceConfig, method string) MethodConfig {
@@ -1284,7 +1285,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	prefaceReceived := grpcsync.NewEvent()
 	connClosed := grpcsync.NewEvent()
 
-	addr.ServerName = ac.getServerName(addr)
+	addr.ServerName = ac.cc.getServerName(addr)
 	hctx, hcancel := context.WithCancel(ac.ctx)
 	hcStarted := false // protected by ac.mu
 
