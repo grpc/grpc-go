@@ -69,17 +69,17 @@ func NewComputeEngineCredentials() credentials.Bundle {
 
 type PerRPCCredsOpts struct {
 	// The per RPC credentials passed to a bundle
-	PerRPC credentials.PerRPCCredentials
+	PerRPCCreds credentials.PerRPCCredentials
 }
 
-// NewComputeEngineCredsWithPerRPC returns a credentials bundle that is configured to work
+// NewComputeEngineCredsWithOptions returns a credentials bundle that is configured to work
 // with google services. This API must only be used when running on GCE.
 //
 // This API is experimental.
 func NewComputeEngineCredsWithOptions(perRPCOpts PerRPCCredsOpts) credentials.Bundle {
 	perRPC := oauth.NewComputeEngine()
-	if perRPCOpts.PerRPC != nil {
-		perRPC = perRPCOpts.PerRPC
+	if perRPCOpts.PerRPCCreds != nil {
+		perRPC = perRPCOpts.PerRPCCreds
 	}
 	c := &creds{
 		newPerRPCCreds: func() credentials.PerRPCCredentials {
