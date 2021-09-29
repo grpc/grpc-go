@@ -257,7 +257,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	// endpoint from the user's dial target (with a leading "/" stripped), as
 	// the default value. We do have some special handling for targets with unix
 	// scheme and empty hostname (":port").
-	// TODO: Define an optional interface on the name resolver to return the
+	// TODO: Define an optional interface on the resolver builder to return the
 	// authority given the user's dial target.
 	cc.authority = strings.TrimPrefix(cc.parsedTarget.Endpoint, "/")
 	if strings.HasPrefix(cc.authority, ":") {
