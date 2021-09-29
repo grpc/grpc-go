@@ -1645,11 +1645,10 @@ func (cc *ClientConn) parseTargetAndFindResolver() (resolver.Builder, error) {
 
 	// We are here because the user's dial target did not contain a scheme or
 	// specified an unregistered scheme. We should fallback to the default
-	// scheme, except when no scheme was specified in the user's dial target and
-	// a custom dialer was specified. In the latter case, we should always use
-	// passthrough scheme.
+	// scheme, except when a custom dialer is specified in which case, we should
+	// always use passthrough scheme.
 	defScheme := resolver.GetDefaultScheme()
-	if parsedTarget.Scheme == "" && cc.dopts.copts.Dialer != nil {
+	if cc.dopts.copts.Dialer != nil {
 		defScheme = "passthrough"
 	}
 	channelz.Infof(logger, cc.channelzID, "fallback to scheme %q", defScheme)
