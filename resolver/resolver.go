@@ -204,25 +204,31 @@ type ClientConn interface {
 
 // Target represents a target for gRPC, as specified in:
 // https://github.com/grpc/grpc/blob/master/doc/naming.md.
-// It is parsed from the target string that gets passed into Dial or DialContext by the user. And
-// grpc passes it to the resolver and the balancer.
+// It is parsed from the target string that gets passed into Dial or DialContext
+// by the user. And gRPC passes it to the resolver and the balancer.
 //
-// If the target follows the naming spec, and the parsed scheme is registered with grpc, we will
-// parse the target string according to the spec. e.g. "dns://some_authority/foo.bar" will be parsed
-// into &Target{Scheme: "dns", Authority: "some_authority", Endpoint: "foo.bar"}
+// If the target follows the naming spec, and the parsed scheme is registered
+// with gRPC, we will parse the target string according to the spec. If the
+// target does not contain a scheme or if the parsed scheme is not registered
+// (i.e. no corresponding resolver available to resolve the endpoint), we will
+// apply the default scheme, and will attempt to reparse it.
 //
-// If the target does not contain a scheme, we will apply the default scheme, and set the Target to
-// be the full target string. e.g. "foo.bar" will be parsed into
-// &Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "foo.bar"}.
+// Examples:
 //
-// If the parsed scheme is not registered (i.e. no corresponding resolver available to resolve the
-// endpoint), we set the Scheme to be the default scheme, and set the Endpoint to be the full target
-// string. e.g. target string "unknown_scheme://authority/endpoint" will be parsed into
-// &Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "unknown_scheme://authority/endpoint"}.
+// - "dns://some_authority/foo.bar"
+//   Target{Scheme: "dns", Authority: "some_authority", Endpoint: "/foo.bar"}
+// - "foo.bar"
+//   Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "/foo.bar"}
+// - "unknown_scheme://authority/endpoint"
+//   Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "/unknown_scheme://authority/endpoint"}
+//
+// Unparsed will be set to the user's original dial target. Any query params
+// specified in the dial target can be accessed though this field.
 type Target struct {
 	Scheme    string
 	Authority string
 	Endpoint  string
+	Unparsed  string
 }
 
 // Builder creates a resolver that will be used to watch name resolution updates.

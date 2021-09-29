@@ -1629,6 +1629,7 @@ func (cc *ClientConn) connectionError() error {
 
 func (cc *ClientConn) parseTargetAndFindResolver() (resolver.Builder, error) {
 	channelz.Infof(logger, cc.channelzID, "original dial target is: %q", cc.target)
+	defer func() { cc.parsedTarget.Unparsed = cc.target }()
 	parsedTarget, err := parseTarget(cc.target)
 	if err != nil {
 		channelz.Infof(logger, cc.channelzID, "dial target %q parse failed: %v", cc.target, err)
