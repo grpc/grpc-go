@@ -78,7 +78,7 @@ func TestClientHandshakeBasedOnClusterName(t *testing.T) {
 	for bundleTyp, tc := range map[string]credentials.Bundle{
 		"defaultCreds":       NewDefaultCredentials(),
 		"computeCreds":       NewComputeEngineCredentials(),
-		"computeCredsPerRPC": NewComputeEngineCredsWithOptions(PerRPCCredsOpts{}),
+		"computeCredsPerRPC": NewComputeEngineCredsWithOptions(ComputeEngineCredsOptions{}),
 	} {
 		tests := []struct {
 			name    string
