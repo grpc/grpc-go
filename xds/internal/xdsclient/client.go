@@ -742,31 +742,55 @@ func (c *clientImpl) Close() {
 	c.logger.Infof("Shutdown")
 }
 
+func (c *clientImpl) filterChainUpdateValidator(fc *FilterChain) error {
+	if fc == nil {
+		return nil
+	}
+	return c.securityConfigUpdateValidator(fc.SecurityCfg)
+}
+
+func (c *clientImpl) securityConfigUpdateValidator(sc *SecurityConfig) error {
+	if sc == nil {
+		return nil
+	}
+	if sc.IdentityInstanceName != "" {
+		if _, ok := c.config.CertProviderConfigs[sc.IdentityInstanceName]; !ok {
+			return fmt.Errorf("identitiy certificate provider instance name %q missing in bootstrap configuration", sc.IdentityInstanceName)
+		}
+	}
+	if sc.RootInstanceName != "" {
+		if _, ok := c.config.CertProviderConfigs[sc.RootInstanceName]; !ok {
+			return fmt.Errorf("root certificate provider instance name %q missing in bootstrap configuration", sc.RootInstanceName)
+		}
+	}
+	return nil
+}
+
 func (c *clientImpl) updateValidator(u interface{}) error {
 	switch update := u.(type) {
-	case *SecurityConfig:
-		if update.IdentityInstanceName != "" {
-			found := false
-			for name := range c.config.CertProviderConfigs {
-				if name == update.IdentityInstanceName {
-					found = true
+	case ListenerUpdate:
+		if update.InboundListenerCfg == nil || update.InboundListenerCfg.FilterChains == nil {
+			return nil
+		}
+
+		fcm := update.InboundListenerCfg.FilterChains
+		for _, dst := range fcm.dstPrefixMap {
+			for _, srcType := range dst.srcTypeArr {
+				if srcType == nil {
+					continue
+				}
+				for _, src := range srcType.srcPrefixMap {
+					for _, fc := range src.srcPortMap {
+						if err := c.filterChainUpdateValidator(fc); err != nil {
+							return err
+						}
+					}
 				}
 			}
-			if !found {
-				return fmt.Errorf("identitiy certificate provider instance name %q missing in bootstrap configuration", update.IdentityInstanceName)
-			}
 		}
-		if update.RootInstanceName != "" {
-			found := false
-			for name := range c.config.CertProviderConfigs {
-				if name == update.RootInstanceName {
-					found = true
-				}
-			}
-			if !found {
-				return fmt.Errorf("root certificate provider instance name %q missing in bootstrap configuration", update.RootInstanceName)
-			}
-		}
+		return c.filterChainUpdateValidator(fcm.def)
+	case ClusterUpdate:
+		return c.securityConfigUpdateValidator(update.SecurityCfg)
 	}
 	return nil
 }

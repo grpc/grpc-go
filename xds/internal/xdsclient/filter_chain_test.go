@@ -188,7 +188,7 @@ func TestNewFilterChainImpl_Failure_BadMatchFields(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			if fci, err := NewFilterChainManager(test.lis, nil); err == nil {
+			if fci, err := NewFilterChainManager(test.lis); err == nil {
 				t.Fatalf("NewFilterChainManager() returned %v when expected to fail", fci)
 			}
 		})
@@ -287,7 +287,7 @@ func TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
 	const wantErr = "multiple filter chains with overlapping matching rules are defined"
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			if _, err := NewFilterChainManager(test.lis, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
+			if _, err := NewFilterChainManager(test.lis); err == nil || !strings.Contains(err.Error(), wantErr) {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, wantErr)
 			}
 		})
@@ -509,7 +509,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			_, err := NewFilterChainManager(test.lis, nil)
+			_, err := NewFilterChainManager(test.lis)
 			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, test.wantErr)
 			}
@@ -746,7 +746,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotFC, err := NewFilterChainManager(test.lis, nil)
+			gotFC, err := NewFilterChainManager(test.lis)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
@@ -853,7 +853,7 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := NewFilterChainManager(test.lis, nil)
+			_, err := NewFilterChainManager(test.lis)
 			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, test.wantErr)
 			}
@@ -927,7 +927,7 @@ func TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := NewFilterChainManager(test.lis, nil)
+			_, err := NewFilterChainManager(test.lis)
 			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, test.wantErr)
 			}
@@ -1247,7 +1247,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotFC, err := NewFilterChainManager(test.lis, nil)
+			gotFC, err := NewFilterChainManager(test.lis)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
@@ -1476,7 +1476,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			gotFC, err := NewFilterChainManager(test.lis, nil)
+			gotFC, err := NewFilterChainManager(test.lis)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
@@ -1649,7 +1649,7 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			gotFC, err := NewFilterChainManager(test.lis, nil)
+			gotFC, err := NewFilterChainManager(test.lis)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
@@ -2150,7 +2150,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			gotFC, err := NewFilterChainManager(test.lis, nil)
+			gotFC, err := NewFilterChainManager(test.lis)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
@@ -2301,7 +2301,7 @@ func TestLookup_Failures(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			fci, err := NewFilterChainManager(test.lis, nil)
+			fci, err := NewFilterChainManager(test.lis)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() failed: %v", err)
 			}
@@ -2535,7 +2535,7 @@ func TestLookup_Successes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			fci, err := NewFilterChainManager(test.lis, nil)
+			fci, err := NewFilterChainManager(test.lis)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() failed: %v", err)
 			}

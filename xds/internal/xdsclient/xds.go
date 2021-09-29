@@ -89,12 +89,12 @@ func unmarshalListenerResource(r *anypb.Any, f UpdateValidatorFunc, logger *grpc
 	}
 	logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, pretty.ToJSON(lis))
 
-	lu, err := processListener(lis, f, logger, v2)
+	lu, err := processListener(lis, logger, v2)
 	if err != nil {
 		return lis.GetName(), ListenerUpdate{}, err
 	}
 	if f != nil {
-		if err := f(lu); err != nil {
+		if err := f(*lu); err != nil {
 			return lis.GetName(), ListenerUpdate{}, err
 		}
 	}
@@ -102,11 +102,11 @@ func unmarshalListenerResource(r *anypb.Any, f UpdateValidatorFunc, logger *grpc
 	return lis.GetName(), *lu, nil
 }
 
-func processListener(lis *v3listenerpb.Listener, f UpdateValidatorFunc, logger *grpclog.PrefixLogger, v2 bool) (*ListenerUpdate, error) {
+func processListener(lis *v3listenerpb.Listener, logger *grpclog.PrefixLogger, v2 bool) (*ListenerUpdate, error) {
 	if lis.GetApiListener() != nil {
 		return processClientSideListener(lis, logger, v2)
 	}
-	return processServerSideListener(lis, f)
+	return processServerSideListener(lis)
 }
 
 // processClientSideListener checks if the provided Listener proto meets
@@ -280,7 +280,7 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 	return ret, nil
 }
 
-func processServerSideListener(lis *v3listenerpb.Listener, f UpdateValidatorFunc) (*ListenerUpdate, error) {
+func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
 	if n := len(lis.ListenerFilters); n != 0 {
 		return nil, fmt.Errorf("unsupported field 'listener_filters' contains %d entries", n)
 	}
@@ -302,7 +302,7 @@ func processServerSideListener(lis *v3listenerpb.Listener, f UpdateValidatorFunc
 		},
 	}
 
-	fcMgr, err := NewFilterChainManager(lis, f)
+	fcMgr, err := NewFilterChainManager(lis)
 	if err != nil {
 		return nil, err
 	}
@@ -665,11 +665,16 @@ func unmarshalClusterResource(r *anypb.Any, f UpdateValidatorFunc, logger *grpcl
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 	logger.Infof("Resource with name: %v, type: %T, contains: %v", cluster.GetName(), cluster, pretty.ToJSON(cluster))
-	cu, err := validateClusterAndConstructClusterUpdate(cluster, f)
+	cu, err := validateClusterAndConstructClusterUpdate(cluster)
 	if err != nil {
 		return cluster.GetName(), ClusterUpdate{}, err
 	}
 	cu.Raw = r
+	if f != nil {
+		if err := f(cu); err != nil {
+			return "", ClusterUpdate{}, err
+		}
+	}
 
 	return cluster.GetName(), cu, nil
 }
@@ -680,7 +685,7 @@ const (
 	ringHashSizeUpperBound = 8 * 1024 * 1024 // 8M
 )
 
-func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, f UpdateValidatorFunc) (ClusterUpdate, error) {
+func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
 	var lbPolicy *ClusterLBPolicyRingHash
 	switch cluster.GetLbPolicy() {
 	case v3clusterpb.Cluster_ROUND_ROBIN:
@@ -721,7 +726,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster, f Up
 	var sc *SecurityConfig
 	if env.ClientSideSecuritySupport {
 		var err error
-		if sc, err = securityConfigFromCluster(cluster, f); err != nil {
+		if sc, err = securityConfigFromCluster(cluster); err != nil {
 			return ClusterUpdate{}, err
 		}
 	}
@@ -811,7 +816,7 @@ func dnsHostNameFromCluster(cluster *v3clusterpb.Cluster) (string, error) {
 
 // securityConfigFromCluster extracts the relevant security configuration from
 // the received Cluster resource.
-func securityConfigFromCluster(cluster *v3clusterpb.Cluster, f UpdateValidatorFunc) (*SecurityConfig, error) {
+func securityConfigFromCluster(cluster *v3clusterpb.Cluster) (*SecurityConfig, error) {
 	if tsm := cluster.GetTransportSocketMatches(); len(tsm) != 0 {
 		return nil, fmt.Errorf("unsupport transport_socket_matches field is non-empty: %+v", tsm)
 	}
@@ -841,12 +846,12 @@ func securityConfigFromCluster(cluster *v3clusterpb.Cluster, f UpdateValidatorFu
 		return nil, errors.New("UpstreamTlsContext in CDS response does not contain a CommonTlsContext")
 	}
 
-	return securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext(), false, f)
+	return securityConfigFromCommonTLSContext(upstreamCtx.GetCommonTlsContext(), false)
 }
 
 // common is expected to be not nil.
 // The `alpn_protocols` field is ignored.
-func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext, server bool, f UpdateValidatorFunc) (*SecurityConfig, error) {
+func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext, server bool) (*SecurityConfig, error) {
 	if common.GetTlsParams() != nil {
 		return nil, fmt.Errorf("unsupported tls_params field in CommonTlsContext message: %+v", common)
 	}
@@ -876,11 +881,6 @@ func securityConfigFromCommonTLSContext(common *v3tlspb.CommonTlsContext, server
 			if sc.RootInstanceName == "" {
 				return nil, errors.New("security configuration on the client-side does not contain root certificate provider instance name")
 			}
-		}
-	}
-	if f != nil {
-		if err := f(sc); err != nil {
-			return nil, err
 		}
 	}
 	return sc, nil

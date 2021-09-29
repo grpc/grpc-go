@@ -442,7 +442,7 @@ func (s) TestServeSuccess(t *testing.T) {
 
 	// Push a good LDS response, and wait for Serve() to be invoked on the
 	// underlying grpc.Server.
-	fcm, err := xdsclient.NewFilterChainManager(listenerWithFilterChains, nil)
+	fcm, err := xdsclient.NewFilterChainManager(listenerWithFilterChains)
 	if err != nil {
 		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
 	}
@@ -780,7 +780,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 				},
 			},
 		},
-	}, nil)
+	})
 	if err != nil {
 		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
 	}

@@ -202,7 +202,7 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 	defer func() { env.RingHashSupport = oldRingHashSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil); err == nil {
+			if update, err := validateClusterAndConstructClusterUpdate(test.cluster); err == nil {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) = %v, wanted error", test.cluster, update)
 			}
 		})
@@ -422,7 +422,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 	defer func() { env.RingHashSupport = oldRingHashSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
+			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
 			if err != nil {
 				t.Errorf("validateClusterAndConstructClusterUpdate(%+v) failed: %v", test.cluster, err)
 			}
@@ -472,7 +472,7 @@ func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 		EDSServiceName: serviceName,
 		EnableLRS:      false,
 	}
-	gotUpdate, err := validateClusterAndConstructClusterUpdate(cluster, nil)
+	gotUpdate, err := validateClusterAndConstructClusterUpdate(cluster)
 	if err != nil {
 		t.Errorf("validateClusterAndConstructClusterUpdate() failed: %v", err)
 	}
@@ -1365,7 +1365,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, err := validateClusterAndConstructClusterUpdate(test.cluster, nil)
+			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
 			if (err != nil) != test.wantErr {
 				t.Errorf("validateClusterAndConstructClusterUpdate() returned err %v wantErr %v)", err, test.wantErr)
 			}
