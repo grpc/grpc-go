@@ -379,6 +379,30 @@ func (s) TestSDKFileWatcherEnd2End(t *testing.T) {
 	}
 }
 
+func verifyValidRefresh(ctx context.Context, tsc pb.TestServiceClient, wantCode codes.Code, wantErr string) (lastStatus *status.Status) {
+	for numRetries := 0; numRetries <= 20; numRetries++ {
+		_, err := tsc.UnaryCall(ctx, &pb.SimpleRequest{})
+		if lastStatus = status.Convert(err); lastStatus.Code() == wantCode && lastStatus.Message() == wantErr {
+			return nil
+		}
+		time.Sleep(20 * time.Millisecond)
+		numRetries++
+	}
+	return lastStatus
+}
+
+func verifySkipReload(ctx context.Context, tsc pb.TestServiceClient, wantCode codes.Code, wantErr string) (lastStatus *status.Status) {
+	for numRetries := 0; numRetries <= 20; numRetries++ {
+		_, err := tsc.UnaryCall(ctx, &pb.SimpleRequest{})
+		if lastStatus := status.Convert(err); lastStatus.Code() != wantCode || lastStatus.Message() != wantErr {
+			return lastStatus
+		}
+		time.Sleep(20 * time.Millisecond)
+		numRetries++
+	}
+	return nil
+}
+
 func (s) TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	valid1 := sdkTests["DeniesRpcMatchInDenyAndAllow"]
 	file := createTmpPolicyFile(t, "valid_policy_refresh", []byte(valid1.authzPolicy))
@@ -422,20 +446,8 @@ func (s) TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	}
 
 	// Verifying authorization decision.
-	numRetries := 0
-	reloadSuccess := false
-	var gotStatus *status.Status
-	for numRetries <= 20 {
-		_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
-		if gotStatus = status.Convert(err); gotStatus.Code() == valid2.wantStatusCode && gotStatus.Message() == valid2.wantErr {
-			reloadSuccess = true
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-		numRetries++
-	}
-	if reloadSuccess == false {
-		t.Fatalf("error want:{%v %v} got:{%v %v}", valid2.wantStatusCode, valid2.wantErr, gotStatus.Code(), gotStatus.Message())
+	if got := verifyValidRefresh(ctx, client, valid2.wantStatusCode, valid2.wantErr); got != nil {
+		t.Fatalf("error want:{%v %v} got:{%v %v}", valid2.wantStatusCode, valid2.wantErr, got.Code(), got.Message())
 	}
 }
 
@@ -481,14 +493,8 @@ func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	}
 
 	// Verifying authorization decision.
-	numRetries := 0
-	for numRetries <= 20 {
-		_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
-		if got := status.Convert(err); got.Code() != valid.wantStatusCode || got.Message() != valid.wantErr {
-			t.Fatalf("error want:{%v %v} got:{%v %v}", valid.wantStatusCode, valid.wantErr, got.Code(), got.Message())
-		}
-		time.Sleep(100 * time.Millisecond)
-		numRetries++
+	if got := verifySkipReload(ctx, client, valid.wantStatusCode, valid.wantErr); got != nil {
+		t.Fatalf("error want:{%v %v} got:{%v %v}", valid.wantStatusCode, valid.wantErr, got.Code(), got.Message())
 	}
 }
 
@@ -534,14 +540,8 @@ func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	}
 
 	// Verifying authorization decision.
-	numRetries := 0
-	for numRetries <= 20 {
-		_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
-		if got := status.Convert(err); got.Code() != valid1.wantStatusCode || got.Message() != valid1.wantErr {
-			t.Fatalf("error want:{%v %v} got:{%v %v}", valid1.wantStatusCode, valid1.wantErr, got.Code(), got.Message())
-		}
-		time.Sleep(100 * time.Millisecond)
-		numRetries++
+	if got := verifySkipReload(ctx, client, valid1.wantStatusCode, valid1.wantErr); got != nil {
+		t.Fatalf("error want:{%v %v} got:{%v %v}", valid1.wantStatusCode, valid1.wantErr, got.Code(), got.Message())
 	}
 
 	// Rewrite the file with a different valid authorization policy.
@@ -551,19 +551,7 @@ func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	}
 
 	// Verifying authorization decision.
-	numRetries = 0
-	reloadSuccess := false
-	var gotStatus *status.Status
-	for numRetries <= 20 {
-		_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
-		if gotStatus = status.Convert(err); gotStatus.Code() == valid2.wantStatusCode && gotStatus.Message() == valid2.wantErr {
-			reloadSuccess = true
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-		numRetries++
-	}
-	if reloadSuccess == false {
-		t.Fatalf("error want:{%v %v} got:{%v %v}", valid2.wantStatusCode, valid2.wantErr, gotStatus.Code(), gotStatus.Message())
+	if got := verifyValidRefresh(ctx, client, valid2.wantStatusCode, valid2.wantErr); got != nil {
+		t.Fatalf("error want:{%v %v} got:{%v %v}", valid2.wantStatusCode, valid2.wantErr, got.Code(), got.Message())
 	}
 }
