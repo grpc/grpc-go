@@ -50,35 +50,55 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestPingPong(t *testing.T) {
-	const testName = "pingpong"
+type testOpts struct {
+	testName     string
+	backendCount int
+	clientFlags  []string
+}
 
-	cp, err := newControlPlane(testName)
+func setup(t *testing.T, opts testOpts) (*controlPlane, *client, []*server, func()) {
+	t.Helper()
+	backendCount := 1
+	if opts.backendCount != 0 {
+		backendCount = opts.backendCount
+	}
+
+	cp, err := newControlPlane(opts.testName)
 	if err != nil {
 		t.Fatalf("failed to start control-plane: %v", err)
 	}
-	defer cp.stop()
 
 	var clientLog bytes.Buffer
-	c, err := newClient(testName, *clientPath, cp.bootstrapContentStr, &clientLog)
+	c, err := newClient(opts.testName, *clientPath, cp.bootstrapContentStr, &clientLog, opts.clientFlags...)
 	if err != nil {
+		cp.stop()
 		t.Fatalf("failed to start client: %v", err)
 	}
-	defer c.stop()
-	// TODO: find a better way to print the log. Here and other places.
-	// defer func() { t.Logf("----- client logs -----\n%v", clientLog.String()) }()
 
 	var serverLog bytes.Buffer
-	servers, err := newServers(testName, *serverPath, cp.bootstrapContentStr, &serverLog, 1)
+	servers, err := newServers(opts.testName, *serverPath, cp.bootstrapContentStr, &serverLog, backendCount)
 	if err != nil {
+		cp.stop()
+		c.stop()
 		t.Fatalf("failed to start server: %v", err)
 	}
-	defer func() {
+
+	return cp, c, servers, func() {
 		for _, s := range servers {
 			s.stop()
 		}
-	}()
-	// defer func() { t.Logf("----- server logs -----\n%v", serverLog.String()) }()
+		c.stop()
+		cp.stop()
+		// TODO: find a better way to print the log. Here and other places.
+		// t.Logf("----- client logs -----\n%v", clientLog.String())
+		// t.Logf("----- server logs -----\n%v", serverLog.String())
+	}
+}
+
+func TestPingPong(t *testing.T) {
+	const testName = "pingpong"
+	cp, c, _, cleanup := setup(t, testOpts{testName: testName})
+	defer cleanup()
 
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: testName,
@@ -118,32 +138,12 @@ func TestAffinity(t *testing.T) {
 		testMDKey    = "xds_md"
 		testMDValue  = "unary_yranu"
 	)
-
-	cp, err := newControlPlane(testName)
-	if err != nil {
-		t.Fatalf("failed to start control-plane: %v", err)
-	}
-	defer cp.stop()
-
-	var clientLog bytes.Buffer
-	c, err := newClient(testName, *clientPath, cp.bootstrapContentStr, &clientLog, "--rpc=EmptyCall", fmt.Sprintf("--metadata=EmptyCall:%s:%s", testMDKey, testMDValue))
-	if err != nil {
-		t.Fatalf("failed to start client: %v", err)
-	}
-	defer c.stop()
-	// defer func() { t.Logf("----- client logs -----\n%v", clientLog.String()) }()
-
-	var serverLog bytes.Buffer
-	servers, err := newServers(testName, *serverPath, cp.bootstrapContentStr, &serverLog, backendCount)
-	if err != nil {
-		t.Fatalf("failed to start server: %v", err)
-	}
-	defer func() {
-		for _, s := range servers {
-			s.stop()
-		}
-	}()
-	// defer func() { t.Logf("----- server logs -----\n%v", serverLog.String()) }()
+	cp, c, servers, cleanup := setup(t, testOpts{
+		testName:     testName,
+		backendCount: backendCount,
+		clientFlags:  []string{"--rpc=EmptyCall", fmt.Sprintf("--metadata=EmptyCall:%s:%s", testMDKey, testMDValue)},
+	})
+	defer cleanup()
 
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: testName,
