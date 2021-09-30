@@ -380,7 +380,7 @@ func (s) TestEnd2End(t *testing.T) {
 			}
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {
-				t.Fatalf("clientTLSCreds failed to create")
+				t.Fatalf("clientTLSCreds failed to create: %v", err)
 			}
 			// ------------------------Scenario 1------------------------------------
 			// stage = 0, initial connection should succeed
@@ -796,7 +796,7 @@ func (s) TestDefaultHostNameCheck(t *testing.T) {
 			}
 			clientTLSCreds, err := NewClientCreds(clientOptions)
 			if err != nil {
-				t.Fatalf("clientTLSCreds failed to create")
+				t.Fatalf("clientTLSCreds failed to create: %v", err)
 			}
 			shouldFail := false
 			if test.expectError {

@@ -564,6 +564,8 @@ func routesProtoToSlice(routes []*v3routepb.Route, logger *grpclog.PrefixLogger,
 				}
 			case *v3routepb.RouteAction_ClusterHeader:
 				continue
+			default:
+				return nil, fmt.Errorf("route %+v, has an unknown ClusterSpecifier: %+v", r, a)
 			}
 
 			msd := action.GetMaxStreamDuration()

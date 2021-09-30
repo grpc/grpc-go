@@ -1411,26 +1411,6 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	}
 
 	isHeader := false
-	defer func() {
-		if t.statsHandler != nil {
-			if isHeader {
-				inHeader := &stats.InHeader{
-					Client:      true,
-					WireLength:  int(frame.Header().Length),
-					Header:      s.header.Copy(),
-					Compression: s.recvCompress,
-				}
-				t.statsHandler.HandleRPC(s.ctx, inHeader)
-			} else {
-				inTrailer := &stats.InTrailer{
-					Client:     true,
-					WireLength: int(frame.Header().Length),
-					Trailer:    s.trailer.Copy(),
-				}
-				t.statsHandler.HandleRPC(s.ctx, inTrailer)
-			}
-		}
-	}()
 
 	// If headerChan hasn't been closed yet
 	if atomic.CompareAndSwapUint32(&s.headerChanClosed, 0, 1) {
@@ -1450,6 +1430,25 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 			s.noHeaders = true
 		}
 		close(s.headerChan)
+	}
+
+	if t.statsHandler != nil {
+		if isHeader {
+			inHeader := &stats.InHeader{
+				Client:      true,
+				WireLength:  int(frame.Header().Length),
+				Header:      metadata.MD(mdata).Copy(),
+				Compression: s.recvCompress,
+			}
+			t.statsHandler.HandleRPC(s.ctx, inHeader)
+		} else {
+			inTrailer := &stats.InTrailer{
+				Client:     true,
+				WireLength: int(frame.Header().Length),
+				Trailer:    metadata.MD(mdata).Copy(),
+			}
+			t.statsHandler.HandleRPC(s.ctx, inTrailer)
+		}
 	}
 
 	if !endStream {

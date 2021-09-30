@@ -390,6 +390,13 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			if timeout, err = decodeTimeout(hf.Value); err != nil {
 				headerError = true
 			}
+		// "Transports must consider requests containing the Connection header
+		// as malformed." - A41
+		case "connection":
+			if logger.V(logLevel) {
+				logger.Errorf("transport: http2Server.operateHeaders parsed a :connection header which makes a request malformed as per the HTTP/2 spec")
+			}
+			headerError = true
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
 				break
@@ -404,6 +411,25 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		}
 	}
 
+	// "If multiple Host headers or multiple :authority headers are present, the
+	// request must be rejected with an HTTP status code 400 as required by Host
+	// validation in RFC 7230 §5.4, gRPC status code INTERNAL, or RST_STREAM
+	// with HTTP/2 error code PROTOCOL_ERROR." - A41. Since this is a HTTP/2
+	// error, this takes precedence over a client not speaking gRPC.
+	if len(mdata[":authority"]) > 1 || len(mdata["host"]) > 1 {
+		errMsg := fmt.Sprintf("num values of :authority: %v, num values of host: %v, both must only have 1 value as per HTTP/2 spec", len(mdata[":authority"]), len(mdata["host"]))
+		if logger.V(logLevel) {
+			logger.Errorf("transport: %v", errMsg)
+		}
+		t.controlBuf.put(&earlyAbortStream{
+			httpStatus:     400,
+			streamID:       streamID,
+			contentSubtype: s.contentSubtype,
+			status:         status.New(codes.Internal, errMsg),
+		})
+		return false
+	}
+
 	if !isGRPC || headerError {
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
@@ -412,6 +438,19 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			onWrite:  func() {},
 		})
 		return false
+	}
+
+	// "If :authority is missing, Host must be renamed to :authority." - A41
+	if len(mdata[":authority"]) == 0 {
+		// No-op if host isn't present, no eventual :authority header is a valid
+		// RPC.
+		if host, ok := mdata["host"]; ok {
+			mdata[":authority"] = host
+			delete(mdata, "host")
+		}
+	} else {
+		// "If :authority is present, Host must be discarded" - A41
+		delete(mdata, "host")
 	}
 
 	if frame.StreamEnded() {
@@ -494,6 +533,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				stat = status.New(codes.PermissionDenied, err.Error())
 			}
 			t.controlBuf.put(&earlyAbortStream{
+				httpStatus:     200,
 				streamID:       s.id,
 				contentSubtype: s.contentSubtype,
 				status:         stat,

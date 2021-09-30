@@ -148,6 +148,11 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 	if !ok {
 		return nil, errors.New("missing metadata in incoming context")
 	}
+	// ":method can be hard-coded to POST if unavailable" - A41
+	md[":method"] = []string{"POST"}
+	// "If the transport exposes TE in Metadata, then RBAC must special-case the
+	// header to treat it as not present." - A41
+	delete(md, "TE")
 
 	pi, ok := peer.FromContext(ctx)
 	if !ok {
@@ -190,7 +195,7 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 		peerInfo:        pi,
 		fullMethod:      mn,
 		destinationPort: uint32(dp),
-		destinationAddr: conn.LocalAddr(),
+		localAddr:       conn.LocalAddr(),
 		certs:           peerCertificates,
 	}, nil
 }
@@ -207,8 +212,8 @@ type rpcData struct {
 	// destinationPort is the port that the RPC is being sent to on the
 	// server.
 	destinationPort uint32
-	// destinationAddr is the address that the RPC is being sent to.
-	destinationAddr net.Addr
+	// localAddr is the address that the RPC is being sent to.
+	localAddr net.Addr
 	// certs are the certificates presented by the peer during a TLS
 	// handshake.
 	certs []*x509.Certificate

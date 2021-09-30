@@ -106,7 +106,9 @@ func matchersFromPermissions(permissions []*v3rbacpb.Permission) ([]matcher, err
 			}
 			matchers = append(matchers, m)
 		case *v3rbacpb.Permission_DestinationIp:
-			m, err := newDestinationIPMatcher(permission.GetDestinationIp())
+			// Due to this being on server side, the destination IP is the local
+			// IP.
+			m, err := newLocalIPMatcher(permission.GetDestinationIp())
 			if err != nil {
 				return nil, err
 			}
@@ -155,7 +157,7 @@ func matchersFromPrincipals(principals []*v3rbacpb.Principal) ([]matcher, error)
 			}
 			matchers = append(matchers, authenticatedMatcher)
 		case *v3rbacpb.Principal_DirectRemoteIp:
-			m, err := newSourceIPMatcher(principal.GetDirectRemoteIp())
+			m, err := newRemoteIPMatcher(principal.GetDirectRemoteIp())
 			if err != nil {
 				return nil, err
 			}
@@ -183,9 +185,14 @@ func matchersFromPrincipals(principals []*v3rbacpb.Principal) ([]matcher, error)
 			// The source ip principal identifier is deprecated. Thus, a
 			// principal typed as a source ip in the identifier will be a no-op.
 			// The config should use DirectRemoteIp instead.
-		case *v3rbacpb.Principal_RemoteIp: // Allow equating RBAC's direct_remote_ip...do we need this?
-			// Not supported in gRPC RBAC currently - a principal typed as
-			// Remote Ip in the initial config will be a no-op.
+		case *v3rbacpb.Principal_RemoteIp:
+			// RBAC in gRPC treats direct_remote_ip and remote_ip as logically
+			// equivalent, as per A41.
+			m, err := newRemoteIPMatcher(principal.GetRemoteIp())
+			if err != nil {
+				return nil, err
+			}
+			matchers = append(matchers, m)
 		case *v3rbacpb.Principal_Metadata:
 			// Not supported in gRPC RBAC currently - a principal typed as
 			// Metadata in the initial config will be a no-op.
@@ -307,18 +314,19 @@ func (upm *urlPathMatcher) match(data *rpcData) bool {
 	return upm.stringMatcher.Match(data.fullMethod)
 }
 
-// sourceIPMatcher and destinationIPMatcher both are matchers that match against
-// a CIDR Range. Two different matchers are needed as the source and ip address
-// come from different parts of the data about incoming RPC's passed in.
-// Matching a CIDR Range means to determine whether the IP Address falls within
-// the CIDR Range or not. They both implement the matcher interface.
-type sourceIPMatcher struct {
+// remoteIPMatcher and localIPMatcher both are matchers that match against
+// a CIDR Range. Two different matchers are needed as the remote and destination
+// ip addresses come from different parts of the data about incoming RPC's
+// passed in. Matching a CIDR Range means to determine whether the IP Address
+// falls within the CIDR Range or not. They both implement the matcher
+// interface.
+type remoteIPMatcher struct {
 	// ipNet represents the CidrRange that this matcher was configured with.
-	// This is what will source and destination IP's will be matched against.
+	// This is what will remote and destination IP's will be matched against.
 	ipNet *net.IPNet
 }
 
-func newSourceIPMatcher(cidrRange *v3corepb.CidrRange) (*sourceIPMatcher, error) {
+func newRemoteIPMatcher(cidrRange *v3corepb.CidrRange) (*remoteIPMatcher, error) {
 	// Convert configuration to a cidrRangeString, as Go standard library has
 	// methods that parse cidr string.
 	cidrRangeString := fmt.Sprintf("%s/%d", cidrRange.AddressPrefix, cidrRange.PrefixLen.Value)
@@ -326,28 +334,28 @@ func newSourceIPMatcher(cidrRange *v3corepb.CidrRange) (*sourceIPMatcher, error)
 	if err != nil {
 		return nil, err
 	}
-	return &sourceIPMatcher{ipNet: ipNet}, nil
+	return &remoteIPMatcher{ipNet: ipNet}, nil
 }
 
-func (sim *sourceIPMatcher) match(data *rpcData) bool {
+func (sim *remoteIPMatcher) match(data *rpcData) bool {
 	return sim.ipNet.Contains(net.IP(net.ParseIP(data.peerInfo.Addr.String())))
 }
 
-type destinationIPMatcher struct {
+type localIPMatcher struct {
 	ipNet *net.IPNet
 }
 
-func newDestinationIPMatcher(cidrRange *v3corepb.CidrRange) (*destinationIPMatcher, error) {
+func newLocalIPMatcher(cidrRange *v3corepb.CidrRange) (*localIPMatcher, error) {
 	cidrRangeString := fmt.Sprintf("%s/%d", cidrRange.AddressPrefix, cidrRange.PrefixLen.Value)
 	_, ipNet, err := net.ParseCIDR(cidrRangeString)
 	if err != nil {
 		return nil, err
 	}
-	return &destinationIPMatcher{ipNet: ipNet}, nil
+	return &localIPMatcher{ipNet: ipNet}, nil
 }
 
-func (dim *destinationIPMatcher) match(data *rpcData) bool {
-	return dim.ipNet.Contains(net.IP(net.ParseIP(data.destinationAddr.String())))
+func (dim *localIPMatcher) match(data *rpcData) bool {
+	return dim.ipNet.Contains(net.IP(net.ParseIP(data.localAddr.String())))
 }
 
 // portMatcher matches on whether the destination port of the RPC matches the
@@ -395,9 +403,11 @@ func (am *authenticatedMatcher) match(data *rpcData) bool {
 	if am.stringMatcher == nil {
 		return len(data.certs) != 0
 	}
-	// No certificate present, so will never successfully match.
+	// "If there is no client certificate (thus no SAN nor Subject), check if ""
+	// (empty string) matches. If it matches, the principal_name is said to
+	// match" - A41
 	if len(data.certs) == 0 {
-		return false
+		return am.stringMatcher.Match("")
 	}
 	cert := data.certs[0]
 	// The order of matching as per the RBAC documentation (see package-level comments)

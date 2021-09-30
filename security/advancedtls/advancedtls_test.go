@@ -27,10 +27,12 @@ import (
 	"net"
 	"testing"
 
+	lru "github.com/hashicorp/golang-lru"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/security/advancedtls/internal/testutils"
+	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
 type s struct {
@@ -339,6 +341,10 @@ func (s) TestClientServerHandshake(t *testing.T) {
 	getRootCAsForServerBad := func(params *GetRootCAsParams) (*GetRootCAsResults, error) {
 		return nil, fmt.Errorf("bad root certificate reloading")
 	}
+	cache, err := lru.New(5)
+	if err != nil {
+		t.Fatalf("lru.New: err = %v", err)
+	}
 	for _, test := range []struct {
 		desc                       string
 		clientCert                 []tls.Certificate
@@ -349,6 +355,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		clientVType                VerificationType
 		clientRootProvider         certprovider.Provider
 		clientIdentityProvider     certprovider.Provider
+		clientRevocationConfig     *RevocationConfig
 		clientExpectHandshakeError bool
 		serverMutualTLS            bool
 		serverCert                 []tls.Certificate
@@ -359,6 +366,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		serverVType                VerificationType
 		serverRootProvider         certprovider.Provider
 		serverIdentityProvider     certprovider.Provider
+		serverRevocationConfig     *RevocationConfig
 		serverExpectError          bool
 	}{
 		// Client: nil setting except verifyFuncGood
@@ -642,6 +650,30 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverRootProvider:     fakeProvider{isClient: false},
 			serverVType:            CertVerification,
 		},
+		// Client: set valid credentials with the revocation config
+		// Server: set valid credentials with the revocation config
+		// Expected Behavior: success, because non of the certificate chains sent in the connection are revoked
+		{
+			desc:             "Client sets peer cert, reload root function with verifyFuncGood; Server sets peer cert, reload root function; mutualTLS",
+			clientCert:       []tls.Certificate{cs.ClientCert1},
+			clientGetRoot:    getRootCAsForClient,
+			clientVerifyFunc: clientVerifyFuncGood,
+			clientVType:      CertVerification,
+			clientRevocationConfig: &RevocationConfig{
+				RootDir:           testdata.Path("crl"),
+				AllowUndetermined: true,
+				Cache:             cache,
+			},
+			serverMutualTLS: true,
+			serverCert:      []tls.Certificate{cs.ServerCert1},
+			serverGetRoot:   getRootCAsForServer,
+			serverVType:     CertVerification,
+			serverRevocationConfig: &RevocationConfig{
+				RootDir:           testdata.Path("crl"),
+				AllowUndetermined: true,
+				Cache:             cache,
+			},
+		},
 	} {
 		test := test
 		t.Run(test.desc, func(t *testing.T) {
@@ -665,6 +697,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				RequireClientCert: test.serverMutualTLS,
 				VerifyPeer:        test.serverVerifyFunc,
 				VType:             test.serverVType,
+				RevocationConfig:  test.serverRevocationConfig,
 			}
 			go func(done chan credentials.AuthInfo, lis net.Listener, serverOptions *ServerOptions) {
 				serverRawConn, err := lis.Accept()
@@ -706,7 +739,8 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					GetRootCertificates: test.clientGetRoot,
 					RootProvider:        test.clientRootProvider,
 				},
-				VType: test.clientVType,
+				VType:            test.clientVType,
+				RevocationConfig: test.clientRevocationConfig,
 			}
 			clientTLS, err := NewClientCreds(clientOptions)
 			if err != nil {

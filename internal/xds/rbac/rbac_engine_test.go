@@ -686,11 +686,11 @@ func (s) TestChainEngine(t *testing.T) {
 			},
 		},
 		{
-			name: "SourceIpMatcher",
+			name: "DirectRemoteIpMatcher",
 			rbacConfigs: []*v3rbacpb.RBAC{
 				{
 					Policies: map[string]*v3rbacpb.Policy{
-						"certain-source-ip": {
+						"certain-direct-remote-ip": {
 							Permissions: []*v3rbacpb.Permission{
 								{Rule: &v3rbacpb.Permission_Any{Any: true}},
 							},
@@ -705,7 +705,7 @@ func (s) TestChainEngine(t *testing.T) {
 				rpcData        *rpcData
 				wantStatusCode codes.Code
 			}{
-				// This incoming RPC Call should match with the certain-source-ip policy.
+				// This incoming RPC Call should match with the certain-direct-remote-ip policy.
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
@@ -714,7 +714,51 @@ func (s) TestChainEngine(t *testing.T) {
 					},
 					wantStatusCode: codes.OK,
 				},
-				// This incoming RPC Call shouldn't match with the certain-source-ip policy.
+				// This incoming RPC Call shouldn't match with the certain-direct-remote-ip policy.
+				{
+					rpcData: &rpcData{
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "10.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+			},
+		},
+		// This test tests a RBAC policy configured with a remote-ip policy.
+		// This should be logically equivalent to configuring a Engine with a
+		// direct-remote-ip policy, as per A41 - "allow equating RBAC's
+		// direct_remote_ip and remote_ip."
+		{
+			name: "RemoteIpMatcher",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"certain-remote-ip": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_RemoteIp{RemoteIp: &v3corepb.CidrRange{AddressPrefix: "0.0.0.0", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				rpcData        *rpcData
+				wantStatusCode codes.Code
+			}{
+				// This incoming RPC Call should match with the certain-remote-ip policy.
+				{
+					rpcData: &rpcData{
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
+				// This incoming RPC Call shouldn't match with the certain-remote-ip policy.
 				{
 					rpcData: &rpcData{
 						peerInfo: &peer.Peer{
@@ -837,6 +881,44 @@ func (s) TestChainEngine(t *testing.T) {
 						},
 					},
 					wantStatusCode: codes.PermissionDenied,
+				},
+			},
+		},
+		// This test tests that when there are no SANs or Subject's
+		// distinguished name in incoming RPC's, that authenticated matchers
+		// match against the empty string.
+		{
+			name: "default-matching-no-credentials",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"service-admin": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Authenticated_{Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""}}}}},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				rpcData        *rpcData
+				wantStatusCode codes.Code
+			}{
+				// This incoming RPC Call should match with the service admin
+				// policy. No authentication info is provided, so the
+				// authenticated matcher should match to the string matcher on
+				// the empty string, matching to the service-admin policy.
+				{
+					rpcData: &rpcData{
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.OK,
 				},
 			},
 		},
