@@ -1630,7 +1630,6 @@ func (cc *ClientConn) connectionError() error {
 
 func (cc *ClientConn) parseTargetAndFindResolver() (resolver.Builder, error) {
 	channelz.Infof(logger, cc.channelzID, "original dial target is: %q", cc.target)
-	defer func() { cc.parsedTarget.Unparsed = cc.target }()
 	parsedTarget, err := parseTarget(cc.target)
 	if err != nil {
 		channelz.Infof(logger, cc.channelzID, "dial target %q parse failed: %v", cc.target, err)
@@ -1676,13 +1675,25 @@ func parseTarget(target string) (resolver.Target, error) {
 	if err != nil {
 		return resolver.Target{}, err
 	}
-	path := u.Path
-	if path == "" {
-		path = u.Opaque
+	// For targets of the form "[scheme]://[authority]/endpoint, the endpoint
+	// value returned from url.Parse() contains a leading "/". Although this is
+	// in accordance with RFC 3986, we do not want to break existing resolver
+	// implementations which expect the endpoint without the leading "/". So, we
+	// end up stripping the leading "/" here. But this will result in an
+	// incorrect parsing for something like "unix:///path/to/socket". Since we
+	// own the "unix" resolver, we can workaround in the unix resolver by using
+	// the `ParsedURL` field instead of the `Endpoint` field.
+	endpoint := u.Path
+	if endpoint == "" {
+		endpoint = u.Opaque
+	}
+	if strings.HasPrefix(target, fmt.Sprintf("%s://", u.Scheme)) {
+		endpoint = strings.TrimPrefix(endpoint, "/")
 	}
 	return resolver.Target{
 		Scheme:    u.Scheme,
 		Authority: u.Host,
-		Endpoint:  path,
+		Endpoint:  endpoint,
+		ParsedURL: u,
 	}, nil
 }

@@ -23,6 +23,7 @@ package resolver
 import (
 	"context"
 	"net"
+	"net/url"
 
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/credentials"
@@ -228,7 +229,7 @@ type Target struct {
 	Scheme    string
 	Authority string
 	Endpoint  string
-	Unparsed  string
+	ParsedURL *url.URL
 }
 
 // Builder creates a resolver that will be used to watch name resolution updates.

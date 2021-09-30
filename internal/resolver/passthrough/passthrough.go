@@ -21,8 +21,6 @@
 package passthrough
 
 import (
-	"strings"
-
 	"google.golang.org/grpc/resolver"
 )
 
@@ -31,7 +29,6 @@ const scheme = "passthrough"
 type passthroughBuilder struct{}
 
 func (*passthroughBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
-	target.Endpoint = strings.TrimPrefix(target.Endpoint, "/")
 	r := &passthroughResolver{
 		target: target,
 		cc:     cc,
