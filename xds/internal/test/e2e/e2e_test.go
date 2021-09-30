@@ -60,6 +60,7 @@ func TestPingPong(t *testing.T) {
 		t.Fatalf("failed to start client: %v", err)
 	}
 	defer c.stop()
+	// defer func() { t.Logf("----- client logs -----\n%v", clientLog.String()) }()
 
 	var serverLog bytes.Buffer
 	servers, err := newServers(testName, &serverLog, 1)
@@ -71,6 +72,7 @@ func TestPingPong(t *testing.T) {
 			s.stop()
 		}
 	}()
+	// defer func() { t.Logf("----- server logs -----\n%v", serverLog.String()) }()
 
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: testName,

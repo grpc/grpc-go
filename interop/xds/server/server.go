@@ -47,7 +47,7 @@ var (
 	maintenancePort  = flag.Int("maintenance_port", 8081, "Listening port for maintenance services like health, reflection, channelz etc when -secure_mode is true. When -secure_mode is false, all these services will be registered on -port")
 	serverID         = flag.String("server_id", "go_server", "Server ID included in response")
 	secureMode       = flag.Bool("secure_mode", false, "If true, retrieve security configuration from the management server. Else, use insecure credentials.")
-	hostNameOverride = flag.String("host_name", "", "If set, use this as the hostname instead of the real hostname")
+	hostNameOverride = flag.String("host_name_override", "", "If set, use this as the hostname instead of the real hostname")
 
 	logger = grpclog.Component("interop")
 )
@@ -68,6 +68,7 @@ func getHostname() string {
 type testServiceImpl struct {
 	testgrpc.UnimplementedTestServiceServer
 	hostname string
+	serverID string
 }
 
 func (s *testServiceImpl) EmptyCall(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
@@ -77,7 +78,7 @@ func (s *testServiceImpl) EmptyCall(ctx context.Context, _ *testpb.Empty) (*test
 
 func (s *testServiceImpl) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 	grpc.SetHeader(ctx, metadata.Pairs("hostname", s.hostname))
-	return &testpb.SimpleResponse{ServerId: *serverID, Hostname: s.hostname}, nil
+	return &testpb.SimpleResponse{ServerId: s.serverID, Hostname: s.hostname}, nil
 }
 
 // xdsUpdateHealthServiceImpl provides an implementation of the
@@ -112,7 +113,7 @@ func main() {
 		logger.Fatal("-port and -maintenance_port must be different when -secure_mode is set")
 	}
 
-	testService := &testServiceImpl{hostname: getHostname()}
+	testService := &testServiceImpl{hostname: getHostname(), serverID: *serverID}
 	healthServer := health.NewServer()
 	updateHealthService := &xdsUpdateHealthServiceImpl{healthServer: healthServer}
 

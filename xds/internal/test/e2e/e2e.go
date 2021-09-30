@@ -74,7 +74,7 @@ func newClient(testName string, logger io.Writer, flags ...string) (*client, err
 		}, flags...), // Append any flags from caller.
 		[]string{
 			"GRPC_GO_LOG_VERBOSITY_LEVEL=99", "GRPC_GO_LOG_SEVERITY_LEVEL=info",
-			"GRPC_XDS_BOOTSTRAP=" + fmt.Sprintf(configJSONPath, testName),
+			"GRPC_XDS_BOOTSTRAP=" + fmt.Sprintf(xdsBootstrapJSONPathTemplate, testName),
 		},
 	)
 	if err != nil {
@@ -155,10 +155,10 @@ func newServers(testName string, logger io.Writer, count int) ([]*server, error)
 		cmd, err := cmd(
 			*serverPath,
 			logger,
-			[]string{fmt.Sprintf("--port=%d", port), fmt.Sprintf("--host_name=%s-%d", testName, i)},
+			[]string{fmt.Sprintf("--port=%d", port), fmt.Sprintf("--host_name_override=%s-%d", testName, i)},
 			[]string{
 				"GRPC_GO_LOG_VERBOSITY_LEVEL=99", "GRPC_GO_LOG_SEVERITY_LEVEL=info",
-				"GRPC_XDS_BOOTSTRAP=" + fmt.Sprintf(configJSONPath, testName),
+				"GRPC_XDS_BOOTSTRAP=" + fmt.Sprintf(xdsBootstrapJSONPathTemplate, testName),
 			},
 		)
 		if err != nil {

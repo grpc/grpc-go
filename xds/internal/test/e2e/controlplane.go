@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 )
 
-const configJSONPath = "./configs/bootstrap-%s.json"
+const xdsBootstrapJSONPathTemplate = "./configs/bootstrap-%s.json"
 
 type controlPlane struct {
 	server *e2e.ManagementServer
@@ -55,7 +55,7 @@ func newControlPlane(testName string) (*controlPlane, error) {
 		return nil, fmt.Errorf("failed to create bootstrap file: %v", err)
 	}
 
-	jsonPath := fmt.Sprintf(configJSONPath, testName)
+	jsonPath := fmt.Sprintf(xdsBootstrapJSONPathTemplate, testName)
 	dir := filepath.Dir(jsonPath)
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		os.MkdirAll(dir, os.ModePerm)
