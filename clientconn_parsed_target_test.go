@@ -75,6 +75,10 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 		{target: "unix-abstract:///a/b/c", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "a/b/c"}},
 		{target: "unix-abstract:///", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: ""}},
 		{target: "passthrough:///unix:///a/b/c", wantParsed: resolver.Target{Scheme: "passthrough", Authority: "", Endpoint: "unix:///a/b/c"}},
+
+		// Cases for `scheme:absolute-path`.
+		{target: "dns:/a/b/c", wantParsed: resolver.Target{Scheme: "dns", Authority: "", Endpoint: "/a/b/c"}},
+		{target: "unregistered:/a/b/c", wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "unregistered:/a/b/c"}},
 	}
 
 	for _, test := range tests {
