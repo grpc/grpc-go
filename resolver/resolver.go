@@ -227,7 +227,7 @@ type Target struct {
 	Authority string
 	Endpoint  string
 	// ParsedURL contains the parsed dial target with an optional default scheme
-	// added to it if the original dial target contained no scheme or containted
+	// added to it if the original dial target contained no scheme or contained
 	// an unregistered scheme. Any query params specified in the original dial
 	// target can be accessed from here.
 	ParsedURL *url.URL
