@@ -72,12 +72,20 @@ func getAPIClientBuilder(version version.TransportAPI) APIClientBuilder {
 	return nil
 }
 
+// UpdateValidatorFunc performs validations on update structs using
+// context/logic available at the xdsClient layer. Since these validation are
+// performed on internal update structs, they can be shared between different
+// API clients.
+type UpdateValidatorFunc func(interface{}) error
+
 // BuildOptions contains options to be passed to client builders.
 type BuildOptions struct {
 	// Parent is a top-level xDS client which has the intelligence to take
 	// appropriate action based on xDS responses received from the management
 	// server.
 	Parent UpdateHandler
+	// Validator performs post unmarshal validation checks.
+	Validator UpdateValidatorFunc
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
 	NodeProto proto.Message
@@ -680,6 +688,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 
 	apiClient, err := newAPIClient(config.TransportAPI, cc, BuildOptions{
 		Parent:    c,
+		Validator: c.updateValidator,
 		NodeProto: config.NodeProto,
 		Backoff:   backoff.DefaultExponential.Backoff,
 		Logger:    c.logger,
@@ -731,6 +740,64 @@ func (c *clientImpl) Close() {
 	c.apiClient.Close()
 	c.cc.Close()
 	c.logger.Infof("Shutdown")
+}
+
+func (c *clientImpl) filterChainUpdateValidator(fc *FilterChain) error {
+	if fc == nil {
+		return nil
+	}
+	return c.securityConfigUpdateValidator(fc.SecurityCfg)
+}
+
+func (c *clientImpl) securityConfigUpdateValidator(sc *SecurityConfig) error {
+	if sc == nil {
+		return nil
+	}
+	if sc.IdentityInstanceName != "" {
+		if _, ok := c.config.CertProviderConfigs[sc.IdentityInstanceName]; !ok {
+			return fmt.Errorf("identitiy certificate provider instance name %q missing in bootstrap configuration", sc.IdentityInstanceName)
+		}
+	}
+	if sc.RootInstanceName != "" {
+		if _, ok := c.config.CertProviderConfigs[sc.RootInstanceName]; !ok {
+			return fmt.Errorf("root certificate provider instance name %q missing in bootstrap configuration", sc.RootInstanceName)
+		}
+	}
+	return nil
+}
+
+func (c *clientImpl) updateValidator(u interface{}) error {
+	switch update := u.(type) {
+	case ListenerUpdate:
+		if update.InboundListenerCfg == nil || update.InboundListenerCfg.FilterChains == nil {
+			return nil
+		}
+
+		fcm := update.InboundListenerCfg.FilterChains
+		for _, dst := range fcm.dstPrefixMap {
+			for _, srcType := range dst.srcTypeArr {
+				if srcType == nil {
+					continue
+				}
+				for _, src := range srcType.srcPrefixMap {
+					for _, fc := range src.srcPortMap {
+						if err := c.filterChainUpdateValidator(fc); err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+		return c.filterChainUpdateValidator(fcm.def)
+	case ClusterUpdate:
+		return c.securityConfigUpdateValidator(update.SecurityCfg)
+	default:
+		// We currently invoke this update validation function only for LDS and
+		// CDS updates. In the future, if we wish to invoke it for other xDS
+		// updates, corresponding plumbing needs to be added to those unmarshal
+		// functions.
+	}
+	return nil
 }
 
 // ResourceType identifies resources in a transport protocol agnostic way. These

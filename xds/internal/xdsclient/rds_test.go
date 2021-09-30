@@ -872,9 +872,13 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, md, err := UnmarshalRouteConfig(testVersion, test.resources, nil)
+			opts := &UnmarshalOptions{
+				Version:   testVersion,
+				Resources: test.resources,
+			}
+			update, md, err := UnmarshalRouteConfig(opts)
 			if (err != nil) != test.wantErr {
-				t.Fatalf("UnmarshalRouteConfig(), got err: %v, wantErr: %v", err, test.wantErr)
+				t.Fatalf("UnmarshalRouteConfig(%+v), got err: %v, wantErr: %v", opts, err, test.wantErr)
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
 				t.Errorf("got unexpected update, diff (-got +want): %v", diff)

@@ -654,9 +654,13 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			update, md, err := UnmarshalListener(testVersion, test.resources, nil)
+			opts := &UnmarshalOptions{
+				Version:   testVersion,
+				Resources: test.resources,
+			}
+			update, md, err := UnmarshalListener(opts)
 			if (err != nil) != test.wantErr {
-				t.Fatalf("UnmarshalListener(), got err: %v, wantErr: %v", err, test.wantErr)
+				t.Fatalf("UnmarshalListener(%+v), got err: %v, wantErr: %v", opts, err, test.wantErr)
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
 				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
@@ -1779,12 +1783,16 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotUpdate, md, err := UnmarshalListener(testVersion, test.resources, nil)
+			opts := &UnmarshalOptions{
+				Version:   testVersion,
+				Resources: test.resources,
+			}
+			gotUpdate, md, err := UnmarshalListener(opts)
 			if (err != nil) != (test.wantErr != "") {
-				t.Fatalf("UnmarshalListener(), got err: %v, wantErr: %v", err, test.wantErr)
+				t.Fatalf("UnmarshalListener(%+v), got err: %v, wantErr: %v", opts, err, test.wantErr)
 			}
 			if err != nil && !strings.Contains(err.Error(), test.wantErr) {
-				t.Fatalf("UnmarshalListener() = %v wantErr: %q", err, test.wantErr)
+				t.Fatalf("UnmarshalListener(%+v) = %v wantErr: %q", opts, err, test.wantErr)
 			}
 			if diff := cmp.Diff(gotUpdate, test.wantUpdate, cmpOpts); diff != "" {
 				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
