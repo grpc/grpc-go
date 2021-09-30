@@ -222,13 +222,14 @@ type ClientConn interface {
 //   Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "/foo.bar"}
 // - "unknown_scheme://authority/endpoint"
 //   Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "/unknown_scheme://authority/endpoint"}
-//
-// Unparsed will be set to the user's original dial target. Any query params
-// specified in the dial target can be accessed though this field.
 type Target struct {
 	Scheme    string
 	Authority string
 	Endpoint  string
+	// ParsedURL contains the parsed dial target with an optional default scheme
+	// added to it if the original dial target contained no scheme or containted
+	// an unregistered scheme. Any query params specified in the original dial
+	// target can be accessed from here.
 	ParsedURL *url.URL
 }
 
