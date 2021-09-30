@@ -21,8 +21,6 @@ package grpc
 import (
 	"context"
 	"errors"
-	"fmt"
-	"net"
 	"strings"
 	"testing"
 	"time"
@@ -35,37 +33,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
 )
-
-// The target string with unknown scheme should be kept unchanged and passed to
-// the dialer.
-func (s) TestDialParseTargetUnknownScheme(t *testing.T) {
-	for _, test := range []struct {
-		targetStr string
-		want      string
-	}{
-		{"/unix/socket/address", "/unix/socket/address"},
-
-		// For known scheme.
-		{"passthrough://a.server.com/google.com", "google.com"},
-	} {
-		dialStrCh := make(chan string, 1)
-		cc, err := Dial(test.targetStr, WithInsecure(), WithDialer(func(addr string, _ time.Duration) (net.Conn, error) {
-			select {
-			case dialStrCh <- addr:
-			default:
-			}
-			return nil, fmt.Errorf("test dialer, always error")
-		}))
-		if err != nil {
-			t.Fatalf("Failed to create ClientConn: %v", err)
-		}
-		got := <-dialStrCh
-		cc.Close()
-		if got != test.want {
-			t.Errorf("Dial(%q), dialer got %q, want %q", test.targetStr, got, test.want)
-		}
-	}
-}
 
 const happyBalancerName = "happy balancer"
 
