@@ -65,7 +65,8 @@ func TestPingPong(t *testing.T) {
 		t.Fatalf("failed to start client: %v", err)
 	}
 	defer c.stop()
-	defer func() { t.Logf("----- client logs -----\n%v", clientLog.String()) }()
+	// TODO: find a better way to print the log. Here and other places.
+	// defer func() { t.Logf("----- client logs -----\n%v", clientLog.String()) }()
 
 	var serverLog bytes.Buffer
 	servers, err := newServers(testName, *serverPath, cp.bootstrapContentStr, &serverLog, 1)
