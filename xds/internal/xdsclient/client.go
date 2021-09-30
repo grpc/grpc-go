@@ -791,6 +791,11 @@ func (c *clientImpl) updateValidator(u interface{}) error {
 		return c.filterChainUpdateValidator(fcm.def)
 	case ClusterUpdate:
 		return c.securityConfigUpdateValidator(update.SecurityCfg)
+	default:
+		// We currently invoke this update validation function only for LDS and
+		// CDS updates. In the future, if we wish to invoke it for other xDS
+		// updates, corresponding plumbing needs to be added to those unmarshal
+		// functions.
 	}
 	return nil
 }
