@@ -20,7 +20,6 @@ package e2e
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -37,13 +36,7 @@ func cmd(path string, logger io.Writer, args []string, env []string) (*exec.Cmd,
 	cmd.Stdout = logger
 	cmd.Stderr = logger
 	return cmd, nil
-
 }
-
-var (
-	clientPath = flag.String("client", "./binaries/client", "The interop client")
-	serverPath = flag.String("server", "./binaries/server", "The interop server")
-)
 
 const (
 	clientStatsPort = 60363 // TODO: make this different per-test, only needed for parallel tests.
@@ -59,18 +52,17 @@ type client struct {
 // newClient create a client with
 // - xds bootstrap file at "./configs/bootstrap-<testName>.json" (%s is the test name)
 // - xds:///<testName> as the target
-func newClient(testName string, bootstrap string, logger io.Writer, flags ...string) (*client, error) {
-	statsPort := clientStatsPort
+func newClient(testName string, binaryPath string, bootstrap string, logger io.Writer, flags ...string) (*client, error) {
 	target := fmt.Sprintf("xds:///%s", testName)
 
 	cmd, err := cmd(
-		*clientPath,
+		binaryPath,
 		logger,
 		append([]string{
 			"--server=" + target,
 			"--print_response=true",
 			"--qps=100",
-			fmt.Sprintf("--stats_port=%d", statsPort),
+			fmt.Sprintf("--stats_port=%d", clientStatsPort),
 		}, flags...), // Append any flags from caller.
 		[]string{
 			"GRPC_GO_LOG_VERBOSITY_LEVEL=99",
@@ -83,8 +75,7 @@ func newClient(testName string, bootstrap string, logger io.Writer, flags ...str
 	}
 	cmd.Start()
 
-	cc, err := grpc.Dial(fmt.Sprintf("localhost:%d", statsPort),
-		grpc.WithInsecure(), grpc.WithDefaultCallOptions(grpc.WaitForReady(true)))
+	cc, err := grpc.Dial(fmt.Sprintf("localhost:%d", clientStatsPort), grpc.WithInsecure(), grpc.WithDefaultCallOptions(grpc.WaitForReady(true)))
 	if err != nil {
 		return nil, err
 	}
@@ -149,12 +140,12 @@ type server struct {
 // newServer creates multiple servers with
 // - xds bootstrap file at "./configs/bootstrap-<testName>.json" (%s is the test name)
 // - <testName>-<index> as the target
-func newServers(testName string, bootstrap string, logger io.Writer, count int) ([]*server, error) {
+func newServers(testName string, binaryPath string, bootstrap string, logger io.Writer, count int) ([]*server, error) {
 	var ret []*server
 	for i := 0; i < count; i++ {
 		port := serverPort + i
 		cmd, err := cmd(
-			*serverPath,
+			binaryPath,
 			logger,
 			[]string{fmt.Sprintf("--port=%d", port), fmt.Sprintf("--host_name_override=%s-%d", testName, i)},
 			[]string{
