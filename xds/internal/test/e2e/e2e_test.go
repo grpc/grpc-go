@@ -89,9 +89,9 @@ func setup(t *testing.T, opts testOpts) (*controlPlane, *client, []*server, func
 		}
 		c.stop()
 		cp.stop()
-		// TODO: find a better way to print the log. Here and other places.
-		// t.Logf("----- client logs -----\n%v", clientLog.String())
-		// t.Logf("----- server logs -----\n%v", serverLog.String())
+		// TODO: find a better way to print the log. They are long, and hides the failure.
+		t.Logf("\n----- client logs -----\n%v", clientLog.String())
+		t.Logf("\n----- server logs -----\n%v", serverLog.String())
 	}
 }
 

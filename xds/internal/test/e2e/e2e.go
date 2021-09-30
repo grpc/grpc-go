@@ -147,7 +147,10 @@ func newServers(testName string, binaryPath string, bootstrap string, logger io.
 		cmd, err := cmd(
 			binaryPath,
 			logger,
-			[]string{fmt.Sprintf("--port=%d", port), fmt.Sprintf("--host_name_override=%s-%d", testName, i)},
+			[]string{
+				fmt.Sprintf("--port=%d", port),
+				fmt.Sprintf("--host_name_override=%s-%d", testName, i),
+			},
 			[]string{
 				"GRPC_GO_LOG_VERBOSITY_LEVEL=99",
 				"GRPC_GO_LOG_SEVERITY_LEVEL=info",
