@@ -55,15 +55,15 @@ func TestPingPong(t *testing.T) {
 	defer cp.stop()
 
 	var clientLog bytes.Buffer
-	c, err := newClient(testName, &clientLog)
+	c, err := newClient(testName, cp.bootstrapContentStr, &clientLog)
 	if err != nil {
 		t.Fatalf("failed to start client: %v", err)
 	}
 	defer c.stop()
-	// defer func() { t.Logf("----- client logs -----\n%v", clientLog.String()) }()
+	defer func() { t.Logf("----- client logs -----\n%v", clientLog.String()) }()
 
 	var serverLog bytes.Buffer
-	servers, err := newServers(testName, &serverLog, 1)
+	servers, err := newServers(testName, cp.bootstrapContentStr, &serverLog, 1)
 	if err != nil {
 		t.Fatalf("failed to start server: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestAffinity(t *testing.T) {
 	defer cp.stop()
 
 	var clientLog bytes.Buffer
-	c, err := newClient(testName, &clientLog, "--rpc=EmptyCall", fmt.Sprintf("--metadata=EmptyCall:%s:%s", testMDKey, testMDValue))
+	c, err := newClient(testName, cp.bootstrapContentStr, &clientLog, "--rpc=EmptyCall", fmt.Sprintf("--metadata=EmptyCall:%s:%s", testMDKey, testMDValue))
 	if err != nil {
 		t.Fatalf("failed to start client: %v", err)
 	}
@@ -128,7 +128,7 @@ func TestAffinity(t *testing.T) {
 	// defer func() { t.Logf("----- client logs -----\n%v", clientLog.String()) }()
 
 	var serverLog bytes.Buffer
-	servers, err := newServers(testName, &serverLog, backendCount)
+	servers, err := newServers(testName, cp.bootstrapContentStr, &serverLog, backendCount)
 	if err != nil {
 		t.Fatalf("failed to start server: %v", err)
 	}

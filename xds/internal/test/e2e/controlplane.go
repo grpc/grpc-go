@@ -19,20 +19,16 @@ package e2e
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 
 	"github.com/google/uuid"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 )
 
-const xdsBootstrapJSONPathTemplate = "./configs/bootstrap-%s.json"
-
 type controlPlane struct {
-	server *e2e.ManagementServer
-	nodeID string
+	server              *e2e.ManagementServer
+	nodeID              string
+	bootstrapContentStr string
 }
 
 func newControlPlane(testName string) (*controlPlane, error) {
@@ -55,24 +51,13 @@ func newControlPlane(testName string) (*controlPlane, error) {
 		return nil, fmt.Errorf("failed to create bootstrap file: %v", err)
 	}
 
-	jsonPath := fmt.Sprintf(xdsBootstrapJSONPathTemplate, testName)
-	dir := filepath.Dir(jsonPath)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		os.MkdirAll(dir, os.ModePerm)
-	}
-
-	if err := ioutil.WriteFile(jsonPath, bootstrapContents, os.ModePerm); err != nil {
-		return nil, fmt.Errorf("ioutil.WriteFile(bootstrap.json) failed: %v", err)
-	}
-
 	return &controlPlane{
-		server: server,
-		nodeID: nodeID,
+		server:              server,
+		nodeID:              nodeID,
+		bootstrapContentStr: string(bootstrapContents),
 	}, nil
 }
 
 func (cp *controlPlane) stop() {
 	cp.server.Stop()
-
-	// TODO: maybe? os.RemoveAll(cp.tempDir)
 }

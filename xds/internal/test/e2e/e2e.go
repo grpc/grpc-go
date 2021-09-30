@@ -59,7 +59,7 @@ type client struct {
 // newClient create a client with
 // - xds bootstrap file at "./configs/bootstrap-<testName>.json" (%s is the test name)
 // - xds:///<testName> as the target
-func newClient(testName string, logger io.Writer, flags ...string) (*client, error) {
+func newClient(testName string, bootstrap string, logger io.Writer, flags ...string) (*client, error) {
 	statsPort := clientStatsPort
 	target := fmt.Sprintf("xds:///%s", testName)
 
@@ -73,8 +73,9 @@ func newClient(testName string, logger io.Writer, flags ...string) (*client, err
 			fmt.Sprintf("--stats_port=%d", statsPort),
 		}, flags...), // Append any flags from caller.
 		[]string{
-			"GRPC_GO_LOG_VERBOSITY_LEVEL=99", "GRPC_GO_LOG_SEVERITY_LEVEL=info",
-			"GRPC_XDS_BOOTSTRAP=" + fmt.Sprintf(xdsBootstrapJSONPathTemplate, testName),
+			"GRPC_GO_LOG_VERBOSITY_LEVEL=99",
+			"GRPC_GO_LOG_SEVERITY_LEVEL=info",
+			"GRPC_XDS_BOOTSTRAP_CONFIG=" + bootstrap, // The bootstrap content doesn't need to be quoted.
 		},
 	)
 	if err != nil {
@@ -148,7 +149,7 @@ type server struct {
 // newServer creates multiple servers with
 // - xds bootstrap file at "./configs/bootstrap-<testName>.json" (%s is the test name)
 // - <testName>-<index> as the target
-func newServers(testName string, logger io.Writer, count int) ([]*server, error) {
+func newServers(testName string, bootstrap string, logger io.Writer, count int) ([]*server, error) {
 	var ret []*server
 	for i := 0; i < count; i++ {
 		port := serverPort + i
@@ -157,8 +158,9 @@ func newServers(testName string, logger io.Writer, count int) ([]*server, error)
 			logger,
 			[]string{fmt.Sprintf("--port=%d", port), fmt.Sprintf("--host_name_override=%s-%d", testName, i)},
 			[]string{
-				"GRPC_GO_LOG_VERBOSITY_LEVEL=99", "GRPC_GO_LOG_SEVERITY_LEVEL=info",
-				"GRPC_XDS_BOOTSTRAP=" + fmt.Sprintf(xdsBootstrapJSONPathTemplate, testName),
+				"GRPC_GO_LOG_VERBOSITY_LEVEL=99",
+				"GRPC_GO_LOG_SEVERITY_LEVEL=info",
+				"GRPC_XDS_BOOTSTRAP_CONFIG=" + bootstrap, // The bootstrap content doesn't need to be quoted.,
 			},
 		)
 		if err != nil {
