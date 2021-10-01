@@ -35,8 +35,8 @@ const tokenRequestTimeout = 30 * time.Second
 
 var logger = grpclog.Component("credentials")
 
-// DefaultCredsOptions constructs options to build DefaultCreds.
-type DefaultCredsOptions struct {
+// DefaultCredentialsOptions constructs options to build DefaultCredentials.
+type DefaultCredentialsOptions struct {
 	// PerRPCCreds is a  per RPC credentials that is passed to a bundle.
 	PerRPCCreds credentials.PerRPCCredentials
 }
@@ -45,7 +45,7 @@ type DefaultCredsOptions struct {
 // configured to work with google services.
 //
 // This API is experimental.
-func NewDefaultCredentialsWithOptions(opts DefaultCredsOptions) credentials.Bundle {
+func NewDefaultCredentialsWithOptions(opts DefaultCredentialsOptions) credentials.Bundle {
 	perRPC := opts.PerRPCCreds
 	if perRPC == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), tokenRequestTimeout)
@@ -73,7 +73,7 @@ func NewDefaultCredentialsWithOptions(opts DefaultCredsOptions) credentials.Bund
 //
 // This API is experimental.
 func NewDefaultCredentials() credentials.Bundle {
-	return NewDefaultCredentialsWithOptions(DefaultCredsOptions{})
+	return NewDefaultCredentialsWithOptions(DefaultCredentialsOptions{})
 }
 
 // NewComputeEngineCredentials returns a credentials bundle that is configured to work
@@ -82,7 +82,7 @@ func NewDefaultCredentials() credentials.Bundle {
 //
 // This API is experimental.
 func NewComputeEngineCredentials() credentials.Bundle {
-	return NewDefaultCredentialsWithOptions(DefaultCredsOptions{
+	return NewDefaultCredentialsWithOptions(DefaultCredentialsOptions{
 		PerRPCCreds: oauth.NewComputeEngine(),
 	})
 }
