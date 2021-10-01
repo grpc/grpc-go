@@ -1694,6 +1694,6 @@ func parseTarget(target string) (resolver.Target, error) {
 		Scheme:    u.Scheme,
 		Authority: u.Host,
 		Endpoint:  endpoint,
-		ParsedURL: u,
+		ParsedURL: *u,
 	}, nil
 }

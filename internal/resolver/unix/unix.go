@@ -43,9 +43,6 @@ func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, _ resolv
 	// resolver implementations we ended up stripping the leading "/" from the
 	// endpoint. This obviously does not work for the "unix" scheme. Hence we
 	// end up using the parsed URL instead.
-	if target.ParsedURL == nil {
-		return nil, fmt.Errorf("nil ParsedURL in received target: %+v", target)
-	}
 	endpoint := target.ParsedURL.Path
 	if endpoint == "" {
 		endpoint = target.ParsedURL.Opaque

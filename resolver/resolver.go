@@ -230,7 +230,7 @@ type Target struct {
 	// added to it if the original dial target contained no scheme or contained
 	// an unregistered scheme. Any query params specified in the original dial
 	// target can be accessed from here.
-	ParsedURL *url.URL
+	ParsedURL url.URL
 }
 
 // Builder creates a resolver that will be used to watch name resolution updates.
