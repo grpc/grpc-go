@@ -56,7 +56,7 @@ type testOpts struct {
 	clientFlags  []string
 }
 
-func setup(t *testing.T, opts testOpts) (*controlPlane, *client, []*server, func()) {
+func setup(t *testing.T, opts testOpts) (*controlPlane, *client, []*server) {
 	t.Helper()
 	backendCount := 1
 	if opts.backendCount != 0 {
@@ -67,38 +67,36 @@ func setup(t *testing.T, opts testOpts) (*controlPlane, *client, []*server, func
 	if err != nil {
 		t.Fatalf("failed to start control-plane: %v", err)
 	}
+	t.Cleanup(cp.stop)
 
 	var clientLog bytes.Buffer
 	c, err := newClient(fmt.Sprintf("xds:///%s", opts.testName), *clientPath, cp.bootstrapContent, &clientLog, opts.clientFlags...)
 	if err != nil {
-		cp.stop()
 		t.Fatalf("failed to start client: %v", err)
 	}
+	t.Cleanup(c.stop)
 
 	var serverLog bytes.Buffer
 	servers, err := newServers(opts.testName, *serverPath, cp.bootstrapContent, &serverLog, backendCount)
 	if err != nil {
-		cp.stop()
-		c.stop()
 		t.Fatalf("failed to start server: %v", err)
 	}
-
-	return cp, c, servers, func() {
+	t.Cleanup(func() {
 		for _, s := range servers {
 			s.stop()
 		}
-		c.stop()
-		cp.stop()
-		// TODO: find a better way to print the log. They are long, and hides the failure.
+	})
+	t.Cleanup(func() {
+		// TODO: find a better way to print the log. They are long, and hide the failure.
 		t.Logf("\n----- client logs -----\n%v", clientLog.String())
 		t.Logf("\n----- server logs -----\n%v", serverLog.String())
-	}
+	})
+	return cp, c, servers
 }
 
 func TestPingPong(t *testing.T) {
 	const testName = "pingpong"
-	cp, c, _, cleanup := setup(t, testOpts{testName: testName})
-	defer cleanup()
+	cp, c, _ := setup(t, testOpts{testName: testName})
 
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: testName,
@@ -138,12 +136,11 @@ func TestAffinity(t *testing.T) {
 		testMDKey    = "xds_md"
 		testMDValue  = "unary_yranu"
 	)
-	cp, c, servers, cleanup := setup(t, testOpts{
+	cp, c, servers := setup(t, testOpts{
 		testName:     testName,
 		backendCount: backendCount,
 		clientFlags:  []string{"--rpc=EmptyCall", fmt.Sprintf("--metadata=EmptyCall:%s:%s", testMDKey, testMDValue)},
 	})
-	defer cleanup()
 
 	resources := e2e.DefaultClientResources(e2e.ResourceParams{
 		DialTarget: testName,
