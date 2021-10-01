@@ -8041,10 +8041,10 @@ func (s) TestServerClosesConn(t *testing.T) {
 		conn.Close()
 	}
 	for ctx.Err() == nil {
-		time.Sleep(50 * time.Millisecond)
 		if atomic.LoadInt32(&wrapLis.connsOpen) == 0 {
 			return
 		}
+		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatalf("timed out waiting for conns to be closed by server; still open: %v", atomic.LoadInt32(&wrapLis.connsOpen))
 }
