@@ -35,52 +35,26 @@ const tokenRequestTimeout = 30 * time.Second
 
 var logger = grpclog.Component("credentials")
 
-// NewDefaultCredentials returns a credentials bundle that is configured to work
-// with google services.
-//
-// This API is experimental.
-func NewDefaultCredentials() credentials.Bundle {
-	c := &creds{
-		newPerRPCCreds: func() credentials.PerRPCCredentials {
-			ctx, cancel := context.WithTimeout(context.Background(), tokenRequestTimeout)
-			defer cancel()
-			perRPCCreds, err := oauth.NewApplicationDefault(ctx)
-			if err != nil {
-				logger.Warningf("google default creds: failed to create application oauth: %v", err)
-			}
-			return perRPCCreds
-		},
-	}
-	bundle, err := c.NewWithMode(internal.CredsBundleModeFallback)
-	if err != nil {
-		logger.Warningf("google default creds: failed to create new creds: %v", err)
-	}
-	return bundle
-}
-
-// NewComputeEngineCredentials returns a credentials bundle that is configured to work
-// with google services. This API must only be used when running on GCE. Authentication configured
-// by this API represents the GCE VM's default service account.
-//
-// This API is experimental.
-func NewComputeEngineCredentials() credentials.Bundle {
-	return NewComputeEngineCredsWithOptions(ComputeEngineCredsOptions{})
-}
-
-// ComputeEngineCredsOptions constructs compite engine credentials with options.
-type ComputeEngineCredsOptions struct {
+// DefaultCredsOptions constructs options to build DefaultCreds.
+type DefaultCredsOptions struct {
 	// PerRPCCreds is a  per RPC credentials that is passed to a bundle.
 	PerRPCCreds credentials.PerRPCCredentials
 }
 
-// NewComputeEngineCredsWithOptions returns a credentials bundle that is configured to work
-// with google services. This API must only be used when running on GCE.
+// NewDefaultCredentialsWithOptions returns a credentials bundle that is
+// configured to work with google services.
 //
 // This API is experimental.
-func NewComputeEngineCredsWithOptions(perRPCOpts ComputeEngineCredsOptions) credentials.Bundle {
-	perRPC := oauth.NewComputeEngine()
-	if perRPCOpts.PerRPCCreds != nil {
-		perRPC = perRPCOpts.PerRPCCreds
+func NewDefaultCredentialsWithOptions(opts DefaultCredsOptions) credentials.Bundle {
+	perRPC := opts.PerRPCCreds
+	if perRPC == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), tokenRequestTimeout)
+		defer cancel()
+		var err error
+		perRPC, err = oauth.NewApplicationDefault(ctx)
+		if err != nil {
+			logger.Warningf("google default creds: failed to create application oauth: %v", err)
+		}
 	}
 	c := &creds{
 		newPerRPCCreds: func() credentials.PerRPCCredentials {
@@ -92,6 +66,25 @@ func NewComputeEngineCredsWithOptions(perRPCOpts ComputeEngineCredsOptions) cred
 		logger.Warningf("compute engine creds with per rpc: failed to create new creds: %v", err)
 	}
 	return bundle
+}
+
+// NewDefaultCredentials returns a credentials bundle that is configured to work
+// with google services.
+//
+// This API is experimental.
+func NewDefaultCredentials() credentials.Bundle {
+	return NewDefaultCredentialsWithOptions(DefaultCredsOptions{})
+}
+
+// NewComputeEngineCredentials returns a credentials bundle that is configured to work
+// with google services. This API must only be used when running on GCE. Authentication configured
+// by this API represents the GCE VM's default service account.
+//
+// This API is experimental.
+func NewComputeEngineCredentials() credentials.Bundle {
+	return NewDefaultCredentialsWithOptions(DefaultCredsOptions{
+		PerRPCCreds: oauth.NewComputeEngine(),
+	})
 }
 
 // creds implements credentials.Bundle.
