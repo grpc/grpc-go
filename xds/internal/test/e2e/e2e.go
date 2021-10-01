@@ -49,12 +49,8 @@ type client struct {
 	statsCC *grpc.ClientConn
 }
 
-// newClient create a client with
-// - xds bootstrap file at "./configs/bootstrap-<testName>.json" (%s is the test name)
-// - xds:///<testName> as the target
-func newClient(testName string, binaryPath string, bootstrap string, logger io.Writer, flags ...string) (*client, error) {
-	target := fmt.Sprintf("xds:///%s", testName)
-
+// newClient create a client with the given target and bootstrap content.
+func newClient(target, binaryPath, bootstrap string, logger io.Writer, flags ...string) (*client, error) {
 	cmd, err := cmd(
 		binaryPath,
 		logger,
@@ -137,10 +133,11 @@ type server struct {
 	port int
 }
 
-// newServer creates multiple servers with
-// - xds bootstrap file at "./configs/bootstrap-<testName>.json" (%s is the test name)
-// - <testName>-<index> as the target
-func newServers(testName string, binaryPath string, bootstrap string, logger io.Writer, count int) ([]*server, error) {
+// newServer creates multiple servers with the given bootstrap content.
+//
+// Each server gets a different hostname, in the format of
+// <hostnamePrefix>-<index>.
+func newServers(hostnamePrefix, binaryPath, bootstrap string, logger io.Writer, count int) ([]*server, error) {
 	var ret []*server
 	for i := 0; i < count; i++ {
 		port := serverPort + i
@@ -149,7 +146,7 @@ func newServers(testName string, binaryPath string, bootstrap string, logger io.
 			logger,
 			[]string{
 				fmt.Sprintf("--port=%d", port),
-				fmt.Sprintf("--host_name_override=%s-%d", testName, i),
+				fmt.Sprintf("--host_name_override=%s-%d", hostnamePrefix, i),
 			},
 			[]string{
 				"GRPC_GO_LOG_VERBOSITY_LEVEL=99",

@@ -69,14 +69,14 @@ func setup(t *testing.T, opts testOpts) (*controlPlane, *client, []*server, func
 	}
 
 	var clientLog bytes.Buffer
-	c, err := newClient(opts.testName, *clientPath, cp.bootstrapContentStr, &clientLog, opts.clientFlags...)
+	c, err := newClient(fmt.Sprintf("xds:///%s", opts.testName), *clientPath, cp.bootstrapContent, &clientLog, opts.clientFlags...)
 	if err != nil {
 		cp.stop()
 		t.Fatalf("failed to start client: %v", err)
 	}
 
 	var serverLog bytes.Buffer
-	servers, err := newServers(opts.testName, *serverPath, cp.bootstrapContentStr, &serverLog, backendCount)
+	servers, err := newServers(opts.testName, *serverPath, cp.bootstrapContent, &serverLog, backendCount)
 	if err != nil {
 		cp.stop()
 		c.stop()

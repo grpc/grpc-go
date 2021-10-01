@@ -26,9 +26,9 @@ import (
 )
 
 type controlPlane struct {
-	server              *e2e.ManagementServer
-	nodeID              string
-	bootstrapContentStr string
+	server           *e2e.ManagementServer
+	nodeID           string
+	bootstrapContent string
 }
 
 func newControlPlane(testName string) (*controlPlane, error) {
@@ -38,9 +38,8 @@ func newControlPlane(testName string) (*controlPlane, error) {
 		return nil, fmt.Errorf("failed to spin up the xDS management server: %v", err)
 	}
 
-	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
-	bootstrapContents, err := xdsinternal.BootstrapContents(xdsinternal.BootstrapOptions{
+	bootstrapContentBytes, err := xdsinternal.BootstrapContents(xdsinternal.BootstrapOptions{
 		Version:                            xdsinternal.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          server.Address,
@@ -52,9 +51,9 @@ func newControlPlane(testName string) (*controlPlane, error) {
 	}
 
 	return &controlPlane{
-		server:              server,
-		nodeID:              nodeID,
-		bootstrapContentStr: string(bootstrapContents),
+		server:           server,
+		nodeID:           nodeID,
+		bootstrapContent: string(bootstrapContentBytes),
 	}, nil
 }
 

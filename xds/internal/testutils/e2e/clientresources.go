@@ -367,7 +367,7 @@ func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpoin
 					SocketAddress: &v3corepb.SocketAddress{
 						Protocol:      v3corepb.SocketAddress_TCP,
 						Address:       host,
-						PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: uint32(port)}},
+						PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: port}},
 				}},
 			}},
 		})
