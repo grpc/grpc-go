@@ -293,7 +293,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		// closed immediately by the latter. Skipping the error here will help
 		// reduce log clutter.
 		if err == io.EOF {
-			return nil, nil
+			return nil, io.EOF
 		}
 		return nil, connectionErrorf(false, err, "transport: http2Server.HandleStreams failed to receive the preface from client: %v", err)
 	}
