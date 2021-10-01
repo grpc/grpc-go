@@ -222,25 +222,6 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 		missingRootProviderInstance     = "missing-root-provider-instance"
 	)
 
-	// setupManagementServer() sets up a bootstrap file with certificate
-	// provider instance names: `e2e.ServerSideCertProviderInstance` and
-	// `e2e.ClientSideCertProviderInstance`.
-	managementServer, nodeID, _, resolver, cleanup1 := setupManagementServer(t)
-	defer cleanup1()
-
-	port, cleanup2 := clientSetup(t, &testService{})
-	defer cleanup2()
-
-	// This creates a `Cluster` resource with a security config which refers to
-	// `e2e.ClientSideCertProviderInstance` for both root and identity certs.
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: serviceName,
-		NodeID:     nodeID,
-		Host:       "localhost",
-		Port:       port,
-		SecLevel:   e2e.SecurityLevelMTLS,
-	})
-
 	tests := []struct {
 		name           string
 		securityConfig *v3corepb.TransportSocket
@@ -340,11 +321,30 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			// setupManagementServer() sets up a bootstrap file with certificate
+			// provider instance names: `e2e.ServerSideCertProviderInstance` and
+			// `e2e.ClientSideCertProviderInstance`.
+			managementServer, nodeID, _, resolver, cleanup1 := setupManagementServer(t)
+			defer cleanup1()
+
+			port, cleanup2 := clientSetup(t, &testService{})
+			defer cleanup2()
+
+			// This creates a `Cluster` resource with a security config which
+			// refers to `e2e.ClientSideCertProviderInstance` for both root and
+			// identity certs.
+			resources := e2e.DefaultClientResources(e2e.ResourceParams{
+				DialTarget: serviceName,
+				NodeID:     nodeID,
+				Host:       "localhost",
+				Port:       port,
+				SecLevel:   e2e.SecurityLevelMTLS,
+			})
 			resources.Clusters[0].TransportSocket = test.securityConfig
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 			if err := managementServer.Update(ctx, resources); err != nil {
 				t.Fatal(err)
 			}
