@@ -137,8 +137,15 @@ type server struct {
 //
 // Each server gets a different hostname, in the format of
 // <hostnamePrefix>-<index>.
-func newServers(hostnamePrefix, binaryPath, bootstrap string, logger io.Writer, count int) ([]*server, error) {
+func newServers(hostnamePrefix, binaryPath, bootstrap string, logger io.Writer, count int) (_ []*server, err error) {
 	var ret []*server
+	defer func() {
+		if err != nil {
+			for _, s := range ret {
+				s.stop()
+			}
+		}
+	}()
 	for i := 0; i < count; i++ {
 		port := serverPort + i
 		cmd, err := cmd(
