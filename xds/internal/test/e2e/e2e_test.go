@@ -188,7 +188,15 @@ func TestAffinity(t *testing.T) {
 		t.Fatalf("failed to update control plane resources: %v", err)
 	}
 
-	// We can skip CSDS check because there's no long delay as in TD.
+	// Note: We can skip CSDS check because there's no long delay as in TD.
+	//
+	// The client stats check doesn't race with the xds resource update because
+	// there's only one version of xds resource, updated at the beginning of the
+	// test. So there's no need to retry the stats call.
+	//
+	// In the future, we may add tests that update xds in the middle. Then we
+	// either need to retry clientStats(), or make a CSDS check before so the
+	// result is stable.
 
 	st, err := c.clientStats(ctx)
 	if err != nil {
