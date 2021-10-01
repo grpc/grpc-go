@@ -65,23 +65,22 @@ func (s) TestLDSWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Another update, with an extra resource for a different resource name. The
-	// original resource though has not changed, and therefore the watcher will
-	// not be notified.
+	// Push an update, with an extra resource for a different resource name.
+	// Specify a non-nil raw proto in the original resource to ensure that the
+	// new update is not considered equal to the old one.
+	newUpdate := ListenerUpdate{RouteConfigName: testRDSName, Raw: &anypb.Any{}}
 	client.NewListeners(map[string]ListenerUpdateErrTuple{
-		testLDSName:  {Update: wantUpdate},
+		testLDSName:  {Update: newUpdate},
 		"randomName": {},
 	}, UpdateMetadata{})
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if u, err := ldsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Fatalf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)
+	if err := verifyListenerUpdate(ctx, ldsUpdateCh, newUpdate, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	// Cancel watch, and send update again.
 	cancelWatch()
 	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Update: wantUpdate}}, UpdateMetadata{})
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := ldsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)

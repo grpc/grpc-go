@@ -83,18 +83,23 @@ func (s) TestEndpointsWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Another update for a different resource name.
-	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{"randomName": {}}, UpdateMetadata{})
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if u, err := endpointsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
+	// Push an update, with an extra resource for a different resource name.
+	// Specify a non-nil raw proto in the original resource to ensure that the
+	// new update is not considered equal to the old one.
+	newUpdate := wantUpdate
+	newUpdate.Raw = &anypb.Any{}
+	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{
+		testCDSName:  {Update: newUpdate},
+		"randomName": {},
+	}, UpdateMetadata{})
+	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, newUpdate, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	// Cancel watch, and send update again.
 	cancelWatch()
 	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := endpointsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)

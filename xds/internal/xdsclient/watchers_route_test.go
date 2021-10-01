@@ -72,18 +72,23 @@ func (s) TestRDSWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Another update for a different resource name.
-	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{"randomName": {}}, UpdateMetadata{})
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if u, err := rdsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Errorf("unexpected RouteConfigUpdate: %v, %v, want channel recv timeout", u, err)
+	// Push an update, with an extra resource for a different resource name.
+	// Specify a non-nil raw proto in the original resource to ensure that the
+	// new update is not considered equal to the old one.
+	newUpdate := wantUpdate
+	newUpdate.Raw = &anypb.Any{}
+	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{
+		testRDSName:  {Update: newUpdate},
+		"randomName": {},
+	}, UpdateMetadata{})
+	if err := verifyRouteConfigUpdate(ctx, rdsUpdateCh, newUpdate, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	// Cancel watch, and send update again.
 	cancelWatch()
 	client.NewRouteConfigs(map[string]RouteConfigUpdateErrTuple{testRDSName: {Update: wantUpdate}}, UpdateMetadata{})
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := rdsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected RouteConfigUpdate: %v, %v, want channel recv timeout", u, err)

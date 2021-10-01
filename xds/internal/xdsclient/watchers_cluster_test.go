@@ -65,23 +65,23 @@ func (s) TestClusterWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Another update, with an extra resource for a different resource name. The
-	// original resource though has not changed, and therefore the watcher will
-	// not be notified.
+	// Push an update, with an extra resource for a different resource name.
+	// Specify a non-nil raw proto in the original resource to ensure that the
+	// new update is not considered equal to the old one.
+	newUpdate := wantUpdate
+	newUpdate.Raw = &anypb.Any{}
 	client.NewClusters(map[string]ClusterUpdateErrTuple{
-		testCDSName:  {Update: wantUpdate},
+		testCDSName:  {Update: newUpdate},
 		"randomName": {},
 	}, UpdateMetadata{})
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if u, err := clusterUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Fatalf("unexpected ClusterUpdate: %v, %v, want channel recv timeout", u, err)
+	if err := verifyClusterUpdate(ctx, clusterUpdateCh, newUpdate, nil); err != nil {
+		t.Fatal(err)
 	}
 
 	// Cancel watch, and send update again.
 	cancelWatch()
 	client.NewClusters(map[string]ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := clusterUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
