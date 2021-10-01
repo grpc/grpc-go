@@ -63,7 +63,7 @@ func NewDefaultCredentialsWithOptions(opts DefaultCredentialsOptions) credential
 	}
 	bundle, err := c.NewWithMode(internal.CredsBundleModeFallback)
 	if err != nil {
-		logger.Warningf("compute engine creds with per rpc: failed to create new creds: %v", err)
+		logger.Warningf("google default creds with per rpc: failed to create new creds: %v", err)
 	}
 	return bundle
 }
