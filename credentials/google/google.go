@@ -37,7 +37,7 @@ var logger = grpclog.Component("credentials")
 
 // DefaultCredentialsOptions constructs options to build DefaultCredentials.
 type DefaultCredentialsOptions struct {
-	// PerRPCCreds is a  per RPC credentials that is passed to a bundle.
+	// PerRPCCreds is a per RPC credentials that is passed to a bundle.
 	PerRPCCreds credentials.PerRPCCredentials
 }
 
@@ -53,7 +53,7 @@ func NewDefaultCredentialsWithOptions(opts DefaultCredentialsOptions) credential
 		var err error
 		perRPC, err = oauth.NewApplicationDefault(ctx)
 		if err != nil {
-			logger.Warningf("google default creds: failed to create application oauth: %v", err)
+			logger.Warningf("NewDefaultCredentialsWithOptions: failed to create application oauth: %v", err)
 		}
 	}
 	c := &creds{
@@ -63,7 +63,7 @@ func NewDefaultCredentialsWithOptions(opts DefaultCredentialsOptions) credential
 	}
 	bundle, err := c.NewWithMode(internal.CredsBundleModeFallback)
 	if err != nil {
-		logger.Warningf("google default creds with per rpc: failed to create new creds: %v", err)
+		logger.Warningf("NewDefaultCredentialsWithOptions: failed to create new creds: %v", err)
 	}
 	return bundle
 }
