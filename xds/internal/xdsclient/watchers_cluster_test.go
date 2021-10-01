@@ -86,7 +86,6 @@ func (s) TestClusterWatch(t *testing.T) {
 	if u, err := clusterUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
-
 }
 
 // TestClusterTwoWatchSameResourceName covers the case where an update is received
