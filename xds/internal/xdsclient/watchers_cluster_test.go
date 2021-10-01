@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc/internal/testutils"
 )
@@ -64,23 +65,28 @@ func (s) TestClusterWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Another update, with an extra resource for a different resource name.
+	// Another update, with an extra resource for a different resource name. The
+	// original resource though has not changed, and therefore the watcher will
+	// not be notified.
 	client.NewClusters(map[string]ClusterUpdateErrTuple{
 		testCDSName:  {Update: wantUpdate},
 		"randomName": {},
 	}, UpdateMetadata{})
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate, nil); err != nil {
-		t.Fatal(err)
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if u, err := clusterUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
+		t.Fatalf("unexpected ClusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 
 	// Cancel watch, and send update again.
 	cancelWatch()
 	client.NewClusters(map[string]ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := clusterUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
 	}
+
 }
 
 // TestClusterTwoWatchSameResourceName covers the case where an update is received
@@ -130,19 +136,28 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	// Cancel the last watch, and send update again.
+	// Cancel the last watch, and send update again. None of the watchers should
+	// be notified because one has been cancelled, and the other is receiving
+	// the same update.
 	cancelLastWatch()
 	client.NewClusters(map[string]ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
-	for i := 0; i < count-1; i++ {
-		if err := verifyClusterUpdate(ctx, clusterUpdateChs[i], wantUpdate, nil); err != nil {
-			t.Fatal(err)
-		}
+	for i := 0; i < count; i++ {
+		func() {
+			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+			defer sCancel()
+			if u, err := clusterUpdateChs[i].Receive(sCtx); err != context.DeadlineExceeded {
+				t.Errorf("unexpected ClusterUpdate: %v, %v, want channel recv timeout", u, err)
+			}
+		}()
 	}
 
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if u, err := clusterUpdateChs[count-1].Receive(sCtx); err != context.DeadlineExceeded {
-		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
+	// Push a new update and make sure the uncancelled watcher is invoked.
+	// Specify a non-nil raw proto to ensure that the new update is not
+	// considered equal to the old one.
+	newUpdate := ClusterUpdate{ClusterName: testEDSName, Raw: &anypb.Any{}}
+	client.NewClusters(map[string]ClusterUpdateErrTuple{testCDSName: {Update: newUpdate}}, UpdateMetadata{})
+	if err := verifyClusterUpdate(ctx, clusterUpdateChs[0], newUpdate, nil); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -417,22 +432,26 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
 	}
 
-	// Watcher 2 should get the same update again.
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2, nil); err != nil {
-		t.Fatal(err)
+	// Watcher 2 should not see an update since the resource has not changed.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if u, err := clusterUpdateCh2.Receive(sCtx); err != context.DeadlineExceeded {
+		t.Errorf("unexpected ClusterUpdate: %v, want receiving from channel timeout", u)
 	}
 
-	// Send one more update without resource 1.
+	// Send another update with resource 2 modified. Specify a non-nil raw proto
+	// to ensure that the new update is not considered equal to the old one.
+	wantUpdate2 = ClusterUpdate{ClusterName: testEDSName + "2", Raw: &anypb.Any{}}
 	client.NewClusters(map[string]ClusterUpdateErrTuple{testCDSName + "2": {Update: wantUpdate2}}, UpdateMetadata{})
 
 	// Watcher 1 should not see an update.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := clusterUpdateCh1.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Errorf("unexpected clusterUpdate: %v, %v, want channel recv timeout", u, err)
+		t.Errorf("unexpected Cluster: %v, want receiving from channel timeout", u)
 	}
 
-	// Watcher 2 should get the same update again.
+	// Watcher 2 should get the update.
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh2, wantUpdate2, nil); err != nil {
 		t.Fatal(err)
 	}

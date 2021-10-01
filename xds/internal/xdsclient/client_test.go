@@ -26,6 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -181,7 +182,9 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wantUpdate2 := ClusterUpdate{ClusterName: testEDSName + "2"}
+	// The second update needs to be different in the underlying resource proto
+	// for the watch callback to be invoked.
+	wantUpdate2 := ClusterUpdate{ClusterName: testEDSName + "2", Raw: &anypb.Any{}}
 	client.NewClusters(map[string]ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate2}}, UpdateMetadata{})
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate2, nil); err != nil {
 		t.Fatal(err)
@@ -200,7 +203,7 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 		}
 		return nil
 	}
-	if gotUpdate.Err != nil || !cmp.Equal(gotUpdate.Update, wantUpdate) {
+	if gotUpdate.Err != nil || !cmp.Equal(gotUpdate.Update, wantUpdate, protocmp.Transform()) {
 		return fmt.Errorf("unexpected endpointsUpdate: (%v, %v), want: (%v, nil)", gotUpdate.Update, gotUpdate.Err, wantUpdate)
 	}
 	return nil
@@ -218,7 +221,7 @@ func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, w
 		}
 		return nil
 	}
-	if gotUpdate.Err != nil || !cmp.Equal(gotUpdate.Update, wantUpdate) {
+	if gotUpdate.Err != nil || !cmp.Equal(gotUpdate.Update, wantUpdate, protocmp.Transform()) {
 		return fmt.Errorf("unexpected route config update: (%v, %v), want: (%v, nil)", gotUpdate.Update, gotUpdate.Err, wantUpdate)
 	}
 	return nil
@@ -236,7 +239,7 @@ func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantU
 		}
 		return nil
 	}
-	if !cmp.Equal(gotUpdate.Update, wantUpdate) {
+	if !cmp.Equal(gotUpdate.Update, wantUpdate, protocmp.Transform()) {
 		return fmt.Errorf("unexpected clusterUpdate: (%v, %v), want: (%v, nil)", gotUpdate.Update, gotUpdate.Err, wantUpdate)
 	}
 	return nil
@@ -254,7 +257,7 @@ func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wan
 		}
 		return nil
 	}
-	if gotUpdate.Err != nil || !cmp.Equal(gotUpdate.Update, wantUpdate, cmpopts.EquateEmpty()) {
+	if gotUpdate.Err != nil || !cmp.Equal(gotUpdate.Update, wantUpdate, cmpopts.EquateEmpty(), protocmp.Transform()) {
 		return fmt.Errorf("unexpected endpointsUpdate: (%v, %v), want: (%v, nil)", gotUpdate.Update, gotUpdate.Err, wantUpdate)
 	}
 	return nil
