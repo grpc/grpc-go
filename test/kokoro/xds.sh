@@ -3,6 +3,12 @@
 set -exu -o pipefail
 [[ -f /VERSION ]] && cat /VERSION
 
+
+echo "Remove the expired letsencrypt.org cert and update the CA certificates"
+sudo apt-get install -y ca-certificates
+sudo rm /usr/share/ca-certificates/mozilla/DST_Root_CA_X3.crt
+sudo update-ca-certificates
+
 cd github
 
 export GOPATH="${HOME}/gopath"
