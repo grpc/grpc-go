@@ -7990,3 +7990,61 @@ func (s) TestAuthorityHeader(t *testing.T) {
 		})
 	}
 }
+
+// wrapCloseListener tracks Accepts/Closes and maintains a counter of the
+// number of open connections.
+type wrapCloseListener struct {
+	net.Listener
+	connsOpen int32
+}
+
+// wrapCloseListener is returned by wrapCloseListener.Accept and decrements its
+// connsOpen when Close is called.
+type wrapCloseConn struct {
+	net.Conn
+	lis       *wrapCloseListener
+	closeOnce sync.Once
+}
+
+func (w *wrapCloseListener) Accept() (net.Conn, error) {
+	conn, err := w.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	atomic.AddInt32(&w.connsOpen, 1)
+	return &wrapCloseConn{Conn: conn, lis: w}, nil
+}
+
+func (w *wrapCloseConn) Close() error {
+	defer w.closeOnce.Do(func() { atomic.AddInt32(&w.lis.connsOpen, -1) })
+	return w.Conn.Close()
+}
+
+// TestServerClosesConn ensures conn.Close is always closed even if the client
+// doesn't complete the HTTP/2 handshake.
+func (s) TestServerClosesConn(t *testing.T) {
+	lis := bufconn.Listen(20)
+	wrapLis := &wrapCloseListener{Listener: lis}
+
+	s := grpc.NewServer()
+	go s.Serve(wrapLis)
+	defer s.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	for i := 0; i < 10; i++ {
+		conn, err := lis.DialContext(ctx)
+		if err != nil {
+			t.Fatalf("Dial = _, %v; want _, nil", err)
+		}
+		conn.Close()
+	}
+	for ctx.Err() == nil {
+		if atomic.LoadInt32(&wrapLis.connsOpen) == 0 {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for conns to be closed by server; still open: %v", atomic.LoadInt32(&wrapLis.connsOpen))
+}
