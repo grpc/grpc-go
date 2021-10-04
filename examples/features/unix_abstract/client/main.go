@@ -1,0 +1,64 @@
+//go:build linux
+// +build linux
+
+/*
+ *
+ * Copyright 2021 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// Binary client is an example client which dials a server on an abstract unix
+// socket.
+package main
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"time"
+
+	"google.golang.org/grpc"
+	ecpb "google.golang.org/grpc/examples/features/proto/echo"
+)
+
+func callUnaryEcho(c ecpb.EchoClient, message string) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	r, err := c.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message})
+	if err != nil {
+		log.Fatalf("could not greet: %v", err)
+	}
+	fmt.Println(r.Message)
+}
+
+func makeRPCs(cc *grpc.ClientConn, n int) {
+	hwc := ecpb.NewEchoClient(cc)
+	for i := 0; i < n; i++ {
+		callUnaryEcho(hwc, "this is examples/unix_abstract")
+	}
+}
+
+func main() {
+	addr := "unix-abstract:abstract-unix-socket"
+	cc, err := grpc.Dial(addr, grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("grpc.Dial(%q) failed: %v", addr, err)
+	}
+	defer cc.Close()
+
+	fmt.Printf("--- calling helloworld.Greeter/SayHello to %q\n", addr)
+	makeRPCs(cc, 10)
+	fmt.Println()
+}
