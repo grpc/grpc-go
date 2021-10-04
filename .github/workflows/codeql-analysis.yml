@@ -3,9 +3,6 @@ name: "CodeQL"
 on:
   push:
     branches: [ master ]
-  pull_request:
-    # The branches below must be a subset of the branches above
-    branches: [ master ]
   schedule:
     - cron: '24 20 * * 3'
 
@@ -19,7 +16,7 @@ jobs:
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
