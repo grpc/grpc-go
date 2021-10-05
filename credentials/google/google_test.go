@@ -76,9 +76,9 @@ func overrideNewCredsFuncs() func() {
 func TestClientHandshakeBasedOnClusterName(t *testing.T) {
 	defer overrideNewCredsFuncs()()
 	for bundleTyp, tc := range map[string]credentials.Bundle{
-		"defaultCreds":       NewDefaultCredentials(),
-		"computeCreds":       NewComputeEngineCredentials(),
-		"computeCredsPerRPC": NewComputeEngineCredsWithOptions(ComputeEngineCredsOptions{}),
+		"defaultCredsWithOptions": NewDefaultCredentialsWithOptions(DefaultCredentialsOptions{}),
+		"defaultCreds":            NewDefaultCredentials(),
+		"computeCreds":            NewComputeEngineCredentials(),
 	} {
 		tests := []struct {
 			name    string
