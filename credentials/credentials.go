@@ -160,8 +160,10 @@ type TransportCredentials interface {
 	Info() ProtocolInfo
 	// Clone makes a copy of this TransportCredentials.
 	Clone() TransportCredentials
-	// OverrideServerName overrides the server name used to verify the hostname
-	// on the returned certificates from the server.
+	// OverrideServerName specifies the value used for the following:
+	// - verifying the hostname on the returned certificates
+	// - as SNI in the client's handshake to support virtual hosting
+	// - as the value for `:authority` header at stream creation time
 	//
 	// Deprecated: use grpc.WithAuthority instead. Will be supported
 	// throughout 1.x.

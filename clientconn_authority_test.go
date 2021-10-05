@@ -47,12 +47,10 @@ func (s) TestClientConnAuthority(t *testing.T) {
 			wantAuthority: "Non-Existent.Server:8080",
 		},
 		{
-			name:   "override-via-creds",
-			target: "Non-Existent.Server:8080",
-			opts:   []DialOption{WithTransportCredentials(creds)},
-			// Overriding authority from the transport credentials is not
-			// supported anymore.
-			wantAuthority: "Non-Existent.Server:8080",
+			name:          "override-via-creds",
+			target:        "Non-Existent.Server:8080",
+			opts:          []DialOption{WithTransportCredentials(creds)},
+			wantAuthority: serverNameOverride,
 		},
 		{
 			name:          "override-via-WithAuthority",

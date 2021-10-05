@@ -69,7 +69,7 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 		{target: "unix-abstract:a b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "a b"}},
 		{target: "unix-abstract:a:b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "a:b"}},
 		{target: "unix-abstract:a-b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "a-b"}},
-		{target: "unix-abstract:/ a///://::!@#$%25^&*()b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "/ a///://::!@"}},
+		{target: "unix-abstract:/ a///://::!@#$%25^&*()b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: " a///://::!@"}},
 		{target: "unix-abstract:passthrough:abc", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "passthrough:abc"}},
 		{target: "unix-abstract:unix:///abc", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "unix:///abc"}},
 		{target: "unix-abstract:///a/b/c", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "a/b/c"}},
@@ -77,7 +77,7 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 		{target: "passthrough:///unix:///a/b/c", wantParsed: resolver.Target{Scheme: "passthrough", Authority: "", Endpoint: "unix:///a/b/c"}},
 
 		// Cases for `scheme:absolute-path`.
-		{target: "dns:/a/b/c", wantParsed: resolver.Target{Scheme: "dns", Authority: "", Endpoint: "/a/b/c"}},
+		{target: "dns:/a/b/c", wantParsed: resolver.Target{Scheme: "dns", Authority: "", Endpoint: "a/b/c"}},
 		{target: "unregistered:/a/b/c", wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "unregistered:/a/b/c"}},
 	}
 
@@ -130,7 +130,7 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 		},
 		{
 			target:            "unix:/a/b/c",
-			wantParsed:        resolver.Target{Scheme: "unix", Authority: "", Endpoint: "/a/b/c"},
+			wantParsed:        resolver.Target{Scheme: "unix", Authority: "", Endpoint: "a/b/c"},
 			wantDialerAddress: "unix:///a/b/c",
 		},
 		{

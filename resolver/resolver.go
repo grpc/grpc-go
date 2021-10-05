@@ -217,11 +217,11 @@ type ClientConn interface {
 // Examples:
 //
 // - "dns://some_authority/foo.bar"
-//   Target{Scheme: "dns", Authority: "some_authority", Endpoint: "/foo.bar"}
+//   Target{Scheme: "dns", Authority: "some_authority", Endpoint: "foo.bar"}
 // - "foo.bar"
-//   Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "/foo.bar"}
+//   Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "foo.bar"}
 // - "unknown_scheme://authority/endpoint"
-//   Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "/unknown_scheme://authority/endpoint"}
+//   Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "unknown_scheme://authority/endpoint"}
 type Target struct {
 	Scheme    string
 	Authority string
