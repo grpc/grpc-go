@@ -46,21 +46,16 @@ type DefaultCredentialsOptions struct {
 //
 // This API is experimental.
 func NewDefaultCredentialsWithOptions(opts DefaultCredentialsOptions) credentials.Bundle {
-	perRPC := opts.PerRPCCreds
-	if perRPC == nil {
+	if opts.PerRPCCreds == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), tokenRequestTimeout)
 		defer cancel()
 		var err error
-		perRPC, err = oauth.NewApplicationDefault(ctx)
+		opts.PerRPCCreds, err = oauth.NewApplicationDefault(ctx)
 		if err != nil {
 			logger.Warningf("NewDefaultCredentialsWithOptions: failed to create application oauth: %v", err)
 		}
 	}
-	c := &creds{
-		newPerRPCCreds: func() credentials.PerRPCCredentials {
-			return perRPC
-		},
-	}
+	c := &creds{opts: opts}
 	bundle, err := c.NewWithMode(internal.CredsBundleModeFallback)
 	if err != nil {
 		logger.Warningf("NewDefaultCredentialsWithOptions: failed to create new creds: %v", err)
@@ -89,14 +84,14 @@ func NewComputeEngineCredentials() credentials.Bundle {
 
 // creds implements credentials.Bundle.
 type creds struct {
+	opts DefaultCredentialsOptions
+
 	// Supported modes are defined in internal/internal.go.
 	mode string
 	// The transport credentials associated with this bundle.
 	transportCreds credentials.TransportCredentials
 	// The per RPC credentials associated with this bundle.
 	perRPCCreds credentials.PerRPCCredentials
-	// Creates new per RPC credentials
-	newPerRPCCreds func() credentials.PerRPCCredentials
 }
 
 func (c *creds) TransportCredentials() credentials.TransportCredentials {
@@ -123,8 +118,8 @@ var (
 // existing Bundle may cause races.
 func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
 	newCreds := &creds{
-		mode:           mode,
-		newPerRPCCreds: c.newPerRPCCreds,
+		opts: c.opts,
+		mode: mode,
 	}
 
 	// Create transport credentials.
@@ -140,7 +135,7 @@ func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
 	}
 
 	if mode == internal.CredsBundleModeFallback || mode == internal.CredsBundleModeBackendFromBalancer {
-		newCreds.perRPCCreds = newCreds.newPerRPCCreds()
+		newCreds.perRPCCreds = newCreds.opts.PerRPCCreds
 	}
 
 	return newCreds, nil
