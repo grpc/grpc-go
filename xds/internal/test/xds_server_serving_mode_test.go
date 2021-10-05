@@ -24,6 +24,7 @@ package xds_test
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"testing"
 	"time"
@@ -38,6 +39,118 @@ import (
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 )
+
+// TestServerSideXDS_RedundantUpdateSuppression tests the scenario where the
+// control plane sends the same resource update. It verifies that the mode
+// change callback is not invoked and client connections to the server are not
+// recycled.
+func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
+	managementServer, nodeID, bootstrapContents, _, cleanup := setupManagementServer(t)
+	defer cleanup()
+
+	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lis, err := xdstestutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	updateCh := make(chan connectivity.ServingMode, 1)
+
+	// Create a server option to get notified about serving mode changes.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
+		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
+		updateCh <- args.Mode
+	})
+
+	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
+	server := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
+	defer server.Stop()
+	testpb.RegisterTestServiceServer(server, &testService{})
+
+	// Setup the management server to respond with the listener resources.
+	host, port, err := hostPortFromListener(lis)
+	if err != nil {
+		t.Fatalf("failed to retrieve host and port of server: %v", err)
+	}
+	listener := e2e.DefaultServerListener(host, port, e2e.SecurityLevelNone)
+	resources := e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{listener},
+	}
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	go func() {
+		if err := server.Serve(lis); err != nil {
+			t.Errorf("Serve() failed: %v", err)
+		}
+	}()
+
+	// Wait for the listener to move to "serving" mode.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timed out waiting for a mode change update: %v", err)
+	case mode := <-updateCh:
+		if mode != connectivity.ServingModeServing {
+			t.Fatalf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
+		}
+	}
+
+	// Create a ClientConn and make a successful RPCs.
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+	waitForSuccessfulRPC(ctx, t, cc)
+
+	// Start a goroutine to make sure that we do not see any connectivity state
+	// changes on the client connection. If redundant updates are not
+	// suppressed, server will recycle client connections.
+	errCh := make(chan error, 1)
+	go func() {
+		if cc.WaitForStateChange(ctx, connectivity.Ready) {
+			errCh <- fmt.Errorf("unexpected connectivity state change {%s --> %s} on the client connection", connectivity.Ready, cc.GetState())
+			return
+		}
+		errCh <- nil
+	}()
+
+	// Update the management server with the same listener resource. This will
+	// update the resource version though, and should result in a the management
+	// server sending the same resource to the xDS-enabled gRPC server.
+	if err := managementServer.Update(ctx, e2e.UpdateOptions{
+		NodeID:    nodeID,
+		Listeners: []*v3listenerpb.Listener{listener},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Since redundant resource updates are suppressed, we should not see the
+	// mode change callback being invoked.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-sCtx.Done():
+	case mode := <-updateCh:
+		t.Fatalf("unexpected mode change callback with new mode %v", mode)
+	}
+
+	// Make sure RPCs continue to succeed.
+	waitForSuccessfulRPC(ctx, t, cc)
+
+	// Cancel the context to ensure that the WaitForStateChange call exits early
+	// and returns false.
+	cancel()
+	if err := <-errCh; err != nil {
+		t.Fatal(err)
+	}
+}
 
 // TestServerSideXDS_ServingModeChanges tests the serving mode functionality in
 // xDS enabled gRPC servers. It verifies that appropriate mode changes happen in
@@ -163,17 +276,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Wait for lis2 to move to "not-serving" mode. lis1 also receives an update
-	// here even though it stays in "serving" mode.
-	// See https://github.com/grpc/grpc-go/issues/4695.
-	select {
-	case <-ctx.Done():
-		t.Fatalf("timed out waiting for a mode change update: %v", err)
-	case mode := <-updateCh1:
-		if mode != connectivity.ServingModeServing {
-			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
-		}
-	}
+	// Wait for lis2 to move to "not-serving" mode.
 	select {
 	case <-ctx.Done():
 		t.Fatalf("timed out waiting for a mode change update: %v", err)

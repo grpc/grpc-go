@@ -23,7 +23,10 @@ import (
 	"fmt"
 	"testing"
 
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // TestLDSWatch covers the cases:
@@ -62,12 +65,15 @@ func (s) TestLDSWatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Another update, with an extra resource for a different resource name.
+	// Push an update, with an extra resource for a different resource name.
+	// Specify a non-nil raw proto in the original resource to ensure that the
+	// new update is not considered equal to the old one.
+	newUpdate := ListenerUpdate{RouteConfigName: testRDSName, Raw: &anypb.Any{}}
 	client.NewListeners(map[string]ListenerUpdateErrTuple{
-		testLDSName:  {Update: wantUpdate},
+		testLDSName:  {Update: newUpdate},
 		"randomName": {},
 	}, UpdateMetadata{})
-	if err := verifyListenerUpdate(ctx, ldsUpdateCh, wantUpdate, nil); err != nil {
+	if err := verifyListenerUpdate(ctx, ldsUpdateCh, newUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -77,7 +83,7 @@ func (s) TestLDSWatch(t *testing.T) {
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := ldsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Errorf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)
+		t.Fatalf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)
 	}
 }
 
@@ -131,19 +137,28 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	// Cancel the last watch, and send update again.
+	// Cancel the last watch, and send update again. None of the watchers should
+	// be notified because one has been cancelled, and the other is receiving
+	// the same update.
 	cancelLastWatch()
 	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Update: wantUpdate}}, UpdateMetadata{})
-	for i := 0; i < count-1; i++ {
-		if err := verifyListenerUpdate(ctx, ldsUpdateChs[i], wantUpdate, nil); err != nil {
-			t.Fatal(err)
-		}
+	for i := 0; i < count; i++ {
+		func() {
+			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+			defer sCancel()
+			if u, err := ldsUpdateChs[i].Receive(sCtx); err != context.DeadlineExceeded {
+				t.Errorf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)
+			}
+		}()
 	}
 
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if u, err := ldsUpdateChs[count-1].Receive(sCtx); err != context.DeadlineExceeded {
-		t.Errorf("unexpected ListenerUpdate: %v, %v, want channel recv timeout", u, err)
+	// Push a new update and make sure the uncancelled watcher is invoked.
+	// Specify a non-nil raw proto to ensure that the new update is not
+	// considered equal to the old one.
+	newUpdate := ListenerUpdate{RouteConfigName: testRDSName, Raw: &anypb.Any{}}
+	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Update: newUpdate}}, UpdateMetadata{})
+	if err := verifyListenerUpdate(ctx, ldsUpdateChs[0], newUpdate, nil); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -332,22 +347,26 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
 	}
 
-	// Watcher 2 should get the same update again.
-	if err := verifyListenerUpdate(ctx, ldsUpdateCh2, wantUpdate2, nil); err != nil {
-		t.Fatal(err)
+	// Watcher 2 should not see an update since the resource has not changed.
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if u, err := ldsUpdateCh2.Receive(sCtx); err != context.DeadlineExceeded {
+		t.Errorf("unexpected ListenerUpdate: %v, want receiving from channel timeout", u)
 	}
 
-	// Send one more update without resource 1.
+	// Send another update with resource 2 modified. Specify a non-nil raw proto
+	// to ensure that the new update is not considered equal to the old one.
+	wantUpdate2 = ListenerUpdate{RouteConfigName: testEDSName + "2", Raw: &anypb.Any{}}
 	client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName + "2": {Update: wantUpdate2}}, UpdateMetadata{})
 
 	// Watcher 1 should not see an update.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := ldsUpdateCh1.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected ListenerUpdate: %v, want receiving from channel timeout", u)
 	}
 
-	// Watcher 2 should get the same update again.
+	// Watcher 2 should get the update.
 	if err := verifyListenerUpdate(ctx, ldsUpdateCh2, wantUpdate2, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -446,5 +465,127 @@ func (s) TestListenerWatchPartialValid(t *testing.T) {
 	// The failed watcher should receive an error.
 	if err := verifyListenerUpdate(ctx, updateChs[badResourceName], ListenerUpdate{}, wantError2); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestListenerWatch_RedundantUpdateSupression tests scenarios where an update
+// with an unmodified resource is suppressed, and modified resource is not.
+func (s) TestListenerWatch_RedundantUpdateSupression(t *testing.T) {
+	apiClientCh, cleanup := overrideNewAPIClient()
+	defer cleanup()
+
+	client, err := newWithConfig(clientOpts(testXDSServer, false))
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	c, err := apiClientCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout when waiting for API client to be created: %v", err)
+	}
+	apiClient := c.(*testAPIClient)
+
+	ldsUpdateCh := testutils.NewChannel()
+	client.WatchListener(testLDSName, func(update ListenerUpdate, err error) {
+		ldsUpdateCh.Send(ListenerUpdateErrTuple{Update: update, Err: err})
+	})
+	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
+		t.Fatalf("want new watch to start, got error %v", err)
+	}
+
+	basicListener := testutils.MarshalAny(&v3listenerpb.Listener{
+		Name: testLDSName,
+		ApiListener: &v3listenerpb.ApiListener{
+			ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+				RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+					Rds: &v3httppb.Rds{RouteConfigName: "route-config-name"},
+				},
+			}),
+		},
+	})
+	listenerWithFilter1 := testutils.MarshalAny(&v3listenerpb.Listener{
+		Name: testLDSName,
+		ApiListener: &v3listenerpb.ApiListener{
+			ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+				RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+					Rds: &v3httppb.Rds{RouteConfigName: "route-config-name"},
+				},
+				HttpFilters: []*v3httppb.HttpFilter{
+					{
+						Name:       "customFilter1",
+						ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: customFilterConfig},
+					},
+				},
+			}),
+		},
+	})
+	listenerWithFilter2 := testutils.MarshalAny(&v3listenerpb.Listener{
+		Name: testLDSName,
+		ApiListener: &v3listenerpb.ApiListener{
+			ApiListener: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+				RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+					Rds: &v3httppb.Rds{RouteConfigName: "route-config-name"},
+				},
+				HttpFilters: []*v3httppb.HttpFilter{
+					{
+						Name:       "customFilter2",
+						ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: customFilterConfig},
+					},
+				},
+			}),
+		},
+	})
+
+	tests := []struct {
+		update       ListenerUpdate
+		wantCallback bool
+	}{
+		{
+			// First update. Callback should be invoked.
+			update:       ListenerUpdate{Raw: basicListener},
+			wantCallback: true,
+		},
+		{
+			// Same update as previous. Callback should be skipped.
+			update:       ListenerUpdate{Raw: basicListener},
+			wantCallback: false,
+		},
+		{
+			// New update. Callback should be invoked.
+			update:       ListenerUpdate{Raw: listenerWithFilter1},
+			wantCallback: true,
+		},
+		{
+			// Same update as previous. Callback should be skipped.
+			update:       ListenerUpdate{Raw: listenerWithFilter1},
+			wantCallback: false,
+		},
+		{
+			// New update. Callback should be invoked.
+			update:       ListenerUpdate{Raw: listenerWithFilter2},
+			wantCallback: true,
+		},
+		{
+			// Same update as previous. Callback should be skipped.
+			update:       ListenerUpdate{Raw: listenerWithFilter2},
+			wantCallback: false,
+		},
+	}
+	for _, test := range tests {
+		client.NewListeners(map[string]ListenerUpdateErrTuple{testLDSName: {Update: test.update}}, UpdateMetadata{})
+		if test.wantCallback {
+			if err := verifyListenerUpdate(ctx, ldsUpdateCh, test.update, nil); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+			defer sCancel()
+			if u, err := ldsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
+				t.Errorf("unexpected ListenerUpdate: %v, want receiving from channel timeout", u)
+			}
+		}
 	}
 }
