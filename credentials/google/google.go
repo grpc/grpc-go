@@ -88,9 +88,9 @@ type creds struct {
 
 	// Supported modes are defined in internal/internal.go.
 	mode string
-	// The transport credentials associated with this bundle.
+	// The active transport credentials associated with this bundle.
 	transportCreds credentials.TransportCredentials
-	// The per RPC credentials associated with this bundle.
+	// The active per RPC credentials associated with this bundle.
 	perRPCCreds credentials.PerRPCCredentials
 }
 
