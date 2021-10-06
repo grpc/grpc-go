@@ -43,7 +43,7 @@ const (
 	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
 	aggregateAndDNSSupportEnv    = "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER"
 	retrySupportEnv              = "GRPC_XDS_EXPERIMENTAL_ENABLE_RETRY"
-	rbacSupportEnv               = "GRPC_XDS_EXPERIMENTAL_ENABLE_RBAC"
+	rbacSupportEnv               = "GRPC_XDS_EXPERIMENTAL_RBAC"
 
 	c2pResolverSupportEnv                    = "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER"
 	c2pResolverTestOnlyTrafficDirectorURIEnv = "GRPC_TEST_ONLY_GOOGLE_C2P_RESOLVER_TRAFFIC_DIRECTOR_URI"
