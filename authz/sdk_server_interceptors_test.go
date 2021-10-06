@@ -20,6 +20,7 @@ package authz_test
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -33,15 +34,15 @@ func createTmpPolicyFile(t *testing.T, dirSuffix string, policy []byte) string {
 
 	// Create a temp directory. Passing an empty string for the first argument
 	// uses the system temp directory.
-	dir, err := os.MkdirTemp("", dirSuffix)
+	dir, err := ioutil.TempDir("", dirSuffix)
 	if err != nil {
-		t.Fatalf("os.MkdirTemp() failed: %v", err)
+		t.Fatalf("ioutil.TempDir() failed: %v", err)
 	}
 	t.Logf("Using tmpdir: %s", dir)
 	// Write policy into file.
 	filename := path.Join(dir, "policy.json")
-	if err := os.WriteFile(filename, policy, os.ModePerm); err != nil {
-		t.Fatalf("os.WriteFile(%q) failed: %v", filename, err)
+	if err := ioutil.WriteFile(filename, policy, os.ModePerm); err != nil {
+		t.Fatalf("ioutil.WriteFile(%q) failed: %v", filename, err)
 	}
 	t.Logf("Wrote policy %s to file at %s", string(policy), filename)
 	return filename
