@@ -44,14 +44,14 @@ func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.Echo
 }
 
 func main() {
-	netw, addr := "unix", "\x00"+"abstract-unix-socket"
+	netw, addr := "unix", "\x00abstract-unix-socket"
 	lis, err := net.Listen(netw, addr)
 	if err != nil {
 		log.Fatalf("net.Listen(%q, %q) failed: %v", netw, addr, err)
 	}
 	s := grpc.NewServer()
 	pb.RegisterEchoServer(s, &ecServer{addr: addr})
-	log.Printf("serving on %q\n", lis.Addr().String())
+	log.Printf("serving on %s\n", lis.Addr().String())
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

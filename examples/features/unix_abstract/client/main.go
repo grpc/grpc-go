@@ -51,6 +51,10 @@ func makeRPCs(cc *grpc.ClientConn, n int) {
 }
 
 func main() {
+	// A dial target of `unix:@abstract-unix-socket` should also work fine for
+	// this example because of golang conventions (net.Dial behavior). But we do
+	// not recommend this since we explicitly added the `unix-abstract` scheme
+	// for cross-language compatibility.
 	addr := "unix-abstract:abstract-unix-socket"
 	cc, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
@@ -58,7 +62,7 @@ func main() {
 	}
 	defer cc.Close()
 
-	fmt.Printf("--- calling helloworld.Greeter/SayHello to %q\n", addr)
+	fmt.Printf("--- calling echo.Echo/UnaryEcho to %s\n", addr)
 	makeRPCs(cc, 10)
 	fmt.Println()
 }
