@@ -114,3 +114,4 @@ jobs:
           examples/examples_test.sh
           security/advancedtls/examples/examples_test.sh
           interop/interop_test.sh
+          xds/internal/test/e2e/run.sh

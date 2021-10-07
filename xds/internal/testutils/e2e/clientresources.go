@@ -93,7 +93,7 @@ func DefaultClientResources(params ResourceParams) UpdateOptions {
 		Listeners: []*v3listenerpb.Listener{DefaultClientListener(params.DialTarget, routeConfigName)},
 		Routes:    []*v3routepb.RouteConfiguration{DefaultRouteConfig(routeConfigName, params.DialTarget, clusterName)},
 		Clusters:  []*v3clusterpb.Cluster{DefaultCluster(clusterName, endpointsName, params.SecLevel)},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{DefaultEndpoint(endpointsName, params.Host, params.Port)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{DefaultEndpoint(endpointsName, params.Host, []uint32{params.Port})},
 	}
 }
 
@@ -358,21 +358,25 @@ func DefaultCluster(clusterName, edsServiceName string, secLevel SecurityLevel) 
 }
 
 // DefaultEndpoint returns a basic xds Endpoint resource.
-func DefaultEndpoint(clusterName string, host string, port uint32) *v3endpointpb.ClusterLoadAssignment {
+func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpointpb.ClusterLoadAssignment {
+	var lbEndpoints []*v3endpointpb.LbEndpoint
+	for _, port := range ports {
+		lbEndpoints = append(lbEndpoints, &v3endpointpb.LbEndpoint{
+			HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
+				Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
+					SocketAddress: &v3corepb.SocketAddress{
+						Protocol:      v3corepb.SocketAddress_TCP,
+						Address:       host,
+						PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: port}},
+				}},
+			}},
+		})
+	}
 	return &v3endpointpb.ClusterLoadAssignment{
 		ClusterName: clusterName,
 		Endpoints: []*v3endpointpb.LocalityLbEndpoints{{
-			Locality: &v3corepb.Locality{SubZone: "subzone"},
-			LbEndpoints: []*v3endpointpb.LbEndpoint{{
-				HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
-					Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
-						SocketAddress: &v3corepb.SocketAddress{
-							Protocol:      v3corepb.SocketAddress_TCP,
-							Address:       host,
-							PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: uint32(port)}},
-					}},
-				}},
-			}},
+			Locality:            &v3corepb.Locality{SubZone: "subzone"},
+			LbEndpoints:         lbEndpoints,
 			LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
 			Priority:            0,
 		}},
