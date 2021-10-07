@@ -23,6 +23,7 @@ import (
 	"context"
 	"sync"
 
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -129,18 +130,32 @@ type csKeyType string
 
 const csKey = csKeyType("grpc.internal.resolver.configSelector")
 
+type csValue struct {
+	ConfigSelector
+}
+
+// IsEqual reports whether the config selectors are identical (have the same
+// pointer).
+func (c *csValue) IsEqual(o attributes.Value) bool {
+	oc, ok := o.(*csValue)
+	return ok && oc.ConfigSelector == c.ConfigSelector
+}
+
 // SetConfigSelector sets the config selector in state and returns the new
 // state.
 func SetConfigSelector(state resolver.State, cs ConfigSelector) resolver.State {
-	state.Attributes = state.Attributes.WithValues(csKey, cs)
+	state.Attributes = state.Attributes.WithValue(csKey, &csValue{ConfigSelector: cs})
 	return state
 }
 
 // GetConfigSelector retrieves the config selector from state, if present, and
 // returns it or nil if absent.
 func GetConfigSelector(state resolver.State) ConfigSelector {
-	cs, _ := state.Attributes.Value(csKey).(ConfigSelector)
-	return cs
+	cs, _ := state.Attributes.Value(csKey).(*csValue)
+	if cs == nil {
+		return nil
+	}
+	return cs.ConfigSelector
 }
 
 // SafeConfigSelector allows for safe switching of ConfigSelector

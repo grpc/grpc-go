@@ -2156,6 +2156,13 @@ func (ac *attrTransportCreds) Clone() credentials.TransportCredentials {
 	return nil
 }
 
+type stringVal string
+
+func (s stringVal) IsEqual(o attributes.Value) bool {
+	os, ok := o.(stringVal)
+	return ok && s == os
+}
+
 // TestClientHandshakeInfo adds attributes to the resolver.Address passes to
 // NewClientTransport and verifies that these attributes are received by the
 // transport credential handshaker.
@@ -2169,7 +2176,7 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 	)
 	addr := resolver.Address{
 		Addr:       "localhost:" + server.port,
-		Attributes: attributes.New(testAttrKey, testAttrVal),
+		Attributes: attributes.New(testAttrKey, stringVal(testAttrVal)),
 	}
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
@@ -2181,7 +2188,7 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 	}
 	defer tr.Close(fmt.Errorf("closed manually by test"))
 
-	wantAttr := attributes.New(testAttrKey, testAttrVal)
+	wantAttr := attributes.New(testAttrKey, stringVal(testAttrVal))
 	if gotAttr := creds.attr; !cmp.Equal(gotAttr, wantAttr, cmp.AllowUnexported(attributes.Attributes{})) {
 		t.Fatalf("received attributes %v in creds, want %v", gotAttr, wantAttr)
 	}

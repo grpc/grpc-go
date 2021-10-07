@@ -117,8 +117,13 @@ type Address struct {
 	ServerName string
 
 	// Attributes contains arbitrary data about this address intended for
-	// consumption by the load balancing policy.
+	// consumption by the SubConn.
 	Attributes *attributes.Attributes
+
+	// BalancerAttributes contains arbitrary data about this address intended
+	// for consumption by the LB policy.  These attribes do not affect SubConn
+	// creation, connection establishment, handshaking, etc.
+	BalancerAttributes *attributes.Attributes
 
 	// Type is the type of this address.
 	//
@@ -130,6 +135,15 @@ type Address struct {
 	//
 	// Deprecated: use Attributes instead.
 	Metadata interface{}
+}
+
+// AddressesEqual returns whether a1 and a2 are identical.  Metadata is
+// compared directly, not with any recursive introspection.
+func AddressesEqual(a1, a2 *Address) bool {
+	return a1.Addr == a2.Addr && a1.ServerName == a2.ServerName &&
+		a1.Attributes.IsEqual(a2.Attributes) &&
+		a1.BalancerAttributes.IsEqual(a2.BalancerAttributes) &&
+		a1.Type == a2.Type && a1.Metadata == a2.Metadata
 }
 
 // BuildOptions includes additional information for the builder to create

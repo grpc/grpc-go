@@ -21,6 +21,7 @@
 package networktype
 
 import (
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -29,9 +30,16 @@ type keyType string
 
 const key = keyType("grpc.internal.transport.networktype")
 
+type value string
+
+func (v value) IsEqual(o attributes.Value) bool {
+	ov, ok := o.(value)
+	return ok && v == ov
+}
+
 // Set returns a copy of the provided address with attributes containing networkType.
 func Set(address resolver.Address, networkType string) resolver.Address {
-	address.Attributes = address.Attributes.WithValues(key, networkType)
+	address.Attributes = address.Attributes.WithValue(key, value(networkType))
 	return address
 }
 
@@ -42,5 +50,5 @@ func Get(address resolver.Address) (string, bool) {
 	if v == nil {
 		return "", false
 	}
-	return v.(string), true
+	return string(v.(value)), true
 }

@@ -43,18 +43,28 @@ func init() {
 // the Attributes field of resolver.Address.
 type handshakeAttrKey struct{}
 
+type handshakeAttrValue HandshakeInfo
+
+// IsEqual reports whether the handshake info structs are identical (have the
+// same pointer).  This is sufficient as all subconns from one CDS balancer use
+// the same one.
+func (h *handshakeAttrValue) IsEqual(o attributes.Value) bool {
+	oh, ok := o.(*handshakeAttrValue)
+	return ok && oh == h
+}
+
 // SetHandshakeInfo returns a copy of addr in which the Attributes field is
 // updated with hInfo.
 func SetHandshakeInfo(addr resolver.Address, hInfo *HandshakeInfo) resolver.Address {
-	addr.Attributes = addr.Attributes.WithValues(handshakeAttrKey{}, hInfo)
+	addr.Attributes = addr.Attributes.WithValue(handshakeAttrKey{}, (*handshakeAttrValue)(hInfo))
 	return addr
 }
 
 // GetHandshakeInfo returns a pointer to the HandshakeInfo stored in attr.
 func GetHandshakeInfo(attr *attributes.Attributes) *HandshakeInfo {
 	v := attr.Value(handshakeAttrKey{})
-	hi, _ := v.(*HandshakeInfo)
-	return hi
+	hi, _ := v.(*handshakeAttrValue)
+	return (*HandshakeInfo)(hi)
 }
 
 // HandshakeInfo wraps all the security configuration required by client and

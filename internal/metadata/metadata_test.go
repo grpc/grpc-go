@@ -41,7 +41,7 @@ func TestGet(t *testing.T) {
 		{
 			name: "not set",
 			addr: resolver.Address{
-				Attributes: attributes.New(mdKey, metadata.Pairs("k", "v")),
+				Attributes: attributes.New(mdKey, mdValue(metadata.Pairs("k", "v"))),
 			},
 			want: metadata.Pairs("k", "v"),
 		},
@@ -69,7 +69,7 @@ func TestSet(t *testing.T) {
 		{
 			name: "set before",
 			addr: resolver.Address{
-				Attributes: attributes.New(mdKey, metadata.Pairs("bef", "ore")),
+				Attributes: attributes.New(mdKey, mdValue(metadata.Pairs("bef", "ore"))),
 			},
 			md: metadata.Pairs("k", "v"),
 		},

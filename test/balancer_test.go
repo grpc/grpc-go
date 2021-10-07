@@ -463,6 +463,13 @@ func (ac *attrTransportCreds) Clone() credentials.TransportCredentials {
 	return nil
 }
 
+type stringVal string
+
+func (s stringVal) IsEqual(o attributes.Value) bool {
+	os, ok := o.(stringVal)
+	return ok && s == os
+}
+
 // TestAddressAttributesInNewSubConn verifies that the Attributes passed from a
 // balancer in the resolver.Address that is passes to NewSubConn reaches all the
 // way to the ClientHandshake method of the credentials configured on the parent
@@ -484,7 +491,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 			}
 
 			// Only use the first address.
-			attr := attributes.New(testAttrKey, testAttrVal)
+			attr := attributes.New(testAttrKey, stringVal(testAttrVal))
 			addrs[0].Attributes = attr
 			sc, err := bd.ClientConn.NewSubConn([]resolver.Address{addrs[0]}, balancer.NewSubConnOptions{})
 			if err != nil {
@@ -548,7 +555,7 @@ func (s) TestAddressAttributesInNewSubConn(t *testing.T) {
 	}
 	t.Log("Made an RPC which succeeded...")
 
-	wantAttr := attributes.New(testAttrKey, testAttrVal)
+	wantAttr := attributes.New(testAttrKey, stringVal(testAttrVal))
 	if gotAttr := creds.attr; !cmp.Equal(gotAttr, wantAttr, cmp.AllowUnexported(attributes.Attributes{})) {
 		t.Fatalf("received attributes %v in creds, want %v", gotAttr, wantAttr)
 	}

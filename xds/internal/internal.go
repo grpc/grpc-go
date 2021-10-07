@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -44,6 +45,15 @@ func (l LocalityID) ToString() (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+// IsEqual satisfies attributes.Value.
+func (l LocalityID) IsEqual(o attributes.Value) bool {
+	ol, ok := o.(LocalityID)
+	if !ok {
+		return false
+	}
+	return l.Region == ol.Region && l.Zone == ol.Zone && l.SubZone == ol.SubZone
 }
 
 // LocalityIDFromString converts a json representation of locality, into a
@@ -68,6 +78,6 @@ func GetLocalityID(addr resolver.Address) LocalityID {
 
 // SetLocalityID sets locality ID in addr to l.
 func SetLocalityID(addr resolver.Address, l LocalityID) resolver.Address {
-	addr.Attributes = addr.Attributes.WithValues(localityKey, l)
+	addr.Attributes = addr.Attributes.WithValue(localityKey, l)
 	return addr
 }

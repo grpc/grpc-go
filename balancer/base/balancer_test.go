@@ -54,32 +54,11 @@ func (p *testPickBuilder) Build(info PickerBuildInfo) balancer.Picker {
 	return nil
 }
 
-func TestBaseBalancerStripAttributes(t *testing.T) {
-	b := (&baseBuilder{}).Build(&testClientConn{
-		newSubConn: func(addrs []resolver.Address, _ balancer.NewSubConnOptions) (balancer.SubConn, error) {
-			for _, addr := range addrs {
-				if addr.Attributes == nil {
-					t.Errorf("in NewSubConn, got address %+v with nil attributes, want not nil", addr)
-				}
-			}
-			return &testSubConn{}, nil
-		},
-	}, balancer.BuildOptions{}).(*baseBalancer)
+type stringVal string
 
-	b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Addresses: []resolver.Address{
-				{Addr: "1.1.1.1", Attributes: &attributes.Attributes{}},
-				{Addr: "2.2.2.2", Attributes: &attributes.Attributes{}},
-			},
-		},
-	})
-
-	for addr := range b.subConns {
-		if addr.Attributes != nil {
-			t.Errorf("in b.subConns, got address %+v with not nil attributes, want nil", addr)
-		}
-	}
+func (s stringVal) IsEqual(o attributes.Value) bool {
+	os, ok := o.(stringVal)
+	return ok && s == os
 }
 
 func TestBaseBalancerReserveAttributes(t *testing.T) {
@@ -89,7 +68,7 @@ func TestBaseBalancerReserveAttributes(t *testing.T) {
 				if sc.Address.Attributes == nil {
 					t.Errorf("in picker.validate, got address %+v with nil attributes, want not nil", sc.Address)
 				}
-				foo, ok := sc.Address.Attributes.Value("foo").(string)
+				foo, ok := sc.Address.Attributes.Value("foo").(stringVal)
 				if !ok || foo != "2233niang" {
 					t.Errorf("in picker.validate, got address[1.1.1.1] with invalid attributes value %v, want 2233niang", sc.Address.Attributes.Value("foo"))
 				}
@@ -110,7 +89,7 @@ func TestBaseBalancerReserveAttributes(t *testing.T) {
 	b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
-				{Addr: "1.1.1.1", Attributes: attributes.New("foo", "2233niang")},
+				{Addr: "1.1.1.1", Attributes: attributes.New("foo", stringVal("2233niang"))},
 				{Addr: "2.2.2.2", Attributes: nil},
 			},
 		},

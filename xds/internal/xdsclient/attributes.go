@@ -18,6 +18,7 @@
 package xdsclient
 
 import (
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
@@ -46,14 +47,28 @@ type XDSClient interface {
 	Close()
 }
 
+type xdsClientValue struct {
+	XDSClient
+}
+
+// IsEqual reports whether the xds clients are identical (have the same
+// pointer).
+func (c *xdsClientValue) IsEqual(o attributes.Value) bool {
+	oc, ok := o.(*xdsClientValue)
+	return ok && oc.XDSClient == c.XDSClient
+}
+
 // FromResolverState returns the Client from state, or nil if not present.
 func FromResolverState(state resolver.State) XDSClient {
-	cs, _ := state.Attributes.Value(clientKey).(XDSClient)
-	return cs
+	cs, _ := state.Attributes.Value(clientKey).(*xdsClientValue)
+	if cs == nil {
+		return nil
+	}
+	return cs.XDSClient
 }
 
 // SetClient sets c in state and returns the new state.
 func SetClient(state resolver.State, c XDSClient) resolver.State {
-	state.Attributes = state.Attributes.WithValues(clientKey, c)
+	state.Attributes = state.Attributes.WithValue(clientKey, &xdsClientValue{XDSClient: c})
 	return state
 }
