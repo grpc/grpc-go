@@ -56,7 +56,7 @@ func main() {
 	// not recommend this since we explicitly added the `unix-abstract` scheme
 	// for cross-language compatibility.
 	addr := "unix-abstract:abstract-unix-socket"
-	cc, err := grpc.Dial(addr, grpc.WithInsecure())
+	cc, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock())
 	if err != nil {
 		log.Fatalf("grpc.Dial(%q) failed: %v", addr, err)
 	}
