@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-
 	"google.golang.org/grpc/serviceconfig"
 )
 

@@ -363,10 +363,14 @@ func (ccw *remoteBalancerCCWrapper) callRemoteBalancer(ctx context.Context) (bac
 	return false, ccw.readServerList(stream)
 }
 
-func (ccw *remoteBalancerCCWrapper) restartRemoteBalancerCall() {
+// cancelRemoteBalancerCall cancels the context used by the stream to the remote
+// balancer. watchRemoteBalancer() takes care of restarting this call after the
+// stream fails.
+func (ccw *remoteBalancerCCWrapper) cancelRemoteBalancerCall() {
 	ccw.streamMu.Lock()
 	if ccw.streamCancel != nil {
 		ccw.streamCancel()
+		ccw.streamCancel = nil
 	}
 	ccw.streamMu.Unlock()
 }
@@ -374,11 +378,14 @@ func (ccw *remoteBalancerCCWrapper) restartRemoteBalancerCall() {
 func (ccw *remoteBalancerCCWrapper) watchRemoteBalancer() {
 	defer func() {
 		ccw.wg.Done()
+		ccw.streamMu.Lock()
 		if ccw.streamCancel != nil {
 			// This is to make sure that we don't leak the context when we are
 			// directly returning from inside of the below `for` loop.
 			ccw.streamCancel()
+			ccw.streamCancel = nil
 		}
+		ccw.streamMu.Unlock()
 	}()
 
 	var retryCount int
@@ -387,6 +394,7 @@ func (ccw *remoteBalancerCCWrapper) watchRemoteBalancer() {
 		ccw.streamMu.Lock()
 		if ccw.streamCancel != nil {
 			ccw.streamCancel()
+			ccw.streamCancel = nil
 		}
 		ctx, ccw.streamCancel = context.WithCancel(context.Background())
 		ccw.streamMu.Unlock()

@@ -419,7 +419,7 @@ func (lb *lbBalancer) handleServiceConfig(gc *grpclbServiceConfig) {
 		if target != lb.target {
 			lb.target = target
 			if lb.ccRemoteLB != nil {
-				lb.ccRemoteLB.restartRemoteBalancerCall()
+				lb.ccRemoteLB.cancelRemoteBalancerCall()
 			}
 		}
 	}
