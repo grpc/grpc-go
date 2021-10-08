@@ -39,6 +39,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const logLevel = 2
+
 var logger = grpclog.Component("rbac")
 
 var getConnection = transport.GetConnection
@@ -77,6 +79,9 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	}
 	for _, engine := range cre.chainedEngines {
 		matchingPolicyName, ok := engine.findMatchingPolicy(rpcData)
+		if logger.V(logLevel) && ok {
+			logger.Infof("incoming RPC matched to policy %v in engine with action %v", matchingPolicyName, engine.action)
+		}
 
 		switch {
 		case engine.action == v3rbacpb.RBAC_ALLOW && !ok:
