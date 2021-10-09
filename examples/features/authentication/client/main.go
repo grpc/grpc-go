@@ -66,7 +66,6 @@ func main() {
 		grpc.WithTransportCredentials(creds),
 	}
 
-	opts = append(opts, grpc.WithBlock())
 	conn, err := grpc.Dial(*addr, opts...)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)

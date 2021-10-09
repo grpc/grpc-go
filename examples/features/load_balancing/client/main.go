@@ -59,7 +59,6 @@ func main() {
 	pickfirstConn, err := grpc.Dial(
 		fmt.Sprintf("%s:///%s", exampleScheme, exampleServiceName),
 		grpc.WithInsecure(),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
@@ -76,7 +75,6 @@ func main() {
 		fmt.Sprintf("%s:///%s", exampleScheme, exampleServiceName),
 		grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`), // This sets the initial balancing policy.
 		grpc.WithInsecure(),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)

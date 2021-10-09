@@ -286,7 +286,7 @@ const message = "this is examples/metadata"
 func main() {
 	flag.Parse()
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(*addr, grpc.WithInsecure(), grpc.WithBlock())
+	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

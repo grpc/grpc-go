@@ -20,6 +20,8 @@ set +e
 export TMPDIR=$(mktemp -d)
 trap "rm -rf ${TMPDIR}" EXIT
 
+export SERVER_PORT=50051
+
 clean () {
   for i in {1..10}; do
     jobs -p | xargs -n1 pkill -P
@@ -43,6 +45,19 @@ fail () {
 
 pass () {
     echo "$(tput setaf 2) $1 $(tput sgr 0)"
+}
+
+wait_for_server () {
+    echo "$(tput setaf 4) waiting for server to start $(tput sgr 0)"
+    for i in {1..10}; do
+        timeout 1 telnet localhost $SERVER_PORT 2>&1 | grep "Connected" &> /dev/null
+        if [ $? -eq 0 ]; then
+            pass "server started"
+            return
+        fi
+        sleep 1
+    done
+    fail "cannot determine if server started"
 }
 
 EXAMPLES=(
@@ -111,10 +126,12 @@ for example in ${EXAMPLES[@]}; do
 
     # Start server
     SERVER_LOG="$(mktemp)"
-    go run ./$example/*server/*.go &> $SERVER_LOG  &
+    go run ./$example/*server/*.go -port $SERVER_PORT &> $SERVER_LOG  &
+
+    wait_for_server
 
     CLIENT_LOG="$(mktemp)"
-    if ! timeout 20 go run ${example}/*client/*.go &> $CLIENT_LOG; then
+    if ! timeout 20 go run ${example}/*client/*.go -addr localhost:$SERVER_PORT &> $CLIENT_LOG; then
         fail "client failed to communicate with server
         got server log:
         $(cat $SERVER_LOG)
