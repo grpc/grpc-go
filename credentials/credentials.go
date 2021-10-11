@@ -140,12 +140,10 @@ type TransportCredentials interface {
 	// Additionally, ClientHandshakeInfo data will be available via the context
 	// passed to this call.
 	//
-	// The second argument to this method is the ClientConn's authority, usually
-	// derived from the user's dial target. Implementations should use this as
-	// the server name during the authentication handshake. Implementations may
-	// choose to ignore this value and use a value acquired through other means,
-	// in which case they must make sure that the value is acquired through
-	// secure means and that a possible attacker cannot tamper with the value.
+	// The second argument to this method is the `:authority` header value used
+	// while creating new streams on this connection after authentication
+	// succeeds. Implementations must use this as the server name during the
+	// authentication handshake.
 	//
 	// If the returned net.Conn is closed, it MUST close the net.Conn provided.
 	ClientHandshake(context.Context, string, net.Conn) (net.Conn, AuthInfo, error)
