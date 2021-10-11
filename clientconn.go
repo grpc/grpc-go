@@ -1706,21 +1706,22 @@ func determineAuthority(endpoint, target string, dopts dialOptions) (string, err
 		return "", fmt.Errorf("ClientConn's authority from transport creds %q and dial option %q don't match", authorityFromCreds, authorityFromDialOption)
 	}
 
-	// TODO: Define an optional interface on the resolver builder to return the
-	// channel authority given the user's dial target. Once we have this, we can
-	// get rid of the special cases for unix and `:port`.
 	switch {
 	case authorityFromDialOption != "":
 		return authorityFromDialOption, nil
 	case authorityFromCreds != "":
 		return authorityFromCreds, nil
 	case strings.HasPrefix(target, "unix:") || strings.HasPrefix(target, "unix-abstract:"):
+		// TODO: remove when the unix resolver implements optional interface to
+		// return channel authority.
 		return "localhost", nil
 	case strings.HasPrefix(endpoint, ":"):
 		return "localhost" + endpoint, nil
 	default:
-		// Use endpoint from "scheme://authority/endpoint" as the default
-		// authority for ClientConn.
+		// TODO: Define an optional interface on the resolver builder to return
+		// the channel authority given the user's dial target. For resolvers
+		// which don't implement this interface, we will use the endpoint from
+		// "scheme://authority/endpoint" as the default authority.
 		return endpoint, nil
 	}
 }
