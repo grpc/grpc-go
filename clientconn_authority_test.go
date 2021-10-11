@@ -61,8 +61,8 @@ func (s) TestClientConnAuthority(t *testing.T) {
 		{
 			name:          "override-via-creds-and-WithAuthority",
 			target:        "Non-Existent.Server:8080",
-			opts:          []DialOption{WithTransportCredentials(creds), WithAuthority("authority-override")},
-			wantAuthority: "authority-override",
+			opts:          []DialOption{WithTransportCredentials(creds), WithAuthority(serverNameOverride)},
+			wantAuthority: serverNameOverride,
 		},
 		{
 			name:          "unix relative",
@@ -117,5 +117,18 @@ func (s) TestClientConnAuthority(t *testing.T) {
 				t.Fatalf("cc.authority = %q, want %q", cc.authority, test.wantAuthority)
 			}
 		})
+	}
+}
+
+func (s) TestClientConnAuthority_CredsAndDialOptionMismatch(t *testing.T) {
+	serverNameOverride := "over.write.server.name"
+	creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), serverNameOverride)
+	if err != nil {
+		t.Fatalf("credentials.NewClientTLSFromFile(_, %q) failed: %v", err, serverNameOverride)
+	}
+	opts := []DialOption{WithTransportCredentials(creds), WithAuthority("authority-override")}
+	if cc, err := Dial("Non-Existent.Server:8000", opts...); err == nil {
+		cc.Close()
+		t.Fatal("grpc.Dial() succeeded when expected to fail")
 	}
 }

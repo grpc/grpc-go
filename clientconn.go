@@ -252,7 +252,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if err != nil {
 		return nil, err
 	}
-	cc.determineAuthority()
+	cc.authority, err = determineAuthority(cc.parsedTarget.Endpoint, cc.target, cc.dopts)
+	if err != nil {
+		return nil, err
+	}
 	channelz.Infof(logger, cc.channelzID, "Channel authority set to %q", cc.authority)
 
 	if cc.dopts.scChan != nil && !scSet {
@@ -1683,7 +1686,7 @@ func parseTarget(target string) (resolver.Target, error) {
 // - user specified authority override using `WithAuthority` dial option
 // - creds' notion of server name for the authentication handshake
 // - endpoint from dial target of the form "scheme://[authority]/endpoint"
-func (cc *ClientConn) determineAuthority() {
+func determineAuthority(endpoint, target string, dopts dialOptions) (string, error) {
 	// Historically, we had two options for users to specify the serverName or
 	// authority for a channel. One was through the transport credentials
 	// (either in its constructor, or through the OverrideServerName() method).
@@ -1695,15 +1698,12 @@ func (cc *ClientConn) determineAuthority() {
 	//   interface for the insecure case
 	// - WithAuthority() dial option support for secure credentials
 	authorityFromCreds := ""
-	if creds := cc.dopts.copts.TransportCredentials; creds != nil && creds.Info().ServerName != "" {
+	if creds := dopts.copts.TransportCredentials; creds != nil && creds.Info().ServerName != "" {
 		authorityFromCreds = creds.Info().ServerName
 	}
-	authorityFromDialOption := ""
-	if cc.dopts.authority != "" {
-		authorityFromDialOption = cc.dopts.authority
-	}
+	authorityFromDialOption := dopts.authority
 	if (authorityFromCreds != "" && authorityFromDialOption != "") && authorityFromCreds != authorityFromDialOption {
-		channelz.Warningf(logger, cc.channelzID, "ClientConn's authority from transport creds %q and dial option %q don't match. Will use the former.", authorityFromCreds, authorityFromDialOption)
+		return "", fmt.Errorf("ClientConn's authority from transport creds %q and dial option %q don't match", authorityFromCreds, authorityFromDialOption)
 	}
 
 	// TODO: Define an optional interface on the resolver builder to return the
@@ -1711,16 +1711,16 @@ func (cc *ClientConn) determineAuthority() {
 	// get rid of the special cases for unix and `:port`.
 	switch {
 	case authorityFromDialOption != "":
-		cc.authority = authorityFromDialOption
+		return authorityFromDialOption, nil
 	case authorityFromCreds != "":
-		cc.authority = authorityFromCreds
-	case strings.HasPrefix(cc.target, "unix:") || strings.HasPrefix(cc.target, "unix-abstract:"):
-		cc.authority = "localhost"
-	case strings.HasPrefix(cc.parsedTarget.Endpoint, ":"):
-		cc.authority = "localhost" + cc.parsedTarget.Endpoint
+		return authorityFromCreds, nil
+	case strings.HasPrefix(target, "unix:") || strings.HasPrefix(target, "unix-abstract:"):
+		return "localhost", nil
+	case strings.HasPrefix(endpoint, ":"):
+		return "localhost" + endpoint, nil
 	default:
 		// Use endpoint from "scheme://authority/endpoint" as the default
 		// authority for ClientConn.
-		cc.authority = cc.parsedTarget.Endpoint
+		return endpoint, nil
 	}
 }
