@@ -89,7 +89,7 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 			}
 			defer cc.Close()
 
-			if !cmp.Equal(cc.parsedTarget, test.wantParsed, cmpopts.IgnoreFields(resolver.Target{}, "ParsedURL")) {
+			if !cmp.Equal(cc.parsedTarget, test.wantParsed, cmpopts.IgnoreFields(resolver.Target{}, "URL")) {
 				t.Errorf("cc.parsedTarget for dial target %q = %+v, want %+v", test.target, cc.parsedTarget, test.wantParsed)
 			}
 		})
@@ -192,7 +192,7 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 			case <-time.After(time.Second):
 				t.Fatal("timeout when waiting for custom dialer to be invoked")
 			}
-			if !cmp.Equal(cc.parsedTarget, test.wantParsed, cmpopts.IgnoreFields(resolver.Target{}, "ParsedURL")) {
+			if !cmp.Equal(cc.parsedTarget, test.wantParsed, cmpopts.IgnoreFields(resolver.Target{}, "URL")) {
 				t.Errorf("cc.parsedTarget for dial target %q = %+v, want %+v", test.target, cc.parsedTarget, test.wantParsed)
 			}
 		})

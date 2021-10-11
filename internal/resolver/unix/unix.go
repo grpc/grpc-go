@@ -43,9 +43,9 @@ func (b *builder) Build(target resolver.Target, cc resolver.ClientConn, _ resolv
 	// resolver implementations we ended up stripping the leading "/" from the
 	// endpoint. This obviously does not work for the "unix" scheme. Hence we
 	// end up using the parsed URL instead.
-	endpoint := target.ParsedURL.Path
+	endpoint := target.URL.Path
 	if endpoint == "" {
-		endpoint = target.ParsedURL.Opaque
+		endpoint = target.URL.Opaque
 	}
 	addr := resolver.Address{Addr: endpoint}
 	if b.scheme == unixAbstractScheme {

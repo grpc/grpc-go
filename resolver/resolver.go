@@ -223,14 +223,18 @@ type ClientConn interface {
 // - "unknown_scheme://authority/endpoint"
 //   Target{Scheme: resolver.GetDefaultScheme(), Endpoint: "unknown_scheme://authority/endpoint"}
 type Target struct {
-	Scheme    string
+	// Deprecated: use URL.Scheme instead.
+	Scheme string
+	// Deprecated: use URL.Host instead.
 	Authority string
-	Endpoint  string
-	// ParsedURL contains the parsed dial target with an optional default scheme
-	// added to it if the original dial target contained no scheme or contained
-	// an unregistered scheme. Any query params specified in the original dial
+	// Deprecated: use URL.Path or URL.Opaque instead. The latter is set when
+	// the former is empty.
+	Endpoint string
+	// URL contains the parsed dial target with an optional default scheme added
+	// to it if the original dial target contained no scheme or contained an
+	// unregistered scheme. Any query params specified in the original dial
 	// target can be accessed from here.
-	ParsedURL url.URL
+	URL url.URL
 }
 
 // Builder creates a resolver that will be used to watch name resolution updates.

@@ -1668,7 +1668,7 @@ func parseTarget(target string) (resolver.Target, error) {
 	// end up stripping the leading "/" here. But this will result in an
 	// incorrect parsing for something like "unix:///path/to/socket". Since we
 	// own the "unix" resolver, we can workaround in the unix resolver by using
-	// the `ParsedURL` field instead of the `Endpoint` field.
+	// the `URL` field instead of the `Endpoint` field.
 	endpoint := u.Path
 	if endpoint == "" {
 		endpoint = u.Opaque
@@ -1678,7 +1678,7 @@ func parseTarget(target string) (resolver.Target, error) {
 		Scheme:    u.Scheme,
 		Authority: u.Host,
 		Endpoint:  endpoint,
-		ParsedURL: *u,
+		URL:       *u,
 	}, nil
 }
 
