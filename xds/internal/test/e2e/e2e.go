@@ -26,7 +26,9 @@ import (
 	"os/exec"
 
 	"google.golang.org/grpc"
+	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
@@ -83,7 +85,7 @@ func newClient(target, binaryPath, bootstrap string, logger io.Writer, flags ...
 }
 
 func (c *client) clientStats(ctx context.Context) (*testpb.LoadBalancerStatsResponse, error) {
-	ccc := testpb.NewLoadBalancerStatsServiceClient(c.statsCC)
+	ccc := testgrpc.NewLoadBalancerStatsServiceClient(c.statsCC)
 	return ccc.GetClientStats(ctx, &testpb.LoadBalancerStatsRequest{
 		NumRpcs:    100,
 		TimeoutSec: 10,
@@ -91,13 +93,13 @@ func (c *client) clientStats(ctx context.Context) (*testpb.LoadBalancerStatsResp
 }
 
 func (c *client) configRPCs(ctx context.Context, req *testpb.ClientConfigureRequest) error {
-	ccc := testpb.NewXdsUpdateClientConfigureServiceClient(c.statsCC)
+	ccc := testgrpc.NewXdsUpdateClientConfigureServiceClient(c.statsCC)
 	_, err := ccc.Configure(ctx, req)
 	return err
 }
 
 func (c *client) channelzSubChannels(ctx context.Context) ([]*channelzpb.Subchannel, error) {
-	ccc := channelzpb.NewChannelzClient(c.statsCC)
+	ccc := channelzgrpc.NewChannelzClient(c.statsCC)
 	r, err := ccc.GetTopChannels(ctx, &channelzpb.GetTopChannelsRequest{})
 	if err != nil {
 		return nil, err
