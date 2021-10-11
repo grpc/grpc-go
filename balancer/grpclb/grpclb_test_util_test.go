@@ -48,19 +48,20 @@ func newRestartableListener(l net.Listener) *restartableListener {
 	}
 }
 
-func (l *restartableListener) Accept() (conn net.Conn, err error) {
-	conn, err = l.Listener.Accept()
-	if err == nil {
-		l.mu.Lock()
-		if l.closed {
-			conn.Close()
-			l.mu.Unlock()
-			return nil, &tempError{}
-		}
-		l.conns = append(l.conns, conn)
-		l.mu.Unlock()
+func (l *restartableListener) Accept() (net.Conn, error) {
+	conn, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
 	}
-	return
+
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.closed {
+		conn.Close()
+		return nil, &tempError{}
+	}
+	l.conns = append(l.conns, conn)
+	return conn, nil
 }
 
 func (l *restartableListener) Close() error {
