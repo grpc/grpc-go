@@ -39,17 +39,6 @@ var (
 	serverPath = flag.String("server", "./binaries/server", "The interop server")
 )
 
-func TestMain(m *testing.M) {
-	flag.Parse()
-	if _, err := os.Stat(*clientPath); os.IsNotExist(err) {
-		return
-	}
-	if _, err := os.Stat(*serverPath); os.IsNotExist(err) {
-		return
-	}
-	os.Exit(m.Run())
-}
-
 type testOpts struct {
 	testName     string
 	backendCount int
@@ -58,6 +47,12 @@ type testOpts struct {
 
 func setup(t *testing.T, opts testOpts) (*controlPlane, *client, []*server) {
 	t.Helper()
+	if _, err := os.Stat(*clientPath); os.IsNotExist(err) {
+		t.Skip("skipped because client is not found")
+	}
+	if _, err := os.Stat(*serverPath); os.IsNotExist(err) {
+		t.Skip("skipped because server is not found")
+	}
 	backendCount := 1
 	if opts.backendCount != 0 {
 		backendCount = opts.backendCount
