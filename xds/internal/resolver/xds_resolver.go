@@ -22,6 +22,7 @@ package resolver
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpclog"
@@ -30,6 +31,7 @@ import (
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 const xdsScheme = "xds"
@@ -60,7 +62,7 @@ type xdsResolverBuilder struct {
 //
 // The xds bootstrap process is performed (and a new xds client is built) every
 // time an xds resolver is built.
-func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (_ resolver.Resolver, retErr error) {
 	r := &xdsResolver{
 		target:         t,
 		cc:             cc,
@@ -68,7 +70,14 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, op
 		updateCh:       make(chan suWithError, 1),
 		activeClusters: make(map[string]*clusterInfo),
 	}
-	r.logger = prefixLogger((r))
+	defer func() {
+		if retErr != nil {
+			if r.client != nil {
+				r.client.Close()
+			}
+		}
+	}()
+	r.logger = prefixLogger(r)
 	r.logger.Infof("Creating resolver for target: %+v", t)
 
 	newXDSClient := newXDSClient
@@ -81,6 +90,10 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, op
 		return nil, fmt.Errorf("xds: failed to create xds-client: %v", err)
 	}
 	r.client = client
+	bootstrapConfig := client.BootstrapConfig()
+	if bootstrapConfig == nil {
+		return nil, errors.New("bootstrap configuration is empty")
+	}
 
 	// If xds credentials were specified by the user, but bootstrap configs do
 	// not contain any certificate provider configuration, it is better to fail
@@ -94,14 +107,36 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, op
 		creds = opts.CredsBundle.TransportCredentials()
 	}
 	if xc, ok := creds.(interface{ UsesXDS() bool }); ok && xc.UsesXDS() {
-		bc := client.BootstrapConfig()
-		if len(bc.CertProviderConfigs) == 0 {
+		if len(bootstrapConfig.CertProviderConfigs) == 0 {
 			return nil, errors.New("xds: xdsCreds specified but certificate_providers config missing in bootstrap file")
 		}
 	}
 
+	// Find the client listener template to use from the bootstrap config:
+	// - If authority is not set in the target, use the top level template
+	// - If authority is set, use the template from the authority map.
+	template := bootstrapConfig.ClientDefaultListenerResourceNameTemplate
+	if authority := r.target.URL.Host; authority != "" {
+		a := bootstrapConfig.Authorities[authority]
+		if a == nil {
+			return nil, fmt.Errorf("xds: authority %q is not found in the bootstrap file", authority)
+		}
+		if a.ClientListenerResourceNameTemplate != "" {
+			// This check will never be false, because
+			// ClientListenerResourceNameTemplate is required to start with
+			// xdstp://, and has a default value (not an empty string) if unset.
+			template = a.ClientListenerResourceNameTemplate
+		}
+	}
+	endpoint := r.target.URL.Path
+	if endpoint == "" {
+		endpoint = r.target.URL.Opaque
+	}
+	endpoint = strings.TrimPrefix(endpoint, "/")
+	resourceName := bootstrap.PopulateResourceTemplate(template, endpoint)
+
 	// Register a watch on the xdsClient for the user's dial target.
-	cancelWatch := watchService(r.client, r.target.Endpoint, r.handleServiceUpdate, r.logger)
+	cancelWatch := watchService(r.client, resourceName, r.handleServiceUpdate, r.logger)
 	r.logger.Infof("Watch started on resource name %v with xds-client %p", r.target.Endpoint, r.client)
 	r.cancelWatch = func() {
 		cancelWatch()

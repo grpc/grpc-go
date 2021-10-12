@@ -21,6 +21,7 @@ package resolver
 import (
 	"context"
 	"errors"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -62,7 +63,7 @@ const (
 	defaultTestShortTimeout = 100 * time.Microsecond
 )
 
-var target = resolver.Target{Endpoint: targetStr}
+var target = resolver.Target{Endpoint: targetStr, URL: url.URL{Scheme: "xds", Path: "/" + targetStr}}
 
 var routerFilter = xdsresource.HTTPFilter{Name: "rtr", Filter: httpfilter.Get(router.TypeURL)}
 var routerFilterList = []xdsresource.HTTPFilter{routerFilter}
@@ -117,6 +118,7 @@ func (s) TestResolverBuilder(t *testing.T) {
 	tests := []struct {
 		name          string
 		xdsClientFunc func() (xdsclient.XDSClient, error)
+		target        resolver.Target
 		wantErr       bool
 	}{
 		{
@@ -124,12 +126,36 @@ func (s) TestResolverBuilder(t *testing.T) {
 			xdsClientFunc: func() (xdsclient.XDSClient, error) {
 				return fakeclient.NewClient(), nil
 			},
+			target:  target,
 			wantErr: false,
 		},
 		{
 			name: "newXDSClient-throws-error",
 			xdsClientFunc: func() (xdsclient.XDSClient, error) {
 				return nil, errors.New("newXDSClient-throws-error")
+			},
+			target:  target,
+			wantErr: true,
+		},
+		{
+			name: "authority not defined in bootstrap",
+			xdsClientFunc: func() (xdsclient.XDSClient, error) {
+				c := fakeclient.NewClient()
+				c.SetBootstrapConfig(&bootstrap.Config{
+					ClientDefaultListenerResourceNameTemplate: "%s",
+					Authorities: map[string]*bootstrap.Authority{
+						"test-authority": {
+							ClientListenerResourceNameTemplate: "xdstp://test-authority/%s",
+						},
+					},
+				})
+				return c, nil
+			},
+			target: resolver.Target{
+				URL: url.URL{
+					Host: "non-existing-authority",
+					Path: "/" + targetStr,
+				},
 			},
 			wantErr: true,
 		},
@@ -148,7 +174,7 @@ func (s) TestResolverBuilder(t *testing.T) {
 				t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
 			}
 
-			r, err := builder.Build(target, newTestClientConn(), resolver.BuildOptions{})
+			r, err := builder.Build(test.target, newTestClientConn(), resolver.BuildOptions{})
 			if (err != nil) != test.wantErr {
 				t.Fatalf("builder.Build(%v) returned err: %v, wantErr: %v", target, err, test.wantErr)
 			}
@@ -197,6 +223,7 @@ func (s) TestResolverBuilder_xdsCredsBootstrapMismatch(t *testing.T) {
 
 type setupOpts struct {
 	xdsClientFunc func() (xdsclient.XDSClient, error)
+	target        *resolver.Target
 }
 
 func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, func()) {
@@ -214,7 +241,11 @@ func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *testClientConn, fun
 	}
 
 	tcc := newTestClientConn()
-	r, err := builder.Build(target, tcc, resolver.BuildOptions{})
+	tgt := target
+	if opts.target != nil {
+		tgt = *opts.target
+	}
+	r, err := builder.Build(tgt, tcc, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("builder.Build(%v) returned err: %v", target, err)
 	}
@@ -248,6 +279,95 @@ func waitForWatchRouteConfig(ctx context.Context, t *testing.T, xdsC *fakeclient
 	}
 	if gotTarget != wantTarget {
 		t.Fatalf("xdsClient.WatchService() called with target: %v, want %v", gotTarget, wantTarget)
+	}
+}
+
+// TestXDSResolverResourceNameToWatch tests that the correct resource name is
+// used to watch for the service. This covers cases with different bootstrap
+// config, and different authority.
+func (s) TestXDSResolverResourceNameToWatch(t *testing.T) {
+	tests := []struct {
+		name   string
+		bc     *bootstrap.Config
+		target *resolver.Target
+		want   string
+	}{
+		{
+			name: "default %s old style",
+			bc: &bootstrap.Config{
+				ClientDefaultListenerResourceNameTemplate: "%s",
+			},
+			target: &resolver.Target{
+				URL: url.URL{Path: "/" + targetStr},
+			},
+			want: targetStr,
+		},
+		{
+			name: "old style no percent encoding",
+			bc: &bootstrap.Config{
+				ClientDefaultListenerResourceNameTemplate: "/path/to/%s",
+			},
+			target: &resolver.Target{
+				URL: url.URL{Path: "/" + targetStr},
+			},
+			want: "/path/to/" + targetStr,
+		},
+		{
+			name: "new style with %s",
+			bc: &bootstrap.Config{
+				ClientDefaultListenerResourceNameTemplate: "xdstp://authority.com/%s",
+				Authorities: nil,
+			},
+			target: &resolver.Target{
+				URL: url.URL{Path: "/0.0.0.0:8080"},
+			},
+			want: "xdstp://authority.com/0.0.0.0:8080",
+		},
+		{
+			name: "new style percent encoding",
+			bc: &bootstrap.Config{
+				ClientDefaultListenerResourceNameTemplate: "xdstp://authority.com/%s",
+				Authorities: nil,
+			},
+			target: &resolver.Target{
+				URL: url.URL{Path: "/[::1]:8080"},
+			},
+			want: "xdstp://authority.com/%5B::1%5D:8080",
+		},
+		{
+			name: "new style different authority",
+			bc: &bootstrap.Config{
+				ClientDefaultListenerResourceNameTemplate: "xdstp://authority.com/%s",
+				Authorities: map[string]*bootstrap.Authority{
+					"test-authority": {
+						ClientListenerResourceNameTemplate: "xdstp://test-authority/%s",
+					},
+				},
+			},
+			target: &resolver.Target{
+				URL: url.URL{
+					Host: "test-authority",
+					Path: "/" + targetStr,
+				},
+			},
+			want: "xdstp://test-authority/" + targetStr,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			xdsC := fakeclient.NewClient()
+			xdsC.SetBootstrapConfig(tt.bc)
+			xdsR, _, cancel := testSetup(t, setupOpts{
+				xdsClientFunc: func() (xdsclient.XDSClient, error) { return xdsC, nil },
+				target:        tt.target,
+			})
+			defer cancel()
+			defer xdsR.Close()
+
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+			waitForWatchListener(ctx, t, xdsC, tt.want)
+		})
 	}
 }
 

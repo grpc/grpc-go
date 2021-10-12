@@ -317,6 +317,7 @@ func NewClientWithName(name string) *Client {
 		loadReportCh: testutils.NewChannel(),
 		lrsCancelCh:  testutils.NewChannel(),
 		loadStore:    load.NewStore(),
+		bootstrapCfg: &bootstrap.Config{ClientDefaultListenerResourceNameTemplate: "%s"},
 		rdsCbs:       make(map[string]func(xdsresource.RouteConfigUpdate, error)),
 		cdsCbs:       make(map[string]func(xdsresource.ClusterUpdate, error)),
 		edsCbs:       make(map[string]func(xdsresource.EndpointsUpdate, error)),

@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strings"
 	"sync"
 
 	"google.golang.org/grpc"
@@ -42,6 +41,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/server"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -217,10 +217,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 	if cfg.ServerListenerResourceNameTemplate == "" {
 		return errors.New("missing server_listener_resource_name_template in the bootstrap configuration")
 	}
-	name := cfg.ServerListenerResourceNameTemplate
-	if strings.Contains(cfg.ServerListenerResourceNameTemplate, "%s") {
-		name = strings.Replace(cfg.ServerListenerResourceNameTemplate, "%s", lis.Addr().String(), -1)
-	}
+	name := bootstrap.PopulateResourceTemplate(cfg.ServerListenerResourceNameTemplate, lis.Addr().String())
 
 	modeUpdateCh := buffer.NewUnbounded()
 	go func() {
