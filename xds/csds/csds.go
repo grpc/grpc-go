@@ -111,7 +111,7 @@ func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statusp
 	ret := &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
-				Node: nodeProtoToV3(s.xdsClient.BootstrapConfig().NodeProto),
+				Node: nodeProtoToV3(s.xdsClient.BootstrapConfig().XDSServer.NodeProto),
 				XdsConfig: []*v3statuspb.PerXdsConfig{
 					s.buildLDSPerXDSConfig(),
 					s.buildRDSPerXDSConfig(),

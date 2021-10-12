@@ -211,15 +211,18 @@ func TestBuildXDS(t *testing.T) {
 				}
 			}
 			wantConfig := &bootstrap.Config{
-				BalancerName: tdURL,
-				TransportAPI: version.TransportV3,
-				NodeProto:    wantNode,
+				XDSServer: &bootstrap.ServerConfig{
+					ServerURI:    tdURL,
+					TransportAPI: version.TransportV3,
+					NodeProto:    wantNode,
+				},
 			}
 			if tt.tdURI != "" {
-				wantConfig.BalancerName = tt.tdURI
+				wantConfig.XDSServer.ServerURI = tt.tdURI
 			}
 			cmpOpts := cmp.Options{
-				cmpopts.IgnoreFields(bootstrap.Config{}, "Creds"),
+				cmpopts.IgnoreFields(bootstrap.ServerConfig{}, "Creds"),
+				cmp.AllowUnexported(bootstrap.ServerConfig{}),
 				protocmp.Transform(),
 			}
 			select {

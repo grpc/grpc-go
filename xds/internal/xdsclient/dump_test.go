@@ -75,9 +75,11 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	}
 
 	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		BalancerName: testXDSServer,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		NodeProto:    xdstestutils.EmptyNodeProtoV2,
+		XDSServer: &bootstrap.ServerConfig{
+			ServerURI: testXDSServer,
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			NodeProto: xdstestutils.EmptyNodeProtoV2,
+		},
 	}, defaultTestWatchExpiryTimeout)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
@@ -189,9 +191,11 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	}
 
 	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		BalancerName: testXDSServer,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		NodeProto:    xdstestutils.EmptyNodeProtoV2,
+		XDSServer: &bootstrap.ServerConfig{
+			ServerURI: testXDSServer,
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			NodeProto: xdstestutils.EmptyNodeProtoV2,
+		},
 	}, defaultTestWatchExpiryTimeout)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
@@ -303,9 +307,11 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	}
 
 	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		BalancerName: testXDSServer,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		NodeProto:    xdstestutils.EmptyNodeProtoV2,
+		XDSServer: &bootstrap.ServerConfig{
+			ServerURI: testXDSServer,
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			NodeProto: xdstestutils.EmptyNodeProtoV2,
+		},
 	}, defaultTestWatchExpiryTimeout)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
@@ -403,9 +409,11 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	}
 
 	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		BalancerName: testXDSServer,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		NodeProto:    xdstestutils.EmptyNodeProtoV2,
+		XDSServer: &bootstrap.ServerConfig{
+			ServerURI: testXDSServer,
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			NodeProto: xdstestutils.EmptyNodeProtoV2,
+		},
 	}, defaultTestWatchExpiryTimeout)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
