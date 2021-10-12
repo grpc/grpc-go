@@ -629,27 +629,29 @@ type clientImpl struct {
 // newWithConfig returns a new xdsClient with the given config.
 func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (*clientImpl, error) {
 	switch {
-	case config.BalancerName == "":
+	case config.XDSServer == nil:
+		return nil, errors.New("xds: no xds_server provided")
+	case config.XDSServer.ServerURI == "":
 		return nil, errors.New("xds: no xds_server name provided in options")
-	case config.Creds == nil:
+	case config.XDSServer.Creds == nil:
 		return nil, errors.New("xds: no credentials provided in options")
-	case config.NodeProto == nil:
+	case config.XDSServer.NodeProto == nil:
 		return nil, errors.New("xds: no node_proto provided in options")
 	}
 
-	switch config.TransportAPI {
+	switch config.XDSServer.TransportAPI {
 	case version.TransportV2:
-		if _, ok := config.NodeProto.(*v2corepb.Node); !ok {
-			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", config.NodeProto, config.TransportAPI)
+		if _, ok := config.XDSServer.NodeProto.(*v2corepb.Node); !ok {
+			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", config.XDSServer.NodeProto, config.XDSServer.TransportAPI)
 		}
 	case version.TransportV3:
-		if _, ok := config.NodeProto.(*v3corepb.Node); !ok {
-			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", config.NodeProto, config.TransportAPI)
+		if _, ok := config.XDSServer.NodeProto.(*v3corepb.Node); !ok {
+			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", config.XDSServer.NodeProto, config.XDSServer.TransportAPI)
 		}
 	}
 
 	dopts := []grpc.DialOption{
-		config.Creds,
+		config.XDSServer.Creds,
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:    5 * time.Minute,
 			Timeout: 20 * time.Second,
@@ -677,19 +679,19 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 		lrsClients:  make(map[string]*lrsClient),
 	}
 
-	cc, err := grpc.Dial(config.BalancerName, dopts...)
+	cc, err := grpc.Dial(config.XDSServer.ServerURI, dopts...)
 	if err != nil {
 		// An error from a non-blocking dial indicates something serious.
-		return nil, fmt.Errorf("xds: failed to dial balancer {%s}: %v", config.BalancerName, err)
+		return nil, fmt.Errorf("xds: failed to dial balancer {%s}: %v", config.XDSServer.ServerURI, err)
 	}
 	c.cc = cc
 	c.logger = prefixLogger((c))
-	c.logger.Infof("Created ClientConn to xDS management server: %s", config.BalancerName)
+	c.logger.Infof("Created ClientConn to xDS management server: %s", config.XDSServer)
 
-	apiClient, err := newAPIClient(config.TransportAPI, cc, BuildOptions{
+	apiClient, err := newAPIClient(config.XDSServer.TransportAPI, cc, BuildOptions{
 		Parent:    c,
 		Validator: c.updateValidator,
-		NodeProto: config.NodeProto,
+		NodeProto: config.XDSServer.NodeProto,
 		Backoff:   backoff.DefaultExponential.Backoff,
 		Logger:    c.logger,
 	})

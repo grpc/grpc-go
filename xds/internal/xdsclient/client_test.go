@@ -82,9 +82,11 @@ func clientOpts(balancerName string, overrideWatchExpiryTimeout bool) (*bootstra
 		watchExpiryTimeout = defaultTestWatchExpiryTimeout
 	}
 	return &bootstrap.Config{
-		BalancerName: balancerName,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		NodeProto:    xdstestutils.EmptyNodeProtoV2,
+		XDSServer: &bootstrap.ServerConfig{
+			ServerURI: balancerName,
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			NodeProto: xdstestutils.EmptyNodeProtoV2,
+		},
 	}, watchExpiryTimeout
 }
 
@@ -269,9 +271,11 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	oldBootstrapNewConfig := bootstrapNewConfig
 	bootstrapNewConfig = func() (*bootstrap.Config, error) {
 		return &bootstrap.Config{
-			BalancerName: testXDSServer,
-			Creds:        grpc.WithInsecure(),
-			NodeProto:    xdstestutils.EmptyNodeProtoV2,
+			XDSServer: &bootstrap.ServerConfig{
+				ServerURI: testXDSServer,
+				Creds:     grpc.WithInsecure(),
+				NodeProto: xdstestutils.EmptyNodeProtoV2,
+			},
 		}, nil
 	}
 	defer func() { bootstrapNewConfig = oldBootstrapNewConfig }()
