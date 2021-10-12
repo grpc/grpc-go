@@ -28,6 +28,7 @@ import (
 	"time"
 
 	v1typepb "github.com/cncf/udpa/go/udpa/type/v1"
+	v3cncftypepb "github.com/cncf/xds/go/xds/type/v3"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -171,15 +172,24 @@ func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.Prefi
 }
 
 func unwrapHTTPFilterConfig(config *anypb.Any) (proto.Message, string, error) {
-	// The real type name is inside the TypedStruct.
-	s := new(v1typepb.TypedStruct)
-	if !ptypes.Is(config, s) {
+	switch {
+	case ptypes.Is(config, &v3cncftypepb.TypedStruct{}):
+		// The real type name is inside the new TypedStruct message.
+		s := new(v3cncftypepb.TypedStruct)
+		if err := ptypes.UnmarshalAny(config, s); err != nil {
+			return nil, "", fmt.Errorf("error unmarshalling TypedStruct filter config: %v", err)
+		}
+		return s, s.GetTypeUrl(), nil
+	case ptypes.Is(config, &v1typepb.TypedStruct{}):
+		// The real type name is inside the old TypedStruct message.
+		s := new(v1typepb.TypedStruct)
+		if err := ptypes.UnmarshalAny(config, s); err != nil {
+			return nil, "", fmt.Errorf("error unmarshalling TypedStruct filter config: %v", err)
+		}
+		return s, s.GetTypeUrl(), nil
+	default:
 		return config, config.GetTypeUrl(), nil
 	}
-	if err := ptypes.UnmarshalAny(config, s); err != nil {
-		return nil, "", fmt.Errorf("error unmarshalling TypedStruct filter config: %v", err)
-	}
-	return s, s.GetTypeUrl(), nil
 }
 
 func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool) (httpfilter.Filter, httpfilter.FilterConfig, error) {

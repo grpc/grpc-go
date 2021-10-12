@@ -24,30 +24,30 @@ import (
 	"testing"
 	"time"
 
-	v1typepb "github.com/cncf/udpa/go/udpa/type/v1"
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"github.com/golang/protobuf/proto"
-	spb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/protobuf/types/known/durationpb"
-
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/types/known/durationpb"
 
+	v1typepb "github.com/cncf/udpa/go/udpa/type/v1"
+	v3cncftypepb "github.com/cncf/xds/go/xds/type/v3"
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v2httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
 	v2listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	anypb "github.com/golang/protobuf/ptypes/any"
+	spb "github.com/golang/protobuf/ptypes/struct"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 )
 
@@ -81,9 +81,13 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			Name:       "customFilter",
 			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: customFilterConfig},
 		}
-		typedStructFilter = &v3httppb.HttpFilter{
+		oldTypedStructFilter = &v3httppb.HttpFilter{
 			Name:       "customFilter",
-			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: wrappedCustomFilterTypedStructConfig},
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: wrappedCustomFilterOldTypedStructConfig},
+		}
+		newTypedStructFilter = &v3httppb.HttpFilter{
+			Name:       "customFilter",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{TypedConfig: wrappedCustomFilterNewTypedStructConfig},
 		}
 		customOptionalFilter = &v3httppb.HttpFilter{
 			Name:       "customFilter",
@@ -375,8 +379,8 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
-			name:      "v3 with custom filter in typed struct",
-			resources: []*anypb.Any{v3LisWithFilters(typedStructFilter)},
+			name:      "v3 with custom filter in old typed struct",
+			resources: []*anypb.Any{v3LisWithFilters(oldTypedStructFilter)},
 			wantUpdate: map[string]ListenerUpdateErrTuple{
 				v3LDSTarget: {Update: ListenerUpdate{
 					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
@@ -384,11 +388,33 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 						{
 							Name:   "customFilter",
 							Filter: httpFilter{},
-							Config: filterConfig{Cfg: customFilterTypedStructConfig},
+							Config: filterConfig{Cfg: customFilterOldTypedStructConfig},
 						},
 						routerFilter,
 					},
-					Raw: v3LisWithFilters(typedStructFilter),
+					Raw: v3LisWithFilters(oldTypedStructFilter),
+				}},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			name:      "v3 with custom filter in new typed struct",
+			resources: []*anypb.Any{v3LisWithFilters(newTypedStructFilter)},
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
+					RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second,
+					HTTPFilters: []HTTPFilter{
+						{
+							Name:   "customFilter",
+							Filter: httpFilter{},
+							Config: filterConfig{Cfg: customFilterNewTypedStructConfig},
+						},
+						routerFilter,
+					},
+					Raw: v3LisWithFilters(newTypedStructFilter),
 				}},
 			},
 			wantMD: UpdateMetadata{
@@ -1914,7 +1940,8 @@ var clientOnlyCustomFilterConfig = &anypb.Any{
 	Value:   []byte{1, 2, 3},
 }
 
-var customFilterTypedStructConfig = &v1typepb.TypedStruct{
+// This custom filter uses the old TypedStruct message from the cncf/udpa repo.
+var customFilterOldTypedStructConfig = &v1typepb.TypedStruct{
 	TypeUrl: "custom.filter",
 	Value: &spb.Struct{
 		Fields: map[string]*spb.Value{
@@ -1922,10 +1949,22 @@ var customFilterTypedStructConfig = &v1typepb.TypedStruct{
 		},
 	},
 }
-var wrappedCustomFilterTypedStructConfig *anypb.Any
+var wrappedCustomFilterOldTypedStructConfig *anypb.Any
+
+// This custom filter uses the new TypedStruct message from the cncf/xds repo.
+var customFilterNewTypedStructConfig = &v3cncftypepb.TypedStruct{
+	TypeUrl: "custom.filter",
+	Value: &spb.Struct{
+		Fields: map[string]*spb.Value{
+			"foo": {Kind: &spb.Value_StringValue{StringValue: "bar"}},
+		},
+	},
+}
+var wrappedCustomFilterNewTypedStructConfig *anypb.Any
 
 func init() {
-	wrappedCustomFilterTypedStructConfig = testutils.MarshalAny(customFilterTypedStructConfig)
+	wrappedCustomFilterOldTypedStructConfig = testutils.MarshalAny(customFilterOldTypedStructConfig)
+	wrappedCustomFilterNewTypedStructConfig = testutils.MarshalAny(customFilterNewTypedStructConfig)
 }
 
 var unknownFilterConfig = &anypb.Any{
