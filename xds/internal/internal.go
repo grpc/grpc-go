@@ -77,6 +77,6 @@ func GetLocalityID(addr resolver.Address) LocalityID {
 
 // SetLocalityID sets locality ID in addr to l.
 func SetLocalityID(addr resolver.Address, l LocalityID) resolver.Address {
-	addr.Attributes = addr.BalancerAttributes.WithValue(localityKey, l)
+	addr.BalancerAttributes = addr.BalancerAttributes.WithValue(localityKey, l)
 	return addr
 }

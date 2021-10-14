@@ -60,7 +60,7 @@ func Get(addr resolver.Address) []string {
 
 // Set overrides the hierarchical path in addr with path.
 func Set(addr resolver.Address, path []string) resolver.Address {
-	addr.Attributes = addr.BalancerAttributes.WithValue(pathKey, pathValue(path))
+	addr.BalancerAttributes = addr.BalancerAttributes.WithValue(pathKey, pathValue(path))
 	return addr
 }
 

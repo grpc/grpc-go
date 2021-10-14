@@ -54,6 +54,6 @@ func FromResolverState(state resolver.State) XDSClient {
 
 // SetClient sets c in state and returns the new state.
 func SetClient(state resolver.State, c XDSClient) resolver.State {
-	state.Attributes = state.Attributes.WithValues(clientKey, c)
+	state.Attributes = state.Attributes.WithValue(clientKey, c)
 	return state
 }
