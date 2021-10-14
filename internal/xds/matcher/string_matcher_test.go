@@ -267,9 +267,9 @@ func TestMatch(t *testing.T) {
 			wantMatch: true,
 		},
 		{
-			desc: "regex match failure because only part match",
-			matcher: regexMatcher,
-			input:   "goodregexa",
+			desc:      "regex match failure because only part match",
+			matcher:   regexMatcher,
+			input:     "goodregexa",
 			wantMatch: false,
 		},
 		{

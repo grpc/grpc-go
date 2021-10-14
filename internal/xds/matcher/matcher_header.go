@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -81,7 +82,6 @@ type HeaderRegexMatcher struct {
 
 // NewHeaderRegexMatcher returns a new HeaderRegexMatcher.
 func NewHeaderRegexMatcher(key string, re *regexp.Regexp) *HeaderRegexMatcher {
-	re.Longest()
 	return &HeaderRegexMatcher{key: key, re: re}
 }
 
@@ -92,8 +92,7 @@ func (hrm *HeaderRegexMatcher) Match(md metadata.MD) bool {
 	if !ok {
 		return false
 	}
-	rem := hrm.re.FindString(v)
-	return len(rem) == len(v)
+	return grpcutil.FullMatchWithRegex(hrm.re, v)
 }
 
 func (hrm *HeaderRegexMatcher) String() string {

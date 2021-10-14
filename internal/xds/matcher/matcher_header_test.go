@@ -109,10 +109,10 @@ func TestHeaderRegexMatcherMatch(t *testing.T) {
 		},
 		{
 			name:     "no match because only part of value matches with regex",
-			key:       "header",
-			regexStr:   "^a+$",
-			md:        metadata.Pairs("header", "ab"),
-			want:      false,
+			key:      "header",
+			regexStr: "^a+$",
+			md:       metadata.Pairs("header", "ab"),
+			want:     false,
 		},
 		{
 			name:     "match because full value matches with regex",
