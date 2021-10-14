@@ -33,7 +33,7 @@ type Attributes struct {
 	m map[interface{}]interface{}
 }
 
-// Value must be implemented by all values stored in Attributes.  It allows
+// Value may be implemented by all values stored in Attributes.  It allows
 // comparing the values with other attributes matching the same key.
 type Value interface {
 	// Equal returns whether this Value is equivalent to o.
@@ -70,7 +70,10 @@ func (a *Attributes) Value(key interface{}) interface{} {
 	return a.m[key]
 }
 
-// Equal returns whether a and o are equivalent.
+// Equal returns whether a and o are equivalent.  If Value is implemented for a
+// value in the attributes, it is called to determine if the value matches the
+// one stored in the other attributes.  If Value is not implemented, standard
+// equality is used to determine if the two values are equal.
 func (a *Attributes) Equal(o *Attributes) bool {
 	if a == nil && o == nil {
 		return true

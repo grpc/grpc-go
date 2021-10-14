@@ -553,6 +553,9 @@ func (s) TestUpdateAddressAttributes(t *testing.T) {
 	// some RPCs do not contain it.
 	for {
 		if _, err := testc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			if status.Code(err) == codes.DeadlineExceeded {
+				t.Fatalf("timed out waiting for metadata in response")
+			}
 			t.Fatalf("EmptyCall() = _, %v, want _, <nil>", err)
 		}
 		md2 := <-test.serverImpls[0].testMDChan

@@ -129,32 +129,18 @@ type csKeyType string
 
 const csKey = csKeyType("grpc.internal.resolver.configSelector")
 
-type csValue struct {
-	ConfigSelector
-}
-
-// Equal reports whether the config selectors are identical (have the same
-// pointer).
-func (c *csValue) Equal(o interface{}) bool {
-	oc, ok := o.(*csValue)
-	return ok && oc.ConfigSelector == c.ConfigSelector
-}
-
 // SetConfigSelector sets the config selector in state and returns the new
 // state.
 func SetConfigSelector(state resolver.State, cs ConfigSelector) resolver.State {
-	state.Attributes = state.Attributes.WithValue(csKey, &csValue{ConfigSelector: cs})
+	state.Attributes = state.Attributes.WithValues(csKey, cs)
 	return state
 }
 
 // GetConfigSelector retrieves the config selector from state, if present, and
 // returns it or nil if absent.
 func GetConfigSelector(state resolver.State) ConfigSelector {
-	cs, _ := state.Attributes.Value(csKey).(*csValue)
-	if cs == nil {
-		return nil
-	}
-	return cs.ConfigSelector
+	cs, _ := state.Attributes.Value(csKey).(ConfigSelector)
+	return cs
 }
 
 // SafeConfigSelector allows for safe switching of ConfigSelector

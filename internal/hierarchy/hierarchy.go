@@ -50,7 +50,7 @@ func (p pathValue) Equal(o interface{}) bool {
 
 // Get returns the hierarchical path of addr.
 func Get(addr resolver.Address) []string {
-	attrs := addr.Attributes
+	attrs := addr.BalancerAttributes
 	if attrs == nil {
 		return nil
 	}
@@ -60,7 +60,7 @@ func Get(addr resolver.Address) []string {
 
 // Set overrides the hierarchical path in addr with path.
 func Set(addr resolver.Address, path []string) resolver.Address {
-	addr.Attributes = addr.Attributes.WithValue(pathKey, pathValue(path))
+	addr.Attributes = addr.BalancerAttributes.WithValue(pathKey, pathValue(path))
 	return addr
 }
 

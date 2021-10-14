@@ -46,7 +46,7 @@ func (s *State) Equal(o interface{}) bool {
 		return false
 	}
 	for i, a := range s.BalancerAddresses {
-		if !resolver.AddressesEqual(&a, &os.BalancerAddresses[i]) {
+		if !a.Equal(&os.BalancerAddresses[i]) {
 			return false
 		}
 	}

@@ -25,42 +25,44 @@ import (
 	"google.golang.org/grpc/attributes"
 )
 
-type stringVal string
+type stringVal struct {
+	s string
+}
 
 func (s stringVal) Equal(o interface{}) bool {
 	os, ok := o.(stringVal)
-	return ok && s == os
+	return ok && s.s == os.s
 }
 
 func ExampleAttributes() {
 	type keyOne struct{}
 	type keyTwo struct{}
-	a := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal("two"))
+	a := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"})
 	fmt.Println("Key one:", a.Value(keyOne{}))
 	fmt.Println("Key two:", a.Value(keyTwo{}))
 	// Output:
 	// Key one: 1
-	// Key two: two
+	// Key two: {two}
 }
 
 func ExampleAttributes_WithValue() {
 	type keyOne struct{}
 	type keyTwo struct{}
 	a := attributes.New(keyOne{}, 1)
-	a = a.WithValue(keyTwo{}, stringVal("two"))
+	a = a.WithValue(keyTwo{}, stringVal{s: "two"})
 	fmt.Println("Key one:", a.Value(keyOne{}))
 	fmt.Println("Key two:", a.Value(keyTwo{}))
 	// Output:
 	// Key one: 1
-	// Key two: two
+	// Key two: {two}
 }
 
 // Test that two attributes with the same content are Equal.
 func TestEqual(t *testing.T) {
 	type keyOne struct{}
 	type keyTwo struct{}
-	a1 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal("two"))
-	a2 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal("two"))
+	a1 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"})
+	a2 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"})
 	if !a1.Equal(a2) {
 		t.Fatalf("%+v.Equals(%+v) = false; want true", a1, a2)
 	}
@@ -73,12 +75,16 @@ func TestEqual(t *testing.T) {
 func TestNotEqual(t *testing.T) {
 	type keyOne struct{}
 	type keyTwo struct{}
-	a1 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal("two"))
-	a2 := attributes.New(keyOne{}, 2).WithValue(keyTwo{}, stringVal("two"))
+	a1 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "two"})
+	a2 := attributes.New(keyOne{}, 2).WithValue(keyTwo{}, stringVal{s: "two"})
+	a3 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal{s: "one"})
 	if a1.Equal(a2) {
 		t.Fatalf("%+v.Equals(%+v) = true; want false", a1, a2)
 	}
 	if a2.Equal(a1) {
 		t.Fatalf("%+v.Equals(%+v) = true; want false", a2, a1)
+	}
+	if a3.Equal(a1) {
+		t.Fatalf("%+v.Equals(%+v) = true; want false", a3, a1)
 	}
 }

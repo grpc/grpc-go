@@ -46,27 +46,14 @@ type XDSClient interface {
 	Close()
 }
 
-type xdsClientValue struct {
-	XDSClient
-}
-
-// Equal reports whether the xds clients are identical (have the same pointer).
-func (c *xdsClientValue) Equal(o interface{}) bool {
-	oc, ok := o.(*xdsClientValue)
-	return ok && oc.XDSClient == c.XDSClient
-}
-
 // FromResolverState returns the Client from state, or nil if not present.
 func FromResolverState(state resolver.State) XDSClient {
-	cs, _ := state.Attributes.Value(clientKey).(*xdsClientValue)
-	if cs == nil {
-		return nil
-	}
-	return cs.XDSClient
+	cs, _ := state.Attributes.Value(clientKey).(XDSClient)
+	return cs
 }
 
 // SetClient sets c in state and returns the new state.
 func SetClient(state resolver.State, c XDSClient) resolver.State {
-	state.Attributes = state.Attributes.WithValue(clientKey, &xdsClientValue{XDSClient: c})
+	state.Attributes = state.Attributes.WithValues(clientKey, c)
 	return state
 }

@@ -137,13 +137,13 @@ type Address struct {
 	Metadata interface{}
 }
 
-// AddressesEqual returns whether a1 and a2 are identical.  Metadata is
-// compared directly, not with any recursive introspection.
-func AddressesEqual(a1, a2 *Address) bool {
-	return a1.Addr == a2.Addr && a1.ServerName == a2.ServerName &&
-		a1.Attributes.Equal(a2.Attributes) &&
-		a1.BalancerAttributes.Equal(a2.BalancerAttributes) &&
-		a1.Type == a2.Type && a1.Metadata == a2.Metadata
+// Equal returns whether a and o are identical.  Metadata is compared directly,
+// not with any recursive introspection.
+func (a *Address) Equal(o *Address) bool {
+	return a.Addr == o.Addr && a.ServerName == o.ServerName &&
+		a.Attributes.Equal(o.Attributes) &&
+		a.BalancerAttributes.Equal(o.BalancerAttributes) &&
+		a.Type == o.Type && a.Metadata == o.Metadata
 }
 
 // BuildOptions includes additional information for the builder to create

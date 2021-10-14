@@ -71,12 +71,12 @@ const localityKey = localityKeyType("grpc.xds.internal.address.locality")
 
 // GetLocalityID returns the locality ID of addr.
 func GetLocalityID(addr resolver.Address) LocalityID {
-	path, _ := addr.Attributes.Value(localityKey).(LocalityID)
+	path, _ := addr.BalancerAttributes.Value(localityKey).(LocalityID)
 	return path
 }
 
 // SetLocalityID sets locality ID in addr to l.
 func SetLocalityID(addr resolver.Address, l LocalityID) resolver.Address {
-	addr.Attributes = addr.Attributes.WithValue(localityKey, l)
+	addr.Attributes = addr.BalancerAttributes.WithValue(localityKey, l)
 	return addr
 }
