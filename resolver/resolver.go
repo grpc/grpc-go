@@ -141,8 +141,8 @@ type Address struct {
 // compared directly, not with any recursive introspection.
 func AddressesEqual(a1, a2 *Address) bool {
 	return a1.Addr == a2.Addr && a1.ServerName == a2.ServerName &&
-		a1.Attributes.IsEqual(a2.Attributes) &&
-		a1.BalancerAttributes.IsEqual(a2.BalancerAttributes) &&
+		a1.Attributes.Equal(a2.Attributes) &&
+		a1.BalancerAttributes.Equal(a2.BalancerAttributes) &&
 		a1.Type == a2.Type && a1.Metadata == a2.Metadata
 }
 

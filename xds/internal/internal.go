@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -47,8 +46,8 @@ func (l LocalityID) ToString() (string, error) {
 	return string(b), nil
 }
 
-// IsEqual satisfies attributes.Value.
-func (l LocalityID) IsEqual(o attributes.Value) bool {
+// Equal satisfies attributes.Value.
+func (l LocalityID) Equal(o interface{}) bool {
 	ol, ok := o.(LocalityID)
 	if !ok {
 		return false

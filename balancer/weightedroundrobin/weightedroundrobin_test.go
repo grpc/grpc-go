@@ -26,13 +26,6 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-type stringVal string
-
-func (s stringVal) IsEqual(o attributes.Value) bool {
-	os, ok := o.(stringVal)
-	return ok && s == os
-}
-
 func TestAddrInfoToAndFromAttributes(t *testing.T) {
 	tests := []struct {
 		desc            string
@@ -49,7 +42,7 @@ func TestAddrInfoToAndFromAttributes(t *testing.T) {
 		{
 			desc:            "non-empty attributes",
 			inputAddrInfo:   AddrInfo{Weight: 100},
-			inputAttributes: attributes.New("foo", stringVal("bar")),
+			inputAttributes: attributes.New("foo", "bar"),
 			wantAddrInfo:    AddrInfo{Weight: 100},
 		},
 		{
@@ -61,7 +54,7 @@ func TestAddrInfoToAndFromAttributes(t *testing.T) {
 		{
 			desc:            "addrInfo not present in non-empty attributes",
 			inputAddrInfo:   AddrInfo{},
-			inputAttributes: attributes.New("foo", stringVal("bar")),
+			inputAttributes: attributes.New("foo", "bar"),
 			wantAddrInfo:    AddrInfo{},
 		},
 	}

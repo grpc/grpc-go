@@ -18,7 +18,6 @@
 package xdsclient
 
 import (
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
@@ -51,9 +50,8 @@ type xdsClientValue struct {
 	XDSClient
 }
 
-// IsEqual reports whether the xds clients are identical (have the same
-// pointer).
-func (c *xdsClientValue) IsEqual(o attributes.Value) bool {
+// Equal reports whether the xds clients are identical (have the same pointer).
+func (c *xdsClientValue) Equal(o interface{}) bool {
 	oc, ok := o.(*xdsClientValue)
 	return ok && oc.XDSClient == c.XDSClient
 }

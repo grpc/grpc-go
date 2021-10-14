@@ -132,8 +132,8 @@ func TestGroup(t *testing.T) {
 			addrs: []resolver.Address{
 				{Addr: "a0", Attributes: attributes.New(pathKey, pathValue{"a"})},
 				{Addr: "a1", Attributes: attributes.New(pathKey, pathValue{"a"})},
-				{Addr: "b0", Attributes: attributes.New(pathKey, stringVal("b"))},
-				{Addr: "b1", Attributes: attributes.New(pathKey, intVal(314))},
+				{Addr: "b0", Attributes: attributes.New(pathKey, "b")},
+				{Addr: "b1", Attributes: attributes.New(pathKey, 314)},
 			},
 			want: map[string][]resolver.Address{
 				"a": {
@@ -194,18 +194,4 @@ func TestGroupE2E(t *testing.T) {
 	if !cmp.Equal(gotHierarchy, hierarchy) {
 		t.Errorf("diff: %v", cmp.Diff(gotHierarchy, hierarchy))
 	}
-}
-
-type intVal int
-
-func (i intVal) IsEqual(o attributes.Value) bool {
-	oi, ok := o.(intVal)
-	return ok && i == oi
-}
-
-type stringVal string
-
-func (s stringVal) IsEqual(o attributes.Value) bool {
-	os, ok := o.(stringVal)
-	return ok && s == os
 }

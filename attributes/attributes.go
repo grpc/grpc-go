@@ -30,30 +30,30 @@ package attributes
 // types for keys.  Values should not be modified after they are added to an
 // Attributes or if they were received from one.
 type Attributes struct {
-	m map[interface{}]Value
+	m map[interface{}]interface{}
 }
 
 // Value must be implemented by all values stored in Attributes.  It allows
 // comparing the values with other attributes matching the same key.
 type Value interface {
-	// IsEqual returns whether this Value is equivalent to o.
-	IsEqual(o Value) bool
+	// Equal returns whether this Value is equivalent to o.
+	Equal(o interface{}) bool
 }
 
 // New returns a new Attributes containing the key/value pair.
-func New(key interface{}, value Value) *Attributes {
-	return &Attributes{m: map[interface{}]Value{key: value}}
+func New(key, value interface{}) *Attributes {
+	return &Attributes{m: map[interface{}]interface{}{key: value}}
 }
 
 // WithValue returns a new Attributes containing the previous keys and values
 // and the new key/value pair.  If the same key appears multiple times, the
 // last value overwrites all previous values for that key.  To remove an
 // existing key, use a nil value.  value should not be modified later.
-func (a *Attributes) WithValue(key interface{}, value Value) *Attributes {
+func (a *Attributes) WithValue(key, value interface{}) *Attributes {
 	if a == nil {
 		return New(key, value)
 	}
-	n := &Attributes{m: make(map[interface{}]Value, len(a.m)+1)}
+	n := &Attributes{m: make(map[interface{}]interface{}, len(a.m)+1)}
 	for k, v := range a.m {
 		n.m[k] = v
 	}
@@ -62,16 +62,16 @@ func (a *Attributes) WithValue(key interface{}, value Value) *Attributes {
 }
 
 // Value returns the value associated with these attributes for key, or nil if
-// no value is associated with key.  The returned Value should not be modified.
-func (a *Attributes) Value(key interface{}) Value {
+// no value is associated with key.  The returned value should not be modified.
+func (a *Attributes) Value(key interface{}) interface{} {
 	if a == nil {
 		return nil
 	}
 	return a.m[key]
 }
 
-// IsEqual returns whether a and o are equivalent.
-func (a *Attributes) IsEqual(o *Attributes) bool {
+// Equal returns whether a and o are equivalent.
+func (a *Attributes) Equal(o *Attributes) bool {
 	if a == nil && o == nil {
 		return true
 	}
@@ -87,7 +87,12 @@ func (a *Attributes) IsEqual(o *Attributes) bool {
 			// o missing element of a
 			return false
 		}
-		if !v.IsEqual(ov) {
+		if eq, ok := v.(Value); ok {
+			if !eq.Equal(ov) {
+				return false
+			}
+		} else if v != ov {
+			// Fallback to a standard equality check if Value is unimplemented.
 			return false
 		}
 	}

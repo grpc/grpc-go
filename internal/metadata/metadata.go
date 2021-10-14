@@ -22,7 +22,6 @@
 package metadata
 
 import (
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 )
@@ -33,7 +32,7 @@ const mdKey = mdKeyType("grpc.internal.address.metadata")
 
 type mdValue metadata.MD
 
-func (m mdValue) IsEqual(o attributes.Value) bool {
+func (m mdValue) Equal(o interface{}) bool {
 	om, ok := o.(mdValue)
 	if !ok {
 		return false

@@ -23,7 +23,6 @@
 package hierarchy
 
 import (
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -33,7 +32,7 @@ const pathKey = pathKeyType("grpc.internal.address.hierarchical_path")
 
 type pathValue []string
 
-func (p pathValue) IsEqual(o attributes.Value) bool {
+func (p pathValue) Equal(o interface{}) bool {
 	op, ok := o.(pathValue)
 	if !ok {
 		return false

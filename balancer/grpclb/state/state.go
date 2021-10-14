@@ -21,7 +21,6 @@
 package state
 
 import (
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -37,8 +36,8 @@ type State struct {
 	BalancerAddresses []resolver.Address
 }
 
-// IsEqual satisfies attributes.Value.
-func (s *State) IsEqual(o attributes.Value) bool {
+// Equal satisfies attributes.Value.
+func (s *State) Equal(o interface{}) bool {
 	os, ok := o.(*State)
 	if !ok {
 		return false

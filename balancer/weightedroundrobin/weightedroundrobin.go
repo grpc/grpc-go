@@ -20,7 +20,6 @@
 package weightedroundrobin
 
 import (
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -37,8 +36,8 @@ type AddrInfo struct {
 	Weight uint32
 }
 
-// IsEqual satisfies attributes.Value.
-func (a AddrInfo) IsEqual(o attributes.Value) bool {
+// Equal satisfies attributes.Value.
+func (a AddrInfo) Equal(o interface{}) bool {
 	oa, ok := o.(AddrInfo)
 	return ok && oa.Weight == a.Weight
 }

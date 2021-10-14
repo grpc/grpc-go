@@ -46,7 +46,7 @@ func (l addressMapEntryList) find(addr Address) int {
 	}
 	for i, entry := range l {
 		if entry.addr.ServerName == addr.ServerName &&
-			entry.addr.Attributes.IsEqual(addr.Attributes) {
+			entry.addr.Attributes.Equal(addr.Attributes) {
 			return i
 		}
 	}

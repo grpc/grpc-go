@@ -23,7 +23,6 @@ import (
 	"context"
 	"sync"
 
-	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -134,9 +133,9 @@ type csValue struct {
 	ConfigSelector
 }
 
-// IsEqual reports whether the config selectors are identical (have the same
+// Equal reports whether the config selectors are identical (have the same
 // pointer).
-func (c *csValue) IsEqual(o attributes.Value) bool {
+func (c *csValue) Equal(o interface{}) bool {
 	oc, ok := o.(*csValue)
 	return ok && oc.ConfigSelector == c.ConfigSelector
 }

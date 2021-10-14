@@ -25,23 +25,16 @@ import (
 // the Attributes field of resolver.Address.
 type handshakeClusterNameKey struct{}
 
-type clusterNameValue string
-
-func (c clusterNameValue) IsEqual(o attributes.Value) bool {
-	oc, ok := o.(clusterNameValue)
-	return ok && oc == c
-}
-
 // SetXDSHandshakeClusterName returns a copy of addr in which the Attributes field
 // is updated with the cluster name.
 func SetXDSHandshakeClusterName(addr resolver.Address, clusterName string) resolver.Address {
-	addr.Attributes = addr.Attributes.WithValue(handshakeClusterNameKey{}, clusterNameValue(clusterName))
+	addr.Attributes = addr.Attributes.WithValue(handshakeClusterNameKey{}, clusterName)
 	return addr
 }
 
 // GetXDSHandshakeClusterName returns cluster name stored in attr.
 func GetXDSHandshakeClusterName(attr *attributes.Attributes) (string, bool) {
 	v := attr.Value(handshakeClusterNameKey{})
-	name, ok := v.(clusterNameValue)
-	return string(name), ok
+	name, ok := v.(string)
+	return name, ok
 }

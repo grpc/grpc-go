@@ -25,16 +25,9 @@ import (
 	"google.golang.org/grpc/attributes"
 )
 
-type intVal int
-
-func (i intVal) IsEqual(o attributes.Value) bool {
-	oi, ok := o.(intVal)
-	return ok && i == oi
-}
-
 type stringVal string
 
-func (s stringVal) IsEqual(o attributes.Value) bool {
+func (s stringVal) Equal(o interface{}) bool {
 	os, ok := o.(stringVal)
 	return ok && s == os
 }
@@ -42,7 +35,7 @@ func (s stringVal) IsEqual(o attributes.Value) bool {
 func ExampleAttributes() {
 	type keyOne struct{}
 	type keyTwo struct{}
-	a := attributes.New(keyOne{}, intVal(1)).WithValue(keyTwo{}, stringVal("two"))
+	a := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal("two"))
 	fmt.Println("Key one:", a.Value(keyOne{}))
 	fmt.Println("Key two:", a.Value(keyTwo{}))
 	// Output:
@@ -53,7 +46,7 @@ func ExampleAttributes() {
 func ExampleAttributes_WithValue() {
 	type keyOne struct{}
 	type keyTwo struct{}
-	a := attributes.New(keyOne{}, intVal(1))
+	a := attributes.New(keyOne{}, 1)
 	a = a.WithValue(keyTwo{}, stringVal("two"))
 	fmt.Println("Key one:", a.Value(keyOne{}))
 	fmt.Println("Key two:", a.Value(keyTwo{}))
@@ -63,29 +56,29 @@ func ExampleAttributes_WithValue() {
 }
 
 // Test that two attributes with the same content are Equal.
-func TestIsEqual(t *testing.T) {
+func TestEqual(t *testing.T) {
 	type keyOne struct{}
 	type keyTwo struct{}
-	a1 := attributes.New(keyOne{}, intVal(1)).WithValue(keyTwo{}, stringVal("two"))
-	a2 := attributes.New(keyOne{}, intVal(1)).WithValue(keyTwo{}, stringVal("two"))
-	if !a1.IsEqual(a2) {
+	a1 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal("two"))
+	a2 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal("two"))
+	if !a1.Equal(a2) {
 		t.Fatalf("%+v.Equals(%+v) = false; want true", a1, a2)
 	}
-	if !a2.IsEqual(a1) {
+	if !a2.Equal(a1) {
 		t.Fatalf("%+v.Equals(%+v) = false; want true", a2, a1)
 	}
 }
 
 // Test that two attributes with different content are not Equal.
-func TestNotIsEqual(t *testing.T) {
+func TestNotEqual(t *testing.T) {
 	type keyOne struct{}
 	type keyTwo struct{}
-	a1 := attributes.New(keyOne{}, intVal(1)).WithValue(keyTwo{}, stringVal("two"))
-	a2 := attributes.New(keyOne{}, intVal(2)).WithValue(keyTwo{}, stringVal("two"))
-	if a1.IsEqual(a2) {
+	a1 := attributes.New(keyOne{}, 1).WithValue(keyTwo{}, stringVal("two"))
+	a2 := attributes.New(keyOne{}, 2).WithValue(keyTwo{}, stringVal("two"))
+	if a1.Equal(a2) {
 		t.Fatalf("%+v.Equals(%+v) = true; want false", a1, a2)
 	}
-	if a2.IsEqual(a1) {
+	if a2.Equal(a1) {
 		t.Fatalf("%+v.Equals(%+v) = true; want false", a2, a1)
 	}
 }
