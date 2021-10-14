@@ -23,7 +23,7 @@ import (
 	"sync"
 	"time"
 
-	orcapb "github.com/cncf/udpa/go/udpa/data/orca/v1"
+	orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 
 	"google.golang.org/grpc/balancer"
