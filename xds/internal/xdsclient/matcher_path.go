@@ -89,11 +89,13 @@ type pathRegexMatcher struct {
 }
 
 func newPathRegexMatcher(re *regexp.Regexp) *pathRegexMatcher {
+	re.Longest()
 	return &pathRegexMatcher{re: re}
 }
 
 func (prm *pathRegexMatcher) match(path string) bool {
-	return prm.re.MatchString(path)
+	rev := prm.re.FindString(path)
+	return len(rev) == len(path)
 }
 
 func (prm *pathRegexMatcher) String() string {

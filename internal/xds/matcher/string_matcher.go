@@ -58,7 +58,8 @@ func (sm StringMatcher) Match(input string) bool {
 	case sm.suffixMatch != nil:
 		return strings.HasSuffix(input, *sm.suffixMatch)
 	case sm.regexMatch != nil:
-		return sm.regexMatch.MatchString(input)
+		rem := sm.regexMatch.FindString(input)
+		return len(rem) == len(input)
 	case sm.containsMatch != nil:
 		return strings.Contains(input, *sm.containsMatch)
 	}
@@ -103,6 +104,7 @@ func StringMatcherFromProto(matcherProto *v3matcherpb.StringMatcher) (StringMatc
 		if err != nil {
 			return StringMatcher{}, fmt.Errorf("safe_regex matcher %q is invalid", regex)
 		}
+		re.Longest()
 		matcher.regexMatch = re
 	case *v3matcherpb.StringMatcher_Contains:
 		if matcherProto.GetContains() == "" {
