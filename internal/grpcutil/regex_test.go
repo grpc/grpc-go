@@ -42,6 +42,12 @@ func TestFullMatchWithRegex(t *testing.T) {
 			string:   "aa",
 			want:     true,
 		},
+		{
+			name:     "longest",
+			regexStr: "a(|b)",
+			string:   "ab",
+			want:     true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
