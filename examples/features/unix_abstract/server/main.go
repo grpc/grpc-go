@@ -25,6 +25,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -32,6 +33,13 @@ import (
 	"google.golang.org/grpc"
 
 	pb "google.golang.org/grpc/examples/features/proto/echo"
+)
+
+var (
+	addr = flag.String(
+		"addr", "abstract-unix-socket",
+		"The unix abstract socket address",
+	)
 )
 
 type ecServer struct {
@@ -44,13 +52,15 @@ func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.Echo
 }
 
 func main() {
-	netw, addr := "unix", "\x00abstract-unix-socket"
-	lis, err := net.Listen(netw, addr)
+	flag.Parse()
+	netw := "unix"
+	socketAddr := fmt.Sprintf("\x00%v", *addr)
+	lis, err := net.Listen(netw, socketAddr)
 	if err != nil {
-		log.Fatalf("net.Listen(%q, %q) failed: %v", netw, addr, err)
+		log.Fatalf("net.Listen(%q, %q) failed: %v", netw, socketAddr, err)
 	}
 	s := grpc.NewServer()
-	pb.RegisterEchoServer(s, &ecServer{addr: addr})
+	pb.RegisterEchoServer(s, &ecServer{addr: socketAddr})
 	log.Printf("serving on %s\n", lis.Addr().String())
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
