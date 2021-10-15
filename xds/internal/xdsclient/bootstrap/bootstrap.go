@@ -59,6 +59,8 @@ var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 // For overriding in unit tests.
 var bootstrapFileReadFunc = ioutil.ReadFile
 
+// ServerConfig contains the configuration to connect to a server, including
+// URI, creds, and transport API version (e.g. v2 or v3).
 type ServerConfig struct {
 	// ServerURI is the management server to connect to.
 	//
@@ -76,6 +78,10 @@ type ServerConfig struct {
 	TransportAPI version.TransportAPI
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
+	//
+	// Note that it's specified in the bootstrap globally for all the servers,
+	// but we keep it in each server config so that its type (e.g. *v2pb.Node or
+	// *v3pb.Node) is consistent with the transport API version.
 	NodeProto proto.Message
 }
 
@@ -125,7 +131,7 @@ type Authority struct {
 	// If not present in the bootstrap file, defaults to
 	// "xdstp://<authority_name>/envoy.config.listener.v3.Listener/%s".
 	ClientListenerResourceNameTemplate string
-	// XDSServer is FIXME.
+	// XDSServer is the management server to connect to for this authority.
 	XDSServer *ServerConfig
 }
 
@@ -142,7 +148,6 @@ func (a *Authority) UnmarshalJSON(data []byte) error {
 				return fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 		case "client_listener_resource_name_template":
-			// FIXME: must start with "xdstp://<authority_name>"
 			if err := json.Unmarshal(v, &a.ClientListenerResourceNameTemplate); err != nil {
 				return fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
@@ -172,9 +177,9 @@ type Config struct {
 	//
 	// The token "%s", if present in this string, will be replaced with the IP
 	// and port on which the server is listening.  (e.g., "0.0.0.0:8080",
-	// "[::]:8080"). For example, a value of 	// "example/resource/%s" could
-	// become "example/resource/0.0.0.0:8080". If the template starts with
-	// "xdstp:", the replaced string will be %-encoded.
+	// "[::]:8080"). For example, a value of "example/resource/%s" could become
+	// "example/resource/0.0.0.0:8080". If the template starts with "xdstp:",
+	// the replaced string will be %-encoded.
 	//
 	// There is no default; if unset, xDS-based server creation fails.
 	ServerListenerResourceNameTemplate string
@@ -246,34 +251,6 @@ func bootstrapConfigFromEnvVariable() ([]byte, error) {
 
 // NewConfig returns a new instance of Config initialized by reading the
 // bootstrap file found at ${GRPC_XDS_BOOTSTRAP}.
-//
-// The format of the bootstrap file will be as follows:
-// {
-//    "xds_servers": [
-//      {
-//        "server_uri": <string containing URI of management server>,
-//        "channel_creds": [
-//          {
-//            "type": <string containing channel cred type>,
-//            "config": <JSON object containing config for the type>
-//          }
-//        ],
-//        "server_features": [ ... ],
-//      }
-//    ],
-//    "node": <JSON form of Node proto>,
-//    "certificate_providers" : {
-//      "default": {
-//        "plugin_name": "default-plugin-name",
-//        "config": { default plugin config in JSON }
-//       },
-//      "foo": {
-//        "plugin_name": "foo",
-//        "config": { foo plugin config in JSON }
-//      }
-//    },
-//    "server_listener_resource_name_template": "grpc/server?xds.resource.listening_address=%s"
-// }
 //
 // Currently, we support exactly one type of credential, which is
 // "google_default", where we use the host's default certs for transport
@@ -385,14 +362,14 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 	// Post-process the authorities' client listener resource template field:
 	// - if set, it must start with "xdstp://<authority_name>/"
 	// - if not set, it defaults to "xdstp://<authority_name>/envoy.config.listener.v3.Listener/%s"
-	for n, a := range config.Authorities {
-		prefix := fmt.Sprintf("xdstp://%s", n)
-		if a.ClientListenerResourceNameTemplate == "" {
-			a.ClientListenerResourceNameTemplate = prefix + "/envoy.config.listener.v3.Listener/%s"
+	for name, authority := range config.Authorities {
+		prefix := fmt.Sprintf("xdstp://%s", name)
+		if authority.ClientListenerResourceNameTemplate == "" {
+			authority.ClientListenerResourceNameTemplate = prefix + "/envoy.config.listener.v3.Listener/%s"
 			continue
 		}
-		if !strings.HasPrefix(a.ClientListenerResourceNameTemplate, prefix) {
-			return nil, fmt.Errorf("xds: field ClientListenerResourceNameTemplate %q of authority %q doesn't start with prefix %q", a.ClientListenerResourceNameTemplate, n, prefix)
+		if !strings.HasPrefix(authority.ClientListenerResourceNameTemplate, prefix) {
+			return nil, fmt.Errorf("xds: field ClientListenerResourceNameTemplate %q of authority %q doesn't start with prefix %q", authority.ClientListenerResourceNameTemplate, name, prefix)
 		}
 	}
 
@@ -405,16 +382,16 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 
 // updateNodeProto updates the node proto read from the bootstrap file.
 //
-// Node proto in Config contains a v3.Node protobuf message corresponding to the
-// JSON contents found in the bootstrap file. This method performs some post
+// The input node is a v3.Node protobuf message corresponding to the JSON
+// contents found in the bootstrap file. This method performs some post
 // processing on it:
-// 1. If we don't find a nodeProto in the bootstrap file, we create an empty one
-// here. That way, callers of this function can always expect that the NodeProto
-// field is non-nil.
-// 2. If the transport protocol version to be used is not v3, we convert the
-// current v3.Node proto in a v2.Node proto.
-// 3. Some additional fields which are not expected to be set in the bootstrap
+// 1. If the node is nil, we create an empty one here. That way, callers of this
+// function can always expect that the NodeProto field is non-nil.
+// 2. Some additional fields which are not expected to be set in the bootstrap
 // file are populated here.
+// 3. For each server config (both top level and in each authority), we set its
+// node field to the v3.Node, or a v2.Node with the same content, depending on
+// the server's transprot API version.
 func (c *Config) updateNodeProto(node *v3corepb.Node) error {
 	v3 := node
 	if v3 == nil {
