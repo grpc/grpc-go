@@ -80,6 +80,8 @@ func TestPathRegexMatcherMatch(t *testing.T) {
 	}{
 		{name: "match", regexPath: "^/s+/m.*$", path: "/sss/me", want: true},
 		{name: "not match", regexPath: "^/s+/m*$", path: "/sss/b", want: false},
+		{name: "no match because only part of path matches with regex", regexPath: "^a+$", path: "ab", want: false},
+		{name: "match because full path matches with regex", regexPath: "^a+$", path: "aa", want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

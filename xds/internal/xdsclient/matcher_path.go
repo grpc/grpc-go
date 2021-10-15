@@ -21,6 +21,8 @@ package xdsclient
 import (
 	"regexp"
 	"strings"
+
+	"google.golang.org/grpc/internal/grpcutil"
 )
 
 type pathMatcher interface {
@@ -93,7 +95,7 @@ func newPathRegexMatcher(re *regexp.Regexp) *pathRegexMatcher {
 }
 
 func (prm *pathRegexMatcher) match(path string) bool {
-	return prm.re.MatchString(path)
+	return grpcutil.FullMatchWithRegex(prm.re, path)
 }
 
 func (prm *pathRegexMatcher) String() string {

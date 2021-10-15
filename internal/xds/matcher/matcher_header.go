@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -91,7 +92,7 @@ func (hrm *HeaderRegexMatcher) Match(md metadata.MD) bool {
 	if !ok {
 		return false
 	}
-	return hrm.re.MatchString(v)
+	return grpcutil.FullMatchWithRegex(hrm.re, v)
 }
 
 func (hrm *HeaderRegexMatcher) String() string {
