@@ -28,8 +28,6 @@ import (
 	"sync"
 	"time"
 
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -639,17 +637,6 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 		return nil, errors.New("xds: no node_proto provided in options")
 	}
 
-	switch config.XDSServer.TransportAPI {
-	case version.TransportV2:
-		if _, ok := config.XDSServer.NodeProto.(*v2corepb.Node); !ok {
-			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", config.XDSServer.NodeProto, config.XDSServer.TransportAPI)
-		}
-	case version.TransportV3:
-		if _, ok := config.XDSServer.NodeProto.(*v3corepb.Node); !ok {
-			return nil, fmt.Errorf("xds: Node proto type (%T) does not match API version: %v", config.XDSServer.NodeProto, config.XDSServer.TransportAPI)
-		}
-	}
-
 	dopts := []grpc.DialOption{
 		config.XDSServer.Creds,
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
@@ -696,6 +683,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 		Logger:    c.logger,
 	})
 	if err != nil {
+		cc.Close()
 		return nil, err
 	}
 	c.apiClient = apiClient
