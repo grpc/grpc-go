@@ -500,9 +500,14 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterConfig}}),
 		},
 		{
-			name:       "good-route-config-with-http-filter-config-typed-struct",
-			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedCustomFilterTypedStructConfig}),
-			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterTypedStructConfig}}),
+			name:       "good-route-config-with-http-filter-config-in-old-typed-struct",
+			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedCustomFilterOldTypedStructConfig}),
+			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterOldTypedStructConfig}}),
+		},
+		{
+			name:       "good-route-config-with-http-filter-config-in-new-typed-struct",
+			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedCustomFilterNewTypedStructConfig}),
+			wantUpdate: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterNewTypedStructConfig}}),
 		},
 		{
 			name:       "good-route-config-with-optional-http-filter-config",
@@ -1422,8 +1427,8 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 		},
 		{
 			name:       "with custom HTTP filter config in typed struct",
-			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedCustomFilterTypedStructConfig}),
-			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterTypedStructConfig}}),
+			routes:     goodRouteWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedCustomFilterOldTypedStructConfig}),
+			wantRoutes: goodUpdateWithFilterConfigs(map[string]httpfilter.FilterConfig{"foo": filterConfig{Override: customFilterOldTypedStructConfig}}),
 		},
 		{
 			name:       "with optional custom HTTP filter config",

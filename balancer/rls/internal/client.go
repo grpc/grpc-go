@@ -68,8 +68,8 @@ func (c *rlsClient) lookup(path string, keyMap map[string]string, cb lookupCallb
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), c.rpcTimeout)
 		resp, err := c.stub.RouteLookup(ctx, &rlspb.RouteLookupRequest{
-			Server:     c.origDialTarget,
-			Path:       path,
+			// TODO(easwars): Use extra_keys field to populate host, service and
+			// method keys.
 			TargetType: grpcTargetType,
 			KeyMap:     keyMap,
 		})
