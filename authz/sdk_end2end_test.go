@@ -20,6 +20,8 @@ package authz_test
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"io"
 	"io/ioutil"
 	"net"
@@ -30,10 +32,12 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	pb "google.golang.org/grpc/test/grpc_testing"
+	"google.golang.org/grpc/testdata"
 )
 
 type testServer struct {
@@ -257,6 +261,45 @@ var sdkTests = map[string]struct {
 			}`,
 		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
 	},
+	"DeniesRpcRequestWithPrincipalsFieldOnUnauthenticatedConnection": {
+		authzPolicy: `{
+				"name": "authz",
+				"allow_rules":
+				[
+					{
+						"name": "allow_TestServiceCalls",
+						"source": {
+							"principals":
+							[
+								"foo"
+							]
+						},
+						"request": {
+							"paths":
+							[
+								"/grpc.testing.TestService/*"
+							]
+						}
+					}
+				]
+			}`,
+		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
+	},
+	"DeniesRpcRequestWithEmptyPrincipalsOnUnauthenticatedConnection": {
+		authzPolicy: `{
+				"name": "authz",
+				"allow_rules":
+				[
+					{
+						"name": "allow_authenticated",
+						"source": {
+							"principals": []
+						}
+					}
+				]
+			}`,
+		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
+	},
 }
 
 func (s) TestSDKStaticPolicyEnd2End(t *testing.T) {
@@ -312,6 +355,138 @@ func (s) TestSDKStaticPolicyEnd2End(t *testing.T) {
 				t.Fatalf("[StreamingCall] error want:{%v} got:{%v}", test.wantStatus.Err(), got.Err())
 			}
 		})
+	}
+}
+
+func (s) TestSDKAllowsRpcRequestWithEmptyPrincipalsOnTlsAuthenticatedConnection(t *testing.T) {
+	authzPolicy := `{
+				"name": "authz",
+				"allow_rules":
+				[
+					{
+						"name": "allow_authenticated",
+						"source": {
+							"principals": []
+						}
+					}
+				]
+			}`
+	// Start a gRPC server with SDK unary server interceptor.
+	i, _ := authz.NewStatic(authzPolicy)
+	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
+	if err != nil {
+		t.Fatalf("failed to generate credentials: %v", err)
+	}
+	s := grpc.NewServer(
+		grpc.Creds(creds),
+		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
+	defer s.Stop()
+	pb.RegisterTestServiceServer(s, &testServer{})
+
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("error listening: %v", err)
+	}
+	go s.Serve(lis)
+
+	// Establish a connection to the server.
+	creds, err = credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")
+	if err != nil {
+		t.Fatalf("failed to load credentials: %v", err)
+	}
+	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(creds))
+	if err != nil {
+		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
+	}
+	defer clientConn.Close()
+	client := pb.NewTestServiceClient(clientConn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Verifying authorization decision.
+	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
+	if got := status.Convert(err); got.Code() != codes.OK {
+		t.Fatalf("error want:{%v} got:{%v}", codes.OK, got.Err())
+	}
+}
+
+func (s) TestSDKAllowsRpcRequestWithEmptyPrincipalsOnMtlsAuthenticatedConnection(t *testing.T) {
+	authzPolicy := `{
+				"name": "authz",
+				"allow_rules":
+				[
+					{
+						"name": "allow_authenticated",
+						"source": {
+							"principals": []
+						}
+					}
+				]
+			}`
+	// Start a gRPC server with SDK unary server interceptor.
+	i, _ := authz.NewStatic(authzPolicy)
+	cert, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(x509/server1_cert.pem, x509/server1_key.pem) failed: %v", err)
+	}
+	ca, err := ioutil.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
+	if err != nil {
+		t.Fatalf("ioutil.ReadFile(x509/client_ca_cert.pem) failed: %v", err)
+	}
+	certPool := x509.NewCertPool()
+	if !certPool.AppendCertsFromPEM(ca) {
+		t.Fatal("failed to append certificates")
+	}
+	creds := credentials.NewTLS(&tls.Config{
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		Certificates: []tls.Certificate{cert},
+		ClientCAs:    certPool,
+	})
+	s := grpc.NewServer(
+		grpc.Creds(creds),
+		grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
+	defer s.Stop()
+	pb.RegisterTestServiceServer(s, &testServer{})
+
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("error listening: %v", err)
+	}
+	go s.Serve(lis)
+
+	// Establish a connection to the server.
+	cert, err = tls.LoadX509KeyPair(testdata.Path("x509/client1_cert.pem"), testdata.Path("x509/client1_key.pem"))
+	if err != nil {
+		t.Fatalf("tls.LoadX509KeyPair(x509/client1_cert.pem, x509/client1_key.pem) failed: %v", err)
+	}
+	ca, err = ioutil.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
+	if err != nil {
+		t.Fatalf("ioutil.ReadFile(x509/server_ca_cert.pem) failed: %v", err)
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(ca) {
+		t.Fatal("failed to append certificates")
+	}
+	creds = credentials.NewTLS(&tls.Config{
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      roots,
+		ServerName:   "x.test.example.com",
+	})
+	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(creds))
+	if err != nil {
+		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
+	}
+	defer clientConn.Close()
+	client := pb.NewTestServiceClient(clientConn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Verifying authorization decision.
+	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
+	if got := status.Convert(err); got.Code() != codes.OK {
+		t.Fatalf("error want:{%v} got:{%v}", codes.OK, got.Err())
 	}
 }
 

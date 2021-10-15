@@ -395,13 +395,13 @@ func newAuthenticatedMatcher(authenticatedMatcherConfig *v3rbacpb.Principal_Auth
 }
 
 func (am *authenticatedMatcher) match(data *rpcData) bool {
-	// Represents this line in the RBAC documentation = "If unset, it applies to
-	// any user that is authenticated" (see package-level comments). An
-	// authenticated downstream in a stateful TLS connection will have to
-	// provide a certificate to prove their identity. Thus, you can simply check
-	// if there is a certificate present.
+	if data.authType != "tls" {
+		// Connection is not authenticated.
+		return false
+	}
 	if am.stringMatcher == nil {
-		return len(data.certs) != 0
+		// Allows any authenticated user.
+		return true
 	}
 	// "If there is no client certificate (thus no SAN nor Subject), check if ""
 	// (empty string) matches. If it matches, the principal_name is said to
