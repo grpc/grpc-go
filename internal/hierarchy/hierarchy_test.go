@@ -40,7 +40,7 @@ func TestGet(t *testing.T) {
 		{
 			name: "set",
 			addr: resolver.Address{
-				Attributes: attributes.New(pathKey, []string{"a", "b"}),
+				BalancerAttributes: attributes.New(pathKey, pathValue{"a", "b"}),
 			},
 			want: []string{"a", "b"},
 		},
@@ -68,7 +68,7 @@ func TestSet(t *testing.T) {
 		{
 			name: "before is set",
 			addr: resolver.Address{
-				Attributes: attributes.New(pathKey, []string{"before", "a", "b"}),
+				BalancerAttributes: attributes.New(pathKey, pathValue{"before", "a", "b"}),
 			},
 			path: []string{"a", "b"},
 		},
@@ -93,19 +93,19 @@ func TestGroup(t *testing.T) {
 		{
 			name: "all with hierarchy",
 			addrs: []resolver.Address{
-				{Addr: "a0", Attributes: attributes.New(pathKey, []string{"a"})},
-				{Addr: "a1", Attributes: attributes.New(pathKey, []string{"a"})},
-				{Addr: "b0", Attributes: attributes.New(pathKey, []string{"b"})},
-				{Addr: "b1", Attributes: attributes.New(pathKey, []string{"b"})},
+				{Addr: "a0", BalancerAttributes: attributes.New(pathKey, pathValue{"a"})},
+				{Addr: "a1", BalancerAttributes: attributes.New(pathKey, pathValue{"a"})},
+				{Addr: "b0", BalancerAttributes: attributes.New(pathKey, pathValue{"b"})},
+				{Addr: "b1", BalancerAttributes: attributes.New(pathKey, pathValue{"b"})},
 			},
 			want: map[string][]resolver.Address{
 				"a": {
-					{Addr: "a0", Attributes: attributes.New(pathKey, []string{})},
-					{Addr: "a1", Attributes: attributes.New(pathKey, []string{})},
+					{Addr: "a0", BalancerAttributes: attributes.New(pathKey, pathValue{})},
+					{Addr: "a1", BalancerAttributes: attributes.New(pathKey, pathValue{})},
 				},
 				"b": {
-					{Addr: "b0", Attributes: attributes.New(pathKey, []string{})},
-					{Addr: "b1", Attributes: attributes.New(pathKey, []string{})},
+					{Addr: "b0", BalancerAttributes: attributes.New(pathKey, pathValue{})},
+					{Addr: "b1", BalancerAttributes: attributes.New(pathKey, pathValue{})},
 				},
 			},
 		},
@@ -113,15 +113,15 @@ func TestGroup(t *testing.T) {
 			// Addresses without hierarchy are ignored.
 			name: "without hierarchy",
 			addrs: []resolver.Address{
-				{Addr: "a0", Attributes: attributes.New(pathKey, []string{"a"})},
-				{Addr: "a1", Attributes: attributes.New(pathKey, []string{"a"})},
-				{Addr: "b0", Attributes: nil},
-				{Addr: "b1", Attributes: nil},
+				{Addr: "a0", BalancerAttributes: attributes.New(pathKey, pathValue{"a"})},
+				{Addr: "a1", BalancerAttributes: attributes.New(pathKey, pathValue{"a"})},
+				{Addr: "b0", BalancerAttributes: nil},
+				{Addr: "b1", BalancerAttributes: nil},
 			},
 			want: map[string][]resolver.Address{
 				"a": {
-					{Addr: "a0", Attributes: attributes.New(pathKey, []string{})},
-					{Addr: "a1", Attributes: attributes.New(pathKey, []string{})},
+					{Addr: "a0", BalancerAttributes: attributes.New(pathKey, pathValue{})},
+					{Addr: "a1", BalancerAttributes: attributes.New(pathKey, pathValue{})},
 				},
 			},
 		},
@@ -130,15 +130,15 @@ func TestGroup(t *testing.T) {
 			// the address is ignored.
 			name: "wrong type",
 			addrs: []resolver.Address{
-				{Addr: "a0", Attributes: attributes.New(pathKey, []string{"a"})},
-				{Addr: "a1", Attributes: attributes.New(pathKey, []string{"a"})},
-				{Addr: "b0", Attributes: attributes.New(pathKey, "b")},
-				{Addr: "b1", Attributes: attributes.New(pathKey, 314)},
+				{Addr: "a0", BalancerAttributes: attributes.New(pathKey, pathValue{"a"})},
+				{Addr: "a1", BalancerAttributes: attributes.New(pathKey, pathValue{"a"})},
+				{Addr: "b0", BalancerAttributes: attributes.New(pathKey, "b")},
+				{Addr: "b1", BalancerAttributes: attributes.New(pathKey, 314)},
 			},
 			want: map[string][]resolver.Address{
 				"a": {
-					{Addr: "a0", Attributes: attributes.New(pathKey, []string{})},
-					{Addr: "a1", Attributes: attributes.New(pathKey, []string{})},
+					{Addr: "a0", BalancerAttributes: attributes.New(pathKey, pathValue{})},
+					{Addr: "a1", BalancerAttributes: attributes.New(pathKey, pathValue{})},
 				},
 			},
 		},
@@ -167,14 +167,14 @@ func TestGroupE2E(t *testing.T) {
 
 	var addrsWithHierarchy []resolver.Address
 	for p, wts := range hierarchy {
-		path1 := []string{p}
+		path1 := pathValue{p}
 		for wt, addrs := range wts {
-			path2 := append([]string(nil), path1...)
+			path2 := append(pathValue(nil), path1...)
 			path2 = append(path2, wt)
 			for _, addr := range addrs {
 				a := resolver.Address{
-					Addr:       addr,
-					Attributes: attributes.New(pathKey, path2),
+					Addr:               addr,
+					BalancerAttributes: attributes.New(pathKey, path2),
 				}
 				addrsWithHierarchy = append(addrsWithHierarchy, a)
 			}

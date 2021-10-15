@@ -85,7 +85,7 @@ type ignoreAttrsRRBalancer struct {
 func (trrb *ignoreAttrsRRBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	var newAddrs []resolver.Address
 	for _, a := range s.ResolverState.Addresses {
-		a.Attributes = nil
+		a.BalancerAttributes = nil
 		newAddrs = append(newAddrs, a)
 	}
 	s.ResolverState.Addresses = newAddrs
@@ -137,8 +137,8 @@ func TestClusterPicks(t *testing.T) {
 
 	// Send the config, and an address with hierarchy path ["cluster_1"].
 	wantAddrs := []resolver.Address{
-		{Addr: testBackendAddrStrs[0], Attributes: nil},
-		{Addr: testBackendAddrStrs[1], Attributes: nil},
+		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
+		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
 	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
@@ -156,11 +156,11 @@ func TestClusterPicks(t *testing.T) {
 	for range wantAddrs {
 		addrs := <-cc.NewSubConnAddrsCh
 		if len(hierarchy.Get(addrs[0])) != 0 {
-			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].Attributes)
+			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].BalancerAttributes)
 		}
 		sc := <-cc.NewSubConnCh
 		// Clear the attributes before adding to map.
-		addrs[0].Attributes = nil
+		addrs[0].BalancerAttributes = nil
 		m1[addrs[0]] = sc
 		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
@@ -215,8 +215,8 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 
 	// Send the config, and an address with hierarchy path ["cluster_1"].
 	wantAddrs := []resolver.Address{
-		{Addr: testBackendAddrStrs[0], Attributes: nil},
-		{Addr: testBackendAddrStrs[1], Attributes: nil},
+		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
+		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
 	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
@@ -234,11 +234,11 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	for range wantAddrs {
 		addrs := <-cc.NewSubConnAddrsCh
 		if len(hierarchy.Get(addrs[0])) != 0 {
-			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].Attributes)
+			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].BalancerAttributes)
 		}
 		sc := <-cc.NewSubConnCh
 		// Clear the attributes before adding to map.
-		addrs[0].Attributes = nil
+		addrs[0].BalancerAttributes = nil
 		m1[addrs[0]] = sc
 		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
@@ -285,7 +285,7 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to parse balancer config: %v", err)
 	}
-	wantAddrs = append(wantAddrs, resolver.Address{Addr: testBackendAddrStrs[2], Attributes: nil})
+	wantAddrs = append(wantAddrs, resolver.Address{Addr: testBackendAddrStrs[2], BalancerAttributes: nil})
 	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
 			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
@@ -300,11 +300,11 @@ func TestConfigUpdateAddCluster(t *testing.T) {
 	// Expect exactly one new subconn.
 	addrs := <-cc.NewSubConnAddrsCh
 	if len(hierarchy.Get(addrs[0])) != 0 {
-		t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].Attributes)
+		t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].BalancerAttributes)
 	}
 	sc := <-cc.NewSubConnCh
 	// Clear the attributes before adding to map.
-	addrs[0].Attributes = nil
+	addrs[0].BalancerAttributes = nil
 	m1[addrs[0]] = sc
 	rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
@@ -372,8 +372,8 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 
 	// Send the config, and an address with hierarchy path ["cluster_1"].
 	wantAddrs := []resolver.Address{
-		{Addr: testBackendAddrStrs[0], Attributes: nil},
-		{Addr: testBackendAddrStrs[1], Attributes: nil},
+		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
+		{Addr: testBackendAddrStrs[1], BalancerAttributes: nil},
 	}
 	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{
@@ -391,11 +391,11 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	for range wantAddrs {
 		addrs := <-cc.NewSubConnAddrsCh
 		if len(hierarchy.Get(addrs[0])) != 0 {
-			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].Attributes)
+			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].BalancerAttributes)
 		}
 		sc := <-cc.NewSubConnCh
 		// Clear the attributes before adding to map.
-		addrs[0].Attributes = nil
+		addrs[0].BalancerAttributes = nil
 		m1[addrs[0]] = sc
 		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
@@ -475,11 +475,11 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 	for range wantAddrs {
 		addrs := <-cc.NewSubConnAddrsCh
 		if len(hierarchy.Get(addrs[0])) != 0 {
-			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].Attributes)
+			t.Fatalf("NewSubConn with address %+v, attrs %+v, want address with hierarchy cleared", addrs[0], addrs[0].BalancerAttributes)
 		}
 		sc := <-cc.NewSubConnCh
 		// Clear the attributes before adding to map.
-		addrs[0].Attributes = nil
+		addrs[0].BalancerAttributes = nil
 		m2[addrs[0]] = sc
 		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 		rtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
@@ -608,7 +608,7 @@ func TestInitialIdle(t *testing.T) {
 
 	// Send the config, and an address with hierarchy path ["cluster_1"].
 	wantAddrs := []resolver.Address{
-		{Addr: testBackendAddrStrs[0], Attributes: nil},
+		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
 	}
 	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{Addresses: []resolver.Address{

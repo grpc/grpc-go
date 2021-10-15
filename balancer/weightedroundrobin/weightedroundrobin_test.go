@@ -73,7 +73,7 @@ func TestAddrInfoToAndFromAttributes(t *testing.T) {
 }
 
 func TestGetAddInfoEmpty(t *testing.T) {
-	addr := resolver.Address{Attributes: attributes.New()}
+	addr := resolver.Address{}
 	gotAddrInfo := GetAddrInfo(addr)
 	wantAddrInfo := AddrInfo{}
 	if !cmp.Equal(gotAddrInfo, wantAddrInfo) {

@@ -54,34 +54,6 @@ func (p *testPickBuilder) Build(info PickerBuildInfo) balancer.Picker {
 	return nil
 }
 
-func TestBaseBalancerStripAttributes(t *testing.T) {
-	b := (&baseBuilder{}).Build(&testClientConn{
-		newSubConn: func(addrs []resolver.Address, _ balancer.NewSubConnOptions) (balancer.SubConn, error) {
-			for _, addr := range addrs {
-				if addr.Attributes == nil {
-					t.Errorf("in NewSubConn, got address %+v with nil attributes, want not nil", addr)
-				}
-			}
-			return &testSubConn{}, nil
-		},
-	}, balancer.BuildOptions{}).(*baseBalancer)
-
-	b.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: resolver.State{
-			Addresses: []resolver.Address{
-				{Addr: "1.1.1.1", Attributes: &attributes.Attributes{}},
-				{Addr: "2.2.2.2", Attributes: &attributes.Attributes{}},
-			},
-		},
-	})
-
-	for addr := range b.subConns {
-		if addr.Attributes != nil {
-			t.Errorf("in b.subConns, got address %+v with not nil attributes, want nil", addr)
-		}
-	}
-}
-
 func TestBaseBalancerReserveAttributes(t *testing.T) {
 	var v = func(info PickerBuildInfo) {
 		for _, sc := range info.ReadySCs {
