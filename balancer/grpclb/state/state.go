@@ -36,23 +36,6 @@ type State struct {
 	BalancerAddresses []resolver.Address
 }
 
-// Equal satisfies attributes.Value.
-func (s *State) Equal(o interface{}) bool {
-	os, ok := o.(*State)
-	if !ok {
-		return false
-	}
-	if len(os.BalancerAddresses) != len(s.BalancerAddresses) {
-		return false
-	}
-	for i, a := range s.BalancerAddresses {
-		if !a.Equal(&os.BalancerAddresses[i]) {
-			return false
-		}
-	}
-	return true
-}
-
 // Set returns a copy of the provided state with attributes containing s.  s's
 // data should not be mutated after calling Set.
 func Set(state resolver.State, s *State) resolver.State {
