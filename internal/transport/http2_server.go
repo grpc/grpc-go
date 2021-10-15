@@ -348,6 +348,16 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return false
 	}
 
+	// Moving streamID validation before other validations
+	if streamID%2 != 1 || streamID <= t.maxStreamID {
+		t.mu.Unlock()
+		// illegal gRPC stream id.
+		if logger.V(logLevel) {
+			logger.Errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", streamID)
+		}
+		return true
+	}
+
 	buf := newRecvBuffer()
 	s := &Stream{
 		id:  streamID,
@@ -355,6 +365,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		buf: buf,
 		fc:  &inFlow{limit: uint32(t.initialWindowSize)},
 	}
+	t.maxStreamID = streamID
 
 	var (
 		// If a gRPC Response-Headers has already been received, then it means
@@ -498,16 +509,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		s.cancel()
 		return false
 	}
-	if streamID%2 != 1 || streamID <= t.maxStreamID {
-		t.mu.Unlock()
-		// illegal gRPC stream id.
-		if logger.V(logLevel) {
-			logger.Errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", streamID)
-		}
-		s.cancel()
-		return true
-	}
-	t.maxStreamID = streamID
 	if httpMethod != http.MethodPost {
 		t.mu.Unlock()
 		if logger.V(logLevel) {
