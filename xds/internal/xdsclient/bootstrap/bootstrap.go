@@ -260,10 +260,9 @@ func bootstrapConfigFromEnvVariable() ([]byte, error) {
 // the presence of the errors) and may return a Config object with certain
 // fields left unspecified, in which case the caller should use some sane
 // defaults.
-//
-// Examples of the bootstrap json can be found in the generator tests
-// https://github.com/GoogleCloudPlatform/traffic-director-grpc-bootstrap/blob/master/main_test.go.
 func NewConfig() (*Config, error) {
+	// Examples of the bootstrap json can be found in the generator tests
+	// https://github.com/GoogleCloudPlatform/traffic-director-grpc-bootstrap/blob/master/main_test.go.
 	data, err := bootstrapConfigFromEnvVariable()
 	if err != nil {
 		return nil, fmt.Errorf("xds: Failed to read bootstrap config: %v", err)
