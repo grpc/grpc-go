@@ -73,6 +73,7 @@ EXAMPLES=(
     "features/metadata"
     "features/multiplex"
     "features/name_resolving"
+    "features/unix_abstract"
 )
 
 declare -A EXPECTED_SERVER_OUTPUT=(
@@ -88,6 +89,7 @@ declare -A EXPECTED_SERVER_OUTPUT=(
     ["features/metadata"]="message:\"this is examples/metadata\", sending echo"
     ["features/multiplex"]=":50051"
     ["features/name_resolving"]="serving on localhost:50051"
+    ["features/unix_abstract"]="serving on @abstract-unix-socket"
 )
 
 declare -A EXPECTED_CLIENT_OUTPUT=(
@@ -103,6 +105,7 @@ declare -A EXPECTED_CLIENT_OUTPUT=(
     ["features/metadata"]="this is examples/metadata"
     ["features/multiplex"]="Greeting:  Hello multiplex"
     ["features/name_resolving"]="calling helloworld.Greeter/SayHello to \"example:///resolver.example.grpc.io\""
+    ["features/unix_abstract"]="calling echo.Echo/UnaryEcho to unix-abstract:abstract-unix-socket"
 )
 
 cd ./examples

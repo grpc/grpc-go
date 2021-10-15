@@ -482,8 +482,7 @@ func WithChainStreamInterceptor(interceptors ...StreamClientInterceptor) DialOpt
 }
 
 // WithAuthority returns a DialOption that specifies the value to be used as the
-// :authority pseudo-header. This value only works with WithInsecure and has no
-// effect if TransportCredentials are present.
+// :authority pseudo-header and as the server name in authentication handshake.
 func WithAuthority(a string) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.authority = a
