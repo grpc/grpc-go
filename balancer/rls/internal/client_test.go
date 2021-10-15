@@ -131,8 +131,8 @@ func (s) TestLookupSuccess(t *testing.T) {
 		"k2": "v2",
 	}
 	wantLookupRequest := &rlspb.RouteLookupRequest{
-		Server:     defaultDialTarget,
-		Path:       rlsReqPath,
+		// TODO(easwars): Use extra_keys field to populate host, service and
+		// method keys.
 		TargetType: "grpc",
 		KeyMap:     rlsReqKeyMap,
 	}
