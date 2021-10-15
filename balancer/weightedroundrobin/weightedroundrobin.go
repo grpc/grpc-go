@@ -36,7 +36,7 @@ type AddrInfo struct {
 	Weight uint32
 }
 
-// Equal satisfies attributes.Value.
+// Equal allows the values to be compared by Attributes.Equal.
 func (a AddrInfo) Equal(o interface{}) bool {
 	oa, ok := o.(AddrInfo)
 	return ok && oa.Weight == a.Weight

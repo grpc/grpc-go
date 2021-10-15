@@ -28,16 +28,11 @@ package attributes
 // Attributes is an immutable struct for storing and retrieving generic
 // key/value pairs.  Keys must be hashable, and users should define their own
 // types for keys.  Values should not be modified after they are added to an
-// Attributes or if they were received from one.
+// Attributes or if they were received from one.  If values implement 'Equal(o
+// interface{}) bool', it will be called by (*Attributes).Equal to determine
+// whether two values with the same key should be considered equal.
 type Attributes struct {
 	m map[interface{}]interface{}
-}
-
-// Value may be implemented by all values stored in Attributes.  It allows
-// comparing the values with other attributes matching the same key.
-type Value interface {
-	// Equal returns whether this Value is equivalent to o.
-	Equal(o interface{}) bool
 }
 
 // New returns a new Attributes containing the key/value pair.
@@ -70,10 +65,11 @@ func (a *Attributes) Value(key interface{}) interface{} {
 	return a.m[key]
 }
 
-// Equal returns whether a and o are equivalent.  If Value is implemented for a
-// value in the attributes, it is called to determine if the value matches the
-// one stored in the other attributes.  If Value is not implemented, standard
-// equality is used to determine if the two values are equal.
+// Equal returns whether a and o are equivalent.  If 'Equal(o interface{})
+// bool' is implemented for a value in the attributes, it is called to
+// determine if the value matches the one stored in the other attributes.  If
+// Equal is not implemented, standard equality is used to determine if the two
+// values are equal.
 func (a *Attributes) Equal(o *Attributes) bool {
 	if a == nil && o == nil {
 		return true
@@ -90,7 +86,7 @@ func (a *Attributes) Equal(o *Attributes) bool {
 			// o missing element of a
 			return false
 		}
-		if eq, ok := v.(Value); ok {
+		if eq, ok := v.(interface{ Equal(o interface{}) bool }); ok {
 			if !eq.Equal(ov) {
 				return false
 			}
