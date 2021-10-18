@@ -33,4 +33,5 @@ FROM alpine
 COPY --from=build /go/src/grpc-go/server .
 ENV GRPC_GO_LOG_VERBOSITY_LEVEL=2
 ENV GRPC_GO_LOG_SEVERITY_LEVEL="info"
+ENV GRPC_GO_LOG_FORMATTER="json"
 ENTRYPOINT ["./server"]
