@@ -348,7 +348,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return false
 	}
 	t.mu.Lock()
-	// Moving streamID validation before other validations
+
 	if streamID%2 != 1 || streamID <= t.maxStreamID {
 		t.mu.Unlock()
 		// illegal gRPC stream id.
@@ -358,6 +358,9 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return true
 	}
 
+	t.maxStreamID = streamID
+	t.mu.Unlock()
+
 	buf := newRecvBuffer()
 	s := &Stream{
 		id:  streamID,
@@ -365,8 +368,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		buf: buf,
 		fc:  &inFlow{limit: uint32(t.initialWindowSize)},
 	}
-	t.maxStreamID = streamID
-	t.mu.Unlock()
 	var (
 		// If a gRPC Response-Headers has already been received, then it means
 		// that the peer is speaking gRPC and we are in gRPC mode.
