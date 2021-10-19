@@ -1874,3 +1874,84 @@ func (s) TestPriority_HighPriorityInitIdle(t *testing.T) {
 		t.Fatalf("pick returned %v, %v, want _, %v", pr, err, errsTestInitIdle[1])
 	}
 }
+
+// If the high priorities send initial pickers with Idle state, their pickers
+// should get picks, because policies like ringhash starts in Idle, and doesn't
+// connect. In this case, if a lower priority is added, it shouldn't switch to
+// the lower priority.
+//
+// Init 0; 0 is Idle, use 0; add 1, use 0.
+func (s) TestPriority_AddLowPriorityWhenHighIsInIdle(t *testing.T) {
+	cc := testutils.NewTestClientConn(t)
+	bb := balancer.Get(Name)
+	pb := bb.Build(cc, balancer.BuildOptions{})
+	defer pb.Close()
+
+	// One child, with priorities [0], one backend.
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: []resolver.Address{
+				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Children: map[string]*Child{
+				"child-0": {Config: &internalserviceconfig.BalancerConfig{Name: fmt.Sprintf("%s-%d", initIdleBalancerName, 0)}},
+			},
+			Priorities: []string{"child-0"},
+		},
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	addrs0 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc0 := <-cc.NewSubConnCh
+
+	// Send an Idle state update to trigger an Idle picker update.
+	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Idle})
+	p0 := <-cc.NewPickerCh
+	if pr, err := p0.Pick(balancer.PickInfo{}); err != errsTestInitIdle[0] {
+		t.Fatalf("pick returned %v, %v, want _, %v", pr, err, errsTestInitIdle[0])
+	}
+
+	// Add 1, should keep using 0.
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: []resolver.Address{
+				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
+				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[1]}, []string{"child-1"}),
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Children: map[string]*Child{
+				"child-0": {Config: &internalserviceconfig.BalancerConfig{Name: fmt.Sprintf("%s-%d", initIdleBalancerName, 0)}},
+				"child-1": {Config: &internalserviceconfig.BalancerConfig{Name: fmt.Sprintf("%s-%d", initIdleBalancerName, 1)}},
+			},
+			Priorities: []string{"child-0", "child-1"},
+		},
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	// The ClientConn state update triggers a priority switch, from p0 -> p0
+	// (since p0 is still in use). Along with this the update, p0 also gets a
+	// ClientConn state update, with the addresses, which didn't change in this
+	// test (this update to the child is necessary in case the addresses are
+	// different).
+	//
+	// The test child policy, initIdleBalancer, blindly calls NewSubConn with
+	// all the addresses it receives, so this will trigger a NewSubConn with the
+	// old p0 addresses. (Note that in a real balancer, like roundrobin, no new
+	// SubConn will be created because the addresses didn't change).
+	//
+	// The check below makes sure that the addresses are still from p0, and not
+	// from p1. This is good enough for the purpose of this test.
+	addrsNew := <-cc.NewSubConnAddrsCh
+	if got, want := addrsNew[0].Addr, testBackendAddrStrs[0]; got != want {
+		// Fail if p1 is started and creates a SubConn.
+		t.Fatalf("got unexpected call to NewSubConn with addr: %v, want %v", addrsNew, want)
+	}
+}
