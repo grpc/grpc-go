@@ -518,14 +518,13 @@ func WithDisableServiceConfig() DialOption {
 // WithDefaultServiceConfig returns a DialOption that configures the default
 // service config, which will be used in cases where:
 //
-// 1. WithDisableServiceConfig is also used.
-// 2. Resolver does not return a service config or if the resolver returns an
-//    invalid service config.
+// 1. WithDisableServiceConfig is also used, or
 //
-// Experimental
+// 2. The name resolver does not provide a service config or provides an
+// invalid service config.
 //
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
+// For more information about service configs, see
+// https://github.com/grpc/grpc/blob/master/doc/service_config.md
 func WithDefaultServiceConfig(s string) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.defaultServiceConfigRawJSON = &s
