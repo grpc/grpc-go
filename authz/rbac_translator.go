@@ -39,7 +39,7 @@ type header struct {
 }
 
 type peer struct {
-	Principals *[]string `json:",omitempty"`
+	Principals *[]string
 }
 
 type request struct {

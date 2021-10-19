@@ -202,8 +202,8 @@ func newRPCData(ctx context.Context) (*rpcData, error) {
 		peerInfo:        pi,
 		fullMethod:      mn,
 		destinationPort: uint32(dp),
-		authType:        authType,
 		localAddr:       conn.LocalAddr(),
+		authType:        authType,
 		certs:           peerCertificates,
 	}, nil
 }
@@ -220,10 +220,10 @@ type rpcData struct {
 	// destinationPort is the port that the RPC is being sent to on the
 	// server.
 	destinationPort uint32
-	// authType is the type of authentication.
-	authType string
 	// localAddr is the address that the RPC is being sent to.
 	localAddr net.Addr
+	// authType is the type of authentication.
+	authType string
 	// certs are the certificates presented by the peer during a TLS
 	// handshake.
 	certs []*x509.Certificate
