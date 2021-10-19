@@ -1290,7 +1290,7 @@ func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
 	}}
 
 	creds := serverNameCheckCreds{}
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
@@ -1319,21 +1319,17 @@ func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
 	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("Initial _.EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
-	t.Log("Now send an empty server list. Wait until we see an RPC failure to make sure the cliet got it...")
+	t.Log("Now send an empty server list. Wait until we see an RPC failure to make sure the client got it...")
 	tss.ls.sls <- &lbpb.ServerList{}
-	gotUnavailable := false
-	for i := 0; i < 100 && !gotUnavailable; i++ {
-		func() {
-			ctx, cancel := context.WithTimeout(ctx, time.Second*1)
-			defer cancel()
-			_, err := testC.EmptyCall(ctx, &testpb.Empty{})
-			if status.Code(err) == codes.Unavailable {
-				gotUnavailable = true
-			}
-		}()
+	gotError := false
+	for i := 0; i < 100; i++ {
+		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+			gotError = true
+			break
+		}
 	}
-	if !gotUnavailable {
-		t.Fatalf("Expected to eventually see an RPC fail with unavailable after the grpclb sends an empty server list, but none did.")
+	if !gotError {
+		t.Fatalf("Expected to eventually see an RPC fail after the grpclb sends an empty server list, but none did.")
 	}
 	t.Log("Now send a non-empty server list. A wait-for-ready RPC should now succeed...")
 	tss.ls.sls <- &lbpb.ServerList{Servers: beServers}
