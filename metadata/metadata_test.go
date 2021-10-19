@@ -262,6 +262,29 @@ func (s) TestAppendToOutgoingContext_FromKVSlice(t *testing.T) {
 	}
 }
 
+func (s) TestValidate(t *testing.T) {
+	// check key
+	md := MD{}
+	md.Set(string(rune(0x19)), "testVal")
+	err := md.Validate()
+	if err == nil {
+		t.Errorf("validating md, err should not nil")
+	}
+	// check value
+	md = MD{}
+	md.Set("test", string(rune(0x19)))
+	err = md.Validate()
+	if err == nil {
+		t.Errorf("validating md, err should not nil")
+	}
+	md = MD{}
+	md.Set("test-bin", string(rune(0x19)))
+	err = md.Validate()
+	if err != nil {
+		t.Fatalf("when key suffix '-bin' and value is binary, validate wrong msg{%v}", err)
+	}
+}
+
 // Old/slow approach to adding metadata to context
 func Benchmark_AddingMetadata_ContextManipulationApproach(b *testing.B) {
 	// TODO: Add in N=1-100 tests once Go1.6 support is removed.

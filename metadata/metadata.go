@@ -92,7 +92,7 @@ func (md MD) Validate() error {
 	for k, vals := range md {
 		// check key
 		for _, rc := range []rune(k) {
-			if !(rc >= 'a' && rc <= 'z') && !(rc >= '0' && rc <= '9') && rc != '.' || rc != '-' || rc != '_' {
+			if !(rc >= 'a' && rc <= 'z') && !(rc >= '0' && rc <= '9') && rc != '.' && rc != '-' && rc != '_' {
 				return errors.New("header key is not 0-9a-z-_.")
 			}
 		}
