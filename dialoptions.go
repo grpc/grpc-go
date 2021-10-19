@@ -523,8 +523,11 @@ func WithDisableServiceConfig() DialOption {
 // 2. The name resolver does not provide a service config or provides an
 // invalid service config.
 //
-// For more information about service configs, see
+// The parameter s is the JSON representation of the default service config.
+// For more information about service configs, see:
 // https://github.com/grpc/grpc/blob/master/doc/service_config.md
+// For a simple example of usage, see:
+// examples/features/load_balancing/client/main.go
 func WithDefaultServiceConfig(s string) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.defaultServiceConfigRawJSON = &s
