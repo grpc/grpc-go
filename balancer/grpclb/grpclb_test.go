@@ -1292,8 +1292,10 @@ func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
 	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, grpc.WithResolvers(r),
-		grpc.WithTransportCredentials(&creds), grpc.WithContextDialer(fakeNameDialer))
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+		grpc.WithResolvers(r),
+		grpc.WithTransportCredentials(&creds),
+		grpc.WithContextDialer(fakeNameDialer))
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -1302,19 +1304,12 @@ func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
 
 	tss.ls.sls <- &lbpb.ServerList{Servers: beServers}
 
-	scpr := r.CC.ParseServiceConfig(svcfg)
-	if scpr.Err != nil {
-		t.Fatalf("Error parsing config %q: %v", svcfg, scpr.Err)
-	}
-
-	r.UpdateState(resolver.State{
-		Addresses: []resolver.Address{{
+	rs := grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(svcfg)},
+		&grpclbstate.State{BalancerAddresses: []resolver.Address{{
 			Addr:       tss.lbAddr,
-			Type:       resolver.GRPCLB,
 			ServerName: lbServerName,
-		}},
-		ServiceConfig: scpr,
-	})
+		}}})
+	r.UpdateState(rs)
 	t.Log("Perform an initial RPC and expect it to succeed...")
 	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("Initial _.EmptyCall(_, _) = _, %v, want _, <nil>", err)
