@@ -135,11 +135,19 @@ func (lb *lbBalancer) refreshSubConns(backendAddrs []resolver.Address, fallback 
 	}
 
 	if lb.usePickFirst {
-		var sc balancer.SubConn
-		for _, sc = range lb.subConns {
+		var (
+			scKey resolver.Address
+			sc    balancer.SubConn
+		)
+		for scKey, sc = range lb.subConns {
 			break
 		}
 		if sc != nil {
+			if len(backendAddrs) == 0 {
+				lb.cc.cc.RemoveSubConn(sc)
+				delete(lb.subConns, scKey)
+				return
+			}
 			lb.cc.cc.UpdateAddresses(sc, backendAddrs)
 			sc.Connect()
 			return
