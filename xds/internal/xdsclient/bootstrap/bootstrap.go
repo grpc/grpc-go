@@ -334,14 +334,6 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 			if err := json.Unmarshal(v, &config.ServerListenerResourceNameTemplate); err != nil {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
-		case "client_default_listener_resource_name_template":
-			if err := json.Unmarshal(v, &config.ClientDefaultListenerResourceNameTemplate); err != nil {
-				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
-			}
-		case "authorities":
-			if err := json.Unmarshal(v, &config.Authorities); err != nil {
-				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
-			}
 		default:
 			logger.Infof("Bootstrap content has unknown field: %s", k)
 		}
