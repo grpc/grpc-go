@@ -120,14 +120,6 @@ func (s) TestAddressMap_Delete(t *testing.T) {
 	}
 }
 
-type byString []Address
-
-func (as byString) Len() int      { return len(as) }
-func (as byString) Swap(i, j int) { as[i], as[j] = as[j], as[i] }
-func (as byString) Less(i, j int) bool {
-	return fmt.Sprint(as[i]) < fmt.Sprint(as[j])
-}
-
 func (s) TestAddressMap_Keys(t *testing.T) {
 	addrMap := NewAddressMap()
 	addrMap.Set(addr1, 1)
@@ -139,10 +131,12 @@ func (s) TestAddressMap_Keys(t *testing.T) {
 	addrMap.Set(addr7, 7) // aliases addr1
 
 	want := []Address{addr1, addr2, addr3, addr4, addr5, addr6}
-	sort.Sort(byString(want))
 	got := addrMap.Keys()
-	sort.Sort(byString(got))
-	if d := cmp.Diff(want, got); d != "" {
+	if d := cmp.Diff(want, got, cmp.Transformer("sort", func(in []Address) []Address {
+		out := append([]Address(nil), in...)
+		sort.Slice(out, func(i, j int) bool { return fmt.Sprint(out[i]) < fmt.Sprint(out[j]) })
+		return out
+	})); d != "" {
 		t.Fatalf("addrMap.Keys returned unexpected elements (-want, +got):\n%v", d)
 	}
 }
