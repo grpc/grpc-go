@@ -19,8 +19,11 @@
 package resolver
 
 import (
+	"fmt"
+	"sort"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/attributes"
 )
 
@@ -117,6 +120,14 @@ func (s) TestAddressMap_Delete(t *testing.T) {
 	}
 }
 
+type byString []Address
+
+func (as byString) Len() int      { return len(as) }
+func (as byString) Swap(i, j int) { as[i], as[j] = as[j], as[i] }
+func (as byString) Less(i, j int) bool {
+	return fmt.Sprint(as[i]) < fmt.Sprint(as[j])
+}
+
 func (s) TestAddressMap_Keys(t *testing.T) {
 	addrMap := NewAddressMap()
 	addrMap.Set(addr1, 1)
@@ -128,22 +139,10 @@ func (s) TestAddressMap_Keys(t *testing.T) {
 	addrMap.Set(addr7, 7) // aliases addr1
 
 	want := []Address{addr1, addr2, addr3, addr4, addr5, addr6}
+	sort.Sort(byString(want))
 	got := addrMap.Keys()
-	for i := 0; i < len(got); i++ {
-		g := got[i]
-		for j, w := range want {
-			if g.Equal(w) {
-				copy(got[i:], got[i+1:])
-				got = got[:len(got)-1]
-				i-- // Since we deleted this element, we need to revisit it with its new value.
-
-				copy(want[j:], want[j+1:])
-				want = want[:len(want)-1]
-				break
-			}
-		}
-	}
-	if len(got) != 0 || len(want) != 0 {
-		t.Fatalf("addrMap.Keys returned unexpected elements: %v; missing %v", got, want)
+	sort.Sort(byString(got))
+	if d := cmp.Diff(want, got); d != "" {
+		t.Fatalf("addrMap.Keys returned unexpected elements (-want, +got):\n%v", d)
 	}
 }
