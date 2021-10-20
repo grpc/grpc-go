@@ -342,6 +342,8 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 			if err := json.Unmarshal(v, &config.Authorities); err != nil {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
+		default:
+			logger.Infof("Bootstrap content has unknown field: %s", k)
 		}
 		// Do not fail the xDS bootstrap when an unknown field is seen. This can
 		// happen when an older version client reads a newer version bootstrap
