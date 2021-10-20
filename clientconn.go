@@ -1633,9 +1633,6 @@ func (cc *ClientConn) parseTargetAndFindResolver() (resolver.Builder, error) {
 	// scheme, except when a custom dialer is specified in which case, we should
 	// always use passthrough scheme.
 	defScheme := resolver.GetDefaultScheme()
-	if cc.dopts.copts.Dialer != nil {
-		defScheme = "passthrough"
-	}
 	channelz.Infof(logger, cc.channelzID, "fallback to scheme %q", defScheme)
 	canonicalTarget := defScheme + ":///" + cc.target
 
