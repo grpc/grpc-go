@@ -116,6 +116,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// Authority represents an Authority for an xDS control plane server.
 type Authority struct {
 	// ClientListenerResourceNameTemplate is template for the name of the
 	// Listener resource to subscribe to for a gRPC client channel.  Used only
@@ -135,6 +136,7 @@ type Authority struct {
 	XDSServer *ServerConfig
 }
 
+// UnmarshalJSON implement json unmarshaller.
 func (a *Authority) UnmarshalJSON(data []byte) error {
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
