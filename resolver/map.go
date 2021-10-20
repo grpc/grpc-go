@@ -90,14 +90,20 @@ func (a *AddressMap) Delete(addr Address) {
 
 // Len returns the number of entries in the map.
 func (a *AddressMap) Len() int {
-	return len(a.m)
+	ret := 0
+	for _, entryList := range a.m {
+		ret += len(entryList)
+	}
+	return ret
 }
 
-// Range invokes f for each entry in the map.
-func (a *AddressMap) Range(f func(addr Address, value interface{})) {
+// Keys returns a slice of all current map keys.
+func (a *AddressMap) Keys() []Address {
+	ret := make([]Address, 0, a.Len())
 	for _, entryList := range a.m {
 		for _, entry := range entryList {
-			f(entry.addr, entry.value)
+			ret = append(ret, entry.addr)
 		}
 	}
+	return ret
 }
