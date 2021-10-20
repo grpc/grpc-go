@@ -88,6 +88,7 @@ func (b *priorityBalancer) syncPriority() {
 
 		if !child.started ||
 			child.state.ConnectivityState == connectivity.Ready ||
+			child.state.ConnectivityState == connectivity.Idle ||
 			p == len(b.priorities)-1 {
 			if b.childInUse != "" && b.childInUse != child.name {
 				// childInUse was set and is different from this child, will
