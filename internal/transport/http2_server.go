@@ -358,7 +358,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return true
 	}
 
-	t.maxStreamID = streamID
 	t.mu.Unlock()
 
 	buf := newRecvBuffer()
@@ -499,6 +498,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		s.cancel()
 		return false
 	}
+	t.maxStreamID = streamID
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
 		t.controlBuf.put(&cleanupStream{
