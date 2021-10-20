@@ -115,7 +115,8 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 			sc.Connect()
 		}
 	}
-	b.subConns.Range(func(a resolver.Address, sci interface{}) {
+	for _, a := range b.subConns.Keys() {
+		sci, _ := b.subConns.Get(a)
 		sc := sci.(balancer.SubConn)
 		// a was removed by resolver.
 		if _, ok := addrsSet.Get(a); !ok {
@@ -124,7 +125,7 @@ func (b *baseBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 			// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
 			// The entry will be deleted in UpdateSubConnState.
 		}
-	})
+	}
 	// If resolver state contains no addresses, return an error so ClientConn
 	// will trigger re-resolve. Also records this as an resolver error, so when
 	// the overall state turns transient failure, the error message will have
@@ -162,12 +163,13 @@ func (b *baseBalancer) regeneratePicker() {
 	readySCs := make(map[balancer.SubConn]SubConnInfo)
 
 	// Filter out all ready SCs from full subConn map.
-	b.subConns.Range(func(addr resolver.Address, sci interface{}) {
+	for _, addr := range b.subConns.Keys() {
+		sci, _ := b.subConns.Get(addr)
 		sc := sci.(balancer.SubConn)
 		if st, ok := b.scStates[sc]; ok && st == connectivity.Ready {
 			readySCs[sc] = SubConnInfo{Address: addr}
 		}
-	})
+	}
 	b.picker = b.pickerBuilder.Build(PickerBuildInfo{ReadySCs: readySCs})
 }
 

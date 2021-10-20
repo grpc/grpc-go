@@ -117,7 +117,7 @@ func (s) TestAddressMap_Delete(t *testing.T) {
 	}
 }
 
-func (s) TestAddressMap_Range(t *testing.T) {
+func (s) TestAddressMap_Keys(t *testing.T) {
 	addrMap := NewAddressMap()
 	addrMap.Set(addr1, 1)
 	addrMap.Set(addr2, 2)
@@ -127,27 +127,23 @@ func (s) TestAddressMap_Range(t *testing.T) {
 	addrMap.Set(addr6, 6)
 	addrMap.Set(addr7, 7) // aliases addr1
 
-	want := map[int]bool{2: true, 3: true, 4: true, 5: true, 6: true, 7: true}
-	test := func(a1, a2 Address, n int, v interface{}) {
-		if a1.Addr == a2.Addr && a1.Attributes == a2.Attributes && a1.ServerName == a2.ServerName {
-			if ok := want[n]; !ok {
-				t.Fatal("matched address multiple times:", a1, n, want)
+	want := []Address{addr1, addr2, addr3, addr4, addr5, addr6}
+	got := addrMap.Keys()
+	for i := 0; i < len(got); i++ {
+		g := got[i]
+		for j, w := range want {
+			if g.Equal(w) {
+				copy(got[i:], got[i+1:])
+				got = got[:len(got)-1]
+				i-- // Since we deleted this element, we need to revisit it with its new value.
+
+				copy(want[j:], want[j+1:])
+				want = want[:len(want)-1]
+				break
 			}
-			if n != v.(int) {
-				t.Fatalf("%v read value %v; want %v:", a1, v, n)
-			}
-			delete(want, n)
 		}
 	}
-	addrMap.Range(func(a Address, v interface{}) {
-		test(a, addr1, 7, v)
-		test(a, addr2, 2, v)
-		test(a, addr3, 3, v)
-		test(a, addr4, 4, v)
-		test(a, addr5, 5, v)
-		test(a, addr6, 6, v)
-	})
-	if len(want) != 0 {
-		t.Fatalf("did not find expected addresses; remaining: %v", want)
+	if len(got) != 0 || len(want) != 0 {
+		t.Fatalf("addrMap.Keys returned unexpected elements: %v; missing %v", got, want)
 	}
 }

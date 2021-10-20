@@ -139,7 +139,7 @@ type Address struct {
 
 // Equal returns whether a and o are identical.  Metadata is compared directly,
 // not with any recursive introspection.
-func (a *Address) Equal(o *Address) bool {
+func (a *Address) Equal(o Address) bool {
 	return a.Addr == o.Addr && a.ServerName == o.ServerName &&
 		a.Attributes.Equal(o.Attributes) &&
 		a.BalancerAttributes.Equal(o.BalancerAttributes) &&
