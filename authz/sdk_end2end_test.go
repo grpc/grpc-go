@@ -73,7 +73,7 @@ var sdkTests = map[string]struct {
 	md          metadata.MD
 	wantStatus  *status.Status
 }{
-	"DeniesRpcMatchInDenyNoMatchInAllow": {
+	"DeniesRPCMatchInDenyNoMatchInAllow": {
 		authzPolicy: `{
 				"name": "authz",
 				"allow_rules": 
@@ -116,7 +116,7 @@ var sdkTests = map[string]struct {
 		md:         metadata.Pairs("key-abc", "val-abc"),
 		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
 	},
-	"DeniesRpcMatchInDenyAndAllow": {
+	"DeniesRPCMatchInDenyAndAllow": {
 		authzPolicy: `{
 				"name": "authz",
 				"allow_rules":
@@ -146,7 +146,7 @@ var sdkTests = map[string]struct {
 			}`,
 		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
 	},
-	"AllowsRpcNoMatchInDenyMatchInAllow": {
+	"AllowsRPCNoMatchInDenyMatchInAllow": {
 		authzPolicy: `{
 				"name": "authz",
 				"allow_rules":
@@ -183,7 +183,7 @@ var sdkTests = map[string]struct {
 		md:         metadata.Pairs("key-xyz", "val-xyz"),
 		wantStatus: status.New(codes.OK, ""),
 	},
-	"DeniesRpcNoMatchInDenyAndAllow": {
+	"DeniesRPCNoMatchInDenyAndAllow": {
 		authzPolicy: `{
 				"name": "authz",
 				"allow_rules":
@@ -213,7 +213,7 @@ var sdkTests = map[string]struct {
 			}`,
 		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
 	},
-	"AllowsRpcEmptyDenyMatchInAllow": {
+	"AllowsRPCEmptyDenyMatchInAllow": {
 		authzPolicy: `{
 				"name": "authz",
 				"allow_rules":
@@ -242,7 +242,7 @@ var sdkTests = map[string]struct {
 			}`,
 		wantStatus: status.New(codes.OK, ""),
 	},
-	"DeniesRpcEmptyDenyNoMatchInAllow": {
+	"DeniesRPCEmptyDenyNoMatchInAllow": {
 		authzPolicy: `{
 				"name": "authz",
 				"allow_rules":
@@ -261,7 +261,7 @@ var sdkTests = map[string]struct {
 			}`,
 		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
 	},
-	"DeniesRpcRequestWithPrincipalsFieldOnUnauthenticatedConnection": {
+	"DeniesRPCRequestWithPrincipalsFieldOnUnauthenticatedConnection": {
 		authzPolicy: `{
 				"name": "authz",
 				"allow_rules":
@@ -285,7 +285,7 @@ var sdkTests = map[string]struct {
 			}`,
 		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
 	},
-	"DeniesRpcRequestWithEmptyPrincipalsOnUnauthenticatedConnection": {
+	"DeniesRPCRequestWithEmptyPrincipalsOnUnauthenticatedConnection": {
 		authzPolicy: `{
 				"name": "authz",
 				"allow_rules":
@@ -358,7 +358,7 @@ func (s) TestSDKStaticPolicyEnd2End(t *testing.T) {
 	}
 }
 
-func (s) TestSDKAllowsRpcRequestWithEmptyPrincipalsOnTlsAuthenticatedConnection(t *testing.T) {
+func (s) TestSDKAllowsRPCRequestWithEmptyPrincipalsOnTLSAuthenticatedConnection(t *testing.T) {
 	authzPolicy := `{
 				"name": "authz",
 				"allow_rules":
@@ -405,13 +405,12 @@ func (s) TestSDKAllowsRpcRequestWithEmptyPrincipalsOnTlsAuthenticatedConnection(
 	defer cancel()
 
 	// Verifying authorization decision.
-	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
-	if got := status.Convert(err); got.Code() != codes.OK {
-		t.Fatalf("error want:{%v} got:{%v}", codes.OK, got.Err())
+	if _, err = client.UnaryCall(ctx, &pb.SimpleRequest{}); err != nil {
+		t.Fatalf("client.UnaryCall(_, _) = %v; want nil", err)
 	}
 }
 
-func (s) TestSDKAllowsRpcRequestWithEmptyPrincipalsOnMtlsAuthenticatedConnection(t *testing.T) {
+func (s) TestSDKAllowsRPCRequestWithEmptyPrincipalsOnMTLSAuthenticatedConnection(t *testing.T) {
 	authzPolicy := `{
 				"name": "authz",
 				"allow_rules":
@@ -484,9 +483,8 @@ func (s) TestSDKAllowsRpcRequestWithEmptyPrincipalsOnMtlsAuthenticatedConnection
 	defer cancel()
 
 	// Verifying authorization decision.
-	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
-	if got := status.Convert(err); got.Code() != codes.OK {
-		t.Fatalf("error want:{%v} got:{%v}", codes.OK, got.Err())
+	if _, err = client.UnaryCall(ctx, &pb.SimpleRequest{}); err != nil {
+		t.Fatalf("client.UnaryCall(_, _) = %v; want nil", err)
 	}
 }
 
@@ -562,7 +560,7 @@ func retryUntil(ctx context.Context, tsc pb.TestServiceClient, want *status.Stat
 }
 
 func (s) TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
-	valid1 := sdkTests["DeniesRpcMatchInDenyAndAllow"]
+	valid1 := sdkTests["DeniesRPCMatchInDenyAndAllow"]
 	file := createTmpPolicyFile(t, "valid_policy_refresh", []byte(valid1.authzPolicy))
 	i, _ := authz.NewFileWatcher(file, 100*time.Millisecond)
 	defer i.Close()
@@ -594,23 +592,23 @@ func (s) TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	// Verifying authorization decision.
 	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 	if got := status.Convert(err); got.Code() != valid1.wantStatus.Code() || got.Message() != valid1.wantStatus.Message() {
-		t.Fatalf("error want:{%v} got:{%v}", valid1.wantStatus.Err(), got.Err())
+		t.Fatalf("client.UnaryCall(_, _) = %v; want = %v", got.Err(), valid1.wantStatus.Err())
 	}
 
 	// Rewrite the file with a different valid authorization policy.
-	valid2 := sdkTests["AllowsRpcEmptyDenyMatchInAllow"]
+	valid2 := sdkTests["AllowsRPCEmptyDenyMatchInAllow"]
 	if err := ioutil.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
 		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
 	}
 
 	// Verifying authorization decision.
 	if got := retryUntil(ctx, client, valid2.wantStatus); got != nil {
-		t.Fatalf("error want:{%v} got:{%v}", valid2.wantStatus.Err(), got)
+		t.Fatalf("client.UnaryCall(_, _) = %v; want = %v", got, valid2.wantStatus.Err())
 	}
 }
 
 func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
-	valid := sdkTests["DeniesRpcMatchInDenyAndAllow"]
+	valid := sdkTests["DeniesRPCMatchInDenyAndAllow"]
 	file := createTmpPolicyFile(t, "invalid_policy_skip_reload", []byte(valid.authzPolicy))
 	i, _ := authz.NewFileWatcher(file, 20*time.Millisecond)
 	defer i.Close()
@@ -642,7 +640,7 @@ func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	// Verifying authorization decision.
 	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 	if got := status.Convert(err); got.Code() != valid.wantStatus.Code() || got.Message() != valid.wantStatus.Message() {
-		t.Fatalf("error want:{%v} got:{%v}", valid.wantStatus.Err(), got.Err())
+		t.Fatalf("client.UnaryCall(_, _) = %v; want = %v", got.Err(), valid.wantStatus.Err())
 	}
 
 	// Skips the invalid policy update, and continues to use the valid policy.
@@ -656,12 +654,12 @@ func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	// Verifying authorization decision.
 	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 	if got := status.Convert(err); got.Code() != valid.wantStatus.Code() || got.Message() != valid.wantStatus.Message() {
-		t.Fatalf("error want:{%v} got:{%v}", valid.wantStatus.Err(), got.Err())
+		t.Fatalf("client.UnaryCall(_, _) = %v; want = %v", got.Err(), valid.wantStatus.Err())
 	}
 }
 
 func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
-	valid1 := sdkTests["DeniesRpcMatchInDenyAndAllow"]
+	valid1 := sdkTests["DeniesRPCMatchInDenyAndAllow"]
 	file := createTmpPolicyFile(t, "recovers_from_reload_failure", []byte(valid1.authzPolicy))
 	i, _ := authz.NewFileWatcher(file, 100*time.Millisecond)
 	defer i.Close()
@@ -693,7 +691,7 @@ func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	// Verifying authorization decision.
 	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 	if got := status.Convert(err); got.Code() != valid1.wantStatus.Code() || got.Message() != valid1.wantStatus.Message() {
-		t.Fatalf("error want:{%v} got:{%v}", valid1.wantStatus.Err(), got.Err())
+		t.Fatalf("client.UnaryCall(_, _) = %v; want = %v", got.Err(), valid1.wantStatus.Err())
 	}
 
 	// Skips the invalid policy update, and continues to use the valid policy.
@@ -707,17 +705,17 @@ func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	// Verifying authorization decision.
 	_, err = client.UnaryCall(ctx, &pb.SimpleRequest{})
 	if got := status.Convert(err); got.Code() != valid1.wantStatus.Code() || got.Message() != valid1.wantStatus.Message() {
-		t.Fatalf("error want:{%v} got:{%v}", valid1.wantStatus.Err(), got.Err())
+		t.Fatalf("client.UnaryCall(_, _) = %v; want = %v", got.Err(), valid1.wantStatus.Err())
 	}
 
 	// Rewrite the file with a different valid authorization policy.
-	valid2 := sdkTests["AllowsRpcEmptyDenyMatchInAllow"]
+	valid2 := sdkTests["AllowsRPCEmptyDenyMatchInAllow"]
 	if err := ioutil.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
 		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
 	}
 
 	// Verifying authorization decision.
 	if got := retryUntil(ctx, client, valid2.wantStatus); got != nil {
-		t.Fatalf("error want:{%v} got:{%v}", valid2.wantStatus.Err(), got)
+		t.Fatalf("client.UnaryCall(_, _) = %v; want = %v", got, valid2.wantStatus.Err())
 	}
 }

@@ -222,7 +222,7 @@ type rpcData struct {
 	destinationPort uint32
 	// localAddr is the address that the RPC is being sent to.
 	localAddr net.Addr
-	// authType is the type of authentication.
+	// authType is the type of authentication e.g. "tls".
 	authType string
 	// certs are the certificates presented by the peer during a TLS
 	// handshake.
