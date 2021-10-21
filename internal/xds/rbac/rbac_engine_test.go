@@ -916,6 +916,20 @@ func (s) TestChainEngine(t *testing.T) {
 						fullMethod: "some method",
 						peerInfo: &peer.Peer{
 							Addr: &addr{ipAddress: "0.0.0.0"},
+							AuthInfo: credentials.TLSInfo{
+								State: tls.ConnectionState{
+									PeerCertificates: []*x509.Certificate{
+										{
+											URIs: []*url.URL{
+												{
+													Host: "cluster.local",
+													Path: "/ns/default/sa/admin",
+												},
+											},
+										},
+									},
+								},
+							},
 						},
 					},
 					wantStatusCode: codes.OK,
