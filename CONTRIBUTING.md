@@ -26,7 +26,7 @@ How to get your contributions merged smoothly and quickly.
   discussion with gRPC-Go authors and consultants.
 
 - For speculative changes, consider opening an issue and discussing it first. If
-  you are suggesting a behavioral or API change, consider starting with a [gRFC
+  you are suggesting a behavioral or API change, consider starting with a [gRPC
   proposal](https://github.com/grpc/proposal).
 
 - Provide a good **PR description** as a record of **what** change is being made
