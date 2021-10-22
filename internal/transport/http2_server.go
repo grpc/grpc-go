@@ -1296,15 +1296,16 @@ var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
 // Handles outgoing GoAway and returns true if loopy needs to put itself
 // in draining mode.
 func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
+	t.maxStreamMu.Lock()
+	sid := t.maxStreamID
+	t.maxStreamMu.Unlock()
+
 	t.mu.Lock()
 	if t.state == closing { // TODO(mmukhi): This seems unnecessary.
 		t.mu.Unlock()
 		// The transport is closing.
 		return false, ErrConnClosing
 	}
-	t.maxStreamMu.Lock()
-	sid := t.maxStreamID
-	t.maxStreamMu.Unlock()
 	if !g.headsUp {
 		// Stop accepting more streams now.
 		t.state = draining
