@@ -33,7 +33,7 @@ const cfeClusterNamePrefix = "google_cfe_"
 //
 // On the client, ClientHandshake picks TLS or ALTS based on address attributes.
 // - if attributes has cluster name
-//   - if cluster name is "google_cfe", use TLS
+//   - if cluster name has prefix "google_cfe_", use TLS
 //   - otherwise, use ALTS
 // - else, do TLS
 //
