@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
@@ -489,14 +488,6 @@ func checkForNACKed(nackResourceIdx int, stream v3statuspbgrpc.ClientStatusDisco
 		return fmt.Errorf(diff)
 	}
 	return nil
-}
-
-func protoToJSON(p proto.Message) string {
-	mm := jsonpb.Marshaler{
-		Indent: "  ",
-	}
-	ret, _ := mm.MarshalToString(p)
-	return ret
 }
 
 func TestCSDSNoXDSClient(t *testing.T) {
