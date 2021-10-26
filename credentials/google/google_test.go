@@ -101,7 +101,7 @@ func TestClientHandshakeBasedOnClusterName(t *testing.T) {
 			{
 				name: "with CFE cluster name",
 				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
-					Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, cfeClusterName).Attributes,
+					Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, "google_cfe_bigtable.googleapis.com").Attributes,
 				}),
 				// CFE should use tls.
 				wantTyp: "tls",
