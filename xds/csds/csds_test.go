@@ -63,7 +63,7 @@ var cmpOpts = cmp.Options{
 				return true
 			}
 			if b == nil {
-				return true
+				return false
 			}
 			if strings.Compare(a.TypeUrl, b.TypeUrl) == 0 {
 				return strings.Compare(a.Name, b.Name) < 0
