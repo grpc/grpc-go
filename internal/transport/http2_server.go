@@ -123,7 +123,10 @@ type http2Server struct {
 	bufferPool *bufferPool
 
 	connectionID uint64
-	maxStreamMu  sync.Mutex // guard the maximum stream ID
+
+	// maxStreamMu guards the maximum stream ID
+	// This lock may not be taken if mu is already held.
+	maxStreamMu sync.Mutex
 }
 
 // NewServerTransport creates a http2 transport with conn and configuration
@@ -1298,11 +1301,11 @@ var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
 func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 	t.maxStreamMu.Lock()
 	sid := t.maxStreamID
-	t.maxStreamMu.Unlock()
 
 	t.mu.Lock()
 	if t.state == closing { // TODO(mmukhi): This seems unnecessary.
 		t.mu.Unlock()
+		t.maxStreamMu.Unlock()
 		// The transport is closing.
 		return false, ErrConnClosing
 	}
@@ -1313,6 +1316,7 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 			g.closeConn = true
 		}
 		t.mu.Unlock()
+		t.maxStreamMu.Unlock()
 		if err := t.framer.fr.WriteGoAway(sid, g.code, g.debugData); err != nil {
 			return false, err
 		}
