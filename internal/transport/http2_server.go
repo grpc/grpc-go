@@ -73,7 +73,6 @@ type http2Server struct {
 	writerDone  chan struct{} // sync point to enable testing.
 	remoteAddr  net.Addr
 	localAddr   net.Addr
-	maxStreamID uint32               // max stream ID ever seen
 	authInfo    credentials.AuthInfo // auth info about the connection
 	inTapHandle tap.ServerInHandle
 	framer      *framer
@@ -126,6 +125,7 @@ type http2Server struct {
 
 	// maxStreamMu guards the maximum stream ID
 	// This lock may not be taken if mu is already held.
+	maxStreamID uint32 // max stream ID ever seen
 	maxStreamMu sync.Mutex
 }
 
@@ -1299,19 +1299,17 @@ var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
 // Handles outgoing GoAway and returns true if loopy needs to put itself
 // in draining mode.
 func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
-	t.maxStreamMu.Lock()
-	sid := t.maxStreamID
-
 	t.mu.Lock()
 	if t.state == closing { // TODO(mmukhi): This seems unnecessary.
 		t.mu.Unlock()
-		t.maxStreamMu.Unlock()
 		// The transport is closing.
 		return false, ErrConnClosing
 	}
 	if !g.headsUp {
 		// Stop accepting more streams now.
 		t.state = draining
+		t.maxStreamMu.Lock()
+		sid := t.maxStreamID
 		if len(t.activeStreams) == 0 {
 			g.closeConn = true
 		}
