@@ -114,10 +114,10 @@ func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statusp
 		return nil, status.Errorf(codes.InvalidArgument, "node_matchers are not supported, request contains node_matchers: %v", req.NodeMatchers)
 	}
 
-	lds := s.buildLDSPerXDSConfig()
-	rds := s.buildRDSPerXDSConfig()
-	cds := s.buildCDSPerXDSConfig()
-	eds := s.buildEDSPerXDSConfig()
+	lds := dumpToGenericXdsConfig(listenerTypeURL, s.xdsClient.DumpLDS)
+	rds := dumpToGenericXdsConfig(routeConfigTypeURL, s.xdsClient.DumpRDS)
+	cds := dumpToGenericXdsConfig(clusterTypeURL, s.xdsClient.DumpCDS)
+	eds := dumpToGenericXdsConfig(endpointsTypeURL, s.xdsClient.DumpEDS)
 	configs := make([]*v3statuspb.ClientConfig_GenericXdsConfig, 0, len(lds)+len(rds)+len(cds)+len(eds))
 	configs = append(configs, lds...)
 	configs = append(configs, rds...)
@@ -173,57 +173,26 @@ func nodeProtoToV3(n proto.Message) *v3corepb.Node {
 	return node
 }
 
-func dumpToGenericXdsConfig(typeURL string, name string, d xdsclient.UpdateWithMD) *v3statuspb.ClientConfig_GenericXdsConfig {
-	config := &v3statuspb.ClientConfig_GenericXdsConfig{
-		TypeUrl:      typeURL,
-		Name:         name,
-		VersionInfo:  d.MD.Version,
-		XdsConfig:    d.Raw,
-		LastUpdated:  timestamppb.New(d.MD.Timestamp),
-		ClientStatus: serviceStatusToProto(d.MD.Status),
-	}
-	if errState := d.MD.ErrState; errState != nil {
-		config.ErrorState = &v3adminpb.UpdateFailureState{
-			LastUpdateAttempt: timestamppb.New(errState.Timestamp),
-			Details:           errState.Err.Error(),
-			VersionInfo:       errState.Version,
+func dumpToGenericXdsConfig(typeURL string, dumpF func() (string, map[string]xdsclient.UpdateWithMD)) []*v3statuspb.ClientConfig_GenericXdsConfig {
+	_, dump := dumpF()
+	ret := make([]*v3statuspb.ClientConfig_GenericXdsConfig, 0, len(dump))
+	for name, d := range dump {
+		config := &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl:      typeURL,
+			Name:         name,
+			VersionInfo:  d.MD.Version,
+			XdsConfig:    d.Raw,
+			LastUpdated:  timestamppb.New(d.MD.Timestamp),
+			ClientStatus: serviceStatusToProto(d.MD.Status),
 		}
-	}
-	return config
-}
-
-func (s *ClientStatusDiscoveryServer) buildLDSPerXDSConfig() []*v3statuspb.ClientConfig_GenericXdsConfig {
-	_, dump := s.xdsClient.DumpLDS()
-	ret := make([]*v3statuspb.ClientConfig_GenericXdsConfig, 0, len(dump))
-	for name, d := range dump {
-		ret = append(ret, dumpToGenericXdsConfig(listenerTypeURL, name, d))
-	}
-	return ret
-}
-
-func (s *ClientStatusDiscoveryServer) buildRDSPerXDSConfig() []*v3statuspb.ClientConfig_GenericXdsConfig {
-	_, dump := s.xdsClient.DumpRDS()
-	ret := make([]*v3statuspb.ClientConfig_GenericXdsConfig, 0, len(dump))
-	for name, d := range dump {
-		ret = append(ret, dumpToGenericXdsConfig(routeConfigTypeURL, name, d))
-	}
-	return ret
-}
-
-func (s *ClientStatusDiscoveryServer) buildCDSPerXDSConfig() []*v3statuspb.ClientConfig_GenericXdsConfig {
-	_, dump := s.xdsClient.DumpCDS()
-	ret := make([]*v3statuspb.ClientConfig_GenericXdsConfig, 0, len(dump))
-	for name, d := range dump {
-		ret = append(ret, dumpToGenericXdsConfig(clusterTypeURL, name, d))
-	}
-	return ret
-}
-
-func (s *ClientStatusDiscoveryServer) buildEDSPerXDSConfig() []*v3statuspb.ClientConfig_GenericXdsConfig {
-	_, dump := s.xdsClient.DumpEDS()
-	ret := make([]*v3statuspb.ClientConfig_GenericXdsConfig, 0, len(dump))
-	for name, d := range dump {
-		ret = append(ret, dumpToGenericXdsConfig(endpointsTypeURL, name, d))
+		if errState := d.MD.ErrState; errState != nil {
+			config.ErrorState = &v3adminpb.UpdateFailureState{
+				LastUpdateAttempt: timestamppb.New(errState.Timestamp),
+				Details:           errState.Err.Error(),
+				VersionInfo:       errState.Version,
+			}
+		}
+		ret = append(ret, config)
 	}
 	return ret
 }
