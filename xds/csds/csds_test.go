@@ -21,15 +21,13 @@ package csds
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/testutils"
@@ -40,7 +38,6 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -58,65 +55,42 @@ const (
 )
 
 var cmpOpts = cmp.Options{
-	cmpopts.EquateEmpty(),
-	cmp.Comparer(func(a, b *timestamppb.Timestamp) bool { return true }),
-	protocmp.IgnoreFields(&v3adminpb.UpdateFailureState{}, "last_update_attempt", "details"),
-	protocmp.SortRepeated(func(a, b *v3adminpb.ListenersConfigDump_DynamicListener) bool {
-		return strings.Compare(a.Name, b.Name) < 0
+	cmp.Transformer("sort", func(in []*v3statuspb.ClientConfig_GenericXdsConfig) []*v3statuspb.ClientConfig_GenericXdsConfig {
+		out := append([]*v3statuspb.ClientConfig_GenericXdsConfig(nil), in...)
+		sort.Slice(out, func(i, j int) bool {
+			a, b := out[i], out[j]
+			if a == nil {
+				return true
+			}
+			if b == nil {
+				return false
+			}
+			if strings.Compare(a.TypeUrl, b.TypeUrl) == 0 {
+				return strings.Compare(a.Name, b.Name) < 0
+			}
+			return strings.Compare(a.TypeUrl, b.TypeUrl) < 0
+		})
+		return out
 	}),
-	protocmp.SortRepeated(func(a, b *v3adminpb.RoutesConfigDump_DynamicRouteConfig) bool {
-		if a.RouteConfig == nil {
-			return false
-		}
-		if b.RouteConfig == nil {
-			return true
-		}
-		var at, bt v3routepb.RouteConfiguration
-		if err := ptypes.UnmarshalAny(a.RouteConfig, &at); err != nil {
-			panic("failed to unmarshal RouteConfig" + err.Error())
-		}
-		if err := ptypes.UnmarshalAny(b.RouteConfig, &bt); err != nil {
-			panic("failed to unmarshal RouteConfig" + err.Error())
-		}
-		return strings.Compare(at.Name, bt.Name) < 0
-	}),
-	protocmp.SortRepeated(func(a, b *v3adminpb.ClustersConfigDump_DynamicCluster) bool {
-		if a.Cluster == nil {
-			return false
-		}
-		if b.Cluster == nil {
-			return true
-		}
-		var at, bt v3clusterpb.Cluster
-		if err := ptypes.UnmarshalAny(a.Cluster, &at); err != nil {
-			panic("failed to unmarshal Cluster" + err.Error())
-		}
-		if err := ptypes.UnmarshalAny(b.Cluster, &bt); err != nil {
-			panic("failed to unmarshal Cluster" + err.Error())
-		}
-		return strings.Compare(at.Name, bt.Name) < 0
-	}),
-	protocmp.SortRepeated(func(a, b *v3adminpb.EndpointsConfigDump_DynamicEndpointConfig) bool {
-		if a.EndpointConfig == nil {
-			return false
-		}
-		if b.EndpointConfig == nil {
-			return true
-		}
-		var at, bt v3endpointpb.ClusterLoadAssignment
-		if err := ptypes.UnmarshalAny(a.EndpointConfig, &at); err != nil {
-			panic("failed to unmarshal Endpoints" + err.Error())
-		}
-		if err := ptypes.UnmarshalAny(b.EndpointConfig, &bt); err != nil {
-			panic("failed to unmarshal Endpoints" + err.Error())
-		}
-		return strings.Compare(at.ClusterName, bt.ClusterName) < 0
-	}),
-	protocmp.IgnoreFields(&v3adminpb.ListenersConfigDump_DynamicListenerState{}, "last_updated"),
-	protocmp.IgnoreFields(&v3adminpb.RoutesConfigDump_DynamicRouteConfig{}, "last_updated"),
-	protocmp.IgnoreFields(&v3adminpb.ClustersConfigDump_DynamicCluster{}, "last_updated"),
-	protocmp.IgnoreFields(&v3adminpb.EndpointsConfigDump_DynamicEndpointConfig{}, "last_updated"),
 	protocmp.Transform(),
+}
+
+// filterFields clears unimportant fields in the proto messages.
+//
+// protocmp.IgnoreFields() doesn't work on nil messages (it panics).
+func filterFields(ms []*v3statuspb.ClientConfig_GenericXdsConfig) []*v3statuspb.ClientConfig_GenericXdsConfig {
+	out := append([]*v3statuspb.ClientConfig_GenericXdsConfig{}, ms...)
+	for _, m := range out {
+		if m == nil {
+			continue
+		}
+		m.LastUpdated = nil
+		if m.ErrorState != nil {
+			m.ErrorState.Details = "blahblah"
+			m.ErrorState.LastUpdateAttempt = nil
+		}
+	}
+	return out
 }
 
 var (
@@ -329,67 +303,31 @@ func checkForRequested(stream v3statuspbgrpc.ClientStatusDiscoveryService_Stream
 	if n := len(r.Config); n != 1 {
 		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(r))
 	}
-	if n := len(r.Config[0].XdsConfig); n != 4 {
-		return fmt.Errorf("got %d xds configs (one for each type), want 4: %v", n, proto.MarshalTextString(r))
+
+	var want []*v3statuspb.ClientConfig_GenericXdsConfig
+	// Status is Requested, but version and xds config are all unset.
+	for i := range ldsTargets {
+		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl: listenerTypeURL, Name: ldsTargets[i], ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
+		})
 	}
-	for _, cfg := range r.Config[0].XdsConfig {
-		switch config := cfg.PerXdsConfig.(type) {
-		case *v3statuspb.PerXdsConfig_ListenerConfig:
-			var wantLis []*v3adminpb.ListenersConfigDump_DynamicListener
-			for i := range ldsTargets {
-				wantLis = append(wantLis, &v3adminpb.ListenersConfigDump_DynamicListener{
-					Name:         ldsTargets[i],
-					ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
-				})
-			}
-			wantDump := &v3adminpb.ListenersConfigDump{
-				DynamicListeners: wantLis,
-			}
-			if diff := cmp.Diff(config.ListenerConfig, wantDump, cmpOpts); diff != "" {
-				return fmt.Errorf(diff)
-			}
-		case *v3statuspb.PerXdsConfig_RouteConfig:
-			var wantRoutes []*v3adminpb.RoutesConfigDump_DynamicRouteConfig
-			for range rdsTargets {
-				wantRoutes = append(wantRoutes, &v3adminpb.RoutesConfigDump_DynamicRouteConfig{
-					ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
-				})
-			}
-			wantDump := &v3adminpb.RoutesConfigDump{
-				DynamicRouteConfigs: wantRoutes,
-			}
-			if diff := cmp.Diff(config.RouteConfig, wantDump, cmpOpts); diff != "" {
-				return fmt.Errorf(diff)
-			}
-		case *v3statuspb.PerXdsConfig_ClusterConfig:
-			var wantCluster []*v3adminpb.ClustersConfigDump_DynamicCluster
-			for range cdsTargets {
-				wantCluster = append(wantCluster, &v3adminpb.ClustersConfigDump_DynamicCluster{
-					ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
-				})
-			}
-			wantDump := &v3adminpb.ClustersConfigDump{
-				DynamicActiveClusters: wantCluster,
-			}
-			if diff := cmp.Diff(config.ClusterConfig, wantDump, cmpOpts); diff != "" {
-				return fmt.Errorf(diff)
-			}
-		case *v3statuspb.PerXdsConfig_EndpointConfig:
-			var wantEndpoint []*v3adminpb.EndpointsConfigDump_DynamicEndpointConfig
-			for range cdsTargets {
-				wantEndpoint = append(wantEndpoint, &v3adminpb.EndpointsConfigDump_DynamicEndpointConfig{
-					ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
-				})
-			}
-			wantDump := &v3adminpb.EndpointsConfigDump{
-				DynamicEndpointConfigs: wantEndpoint,
-			}
-			if diff := cmp.Diff(config.EndpointConfig, wantDump, cmpOpts); diff != "" {
-				return fmt.Errorf(diff)
-			}
-		default:
-			return fmt.Errorf("unexpected PerXdsConfig: %+v; %v", cfg.PerXdsConfig, protoToJSON(r))
-		}
+	for i := range rdsTargets {
+		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl: routeConfigTypeURL, Name: rdsTargets[i], ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
+		})
+	}
+	for i := range cdsTargets {
+		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl: clusterTypeURL, Name: cdsTargets[i], ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
+		})
+	}
+	for i := range edsTargets {
+		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl: endpointsTypeURL, Name: edsTargets[i], ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
+		})
+	}
+	if diff := cmp.Diff(filterFields(r.Config[0].GenericXdsConfigs), want, cmpOpts); diff != "" {
+		return fmt.Errorf(diff)
 	}
 	return nil
 }
@@ -409,84 +347,47 @@ func checkForACKed(stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClie
 	if n := len(r.Config); n != 1 {
 		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(r))
 	}
-	if n := len(r.Config[0].XdsConfig); n != 4 {
-		return fmt.Errorf("got %d xds configs (one for each type), want 4: %v", n, proto.MarshalTextString(r))
+
+	var want []*v3statuspb.ClientConfig_GenericXdsConfig
+	// Status is Acked, config is filled with the prebuilt Anys.
+	for i := range ldsTargets {
+		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl:      listenerTypeURL,
+			Name:         ldsTargets[i],
+			VersionInfo:  wantVersion,
+			XdsConfig:    listenerAnys[i],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+		})
 	}
-	for _, cfg := range r.Config[0].XdsConfig {
-		switch config := cfg.PerXdsConfig.(type) {
-		case *v3statuspb.PerXdsConfig_ListenerConfig:
-			var wantLis []*v3adminpb.ListenersConfigDump_DynamicListener
-			for i := range ldsTargets {
-				wantLis = append(wantLis, &v3adminpb.ListenersConfigDump_DynamicListener{
-					Name: ldsTargets[i],
-					ActiveState: &v3adminpb.ListenersConfigDump_DynamicListenerState{
-						VersionInfo: wantVersion,
-						Listener:    listenerAnys[i],
-						LastUpdated: nil,
-					},
-					ErrorState:   nil,
-					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-				})
-			}
-			wantDump := &v3adminpb.ListenersConfigDump{
-				VersionInfo:      wantVersion,
-				DynamicListeners: wantLis,
-			}
-			if diff := cmp.Diff(config.ListenerConfig, wantDump, cmpOpts); diff != "" {
-				return fmt.Errorf(diff)
-			}
-		case *v3statuspb.PerXdsConfig_RouteConfig:
-			var wantRoutes []*v3adminpb.RoutesConfigDump_DynamicRouteConfig
-			for i := range rdsTargets {
-				wantRoutes = append(wantRoutes, &v3adminpb.RoutesConfigDump_DynamicRouteConfig{
-					VersionInfo:  wantVersion,
-					RouteConfig:  routeAnys[i],
-					LastUpdated:  nil,
-					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-				})
-			}
-			wantDump := &v3adminpb.RoutesConfigDump{
-				DynamicRouteConfigs: wantRoutes,
-			}
-			if diff := cmp.Diff(config.RouteConfig, wantDump, cmpOpts); diff != "" {
-				return fmt.Errorf(diff)
-			}
-		case *v3statuspb.PerXdsConfig_ClusterConfig:
-			var wantCluster []*v3adminpb.ClustersConfigDump_DynamicCluster
-			for i := range cdsTargets {
-				wantCluster = append(wantCluster, &v3adminpb.ClustersConfigDump_DynamicCluster{
-					VersionInfo:  wantVersion,
-					Cluster:      clusterAnys[i],
-					LastUpdated:  nil,
-					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-				})
-			}
-			wantDump := &v3adminpb.ClustersConfigDump{
-				VersionInfo:           wantVersion,
-				DynamicActiveClusters: wantCluster,
-			}
-			if diff := cmp.Diff(config.ClusterConfig, wantDump, cmpOpts); diff != "" {
-				return fmt.Errorf(diff)
-			}
-		case *v3statuspb.PerXdsConfig_EndpointConfig:
-			var wantEndpoint []*v3adminpb.EndpointsConfigDump_DynamicEndpointConfig
-			for i := range cdsTargets {
-				wantEndpoint = append(wantEndpoint, &v3adminpb.EndpointsConfigDump_DynamicEndpointConfig{
-					VersionInfo:    wantVersion,
-					EndpointConfig: endpointAnys[i],
-					LastUpdated:    nil,
-					ClientStatus:   v3adminpb.ClientResourceStatus_ACKED,
-				})
-			}
-			wantDump := &v3adminpb.EndpointsConfigDump{
-				DynamicEndpointConfigs: wantEndpoint,
-			}
-			if diff := cmp.Diff(config.EndpointConfig, wantDump, cmpOpts); diff != "" {
-				return fmt.Errorf(diff)
-			}
-		default:
-			return fmt.Errorf("unexpected PerXdsConfig: %+v; %v", cfg.PerXdsConfig, protoToJSON(r))
-		}
+	for i := range rdsTargets {
+		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl:      routeConfigTypeURL,
+			Name:         rdsTargets[i],
+			VersionInfo:  wantVersion,
+			XdsConfig:    routeAnys[i],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+		})
+	}
+	for i := range cdsTargets {
+		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl:      clusterTypeURL,
+			Name:         cdsTargets[i],
+			VersionInfo:  wantVersion,
+			XdsConfig:    clusterAnys[i],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+		})
+	}
+	for i := range edsTargets {
+		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl:      endpointsTypeURL,
+			Name:         edsTargets[i],
+			VersionInfo:  wantVersion,
+			XdsConfig:    endpointAnys[i],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+		})
+	}
+	if diff := cmp.Diff(filterFields(r.Config[0].GenericXdsConfigs), want, cmpOpts); diff != "" {
+		return fmt.Errorf(diff)
 	}
 	return nil
 }
@@ -508,129 +409,85 @@ func checkForNACKed(nackResourceIdx int, stream v3statuspbgrpc.ClientStatusDisco
 	if n := len(r.Config); n != 1 {
 		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(r))
 	}
-	if n := len(r.Config[0].XdsConfig); n != 4 {
-		return fmt.Errorf("got %d xds configs (one for each type), want 4: %v", n, proto.MarshalTextString(r))
-	}
-	for _, cfg := range r.Config[0].XdsConfig {
-		switch config := cfg.PerXdsConfig.(type) {
-		case *v3statuspb.PerXdsConfig_ListenerConfig:
-			var wantLis []*v3adminpb.ListenersConfigDump_DynamicListener
-			for i := range ldsTargets {
-				configDump := &v3adminpb.ListenersConfigDump_DynamicListener{
-					Name: ldsTargets[i],
-					ActiveState: &v3adminpb.ListenersConfigDump_DynamicListenerState{
-						VersionInfo: nackVersion,
-						Listener:    listenerAnys[i],
-						LastUpdated: nil,
-					},
-					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-				}
-				if i == nackResourceIdx {
-					configDump.ActiveState.VersionInfo = ackVersion
-					configDump.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
-					configDump.ErrorState = &v3adminpb.UpdateFailureState{
-						Details:     "blahblah",
-						VersionInfo: nackVersion,
-					}
-				}
-				wantLis = append(wantLis, configDump)
-			}
-			wantDump := &v3adminpb.ListenersConfigDump{
-				VersionInfo:      nackVersion,
-				DynamicListeners: wantLis,
-			}
-			if diff := cmp.Diff(config.ListenerConfig, wantDump, cmpOpts); diff != "" {
-				return fmt.Errorf(diff)
-			}
-		case *v3statuspb.PerXdsConfig_RouteConfig:
-			var wantRoutes []*v3adminpb.RoutesConfigDump_DynamicRouteConfig
-			for i := range rdsTargets {
-				configDump := &v3adminpb.RoutesConfigDump_DynamicRouteConfig{
-					VersionInfo:  nackVersion,
-					RouteConfig:  routeAnys[i],
-					LastUpdated:  nil,
-					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-				}
-				if i == nackResourceIdx {
-					configDump.VersionInfo = ackVersion
-					configDump.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
-					configDump.ErrorState = &v3adminpb.UpdateFailureState{
-						Details:     "blahblah",
-						VersionInfo: nackVersion,
-					}
-				}
-				wantRoutes = append(wantRoutes, configDump)
-			}
-			wantDump := &v3adminpb.RoutesConfigDump{
-				DynamicRouteConfigs: wantRoutes,
-			}
-			if diff := cmp.Diff(config.RouteConfig, wantDump, cmpOpts); diff != "" {
-				return fmt.Errorf(diff)
-			}
-		case *v3statuspb.PerXdsConfig_ClusterConfig:
-			var wantCluster []*v3adminpb.ClustersConfigDump_DynamicCluster
-			for i := range cdsTargets {
-				configDump := &v3adminpb.ClustersConfigDump_DynamicCluster{
-					VersionInfo:  nackVersion,
-					Cluster:      clusterAnys[i],
-					LastUpdated:  nil,
-					ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-				}
-				if i == nackResourceIdx {
-					configDump.VersionInfo = ackVersion
-					configDump.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
-					configDump.ErrorState = &v3adminpb.UpdateFailureState{
-						Details:     "blahblah",
-						VersionInfo: nackVersion,
-					}
-				}
-				wantCluster = append(wantCluster, configDump)
-			}
-			wantDump := &v3adminpb.ClustersConfigDump{
-				VersionInfo:           nackVersion,
-				DynamicActiveClusters: wantCluster,
-			}
-			if diff := cmp.Diff(config.ClusterConfig, wantDump, cmpOpts); diff != "" {
-				return fmt.Errorf(diff)
-			}
-		case *v3statuspb.PerXdsConfig_EndpointConfig:
-			var wantEndpoint []*v3adminpb.EndpointsConfigDump_DynamicEndpointConfig
-			for i := range cdsTargets {
-				configDump := &v3adminpb.EndpointsConfigDump_DynamicEndpointConfig{
-					VersionInfo:    nackVersion,
-					EndpointConfig: endpointAnys[i],
-					LastUpdated:    nil,
-					ClientStatus:   v3adminpb.ClientResourceStatus_ACKED,
-				}
-				if i == nackResourceIdx {
-					configDump.VersionInfo = ackVersion
-					configDump.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
-					configDump.ErrorState = &v3adminpb.UpdateFailureState{
-						Details:     "blahblah",
-						VersionInfo: nackVersion,
-					}
-				}
-				wantEndpoint = append(wantEndpoint, configDump)
-			}
-			wantDump := &v3adminpb.EndpointsConfigDump{
-				DynamicEndpointConfigs: wantEndpoint,
-			}
-			if diff := cmp.Diff(config.EndpointConfig, wantDump, cmpOpts); diff != "" {
-				return fmt.Errorf(diff)
-			}
-		default:
-			return fmt.Errorf("unexpected PerXdsConfig: %+v; %v", cfg.PerXdsConfig, protoToJSON(r))
+
+	var want []*v3statuspb.ClientConfig_GenericXdsConfig
+	// Resources with the nackIdx are NACKed.
+	for i := range ldsTargets {
+		config := &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl:      listenerTypeURL,
+			Name:         ldsTargets[i],
+			VersionInfo:  nackVersion,
+			XdsConfig:    listenerAnys[i],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
 		}
+		if i == nackResourceIdx {
+			config.VersionInfo = ackVersion
+			config.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
+			config.ErrorState = &v3adminpb.UpdateFailureState{
+				Details:     "blahblah",
+				VersionInfo: nackVersion,
+			}
+		}
+		want = append(want, config)
+	}
+	for i := range rdsTargets {
+		config := &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl:      routeConfigTypeURL,
+			Name:         rdsTargets[i],
+			VersionInfo:  nackVersion,
+			XdsConfig:    routeAnys[i],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+		}
+		if i == nackResourceIdx {
+			config.VersionInfo = ackVersion
+			config.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
+			config.ErrorState = &v3adminpb.UpdateFailureState{
+				Details:     "blahblah",
+				VersionInfo: nackVersion,
+			}
+		}
+		want = append(want, config)
+	}
+	for i := range cdsTargets {
+		config := &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl:      clusterTypeURL,
+			Name:         cdsTargets[i],
+			VersionInfo:  nackVersion,
+			XdsConfig:    clusterAnys[i],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+		}
+		if i == nackResourceIdx {
+			config.VersionInfo = ackVersion
+			config.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
+			config.ErrorState = &v3adminpb.UpdateFailureState{
+				Details:     "blahblah",
+				VersionInfo: nackVersion,
+			}
+		}
+		want = append(want, config)
+	}
+	for i := range edsTargets {
+		config := &v3statuspb.ClientConfig_GenericXdsConfig{
+			TypeUrl:      endpointsTypeURL,
+			Name:         edsTargets[i],
+			VersionInfo:  nackVersion,
+			XdsConfig:    endpointAnys[i],
+			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
+		}
+		if i == nackResourceIdx {
+			config.VersionInfo = ackVersion
+			config.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
+			config.ErrorState = &v3adminpb.UpdateFailureState{
+				Details:     "blahblah",
+				VersionInfo: nackVersion,
+			}
+		}
+		want = append(want, config)
+	}
+	if diff := cmp.Diff(filterFields(r.Config[0].GenericXdsConfigs), want, cmpOpts); diff != "" {
+		return fmt.Errorf(diff)
 	}
 	return nil
-}
-
-func protoToJSON(p proto.Message) string {
-	mm := jsonpb.Marshaler{
-		Indent: "  ",
-	}
-	ret, _ := mm.MarshalToString(p)
-	return ret
 }
 
 func TestCSDSNoXDSClient(t *testing.T) {
