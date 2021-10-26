@@ -1300,15 +1300,16 @@ var goAwayPing = &ping{data: [8]byte{1, 6, 1, 8, 0, 3, 3, 9}}
 // in draining mode.
 func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 	t.mu.Lock()
+	t.maxStreamMu.Lock()
 	if t.state == closing { // TODO(mmukhi): This seems unnecessary.
 		t.mu.Unlock()
+		t.maxStreamMu.Unlock()
 		// The transport is closing.
 		return false, ErrConnClosing
 	}
 	if !g.headsUp {
 		// Stop accepting more streams now.
 		t.state = draining
-		t.maxStreamMu.Lock()
 		sid := t.maxStreamID
 		if len(t.activeStreams) == 0 {
 			g.closeConn = true
@@ -1327,6 +1328,7 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		return true, nil
 	}
 	t.mu.Unlock()
+	t.maxStreamMu.Unlock()
 	// For a graceful close, send out a GoAway with stream ID of MaxUInt32,
 	// Follow that with a ping and wait for the ack to come back or a timer
 	// to expire. During this time accept new streams since they might have
