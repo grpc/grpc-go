@@ -20,6 +20,7 @@ package xdsclient
 
 import (
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -52,19 +53,19 @@ func (c *clientImpl) callCallback(wiu *watcherInfoWithUpdate) {
 	switch wiu.wi.rType {
 	case ListenerResource:
 		if s, ok := c.ldsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
-			ccb = func() { wiu.wi.ldsCallback(wiu.update.(ListenerUpdate), wiu.err) }
+			ccb = func() { wiu.wi.ldsCallback(wiu.update.(resource.ListenerUpdate), wiu.err) }
 		}
 	case RouteConfigResource:
 		if s, ok := c.rdsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
-			ccb = func() { wiu.wi.rdsCallback(wiu.update.(RouteConfigUpdate), wiu.err) }
+			ccb = func() { wiu.wi.rdsCallback(wiu.update.(resource.RouteConfigUpdate), wiu.err) }
 		}
 	case ClusterResource:
 		if s, ok := c.cdsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
-			ccb = func() { wiu.wi.cdsCallback(wiu.update.(ClusterUpdate), wiu.err) }
+			ccb = func() { wiu.wi.cdsCallback(wiu.update.(resource.ClusterUpdate), wiu.err) }
 		}
 	case EndpointsResource:
 		if s, ok := c.edsWatchers[wiu.wi.target]; ok && s[wiu.wi] {
-			ccb = func() { wiu.wi.edsCallback(wiu.update.(EndpointsUpdate), wiu.err) }
+			ccb = func() { wiu.wi.edsCallback(wiu.update.(resource.EndpointsUpdate), wiu.err) }
 		}
 	}
 	c.mu.Unlock()
@@ -79,7 +80,7 @@ func (c *clientImpl) callCallback(wiu *watcherInfoWithUpdate) {
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewListeners(updates map[string]ListenerUpdateErrTuple, metadata UpdateMetadata) {
+func (c *clientImpl) NewListeners(updates map[string]resource.ListenerUpdateErrTuple, metadata resource.UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -116,7 +117,7 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdateErrTuple, met
 			// NACK metadata because some other resources in the same response
 			// are invalid.
 			mdCopy := metadata
-			mdCopy.Status = ServiceStatusACKed
+			mdCopy.Status = resource.ServiceStatusACKed
 			mdCopy.ErrState = nil
 			if metadata.ErrState != nil {
 				mdCopy.Version = metadata.ErrState.Version
@@ -132,7 +133,7 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdateErrTuple, met
 			// the resource from cache, and also send an resource not found
 			// error to indicate resource removed.
 			delete(c.ldsCache, name)
-			c.ldsMD[name] = UpdateMetadata{Status: ServiceStatusNotExist}
+			c.ldsMD[name] = resource.UpdateMetadata{Status: resource.ServiceStatusNotExist}
 			for wi := range c.ldsWatchers[name] {
 				wi.resourceNotFound()
 			}
@@ -148,7 +149,7 @@ func (c *clientImpl) NewListeners(updates map[string]ListenerUpdateErrTuple, met
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdateErrTuple, metadata UpdateMetadata) {
+func (c *clientImpl) NewRouteConfigs(updates map[string]resource.RouteConfigUpdateErrTuple, metadata resource.UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -186,7 +187,7 @@ func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdateErrTupl
 			// NACK metadata because some other resources in the same response
 			// are invalid.
 			mdCopy := metadata
-			mdCopy.Status = ServiceStatusACKed
+			mdCopy.Status = resource.ServiceStatusACKed
 			mdCopy.ErrState = nil
 			if metadata.ErrState != nil {
 				mdCopy.Version = metadata.ErrState.Version
@@ -201,7 +202,7 @@ func (c *clientImpl) NewRouteConfigs(updates map[string]RouteConfigUpdateErrTupl
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewClusters(updates map[string]ClusterUpdateErrTuple, metadata UpdateMetadata) {
+func (c *clientImpl) NewClusters(updates map[string]resource.ClusterUpdateErrTuple, metadata resource.UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -240,7 +241,7 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdateErrTuple, metad
 			// NACK metadata because some other resources in the same response
 			// are invalid.
 			mdCopy := metadata
-			mdCopy.Status = ServiceStatusACKed
+			mdCopy.Status = resource.ServiceStatusACKed
 			mdCopy.ErrState = nil
 			if metadata.ErrState != nil {
 				mdCopy.Version = metadata.ErrState.Version
@@ -256,7 +257,7 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdateErrTuple, metad
 			// from cache, and also send an resource not found error to indicate
 			// resource removed.
 			delete(c.cdsCache, name)
-			c.ldsMD[name] = UpdateMetadata{Status: ServiceStatusNotExist}
+			c.ldsMD[name] = resource.UpdateMetadata{Status: resource.ServiceStatusNotExist}
 			for wi := range c.cdsWatchers[name] {
 				wi.resourceNotFound()
 			}
@@ -272,7 +273,7 @@ func (c *clientImpl) NewClusters(updates map[string]ClusterUpdateErrTuple, metad
 //
 // A response can contain multiple resources. They will be parsed and put in a
 // map from resource name to the resource content.
-func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdateErrTuple, metadata UpdateMetadata) {
+func (c *clientImpl) NewEndpoints(updates map[string]resource.EndpointsUpdateErrTuple, metadata resource.UpdateMetadata) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -311,7 +312,7 @@ func (c *clientImpl) NewEndpoints(updates map[string]EndpointsUpdateErrTuple, me
 			// NACK metadata because some other resources in the same response
 			// are invalid.
 			mdCopy := metadata
-			mdCopy.Status = ServiceStatusACKed
+			mdCopy.Status = resource.ServiceStatusACKed
 			mdCopy.ErrState = nil
 			if metadata.ErrState != nil {
 				mdCopy.Version = metadata.ErrState.Version

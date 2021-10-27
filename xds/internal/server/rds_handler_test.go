@@ -26,7 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 )
 
 const (
@@ -86,12 +86,12 @@ func (s) TestSuccessCaseOneRDSWatch(t *testing.T) {
 	if gotRoute != route1 {
 		t.Fatalf("xdsClient.WatchRDS called for route: %v, want %v", gotRoute, route1)
 	}
-	rdsUpdate := xdsclient.RouteConfigUpdate{}
+	rdsUpdate := resource.RouteConfigUpdate{}
 	// Invoke callback with the xds client with a certain route update. Due to
 	// this route update updating every route name that rds handler handles,
 	// this should write to the update channel to send to the listener.
 	fakeClient.InvokeWatchRouteConfigCallback(route1, rdsUpdate, nil)
-	rhuWant := map[string]xdsclient.RouteConfigUpdate{route1: rdsUpdate}
+	rhuWant := map[string]resource.RouteConfigUpdate{route1: rdsUpdate}
 	select {
 	case rhu := <-ch:
 		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
@@ -147,7 +147,7 @@ func (s) TestSuccessCaseTwoUpdates(t *testing.T) {
 	// Invoke the callback with an update for route 1. This shouldn't cause the
 	// handler to write an update, as it has not received RouteConfigurations
 	// for every RouteName.
-	rdsUpdate1 := xdsclient.RouteConfigUpdate{}
+	rdsUpdate1 := resource.RouteConfigUpdate{}
 	fakeClient.InvokeWatchRouteConfigCallback(route1, rdsUpdate1, nil)
 
 	// The RDS Handler should not send an update.
@@ -162,12 +162,12 @@ func (s) TestSuccessCaseTwoUpdates(t *testing.T) {
 	// Invoke the callback with an update for route 2. This should cause the
 	// handler to write an update, as it has received RouteConfigurations for
 	// every RouteName.
-	rdsUpdate2 := xdsclient.RouteConfigUpdate{}
+	rdsUpdate2 := resource.RouteConfigUpdate{}
 	fakeClient.InvokeWatchRouteConfigCallback(route2, rdsUpdate2, nil)
 	// The RDS Handler should then update the listener wrapper with an update
 	// with two route configurations, as both route names the RDS Handler handles
 	// have received an update.
-	rhuWant := map[string]xdsclient.RouteConfigUpdate{route1: rdsUpdate1, route2: rdsUpdate2}
+	rhuWant := map[string]resource.RouteConfigUpdate{route1: rdsUpdate1, route2: rdsUpdate2}
 	select {
 	case rhu := <-ch:
 		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
@@ -213,12 +213,12 @@ func (s) TestSuccessCaseDeletedRoute(t *testing.T) {
 		t.Fatalf("xdsClient.CancelRDS called for route %v, want %v", routeNameDeleted, route2)
 	}
 
-	rdsUpdate := xdsclient.RouteConfigUpdate{}
+	rdsUpdate := resource.RouteConfigUpdate{}
 	// Invoke callback with the xds client with a certain route update. Due to
 	// this route update updating every route name that rds handler handles,
 	// this should write to the update channel to send to the listener.
 	fakeClient.InvokeWatchRouteConfigCallback(route1, rdsUpdate, nil)
-	rhuWant := map[string]xdsclient.RouteConfigUpdate{route1: rdsUpdate}
+	rhuWant := map[string]resource.RouteConfigUpdate{route1: rdsUpdate}
 	select {
 	case rhu := <-ch:
 		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
@@ -281,7 +281,7 @@ func (s) TestSuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 	// Invoke the callback with an update for route 2. This shouldn't cause the
 	// handler to write an update, as it has not received RouteConfigurations
 	// for every RouteName.
-	rdsUpdate2 := xdsclient.RouteConfigUpdate{}
+	rdsUpdate2 := resource.RouteConfigUpdate{}
 	fakeClient.InvokeWatchRouteConfigCallback(route2, rdsUpdate2, nil)
 
 	// The RDS Handler should not send an update.
@@ -296,12 +296,12 @@ func (s) TestSuccessCaseTwoUpdatesAddAndDeleteRoute(t *testing.T) {
 	// Invoke the callback with an update for route 3. This should cause the
 	// handler to write an update, as it has received RouteConfigurations for
 	// every RouteName.
-	rdsUpdate3 := xdsclient.RouteConfigUpdate{}
+	rdsUpdate3 := resource.RouteConfigUpdate{}
 	fakeClient.InvokeWatchRouteConfigCallback(route3, rdsUpdate3, nil)
 	// The RDS Handler should then update the listener wrapper with an update
 	// with two route configurations, as both route names the RDS Handler handles
 	// have received an update.
-	rhuWant := map[string]xdsclient.RouteConfigUpdate{route2: rdsUpdate2, route3: rdsUpdate3}
+	rhuWant := map[string]resource.RouteConfigUpdate{route2: rdsUpdate2, route3: rdsUpdate3}
 	select {
 	case rhu := <-rh.updateChannel:
 		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
@@ -335,8 +335,8 @@ func (s) TestSuccessCaseSecondUpdateMakesRouteFull(t *testing.T) {
 
 	// Invoke the callbacks for two of the three watches. Since RDS is not full,
 	// this shouldn't trigger rds handler to write an update to update buffer.
-	fakeClient.InvokeWatchRouteConfigCallback(route1, xdsclient.RouteConfigUpdate{}, nil)
-	fakeClient.InvokeWatchRouteConfigCallback(route2, xdsclient.RouteConfigUpdate{}, nil)
+	fakeClient.InvokeWatchRouteConfigCallback(route1, resource.RouteConfigUpdate{}, nil)
+	fakeClient.InvokeWatchRouteConfigCallback(route2, resource.RouteConfigUpdate{}, nil)
 
 	// The RDS Handler should not send an update.
 	sCtx, sCtxCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -360,7 +360,7 @@ func (s) TestSuccessCaseSecondUpdateMakesRouteFull(t *testing.T) {
 	if routeNameDeleted != route3 {
 		t.Fatalf("xdsClient.CancelRDS called for route %v, want %v", routeNameDeleted, route1)
 	}
-	rhuWant := map[string]xdsclient.RouteConfigUpdate{route1: {}, route2: {}}
+	rhuWant := map[string]resource.RouteConfigUpdate{route1: {}, route2: {}}
 	select {
 	case rhu := <-ch:
 		if diff := cmp.Diff(rhu.updates, rhuWant); diff != "" {
@@ -389,7 +389,7 @@ func (s) TestErrorReceived(t *testing.T) {
 	}
 
 	rdsErr := errors.New("some error")
-	fakeClient.InvokeWatchRouteConfigCallback(route1, xdsclient.RouteConfigUpdate{}, rdsErr)
+	fakeClient.InvokeWatchRouteConfigCallback(route1, resource.RouteConfigUpdate{}, rdsErr)
 	select {
 	case rhu := <-ch:
 		if rhu.err.Error() != "some error" {

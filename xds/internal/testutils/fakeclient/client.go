@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 )
 
 // Client is a fake implementation of an xds client. It exposes a bunch of
@@ -51,16 +52,16 @@ type Client struct {
 	loadStore    *load.Store
 	bootstrapCfg *bootstrap.Config
 
-	ldsCb  func(xdsclient.ListenerUpdate, error)
-	rdsCbs map[string]func(xdsclient.RouteConfigUpdate, error)
-	cdsCbs map[string]func(xdsclient.ClusterUpdate, error)
-	edsCbs map[string]func(xdsclient.EndpointsUpdate, error)
+	ldsCb  func(resource.ListenerUpdate, error)
+	rdsCbs map[string]func(resource.RouteConfigUpdate, error)
+	cdsCbs map[string]func(resource.ClusterUpdate, error)
+	edsCbs map[string]func(resource.EndpointsUpdate, error)
 
 	Closed *grpcsync.Event // fired when Close is called.
 }
 
 // WatchListener registers a LDS watch.
-func (xdsC *Client) WatchListener(serviceName string, callback func(xdsclient.ListenerUpdate, error)) func() {
+func (xdsC *Client) WatchListener(serviceName string, callback func(resource.ListenerUpdate, error)) func() {
 	xdsC.ldsCb = callback
 	xdsC.ldsWatchCh.Send(serviceName)
 	return func() {
@@ -82,7 +83,7 @@ func (xdsC *Client) WaitForWatchListener(ctx context.Context) (string, error) {
 //
 // Not thread safe with WatchListener. Only call this after
 // WaitForWatchListener.
-func (xdsC *Client) InvokeWatchListenerCallback(update xdsclient.ListenerUpdate, err error) {
+func (xdsC *Client) InvokeWatchListenerCallback(update resource.ListenerUpdate, err error) {
 	xdsC.ldsCb(update, err)
 }
 
@@ -94,7 +95,7 @@ func (xdsC *Client) WaitForCancelListenerWatch(ctx context.Context) error {
 }
 
 // WatchRouteConfig registers a RDS watch.
-func (xdsC *Client) WatchRouteConfig(routeName string, callback func(xdsclient.RouteConfigUpdate, error)) func() {
+func (xdsC *Client) WatchRouteConfig(routeName string, callback func(resource.RouteConfigUpdate, error)) func() {
 	xdsC.rdsCbs[routeName] = callback
 	xdsC.rdsWatchCh.Send(routeName)
 	return func() {
@@ -116,7 +117,7 @@ func (xdsC *Client) WaitForWatchRouteConfig(ctx context.Context) (string, error)
 //
 // Not thread safe with WatchRouteConfig. Only call this after
 // WaitForWatchRouteConfig.
-func (xdsC *Client) InvokeWatchRouteConfigCallback(name string, update xdsclient.RouteConfigUpdate, err error) {
+func (xdsC *Client) InvokeWatchRouteConfigCallback(name string, update resource.RouteConfigUpdate, err error) {
 	if len(xdsC.rdsCbs) != 1 {
 		xdsC.rdsCbs[name](update, err)
 		return
@@ -141,7 +142,7 @@ func (xdsC *Client) WaitForCancelRouteConfigWatch(ctx context.Context) (string, 
 }
 
 // WatchCluster registers a CDS watch.
-func (xdsC *Client) WatchCluster(clusterName string, callback func(xdsclient.ClusterUpdate, error)) func() {
+func (xdsC *Client) WatchCluster(clusterName string, callback func(resource.ClusterUpdate, error)) func() {
 	// Due to the tree like structure of aggregate clusters, there can be multiple callbacks persisted for each cluster
 	// node. However, the client doesn't care about the parent child relationship between the nodes, only that it invokes
 	// the right callback for a particular cluster.
@@ -166,7 +167,7 @@ func (xdsC *Client) WaitForWatchCluster(ctx context.Context) (string, error) {
 //
 // Not thread safe with WatchCluster. Only call this after
 // WaitForWatchCluster.
-func (xdsC *Client) InvokeWatchClusterCallback(update xdsclient.ClusterUpdate, err error) {
+func (xdsC *Client) InvokeWatchClusterCallback(update resource.ClusterUpdate, err error) {
 	// Keeps functionality with previous usage of this, if single callback call that callback.
 	if len(xdsC.cdsCbs) == 1 {
 		var clusterName string
@@ -192,7 +193,7 @@ func (xdsC *Client) WaitForCancelClusterWatch(ctx context.Context) (string, erro
 }
 
 // WatchEndpoints registers an EDS watch for provided clusterName.
-func (xdsC *Client) WatchEndpoints(clusterName string, callback func(xdsclient.EndpointsUpdate, error)) (cancel func()) {
+func (xdsC *Client) WatchEndpoints(clusterName string, callback func(resource.EndpointsUpdate, error)) (cancel func()) {
 	xdsC.edsCbs[clusterName] = callback
 	xdsC.edsWatchCh.Send(clusterName)
 	return func() {
@@ -214,7 +215,7 @@ func (xdsC *Client) WaitForWatchEDS(ctx context.Context) (string, error) {
 //
 // Not thread safe with WatchEndpoints. Only call this after
 // WaitForWatchEDS.
-func (xdsC *Client) InvokeWatchEDSCallback(name string, update xdsclient.EndpointsUpdate, err error) {
+func (xdsC *Client) InvokeWatchEDSCallback(name string, update resource.EndpointsUpdate, err error) {
 	if len(xdsC.edsCbs) != 1 {
 		// This may panic if name isn't found. But it's fine for tests.
 		xdsC.edsCbs[name](update, err)
@@ -316,9 +317,9 @@ func NewClientWithName(name string) *Client {
 		loadReportCh: testutils.NewChannel(),
 		lrsCancelCh:  testutils.NewChannel(),
 		loadStore:    load.NewStore(),
-		rdsCbs:       make(map[string]func(xdsclient.RouteConfigUpdate, error)),
-		cdsCbs:       make(map[string]func(xdsclient.ClusterUpdate, error)),
-		edsCbs:       make(map[string]func(xdsclient.EndpointsUpdate, error)),
+		rdsCbs:       make(map[string]func(resource.RouteConfigUpdate, error)),
+		cdsCbs:       make(map[string]func(resource.ClusterUpdate, error)),
+		edsCbs:       make(map[string]func(resource.EndpointsUpdate, error)),
 		Closed:       grpcsync.NewEvent(),
 	}
 }

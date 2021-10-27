@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 )
 
 type clientKeyType string
@@ -31,10 +32,10 @@ const clientKey = clientKeyType("grpc.xds.internal.client.Client")
 // (collectively termed as xDS) on a remote management server, to discover
 // various dynamic resources.
 type XDSClient interface {
-	WatchListener(string, func(ListenerUpdate, error)) func()
-	WatchRouteConfig(string, func(RouteConfigUpdate, error)) func()
-	WatchCluster(string, func(ClusterUpdate, error)) func()
-	WatchEndpoints(clusterName string, edsCb func(EndpointsUpdate, error)) (cancel func())
+	WatchListener(string, func(resource.ListenerUpdate, error)) func()
+	WatchRouteConfig(string, func(resource.RouteConfigUpdate, error)) func()
+	WatchCluster(string, func(resource.ClusterUpdate, error)) func()
+	WatchEndpoints(clusterName string, edsCb func(resource.EndpointsUpdate, error)) (cancel func())
 	ReportLoad(server string) (*load.Store, func())
 
 	DumpLDS() (string, map[string]UpdateWithMD)

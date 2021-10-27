@@ -24,8 +24,8 @@ import (
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/google/go-cmp/cmp/cmpopts"
-
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 )
 
 // TestLDSHandleResponse starts a fake xDS server, makes a ClientConn to it,
@@ -36,8 +36,8 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 		name          string
 		ldsResponse   *v2xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    map[string]xdsclient.ListenerUpdateErrTuple
-		wantUpdateMD  xdsclient.UpdateMetadata
+		wantUpdate    map[string]resource.ListenerUpdateErrTuple
+		wantUpdateMD  resource.UpdateMetadata
 		wantUpdateErr bool
 	}{
 		// Badly marshaled LDS response.
@@ -46,9 +46,9 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			ldsResponse: badlyMarshaledLDSResponse,
 			wantErr:     true,
 			wantUpdate:  nil,
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusNACKed,
-				ErrState: &xdsclient.UpdateErrorMetadata{
+			wantUpdateMD: resource.UpdateMetadata{
+				Status: resource.ServiceStatusNACKed,
+				ErrState: &resource.UpdateErrorMetadata{
 					Err: cmpopts.AnyError,
 				},
 			},
@@ -60,9 +60,9 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			ldsResponse: badResourceTypeInLDSResponse,
 			wantErr:     true,
 			wantUpdate:  nil,
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusNACKed,
-				ErrState: &xdsclient.UpdateErrorMetadata{
+			wantUpdateMD: resource.UpdateMetadata{
+				Status: resource.ServiceStatusNACKed,
+				ErrState: &resource.UpdateErrorMetadata{
 					Err: cmpopts.AnyError,
 				},
 			},
@@ -75,12 +75,12 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			name:        "no-apiListener-in-response",
 			ldsResponse: noAPIListenerLDSResponse,
 			wantErr:     true,
-			wantUpdate: map[string]xdsclient.ListenerUpdateErrTuple{
+			wantUpdate: map[string]resource.ListenerUpdateErrTuple{
 				goodLDSTarget1: {Err: cmpopts.AnyError},
 			},
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusNACKed,
-				ErrState: &xdsclient.UpdateErrorMetadata{
+			wantUpdateMD: resource.UpdateMetadata{
+				Status: resource.ServiceStatusNACKed,
+				ErrState: &resource.UpdateErrorMetadata{
 					Err: cmpopts.AnyError,
 				},
 			},
@@ -91,11 +91,11 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			name:        "one-good-listener",
 			ldsResponse: goodLDSResponse1,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.ListenerUpdateErrTuple{
-				goodLDSTarget1: {Update: xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener1}},
+			wantUpdate: map[string]resource.ListenerUpdateErrTuple{
+				goodLDSTarget1: {Update: resource.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener1}},
 			},
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusACKed,
+			wantUpdateMD: resource.UpdateMetadata{
+				Status: resource.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -105,12 +105,12 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			name:        "multiple-good-listener",
 			ldsResponse: ldsResponseWithMultipleResources,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.ListenerUpdateErrTuple{
-				goodLDSTarget1: {Update: xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener1}},
-				goodLDSTarget2: {Update: xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener2}},
+			wantUpdate: map[string]resource.ListenerUpdateErrTuple{
+				goodLDSTarget1: {Update: resource.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener1}},
+				goodLDSTarget2: {Update: resource.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener2}},
 			},
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusACKed,
+			wantUpdateMD: resource.UpdateMetadata{
+				Status: resource.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -121,13 +121,13 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			name:        "good-bad-ugly-listeners",
 			ldsResponse: goodBadUglyLDSResponse,
 			wantErr:     true,
-			wantUpdate: map[string]xdsclient.ListenerUpdateErrTuple{
-				goodLDSTarget1: {Update: xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener1}},
+			wantUpdate: map[string]resource.ListenerUpdateErrTuple{
+				goodLDSTarget1: {Update: resource.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener1}},
 				goodLDSTarget2: {Err: cmpopts.AnyError},
 			},
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusNACKed,
-				ErrState: &xdsclient.UpdateErrorMetadata{
+			wantUpdateMD: resource.UpdateMetadata{
+				Status: resource.ServiceStatusNACKed,
+				ErrState: &resource.UpdateErrorMetadata{
 					Err: cmpopts.AnyError,
 				},
 			},
@@ -138,11 +138,11 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			name:        "one-uninteresting-listener",
 			ldsResponse: goodLDSResponse2,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.ListenerUpdateErrTuple{
-				goodLDSTarget2: {Update: xdsclient.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener2}},
+			wantUpdate: map[string]resource.ListenerUpdateErrTuple{
+				goodLDSTarget2: {Update: resource.ListenerUpdate{RouteConfigName: goodRouteName1, Raw: marshaledListener2}},
 			},
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusACKed,
+			wantUpdateMD: resource.UpdateMetadata{
+				Status: resource.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -153,8 +153,8 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 			ldsResponse: emptyLDSResponse,
 			wantErr:     false,
 			wantUpdate:  nil,
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusACKed,
+			wantUpdateMD: resource.UpdateMetadata{
+				Status: resource.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -182,7 +182,7 @@ func (s) TestLDSHandleResponseWithoutWatch(t *testing.T) {
 	defer cleanup()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}, xdsclient.UpdateMetadata) {},
+		f: func(xdsclient.ResourceType, map[string]interface{}, resource.UpdateMetadata) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)

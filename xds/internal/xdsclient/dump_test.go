@@ -30,6 +30,7 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -94,25 +95,25 @@ func (s) TestLDSConfigDump(t *testing.T) {
 
 	wantRequested := make(map[string]xdsclient.UpdateWithMD)
 	for _, n := range ldsTargets {
-		cancel := client.WatchListener(n, func(update xdsclient.ListenerUpdate, err error) {})
+		cancel := client.WatchListener(n, func(update resource.ListenerUpdate, err error) {})
 		defer cancel()
-		wantRequested[n] = xdsclient.UpdateWithMD{MD: xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusRequested}}
+		wantRequested[n] = xdsclient.UpdateWithMD{MD: resource.UpdateMetadata{Status: resource.ServiceStatusRequested}}
 	}
 	// Expected requested.
 	if err := compareDump(client.DumpLDS, "", wantRequested); err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	update0 := make(map[string]xdsclient.ListenerUpdateErrTuple)
+	update0 := make(map[string]resource.ListenerUpdateErrTuple)
 	want0 := make(map[string]xdsclient.UpdateWithMD)
 	for n, r := range listenerRaws {
-		update0[n] = xdsclient.ListenerUpdateErrTuple{Update: xdsclient.ListenerUpdate{Raw: r}}
+		update0[n] = resource.ListenerUpdateErrTuple{Update: resource.ListenerUpdate{Raw: r}}
 		want0[n] = xdsclient.UpdateWithMD{
-			MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion},
+			MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
 		}
 	}
-	updateHandler.NewListeners(update0, xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion})
+	updateHandler.NewListeners(update0, resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: testVersion})
 
 	// Expect ACK.
 	if err := compareDump(client.DumpLDS, testVersion, want0); err != nil {
@@ -122,13 +123,13 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	const nackVersion = "lds-version-nack"
 	var nackErr = fmt.Errorf("lds nack error")
 	updateHandler.NewListeners(
-		map[string]xdsclient.ListenerUpdateErrTuple{
+		map[string]resource.ListenerUpdateErrTuple{
 			ldsTargets[0]: {Err: nackErr},
-			ldsTargets[1]: {Update: xdsclient.ListenerUpdate{Raw: listenerRaws[ldsTargets[1]]}},
+			ldsTargets[1]: {Update: resource.ListenerUpdate{Raw: listenerRaws[ldsTargets[1]]}},
 		},
-		xdsclient.UpdateMetadata{
-			Status: xdsclient.ServiceStatusNACKed,
-			ErrState: &xdsclient.UpdateErrorMetadata{
+		resource.UpdateMetadata{
+			Status: resource.ServiceStatusNACKed,
+			ErrState: &resource.UpdateErrorMetadata{
 				Version: nackVersion,
 				Err:     nackErr,
 			},
@@ -140,10 +141,10 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
 	wantDump[ldsTargets[0]] = xdsclient.UpdateWithMD{
-		MD: xdsclient.UpdateMetadata{
-			Status:  xdsclient.ServiceStatusNACKed,
+		MD: resource.UpdateMetadata{
+			Status:  resource.ServiceStatusNACKed,
 			Version: testVersion,
-			ErrState: &xdsclient.UpdateErrorMetadata{
+			ErrState: &resource.UpdateErrorMetadata{
 				Version: nackVersion,
 				Err:     nackErr,
 			},
@@ -152,7 +153,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	}
 
 	wantDump[ldsTargets[1]] = xdsclient.UpdateWithMD{
-		MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: nackVersion},
+		MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: nackVersion},
 		Raw: listenerRaws[ldsTargets[1]],
 	}
 	if err := compareDump(client.DumpLDS, nackVersion, wantDump); err != nil {
@@ -210,25 +211,25 @@ func (s) TestRDSConfigDump(t *testing.T) {
 
 	wantRequested := make(map[string]xdsclient.UpdateWithMD)
 	for _, n := range rdsTargets {
-		cancel := client.WatchRouteConfig(n, func(update xdsclient.RouteConfigUpdate, err error) {})
+		cancel := client.WatchRouteConfig(n, func(update resource.RouteConfigUpdate, err error) {})
 		defer cancel()
-		wantRequested[n] = xdsclient.UpdateWithMD{MD: xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusRequested}}
+		wantRequested[n] = xdsclient.UpdateWithMD{MD: resource.UpdateMetadata{Status: resource.ServiceStatusRequested}}
 	}
 	// Expected requested.
 	if err := compareDump(client.DumpRDS, "", wantRequested); err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	update0 := make(map[string]xdsclient.RouteConfigUpdateErrTuple)
+	update0 := make(map[string]resource.RouteConfigUpdateErrTuple)
 	want0 := make(map[string]xdsclient.UpdateWithMD)
 	for n, r := range routeRaws {
-		update0[n] = xdsclient.RouteConfigUpdateErrTuple{Update: xdsclient.RouteConfigUpdate{Raw: r}}
+		update0[n] = resource.RouteConfigUpdateErrTuple{Update: resource.RouteConfigUpdate{Raw: r}}
 		want0[n] = xdsclient.UpdateWithMD{
-			MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion},
+			MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
 		}
 	}
-	updateHandler.NewRouteConfigs(update0, xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion})
+	updateHandler.NewRouteConfigs(update0, resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: testVersion})
 
 	// Expect ACK.
 	if err := compareDump(client.DumpRDS, testVersion, want0); err != nil {
@@ -238,13 +239,13 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	const nackVersion = "rds-version-nack"
 	var nackErr = fmt.Errorf("rds nack error")
 	updateHandler.NewRouteConfigs(
-		map[string]xdsclient.RouteConfigUpdateErrTuple{
+		map[string]resource.RouteConfigUpdateErrTuple{
 			rdsTargets[0]: {Err: nackErr},
-			rdsTargets[1]: {Update: xdsclient.RouteConfigUpdate{Raw: routeRaws[rdsTargets[1]]}},
+			rdsTargets[1]: {Update: resource.RouteConfigUpdate{Raw: routeRaws[rdsTargets[1]]}},
 		},
-		xdsclient.UpdateMetadata{
-			Status: xdsclient.ServiceStatusNACKed,
-			ErrState: &xdsclient.UpdateErrorMetadata{
+		resource.UpdateMetadata{
+			Status: resource.ServiceStatusNACKed,
+			ErrState: &resource.UpdateErrorMetadata{
 				Version: nackVersion,
 				Err:     nackErr,
 			},
@@ -256,10 +257,10 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
 	wantDump[rdsTargets[0]] = xdsclient.UpdateWithMD{
-		MD: xdsclient.UpdateMetadata{
-			Status:  xdsclient.ServiceStatusNACKed,
+		MD: resource.UpdateMetadata{
+			Status:  resource.ServiceStatusNACKed,
 			Version: testVersion,
-			ErrState: &xdsclient.UpdateErrorMetadata{
+			ErrState: &resource.UpdateErrorMetadata{
 				Version: nackVersion,
 				Err:     nackErr,
 			},
@@ -267,7 +268,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		Raw: routeRaws[rdsTargets[0]],
 	}
 	wantDump[rdsTargets[1]] = xdsclient.UpdateWithMD{
-		MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: nackVersion},
+		MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: nackVersion},
 		Raw: routeRaws[rdsTargets[1]],
 	}
 	if err := compareDump(client.DumpRDS, nackVersion, wantDump); err != nil {
@@ -326,25 +327,25 @@ func (s) TestCDSConfigDump(t *testing.T) {
 
 	wantRequested := make(map[string]xdsclient.UpdateWithMD)
 	for _, n := range cdsTargets {
-		cancel := client.WatchCluster(n, func(update xdsclient.ClusterUpdate, err error) {})
+		cancel := client.WatchCluster(n, func(update resource.ClusterUpdate, err error) {})
 		defer cancel()
-		wantRequested[n] = xdsclient.UpdateWithMD{MD: xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusRequested}}
+		wantRequested[n] = xdsclient.UpdateWithMD{MD: resource.UpdateMetadata{Status: resource.ServiceStatusRequested}}
 	}
 	// Expected requested.
 	if err := compareDump(client.DumpCDS, "", wantRequested); err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	update0 := make(map[string]xdsclient.ClusterUpdateErrTuple)
+	update0 := make(map[string]resource.ClusterUpdateErrTuple)
 	want0 := make(map[string]xdsclient.UpdateWithMD)
 	for n, r := range clusterRaws {
-		update0[n] = xdsclient.ClusterUpdateErrTuple{Update: xdsclient.ClusterUpdate{Raw: r}}
+		update0[n] = resource.ClusterUpdateErrTuple{Update: resource.ClusterUpdate{Raw: r}}
 		want0[n] = xdsclient.UpdateWithMD{
-			MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion},
+			MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
 		}
 	}
-	updateHandler.NewClusters(update0, xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion})
+	updateHandler.NewClusters(update0, resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: testVersion})
 
 	// Expect ACK.
 	if err := compareDump(client.DumpCDS, testVersion, want0); err != nil {
@@ -354,13 +355,13 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	const nackVersion = "cds-version-nack"
 	var nackErr = fmt.Errorf("cds nack error")
 	updateHandler.NewClusters(
-		map[string]xdsclient.ClusterUpdateErrTuple{
+		map[string]resource.ClusterUpdateErrTuple{
 			cdsTargets[0]: {Err: nackErr},
-			cdsTargets[1]: {Update: xdsclient.ClusterUpdate{Raw: clusterRaws[cdsTargets[1]]}},
+			cdsTargets[1]: {Update: resource.ClusterUpdate{Raw: clusterRaws[cdsTargets[1]]}},
 		},
-		xdsclient.UpdateMetadata{
-			Status: xdsclient.ServiceStatusNACKed,
-			ErrState: &xdsclient.UpdateErrorMetadata{
+		resource.UpdateMetadata{
+			Status: resource.ServiceStatusNACKed,
+			ErrState: &resource.UpdateErrorMetadata{
 				Version: nackVersion,
 				Err:     nackErr,
 			},
@@ -372,10 +373,10 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
 	wantDump[cdsTargets[0]] = xdsclient.UpdateWithMD{
-		MD: xdsclient.UpdateMetadata{
-			Status:  xdsclient.ServiceStatusNACKed,
+		MD: resource.UpdateMetadata{
+			Status:  resource.ServiceStatusNACKed,
 			Version: testVersion,
-			ErrState: &xdsclient.UpdateErrorMetadata{
+			ErrState: &resource.UpdateErrorMetadata{
 				Version: nackVersion,
 				Err:     nackErr,
 			},
@@ -383,7 +384,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		Raw: clusterRaws[cdsTargets[0]],
 	}
 	wantDump[cdsTargets[1]] = xdsclient.UpdateWithMD{
-		MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: nackVersion},
+		MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: nackVersion},
 		Raw: clusterRaws[cdsTargets[1]],
 	}
 	if err := compareDump(client.DumpCDS, nackVersion, wantDump); err != nil {
@@ -428,25 +429,25 @@ func (s) TestEDSConfigDump(t *testing.T) {
 
 	wantRequested := make(map[string]xdsclient.UpdateWithMD)
 	for _, n := range edsTargets {
-		cancel := client.WatchEndpoints(n, func(update xdsclient.EndpointsUpdate, err error) {})
+		cancel := client.WatchEndpoints(n, func(update resource.EndpointsUpdate, err error) {})
 		defer cancel()
-		wantRequested[n] = xdsclient.UpdateWithMD{MD: xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusRequested}}
+		wantRequested[n] = xdsclient.UpdateWithMD{MD: resource.UpdateMetadata{Status: resource.ServiceStatusRequested}}
 	}
 	// Expected requested.
 	if err := compareDump(client.DumpEDS, "", wantRequested); err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	update0 := make(map[string]xdsclient.EndpointsUpdateErrTuple)
+	update0 := make(map[string]resource.EndpointsUpdateErrTuple)
 	want0 := make(map[string]xdsclient.UpdateWithMD)
 	for n, r := range endpointRaws {
-		update0[n] = xdsclient.EndpointsUpdateErrTuple{Update: xdsclient.EndpointsUpdate{Raw: r}}
+		update0[n] = resource.EndpointsUpdateErrTuple{Update: resource.EndpointsUpdate{Raw: r}}
 		want0[n] = xdsclient.UpdateWithMD{
-			MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion},
+			MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: testVersion},
 			Raw: r,
 		}
 	}
-	updateHandler.NewEndpoints(update0, xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: testVersion})
+	updateHandler.NewEndpoints(update0, resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: testVersion})
 
 	// Expect ACK.
 	if err := compareDump(client.DumpEDS, testVersion, want0); err != nil {
@@ -456,13 +457,13 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	const nackVersion = "eds-version-nack"
 	var nackErr = fmt.Errorf("eds nack error")
 	updateHandler.NewEndpoints(
-		map[string]xdsclient.EndpointsUpdateErrTuple{
+		map[string]resource.EndpointsUpdateErrTuple{
 			edsTargets[0]: {Err: nackErr},
-			edsTargets[1]: {Update: xdsclient.EndpointsUpdate{Raw: endpointRaws[edsTargets[1]]}},
+			edsTargets[1]: {Update: resource.EndpointsUpdate{Raw: endpointRaws[edsTargets[1]]}},
 		},
-		xdsclient.UpdateMetadata{
-			Status: xdsclient.ServiceStatusNACKed,
-			ErrState: &xdsclient.UpdateErrorMetadata{
+		resource.UpdateMetadata{
+			Status: resource.ServiceStatusNACKed,
+			ErrState: &resource.UpdateErrorMetadata{
 				Version: nackVersion,
 				Err:     nackErr,
 			},
@@ -474,10 +475,10 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	// Though resource 0 was NACKed, the dump should show the previous ACKed raw
 	// message, as well as the NACK error.
 	wantDump[edsTargets[0]] = xdsclient.UpdateWithMD{
-		MD: xdsclient.UpdateMetadata{
-			Status:  xdsclient.ServiceStatusNACKed,
+		MD: resource.UpdateMetadata{
+			Status:  resource.ServiceStatusNACKed,
 			Version: testVersion,
-			ErrState: &xdsclient.UpdateErrorMetadata{
+			ErrState: &resource.UpdateErrorMetadata{
 				Version: nackVersion,
 				Err:     nackErr,
 			},
@@ -485,7 +486,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		Raw: endpointRaws[edsTargets[0]],
 	}
 	wantDump[edsTargets[1]] = xdsclient.UpdateWithMD{
-		MD:  xdsclient.UpdateMetadata{Status: xdsclient.ServiceStatusACKed, Version: nackVersion},
+		MD:  resource.UpdateMetadata{Status: resource.ServiceStatusACKed, Version: nackVersion},
 		Raw: endpointRaws[edsTargets[1]],
 	}
 	if err := compareDump(client.DumpEDS, nackVersion, wantDump); err != nil {

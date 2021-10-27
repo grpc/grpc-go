@@ -29,7 +29,7 @@ import (
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/metadata"
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 )
 
 func (s) TestPruneActiveClusters(t *testing.T) {
@@ -57,7 +57,7 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 	}
 	tests := []struct {
 		name            string
-		hashPolicies    []*xdsclient.HashPolicy
+		hashPolicies    []*resource.HashPolicy
 		requestHashWant uint64
 		rpcInfo         iresolver.RPCInfo
 	}{
@@ -65,8 +65,8 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 		// hash policies that specify to hash headers.
 		{
 			name: "test-generate-request-hash-headers",
-			hashPolicies: []*xdsclient.HashPolicy{{
-				HashPolicyType:    xdsclient.HashPolicyTypeHeader,
+			hashPolicies: []*resource.HashPolicy{{
+				HashPolicyType:    resource.HashPolicyTypeHeader,
 				HeaderName:        ":path",
 				Regex:             func() *regexp.Regexp { return regexp.MustCompile("/products") }(), // Will replace /products with /new-products, to test find and replace functionality.
 				RegexSubstitution: "/new-products",
@@ -82,8 +82,8 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 		// ClientConn (the pointer).
 		{
 			name: "test-generate-request-hash-channel-id",
-			hashPolicies: []*xdsclient.HashPolicy{{
-				HashPolicyType: xdsclient.HashPolicyTypeChannelID,
+			hashPolicies: []*resource.HashPolicy{{
+				HashPolicyType: resource.HashPolicyTypeChannelID,
 			}},
 			requestHashWant: xxhash.Sum64String(fmt.Sprintf("%p", &cs.r.cc)),
 			rpcInfo:         iresolver.RPCInfo{},
@@ -93,8 +93,8 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 		// strings in the headers.
 		{
 			name: "test-generate-request-hash-empty-string",
-			hashPolicies: []*xdsclient.HashPolicy{{
-				HashPolicyType:    xdsclient.HashPolicyTypeHeader,
+			hashPolicies: []*resource.HashPolicy{{
+				HashPolicyType:    resource.HashPolicyTypeHeader,
 				HeaderName:        ":path",
 				Regex:             func() *regexp.Regexp { return regexp.MustCompile("") }(),
 				RegexSubstitution: "e",

@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 )
 
 const (
@@ -185,7 +186,7 @@ func (b *cdsBalancer) handleClientConnUpdate(update *ccUpdate) {
 // management server, creates appropriate certificate provider plugins, and
 // updates the HandhakeInfo which is added as an address attribute in
 // NewSubConn() calls.
-func (b *cdsBalancer) handleSecurityConfig(config *xdsclient.SecurityConfig) error {
+func (b *cdsBalancer) handleSecurityConfig(config *resource.SecurityConfig) error {
 	// If xdsCredentials are not in use, i.e, the user did not want to get
 	// security configuration from an xDS server, we should not be acting on the
 	// received security config here. Doing so poses a security threat.
@@ -310,7 +311,7 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 	dms := make([]clusterresolver.DiscoveryMechanism, len(update.updates))
 	for i, cu := range update.updates {
 		switch cu.ClusterType {
-		case xdsclient.ClusterTypeEDS:
+		case resource.ClusterTypeEDS:
 			dms[i] = clusterresolver.DiscoveryMechanism{
 				Type:                  clusterresolver.DiscoveryMechanismTypeEDS,
 				Cluster:               cu.ClusterName,
@@ -324,7 +325,7 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 				dms[i].LoadReportingServerName = new(string)
 
 			}
-		case xdsclient.ClusterTypeLogicalDNS:
+		case resource.ClusterTypeLogicalDNS:
 			dms[i] = clusterresolver.DiscoveryMechanism{
 				Type:        clusterresolver.DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname: cu.DNSHostName,

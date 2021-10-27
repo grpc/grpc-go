@@ -27,7 +27,7 @@ import (
 
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 )
 
 // connWrapper is a thin wrapper around a net.Conn returned by Accept(). It
@@ -43,7 +43,7 @@ type connWrapper struct {
 	net.Conn
 
 	// The specific filter chain picked for handling this connection.
-	filterChain *xdsclient.FilterChain
+	filterChain *resource.FilterChain
 
 	// A reference fo the listenerWrapper on which this connection was accepted.
 	parent *listenerWrapper
@@ -61,11 +61,11 @@ type connWrapper struct {
 
 	// The virtual hosts with matchable routes and instantiated HTTP Filters per
 	// route.
-	virtualHosts []xdsclient.VirtualHostWithInterceptors
+	virtualHosts []resource.VirtualHostWithInterceptors
 }
 
 // VirtualHosts returns the virtual hosts to be used for server side routing.
-func (c *connWrapper) VirtualHosts() []xdsclient.VirtualHostWithInterceptors {
+func (c *connWrapper) VirtualHosts() []resource.VirtualHostWithInterceptors {
 	return c.virtualHosts
 }
 

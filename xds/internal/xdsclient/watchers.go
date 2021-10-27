@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 )
 
 type watchInfoState int
@@ -41,10 +42,10 @@ type watchInfo struct {
 	rType  ResourceType
 	target string
 
-	ldsCallback func(ListenerUpdate, error)
-	rdsCallback func(RouteConfigUpdate, error)
-	cdsCallback func(ClusterUpdate, error)
-	edsCallback func(EndpointsUpdate, error)
+	ldsCallback func(resource.ListenerUpdate, error)
+	rdsCallback func(resource.RouteConfigUpdate, error)
+	cdsCallback func(resource.ClusterUpdate, error)
+	edsCallback func(resource.EndpointsUpdate, error)
 
 	expiryTimer *time.Timer
 
@@ -105,13 +106,13 @@ func (wi *watchInfo) sendErrorLocked(err error) {
 	)
 	switch wi.rType {
 	case ListenerResource:
-		u = ListenerUpdate{}
+		u = resource.ListenerUpdate{}
 	case RouteConfigResource:
-		u = RouteConfigUpdate{}
+		u = resource.RouteConfigUpdate{}
 	case ClusterResource:
-		u = ClusterUpdate{}
+		u = resource.ClusterUpdate{}
 	case EndpointsResource:
-		u = EndpointsUpdate{}
+		u = resource.EndpointsUpdate{}
 	}
 	wi.c.scheduleCallback(wi, u, err)
 }
@@ -132,7 +133,7 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 	c.logger.Debugf("new watch for type %v, resource name %v", wi.rType, wi.target)
 	var (
 		watchers map[string]map[*watchInfo]bool
-		mds      map[string]UpdateMetadata
+		mds      map[string]resource.UpdateMetadata
 	)
 	switch wi.rType {
 	case ListenerResource:
@@ -163,7 +164,7 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 		c.logger.Debugf("first watch for type %v, resource name %v, will send a new xDS request", wi.rType, wi.target)
 		s = make(map[*watchInfo]bool)
 		watchers[resourceName] = s
-		mds[resourceName] = UpdateMetadata{Status: ServiceStatusRequested}
+		mds[resourceName] = resource.UpdateMetadata{Status: resource.ServiceStatusRequested}
 		c.apiClient.AddWatch(wi.rType, resourceName)
 	}
 	// No matter what, add the new watcher to the set, so it's callback will be
@@ -233,7 +234,7 @@ func (c *clientImpl) watch(wi *watchInfo) (cancel func()) {
 // Note that during race (e.g. an xDS response is received while the user is
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
-func (c *clientImpl) WatchListener(serviceName string, cb func(ListenerUpdate, error)) (cancel func()) {
+func (c *clientImpl) WatchListener(serviceName string, cb func(resource.ListenerUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
 		rType:       ListenerResource,
@@ -252,7 +253,7 @@ func (c *clientImpl) WatchListener(serviceName string, cb func(ListenerUpdate, e
 // Note that during race (e.g. an xDS response is received while the user is
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
-func (c *clientImpl) WatchRouteConfig(routeName string, cb func(RouteConfigUpdate, error)) (cancel func()) {
+func (c *clientImpl) WatchRouteConfig(routeName string, cb func(resource.RouteConfigUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
 		rType:       RouteConfigResource,
@@ -275,7 +276,7 @@ func (c *clientImpl) WatchRouteConfig(routeName string, cb func(RouteConfigUpdat
 // Note that during race (e.g. an xDS response is received while the user is
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
-func (c *clientImpl) WatchCluster(clusterName string, cb func(ClusterUpdate, error)) (cancel func()) {
+func (c *clientImpl) WatchCluster(clusterName string, cb func(resource.ClusterUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
 		rType:       ClusterResource,
@@ -297,7 +298,7 @@ func (c *clientImpl) WatchCluster(clusterName string, cb func(ClusterUpdate, err
 // Note that during race (e.g. an xDS response is received while the user is
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
-func (c *clientImpl) WatchEndpoints(clusterName string, cb func(EndpointsUpdate, error)) (cancel func()) {
+func (c *clientImpl) WatchEndpoints(clusterName string, cb func(resource.EndpointsUpdate, error)) (cancel func()) {
 	wi := &watchInfo{
 		c:           c,
 		rType:       EndpointsResource,

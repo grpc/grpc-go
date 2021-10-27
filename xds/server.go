@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/server"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 )
 
 const serverPrefix = "[xds-server %p] "
@@ -330,7 +331,7 @@ func (s *GRPCServer) GracefulStop() {
 func routeAndProcess(ctx context.Context) error {
 	conn := transport.GetConnection(ctx)
 	cw, ok := conn.(interface {
-		VirtualHosts() []xdsclient.VirtualHostWithInterceptors
+		VirtualHosts() []resource.VirtualHostWithInterceptors
 	})
 	if !ok {
 		return errors.New("missing virtual hosts in incoming context")
@@ -347,12 +348,12 @@ func routeAndProcess(ctx context.Context) error {
 	// the RPC gets to this point, there will be a single, unambiguous authority
 	// present in the header map.
 	authority := md.Get(":authority")
-	vh := xdsclient.FindBestMatchingVirtualHostServer(authority[0], cw.VirtualHosts())
+	vh := resource.FindBestMatchingVirtualHostServer(authority[0], cw.VirtualHosts())
 	if vh == nil {
 		return status.Error(codes.Unavailable, "the incoming RPC did not match a configured Virtual Host")
 	}
 
-	var rwi *xdsclient.RouteWithInterceptors
+	var rwi *resource.RouteWithInterceptors
 	rpcInfo := iresolver.RPCInfo{
 		Context: ctx,
 		Method:  mn,
@@ -361,7 +362,7 @@ func routeAndProcess(ctx context.Context) error {
 		if r.M.Match(rpcInfo) {
 			// "NonForwardingAction is expected for all Routes used on server-side; a route with an inappropriate action causes
 			// RPCs matching that route to fail with UNAVAILABLE." - A36
-			if r.RouteAction != xdsclient.RouteActionNonForwardingAction {
+			if r.RouteAction != resource.RouteActionNonForwardingAction {
 				return status.Error(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding")
 			}
 			rwi = &r

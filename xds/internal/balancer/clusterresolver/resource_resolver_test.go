@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
-	xdsclient "google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 )
 
 const (
@@ -36,7 +36,7 @@ const (
 )
 
 var (
-	testEDSUpdates []xdsclient.EndpointsUpdate
+	testEDSUpdates []resource.EndpointsUpdate
 )
 
 func init() {
@@ -54,7 +54,7 @@ func (s) TestResourceResolverOneEDSResource(t *testing.T) {
 		name                 string
 		clusterName, edsName string
 		wantName             string
-		edsUpdate            xdsclient.EndpointsUpdate
+		edsUpdate            resource.EndpointsUpdate
 		want                 []priorityConfig
 	}{
 		{name: "watch EDS",
@@ -779,7 +779,7 @@ func (s) TestResourceResolverError(t *testing.T) {
 
 	// Invoke callback with an error, should get an update.
 	edsErr := fmt.Errorf("EDS error")
-	fakeClient.InvokeWatchEDSCallback(gotEDSName1, xdsclient.EndpointsUpdate{}, edsErr)
+	fakeClient.InvokeWatchEDSCallback(gotEDSName1, resource.EndpointsUpdate{}, edsErr)
 	select {
 	case u := <-rr.updateChannel:
 		if u.err != edsErr {

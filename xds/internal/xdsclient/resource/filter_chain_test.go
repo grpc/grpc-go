@@ -13,10 +13,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package xdsclient
+package resource
 
 import (
 	"context"
@@ -99,7 +98,7 @@ var (
 
 // TestNewFilterChainImpl_Failure_BadMatchFields verifies cases where we have a
 // single filter chain with match criteria that contains unsupported fields.
-func TestNewFilterChainImpl_Failure_BadMatchFields(t *testing.T) {
+func (s) TestNewFilterChainImpl_Failure_BadMatchFields(t *testing.T) {
 	tests := []struct {
 		desc string
 		lis  *v3listenerpb.Listener
@@ -188,7 +187,7 @@ func TestNewFilterChainImpl_Failure_BadMatchFields(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			if fci, err := NewFilterChainManager(test.lis); err == nil {
+			if fci, err := NewFilterChainManager(test.lis, nil); err == nil {
 				t.Fatalf("NewFilterChainManager() returned %v when expected to fail", fci)
 			}
 		})
@@ -197,7 +196,7 @@ func TestNewFilterChainImpl_Failure_BadMatchFields(t *testing.T) {
 
 // TestNewFilterChainImpl_Failure_OverlappingMatchingRules verifies cases where
 // there are multiple filter chains and they have overlapping match rules.
-func TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
+func (s) TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
 	tests := []struct {
 		desc string
 		lis  *v3listenerpb.Listener
@@ -287,7 +286,7 @@ func TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
 	const wantErr = "multiple filter chains with overlapping matching rules are defined"
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			if _, err := NewFilterChainManager(test.lis); err == nil || !strings.Contains(err.Error(), wantErr) {
+			if _, err := NewFilterChainManager(test.lis, nil); err == nil || !strings.Contains(err.Error(), wantErr) {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, wantErr)
 			}
 		})
@@ -296,7 +295,7 @@ func TestNewFilterChainImpl_Failure_OverlappingMatchingRules(t *testing.T) {
 
 // TestNewFilterChainImpl_Failure_BadSecurityConfig verifies cases where the
 // security configuration in the filter chain is invalid.
-func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
+func (s) TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 	tests := []struct {
 		desc    string
 		lis     *v3listenerpb.Listener
@@ -509,7 +508,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			_, err := NewFilterChainManager(test.lis)
+			_, err := NewFilterChainManager(test.lis, nil)
 			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, test.wantErr)
 			}
@@ -519,7 +518,7 @@ func TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 
 // TestNewFilterChainImpl_Success_RouteUpdate tests the construction of the
 // filter chain with valid HTTP Filters present.
-func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
+func (s) TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 	oldRBAC := env.RBACSupport
 	env.RBACSupport = true
 	defer func() {
@@ -746,7 +745,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotFC, err := NewFilterChainManager(test.lis)
+			gotFC, err := NewFilterChainManager(test.lis, nil)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
@@ -759,7 +758,7 @@ func TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 
 // TestNewFilterChainImpl_Failure_BadRouteUpdate verifies cases where the Route
 // Update in the filter chain are invalid.
-func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
+func (s) TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 	oldRBAC := env.RBACSupport
 	env.RBACSupport = true
 	defer func() {
@@ -887,7 +886,7 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := NewFilterChainManager(test.lis)
+			_, err := NewFilterChainManager(test.lis, nil)
 			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, test.wantErr)
 			}
@@ -897,7 +896,7 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 
 // TestNewFilterChainImpl_Failure_BadHTTPFilters verifies cases where the HTTP
 // Filters in the filter chain are invalid.
-func TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
+func (s) TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
 	tests := []struct {
 		name    string
 		lis     *v3listenerpb.Listener
@@ -961,7 +960,7 @@ func TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := NewFilterChainManager(test.lis)
+			_, err := NewFilterChainManager(test.lis, nil)
 			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: %s", err, test.wantErr)
 			}
@@ -971,7 +970,7 @@ func TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
 
 // TestNewFilterChainImpl_Success_HTTPFilters tests the construction of the
 // filter chain with valid HTTP Filters present.
-func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
+func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 	oldRBAC := env.RBACSupport
 	env.RBACSupport = true
 	defer func() {
@@ -1281,7 +1280,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotFC, err := NewFilterChainManager(test.lis)
+			gotFC, err := NewFilterChainManager(test.lis, nil)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
@@ -1294,7 +1293,7 @@ func TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 
 // TestNewFilterChainImpl_Success_SecurityConfig verifies cases where the
 // security configuration in the filter chain contains valid data.
-func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
+func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 	oldRBAC := env.RBACSupport
 	env.RBACSupport = true
 	defer func() {
@@ -1510,7 +1509,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			gotFC, err := NewFilterChainManager(test.lis)
+			gotFC, err := NewFilterChainManager(test.lis, nil)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
@@ -1526,7 +1525,7 @@ func TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 // contains unsupported match fields. These configurations should lead to
 // success at config validation time and the filter chains which contains
 // unsupported match fields will be skipped at lookup time.
-func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
+func (s) TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 	oldRBAC := env.RBACSupport
 	env.RBACSupport = true
 	defer func() {
@@ -1683,7 +1682,7 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			gotFC, err := NewFilterChainManager(test.lis)
+			gotFC, err := NewFilterChainManager(test.lis, nil)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
@@ -1696,7 +1695,7 @@ func TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 
 // TestNewFilterChainImpl_Success_AllCombinations verifies different
 // combinations of the supported match criteria.
-func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
+func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 	oldRBAC := env.RBACSupport
 	env.RBACSupport = true
 	defer func() {
@@ -2184,7 +2183,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			gotFC, err := NewFilterChainManager(test.lis)
+			gotFC, err := NewFilterChainManager(test.lis, nil)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() returned err: %v, wantErr: nil", err)
 			}
@@ -2195,7 +2194,7 @@ func TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
 	}
 }
 
-func TestLookup_Failures(t *testing.T) {
+func (s) TestLookup_Failures(t *testing.T) {
 	tests := []struct {
 		desc    string
 		lis     *v3listenerpb.Listener
@@ -2335,7 +2334,7 @@ func TestLookup_Failures(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			fci, err := NewFilterChainManager(test.lis)
+			fci, err := NewFilterChainManager(test.lis, nil)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() failed: %v", err)
 			}
@@ -2347,7 +2346,7 @@ func TestLookup_Failures(t *testing.T) {
 	}
 }
 
-func TestLookup_Successes(t *testing.T) {
+func (s) TestLookup_Successes(t *testing.T) {
 	oldRBAC := env.RBACSupport
 	env.RBACSupport = true
 	defer func() {
@@ -2569,7 +2568,7 @@ func TestLookup_Successes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			fci, err := NewFilterChainManager(test.lis)
+			fci, err := NewFilterChainManager(test.lis, nil)
 			if err != nil {
 				t.Fatalf("NewFilterChainManager() failed: %v", err)
 			}
@@ -2615,7 +2614,7 @@ func (si *serverInterceptor) AllowRPC(context.Context) error {
 	return errors.New(si.level)
 }
 
-func TestHTTPFilterInstantiation(t *testing.T) {
+func (s) TestHTTPFilterInstantiation(t *testing.T) {
 	tests := []struct {
 		name        string
 		filters     []HTTPFilter
