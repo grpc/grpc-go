@@ -36,10 +36,7 @@ import (
 )
 
 var (
-	addr = flag.String(
-		"addr", "abstract-unix-socket",
-		"The unix abstract socket address",
-	)
+	addr = flag.String("addr", "abstract-unix-socket", "The unix abstract socket address")
 )
 
 type ecServer struct {

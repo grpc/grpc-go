@@ -39,10 +39,7 @@ var (
 	// this example because of golang conventions (net.Dial behavior). But we do
 	// not recommend this since we explicitly added the `unix-abstract` scheme
 	// for cross-language compatibility.
-	addr = flag.String(
-		"addr", "abstract-unix-socket",
-		"The unix abstract socket address",
-	)
+	addr = flag.String("addr", "abstract-unix-socket", "The unix abstract socket address")
 )
 
 func callUnaryEcho(c ecpb.EchoClient, message string) {

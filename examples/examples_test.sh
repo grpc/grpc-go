@@ -1,4 +1,3 @@
-#!/usr/local/bin/bash
 #!/bin/bash
 #
 #  Copyright 2019 gRPC authors.
