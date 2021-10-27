@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/xds/internal"
 	xtestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/version"
-	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -165,7 +164,7 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
-				rType:            xdsclient.EndpointsResource,
+				rType:            xdsresource.EndpointsResource,
 				resourceName:     goodEDSName,
 				responseToHandle: test.edsResponse,
 				wantHandleErr:    test.wantErr,
@@ -184,7 +183,7 @@ func (s) TestEDSHandleResponseWithoutWatch(t *testing.T) {
 	defer cleanup()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) {},
+		f: func(xdsresource.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)

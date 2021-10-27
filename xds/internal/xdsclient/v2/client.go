@@ -43,11 +43,11 @@ func init() {
 }
 
 var (
-	resourceTypeToURL = map[xdsclient.ResourceType]string{
-		xdsclient.ListenerResource:    version.V2ListenerURL,
-		xdsclient.RouteConfigResource: version.V2RouteConfigURL,
-		xdsclient.ClusterResource:     version.V2ClusterURL,
-		xdsclient.EndpointsResource:   version.V2EndpointsURL,
+	resourceTypeToURL = map[xdsresource.ResourceType]string{
+		xdsresource.ListenerResource:    version.V2ListenerURL,
+		xdsresource.RouteConfigResource: version.V2RouteConfigURL,
+		xdsresource.ClusterResource:     version.V2ClusterURL,
+		xdsresource.EndpointsResource:   version.V2EndpointsURL,
 	}
 )
 
@@ -109,7 +109,7 @@ func (v2c *client) NewStream(ctx context.Context) (grpc.ClientStream, error) {
 // - If this is an ack, version will be the version from the response.
 // - If this is a nack, version will be the previous acked version (from
 //   versionMap). If there was no ack before, it will be empty.
-func (v2c *client) SendRequest(s grpc.ClientStream, resourceNames []string, rType xdsclient.ResourceType, version, nonce, errMsg string) error {
+func (v2c *client) SendRequest(s grpc.ClientStream, resourceNames []string, rType xdsresource.ResourceType, version, nonce, errMsg string) error {
 	stream, ok := s.(adsStream)
 	if !ok {
 		return fmt.Errorf("xds: Attempt to send request on unsupported stream type: %T", s)
@@ -151,8 +151,8 @@ func (v2c *client) RecvResponse(s grpc.ClientStream) (proto.Message, error) {
 	return resp, nil
 }
 
-func (v2c *client) HandleResponse(r proto.Message) (xdsclient.ResourceType, string, string, error) {
-	rType := xdsclient.UnknownResource
+func (v2c *client) HandleResponse(r proto.Message) (xdsresource.ResourceType, string, string, error) {
+	rType := xdsresource.UnknownResource
 	resp, ok := r.(*v2xdspb.DiscoveryResponse)
 	if !ok {
 		return rType, "", "", fmt.Errorf("xds: unsupported message type: %T", resp)
@@ -167,16 +167,16 @@ func (v2c *client) HandleResponse(r proto.Message) (xdsclient.ResourceType, stri
 	switch {
 	case xdsresource.IsListenerResource(url):
 		err = v2c.handleLDSResponse(resp)
-		rType = xdsclient.ListenerResource
+		rType = xdsresource.ListenerResource
 	case xdsresource.IsRouteConfigResource(url):
 		err = v2c.handleRDSResponse(resp)
-		rType = xdsclient.RouteConfigResource
+		rType = xdsresource.RouteConfigResource
 	case xdsresource.IsClusterResource(url):
 		err = v2c.handleCDSResponse(resp)
-		rType = xdsclient.ClusterResource
+		rType = xdsresource.ClusterResource
 	case xdsresource.IsEndpointsResource(url):
 		err = v2c.handleEDSResponse(resp)
-		rType = xdsclient.EndpointsResource
+		rType = xdsresource.EndpointsResource
 	default:
 		return rType, "", "", xdsclient.ErrResourceTypeUnsupported{
 			ErrStr: fmt.Sprintf("Resource type %v unknown in response from server", resp.GetTypeUrl()),

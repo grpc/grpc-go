@@ -74,7 +74,7 @@ func (s) TestEndpointsWatch(t *testing.T) {
 	cancelWatch := client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -142,7 +142,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 		if i == 0 {
 			// A new watch is registered on the underlying API client only for
 			// the first iteration because we are using the same resource name.
-			if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
+			if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
 				t.Fatalf("want new watch to start, got error %v", err)
 			}
 		}
@@ -214,7 +214,7 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 		if i == 0 {
 			// A new watch is registered on the underlying API client only for
 			// the first iteration because we are using the same resource name.
-			if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
+			if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
 				t.Fatalf("want new watch to start, got error %v", err)
 			}
 		}
@@ -225,7 +225,7 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	client.WatchEndpoints(testCDSName+"2", func(update xdsresource.EndpointsUpdate, err error) {
 		endpointsUpdateCh2.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -270,7 +270,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -287,7 +287,7 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if n, err := apiClient.addWatches[EndpointsResource].Receive(sCtx); err != context.DeadlineExceeded {
+	if n, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
@@ -329,7 +329,7 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 	client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
 		endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -368,7 +368,7 @@ func (s) TestEndpointsWatchNACKError(t *testing.T) {
 		endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 	})
 	defer cancelWatch()
-	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -411,11 +411,11 @@ func (s) TestEndpointsWatchPartialValid(t *testing.T) {
 		})
 		defer func() {
 			cancelWatch()
-			if _, err := apiClient.removeWatches[EndpointsResource].Receive(ctx); err != nil {
+			if _, err := apiClient.removeWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
 				t.Fatalf("want watch to be canceled, got err: %v", err)
 			}
 		}()
-		if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
+		if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 		updateChs[name] = endpointsUpdateCh

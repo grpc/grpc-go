@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 const xdsScheme = "xds"
@@ -234,7 +235,7 @@ func (r *xdsResolver) run() {
 		case update := <-r.updateCh:
 			if update.err != nil {
 				r.logger.Warningf("Watch error on resource %v from xds-client %p, %v", r.target.Endpoint, r.client, update.err)
-				if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
+				if xdsresource.ErrType(update.err) == xdsresource.ErrorTypeResourceNotFound {
 					// If error is resource-not-found, it means the LDS
 					// resource was removed. Ultimately send an empty service
 					// config, which picks pick-first, with no address, and

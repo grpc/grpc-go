@@ -25,6 +25,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/buffer"
@@ -52,7 +53,7 @@ type VersionedClient interface {
 
 	// SendRequest constructs and sends out a DiscoveryRequest message specific
 	// to the underlying transport protocol version.
-	SendRequest(s grpc.ClientStream, resourceNames []string, rType ResourceType, version, nonce, errMsg string) error
+	SendRequest(s grpc.ClientStream, resourceNames []string, rType xdsresource.ResourceType, version, nonce, errMsg string) error
 
 	// RecvResponse uses the provided stream to receive a response specific to
 	// the underlying transport protocol version.
@@ -65,7 +66,7 @@ type VersionedClient interface {
 	// If the provided protobuf message contains a resource type which is not
 	// supported, implementations must return an error of type
 	// ErrResourceTypeUnsupported.
-	HandleResponse(proto.Message) (ResourceType, string, string, error)
+	HandleResponse(proto.Message) (xdsresource.ResourceType, string, string, error)
 
 	// NewLoadStatsStream returns a new LRS client stream specific to the underlying
 	// transport protocol version.
@@ -116,14 +117,14 @@ type TransportHelper struct {
 	// messages. When the user of this client object cancels a watch call,
 	// these are set to nil. All accesses to the map protected and any value
 	// inside the map should be protected with the above mutex.
-	watchMap map[ResourceType]map[string]bool
+	watchMap map[xdsresource.ResourceType]map[string]bool
 	// versionMap contains the version that was acked (the version in the ack
 	// request that was sent on wire). The key is rType, the value is the
 	// version string, becaues the versions for different resource types should
 	// be independent.
-	versionMap map[ResourceType]string
+	versionMap map[xdsresource.ResourceType]string
 	// nonceMap contains the nonce from the most recent received response.
-	nonceMap map[ResourceType]string
+	nonceMap map[xdsresource.ResourceType]string
 }
 
 // NewTransportHelper creates a new transport helper to be used by versioned
@@ -138,9 +139,9 @@ func NewTransportHelper(vc VersionedClient, logger *grpclog.PrefixLogger, backof
 
 		streamCh:   make(chan grpc.ClientStream, 1),
 		sendCh:     buffer.NewUnbounded(),
-		watchMap:   make(map[ResourceType]map[string]bool),
-		versionMap: make(map[ResourceType]string),
-		nonceMap:   make(map[ResourceType]string),
+		watchMap:   make(map[xdsresource.ResourceType]map[string]bool),
+		versionMap: make(map[xdsresource.ResourceType]string),
+		nonceMap:   make(map[xdsresource.ResourceType]string),
 	}
 
 	go t.run(ctx)
@@ -148,7 +149,7 @@ func NewTransportHelper(vc VersionedClient, logger *grpclog.PrefixLogger, backof
 }
 
 // AddWatch adds a watch for an xDS resource given its type and name.
-func (t *TransportHelper) AddWatch(rType ResourceType, resourceName string) {
+func (t *TransportHelper) AddWatch(rType xdsresource.ResourceType, resourceName string) {
 	t.sendCh.Put(&watchAction{
 		rType:    rType,
 		remove:   false,
@@ -158,7 +159,7 @@ func (t *TransportHelper) AddWatch(rType ResourceType, resourceName string) {
 
 // RemoveWatch cancels an already registered watch for an xDS resource
 // given its type and name.
-func (t *TransportHelper) RemoveWatch(rType ResourceType, resourceName string) {
+func (t *TransportHelper) RemoveWatch(rType xdsresource.ResourceType, resourceName string) {
 	t.sendCh.Put(&watchAction{
 		rType:    rType,
 		remove:   true,
@@ -250,7 +251,7 @@ func (t *TransportHelper) send(ctx context.Context) {
 
 			var (
 				target                 []string
-				rType                  ResourceType
+				rType                  xdsresource.ResourceType
 				version, nonce, errMsg string
 				send                   bool
 			)
@@ -292,8 +293,8 @@ func (t *TransportHelper) sendExisting(stream grpc.ClientStream) bool {
 	defer t.mu.Unlock()
 
 	// Reset the ack versions when the stream restarts.
-	t.versionMap = make(map[ResourceType]string)
-	t.nonceMap = make(map[ResourceType]string)
+	t.versionMap = make(map[xdsresource.ResourceType]string)
+	t.nonceMap = make(map[xdsresource.ResourceType]string)
 
 	for rType, s := range t.watchMap {
 		if err := t.vClient.SendRequest(stream, mapToSlice(s), rType, "", "", ""); err != nil {
@@ -351,7 +352,7 @@ func mapToSlice(m map[string]bool) []string {
 }
 
 type watchAction struct {
-	rType    ResourceType
+	rType    xdsresource.ResourceType
 	remove   bool // Whether this is to remove watch for the resource.
 	resource string
 }
@@ -359,7 +360,7 @@ type watchAction struct {
 // processWatchInfo pulls the fields needed by the request from a watchAction.
 //
 // It also updates the watch map.
-func (t *TransportHelper) processWatchInfo(w *watchAction) (target []string, rType ResourceType, ver, nonce string) {
+func (t *TransportHelper) processWatchInfo(w *watchAction) (target []string, rType xdsresource.ResourceType, ver, nonce string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -390,7 +391,7 @@ func (t *TransportHelper) processWatchInfo(w *watchAction) (target []string, rTy
 }
 
 type ackAction struct {
-	rType   ResourceType
+	rType   xdsresource.ResourceType
 	version string // NACK if version is an empty string.
 	nonce   string
 	errMsg  string // Empty unless it's a NACK.
@@ -403,13 +404,13 @@ type ackAction struct {
 // processAckInfo pulls the fields needed by the ack request from a ackAction.
 //
 // If no active watch is found for this ack, it returns false for send.
-func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStream) (target []string, rType ResourceType, version, nonce string, send bool) {
+func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStream) (target []string, rType xdsresource.ResourceType, version, nonce string, send bool) {
 	if ack.stream != stream {
 		// If ACK's stream isn't the current sending stream, this means the ACK
 		// was pushed to queue before the old stream broke, and a new stream has
 		// been started since. Return immediately here so we don't update the
 		// nonce for the new stream.
-		return nil, UnknownResource, "", "", false
+		return nil, xdsresource.UnknownResource, "", "", false
 	}
 	rType = ack.rType
 
@@ -429,7 +430,7 @@ func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStrea
 		// canceled while the ackAction is in queue), because there's no resource
 		// name. And if we send a request with empty resource name list, the
 		// server may treat it as a wild card and send us everything.
-		return nil, UnknownResource, "", "", false
+		return nil, xdsresource.UnknownResource, "", "", false
 	}
 	send = true
 	target = mapToSlice(s)

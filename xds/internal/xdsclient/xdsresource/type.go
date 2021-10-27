@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // UpdateValidatorFunc performs validations on update structs using
@@ -104,4 +105,46 @@ type UpdateErrorMetadata struct {
 	Err error
 	// Timestamp is when the NACKed response was received.
 	Timestamp time.Time
+}
+
+// UpdateWithMD contains the raw message of the update and the metadata,
+// including version, raw message, timestamp.
+//
+// This is to be used for config dump and CSDS, not directly by users (like
+// resolvers/balancers).
+type UpdateWithMD struct {
+	MD  UpdateMetadata
+	Raw *anypb.Any
+}
+
+// ResourceType identifies resources in a transport protocol agnostic way. These
+// will be used in transport version agnostic code, while the versioned API
+// clients will map these to appropriate version URLs.
+type ResourceType int
+
+// Version agnostic resource type constants.
+const (
+	UnknownResource ResourceType = iota
+	ListenerResource
+	HTTPConnManagerResource
+	RouteConfigResource
+	ClusterResource
+	EndpointsResource
+)
+
+func (r ResourceType) String() string {
+	switch r {
+	case ListenerResource:
+		return "ListenerResource"
+	case HTTPConnManagerResource:
+		return "HTTPConnManagerResource"
+	case RouteConfigResource:
+		return "RouteConfigResource"
+	case ClusterResource:
+		return "ClusterResource"
+	case EndpointsResource:
+		return "EndpointsResource"
+	default:
+		return "UnknownResource"
+	}
 }

@@ -36,7 +36,7 @@ import (
 // pre-requirement for RDS, and RDS handle would fail without an existing LDS
 // watch.
 func doLDS(ctx context.Context, t *testing.T, v2c xdsclient.APIClient, fakeServer *fakeserver.Server) {
-	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
+	v2c.AddWatch(xdsresource.ListenerResource, goodLDSTarget1)
 	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
 		t.Fatalf("Timeout waiting for LDS request: %v", err)
 	}
@@ -164,7 +164,7 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
-				rType:            xdsclient.RouteConfigResource,
+				rType:            xdsresource.RouteConfigResource,
 				resourceName:     goodRouteName1,
 				responseToHandle: test.rdsResponse,
 				wantHandleErr:    test.wantErr,
@@ -183,7 +183,7 @@ func (s) TestRDSHandleResponseWithoutRDSWatch(t *testing.T) {
 	defer cleanup()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) {},
+		f: func(xdsresource.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)
