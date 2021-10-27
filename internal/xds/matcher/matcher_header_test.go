@@ -64,7 +64,7 @@ func TestHeaderExactMatcherMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hem := NewHeaderExactMatcher(tt.key, tt.exact)
+			hem := NewHeaderExactMatcher(tt.key, tt.exact, false)
 			if got := hem.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
@@ -124,7 +124,7 @@ func TestHeaderRegexMatcherMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hrm := NewHeaderRegexMatcher(tt.key, regexp.MustCompile(tt.regexStr))
+			hrm := NewHeaderRegexMatcher(tt.key, regexp.MustCompile(tt.regexStr), false)
 			if got := hrm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
@@ -171,7 +171,7 @@ func TestHeaderRangeMatcherMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hrm := NewHeaderRangeMatcher(tt.key, tt.start, tt.end)
+			hrm := NewHeaderRangeMatcher(tt.key, tt.start, tt.end, false)
 			if got := hrm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
@@ -218,7 +218,7 @@ func TestHeaderPresentMatcherMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hpm := NewHeaderPresentMatcher(tt.key, tt.present)
+			hpm := NewHeaderPresentMatcher(tt.key, tt.present, false)
 			if got := hpm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
@@ -264,7 +264,7 @@ func TestHeaderPrefixMatcherMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hpm := NewHeaderPrefixMatcher(tt.key, tt.prefix)
+			hpm := NewHeaderPrefixMatcher(tt.key, tt.prefix, false)
 			if got := hpm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
@@ -310,7 +310,7 @@ func TestHeaderSuffixMatcherMatch(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hsm := NewHeaderSuffixMatcher(tt.key, tt.suffix)
+			hsm := NewHeaderSuffixMatcher(tt.key, tt.suffix, false)
 			if got := hsm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
@@ -323,24 +323,67 @@ func TestInvertMatcherMatch(t *testing.T) {
 		name string
 		m    HeaderMatcher
 		md   metadata.MD
+		want bool
 	}{
 		{
 			name: "true->false",
-			m:    NewHeaderExactMatcher("th", "tv"),
+			m:    NewHeaderExactMatcher("th", "tv", true),
 			md:   metadata.Pairs("th", "tv"),
+			want: false,
 		},
 		{
 			name: "false->true",
-			m:    NewHeaderExactMatcher("th", "abc"),
+			m:    NewHeaderExactMatcher("th", "abc", true),
 			md:   metadata.Pairs("th", "tv"),
+			want: true,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewInvertMatcher(tt.m).Match(tt.md)
-			want := !tt.m.Match(tt.md)
-			if got != want {
-				t.Errorf("match() = %v, want %v", got, want)
+			got := tt.m.Match(tt.md)
+			if got != tt.want {
+				t.Errorf("match() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestInvertWhenHeaderNotPresent tests the scenario when matchers (outside of
+// present) are configured with the invert knob, and the header the matcher is
+// testing is not present. The absence of the header should cause the matcher to
+// not match, independent of the configured matchers comparator and also the
+// invert knob.
+func TestInvertWhenNotPresent(t *testing.T) {
+	tests := []struct {
+		name string
+		m    HeaderMatcher
+		md   metadata.MD
+		want bool
+	}{
+		{
+			name: "no match exact",
+			m:    NewHeaderExactMatcher(":method", "GET", true),
+			md:   metadata.Pairs("th", "GET"),
+			want: false,
+		},
+		{
+			name: "no match prefix",
+			m:    NewHeaderPrefixMatcher(":method", "GET", true),
+			md:   metadata.Pairs("th", "GET"),
+			want: false,
+		},
+		{
+			name: "no match suffix",
+			m:    NewHeaderSuffixMatcher(":method", "GET", true),
+			md:   metadata.Pairs("th", "GET"),
+			want: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got := test.m.Match(test.md)
+			if got != test.want {
+				t.Errorf("match = %v, want %v", got, test.want)
 			}
 		})
 	}
