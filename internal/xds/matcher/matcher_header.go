@@ -136,20 +136,22 @@ func (hrm *HeaderRangeMatcher) String() string {
 type HeaderPresentMatcher struct {
 	key     string
 	present bool
-	invert  bool
 }
 
 // NewHeaderPresentMatcher returns a new HeaderPresentMatcher.
 func NewHeaderPresentMatcher(key string, present bool, invert bool) *HeaderPresentMatcher {
-	return &HeaderPresentMatcher{key: key, present: present, invert: invert}
+	if invert {
+		present = !present
+	}
+	return &HeaderPresentMatcher{key: key, present: present}
 }
 
 // Match returns whether the passed in HTTP Headers match according to the
 // HeaderPresentMatcher.
 func (hpm *HeaderPresentMatcher) Match(md metadata.MD) bool {
 	vs, ok := mdValuesFromOutgoingCtx(md, hpm.key)
-	present := ok && len(vs) > 0 // Are we sure we need this len(vs) > 0 ?
-	return (present == hpm.present) != hpm.invert
+	present := ok && len(vs) > 0 // TODO: Are we sure we need this len(vs) > 0?
+	return present == hpm.present
 }
 
 func (hpm *HeaderPresentMatcher) String() string {
@@ -239,25 +241,3 @@ func (hcm *HeaderContainsMatcher) Match(md metadata.MD) bool {
 func (hcm *HeaderContainsMatcher) String() string {
 	return fmt.Sprintf("headerContains:%v%v", hcm.key, hcm.contains)
 }
-
-/*
-// InvertMatcher inverts the match result of the underlying header matcher.
-type InvertMatcher struct {
-	m HeaderMatcher
-}
-
-// NewInvertMatcher returns a new InvertMatcher.
-func NewInvertMatcher(m HeaderMatcher) *InvertMatcher {
-	return &InvertMatcher{m: m}
-}
-
-// Match returns whether the passed in HTTP Headers match according to the
-// InvertMatcher.
-func (i *InvertMatcher) Match(md metadata.MD) bool {
-	return !i.m.Match(md)
-}
-
-func (i *InvertMatcher) String() string {
-	return fmt.Sprintf("invert{%s}", i.m)
-}
-*/
