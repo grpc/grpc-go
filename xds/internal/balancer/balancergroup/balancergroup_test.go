@@ -27,6 +27,7 @@ package balancergroup
 
 import (
 	"fmt"
+	"google.golang.org/grpc/internal/grpclog"
 	"testing"
 	"time"
 
@@ -71,11 +72,22 @@ func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	}
 }
 
+func newBalancerGroupOptions(cc balancer.ClientConn, bOpts balancer.BuildOptions,
+	stateAggregator BalancerStateAggregator, loadStore load.PerClusterReporter, logger *grpclog.PrefixLogger) *BalancerGroupOptions {
+	return &BalancerGroupOptions{
+		Cc:              cc,
+		BOpts:           bOpts,
+		StateAggregator: stateAggregator,
+		LoadStore:       loadStore,
+		Logger:          logger,
+	}
+}
 func newTestBalancerGroup(t *testing.T, loadStore load.PerClusterReporter) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, balancer.BuildOptions{}, gator, loadStore, nil)
+	bgOpts := newBalancerGroupOptions(cc, balancer.BuildOptions{}, gator, loadStore, nil)
+	bg := New(bgOpts)
 	bg.Start()
 	return cc, gator, bg
 }
@@ -502,7 +514,8 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, balancer.BuildOptions{}, gator, nil, nil)
+	bgOpts := newBalancerGroupOptions(cc, balancer.BuildOptions{}, gator, nil, nil)
+	bg := New(bgOpts)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -598,7 +611,8 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, balancer.BuildOptions{}, gator, nil, nil)
+	bgOpts := newBalancerGroupOptions(cc, balancer.BuildOptions{}, gator, nil, nil)
+	bg := New(bgOpts)
 
 	gator.Add(testBalancerIDs[0], 2)
 	bg.Add(testBalancerIDs[0], builder)
@@ -700,7 +714,8 @@ func initBalancerGroupForCachingTest(t *testing.T) (*weightedaggregator.Aggregat
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, balancer.BuildOptions{}, gator, nil, nil)
+	bgOpts := newBalancerGroupOptions(cc, balancer.BuildOptions{}, gator, nil, nil)
+	bg := New(bgOpts)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -993,7 +1008,8 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 		},
 	})
 	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, bOpts, nil, nil, nil)
+	bgOpts := newBalancerGroupOptions(cc, bOpts, nil, nil, nil)
+	bg := New(bgOpts)
 	bg.Start()
 
 	// Add the stub balancer build above as a child policy.

@@ -59,7 +59,14 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 	}
 
 	b.logger = prefixLogger(b)
-	b.bg = balancergroup.New(cc, bOpts, b, nil, b.logger)
+	bgOpts := &balancergroup.BalancerGroupOptions{
+		Cc:              cc,
+		BOpts:           bOpts,
+		StateAggregator: b,
+		LoadStore:       nil,
+		Logger:          b.logger,
+	}
+	b.bg = balancergroup.New(bgOpts)
 	b.bg.Start()
 	go b.run()
 	b.logger.Infof("Created")

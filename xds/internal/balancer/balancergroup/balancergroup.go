@@ -76,9 +76,9 @@ type subBalancerWrapper struct {
 // UpdateState overrides balancer.ClientConn, to keep state and picker.
 func (sbc *subBalancerWrapper) UpdateState(state balancer.State) {
 	sbc.mu.Lock()
+	defer sbc.mu.Unlock()
 	sbc.state = state
 	sbc.group.updateBalancerState(sbc.id, state)
-	sbc.mu.Unlock()
 }
 
 // NewSubConn overrides balancer.ClientConn, so balancer group can keep track of
@@ -89,10 +89,10 @@ func (sbc *subBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balance
 
 func (sbc *subBalancerWrapper) updateBalancerStateWithCachedPicker() {
 	sbc.mu.Lock()
+	defer sbc.mu.Unlock()
 	if sbc.state.Picker != nil {
 		sbc.group.updateBalancerState(sbc.id, sbc.state)
 	}
-	sbc.mu.Unlock()
 }
 
 func (sbc *subBalancerWrapper) startBalancer() {
@@ -252,18 +252,24 @@ type BalancerGroup struct {
 // TODO: make it a parameter for New().
 var DefaultSubBalancerCloseTimeout = 15 * time.Minute
 
+// BalancerGroupOptions pass an options' struct instead of N args.
+type BalancerGroupOptions struct {
+	Cc              balancer.ClientConn
+	BOpts           balancer.BuildOptions
+	StateAggregator BalancerStateAggregator
+	LoadStore       load.PerClusterReporter
+	Logger          *grpclog.PrefixLogger
+}
+
 // New creates a new BalancerGroup. Note that the BalancerGroup
 // needs to be started to work.
-//
-// TODO(easwars): Pass an options struct instead of N args.
-func New(cc balancer.ClientConn, bOpts balancer.BuildOptions, stateAggregator BalancerStateAggregator, loadStore load.PerClusterReporter, logger *grpclog.PrefixLogger) *BalancerGroup {
+func New(bgOpts *BalancerGroupOptions) *BalancerGroup {
 	return &BalancerGroup{
-		cc:        cc,
-		buildOpts: bOpts,
-		logger:    logger,
-		loadStore: loadStore,
-
-		stateAggregator: stateAggregator,
+		cc:              bgOpts.Cc,
+		buildOpts:       bgOpts.BOpts,
+		logger:          bgOpts.Logger,
+		loadStore:       bgOpts.LoadStore,
+		stateAggregator: bgOpts.StateAggregator,
 
 		idToBalancerConfig: make(map[string]*subBalancerWrapper),
 		balancerCache:      cache.NewTimeoutCache(DefaultSubBalancerCloseTimeout),
