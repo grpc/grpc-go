@@ -328,15 +328,13 @@ func (c *controlBuffer) put(it cbItem) error {
 func (c *controlBuffer) executeAndPut(f func(it interface{}) bool, it cbItem) (bool, error) {
 	var wakeUp bool
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.err != nil {
-		c.mu.Unlock()
 		return false, c.err
 	}
-	if f != nil {
-		if !f(it) { // f wasn't successful
-			c.mu.Unlock()
-			return false, nil
-		}
+	if f != nil && !f(it) {
+		// f wasn't successful
+		return false, nil
 	}
 	if c.consumerWaiting {
 		wakeUp = true
@@ -351,7 +349,6 @@ func (c *controlBuffer) executeAndPut(f func(it interface{}) bool, it cbItem) (b
 			c.trfChan.Store(make(chan struct{}))
 		}
 	}
-	c.mu.Unlock()
 	if wakeUp {
 		select {
 		case c.ch <- struct{}{}:
@@ -364,23 +361,21 @@ func (c *controlBuffer) executeAndPut(f func(it interface{}) bool, it cbItem) (b
 // Note argument f should never be nil.
 func (c *controlBuffer) execute(f func(it interface{}) bool, it interface{}) (bool, error) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.err != nil {
-		c.mu.Unlock()
 		return false, c.err
 	}
 	if !f(it) { // f wasn't successful
-		c.mu.Unlock()
 		return false, nil
 	}
-	c.mu.Unlock()
 	return true, nil
 }
 
 func (c *controlBuffer) get(block bool) (interface{}, error) {
+	defer c.mu.Unlock()
 	for {
 		c.mu.Lock()
 		if c.err != nil {
-			c.mu.Unlock()
 			return nil, c.err
 		}
 		if !c.list.isEmpty() {
@@ -395,15 +390,12 @@ func (c *controlBuffer) get(block bool) (interface{}, error) {
 				}
 				c.transportResponseFrames--
 			}
-			c.mu.Unlock()
 			return h, nil
 		}
 		if !block {
-			c.mu.Unlock()
 			return nil, nil
 		}
 		c.consumerWaiting = true
-		c.mu.Unlock()
 		select {
 		case <-c.ch:
 		case <-c.done:
@@ -414,8 +406,8 @@ func (c *controlBuffer) get(block bool) (interface{}, error) {
 
 func (c *controlBuffer) finish() {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.err != nil {
-		c.mu.Unlock()
 		return
 	}
 	c.err = ErrConnClosing
@@ -439,7 +431,6 @@ func (c *controlBuffer) finish() {
 		close(ch)
 	}
 	c.trfChan.Store((chan struct{})(nil))
-	c.mu.Unlock()
 }
 
 type side int
@@ -455,7 +446,7 @@ const (
 // stream maintains a queue of data frames; as loopy receives data frames
 // it gets added to the queue of the relevant stream.
 // Loopy goes over this list of active streams by processing one node every iteration,
-// thereby closely resemebling to a round-robin scheduling over all streams. While
+// thereby closely resembling to a round-robin scheduling over all streams. While
 // processing a stream, loopy writes out data bytes from this stream capped by the min
 // of http2MaxFrameLen, connection-level flow control and stream-level flow control.
 type loopyWriter struct {
@@ -542,7 +533,6 @@ func (l *loopyWriter) run() (err error) {
 			return err
 		}
 		gosched := true
-	hasdata:
 		for {
 			it, err := l.cbuf.get(false)
 			if err != nil {
@@ -555,25 +545,26 @@ func (l *loopyWriter) run() (err error) {
 				if _, err = l.processData(); err != nil {
 					return err
 				}
-				continue hasdata
+				continue
 			}
 			isEmpty, err := l.processData()
 			if err != nil {
 				return err
 			}
 			if !isEmpty {
-				continue hasdata
+				continue
 			}
 			if gosched {
 				gosched = false
 				if l.framer.writer.offset < minBatchSize {
 					runtime.Gosched()
-					continue hasdata
+					continue
 				}
 			}
-			l.framer.writer.Flush()
-			break hasdata
-
+			if err = l.framer.writer.Flush(); err != nil {
+				return err
+			}
+			break
 		}
 	}
 }
@@ -594,7 +585,6 @@ func (l *loopyWriter) incomingWindowUpdateHandler(w *incomingWindowUpdate) error
 		if strQuota := int(l.oiws) - str.bytesOutStanding; strQuota > 0 && str.state == waitingOnStreamQuota {
 			str.state = active
 			l.activeStreams.enqueue(str)
-			return nil
 		}
 	}
 	return nil
@@ -882,7 +872,7 @@ func (l *loopyWriter) processData() (bool, error) {
 	// multiple HTTP2 data frames.
 	// Every dataFrame has two buffers; h that keeps grpc-message header and d that is acutal data.
 	// As an optimization to keep wire traffic low, data from d is copied to h to make as big as the
-	// maximum possilbe HTTP2 frame size.
+	// maximum possible HTTP2 frame size.
 
 	if len(dataItem.h) == 0 && len(dataItem.d) == 0 { // Empty data frame
 		// Client sends out empty data frame with endStream = true
@@ -897,7 +887,7 @@ func (l *loopyWriter) processData() (bool, error) {
 				return false, err
 			}
 			if err := l.cleanupStreamHandler(trailer.cleanup); err != nil {
-				return false, nil
+				return false, err
 			}
 		} else {
 			l.activeStreams.enqueue(str)

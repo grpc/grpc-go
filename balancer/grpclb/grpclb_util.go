@@ -200,9 +200,9 @@ func (ccc *lbCacheClientConn) UpdateState(s balancer.State) {
 
 func (ccc *lbCacheClientConn) close() {
 	ccc.mu.Lock()
+	defer ccc.mu.Unlock()
 	// Only cancel all existing timers. There's no need to remove SubConns.
 	for _, entry := range ccc.subConnCache {
 		entry.cancel()
 	}
-	ccc.mu.Unlock()
 }

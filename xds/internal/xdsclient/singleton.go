@@ -157,8 +157,7 @@ func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout time.D
 func NewClientWithBootstrapContents(contents []byte) (XDSClient, error) {
 	// Normalize the contents
 	buf := bytes.Buffer{}
-	err := json.Indent(&buf, contents, "", "")
-	if err != nil {
+	if err := json.Indent(&buf, contents, "", ""); err != nil {
 		return nil, fmt.Errorf("xds: error normalizing JSON: %v", err)
 	}
 	contents = bytes.TrimSpace(buf.Bytes())
@@ -167,14 +166,13 @@ func NewClientWithBootstrapContents(contents []byte) (XDSClient, error) {
 	defer clientsMu.Unlock()
 	if c := clients[string(contents)]; c != nil {
 		c.mu.Lock()
+		defer c.mu.Unlock()
 		// Since we don't remove the *Client from the map when it is closed, we
 		// need to recreate the impl if the ref count dropped to zero.
 		if c.refCount > 0 {
 			c.refCount++
-			c.mu.Unlock()
 			return c, nil
 		}
-		c.mu.Unlock()
 	}
 
 	bcfg, err := bootstrap.NewConfigFromContents(contents)
