@@ -46,24 +46,22 @@ func RouteToMatcher(r *Route) (*CompositeMatcher, error) {
 	headerMatchers := make([]matcher.HeaderMatcher, 0, len(r.Headers))
 	for _, h := range r.Headers {
 		var matcherT matcher.HeaderMatcher
+		invert := h.InvertMatch != nil && *h.InvertMatch
 		switch {
 		case h.ExactMatch != nil && *h.ExactMatch != "":
-			matcherT = matcher.NewHeaderExactMatcher(h.Name, *h.ExactMatch)
+			matcherT = matcher.NewHeaderExactMatcher(h.Name, *h.ExactMatch, invert)
 		case h.RegexMatch != nil:
-			matcherT = matcher.NewHeaderRegexMatcher(h.Name, h.RegexMatch)
+			matcherT = matcher.NewHeaderRegexMatcher(h.Name, h.RegexMatch, invert)
 		case h.PrefixMatch != nil && *h.PrefixMatch != "":
-			matcherT = matcher.NewHeaderPrefixMatcher(h.Name, *h.PrefixMatch)
+			matcherT = matcher.NewHeaderPrefixMatcher(h.Name, *h.PrefixMatch, invert)
 		case h.SuffixMatch != nil && *h.SuffixMatch != "":
-			matcherT = matcher.NewHeaderSuffixMatcher(h.Name, *h.SuffixMatch)
+			matcherT = matcher.NewHeaderSuffixMatcher(h.Name, *h.SuffixMatch, invert)
 		case h.RangeMatch != nil:
-			matcherT = matcher.NewHeaderRangeMatcher(h.Name, h.RangeMatch.Start, h.RangeMatch.End)
+			matcherT = matcher.NewHeaderRangeMatcher(h.Name, h.RangeMatch.Start, h.RangeMatch.End, invert)
 		case h.PresentMatch != nil:
-			matcherT = matcher.NewHeaderPresentMatcher(h.Name, *h.PresentMatch)
+			matcherT = matcher.NewHeaderPresentMatcher(h.Name, *h.PresentMatch, invert)
 		default:
 			return nil, fmt.Errorf("illegal route: missing header_match_specifier")
-		}
-		if h.InvertMatch != nil && *h.InvertMatch {
-			matcherT = matcher.NewInvertMatcher(matcherT)
 		}
 		headerMatchers = append(headerMatchers, matcherT)
 	}
