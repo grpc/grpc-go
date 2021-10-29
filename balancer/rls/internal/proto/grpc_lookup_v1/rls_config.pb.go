@@ -486,6 +486,56 @@ func (x *RouteLookupConfig) GetDefaultTarget() string {
 	return ""
 }
 
+// RouteLookupClusterSpecifier is used in xDS to represent a cluster specifier
+// plugin for RLS.
+type RouteLookupClusterSpecifier struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	// The RLS config for this cluster specifier plugin instance.
+	RouteLookupConfig *RouteLookupConfig `protobuf:"bytes,1,opt,name=route_lookup_config,json=routeLookupConfig,proto3" json:"route_lookup_config,omitempty"`
+}
+
+func (x *RouteLookupClusterSpecifier) Reset() {
+	*x = RouteLookupClusterSpecifier{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_grpc_lookup_v1_rls_config_proto_msgTypes[4]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *RouteLookupClusterSpecifier) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RouteLookupClusterSpecifier) ProtoMessage() {}
+
+func (x *RouteLookupClusterSpecifier) ProtoReflect() protoreflect.Message {
+	mi := &file_grpc_lookup_v1_rls_config_proto_msgTypes[4]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RouteLookupClusterSpecifier.ProtoReflect.Descriptor instead.
+func (*RouteLookupClusterSpecifier) Descriptor() ([]byte, []int) {
+	return file_grpc_lookup_v1_rls_config_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *RouteLookupClusterSpecifier) GetRouteLookupConfig() *RouteLookupConfig {
+	if x != nil {
+		return x.RouteLookupConfig
+	}
+	return nil
+}
+
 // To match, one of the given Name fields must match; the service and method
 // fields are specified as fixed strings.  The service name is required and
 // includes the proto package name.  The method name may be omitted, in
@@ -502,7 +552,7 @@ type GrpcKeyBuilder_Name struct {
 func (x *GrpcKeyBuilder_Name) Reset() {
 	*x = GrpcKeyBuilder_Name{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_grpc_lookup_v1_rls_config_proto_msgTypes[4]
+		mi := &file_grpc_lookup_v1_rls_config_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -515,7 +565,7 @@ func (x *GrpcKeyBuilder_Name) String() string {
 func (*GrpcKeyBuilder_Name) ProtoMessage() {}
 
 func (x *GrpcKeyBuilder_Name) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_lookup_v1_rls_config_proto_msgTypes[4]
+	mi := &file_grpc_lookup_v1_rls_config_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -564,7 +614,7 @@ type GrpcKeyBuilder_ExtraKeys struct {
 func (x *GrpcKeyBuilder_ExtraKeys) Reset() {
 	*x = GrpcKeyBuilder_ExtraKeys{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_grpc_lookup_v1_rls_config_proto_msgTypes[5]
+		mi := &file_grpc_lookup_v1_rls_config_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -577,7 +627,7 @@ func (x *GrpcKeyBuilder_ExtraKeys) String() string {
 func (*GrpcKeyBuilder_ExtraKeys) ProtoMessage() {}
 
 func (x *GrpcKeyBuilder_ExtraKeys) ProtoReflect() protoreflect.Message {
-	mi := &file_grpc_lookup_v1_rls_config_proto_msgTypes[5]
+	mi := &file_grpc_lookup_v1_rls_config_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -716,13 +766,20 @@ var file_grpc_lookup_v1_rls_config_proto_rawDesc = []byte{
 	0x5f, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x18, 0x09, 0x20, 0x01, 0x28, 0x09, 0x52, 0x0d, 0x64,
 	0x65, 0x66, 0x61, 0x75, 0x6c, 0x74, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x4a, 0x04, 0x08, 0x0a,
 	0x10, 0x0b, 0x52, 0x1b, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x5f, 0x70, 0x72, 0x6f, 0x63,
-	0x65, 0x73, 0x73, 0x69, 0x6e, 0x67, 0x5f, 0x73, 0x74, 0x72, 0x61, 0x74, 0x65, 0x67, 0x79, 0x42,
-	0x53, 0x0a, 0x11, 0x69, 0x6f, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x6c, 0x6f, 0x6f, 0x6b, 0x75,
-	0x70, 0x2e, 0x76, 0x31, 0x42, 0x0e, 0x52, 0x6c, 0x73, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x50,
-	0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x2c, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65, 0x2e, 0x67,
-	0x6f, 0x6c, 0x61, 0x6e, 0x67, 0x2e, 0x6f, 0x72, 0x67, 0x2f, 0x67, 0x72, 0x70, 0x63, 0x2f, 0x6c,
-	0x6f, 0x6f, 0x6b, 0x75, 0x70, 0x2f, 0x67, 0x72, 0x70, 0x63, 0x5f, 0x6c, 0x6f, 0x6f, 0x6b, 0x75,
-	0x70, 0x5f, 0x76, 0x31, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x65, 0x73, 0x73, 0x69, 0x6e, 0x67, 0x5f, 0x73, 0x74, 0x72, 0x61, 0x74, 0x65, 0x67, 0x79, 0x22,
+	0x70, 0x0a, 0x1b, 0x52, 0x6f, 0x75, 0x74, 0x65, 0x4c, 0x6f, 0x6f, 0x6b, 0x75, 0x70, 0x43, 0x6c,
+	0x75, 0x73, 0x74, 0x65, 0x72, 0x53, 0x70, 0x65, 0x63, 0x69, 0x66, 0x69, 0x65, 0x72, 0x12, 0x51,
+	0x0a, 0x13, 0x72, 0x6f, 0x75, 0x74, 0x65, 0x5f, 0x6c, 0x6f, 0x6f, 0x6b, 0x75, 0x70, 0x5f, 0x63,
+	0x6f, 0x6e, 0x66, 0x69, 0x67, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x21, 0x2e, 0x67, 0x72,
+	0x70, 0x63, 0x2e, 0x6c, 0x6f, 0x6f, 0x6b, 0x75, 0x70, 0x2e, 0x76, 0x31, 0x2e, 0x52, 0x6f, 0x75,
+	0x74, 0x65, 0x4c, 0x6f, 0x6f, 0x6b, 0x75, 0x70, 0x43, 0x6f, 0x6e, 0x66, 0x69, 0x67, 0x52, 0x11,
+	0x72, 0x6f, 0x75, 0x74, 0x65, 0x4c, 0x6f, 0x6f, 0x6b, 0x75, 0x70, 0x43, 0x6f, 0x6e, 0x66, 0x69,
+	0x67, 0x42, 0x53, 0x0a, 0x11, 0x69, 0x6f, 0x2e, 0x67, 0x72, 0x70, 0x63, 0x2e, 0x6c, 0x6f, 0x6f,
+	0x6b, 0x75, 0x70, 0x2e, 0x76, 0x31, 0x42, 0x0e, 0x52, 0x6c, 0x73, 0x43, 0x6f, 0x6e, 0x66, 0x69,
+	0x67, 0x50, 0x72, 0x6f, 0x74, 0x6f, 0x50, 0x01, 0x5a, 0x2c, 0x67, 0x6f, 0x6f, 0x67, 0x6c, 0x65,
+	0x2e, 0x67, 0x6f, 0x6c, 0x61, 0x6e, 0x67, 0x2e, 0x6f, 0x72, 0x67, 0x2f, 0x67, 0x72, 0x70, 0x63,
+	0x2f, 0x6c, 0x6f, 0x6f, 0x6b, 0x75, 0x70, 0x2f, 0x67, 0x72, 0x70, 0x63, 0x5f, 0x6c, 0x6f, 0x6f,
+	0x6b, 0x75, 0x70, 0x5f, 0x76, 0x31, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -737,36 +794,38 @@ func file_grpc_lookup_v1_rls_config_proto_rawDescGZIP() []byte {
 	return file_grpc_lookup_v1_rls_config_proto_rawDescData
 }
 
-var file_grpc_lookup_v1_rls_config_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_grpc_lookup_v1_rls_config_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_grpc_lookup_v1_rls_config_proto_goTypes = []interface{}{
-	(*NameMatcher)(nil),              // 0: grpc.lookup.v1.NameMatcher
-	(*GrpcKeyBuilder)(nil),           // 1: grpc.lookup.v1.GrpcKeyBuilder
-	(*HttpKeyBuilder)(nil),           // 2: grpc.lookup.v1.HttpKeyBuilder
-	(*RouteLookupConfig)(nil),        // 3: grpc.lookup.v1.RouteLookupConfig
-	(*GrpcKeyBuilder_Name)(nil),      // 4: grpc.lookup.v1.GrpcKeyBuilder.Name
-	(*GrpcKeyBuilder_ExtraKeys)(nil), // 5: grpc.lookup.v1.GrpcKeyBuilder.ExtraKeys
-	nil,                              // 6: grpc.lookup.v1.GrpcKeyBuilder.ConstantKeysEntry
-	nil,                              // 7: grpc.lookup.v1.HttpKeyBuilder.ConstantKeysEntry
-	(*durationpb.Duration)(nil),      // 8: google.protobuf.Duration
+	(*NameMatcher)(nil),                 // 0: grpc.lookup.v1.NameMatcher
+	(*GrpcKeyBuilder)(nil),              // 1: grpc.lookup.v1.GrpcKeyBuilder
+	(*HttpKeyBuilder)(nil),              // 2: grpc.lookup.v1.HttpKeyBuilder
+	(*RouteLookupConfig)(nil),           // 3: grpc.lookup.v1.RouteLookupConfig
+	(*RouteLookupClusterSpecifier)(nil), // 4: grpc.lookup.v1.RouteLookupClusterSpecifier
+	(*GrpcKeyBuilder_Name)(nil),         // 5: grpc.lookup.v1.GrpcKeyBuilder.Name
+	(*GrpcKeyBuilder_ExtraKeys)(nil),    // 6: grpc.lookup.v1.GrpcKeyBuilder.ExtraKeys
+	nil,                                 // 7: grpc.lookup.v1.GrpcKeyBuilder.ConstantKeysEntry
+	nil,                                 // 8: grpc.lookup.v1.HttpKeyBuilder.ConstantKeysEntry
+	(*durationpb.Duration)(nil),         // 9: google.protobuf.Duration
 }
 var file_grpc_lookup_v1_rls_config_proto_depIdxs = []int32{
-	4,  // 0: grpc.lookup.v1.GrpcKeyBuilder.names:type_name -> grpc.lookup.v1.GrpcKeyBuilder.Name
-	5,  // 1: grpc.lookup.v1.GrpcKeyBuilder.extra_keys:type_name -> grpc.lookup.v1.GrpcKeyBuilder.ExtraKeys
+	5,  // 0: grpc.lookup.v1.GrpcKeyBuilder.names:type_name -> grpc.lookup.v1.GrpcKeyBuilder.Name
+	6,  // 1: grpc.lookup.v1.GrpcKeyBuilder.extra_keys:type_name -> grpc.lookup.v1.GrpcKeyBuilder.ExtraKeys
 	0,  // 2: grpc.lookup.v1.GrpcKeyBuilder.headers:type_name -> grpc.lookup.v1.NameMatcher
-	6,  // 3: grpc.lookup.v1.GrpcKeyBuilder.constant_keys:type_name -> grpc.lookup.v1.GrpcKeyBuilder.ConstantKeysEntry
+	7,  // 3: grpc.lookup.v1.GrpcKeyBuilder.constant_keys:type_name -> grpc.lookup.v1.GrpcKeyBuilder.ConstantKeysEntry
 	0,  // 4: grpc.lookup.v1.HttpKeyBuilder.query_parameters:type_name -> grpc.lookup.v1.NameMatcher
 	0,  // 5: grpc.lookup.v1.HttpKeyBuilder.headers:type_name -> grpc.lookup.v1.NameMatcher
-	7,  // 6: grpc.lookup.v1.HttpKeyBuilder.constant_keys:type_name -> grpc.lookup.v1.HttpKeyBuilder.ConstantKeysEntry
+	8,  // 6: grpc.lookup.v1.HttpKeyBuilder.constant_keys:type_name -> grpc.lookup.v1.HttpKeyBuilder.ConstantKeysEntry
 	2,  // 7: grpc.lookup.v1.RouteLookupConfig.http_keybuilders:type_name -> grpc.lookup.v1.HttpKeyBuilder
 	1,  // 8: grpc.lookup.v1.RouteLookupConfig.grpc_keybuilders:type_name -> grpc.lookup.v1.GrpcKeyBuilder
-	8,  // 9: grpc.lookup.v1.RouteLookupConfig.lookup_service_timeout:type_name -> google.protobuf.Duration
-	8,  // 10: grpc.lookup.v1.RouteLookupConfig.max_age:type_name -> google.protobuf.Duration
-	8,  // 11: grpc.lookup.v1.RouteLookupConfig.stale_age:type_name -> google.protobuf.Duration
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	9,  // 9: grpc.lookup.v1.RouteLookupConfig.lookup_service_timeout:type_name -> google.protobuf.Duration
+	9,  // 10: grpc.lookup.v1.RouteLookupConfig.max_age:type_name -> google.protobuf.Duration
+	9,  // 11: grpc.lookup.v1.RouteLookupConfig.stale_age:type_name -> google.protobuf.Duration
+	3,  // 12: grpc.lookup.v1.RouteLookupClusterSpecifier.route_lookup_config:type_name -> grpc.lookup.v1.RouteLookupConfig
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_grpc_lookup_v1_rls_config_proto_init() }
@@ -824,7 +883,7 @@ func file_grpc_lookup_v1_rls_config_proto_init() {
 			}
 		}
 		file_grpc_lookup_v1_rls_config_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*GrpcKeyBuilder_Name); i {
+			switch v := v.(*RouteLookupClusterSpecifier); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -836,6 +895,18 @@ func file_grpc_lookup_v1_rls_config_proto_init() {
 			}
 		}
 		file_grpc_lookup_v1_rls_config_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*GrpcKeyBuilder_Name); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_grpc_lookup_v1_rls_config_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*GrpcKeyBuilder_ExtraKeys); i {
 			case 0:
 				return &v.state
@@ -854,7 +925,7 @@ func file_grpc_lookup_v1_rls_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_grpc_lookup_v1_rls_config_proto_rawDesc,
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
