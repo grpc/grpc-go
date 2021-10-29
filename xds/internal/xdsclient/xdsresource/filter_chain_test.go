@@ -43,7 +43,7 @@ import (
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
-	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 const (

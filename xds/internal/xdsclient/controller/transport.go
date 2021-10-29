@@ -16,140 +16,23 @@
  *
  */
 
-package xdsclient
+package controller
 
 import (
 	"context"
-	"sync"
+	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc"
+	controllerversion "google.golang.org/grpc/xds/internal/xdsclient/controller/version"
+	xdsresourceversion "google.golang.org/grpc/xds/internal/xdsclient/controller/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/buffer"
-	"google.golang.org/grpc/internal/grpclog"
 )
 
-// ErrResourceTypeUnsupported is an error used to indicate an unsupported xDS
-// resource type. The wrapped ErrStr contains the details.
-type ErrResourceTypeUnsupported struct {
-	ErrStr string
-}
-
-// Error helps implements the error interface.
-func (e ErrResourceTypeUnsupported) Error() string {
-	return e.ErrStr
-}
-
-// VersionedClient is the interface to be provided by the transport protocol
-// specific client implementations. This mainly deals with the actual sending
-// and receiving of messages.
-type VersionedClient interface {
-	// NewStream returns a new xDS client stream specific to the underlying
-	// transport protocol version.
-	NewStream(ctx context.Context) (grpc.ClientStream, error)
-
-	// SendRequest constructs and sends out a DiscoveryRequest message specific
-	// to the underlying transport protocol version.
-	SendRequest(s grpc.ClientStream, resourceNames []string, rType xdsresource.ResourceType, version, nonce, errMsg string) error
-
-	// RecvResponse uses the provided stream to receive a response specific to
-	// the underlying transport protocol version.
-	RecvResponse(s grpc.ClientStream) (proto.Message, error)
-
-	// HandleResponse parses and validates the received response and notifies
-	// the top-level client which in turn notifies the registered watchers.
-	//
-	// Return values are: resourceType, version, nonce, error.
-	// If the provided protobuf message contains a resource type which is not
-	// supported, implementations must return an error of type
-	// ErrResourceTypeUnsupported.
-	HandleResponse(proto.Message) (xdsresource.ResourceType, string, string, error)
-
-	// NewLoadStatsStream returns a new LRS client stream specific to the underlying
-	// transport protocol version.
-	NewLoadStatsStream(ctx context.Context, cc *grpc.ClientConn) (grpc.ClientStream, error)
-
-	// SendFirstLoadStatsRequest constructs and sends the first request on the
-	// LRS stream.
-	SendFirstLoadStatsRequest(s grpc.ClientStream) error
-
-	// HandleLoadStatsResponse receives the first response from the server which
-	// contains the load reporting interval and the clusters for which the
-	// server asks the client to report load for.
-	//
-	// If the response sets SendAllClusters to true, the returned clusters is
-	// nil.
-	HandleLoadStatsResponse(s grpc.ClientStream) (clusters []string, _ time.Duration, _ error)
-
-	// SendLoadStatsRequest will be invoked at regular intervals to send load
-	// report with load data reported since the last time this method was
-	// invoked.
-	SendLoadStatsRequest(s grpc.ClientStream, loads []*load.Data) error
-}
-
-// TransportHelper contains all xDS transport protocol related functionality
-// which is common across different versioned client implementations.
-//
-// TransportHelper takes care of sending and receiving xDS requests and
-// responses on an ADS stream. It also takes care of ACK/NACK handling. It
-// delegates to the actual versioned client implementations wherever
-// appropriate.
-//
-// Implements the APIClient interface which makes it possible for versioned
-// client implementations to embed this type, and thereby satisfy the interface
-// requirements.
-type TransportHelper struct {
-	cancelCtx context.CancelFunc
-
-	vClient  VersionedClient
-	logger   *grpclog.PrefixLogger
-	backoff  func(int) time.Duration
-	streamCh chan grpc.ClientStream
-	sendCh   *buffer.Unbounded
-
-	mu sync.Mutex
-	// Message specific watch infos, protected by the above mutex. These are
-	// written to, after successfully reading from the update channel, and are
-	// read from when recovering from a broken stream to resend the xDS
-	// messages. When the user of this client object cancels a watch call,
-	// these are set to nil. All accesses to the map protected and any value
-	// inside the map should be protected with the above mutex.
-	watchMap map[xdsresource.ResourceType]map[string]bool
-	// versionMap contains the version that was acked (the version in the ack
-	// request that was sent on wire). The key is rType, the value is the
-	// version string, becaues the versions for different resource types should
-	// be independent.
-	versionMap map[xdsresource.ResourceType]string
-	// nonceMap contains the nonce from the most recent received response.
-	nonceMap map[xdsresource.ResourceType]string
-}
-
-// NewTransportHelper creates a new transport helper to be used by versioned
-// client implementations.
-func NewTransportHelper(vc VersionedClient, logger *grpclog.PrefixLogger, backoff func(int) time.Duration) *TransportHelper {
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	t := &TransportHelper{
-		cancelCtx: cancelCtx,
-		vClient:   vc,
-		logger:    logger,
-		backoff:   backoff,
-
-		streamCh:   make(chan grpc.ClientStream, 1),
-		sendCh:     buffer.NewUnbounded(),
-		watchMap:   make(map[xdsresource.ResourceType]map[string]bool),
-		versionMap: make(map[xdsresource.ResourceType]string),
-		nonceMap:   make(map[xdsresource.ResourceType]string),
-	}
-
-	go t.run(ctx)
-	return t
-}
-
 // AddWatch adds a watch for an xDS resource given its type and name.
-func (t *TransportHelper) AddWatch(rType xdsresource.ResourceType, resourceName string) {
+func (t *Controller) AddWatch(rType xdsresource.ResourceType, resourceName string) {
 	t.sendCh.Put(&watchAction{
 		rType:    rType,
 		remove:   false,
@@ -159,7 +42,7 @@ func (t *TransportHelper) AddWatch(rType xdsresource.ResourceType, resourceName 
 
 // RemoveWatch cancels an already registered watch for an xDS resource
 // given its type and name.
-func (t *TransportHelper) RemoveWatch(rType xdsresource.ResourceType, resourceName string) {
+func (t *Controller) RemoveWatch(rType xdsresource.ResourceType, resourceName string) {
 	t.sendCh.Put(&watchAction{
 		rType:    rType,
 		remove:   true,
@@ -167,15 +50,10 @@ func (t *TransportHelper) RemoveWatch(rType xdsresource.ResourceType, resourceNa
 	})
 }
 
-// Close closes the transport helper.
-func (t *TransportHelper) Close() {
-	t.cancelCtx()
-}
-
 // run starts an ADS stream (and backs off exponentially, if the previous
 // stream failed without receiving a single reply) and runs the sender and
 // receiver routines to send and receive data from the stream respectively.
-func (t *TransportHelper) run(ctx context.Context) {
+func (t *Controller) run(ctx context.Context) {
 	go t.send(ctx)
 	// TODO: start a goroutine monitoring ClientConn's connectivity state, and
 	// report error (and log) when stats is transient failure.
@@ -201,7 +79,7 @@ func (t *TransportHelper) run(ctx context.Context) {
 		}
 
 		retries++
-		stream, err := t.vClient.NewStream(ctx)
+		stream, err := t.vClient.NewStream(ctx, t.cc)
 		if err != nil {
 			t.logger.Warningf("xds: ADS stream creation failed: %v", err)
 			continue
@@ -235,7 +113,7 @@ func (t *TransportHelper) run(ctx context.Context) {
 // Note that this goroutine doesn't do anything to the old stream when there's a
 // new one. In fact, there should be only one stream in progress, and new one
 // should only be created when the old one fails (recv returns an error).
-func (t *TransportHelper) send(ctx context.Context) {
+func (t *Controller) send(ctx context.Context) {
 	var stream grpc.ClientStream
 	for {
 		select {
@@ -288,7 +166,7 @@ func (t *TransportHelper) send(ctx context.Context) {
 // that here because the stream has just started and Send() usually returns
 // quickly (once it pushes the message onto the transport layer) and is only
 // ever blocked if we don't have enough flow control quota.
-func (t *TransportHelper) sendExisting(stream grpc.ClientStream) bool {
+func (t *Controller) sendExisting(stream grpc.ClientStream) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -308,16 +186,19 @@ func (t *TransportHelper) sendExisting(stream grpc.ClientStream) bool {
 
 // recv receives xDS responses on the provided ADS stream and branches out to
 // message specific handlers.
-func (t *TransportHelper) recv(stream grpc.ClientStream) bool {
+func (t *Controller) recv(stream grpc.ClientStream) bool {
 	success := false
 	for {
 		resp, err := t.vClient.RecvResponse(stream)
 		if err != nil {
+			t.updateHandler.NewConnectionError(err)
 			t.logger.Warningf("ADS stream is closed with error: %v", err)
 			return success
 		}
-		rType, version, nonce, err := t.vClient.HandleResponse(resp)
-		if e, ok := err.(ErrResourceTypeUnsupported); ok {
+
+		rType, version, nonce, err := t.handleResponse(resp)
+
+		if e, ok := err.(xdsresourceversion.ErrResourceTypeUnsupported); ok {
 			t.logger.Warningf("%s", e.ErrStr)
 			continue
 		}
@@ -343,6 +224,43 @@ func (t *TransportHelper) recv(stream grpc.ClientStream) bool {
 	}
 }
 
+func (t *Controller) handleResponse(resp proto.Message) (xdsresource.ResourceType, string, string, error) {
+	rType, resource, version, nonce, err := t.vClient.ParseResponse(resp)
+	if err != nil {
+		return rType, version, nonce, err
+	}
+	opts := &xdsresource.UnmarshalOptions{
+		Version:         version,
+		Resources:       resource,
+		Logger:          t.logger,
+		UpdateValidator: t.updateValidator,
+	}
+	var md xdsresource.UpdateMetadata
+	switch rType {
+	case xdsresource.ListenerResource:
+		var update map[string]xdsresource.ListenerUpdateErrTuple
+		update, md, err = xdsresource.UnmarshalListener(opts)
+		t.updateHandler.NewListeners(update, md)
+	case xdsresource.RouteConfigResource:
+		var update map[string]xdsresource.RouteConfigUpdateErrTuple
+		update, md, err = xdsresource.UnmarshalRouteConfig(opts)
+		t.updateHandler.NewRouteConfigs(update, md)
+	case xdsresource.ClusterResource:
+		var update map[string]xdsresource.ClusterUpdateErrTuple
+		update, md, err = xdsresource.UnmarshalCluster(opts)
+		t.updateHandler.NewClusters(update, md)
+	case xdsresource.EndpointsResource:
+		var update map[string]xdsresource.EndpointsUpdateErrTuple
+		update, md, err = xdsresource.UnmarshalEndpoints(opts)
+		t.updateHandler.NewEndpoints(update, md)
+	default:
+		return rType, "", "", xdsresourceversion.ErrResourceTypeUnsupported{
+			ErrStr: fmt.Sprintf("Resource type %v unknown in response from server", rType),
+		}
+	}
+	return rType, version, nonce, err
+}
+
 func mapToSlice(m map[string]bool) []string {
 	ret := make([]string, 0, len(m))
 	for i := range m {
@@ -360,7 +278,7 @@ type watchAction struct {
 // processWatchInfo pulls the fields needed by the request from a watchAction.
 //
 // It also updates the watch map.
-func (t *TransportHelper) processWatchInfo(w *watchAction) (target []string, rType xdsresource.ResourceType, ver, nonce string) {
+func (t *Controller) processWatchInfo(w *watchAction) (target []string, rType xdsresource.ResourceType, ver, nonce string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -404,7 +322,7 @@ type ackAction struct {
 // processAckInfo pulls the fields needed by the ack request from a ackAction.
 //
 // If no active watch is found for this ack, it returns false for send.
-func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStream) (target []string, rType xdsresource.ResourceType, version, nonce string, send bool) {
+func (t *Controller) processAckInfo(ack *ackAction, stream grpc.ClientStream) (target []string, rType xdsresource.ResourceType, version, nonce string, send bool) {
 	if ack.stream != stream {
 		// If ACK's stream isn't the current sending stream, this means the ACK
 		// was pushed to queue before the old stream broke, and a new stream has
@@ -450,7 +368,7 @@ func (t *TransportHelper) processAckInfo(ack *ackAction, stream grpc.ClientStrea
 
 // reportLoad starts an LRS stream to report load data to the management server.
 // It blocks until the context is cancelled.
-func (t *TransportHelper) reportLoad(ctx context.Context, cc *grpc.ClientConn, opts loadReportingOptions) {
+func (t *Controller) reportLoad(ctx context.Context, cc *grpc.ClientConn, opts controllerversion.LoadReportingOptions) {
 	retries := 0
 	for {
 		if ctx.Err() != nil {
@@ -472,28 +390,28 @@ func (t *TransportHelper) reportLoad(ctx context.Context, cc *grpc.ClientConn, o
 		retries++
 		stream, err := t.vClient.NewLoadStatsStream(ctx, cc)
 		if err != nil {
-			logger.Warningf("lrs: failed to create stream: %v", err)
+			t.logger.Warningf("lrs: failed to create stream: %v", err)
 			continue
 		}
-		logger.Infof("lrs: created LRS stream")
+		t.logger.Infof("lrs: created LRS stream")
 
 		if err := t.vClient.SendFirstLoadStatsRequest(stream); err != nil {
-			logger.Warningf("lrs: failed to send first request: %v", err)
+			t.logger.Warningf("lrs: failed to send first request: %v", err)
 			continue
 		}
 
 		clusters, interval, err := t.vClient.HandleLoadStatsResponse(stream)
 		if err != nil {
-			logger.Warning(err)
+			t.logger.Warningf("%v", err)
 			continue
 		}
 
 		retries = 0
-		t.sendLoads(ctx, stream, opts.loadStore, clusters, interval)
+		t.sendLoads(ctx, stream, opts.LoadStore, clusters, interval)
 	}
 }
 
-func (t *TransportHelper) sendLoads(ctx context.Context, stream grpc.ClientStream, store *load.Store, clusterNames []string, interval time.Duration) {
+func (t *Controller) sendLoads(ctx context.Context, stream grpc.ClientStream, store *load.Store, clusterNames []string, interval time.Duration) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {
@@ -503,7 +421,7 @@ func (t *TransportHelper) sendLoads(ctx context.Context, stream grpc.ClientStrea
 			return
 		}
 		if err := t.vClient.SendLoadStatsRequest(stream, store.Stats(clusterNames)); err != nil {
-			logger.Warning(err)
+			t.logger.Warningf("%v", err)
 			return
 		}
 	}

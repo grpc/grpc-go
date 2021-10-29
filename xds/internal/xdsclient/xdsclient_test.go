@@ -26,10 +26,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // Register the v2 API client.
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+
+	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2" // Register the v2 API client.
 )
 
 type s struct {

@@ -35,7 +35,7 @@ import (
 // - an update for another resource name
 // - an update is received after cancel()
 func (s) TestClusterWatch(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -50,7 +50,7 @@ func (s) TestClusterWatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	clusterUpdateCh := testutils.NewChannel()
 	cancelWatch := client.WatchCluster(testCDSName, func(update xdsresource.ClusterUpdate, err error) {
@@ -92,7 +92,7 @@ func (s) TestClusterWatch(t *testing.T) {
 // TestClusterTwoWatchSameResourceName covers the case where an update is received
 // after two watch() for the same resource name.
 func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -107,7 +107,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	var clusterUpdateChs []*testutils.Channel
 	var cancelLastWatch func()
@@ -164,7 +164,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 // TestClusterThreeWatchDifferentResourceName covers the case where an update is
 // received after three watch() for different resource names.
 func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -179,7 +179,7 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	// Two watches for the same name.
 	var clusterUpdateChs []*testutils.Channel
@@ -229,7 +229,7 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 // TestClusterWatchAfterCache covers the case where watch is called after the update
 // is in cache.
 func (s) TestClusterWatchAfterCache(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -244,7 +244,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	clusterUpdateCh := testutils.NewChannel()
 	client.WatchCluster(testCDSName, func(update xdsresource.ClusterUpdate, err error) {
@@ -290,7 +290,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 // an CDS response for the request that it sends out. We want the watch callback
 // to be invoked with an error once the watchExpiryTimer fires.
 func (s) TestClusterWatchExpiryTimer(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, true))
@@ -305,7 +305,7 @@ func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	clusterUpdateCh := testutils.NewChannel()
 	client.WatchCluster(testCDSName, func(u xdsresource.ClusterUpdate, err error) {
@@ -329,7 +329,7 @@ func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 // an CDS response for the request that it sends out. We want no error even
 // after expiry timeout.
 func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, true))
@@ -344,7 +344,7 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	clusterUpdateCh := testutils.NewChannel()
 	client.WatchCluster(testCDSName, func(u xdsresource.ClusterUpdate, err error) {
@@ -377,7 +377,7 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 // - one more update without the removed resource
 //   - the callback (above) shouldn't receive any update
 func (s) TestClusterResourceRemoved(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -392,7 +392,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	clusterUpdateCh1 := testutils.NewChannel()
 	client.WatchCluster(testCDSName+"1", func(update xdsresource.ClusterUpdate, err error) {
@@ -460,7 +460,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 // TestClusterWatchNACKError covers the case that an update is NACK'ed, and the
 // watcher should also receive the error.
 func (s) TestClusterWatchNACKError(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -475,7 +475,7 @@ func (s) TestClusterWatchNACKError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	clusterUpdateCh := testutils.NewChannel()
 	cancelWatch := client.WatchCluster(testCDSName, func(update xdsresource.ClusterUpdate, err error) {
@@ -500,7 +500,7 @@ func (s) TestClusterWatchNACKError(t *testing.T) {
 // But the watchers with valid resources should receive the update, those with
 // invalida resources should receive an error.
 func (s) TestClusterWatchPartialValid(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -515,7 +515,7 @@ func (s) TestClusterWatchPartialValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	const badResourceName = "bad-resource"
 	updateChs := make(map[string]*testutils.Channel)

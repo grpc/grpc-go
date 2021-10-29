@@ -32,7 +32,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 func (s) TestEDSParseRespProto(t *testing.T) {

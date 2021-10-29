@@ -29,11 +29,11 @@ import (
 func (c *clientImpl) WatchListener(serviceName string, cb func(xdsresource.ListenerUpdate, error)) (cancel func()) {
 	first, cancelF := c.pubsub.WatchListener(serviceName, cb)
 	if first {
-		c.apiClient.AddWatch(xdsresource.ListenerResource, serviceName)
+		c.controller.AddWatch(xdsresource.ListenerResource, serviceName)
 	}
 	return func() {
 		if cancelF() {
-			c.apiClient.RemoveWatch(xdsresource.ListenerResource, serviceName)
+			c.controller.RemoveWatch(xdsresource.ListenerResource, serviceName)
 		}
 	}
 }
@@ -46,11 +46,11 @@ func (c *clientImpl) WatchListener(serviceName string, cb func(xdsresource.Liste
 func (c *clientImpl) WatchRouteConfig(routeName string, cb func(xdsresource.RouteConfigUpdate, error)) (cancel func()) {
 	first, cancelF := c.pubsub.WatchRouteConfig(routeName, cb)
 	if first {
-		c.apiClient.AddWatch(xdsresource.RouteConfigResource, routeName)
+		c.controller.AddWatch(xdsresource.RouteConfigResource, routeName)
 	}
 	return func() {
 		if cancelF() {
-			c.apiClient.RemoveWatch(xdsresource.RouteConfigResource, routeName)
+			c.controller.RemoveWatch(xdsresource.RouteConfigResource, routeName)
 		}
 	}
 }
@@ -67,11 +67,11 @@ func (c *clientImpl) WatchRouteConfig(routeName string, cb func(xdsresource.Rout
 func (c *clientImpl) WatchCluster(clusterName string, cb func(xdsresource.ClusterUpdate, error)) (cancel func()) {
 	first, cancelF := c.pubsub.WatchCluster(clusterName, cb)
 	if first {
-		c.apiClient.AddWatch(xdsresource.ClusterResource, clusterName)
+		c.controller.AddWatch(xdsresource.ClusterResource, clusterName)
 	}
 	return func() {
 		if cancelF() {
-			c.apiClient.RemoveWatch(xdsresource.ClusterResource, clusterName)
+			c.controller.RemoveWatch(xdsresource.ClusterResource, clusterName)
 		}
 	}
 }
@@ -87,11 +87,11 @@ func (c *clientImpl) WatchCluster(clusterName string, cb func(xdsresource.Cluste
 func (c *clientImpl) WatchEndpoints(clusterName string, cb func(xdsresource.EndpointsUpdate, error)) (cancel func()) {
 	first, cancelF := c.pubsub.WatchEndpoints(clusterName, cb)
 	if first {
-		c.apiClient.AddWatch(xdsresource.EndpointsResource, clusterName)
+		c.controller.AddWatch(xdsresource.EndpointsResource, clusterName)
 	}
 	return func() {
 		if cancelF() {
-			c.apiClient.RemoveWatch(xdsresource.EndpointsResource, clusterName)
+			c.controller.RemoveWatch(xdsresource.EndpointsResource, clusterName)
 		}
 	}
 }

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package v2
+package controller
 
 import (
 	"context"
@@ -28,12 +28,11 @@ import (
 	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
-	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 const (
@@ -41,12 +40,12 @@ const (
 	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
-func startXDSV2Client(t *testing.T, cc *grpc.ClientConn) (v2c *client, cbLDS, cbRDS, cbCDS, cbEDS *testutils.Channel, cleanup func()) {
+func startXDSV2Client(t *testing.T, controlPlaneAddr string) (v2c *Controller, cbLDS, cbRDS, cbCDS, cbEDS *testutils.Channel, cleanup func()) {
 	cbLDS = testutils.NewChannel()
 	cbRDS = testutils.NewChannel()
 	cbCDS = testutils.NewChannel()
 	cbEDS = testutils.NewChannel()
-	v2c, err := newV2Client(&testUpdateReceiver{
+	v2c, err := newTestController(&testUpdateReceiver{
 		f: func(rType xdsresource.ResourceType, d map[string]interface{}, md xdsresource.UpdateMetadata) {
 			t.Logf("Received %v callback with {%+v}", rType, d)
 			switch rType {
@@ -68,7 +67,7 @@ func startXDSV2Client(t *testing.T, cc *grpc.ClientConn) (v2c *client, cbLDS, cb
 				}
 			}
 		},
-	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	}, controlPlaneAddr, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +116,7 @@ func sendXDSRespWithVersion(ch chan<- *fakeserver.Response, respWithoutVersion *
 
 // startXDS calls watch to send the first request. It then sends a good response
 // and checks for ack.
-func startXDS(ctx context.Context, t *testing.T, rType xdsresource.ResourceType, v2c *client, reqChan *testutils.Channel, req *xdspb.DiscoveryRequest, preVersion string, preNonce string) {
+func startXDS(ctx context.Context, t *testing.T, rType xdsresource.ResourceType, v2c *Controller, reqChan *testutils.Channel, req *xdspb.DiscoveryRequest, preVersion string, preNonce string) {
 	nameToWatch := ""
 	switch rType {
 	case xdsresource.ListenerResource:
@@ -198,10 +197,10 @@ func (s) TestV2ClientAck(t *testing.T) {
 		versionEDS = 4000
 	)
 
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	fakeServer, cleanup := startServer(t)
 	defer cleanup()
 
-	v2c, cbLDS, cbRDS, cbCDS, cbEDS, v2cCleanup := startXDSV2Client(t, cc)
+	v2c, cbLDS, cbRDS, cbCDS, cbEDS, v2cCleanup := startXDSV2Client(t, fakeServer.Address)
 	defer v2cCleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -271,10 +270,10 @@ func (s) TestV2ClientAck(t *testing.T) {
 func (s) TestV2ClientAckFirstIsNack(t *testing.T) {
 	var versionLDS = 1000
 
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	fakeServer, cleanup := startServer(t)
 	defer cleanup()
 
-	v2c, cbLDS, _, _, _, v2cCleanup := startXDSV2Client(t, cc)
+	v2c, cbLDS, _, _, _, v2cCleanup := startXDSV2Client(t, fakeServer.Address)
 	defer v2cCleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -306,10 +305,10 @@ func (s) TestV2ClientAckFirstIsNack(t *testing.T) {
 func (s) TestV2ClientAckNackAfterNewWatch(t *testing.T) {
 	var versionLDS = 1000
 
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	fakeServer, cleanup := startServer(t)
 	defer cleanup()
 
-	v2c, cbLDS, _, _, _, v2cCleanup := startXDSV2Client(t, cc)
+	v2c, cbLDS, _, _, _, v2cCleanup := startXDSV2Client(t, fakeServer.Address)
 	defer v2cCleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -351,10 +350,10 @@ func (s) TestV2ClientAckNackAfterNewWatch(t *testing.T) {
 func (s) TestV2ClientAckNewWatchAfterCancel(t *testing.T) {
 	var versionCDS = 3000
 
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	fakeServer, cleanup := startServer(t)
 	defer cleanup()
 
-	v2c, _, _, cbCDS, _, v2cCleanup := startXDSV2Client(t, cc)
+	v2c, _, _, cbCDS, _, v2cCleanup := startXDSV2Client(t, fakeServer.Address)
 	defer v2cCleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -409,10 +408,10 @@ func (s) TestV2ClientAckNewWatchAfterCancel(t *testing.T) {
 func (s) TestV2ClientAckCancelResponseRace(t *testing.T) {
 	var versionCDS = 3000
 
-	fakeServer, cc, cleanup := startServerAndGetCC(t)
+	fakeServer, cleanup := startServer(t)
 	defer cleanup()
 
-	v2c, _, _, cbCDS, _, v2cCleanup := startXDSV2Client(t, cc)
+	v2c, _, _, cbCDS, _, v2cCleanup := startXDSV2Client(t, fakeServer.Address)
 	defer v2cCleanup()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

@@ -16,7 +16,7 @@
  *
  */
 
-package v2
+package controller
 
 import (
 	"testing"
@@ -28,8 +28,8 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
 	xtestutils "google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 var (
@@ -179,22 +179,22 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 // TestEDSHandleResponseWithoutWatch tests the case where the v2Client
 // receives an EDS response without a registered EDS watcher.
 func (s) TestEDSHandleResponseWithoutWatch(t *testing.T) {
-	_, cc, cleanup := startServerAndGetCC(t)
+	fakeServer, cleanup := startServer(t)
 	defer cleanup()
 
-	v2c, err := newV2Client(&testUpdateReceiver{
+	v2c, err := newTestController(&testUpdateReceiver{
 		f: func(xdsresource.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) {},
-	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	}, fakeServer.Address, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer v2c.Close()
 
-	if v2c.handleEDSResponse(badResourceTypeInEDSResponse) == nil {
+	if _, _, _, err := v2c.handleResponse(badResourceTypeInEDSResponse); err == nil {
 		t.Fatal("v2c.handleEDSResponse() succeeded, should have failed")
 	}
 
-	if v2c.handleEDSResponse(goodEDSResponse1) != nil {
+	if _, _, _, err := v2c.handleResponse(goodEDSResponse1); err != nil {
 		t.Fatal("v2c.handleEDSResponse() succeeded, should have failed")
 	}
 }

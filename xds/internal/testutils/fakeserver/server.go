@@ -20,7 +20,6 @@
 package fakeserver
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"net"
@@ -29,7 +28,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
 
@@ -132,18 +130,6 @@ func StartServer() (*Server, func(), error) {
 	go server.Serve(wp)
 
 	return s, func() { server.Stop() }, nil
-}
-
-// XDSClientConn returns a grpc.ClientConn connected to the fakeServer.
-func (xdsS *Server) XDSClientConn() (*grpc.ClientConn, func(), error) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultDialTimeout)
-	defer cancel()
-
-	cc, err := grpc.DialContext(ctx, xdsS.Address, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
-	if err != nil {
-		return nil, nil, fmt.Errorf("grpc.DialContext(%s) failed: %v", xdsS.Address, err)
-	}
-	return cc, func() { cc.Close() }, nil
 }
 
 type xdsServer struct {
