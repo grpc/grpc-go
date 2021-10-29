@@ -20,6 +20,7 @@ package codes
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"testing"
 
@@ -89,5 +90,26 @@ func (s) TestUnmarshalJSON_MarshalUnmarshal(t *testing.T) {
 		if c != cUnMarshaled {
 			t.Errorf("code is %q after marshalling/unmarshalling, expected %q", cUnMarshaled, c)
 		}
+	}
+}
+
+func TestWellDefinedString(t *testing.T) {
+	for _, test := range []struct {
+		code Code
+		want string
+	}{
+		// We don't exhaustively re-test the completeness of the table in the
+		// WellDefinedString implementation itself. Rather, we check the zero
+		// value OK (zeroes are always worth some attention), a non-zero but
+		// defined code, and a code not yet known to this library.
+		{OK, "OK"},
+		{PermissionDenied, "PERMISSION_DENIED"},
+		{Code(uint32(4242)), "CODE(4242)"},
+	} {
+		t.Run(fmt.Sprintf("code_%d", test.code), func(t *testing.T) {
+			if got := test.code.WellDefinedString(); got != test.want {
+				t.Errorf("wanted %q but got %q", test.want, got)
+			}
+		})
 	}
 }

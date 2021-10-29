@@ -60,3 +60,50 @@ func (c Code) String() string {
 		return "Code(" + strconv.FormatInt(int64(c), 10) + ")"
 	}
 }
+
+// WellDefinedString returns the name given for c in the GRPC Core
+// documentation. Unlike the String method, which returns a value corresponding
+// to the Go constant corresponding to c, this method returns the form used in
+// the definition of GRPC codes.
+//
+// See https://grpc.github.io/grpc/core/md_doc_statuscodes.html
+func (c Code) WellDefinedString() string {
+	switch c {
+	case OK:
+		return "OK"
+	case Canceled:
+		return "CANCELLED"
+	case Unknown:
+		return "UNKNOWN"
+	case InvalidArgument:
+		return "INVALID_ARGUMENT"
+	case DeadlineExceeded:
+		return "DEADLINE_EXCEEDED"
+	case NotFound:
+		return "NOT_FOUND"
+	case AlreadyExists:
+		return "ALREADY_EXISTS"
+	case PermissionDenied:
+		return "PERMISSION_DENIED"
+	case ResourceExhausted:
+		return "RESOURCE_EXHAUSTED"
+	case FailedPrecondition:
+		return "FAILED_PRECONDITION"
+	case Aborted:
+		return "ABORTED"
+	case OutOfRange:
+		return "OUT_OF_RANGE"
+	case Unimplemented:
+		return "UNIMPLEMENTED"
+	case Internal:
+		return "INTERNAL"
+	case Unavailable:
+		return "UNAVAILABLE"
+	case DataLoss:
+		return "DATA_LOSS"
+	case Unauthenticated:
+		return "UNAUTHENTICATED"
+	default:
+		return "CODE(" + strconv.FormatInt(int64(c), 10) + ")"
+	}
+}
