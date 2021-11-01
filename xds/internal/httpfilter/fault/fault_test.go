@@ -42,7 +42,6 @@ import (
 	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	xtestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
@@ -122,9 +121,9 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	testpb.RegisterTestServiceServer(server, &testService{})
 
 	// Create a local listener and pass it to Serve().
-	lis, err := xtestutils.LocalTCPListener()
+	lis, err := testutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("xtestutils.LocalTCPListener() failed: %v", err)
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 
 	go func() {
