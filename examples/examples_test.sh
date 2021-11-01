@@ -138,13 +138,6 @@ for example in ${EXAMPLES[@]}; do
         pass "successfully built server"
     fi
 
-    # Build client
-    if ! go build -o /dev/null ./${example}/*client/*.go; then
-        fail "failed to build client"
-    else
-        pass "successfully built client"
-    fi
-
     # Start server
     SERVER_LOG="$(mktemp)"
     server_args=${SERVER_ARGS[$example]:-${SERVER_ARGS["default"]}}
@@ -152,6 +145,14 @@ for example in ${EXAMPLES[@]}; do
 
     wait_for_server $example
 
+    # Build client
+    if ! go build -o /dev/null ./${example}/*client/*.go; then
+        fail "failed to build client"
+    else
+        pass "successfully built client"
+    fi
+
+    # Start client
     CLIENT_LOG="$(mktemp)"
     client_args=${CLIENT_ARGS[$example]:-${CLIENT_ARGS["default"]}}
     if ! timeout 20 go run ${example}/*client/*.go $client_args &> $CLIENT_LOG; then
