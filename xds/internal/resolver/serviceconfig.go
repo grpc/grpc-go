@@ -40,7 +40,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 const (
@@ -109,7 +109,7 @@ type virtualHost struct {
 	// map from filter name to its config
 	httpFilterConfigOverride map[string]httpfilter.FilterConfig
 	// retry policy present in virtual host
-	retryConfig *resource.RetryConfig
+	retryConfig *xdsresource.RetryConfig
 }
 
 // routeCluster holds information about a cluster as referenced by a route.
@@ -120,13 +120,13 @@ type routeCluster struct {
 }
 
 type route struct {
-	m                 *resource.CompositeMatcher // converted from route matchers
-	clusters          wrr.WRR                    // holds *routeCluster entries
+	m                 *xdsresource.CompositeMatcher // converted from route matchers
+	clusters          wrr.WRR                       // holds *routeCluster entries
 	maxStreamDuration time.Duration
 	// map from filter name to its config
 	httpFilterConfigOverride map[string]httpfilter.FilterConfig
-	retryConfig              *resource.RetryConfig
-	hashPolicies             []*resource.HashPolicy
+	retryConfig              *xdsresource.RetryConfig
+	hashPolicies             []*xdsresource.HashPolicy
 }
 
 func (r route) String() string {
@@ -138,7 +138,7 @@ type configSelector struct {
 	virtualHost      virtualHost
 	routes           []route
 	clusters         map[string]*clusterInfo
-	httpFilterConfig []resource.HTTPFilter
+	httpFilterConfig []xdsresource.HTTPFilter
 }
 
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
@@ -208,7 +208,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	return config, nil
 }
 
-func retryConfigToPolicy(config *resource.RetryConfig) *serviceconfig.RetryPolicy {
+func retryConfigToPolicy(config *xdsresource.RetryConfig) *serviceconfig.RetryPolicy {
 	return &serviceconfig.RetryPolicy{
 		MaxAttempts:          int(config.NumRetries) + 1,
 		InitialBackoff:       config.RetryBackoff.BaseInterval,
@@ -218,14 +218,14 @@ func retryConfigToPolicy(config *resource.RetryConfig) *serviceconfig.RetryPolic
 	}
 }
 
-func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies []*resource.HashPolicy) uint64 {
+func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies []*xdsresource.HashPolicy) uint64 {
 	var hash uint64
 	var generatedHash bool
 	for _, policy := range hashPolicies {
 		var policyHash uint64
 		var generatedPolicyHash bool
 		switch policy.HashPolicyType {
-		case resource.HashPolicyTypeHeader:
+		case xdsresource.HashPolicyTypeHeader:
 			md, ok := metadata.FromOutgoingContext(rpcInfo.Context)
 			if !ok {
 				continue
@@ -242,7 +242,7 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 			policyHash = xxhash.Sum64String(joinedValues)
 			generatedHash = true
 			generatedPolicyHash = true
-		case resource.HashPolicyTypeChannelID:
+		case xdsresource.HashPolicyTypeChannelID:
 			// Hash the ClientConn pointer which logically uniquely
 			// identifies the client.
 			policyHash = xxhash.Sum64String(fmt.Sprintf("%p", &cs.r.cc))
@@ -372,7 +372,7 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 		cs.routes[i].clusters = clusters
 
 		var err error
-		cs.routes[i].m, err = resource.RouteToMatcher(rt)
+		cs.routes[i].m, err = xdsresource.RouteToMatcher(rt)
 		if err != nil {
 			return nil, err
 		}

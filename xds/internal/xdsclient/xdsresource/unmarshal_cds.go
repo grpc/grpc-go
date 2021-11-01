@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package resource
+package xdsresource
 
 import (
 	"errors"

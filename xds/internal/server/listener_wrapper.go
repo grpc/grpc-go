@@ -38,7 +38,7 @@ import (
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 var (
@@ -74,8 +74,8 @@ func prefixLogger(p *listenerWrapper) *internalgrpclog.PrefixLogger {
 // XDSClient wraps the methods on the XDSClient which are required by
 // the listenerWrapper.
 type XDSClient interface {
-	WatchListener(string, func(resource.ListenerUpdate, error)) func()
-	WatchRouteConfig(string, func(resource.RouteConfigUpdate, error)) func()
+	WatchListener(string, func(xdsresource.ListenerUpdate, error)) func()
+	WatchRouteConfig(string, func(xdsresource.RouteConfigUpdate, error)) func()
 	BootstrapConfig() *bootstrap.Config
 }
 
@@ -137,7 +137,7 @@ func NewListenerWrapper(params ListenerWrapperParams) (net.Listener, <-chan stru
 }
 
 type ldsUpdateWithError struct {
-	update resource.ListenerUpdate
+	update xdsresource.ListenerUpdate
 	err    error
 }
 
@@ -183,7 +183,7 @@ type listenerWrapper struct {
 	// Current serving mode.
 	mode connectivity.ServingMode
 	// Filter chains received as part of the last good update.
-	filterChains *resource.FilterChainManager
+	filterChains *xdsresource.FilterChainManager
 
 	// rdsHandler is used for any dynamic RDS resources specified in a LDS
 	// update.
@@ -251,7 +251,7 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			conn.Close()
 			continue
 		}
-		fc, err := l.filterChains.Lookup(resource.FilterChainLookupParams{
+		fc, err := l.filterChains.Lookup(xdsresource.FilterChainLookupParams{
 			IsUnspecifiedListener: l.isUnspecifiedAddr,
 			DestAddr:              destAddr.IP,
 			SourceAddr:            srcAddr.IP,
@@ -277,12 +277,12 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		if !env.RBACSupport {
 			return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
 		}
-		var rc resource.RouteConfigUpdate
+		var rc xdsresource.RouteConfigUpdate
 		if fc.InlineRouteConfig != nil {
 			rc = *fc.InlineRouteConfig
 		} else {
 			rcPtr := atomic.LoadPointer(&l.rdsUpdates)
-			rcuPtr := (*map[string]resource.RouteConfigUpdate)(rcPtr)
+			rcuPtr := (*map[string]xdsresource.RouteConfigUpdate)(rcPtr)
 			// This shouldn't happen, but this error protects against a panic.
 			if rcuPtr == nil {
 				return nil, errors.New("route configuration pointer is nil")
@@ -341,7 +341,7 @@ func (l *listenerWrapper) run() {
 // handleLDSUpdate is the callback which handles LDS Updates. It writes the
 // received update to the update channel, which is picked up by the run
 // goroutine.
-func (l *listenerWrapper) handleListenerUpdate(update resource.ListenerUpdate, err error) {
+func (l *listenerWrapper) handleListenerUpdate(update xdsresource.ListenerUpdate, err error) {
 	if l.closed.HasFired() {
 		l.logger.Warningf("Resource %q received update: %v with error: %v, after listener was closed", l.name, update, err)
 		return
@@ -430,7 +430,7 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	}
 }
 
-func (l *listenerWrapper) switchMode(fcs *resource.FilterChainManager, newMode connectivity.ServingMode, err error) {
+func (l *listenerWrapper) switchMode(fcs *xdsresource.FilterChainManager, newMode connectivity.ServingMode, err error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

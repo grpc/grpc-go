@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -94,7 +94,7 @@ type client struct {
 	// ClientConn to the xDS gRPC server. Owned by the parent xdsClient.
 	cc              *grpc.ClientConn
 	nodeProto       *v2corepb.Node
-	updateValidator resource.UpdateValidatorFunc
+	updateValidator xdsresource.UpdateValidatorFunc
 }
 
 func (v2c *client) NewStream(ctx context.Context) (grpc.ClientStream, error) {
@@ -165,16 +165,16 @@ func (v2c *client) HandleResponse(r proto.Message) (xdsclient.ResourceType, stri
 	var err error
 	url := resp.GetTypeUrl()
 	switch {
-	case resource.IsListenerResource(url):
+	case xdsresource.IsListenerResource(url):
 		err = v2c.handleLDSResponse(resp)
 		rType = xdsclient.ListenerResource
-	case resource.IsRouteConfigResource(url):
+	case xdsresource.IsRouteConfigResource(url):
 		err = v2c.handleRDSResponse(resp)
 		rType = xdsclient.RouteConfigResource
-	case resource.IsClusterResource(url):
+	case xdsresource.IsClusterResource(url):
 		err = v2c.handleCDSResponse(resp)
 		rType = xdsclient.ClusterResource
-	case resource.IsEndpointsResource(url):
+	case xdsresource.IsEndpointsResource(url):
 		err = v2c.handleEDSResponse(resp)
 		rType = xdsclient.EndpointsResource
 	default:
@@ -189,7 +189,7 @@ func (v2c *client) HandleResponse(r proto.Message) (xdsclient.ResourceType, stri
 // server. On receipt of a good response, it also invokes the registered watcher
 // callback.
 func (v2c *client) handleLDSResponse(resp *v2xdspb.DiscoveryResponse) error {
-	update, md, err := resource.UnmarshalListener(&resource.UnmarshalOptions{
+	update, md, err := xdsresource.UnmarshalListener(&xdsresource.UnmarshalOptions{
 		Version:         resp.GetVersionInfo(),
 		Resources:       resp.GetResources(),
 		Logger:          v2c.logger,
@@ -203,7 +203,7 @@ func (v2c *client) handleLDSResponse(resp *v2xdspb.DiscoveryResponse) error {
 // server. On receipt of a good response, it caches validated resources and also
 // invokes the registered watcher callback.
 func (v2c *client) handleRDSResponse(resp *v2xdspb.DiscoveryResponse) error {
-	update, md, err := resource.UnmarshalRouteConfig(&resource.UnmarshalOptions{
+	update, md, err := xdsresource.UnmarshalRouteConfig(&xdsresource.UnmarshalOptions{
 		Version:         resp.GetVersionInfo(),
 		Resources:       resp.GetResources(),
 		Logger:          v2c.logger,
@@ -217,7 +217,7 @@ func (v2c *client) handleRDSResponse(resp *v2xdspb.DiscoveryResponse) error {
 // server. On receipt of a good response, it also invokes the registered watcher
 // callback.
 func (v2c *client) handleCDSResponse(resp *v2xdspb.DiscoveryResponse) error {
-	update, md, err := resource.UnmarshalCluster(&resource.UnmarshalOptions{
+	update, md, err := xdsresource.UnmarshalCluster(&xdsresource.UnmarshalOptions{
 		Version:         resp.GetVersionInfo(),
 		Resources:       resp.GetResources(),
 		Logger:          v2c.logger,
@@ -228,7 +228,7 @@ func (v2c *client) handleCDSResponse(resp *v2xdspb.DiscoveryResponse) error {
 }
 
 func (v2c *client) handleEDSResponse(resp *v2xdspb.DiscoveryResponse) error {
-	update, md, err := resource.UnmarshalEndpoints(&resource.UnmarshalOptions{
+	update, md, err := xdsresource.UnmarshalEndpoints(&xdsresource.UnmarshalOptions{
 		Version:         resp.GetVersionInfo(),
 		Resources:       resp.GetResources(),
 		Logger:          v2c.logger,

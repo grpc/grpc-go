@@ -26,7 +26,7 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 // serviceUpdate contains information received from the LDS/RDS responses which
@@ -34,7 +34,7 @@ import (
 // making a LDS to get the RouteConfig name.
 type serviceUpdate struct {
 	// virtualHost contains routes and other configuration to route RPCs.
-	virtualHost *resource.VirtualHost
+	virtualHost *xdsresource.VirtualHost
 	// ldsConfig contains configuration that applies to all routes.
 	ldsConfig ldsConfig
 }
@@ -45,7 +45,7 @@ type ldsConfig struct {
 	// maxStreamDuration is from the HTTP connection manager's
 	// common_http_protocol_options field.
 	maxStreamDuration time.Duration
-	httpFilterConfig  []resource.HTTPFilter
+	httpFilterConfig  []xdsresource.HTTPFilter
 }
 
 // watchService uses LDS and RDS to discover information about the provided
@@ -82,7 +82,7 @@ type serviceUpdateWatcher struct {
 	rdsCancel func()
 }
 
-func (w *serviceUpdateWatcher) handleLDSResp(update resource.ListenerUpdate, err error) {
+func (w *serviceUpdateWatcher) handleLDSResp(update xdsresource.ListenerUpdate, err error) {
 	w.logger.Infof("received LDS update: %+v, err: %v", pretty.ToJSON(update), err)
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -151,8 +151,8 @@ func (w *serviceUpdateWatcher) handleLDSResp(update resource.ListenerUpdate, err
 	w.rdsCancel = w.c.WatchRouteConfig(update.RouteConfigName, w.handleRDSResp)
 }
 
-func (w *serviceUpdateWatcher) updateVirtualHostsFromRDS(update resource.RouteConfigUpdate) {
-	matchVh := resource.FindBestMatchingVirtualHost(w.serviceName, update.VirtualHosts)
+func (w *serviceUpdateWatcher) updateVirtualHostsFromRDS(update xdsresource.RouteConfigUpdate) {
+	matchVh := xdsresource.FindBestMatchingVirtualHost(w.serviceName, update.VirtualHosts)
 	if matchVh == nil {
 		// No matching virtual host found.
 		w.serviceCb(serviceUpdate{}, fmt.Errorf("no matching virtual host found for %q", w.serviceName))
@@ -163,7 +163,7 @@ func (w *serviceUpdateWatcher) updateVirtualHostsFromRDS(update resource.RouteCo
 	w.serviceCb(w.lastUpdate, nil)
 }
 
-func (w *serviceUpdateWatcher) handleRDSResp(update resource.RouteConfigUpdate, err error) {
+func (w *serviceUpdateWatcher) handleRDSResp(update xdsresource.RouteConfigUpdate, err error) {
 	w.logger.Infof("received RDS update: %+v, err: %v", pretty.ToJSON(update), err)
 	w.mu.Lock()
 	defer w.mu.Unlock()

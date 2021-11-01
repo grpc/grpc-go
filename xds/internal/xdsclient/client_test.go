@@ -26,7 +26,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc"
@@ -153,10 +153,10 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 
 	clusterUpdateCh := testutils.NewChannel()
 	firstTime := true
-	client.WatchCluster(testCDSName, func(update resource.ClusterUpdate, err error) {
-		clusterUpdateCh.Send(resource.ClusterUpdateErrTuple{Update: update, Err: err})
+	client.WatchCluster(testCDSName, func(update xdsresource.ClusterUpdate, err error) {
+		clusterUpdateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: update, Err: err})
 		// Calls another watch inline, to ensure there's deadlock.
-		client.WatchCluster("another-random-name", func(resource.ClusterUpdate, error) {})
+		client.WatchCluster("another-random-name", func(xdsresource.ClusterUpdate, error) {})
 
 		if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); firstTime && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
@@ -167,27 +167,27 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := resource.ClusterUpdate{ClusterName: testEDSName}
-	client.NewClusters(map[string]resource.ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate}}, resource.UpdateMetadata{})
+	wantUpdate := xdsresource.ClusterUpdate{ClusterName: testEDSName}
+	client.NewClusters(map[string]xdsresource.ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	// The second update needs to be different in the underlying resource proto
 	// for the watch callback to be invoked.
-	wantUpdate2 := resource.ClusterUpdate{ClusterName: testEDSName + "2", Raw: &anypb.Any{}}
-	client.NewClusters(map[string]resource.ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate2}}, resource.UpdateMetadata{})
+	wantUpdate2 := xdsresource.ClusterUpdate{ClusterName: testEDSName + "2", Raw: &anypb.Any{}}
+	client.NewClusters(map[string]xdsresource.ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate2}}, xdsresource.UpdateMetadata{})
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate2, nil); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate resource.ListenerUpdate, wantErr error) error {
+func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.ListenerUpdate, wantErr error) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for listener update: %v", err)
 	}
-	gotUpdate := u.(resource.ListenerUpdateErrTuple)
+	gotUpdate := u.(xdsresource.ListenerUpdateErrTuple)
 	if wantErr != nil {
 		if gotUpdate.Err != wantErr {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
@@ -200,12 +200,12 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	return nil
 }
 
-func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate resource.RouteConfigUpdate, wantErr error) error {
+func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.RouteConfigUpdate, wantErr error) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for route configuration update: %v", err)
 	}
-	gotUpdate := u.(resource.RouteConfigUpdateErrTuple)
+	gotUpdate := u.(xdsresource.RouteConfigUpdateErrTuple)
 	if wantErr != nil {
 		if gotUpdate.Err != wantErr {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
@@ -218,12 +218,12 @@ func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, w
 	return nil
 }
 
-func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate resource.ClusterUpdate, wantErr error) error {
+func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.ClusterUpdate, wantErr error) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for cluster update: %v", err)
 	}
-	gotUpdate := u.(resource.ClusterUpdateErrTuple)
+	gotUpdate := u.(xdsresource.ClusterUpdateErrTuple)
 	if wantErr != nil {
 		if gotUpdate.Err != wantErr {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
@@ -236,12 +236,12 @@ func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantU
 	return nil
 }
 
-func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate resource.EndpointsUpdate, wantErr error) error {
+func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.EndpointsUpdate, wantErr error) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("timeout when waiting for endpoints update: %v", err)
 	}
-	gotUpdate := u.(resource.EndpointsUpdateErrTuple)
+	gotUpdate := u.(xdsresource.EndpointsUpdateErrTuple)
 	if wantErr != nil {
 		if gotUpdate.Err != wantErr {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)

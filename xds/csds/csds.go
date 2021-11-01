@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // Register v2 xds_client.
@@ -198,17 +198,17 @@ func dumpToGenericXdsConfig(typeURL string, dumpF func() (string, map[string]xds
 	return ret
 }
 
-func serviceStatusToProto(serviceStatus resource.ServiceStatus) v3adminpb.ClientResourceStatus {
+func serviceStatusToProto(serviceStatus xdsresource.ServiceStatus) v3adminpb.ClientResourceStatus {
 	switch serviceStatus {
-	case resource.ServiceStatusUnknown:
+	case xdsresource.ServiceStatusUnknown:
 		return v3adminpb.ClientResourceStatus_UNKNOWN
-	case resource.ServiceStatusRequested:
+	case xdsresource.ServiceStatusRequested:
 		return v3adminpb.ClientResourceStatus_REQUESTED
-	case resource.ServiceStatusNotExist:
+	case xdsresource.ServiceStatusNotExist:
 		return v3adminpb.ClientResourceStatus_DOES_NOT_EXIST
-	case resource.ServiceStatusACKed:
+	case xdsresource.ServiceStatusACKed:
 		return v3adminpb.ClientResourceStatus_ACKED
-	case resource.ServiceStatusNACKed:
+	case xdsresource.ServiceStatusNACKed:
 		return v3adminpb.ClientResourceStatus_NACKED
 	default:
 		return v3adminpb.ClientResourceStatus_UNKNOWN

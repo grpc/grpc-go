@@ -38,7 +38,7 @@ import (
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 const (
@@ -272,7 +272,7 @@ func (s) TestNewListenerWrapper(t *testing.T) {
 	}
 
 	// Push an error to the listener update handler.
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{}, errors.New("bad listener update"))
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{}, errors.New("bad listener update"))
 	timer := time.NewTimer(defaultTestShortTimeout)
 	select {
 	case <-timer.C:
@@ -281,15 +281,15 @@ func (s) TestNewListenerWrapper(t *testing.T) {
 		t.Fatalf("ready channel written to after receipt of a bad Listener update")
 	}
 
-	fcm, err := resource.NewFilterChainManager(listenerWithFilterChains, nil)
+	fcm, err := xdsresource.NewFilterChainManager(listenerWithFilterChains, nil)
 	if err != nil {
 		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
 	}
 
 	// Push an update whose address does not match the address to which our
 	// listener is bound, and verify that the ready channel is not written to.
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{
-		InboundListenerCfg: &resource.InboundListenerConfig{
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{
+		InboundListenerCfg: &xdsresource.InboundListenerConfig{
 			Address:      "10.0.0.1",
 			Port:         "50051",
 			FilterChains: fcm,
@@ -306,8 +306,8 @@ func (s) TestNewListenerWrapper(t *testing.T) {
 	// Since there are no dynamic RDS updates needed to be received, the
 	// ListenerWrapper does not have to wait for anything else before telling
 	// that it is ready.
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{
-		InboundListenerCfg: &resource.InboundListenerConfig{
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{
+		InboundListenerCfg: &xdsresource.InboundListenerConfig{
 			Address:      fakeListenerHost,
 			Port:         strconv.Itoa(fakeListenerPort),
 			FilterChains: fcm,
@@ -345,7 +345,7 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	if name != testListenerResourceName {
 		t.Fatalf("listenerWrapper registered a lds watch on %s, want %s", name, testListenerResourceName)
 	}
-	fcm, err := resource.NewFilterChainManager(listenerWithRouteConfiguration, nil)
+	fcm, err := xdsresource.NewFilterChainManager(listenerWithRouteConfiguration, nil)
 	if err != nil {
 		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
 	}
@@ -354,8 +354,8 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	// RDS Resources that need to be received. This should ping rds handler
 	// about which rds names to start, which will eventually start a watch on
 	// xds client for rds name "route-1".
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{
-		InboundListenerCfg: &resource.InboundListenerConfig{
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{
+		InboundListenerCfg: &xdsresource.InboundListenerConfig{
 			Address:      fakeListenerHost,
 			Port:         strconv.Itoa(fakeListenerPort),
 			FilterChains: fcm,
@@ -383,7 +383,7 @@ func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
 	// should trigger the listener wrapper to fire GoodUpdate, as it has
 	// received both it's LDS Configuration and also RDS Configuration,
 	// specified in LDS Configuration.
-	xdsC.InvokeWatchRouteConfigCallback("route-1", resource.RouteConfigUpdate{}, nil)
+	xdsC.InvokeWatchRouteConfigCallback("route-1", xdsresource.RouteConfigUpdate{}, nil)
 
 	// All of the xDS updates have completed, so can expect to send a ping on
 	// good update channel.
@@ -408,12 +408,12 @@ func (s) TestListenerWrapper_Accept(t *testing.T) {
 
 	// Push a good update with a filter chain which accepts local connections on
 	// 192.168.0.0/16 subnet and port 80.
-	fcm, err := resource.NewFilterChainManager(listenerWithFilterChains, nil)
+	fcm, err := xdsresource.NewFilterChainManager(listenerWithFilterChains, nil)
 	if err != nil {
 		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
 	}
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{
-		InboundListenerCfg: &resource.InboundListenerConfig{
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{
+		InboundListenerCfg: &xdsresource.InboundListenerConfig{
 			Address:      fakeListenerHost,
 			Port:         strconv.Itoa(fakeListenerPort),
 			FilterChains: fcm,

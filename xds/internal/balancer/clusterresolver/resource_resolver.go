@@ -22,7 +22,7 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 // resourceUpdate is a combined update from all the resources, in the order of
@@ -187,7 +187,7 @@ func (rr *resourceResolver) generate() {
 			return
 		}
 		switch uu := u.(type) {
-		case resource.EndpointsUpdate:
+		case xdsresource.EndpointsUpdate:
 			ret = append(ret, priorityConfig{mechanism: rDM.dm, edsResp: uu})
 		case []string:
 			ret = append(ret, priorityConfig{mechanism: rDM.dm, addresses: uu})
@@ -203,7 +203,7 @@ func (rr *resourceResolver) generate() {
 type edsDiscoveryMechanism struct {
 	cancel func()
 
-	update         resource.EndpointsUpdate
+	update         xdsresource.EndpointsUpdate
 	updateReceived bool
 }
 
@@ -225,7 +225,7 @@ func (er *edsDiscoveryMechanism) stop() {
 func newEDSResolver(nameToWatch string, xdsc xdsclient.XDSClient, topLevelResolver *resourceResolver) *edsDiscoveryMechanism {
 	ret := &edsDiscoveryMechanism{}
 	topLevelResolver.parent.logger.Infof("EDS watch started on %v", nameToWatch)
-	cancel := xdsc.WatchEndpoints(nameToWatch, func(update resource.EndpointsUpdate, err error) {
+	cancel := xdsc.WatchEndpoints(nameToWatch, func(update xdsresource.EndpointsUpdate, err error) {
 		topLevelResolver.mu.Lock()
 		defer topLevelResolver.mu.Unlock()
 		if err != nil {

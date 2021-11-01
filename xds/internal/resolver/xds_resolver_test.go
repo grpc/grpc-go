@@ -51,7 +51,7 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 const (
@@ -64,8 +64,8 @@ const (
 
 var target = resolver.Target{Endpoint: targetStr}
 
-var routerFilter = resource.HTTPFilter{Name: "rtr", Filter: httpfilter.Get(router.TypeURL)}
-var routerFilterList = []resource.HTTPFilter{routerFilter}
+var routerFilter = xdsresource.HTTPFilter{Name: "rtr", Filter: httpfilter.Get(router.TypeURL)}
+var routerFilterList = []xdsresource.HTTPFilter{routerFilter}
 
 type s struct {
 	grpctest.Tester
@@ -263,17 +263,17 @@ func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	// Call the watchAPI callback after closing the resolver, and make sure no
 	// update is triggerred on the ClientConn.
 	xdsR.Close()
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-		VirtualHosts: []*resource.VirtualHost{
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*resource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]resource.WeightedCluster{cluster: {Weight: 1}}}},
+				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -310,13 +310,13 @@ func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr := errors.New("bad serviceupdate")
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{}, suErr)
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{}, suErr)
 
 	if gotErrVal, gotErr := tcc.errorCh.Receive(ctx); gotErr != nil || gotErrVal != suErr {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr)
@@ -336,17 +336,17 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 	defer replaceRandNumGenerator(0)()
 
 	for _, tt := range []struct {
-		routes       []*resource.Route
+		routes       []*xdsresource.Route
 		wantJSON     string
 		wantClusters map[string]bool
 	}{
 		{
-			routes: []*resource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]resource.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
+			routes: []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			wantJSON: `{"loadBalancingConfig":[{
     "xds_cluster_manager_experimental":{
       "children":{
@@ -358,7 +358,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			wantClusters: map[string]bool{"test-cluster-1": true},
 		},
 		{
-			routes: []*resource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]resource.WeightedCluster{
+			routes: []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{
 				"cluster_1": {Weight: 75},
 				"cluster_2": {Weight: 25},
 			}}},
@@ -382,7 +382,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			wantClusters: map[string]bool{"cluster_1": true, "cluster_2": true},
 		},
 		{
-			routes: []*resource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]resource.WeightedCluster{
+			routes: []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{
 				"cluster_1": {Weight: 75},
 				"cluster_2": {Weight: 25},
 			}}},
@@ -405,8 +405,8 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 	} {
 		// Invoke the watchAPI callback with a good service update and wait for the
 		// UpdateState method to be called on the ClientConn.
-		xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-			VirtualHosts: []*resource.VirtualHost{
+		xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+			VirtualHosts: []*xdsresource.VirtualHost{
 				{
 					Domains: []string{targetStr},
 					Routes:  tt.routes,
@@ -475,22 +475,22 @@ func (s) TestXDSResolverRequestHash(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 	// Invoke watchAPI callback with a good service update (with hash policies
 	// specified) and wait for UpdateState method to be called on ClientConn.
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-		VirtualHosts: []*resource.VirtualHost{
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes: []*resource.Route{{
+				Routes: []*xdsresource.Route{{
 					Prefix: newStringP(""),
-					WeightedClusters: map[string]resource.WeightedCluster{
+					WeightedClusters: map[string]xdsresource.WeightedCluster{
 						"cluster_1": {Weight: 75},
 						"cluster_2": {Weight: 25},
 					},
-					HashPolicies: []*resource.HashPolicy{{
-						HashPolicyType: resource.HashPolicyTypeHeader,
+					HashPolicies: []*xdsresource.HashPolicy{{
+						HashPolicyType: xdsresource.HashPolicyTypeHeader,
 						HeaderName:     ":path",
 					}},
 				}},
@@ -535,16 +535,16 @@ func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-		VirtualHosts: []*resource.VirtualHost{
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*resource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]resource.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
+				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -571,7 +571,7 @@ func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
 
 	// Delete the resource
 	suErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "resource removed error")
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{}, suErr)
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{}, suErr)
 
 	if _, err = tcc.stateCh.Receive(ctx); err != nil {
 		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
@@ -595,16 +595,16 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-		VirtualHosts: []*resource.VirtualHost{
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*resource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]resource.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
+				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -650,7 +650,7 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 	// Delete the resource.  The channel should receive a service config with the
 	// original cluster but with an erroring config selector.
 	suErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "resource removed error")
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{}, suErr)
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{}, suErr)
 
 	if gotState, err = tcc.stateCh.Receive(ctx); err != nil {
 		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
@@ -703,7 +703,7 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	defer func(oldNewWRR func() wrr.WRR) { newWRR = oldNewWRR }(newWRR)
@@ -711,11 +711,11 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-		VirtualHosts: []*resource.VirtualHost{
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes: []*resource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]resource.WeightedCluster{
+				Routes: []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{
 					"A": {Weight: 5},
 					"B": {Weight: 10},
 				}}},
@@ -763,7 +763,7 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	defer func(oldNewWRR func() wrr.WRR) { newWRR = oldNewWRR }(newWRR)
@@ -771,21 +771,21 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-		VirtualHosts: []*resource.VirtualHost{
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes: []*resource.Route{{
+				Routes: []*xdsresource.Route{{
 					Prefix:            newStringP("/foo"),
-					WeightedClusters:  map[string]resource.WeightedCluster{"A": {Weight: 1}},
+					WeightedClusters:  map[string]xdsresource.WeightedCluster{"A": {Weight: 1}},
 					MaxStreamDuration: newDurationP(5 * time.Second),
 				}, {
 					Prefix:            newStringP("/bar"),
-					WeightedClusters:  map[string]resource.WeightedCluster{"B": {Weight: 1}},
+					WeightedClusters:  map[string]xdsresource.WeightedCluster{"B": {Weight: 1}},
 					MaxStreamDuration: newDurationP(0),
 				}, {
 					Prefix:           newStringP(""),
-					WeightedClusters: map[string]resource.WeightedCluster{"C": {Weight: 1}},
+					WeightedClusters: map[string]xdsresource.WeightedCluster{"C": {Weight: 1}},
 				}},
 			},
 		},
@@ -856,16 +856,16 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-		VirtualHosts: []*resource.VirtualHost{
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*resource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]resource.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
+				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -911,21 +911,21 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 
 	// Perform TWO updates to ensure the old config selector does not hold a
 	// reference to test-cluster-1.
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-		VirtualHosts: []*resource.VirtualHost{
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*resource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]resource.WeightedCluster{"NEW": {Weight: 1}}}},
+				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{"NEW": {Weight: 1}}}},
 			},
 		},
 	}, nil)
 	tcc.stateCh.Receive(ctx) // Ignore the first update.
 
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-		VirtualHosts: []*resource.VirtualHost{
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*resource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]resource.WeightedCluster{"NEW": {Weight: 1}}}},
+				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{"NEW": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -960,11 +960,11 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	// test-cluster-1.
 	res.OnCommitted()
 
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-		VirtualHosts: []*resource.VirtualHost{
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*resource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]resource.WeightedCluster{"NEW": {Weight: 1}}}},
+				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{"NEW": {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -1005,13 +1005,13 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr := errors.New("bad serviceupdate")
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{}, suErr)
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{}, suErr)
 
 	if gotErrVal, gotErr := tcc.errorCh.Receive(ctx); gotErr != nil || gotErrVal != suErr {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr)
@@ -1019,11 +1019,11 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-		VirtualHosts: []*resource.VirtualHost{
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
 			{
 				Domains: []string{targetStr},
-				Routes:  []*resource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]resource.WeightedCluster{cluster: {Weight: 1}}}},
+				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{cluster: {Weight: 1}}}},
 			},
 		},
 	}, nil)
@@ -1039,7 +1039,7 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr2 := errors.New("bad serviceupdate 2")
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{}, suErr2)
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{}, suErr2)
 	if gotErrVal, gotErr := tcc.errorCh.Receive(ctx); gotErr != nil || gotErrVal != suErr2 {
 		t.Fatalf("ClientConn.ReportError() received %v, want %v", gotErrVal, suErr2)
 	}
@@ -1059,13 +1059,13 @@ func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	// Invoke the watchAPI callback with a bad service update and wait for the
 	// ReportError method to be called on the ClientConn.
 	suErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "resource removed error")
-	xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{}, suErr)
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{}, suErr)
 
 	if gotErrVal, gotErr := tcc.errorCh.Receive(ctx); gotErr != context.DeadlineExceeded {
 		t.Fatalf("ClientConn.ReportError() received %v, %v, want channel recv timeout", gotErrVal, gotErr)
@@ -1105,12 +1105,12 @@ func (s) TestXDSResolverMultipleLDSUpdates(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 	defer replaceRandNumGenerator(0)()
 
 	// Send a new LDS update, with the same fields.
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
 	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer cancel()
 	// Should NOT trigger a state update.
@@ -1120,7 +1120,7 @@ func (s) TestXDSResolverMultipleLDSUpdates(t *testing.T) {
 	}
 
 	// Send a new LDS update, with the same RDS name, but different fields.
-	xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{RouteConfigName: routeStr, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList}, nil)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList}, nil)
 	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer cancel()
 	gotState, err = tcc.stateCh.Receive(ctx)
@@ -1188,7 +1188,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 	var path []string
 	testCases := []struct {
 		name         string
-		ldsFilters   []resource.HTTPFilter
+		ldsFilters   []xdsresource.HTTPFilter
 		vhOverrides  map[string]httpfilter.FilterConfig
 		rtOverrides  map[string]httpfilter.FilterConfig
 		clOverrides  map[string]httpfilter.FilterConfig
@@ -1198,7 +1198,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 	}{
 		{
 			name: "no router filter",
-			ldsFilters: []resource.HTTPFilter{
+			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
 			},
 			rpcRes: map[string][][]string{
@@ -1210,7 +1210,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 		},
 		{
 			name: "ignored after router filter",
-			ldsFilters: []resource.HTTPFilter{
+			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
 				routerFilter,
 				{Name: "foo2", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo2"}},
@@ -1228,7 +1228,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 		},
 		{
 			name: "NewStream error; ensure earlier interceptor Done is still called",
-			ldsFilters: []resource.HTTPFilter{
+			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1"}},
 				{Name: "bar", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "bar1", newStreamErr: errors.New("bar newstream err")}},
 				routerFilter,
@@ -1245,7 +1245,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 		},
 		{
 			name: "all overrides",
-			ldsFilters: []resource.HTTPFilter{
+			ldsFilters: []xdsresource.HTTPFilter{
 				{Name: "foo", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "foo1", newStreamErr: errors.New("this is overridden to nil")}},
 				{Name: "bar", Filter: &filterBuilder{path: &path}, Config: filterCfg{s: "bar1"}},
 				routerFilter,
@@ -1281,7 +1281,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 			defer cancel()
 			waitForWatchListener(ctx, t, xdsC, targetStr)
 
-			xdsC.InvokeWatchListenerCallback(resource.ListenerUpdate{
+			xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{
 				RouteConfigName: routeStr,
 				HTTPFilters:     tc.ldsFilters,
 			}, nil)
@@ -1294,17 +1294,17 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 
 			// Invoke the watchAPI callback with a good service update and wait for the
 			// UpdateState method to be called on the ClientConn.
-			xdsC.InvokeWatchRouteConfigCallback("", resource.RouteConfigUpdate{
-				VirtualHosts: []*resource.VirtualHost{
+			xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+				VirtualHosts: []*xdsresource.VirtualHost{
 					{
 						Domains: []string{targetStr},
-						Routes: []*resource.Route{{
-							Prefix: newStringP("1"), WeightedClusters: map[string]resource.WeightedCluster{
+						Routes: []*xdsresource.Route{{
+							Prefix: newStringP("1"), WeightedClusters: map[string]xdsresource.WeightedCluster{
 								"A": {Weight: 1},
 								"B": {Weight: 1},
 							},
 						}, {
-							Prefix: newStringP("2"), WeightedClusters: map[string]resource.WeightedCluster{
+							Prefix: newStringP("2"), WeightedClusters: map[string]xdsresource.WeightedCluster{
 								"A": {Weight: 1},
 								"B": {Weight: 1, HTTPFilterConfigOverride: tc.clOverrides},
 							},
@@ -1392,13 +1392,13 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 
 func replaceRandNumGenerator(start int64) func() {
 	nextInt := start
-	resource.RandInt63n = func(int64) (ret int64) {
+	xdsresource.RandInt63n = func(int64) (ret int64) {
 		ret = nextInt
 		nextInt++
 		return
 	}
 	return func() {
-		resource.RandInt63n = grpcrand.Int63n
+		xdsresource.RandInt63n = grpcrand.Int63n
 	}
 }
 

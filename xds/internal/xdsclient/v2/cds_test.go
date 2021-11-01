@@ -29,7 +29,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 const (
@@ -102,8 +102,8 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 		name          string
 		cdsResponse   *xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    map[string]resource.ClusterUpdateErrTuple
-		wantUpdateMD  resource.UpdateMetadata
+		wantUpdate    map[string]xdsresource.ClusterUpdateErrTuple
+		wantUpdateMD  xdsresource.UpdateMetadata
 		wantUpdateErr bool
 	}{
 		// Badly marshaled CDS response.
@@ -112,9 +112,9 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			cdsResponse: badlyMarshaledCDSResponse,
 			wantErr:     true,
 			wantUpdate:  nil,
-			wantUpdateMD: resource.UpdateMetadata{
-				Status: resource.ServiceStatusNACKed,
-				ErrState: &resource.UpdateErrorMetadata{
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusNACKed,
+				ErrState: &xdsresource.UpdateErrorMetadata{
 					Err: cmpopts.AnyError,
 				},
 			},
@@ -126,9 +126,9 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			cdsResponse: badResourceTypeInLDSResponse,
 			wantErr:     true,
 			wantUpdate:  nil,
-			wantUpdateMD: resource.UpdateMetadata{
-				Status: resource.ServiceStatusNACKed,
-				ErrState: &resource.UpdateErrorMetadata{
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusNACKed,
+				ErrState: &xdsresource.UpdateErrorMetadata{
 					Err: cmpopts.AnyError,
 				},
 			},
@@ -140,8 +140,8 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			cdsResponse: &xdspb.DiscoveryResponse{},
 			wantErr:     false,
 			wantUpdate:  nil,
-			wantUpdateMD: resource.UpdateMetadata{
-				Status: resource.ServiceStatusACKed,
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -150,11 +150,11 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			name:        "one-uninteresting-cluster",
 			cdsResponse: goodCDSResponse2,
 			wantErr:     false,
-			wantUpdate: map[string]resource.ClusterUpdateErrTuple{
-				goodClusterName2: {Update: resource.ClusterUpdate{ClusterName: goodClusterName2, EDSServiceName: serviceName2, Raw: marshaledCluster2}},
+			wantUpdate: map[string]xdsresource.ClusterUpdateErrTuple{
+				goodClusterName2: {Update: xdsresource.ClusterUpdate{ClusterName: goodClusterName2, EDSServiceName: serviceName2, Raw: marshaledCluster2}},
 			},
-			wantUpdateMD: resource.UpdateMetadata{
-				Status: resource.ServiceStatusACKed,
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -163,11 +163,11 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			name:        "one-good-cluster",
 			cdsResponse: goodCDSResponse1,
 			wantErr:     false,
-			wantUpdate: map[string]resource.ClusterUpdateErrTuple{
-				goodClusterName1: {Update: resource.ClusterUpdate{ClusterName: goodClusterName1, EDSServiceName: serviceName1, EnableLRS: true, Raw: marshaledCluster1}},
+			wantUpdate: map[string]xdsresource.ClusterUpdateErrTuple{
+				goodClusterName1: {Update: xdsresource.ClusterUpdate{ClusterName: goodClusterName1, EDSServiceName: serviceName1, EnableLRS: true, Raw: marshaledCluster1}},
 			},
-			wantUpdateMD: resource.UpdateMetadata{
-				Status: resource.ServiceStatusACKed,
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -195,7 +195,7 @@ func (s) TestCDSHandleResponseWithoutWatch(t *testing.T) {
 	defer cleanup()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}, resource.UpdateMetadata) {},
+		f: func(xdsclient.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)

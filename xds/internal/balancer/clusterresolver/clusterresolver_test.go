@@ -33,8 +33,8 @@ import (
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
 	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // V2 client registration.
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 const (
@@ -47,10 +47,10 @@ const (
 var (
 	// A non-empty endpoints update which is expected to be accepted by the EDS
 	// LB policy.
-	defaultEndpointsUpdate = resource.EndpointsUpdate{
-		Localities: []resource.Locality{
+	defaultEndpointsUpdate = xdsresource.EndpointsUpdate{
+		Localities: []xdsresource.Locality{
 			{
-				Endpoints: []resource.Endpoint{{Address: "endpoint1"}},
+				Endpoints: []xdsresource.Endpoint{{Address: "endpoint1"}},
 				ID:        internal.LocalityID{Zone: "zone"},
 				Priority:  1,
 				Weight:    100,
@@ -270,7 +270,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
-	xdsC.InvokeWatchEDSCallback("", resource.EndpointsUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback("", xdsresource.EndpointsUpdate{}, nil)
 	edsLB, err := waitForNewChildLB(ctx, edsLBCh)
 	if err != nil {
 		t.Fatal(err)
@@ -280,7 +280,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	}
 
 	connectionErr := xdsclient.NewErrorf(xdsclient.ErrorTypeConnection, "connection error")
-	xdsC.InvokeWatchEDSCallback("", resource.EndpointsUpdate{}, connectionErr)
+	xdsC.InvokeWatchEDSCallback("", xdsresource.EndpointsUpdate{}, connectionErr)
 
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
@@ -298,7 +298,7 @@ func (s) TestErrorFromXDSClientUpdate(t *testing.T) {
 	}
 
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "clusterResolverBalancer resource not found error")
-	xdsC.InvokeWatchEDSCallback("", resource.EndpointsUpdate{}, resourceErr)
+	xdsC.InvokeWatchEDSCallback("", xdsresource.EndpointsUpdate{}, resourceErr)
 	// Even if error is resource not found, watch shouldn't be canceled, because
 	// this is an EDS resource removed (and xds client actually never sends this
 	// error, but we still handles it).
@@ -359,7 +359,7 @@ func (s) TestErrorFromResolver(t *testing.T) {
 	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
-	xdsC.InvokeWatchEDSCallback("", resource.EndpointsUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback("", xdsresource.EndpointsUpdate{}, nil)
 	edsLB, err := waitForNewChildLB(ctx, edsLBCh)
 	if err != nil {
 		t.Fatal(err)

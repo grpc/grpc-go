@@ -20,7 +20,7 @@ package xdsclient
 
 import (
 	anypb "github.com/golang/protobuf/ptypes/any"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 // UpdateWithMD contains the raw message of the update and the metadata,
@@ -29,31 +29,31 @@ import (
 // This is to be used for config dump and CSDS, not directly by users (like
 // resolvers/balancers).
 type UpdateWithMD struct {
-	MD  resource.UpdateMetadata
+	MD  xdsresource.UpdateMetadata
 	Raw *anypb.Any
 }
 
 func rawFromCache(s string, cache interface{}) *anypb.Any {
 	switch c := cache.(type) {
-	case map[string]resource.ListenerUpdate:
+	case map[string]xdsresource.ListenerUpdate:
 		v, ok := c[s]
 		if !ok {
 			return nil
 		}
 		return v.Raw
-	case map[string]resource.RouteConfigUpdate:
+	case map[string]xdsresource.RouteConfigUpdate:
 		v, ok := c[s]
 		if !ok {
 			return nil
 		}
 		return v.Raw
-	case map[string]resource.ClusterUpdate:
+	case map[string]xdsresource.ClusterUpdate:
 		v, ok := c[s]
 		if !ok {
 			return nil
 		}
 		return v.Raw
-	case map[string]resource.EndpointsUpdate:
+	case map[string]xdsresource.EndpointsUpdate:
 		v, ok := c[s]
 		if !ok {
 			return nil
@@ -70,7 +70,7 @@ func (c *clientImpl) dump(t ResourceType) (string, map[string]UpdateWithMD) {
 
 	var (
 		version string
-		md      map[string]resource.UpdateMetadata
+		md      map[string]xdsresource.UpdateMetadata
 		cache   interface{}
 	)
 	switch t {

@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
-	"google.golang.org/grpc/xds/internal/xdsclient/resource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 var (
@@ -70,7 +70,7 @@ type BuildOptions struct {
 	// server.
 	Parent UpdateHandler
 	// Validator performs post unmarshal validation checks.
-	Validator resource.UpdateValidatorFunc
+	Validator xdsresource.UpdateValidatorFunc
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
 	NodeProto proto.Message
@@ -127,14 +127,14 @@ type loadReportingOptions struct {
 // resource updates from an APIClient for a specific version.
 type UpdateHandler interface {
 	// NewListeners handles updates to xDS listener resources.
-	NewListeners(map[string]resource.ListenerUpdateErrTuple, resource.UpdateMetadata)
+	NewListeners(map[string]xdsresource.ListenerUpdateErrTuple, xdsresource.UpdateMetadata)
 	// NewRouteConfigs handles updates to xDS RouteConfiguration resources.
-	NewRouteConfigs(map[string]resource.RouteConfigUpdateErrTuple, resource.UpdateMetadata)
+	NewRouteConfigs(map[string]xdsresource.RouteConfigUpdateErrTuple, xdsresource.UpdateMetadata)
 	// NewClusters handles updates to xDS Cluster resources.
-	NewClusters(map[string]resource.ClusterUpdateErrTuple, resource.UpdateMetadata)
+	NewClusters(map[string]xdsresource.ClusterUpdateErrTuple, xdsresource.UpdateMetadata)
 	// NewEndpoints handles updates to xDS ClusterLoadAssignment (or tersely
 	// referred to as Endpoints) resources.
-	NewEndpoints(map[string]resource.EndpointsUpdateErrTuple, resource.UpdateMetadata)
+	NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple, xdsresource.UpdateMetadata)
 	// NewConnectionError handles connection errors from the xDS stream. The
 	// error will be reported to all the resource watchers.
 	NewConnectionError(err error)
@@ -172,20 +172,20 @@ type clientImpl struct {
 	mu          sync.Mutex
 	ldsWatchers map[string]map[*watchInfo]bool
 	ldsVersion  string // Only used in CSDS.
-	ldsCache    map[string]resource.ListenerUpdate
-	ldsMD       map[string]resource.UpdateMetadata
+	ldsCache    map[string]xdsresource.ListenerUpdate
+	ldsMD       map[string]xdsresource.UpdateMetadata
 	rdsWatchers map[string]map[*watchInfo]bool
 	rdsVersion  string // Only used in CSDS.
-	rdsCache    map[string]resource.RouteConfigUpdate
-	rdsMD       map[string]resource.UpdateMetadata
+	rdsCache    map[string]xdsresource.RouteConfigUpdate
+	rdsMD       map[string]xdsresource.UpdateMetadata
 	cdsWatchers map[string]map[*watchInfo]bool
 	cdsVersion  string // Only used in CSDS.
-	cdsCache    map[string]resource.ClusterUpdate
-	cdsMD       map[string]resource.UpdateMetadata
+	cdsCache    map[string]xdsresource.ClusterUpdate
+	cdsMD       map[string]xdsresource.UpdateMetadata
 	edsWatchers map[string]map[*watchInfo]bool
 	edsVersion  string // Only used in CSDS.
-	edsCache    map[string]resource.EndpointsUpdate
-	edsMD       map[string]resource.UpdateMetadata
+	edsCache    map[string]xdsresource.EndpointsUpdate
+	edsMD       map[string]xdsresource.UpdateMetadata
 
 	// Changes to map lrsClients and the lrsClient inside the map need to be
 	// protected by lrsMu.
@@ -221,17 +221,17 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),
-		ldsCache:    make(map[string]resource.ListenerUpdate),
-		ldsMD:       make(map[string]resource.UpdateMetadata),
+		ldsCache:    make(map[string]xdsresource.ListenerUpdate),
+		ldsMD:       make(map[string]xdsresource.UpdateMetadata),
 		rdsWatchers: make(map[string]map[*watchInfo]bool),
-		rdsCache:    make(map[string]resource.RouteConfigUpdate),
-		rdsMD:       make(map[string]resource.UpdateMetadata),
+		rdsCache:    make(map[string]xdsresource.RouteConfigUpdate),
+		rdsMD:       make(map[string]xdsresource.UpdateMetadata),
 		cdsWatchers: make(map[string]map[*watchInfo]bool),
-		cdsCache:    make(map[string]resource.ClusterUpdate),
-		cdsMD:       make(map[string]resource.UpdateMetadata),
+		cdsCache:    make(map[string]xdsresource.ClusterUpdate),
+		cdsMD:       make(map[string]xdsresource.UpdateMetadata),
 		edsWatchers: make(map[string]map[*watchInfo]bool),
-		edsCache:    make(map[string]resource.EndpointsUpdate),
-		edsMD:       make(map[string]resource.UpdateMetadata),
+		edsCache:    make(map[string]xdsresource.EndpointsUpdate),
+		edsMD:       make(map[string]xdsresource.UpdateMetadata),
 		lrsClients:  make(map[string]*lrsClient),
 	}
 
@@ -301,14 +301,14 @@ func (c *clientImpl) Close() {
 	c.logger.Infof("Shutdown")
 }
 
-func (c *clientImpl) filterChainUpdateValidator(fc *resource.FilterChain) error {
+func (c *clientImpl) filterChainUpdateValidator(fc *xdsresource.FilterChain) error {
 	if fc == nil {
 		return nil
 	}
 	return c.securityConfigUpdateValidator(fc.SecurityCfg)
 }
 
-func (c *clientImpl) securityConfigUpdateValidator(sc *resource.SecurityConfig) error {
+func (c *clientImpl) securityConfigUpdateValidator(sc *xdsresource.SecurityConfig) error {
 	if sc == nil {
 		return nil
 	}
@@ -327,12 +327,12 @@ func (c *clientImpl) securityConfigUpdateValidator(sc *resource.SecurityConfig) 
 
 func (c *clientImpl) updateValidator(u interface{}) error {
 	switch update := u.(type) {
-	case resource.ListenerUpdate:
+	case xdsresource.ListenerUpdate:
 		if update.InboundListenerCfg == nil || update.InboundListenerCfg.FilterChains == nil {
 			return nil
 		}
 		return update.InboundListenerCfg.FilterChains.Validate(c.filterChainUpdateValidator)
-	case resource.ClusterUpdate:
+	case xdsresource.ClusterUpdate:
 		return c.securityConfigUpdateValidator(update.SecurityCfg)
 	default:
 		// We currently invoke this update validation function only for LDS and
