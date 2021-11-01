@@ -369,7 +369,7 @@ func startBackendsAndRemoteLoadBalancer(numberOfBackends int, customUserAgent st
 		beIPs = append(beIPs, beLis.Addr().(*net.TCPAddr).IP)
 		bePorts = append(bePorts, beLis.Addr().(*net.TCPAddr).Port)
 
-		beListeners = append(beListeners, newRestartableListener(beLis))
+		beListeners = append(beListeners, testutils.NewRestartableListener(beLis))
 	}
 	backends := startBackends(beServerName, false, beListeners...)
 
@@ -379,7 +379,7 @@ func startBackendsAndRemoteLoadBalancer(numberOfBackends int, customUserAgent st
 		err = fmt.Errorf("failed to create the listener for the load balancer %v", err)
 		return
 	}
-	lbLis = newRestartableListener(lbLis)
+	lbLis = testutils.NewRestartableListener(lbLis)
 	lbCreds := &serverNameCheckCreds{
 		sn: lbServerName,
 	}
@@ -846,8 +846,8 @@ func (s) TestFallback(t *testing.T) {
 	}
 
 	// Close backend and remote balancer connections, should use fallback.
-	tss.beListeners[0].(*restartableListener).stopPreviousConns()
-	tss.lbListener.(*restartableListener).stopPreviousConns()
+	tss.beListeners[0].(*testutils.RestartableListener).Stop()
+	tss.lbListener.(*testutils.RestartableListener).Stop()
 
 	var fallbackUsed bool
 	for i := 0; i < 2000; i++ {
@@ -871,8 +871,8 @@ func (s) TestFallback(t *testing.T) {
 	}
 
 	// Restart backend and remote balancer, should not use fallback backend.
-	tss.beListeners[0].(*restartableListener).restart()
-	tss.lbListener.(*restartableListener).restart()
+	tss.beListeners[0].(*testutils.RestartableListener).Restart()
+	tss.lbListener.(*testutils.RestartableListener).Restart()
 	tss.ls.sls <- sl
 
 	var backendUsed2 bool
