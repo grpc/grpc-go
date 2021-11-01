@@ -52,7 +52,6 @@ import (
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 )
 
 const (
@@ -86,7 +85,7 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 	testpb.RegisterTestServiceServer(server, &testService{})
 
 	// Create a local listener and pass it to Serve().
-	lis, err := xdstestutils.LocalTCPListener()
+	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
