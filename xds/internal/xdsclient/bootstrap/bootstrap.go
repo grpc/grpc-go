@@ -116,7 +116,8 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// Authority represents an Authority for an xDS control plane server.
+// Authority contains configuration for an Authority for an xDS control plane
+// server. See the Authorities field in the Config struct for how it's used.
 type Authority struct {
 	// ClientListenerResourceNameTemplate is template for the name of the
 	// Listener resource to subscribe to for a gRPC client channel.  Used only
@@ -132,7 +133,8 @@ type Authority struct {
 	// If not present in the bootstrap file, defaults to
 	// "xdstp://<authority_name>/envoy.config.listener.v3.Listener/%s".
 	ClientListenerResourceNameTemplate string
-	// XDSServer is the management server to connect to for this authority.
+	// XDSServer contains the management server and config to connect to for
+	// this authority.
 	XDSServer *ServerConfig
 }
 
@@ -337,7 +339,7 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 		default:
-			logger.Infof("Bootstrap content has unknown field: %s", k)
+			logger.Warningf("Bootstrap content has unknown field: %s", k)
 		}
 		// Do not fail the xDS bootstrap when an unknown field is seen. This can
 		// happen when an older version client reads a newer version bootstrap
