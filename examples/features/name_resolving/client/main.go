@@ -58,7 +58,6 @@ func main() {
 	passthroughConn, err := grpc.Dial(
 		fmt.Sprintf("passthrough:///%s", backendAddr), // Dial to "passthrough:///localhost:50051"
 		grpc.WithInsecure(),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
@@ -73,7 +72,6 @@ func main() {
 	exampleConn, err := grpc.Dial(
 		fmt.Sprintf("%s:///%s", exampleScheme, exampleServiceName), // Dial to "example:///resolver.example.grpc.io"
 		grpc.WithInsecure(),
-		grpc.WithBlock(),
 	)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
