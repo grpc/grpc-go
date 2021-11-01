@@ -555,6 +555,14 @@ func WithMaxHeaderListSize(s uint32) DialOption {
 	})
 }
 
+// WithMaxFrameSize returns a DialOption that specifies the maximum
+// (uncompressed) size of frame that the client is prepared to accept.
+func WithMaxFrameSize(s uint32) DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.copts.MaxFrameSize = &s
+	})
+}
+
 // WithDisableHealthCheck disables the LB channel health checking for all
 // SubConns of this ClientConn.
 //

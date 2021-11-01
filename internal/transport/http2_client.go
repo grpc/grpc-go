@@ -97,6 +97,9 @@ type http2Client struct {
 	// configured by peer through SETTINGS_MAX_HEADER_LIST_SIZE
 	maxSendHeaderListSize *uint32
 
+	// configured by peer SETTINGS_MAX_FRAME_SIZE
+	maxFrameSize *uint32
+
 	bdpEst *bdpEstimator
 	// onPrefaceReceipt is a callback that client transport calls upon
 	// receiving server preface to signal that a succefull HTTP2
@@ -291,6 +294,10 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	if opts.MaxHeaderListSize != nil {
 		maxHeaderListSize = *opts.MaxHeaderListSize
 	}
+	maxFrameSize := defaultFrameSize
+	if opts.MaxFrameSize != nil {
+		maxFrameSize = *opts.MaxFrameSize
+	}
 	t := &http2Client{
 		ctx:                   ctx,
 		ctxDone:               ctx.Done(), // Cache Done chan.
@@ -303,7 +310,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		readerDone:            make(chan struct{}),
 		writerDone:            make(chan struct{}),
 		goAway:                make(chan struct{}),
-		framer:                newFramer(conn, writeBufSize, readBufSize, maxHeaderListSize),
+		framer:                newFramer(conn, writeBufSize, readBufSize, maxHeaderListSize, maxFrameSize),
 		fc:                    &trInFlow{limit: uint32(icwz)},
 		scheme:                scheme,
 		activeStreams:         make(map[uint32]*Stream),
@@ -386,6 +393,12 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		ss = append(ss, http2.Setting{
 			ID:  http2.SettingMaxHeaderListSize,
 			Val: *opts.MaxHeaderListSize,
+		})
+	}
+	if opts.MaxFrameSize != nil {
+		ss = append(ss, http2.Setting{
+			ID:  http2.SettingMaxFrameSize,
+			Val: *opts.MaxFrameSize,
 		})
 	}
 	err = t.framer.fr.WriteSettings(ss...)
@@ -1128,6 +1141,11 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
 			updateFuncs = append(updateFuncs, func() {
 				t.maxSendHeaderListSize = new(uint32)
 				*t.maxSendHeaderListSize = s.Val
+			})
+		case http2.SettingMaxFrameSize:
+			updateFuncs = append(updateFuncs, func() {
+				t.maxFrameSize = new(uint32)
+				*t.maxFrameSize = s.Val
 			})
 		default:
 			ss = append(ss, s)

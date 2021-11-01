@@ -531,6 +531,7 @@ type ServerConfig struct {
 	ReadBufferSize        int
 	ChannelzParentID      int64
 	MaxHeaderListSize     *uint32
+	MaxFrameSize          *uint32
 	HeaderTableSize       *uint32
 }
 
@@ -566,6 +567,8 @@ type ConnectOptions struct {
 	ChannelzParentID int64
 	// MaxHeaderListSize sets the max (uncompressed) size of header list that is prepared to be received.
 	MaxHeaderListSize *uint32
+	// MaxFrameSize sets the max size of frame size
+	MaxFrameSize *uint32
 	// UseProxy specifies if a proxy should be used.
 	UseProxy bool
 }
