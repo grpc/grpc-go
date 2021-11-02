@@ -42,7 +42,6 @@ const (
 	ringHashSupportEnv           = "GRPC_XDS_EXPERIMENTAL_ENABLE_RING_HASH"
 	clientSideSecuritySupportEnv = "GRPC_XDS_EXPERIMENTAL_SECURITY_SUPPORT"
 	aggregateAndDNSSupportEnv    = "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER"
-	retrySupportEnv              = "GRPC_XDS_EXPERIMENTAL_ENABLE_RETRY"
 	rbacSupportEnv               = "GRPC_XDS_EXPERIMENTAL_RBAC"
 	federationEnv                = "GRPC_EXPERIMENTAL_XDS_FEDERATION"
 
@@ -80,9 +79,6 @@ var (
 	// "GRPC_XDS_EXPERIMENTAL_ENABLE_AGGREGATE_AND_LOGICAL_DNS_CLUSTER" to
 	// "true".
 	AggregateAndDNSSupportEnv = strings.EqualFold(os.Getenv(aggregateAndDNSSupportEnv), "true")
-
-	// RetrySupport indicates whether xDS retry is enabled.
-	RetrySupport = !strings.EqualFold(os.Getenv(retrySupportEnv), "false")
 
 	// RBACSupport indicates whether xDS configured RBAC HTTP Filter is enabled,
 	// which can be disabled by setting the environment variable

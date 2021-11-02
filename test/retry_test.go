@@ -33,7 +33,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -41,14 +40,7 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-func enableRetry() func() {
-	old := envconfig.Retry
-	envconfig.Retry = true
-	return func() { envconfig.Retry = old }
-}
-
 func (s) TestRetryUnary(t *testing.T) {
-	defer enableRetry()()
 	i := -1
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
@@ -116,7 +108,6 @@ func (s) TestRetryUnary(t *testing.T) {
 }
 
 func (s) TestRetryThrottling(t *testing.T) {
-	defer enableRetry()()
 	i := -1
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
@@ -192,7 +183,6 @@ func (s) TestRetryThrottling(t *testing.T) {
 }
 
 func (s) TestRetryStreaming(t *testing.T) {
-	defer enableRetry()()
 	req := func(b byte) *testpb.StreamingOutputCallRequest {
 		return &testpb.StreamingOutputCallRequest{Payload: &testpb.Payload{Body: []byte{b}}}
 	}
@@ -510,7 +500,6 @@ func (*retryStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) con
 func (*retryStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 func (s) TestRetryStats(t *testing.T) {
-	defer enableRetry()()
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen. Err: %v", err)
