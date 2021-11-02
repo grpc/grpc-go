@@ -16,9 +16,7 @@
  *
  */
 
-// Package env acts a single source of definition for all environment variables
-// related to the xDS implementation in gRPC.
-package env
+package envconfig
 
 import (
 	"os"

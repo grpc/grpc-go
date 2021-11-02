@@ -33,12 +33,12 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpctest"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/wrr"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -584,9 +584,9 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 // with a HashPolicy specifying to generate a hash. The configSelector generated should
 // successfully generate a Hash.
 func (s) TestXDSResolverRequestHash(t *testing.T) {
-	oldRH := env.RingHashSupport
-	env.RingHashSupport = true
-	defer func() { env.RingHashSupport = oldRH }()
+	oldRH := envconfig.RingHashSupport
+	envconfig.RingHashSupport = true
+	defer func() { envconfig.RingHashSupport = oldRH }()
 
 	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer xdsR.Close()

@@ -27,8 +27,6 @@ import (
 	"io/ioutil"
 	"strings"
 
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
@@ -36,9 +34,14 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/grpc/xds/internal/version"
+
+	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 const (
@@ -231,8 +234,8 @@ type xdsServer struct {
 }
 
 func bootstrapConfigFromEnvVariable() ([]byte, error) {
-	fName := env.BootstrapFileName
-	fContent := env.BootstrapFileContent
+	fName := envconfig.BootstrapFileName
+	fContent := envconfig.BootstrapFileContent
 
 	// Bootstrap file name has higher priority than bootstrap content.
 	if fName != "" {
@@ -250,7 +253,8 @@ func bootstrapConfigFromEnvVariable() ([]byte, error) {
 		return []byte(fContent), nil
 	}
 
-	return nil, fmt.Errorf("none of the bootstrap environment variables (%q or %q) defined", env.BootstrapFileNameEnv, env.BootstrapFileContentEnv)
+	return nil, fmt.Errorf("none of the bootstrap environment variables (%q or %q) defined",
+		envconfig.BootstrapFileNameEnv, envconfig.BootstrapFileContentEnv)
 }
 
 // NewConfig returns a new instance of Config initialized by reading the
@@ -339,7 +343,7 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 		case "client_default_listener_resource_name_template":
-			if !env.FederationSupport {
+			if !envconfig.FederationSupport {
 				logger.Warningf("xds: bootstrap field %v is not support when Federation is disabled", k)
 				continue
 			}
@@ -347,7 +351,7 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 		case "authorities":
-			if !env.FederationSupport {
+			if !envconfig.FederationSupport {
 				logger.Warningf("xds: bootstrap field %v is not support when Federation is disabled", k)
 				continue
 			}

@@ -22,6 +22,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/xds/internal/version"
+	"google.golang.org/protobuf/types/known/wrapperspb"
+
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -37,6 +45,13 @@ import (
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/types/known/wrapperspb"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/xds/env"
+	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -193,12 +208,12 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 		},
 	}
 
-	oldAggregateAndDNSSupportEnv := env.AggregateAndDNSSupportEnv
-	env.AggregateAndDNSSupportEnv = true
-	defer func() { env.AggregateAndDNSSupportEnv = oldAggregateAndDNSSupportEnv }()
-	oldRingHashSupport := env.RingHashSupport
-	env.RingHashSupport = true
-	defer func() { env.RingHashSupport = oldRingHashSupport }()
+	oldAggregateAndDNSSupportEnv := envconfig.AggregateAndDNSSupportEnv
+	envconfig.AggregateAndDNSSupportEnv = true
+	defer func() { envconfig.AggregateAndDNSSupportEnv = oldAggregateAndDNSSupportEnv }()
+	oldRingHashSupport := envconfig.RingHashSupport
+	envconfig.RingHashSupport = true
+	defer func() { envconfig.RingHashSupport = oldRingHashSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			if update, err := validateClusterAndConstructClusterUpdate(test.cluster); err == nil {
@@ -413,12 +428,12 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		},
 	}
 
-	oldAggregateAndDNSSupportEnv := env.AggregateAndDNSSupportEnv
-	env.AggregateAndDNSSupportEnv = true
-	defer func() { env.AggregateAndDNSSupportEnv = oldAggregateAndDNSSupportEnv }()
-	oldRingHashSupport := env.RingHashSupport
-	env.RingHashSupport = true
-	defer func() { env.RingHashSupport = oldRingHashSupport }()
+	oldAggregateAndDNSSupportEnv := envconfig.AggregateAndDNSSupportEnv
+	envconfig.AggregateAndDNSSupportEnv = true
+	defer func() { envconfig.AggregateAndDNSSupportEnv = oldAggregateAndDNSSupportEnv }()
+	oldRingHashSupport := envconfig.RingHashSupport
+	envconfig.RingHashSupport = true
+	defer func() { envconfig.RingHashSupport = oldRingHashSupport }()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			update, err := validateClusterAndConstructClusterUpdate(test.cluster)
@@ -434,9 +449,9 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 
 func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 	// Turn off the env var protection for client-side security.
-	origClientSideSecurityEnvVar := env.ClientSideSecuritySupport
-	env.ClientSideSecuritySupport = false
-	defer func() { env.ClientSideSecuritySupport = origClientSideSecurityEnvVar }()
+	origClientSideSecurityEnvVar := envconfig.ClientSideSecuritySupport
+	envconfig.ClientSideSecuritySupport = false
+	defer func() { envconfig.ClientSideSecuritySupport = origClientSideSecurityEnvVar }()
 
 	cluster := &v3clusterpb.Cluster{
 		Name:                 clusterName,

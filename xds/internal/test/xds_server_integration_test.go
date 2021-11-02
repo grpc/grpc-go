@@ -33,8 +33,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds"
 	"google.golang.org/grpc/xds/internal/httpfilter/rbac"
@@ -374,10 +374,10 @@ func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
 // (NonForwardingAction), and the RPC's matching those routes should proceed as
 // normal.
 func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
-	oldRBAC := env.RBACSupport
-	env.RBACSupport = true
+	oldRBAC := envconfig.RBACSupport
+	envconfig.RBACSupport = true
 	defer func() {
-		env.RBACSupport = oldRBAC
+		envconfig.RBACSupport = oldRBAC
 	}()
 	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := setupManagementServer(t)
 	defer cleanup1()
@@ -722,10 +722,10 @@ func serverListenerWithRBACHTTPFilters(host string, port uint32, rbacCfg *rpb.RB
 // as normal and certain RPC's are denied by the RBAC HTTP Filter which gets
 // called by hooked xds interceptors.
 func (s) TestRBACHTTPFilter(t *testing.T) {
-	oldRBAC := env.RBACSupport
-	env.RBACSupport = true
+	oldRBAC := envconfig.RBACSupport
+	envconfig.RBACSupport = true
 	defer func() {
-		env.RBACSupport = oldRBAC
+		envconfig.RBACSupport = oldRBAC
 	}()
 	rbac.RegisterForTesting()
 	defer rbac.UnregisterForTesting()
@@ -970,7 +970,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 
 				// Toggle the RBAC Env variable off, this should disable RBAC and allow any RPC"s through (will not go through
 				// routing or processed by HTTP Filters and thus will never get denied by RBAC).
-				env.RBACSupport = false
+				envconfig.RBACSupport = false
 				if _, err := client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.OK {
 					t.Fatalf("EmptyCall() returned err with status: %v, once RBAC is disabled all RPC's should proceed as normal", status.Code(err))
 				}
@@ -978,7 +978,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 					t.Fatalf("UnaryCall() returned err with status: %v, once RBAC is disabled all RPC's should proceed as normal", status.Code(err))
 				}
 				// Toggle RBAC back on for next iterations.
-				env.RBACSupport = true
+				envconfig.RBACSupport = true
 			}()
 		})
 	}
@@ -1103,10 +1103,10 @@ func serverListenerWithBadRouteConfiguration(host string, port uint32) *v3listen
 
 func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
 	// Turn RBAC support on.
-	oldRBAC := env.RBACSupport
-	env.RBACSupport = true
+	oldRBAC := envconfig.RBACSupport
+	envconfig.RBACSupport = true
 	defer func() {
-		env.RBACSupport = oldRBAC
+		envconfig.RBACSupport = oldRBAC
 	}()
 
 	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := setupManagementServer(t)
@@ -1160,10 +1160,10 @@ func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
 
 func (s) TestRBACToggledOff_WithBadRouteConfiguration(t *testing.T) {
 	// Turn RBAC support off.
-	oldRBAC := env.RBACSupport
-	env.RBACSupport = false
+	oldRBAC := envconfig.RBACSupport
+	envconfig.RBACSupport = false
 	defer func() {
-		env.RBACSupport = oldRBAC
+		envconfig.RBACSupport = oldRBAC
 	}()
 
 	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := setupManagementServer(t)

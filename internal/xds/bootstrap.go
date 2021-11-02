@@ -27,7 +27,7 @@ import (
 	"os"
 
 	"google.golang.org/grpc/grpclog"
-	"google.golang.org/grpc/internal/xds/env"
+	"google.golang.org/grpc/internal/envconfig"
 )
 
 var logger = grpclog.Component("internal/xds")
@@ -79,11 +79,11 @@ func SetupBootstrapFile(opts BootstrapOptions) (func(), error) {
 	}
 	logger.Infof("Created bootstrap file at %q with contents: %s\n", f.Name(), bootstrapContents)
 
-	origBootstrapFileName := env.BootstrapFileName
-	env.BootstrapFileName = f.Name()
+	origBootstrapFileName := envconfig.BootstrapFileName
+	envconfig.BootstrapFileName = f.Name()
 	return func() {
 		os.Remove(f.Name())
-		env.BootstrapFileName = origBootstrapFileName
+		envconfig.BootstrapFileName = origBootstrapFileName
 	}, nil
 }
 

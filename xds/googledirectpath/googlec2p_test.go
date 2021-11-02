@@ -23,17 +23,18 @@ import (
 	"testing"
 	"time"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal/xds/env"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 type emptyResolver struct {
@@ -90,7 +91,7 @@ func TestBuildWithBootstrapEnvSet(t *testing.T) {
 	defer replaceResolvers()()
 	builder := resolver.Get(c2pScheme)
 
-	for i, envP := range []*string{&env.BootstrapFileName, &env.BootstrapFileContent} {
+	for i, envP := range []*string{&envconfig.BootstrapFileName, &envconfig.BootstrapFileContent} {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			// Set bootstrap config env var.
 			oldEnv := *envP
@@ -166,10 +167,10 @@ func TestBuildXDS(t *testing.T) {
 			defer func() { getIPv6Capable = oldGetIPv6Capability }()
 
 			if tt.tdURI != "" {
-				oldURI := env.C2PResolverTestOnlyTrafficDirectorURI
-				env.C2PResolverTestOnlyTrafficDirectorURI = tt.tdURI
+				oldURI := envconfig.C2PResolverTestOnlyTrafficDirectorURI
+				envconfig.C2PResolverTestOnlyTrafficDirectorURI = tt.tdURI
 				defer func() {
-					env.C2PResolverTestOnlyTrafficDirectorURI = oldURI
+					envconfig.C2PResolverTestOnlyTrafficDirectorURI = oldURI
 				}()
 			}
 

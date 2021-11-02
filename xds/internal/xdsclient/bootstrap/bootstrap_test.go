@@ -25,10 +25,7 @@ import (
 	"os"
 	"testing"
 
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/proto"
-	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
@@ -37,8 +34,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/xds/internal/version"
+
+	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	structpb "github.com/golang/protobuf/ptypes/struct"
 )
 
 var (
@@ -272,9 +274,9 @@ func setupBootstrapOverride(bootstrapFileMap map[string]string) func() {
 // code that reads file with the given fileName.
 func testNewConfigWithFileNameEnv(t *testing.T, fileName string, wantError bool, wantConfig *Config) {
 	t.Helper()
-	origBootstrapFileName := env.BootstrapFileName
-	env.BootstrapFileName = fileName
-	defer func() { env.BootstrapFileName = origBootstrapFileName }()
+	origBootstrapFileName := envconfig.BootstrapFileName
+	envconfig.BootstrapFileName = fileName
+	defer func() { envconfig.BootstrapFileName = origBootstrapFileName }()
 
 	c, err := NewConfig()
 	if (err != nil) != wantError {
@@ -296,9 +298,9 @@ func testNewConfigWithFileContentEnv(t *testing.T, fileName string, wantError bo
 	if err != nil {
 		t.Skip(err)
 	}
-	origBootstrapContent := env.BootstrapFileContent
-	env.BootstrapFileContent = string(b)
-	defer func() { env.BootstrapFileContent = origBootstrapContent }()
+	origBootstrapContent := envconfig.BootstrapFileContent
+	envconfig.BootstrapFileContent = string(b)
+	defer func() { envconfig.BootstrapFileContent = origBootstrapContent }()
 
 	c, err := NewConfig()
 	if (err != nil) != wantError {
@@ -463,13 +465,13 @@ func TestNewConfigBootstrapEnvPriority(t *testing.T) {
 	goodFileContent2 := v3BootstrapFileMap[goodFileName2]
 	goodConfig2 := nonNilCredsConfigV3
 
-	origBootstrapFileName := env.BootstrapFileName
-	env.BootstrapFileName = ""
-	defer func() { env.BootstrapFileName = origBootstrapFileName }()
+	origBootstrapFileName := envconfig.BootstrapFileName
+	envconfig.BootstrapFileName = ""
+	defer func() { envconfig.BootstrapFileName = origBootstrapFileName }()
 
-	origBootstrapContent := env.BootstrapFileContent
-	env.BootstrapFileContent = ""
-	defer func() { env.BootstrapFileContent = origBootstrapContent }()
+	origBootstrapContent := envconfig.BootstrapFileContent
+	envconfig.BootstrapFileContent = ""
+	defer func() { envconfig.BootstrapFileContent = origBootstrapContent }()
 
 	// When both env variables are empty, NewConfig should fail.
 	if _, err := NewConfig(); err == nil {
@@ -477,21 +479,21 @@ func TestNewConfigBootstrapEnvPriority(t *testing.T) {
 	}
 
 	// When one of them is set, it should be used.
-	env.BootstrapFileName = goodFileName1
-	env.BootstrapFileContent = ""
+	envconfig.BootstrapFileName = goodFileName1
+	envconfig.BootstrapFileContent = ""
 	if c, err := NewConfig(); err != nil || c.compare(goodConfig1) != nil {
 		t.Errorf("NewConfig() = %v, %v, want: %v, %v", c, err, goodConfig1, nil)
 	}
 
-	env.BootstrapFileName = ""
-	env.BootstrapFileContent = goodFileContent2
+	envconfig.BootstrapFileName = ""
+	envconfig.BootstrapFileContent = goodFileContent2
 	if c, err := NewConfig(); err != nil || c.compare(goodConfig2) != nil {
 		t.Errorf("NewConfig() = %v, %v, want: %v, %v", c, err, goodConfig1, nil)
 	}
 
 	// Set both, file name should be read.
-	env.BootstrapFileName = goodFileName1
-	env.BootstrapFileContent = goodFileContent2
+	envconfig.BootstrapFileName = goodFileName1
+	envconfig.BootstrapFileContent = goodFileContent2
 	if c, err := NewConfig(); err != nil || c.compare(goodConfig1) != nil {
 		t.Errorf("NewConfig() = %v, %v, want: %v, %v", c, err, goodConfig1, nil)
 	}
@@ -978,9 +980,9 @@ func TestNewConfigWithFederation(t *testing.T) {
 		},
 	}
 
-	oldFederationSupport := env.FederationSupport
-	env.FederationSupport = true
-	defer func() { env.FederationSupport = oldFederationSupport }()
+	oldFederationSupport := envconfig.FederationSupport
+	envconfig.FederationSupport = true
+	defer func() { envconfig.FederationSupport = oldFederationSupport }()
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

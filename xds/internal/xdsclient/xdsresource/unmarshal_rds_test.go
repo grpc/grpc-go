@@ -28,8 +28,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
@@ -1599,9 +1599,9 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			return fmt.Sprint(fc)
 		}),
 	}
-	oldRingHashSupport := env.RingHashSupport
-	env.RingHashSupport = true
-	defer func() { env.RingHashSupport = oldRingHashSupport }()
+	oldRingHashSupport := envconfig.RingHashSupport
+	envconfig.RingHashSupport = true
+	defer func() { envconfig.RingHashSupport = oldRingHashSupport }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, _, err := routesProtoToSlice(tt.routes, nil, nil, false)
@@ -1712,9 +1712,9 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 		},
 	}
 
-	oldRingHashSupport := env.RingHashSupport
-	env.RingHashSupport = true
-	defer func() { env.RingHashSupport = oldRingHashSupport }()
+	oldRingHashSupport := envconfig.RingHashSupport
+	envconfig.RingHashSupport = true
+	defer func() { envconfig.RingHashSupport = oldRingHashSupport }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := hashPoliciesProtoToSlice(tt.hashPolicies, nil)
