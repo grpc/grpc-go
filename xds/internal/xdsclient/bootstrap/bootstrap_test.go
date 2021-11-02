@@ -30,6 +30,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	structpb "github.com/golang/protobuf/ptypes/struct"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
@@ -207,59 +208,44 @@ var (
 		ClientFeatures:       []string{clientFeatureNoOverprovisioning},
 	}
 	nilCredsConfigV2 = &Config{
-		BalancerName: "trafficdirector.googleapis.com:443",
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		NodeProto:    v2NodeProto,
+		XDSServer: &ServerConfig{
+			ServerURI: "trafficdirector.googleapis.com:443",
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			credsType: "insecure",
+			NodeProto: v2NodeProto,
+		},
+		ClientDefaultListenerResourceNameTemplate: "%s",
 	}
 	nonNilCredsConfigV2 = &Config{
-		BalancerName: "trafficdirector.googleapis.com:443",
-		Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-		NodeProto:    v2NodeProto,
+		XDSServer: &ServerConfig{
+			ServerURI: "trafficdirector.googleapis.com:443",
+			Creds:     grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
+			credsType: "google_default",
+			NodeProto: v2NodeProto,
+		},
+		ClientDefaultListenerResourceNameTemplate: "%s",
 	}
 	nonNilCredsConfigV3 = &Config{
-		BalancerName: "trafficdirector.googleapis.com:443",
-		Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-		TransportAPI: version.TransportV3,
-		NodeProto:    v3NodeProto,
+		XDSServer: &ServerConfig{
+			ServerURI:    "trafficdirector.googleapis.com:443",
+			Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
+			credsType:    "google_default",
+			TransportAPI: version.TransportV3,
+			NodeProto:    v3NodeProto,
+		},
+		ClientDefaultListenerResourceNameTemplate: "%s",
 	}
 )
 
 func (c *Config) compare(want *Config) error {
-	if c.BalancerName != want.BalancerName {
-		return fmt.Errorf("config.BalancerName is %s, want %s", c.BalancerName, want.BalancerName)
-	}
-	// Since Creds is of type grpc.DialOption interface, where the
-	// implementation is provided by a function, it is not possible to compare.
-	if (c.Creds != nil) != (want.Creds != nil) {
-		return fmt.Errorf("config.Creds is %#v, want %#v", c.Creds, want.Creds)
-	}
-	if c.TransportAPI != want.TransportAPI {
-		return fmt.Errorf("config.TransportAPI is %v, want %v", c.TransportAPI, want.TransportAPI)
-
-	}
-	if diff := cmp.Diff(want.NodeProto, c.NodeProto, cmp.Comparer(proto.Equal)); diff != "" {
-		return fmt.Errorf("config.NodeProto diff (-want, +got):\n%s", diff)
-	}
-	if c.ServerListenerResourceNameTemplate != want.ServerListenerResourceNameTemplate {
-		return fmt.Errorf("config.ServerListenerResourceNameTemplate is %q, want %q", c.ServerListenerResourceNameTemplate, want.ServerListenerResourceNameTemplate)
-	}
-
-	// A vanilla cmp.Equal or cmp.Diff will not produce useful error message
-	// here. So, we iterate through the list of configs and compare them one at
-	// a time.
-	gotCfgs := c.CertProviderConfigs
-	wantCfgs := want.CertProviderConfigs
-	if len(gotCfgs) != len(wantCfgs) {
-		return fmt.Errorf("config.CertProviderConfigs is %d entries, want %d", len(gotCfgs), len(wantCfgs))
-	}
-	for instance, gotCfg := range gotCfgs {
-		wantCfg, ok := wantCfgs[instance]
-		if !ok {
-			return fmt.Errorf("config.CertProviderConfigs has unexpected plugin instance %q with config %q", instance, gotCfg.String())
-		}
-		if got, want := gotCfg.String(), wantCfg.String(); got != want {
-			return fmt.Errorf("config.CertProviderConfigs for plugin instance %q has config %q, want %q", instance, got, want)
-		}
+	if diff := cmp.Diff(c, want,
+		cmpopts.EquateEmpty(),
+		cmp.AllowUnexported(ServerConfig{}),
+		cmp.Comparer(proto.Equal),
+		cmp.Comparer(func(a, b grpc.DialOption) bool { return (a != nil) == (b != nil) }),
+		cmp.Transformer("certproviderconfigstring", func(a *certprovider.BuildableConfig) string { return a.String() }),
+	); diff != "" {
+		return fmt.Errorf("diff: %v", diff)
 	}
 	return nil
 }
@@ -285,6 +271,7 @@ func setupBootstrapOverride(bootstrapFileMap map[string]string) func() {
 // This function overrides the bootstrap file NAME env variable, to test the
 // code that reads file with the given fileName.
 func testNewConfigWithFileNameEnv(t *testing.T, fileName string, wantError bool, wantConfig *Config) {
+	t.Helper()
 	origBootstrapFileName := env.BootstrapFileName
 	env.BootstrapFileName = fileName
 	defer func() { env.BootstrapFileName = origBootstrapFileName }()
@@ -304,10 +291,10 @@ func testNewConfigWithFileNameEnv(t *testing.T, fileName string, wantError bool,
 // This function overrides the bootstrap file CONTENT env variable, to test the
 // code that uses the content from env directly.
 func testNewConfigWithFileContentEnv(t *testing.T, fileName string, wantError bool, wantConfig *Config) {
+	t.Helper()
 	b, err := bootstrapFileReadFunc(fileName)
 	if err != nil {
-		// If file reading failed, skip this test.
-		return
+		t.Skip(err)
 	}
 	origBootstrapContent := env.BootstrapFileContent
 	env.BootstrapFileContent = string(b)
@@ -404,14 +391,18 @@ func TestNewConfigV2ProtoSuccess(t *testing.T) {
 	}{
 		{
 			"emptyNodeProto", &Config{
-				BalancerName: "trafficdirector.googleapis.com:443",
-				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-				NodeProto: &v2corepb.Node{
-					BuildVersion:         gRPCVersion,
-					UserAgentName:        gRPCUserAgentName,
-					UserAgentVersionType: &v2corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-					ClientFeatures:       []string{clientFeatureNoOverprovisioning},
+				XDSServer: &ServerConfig{
+					ServerURI: "trafficdirector.googleapis.com:443",
+					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+					credsType: "insecure",
+					NodeProto: &v2corepb.Node{
+						BuildVersion:         gRPCVersion,
+						UserAgentName:        gRPCUserAgentName,
+						UserAgentVersionType: &v2corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+						ClientFeatures:       []string{clientFeatureNoOverprovisioning},
+					},
 				},
+				ClientDefaultListenerResourceNameTemplate: "%s",
 			},
 		},
 		{"unknownTopLevelFieldInFile", nilCredsConfigV2},
@@ -670,13 +661,17 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 	defer cancel()
 
 	goodConfig := &Config{
-		BalancerName: "trafficdirector.googleapis.com:443",
-		Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-		TransportAPI: version.TransportV3,
-		NodeProto:    v3NodeProto,
+		XDSServer: &ServerConfig{
+			ServerURI:    "trafficdirector.googleapis.com:443",
+			Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
+			credsType:    "google_default",
+			TransportAPI: version.TransportV3,
+			NodeProto:    v3NodeProto,
+		},
 		CertProviderConfigs: map[string]*certprovider.BuildableConfig{
 			"fakeProviderInstance": wantCfg,
 		},
+		ClientDefaultListenerResourceNameTemplate: "%s",
 	}
 	tests := []struct {
 		name       string
@@ -760,11 +755,15 @@ func TestNewConfigWithServerListenerResourceNameTemplate(t *testing.T) {
 		{
 			name: "goodServerListenerResourceNameTemplate",
 			wantConfig: &Config{
-				BalancerName:                       "trafficdirector.googleapis.com:443",
-				Creds:                              grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-				TransportAPI:                       version.TransportV2,
-				NodeProto:                          v2NodeProto,
-				ServerListenerResourceNameTemplate: "grpc/server?xds.resource.listening_address=%s",
+				XDSServer: &ServerConfig{
+					ServerURI:    "trafficdirector.googleapis.com:443",
+					Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
+					credsType:    "google_default",
+					TransportAPI: version.TransportV2,
+					NodeProto:    v2NodeProto,
+				},
+				ServerListenerResourceNameTemplate:        "grpc/server?xds.resource.listening_address=%s",
+				ClientDefaultListenerResourceNameTemplate: "%s",
 			},
 		},
 	}

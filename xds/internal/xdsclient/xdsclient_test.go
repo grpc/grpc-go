@@ -56,34 +56,42 @@ func (s) TestNew(t *testing.T) {
 		{
 			name: "empty-balancer-name",
 			config: &bootstrap.Config{
-				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				NodeProto: testutils.EmptyNodeProtoV2,
+				XDSServer: &bootstrap.ServerConfig{
+					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+					NodeProto: testutils.EmptyNodeProtoV2,
+				},
 			},
 			wantErr: true,
 		},
 		{
 			name: "empty-dial-creds",
 			config: &bootstrap.Config{
-				BalancerName: testXDSServer,
-				NodeProto:    testutils.EmptyNodeProtoV2,
+				XDSServer: &bootstrap.ServerConfig{
+					ServerURI: testXDSServer,
+					NodeProto: testutils.EmptyNodeProtoV2,
+				},
 			},
 			wantErr: true,
 		},
 		{
 			name: "empty-node-proto",
 			config: &bootstrap.Config{
-				BalancerName: testXDSServer,
-				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
+				XDSServer: &bootstrap.ServerConfig{
+					ServerURI: testXDSServer,
+					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+				},
 			},
 			wantErr: true,
 		},
 		{
 			name: "node-proto-version-mismatch",
 			config: &bootstrap.Config{
-				BalancerName: testXDSServer,
-				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-				NodeProto:    testutils.EmptyNodeProtoV3,
-				TransportAPI: version.TransportV2,
+				XDSServer: &bootstrap.ServerConfig{
+					ServerURI:    testXDSServer,
+					Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
+					TransportAPI: version.TransportV2,
+					NodeProto:    testutils.EmptyNodeProtoV3,
+				},
 			},
 			wantErr: true,
 		},
@@ -91,9 +99,11 @@ func (s) TestNew(t *testing.T) {
 		{
 			name: "happy-case",
 			config: &bootstrap.Config{
-				BalancerName: testXDSServer,
-				Creds:        grpc.WithInsecure(),
-				NodeProto:    testutils.EmptyNodeProtoV2,
+				XDSServer: &bootstrap.ServerConfig{
+					ServerURI: testXDSServer,
+					Creds:     grpc.WithInsecure(),
+					NodeProto: testutils.EmptyNodeProtoV2,
+				},
 			},
 		},
 	}

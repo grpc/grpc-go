@@ -55,10 +55,12 @@ func (s) TestLRSClient(t *testing.T) {
 	defer sCleanup()
 
 	xdsC, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		BalancerName: fs.Address,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		NodeProto:    &v2corepb.Node{},
-		TransportAPI: version.TransportV2,
+		XDSServer: &bootstrap.ServerConfig{
+			ServerURI:    fs.Address,
+			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
+			TransportAPI: version.TransportV2,
+			NodeProto:    &v2corepb.Node{},
+		},
 	}, defaultClientWatchExpiryTimeout)
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)

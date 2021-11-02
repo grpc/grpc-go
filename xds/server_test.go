@@ -322,9 +322,11 @@ func setupOverrides() (*fakeGRPCServer, *testutils.Channel, func()) {
 	newXDSClient = func() (xdsclient.XDSClient, error) {
 		c := fakeclient.NewClient()
 		c.SetBootstrapConfig(&bootstrap.Config{
-			BalancerName:                       "dummyBalancer",
-			Creds:                              grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto:                          xdstestutils.EmptyNodeProtoV3,
+			XDSServer: &bootstrap.ServerConfig{
+				ServerURI: "dummyBalancer",
+				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+				NodeProto: xdstestutils.EmptyNodeProtoV3,
+			},
 			ServerListenerResourceNameTemplate: testServerListenerResourceNameTemplate,
 			CertProviderConfigs:                certProviderConfigs,
 		})
@@ -352,9 +354,11 @@ func setupOverridesForXDSCreds(includeCertProviderCfg bool) (*testutils.Channel,
 	newXDSClient = func() (xdsclient.XDSClient, error) {
 		c := fakeclient.NewClient()
 		bc := &bootstrap.Config{
-			BalancerName:                       "dummyBalancer",
-			Creds:                              grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto:                          xdstestutils.EmptyNodeProtoV3,
+			XDSServer: &bootstrap.ServerConfig{
+				ServerURI: "dummyBalancer",
+				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+				NodeProto: xdstestutils.EmptyNodeProtoV3,
+			},
 			ServerListenerResourceNameTemplate: testServerListenerResourceNameTemplate,
 		}
 		if includeCertProviderCfg {
@@ -599,18 +603,22 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 		{
 			desc: "certificate provider config is missing",
 			bootstrapConfig: &bootstrap.Config{
-				BalancerName:                       "dummyBalancer",
-				Creds:                              grpc.WithTransportCredentials(insecure.NewCredentials()),
-				NodeProto:                          xdstestutils.EmptyNodeProtoV3,
+				XDSServer: &bootstrap.ServerConfig{
+					ServerURI: "dummyBalancer",
+					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+					NodeProto: xdstestutils.EmptyNodeProtoV3,
+				},
 				ServerListenerResourceNameTemplate: testServerListenerResourceNameTemplate,
 			},
 		},
 		{
 			desc: "server_listener_resource_name_template is missing",
 			bootstrapConfig: &bootstrap.Config{
-				BalancerName:        "dummyBalancer",
-				Creds:               grpc.WithTransportCredentials(insecure.NewCredentials()),
-				NodeProto:           xdstestutils.EmptyNodeProtoV3,
+				XDSServer: &bootstrap.ServerConfig{
+					ServerURI: "dummyBalancer",
+					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+					NodeProto: xdstestutils.EmptyNodeProtoV3,
+				},
 				CertProviderConfigs: certProviderConfigs,
 			},
 		},
