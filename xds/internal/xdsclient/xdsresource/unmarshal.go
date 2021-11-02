@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-// Package resource contains functions to proto xds updates (unmarshal from
+// Package xdsresource contains functions to proto xds updates (unmarshal from
 // proto), and types for the resource updates.
 package xdsresource
 
