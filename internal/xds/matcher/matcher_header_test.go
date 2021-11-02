@@ -31,6 +31,7 @@ func TestHeaderExactMatcherMatch(t *testing.T) {
 		key, exact string
 		md         metadata.MD
 		want       bool
+		invert     bool
 	}{
 		{
 			name:  "one value one match",
@@ -61,10 +62,34 @@ func TestHeaderExactMatcherMatch(t *testing.T) {
 			md:    metadata.Pairs("th", "abc"),
 			want:  false,
 		},
+		{
+			name:   "invert header not present",
+			key:    "th",
+			exact:  "tv",
+			md:     metadata.Pairs(":method", "GET"),
+			want:   false,
+			invert: true,
+		},
+		{
+			name:   "invert header match",
+			key:    "th",
+			exact:  "tv",
+			md:     metadata.Pairs("th", "tv"),
+			want:   false,
+			invert: true,
+		},
+		{
+			name:   "invert header not match",
+			key:    "th",
+			exact:  "tv",
+			md:     metadata.Pairs("th", "tvv"),
+			want:   true,
+			invert: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hem := NewHeaderExactMatcher(tt.key, tt.exact)
+			hem := NewHeaderExactMatcher(tt.key, tt.exact, tt.invert)
 			if got := hem.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
@@ -78,6 +103,7 @@ func TestHeaderRegexMatcherMatch(t *testing.T) {
 		key, regexStr string
 		md            metadata.MD
 		want          bool
+		invert        bool
 	}{
 		{
 			name:     "one value one match",
@@ -121,10 +147,34 @@ func TestHeaderRegexMatcherMatch(t *testing.T) {
 			md:       metadata.Pairs("header", "aa"),
 			want:     true,
 		},
+		{
+			name:     "invert header not present",
+			key:      "th",
+			regexStr: "^t+v*$",
+			md:       metadata.Pairs(":method", "GET"),
+			want:     false,
+			invert:   true,
+		},
+		{
+			name:     "invert header match",
+			key:      "th",
+			regexStr: "^t+v*$",
+			md:       metadata.Pairs("th", "tttvv"),
+			want:     false,
+			invert:   true,
+		},
+		{
+			name:     "invert header not match",
+			key:      "th",
+			regexStr: "^t+v*$",
+			md:       metadata.Pairs("th", "abc"),
+			want:     true,
+			invert:   true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hrm := NewHeaderRegexMatcher(tt.key, regexp.MustCompile(tt.regexStr))
+			hrm := NewHeaderRegexMatcher(tt.key, regexp.MustCompile(tt.regexStr), tt.invert)
 			if got := hrm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
@@ -139,6 +189,7 @@ func TestHeaderRangeMatcherMatch(t *testing.T) {
 		start, end int64
 		md         metadata.MD
 		want       bool
+		invert     bool
 	}{
 		{
 			name:  "match",
@@ -168,10 +219,34 @@ func TestHeaderRangeMatcherMatch(t *testing.T) {
 			md:   metadata.Pairs("th", "-5"),
 			want: true,
 		},
+		{
+			name:  "invert header not present",
+			key:   "th",
+			start: 1, end: 10,
+			md:     metadata.Pairs(":method", "GET"),
+			want:   false,
+			invert: true,
+		},
+		{
+			name:  "invert header match",
+			key:   "th",
+			start: 1, end: 10,
+			md:     metadata.Pairs("th", "5"),
+			want:   false,
+			invert: true,
+		},
+		{
+			name:  "invert header not match",
+			key:   "th",
+			start: 1, end: 9,
+			md:     metadata.Pairs("th", "10"),
+			want:   true,
+			invert: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hrm := NewHeaderRangeMatcher(tt.key, tt.start, tt.end)
+			hrm := NewHeaderRangeMatcher(tt.key, tt.start, tt.end, tt.invert)
 			if got := hrm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
@@ -186,6 +261,7 @@ func TestHeaderPresentMatcherMatch(t *testing.T) {
 		present bool
 		md      metadata.MD
 		want    bool
+		invert  bool
 	}{
 		{
 			name:    "want present is present",
@@ -215,10 +291,34 @@ func TestHeaderPresentMatcherMatch(t *testing.T) {
 			md:      metadata.Pairs("abc", "tv"),
 			want:    true,
 		},
+		{
+			name:    "invert header not present",
+			key:     "th",
+			present: true,
+			md:      metadata.Pairs(":method", "GET"),
+			want:    true,
+			invert:  true,
+		},
+		{
+			name:    "invert header match",
+			key:     "th",
+			present: true,
+			md:      metadata.Pairs("th", "tv"),
+			want:    false,
+			invert:  true,
+		},
+		{
+			name:    "invert header not match",
+			key:     "th",
+			present: true,
+			md:      metadata.Pairs(":method", "GET"),
+			want:    true,
+			invert:  true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hpm := NewHeaderPresentMatcher(tt.key, tt.present)
+			hpm := NewHeaderPresentMatcher(tt.key, tt.present, tt.invert)
 			if got := hpm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
@@ -232,6 +332,7 @@ func TestHeaderPrefixMatcherMatch(t *testing.T) {
 		key, prefix string
 		md          metadata.MD
 		want        bool
+		invert      bool
 	}{
 		{
 			name:   "one value one match",
@@ -261,10 +362,34 @@ func TestHeaderPrefixMatcherMatch(t *testing.T) {
 			md:     metadata.Pairs("th", "abc"),
 			want:   false,
 		},
+		{
+			name:   "invert header not present",
+			key:    "th",
+			prefix: "tv",
+			md:     metadata.Pairs(":method", "GET"),
+			want:   false,
+			invert: true,
+		},
+		{
+			name:   "invert header match",
+			key:    "th",
+			prefix: "tv",
+			md:     metadata.Pairs("th", "tv123"),
+			want:   false,
+			invert: true,
+		},
+		{
+			name:   "invert header not match",
+			key:    "th",
+			prefix: "tv",
+			md:     metadata.Pairs("th", "abc"),
+			want:   true,
+			invert: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hpm := NewHeaderPrefixMatcher(tt.key, tt.prefix)
+			hpm := NewHeaderPrefixMatcher(tt.key, tt.prefix, tt.invert)
 			if got := hpm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
@@ -278,6 +403,7 @@ func TestHeaderSuffixMatcherMatch(t *testing.T) {
 		key, suffix string
 		md          metadata.MD
 		want        bool
+		invert      bool
 	}{
 		{
 			name:   "one value one match",
@@ -307,40 +433,36 @@ func TestHeaderSuffixMatcherMatch(t *testing.T) {
 			md:     metadata.Pairs("th", "abc"),
 			want:   false,
 		},
+		{
+			name:   "invert header not present",
+			key:    "th",
+			suffix: "tv",
+			md:     metadata.Pairs(":method", "GET"),
+			want:   false,
+			invert: true,
+		},
+		{
+			name:   "invert header match",
+			key:    "th",
+			suffix: "tv",
+			md:     metadata.Pairs("th", "123tv"),
+			want:   false,
+			invert: true,
+		},
+		{
+			name:   "invert header not match",
+			key:    "th",
+			suffix: "tv",
+			md:     metadata.Pairs("th", "abc"),
+			want:   true,
+			invert: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			hsm := NewHeaderSuffixMatcher(tt.key, tt.suffix)
+			hsm := NewHeaderSuffixMatcher(tt.key, tt.suffix, tt.invert)
 			if got := hsm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestInvertMatcherMatch(t *testing.T) {
-	tests := []struct {
-		name string
-		m    HeaderMatcher
-		md   metadata.MD
-	}{
-		{
-			name: "true->false",
-			m:    NewHeaderExactMatcher("th", "tv"),
-			md:   metadata.Pairs("th", "tv"),
-		},
-		{
-			name: "false->true",
-			m:    NewHeaderExactMatcher("th", "abc"),
-			md:   metadata.Pairs("th", "tv"),
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := NewInvertMatcher(tt.m).Match(tt.md)
-			want := !tt.m.Match(tt.md)
-			if got != want {
-				t.Errorf("match() = %v, want %v", got, want)
 			}
 		})
 	}

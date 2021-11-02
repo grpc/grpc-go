@@ -83,8 +83,10 @@ var (
 	// RetrySupport indicates whether xDS retry is enabled.
 	RetrySupport = !strings.EqualFold(os.Getenv(retrySupportEnv), "false")
 
-	// RBACSupport indicates whether xDS configured RBAC HTTP Filter is enabled.
-	RBACSupport = strings.EqualFold(os.Getenv(rbacSupportEnv), "true")
+	// RBACSupport indicates whether xDS configured RBAC HTTP Filter is enabled,
+	// which can be disabled by setting the environment variable
+	// "GRPC_XDS_EXPERIMENTAL_RBAC" to "false".
+	RBACSupport = !strings.EqualFold(os.Getenv(rbacSupportEnv), "false")
 
 	// C2PResolverSupport indicates whether support for C2P resolver is enabled.
 	// This can be enabled by setting the environment variable

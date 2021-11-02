@@ -40,7 +40,7 @@ func TestAndMatcherMatch(t *testing.T) {
 		{
 			name: "both match",
 			pm:   newPathExactMatcher("/a/b", false),
-			hm:   matcher.NewHeaderExactMatcher("th", "tv"),
+			hm:   matcher.NewHeaderExactMatcher("th", "tv", false),
 			info: iresolver.RPCInfo{
 				Method:  "/a/b",
 				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
@@ -50,7 +50,7 @@ func TestAndMatcherMatch(t *testing.T) {
 		{
 			name: "both match with path case insensitive",
 			pm:   newPathExactMatcher("/A/B", true),
-			hm:   matcher.NewHeaderExactMatcher("th", "tv"),
+			hm:   matcher.NewHeaderExactMatcher("th", "tv", false),
 			info: iresolver.RPCInfo{
 				Method:  "/a/b",
 				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
@@ -60,7 +60,7 @@ func TestAndMatcherMatch(t *testing.T) {
 		{
 			name: "only one match",
 			pm:   newPathExactMatcher("/a/b", false),
-			hm:   matcher.NewHeaderExactMatcher("th", "tv"),
+			hm:   matcher.NewHeaderExactMatcher("th", "tv", false),
 			info: iresolver.RPCInfo{
 				Method:  "/z/y",
 				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
@@ -70,7 +70,7 @@ func TestAndMatcherMatch(t *testing.T) {
 		{
 			name: "both not match",
 			pm:   newPathExactMatcher("/z/y", false),
-			hm:   matcher.NewHeaderExactMatcher("th", "abc"),
+			hm:   matcher.NewHeaderExactMatcher("th", "abc", false),
 			info: iresolver.RPCInfo{
 				Method:  "/a/b",
 				Context: metadata.NewOutgoingContext(context.Background(), metadata.Pairs("th", "tv")),
@@ -80,7 +80,7 @@ func TestAndMatcherMatch(t *testing.T) {
 		{
 			name: "fake header",
 			pm:   newPathPrefixMatcher("/", false),
-			hm:   matcher.NewHeaderExactMatcher("content-type", "fake"),
+			hm:   matcher.NewHeaderExactMatcher("content-type", "fake", false),
 			info: iresolver.RPCInfo{
 				Method: "/a/b",
 				Context: grpcutil.WithExtraMetadata(context.Background(), metadata.Pairs(
@@ -92,7 +92,7 @@ func TestAndMatcherMatch(t *testing.T) {
 		{
 			name: "binary header",
 			pm:   newPathPrefixMatcher("/", false),
-			hm:   matcher.NewHeaderPresentMatcher("t-bin", true),
+			hm:   matcher.NewHeaderPresentMatcher("t-bin", true, false),
 			info: iresolver.RPCInfo{
 				Method: "/a/b",
 				Context: grpcutil.WithExtraMetadata(
