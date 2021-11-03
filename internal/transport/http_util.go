@@ -43,8 +43,6 @@ import (
 )
 
 const (
-	// http2MaxFrameLen specifies the max length of a HTTP2 frame.
-	http2MaxFrameLen = 16384 // 16KB frame
 	// http://http2.github.io/http2-spec/#SettingValues
 	http2InitHeaderTableSize = 4096
 	// baseContentType is the base content-type for gRPC.  This is a valid
@@ -373,7 +371,7 @@ type framer struct {
 	fr     *http2.Framer
 }
 
-func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderListSize uint32) *framer {
+func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderListSize, maxFrameSize uint32) *framer {
 	if writeBufferSize < 0 {
 		writeBufferSize = 0
 	}
@@ -386,7 +384,7 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderList
 		writer: w,
 		fr:     http2.NewFramer(w, r),
 	}
-	f.fr.SetMaxReadFrameSize(http2MaxFrameLen)
+	f.fr.SetMaxReadFrameSize(maxFrameSize)
 	// Opt-in to Frame reuse API on framer to reduce garbage.
 	// Frames aren't safe to read from after a subsequent call to ReadFrame.
 	f.fr.SetReuseFrames()

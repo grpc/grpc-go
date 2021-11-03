@@ -163,6 +163,7 @@ type serverOptions struct {
 	readBufferSize        int
 	connectionTimeout     time.Duration
 	maxHeaderListSize     *uint32
+	maxFrameSize          *uint32
 	headerTableSize       *uint32
 	numServerWorkers      uint32
 }
@@ -477,6 +478,14 @@ func ConnectionTimeout(d time.Duration) ServerOption {
 func MaxHeaderListSize(s uint32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.maxHeaderListSize = &s
+	})
+}
+
+// MaxFrameSize returns a ServerOption that sets the max (uncompressed) size
+// of header list that the server is prepared to accept.
+func MaxFrameSize(s uint32) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.maxFrameSize = &s
 	})
 }
 
@@ -875,6 +884,7 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 		ReadBufferSize:        s.opts.readBufferSize,
 		ChannelzParentID:      s.channelzID,
 		MaxHeaderListSize:     s.opts.maxHeaderListSize,
+		MaxFrameSize:          s.opts.maxFrameSize,
 		HeaderTableSize:       s.opts.headerTableSize,
 	}
 	st, err := transport.NewServerTransport(c, config)

@@ -693,8 +693,8 @@ func (l *loopyWriter) writeHeader(streamID uint32, endStream bool, hf []hpack.He
 	first = true
 	for !endHeaders {
 		size := l.hBuf.Len()
-		if size > http2MaxFrameLen {
-			size = http2MaxFrameLen
+		if size > int(defaultFrameSize) {
+			size = int(defaultFrameSize)
 		} else {
 			endHeaders = true
 		}
@@ -908,7 +908,7 @@ func (l *loopyWriter) processData() (bool, error) {
 		buf []byte
 	)
 	// Figure out the maximum size we can send
-	maxSize := http2MaxFrameLen
+	maxSize := int(defaultFrameSize)
 	if strQuota := int(l.oiws) - str.bytesOutStanding; strQuota <= 0 { // stream-level flow control.
 		str.state = waitingOnStreamQuota
 		return false, nil
@@ -927,7 +927,7 @@ func (l *loopyWriter) processData() (bool, error) {
 		} else {
 			// We can add some data to grpc message header to distribute bytes more equally across frames.
 			// Copy on the stack to avoid generating garbage
-			var localBuf [http2MaxFrameLen]byte
+			var localBuf [defaultFrameSize]byte
 			copy(localBuf[:hSize], dataItem.h)
 			copy(localBuf[hSize:], dataItem.d[:dSize])
 			buf = localBuf[:hSize+dSize]

@@ -98,6 +98,7 @@ type http2Server struct {
 	initialWindowSize     int32
 	bdpEst                *bdpEstimator
 	maxSendHeaderListSize *uint32
+	maxFrameSize          *uint32
 
 	mu sync.Mutex // guard the following
 
@@ -159,11 +160,15 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	if config.MaxHeaderListSize != nil {
 		maxHeaderListSize = *config.MaxHeaderListSize
 	}
-	framer := newFramer(conn, writeBufSize, readBufSize, maxHeaderListSize)
+	maxFrameSize := defaultFrameSize
+	if config.MaxFrameSize != nil {
+		maxFrameSize = *config.MaxFrameSize
+	}
+	framer := newFramer(conn, writeBufSize, readBufSize, maxHeaderListSize, maxFrameSize)
 	// Send initial settings as connection preface to client.
 	isettings := []http2.Setting{{
 		ID:  http2.SettingMaxFrameSize,
-		Val: http2MaxFrameLen,
+		Val: maxFrameSize,
 	}}
 	// TODO(zhaoq): Have a better way to signal "no limit" because 0 is
 	// permitted in the HTTP2 spec.
@@ -815,6 +820,11 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 			updateFuncs = append(updateFuncs, func() {
 				t.maxSendHeaderListSize = new(uint32)
 				*t.maxSendHeaderListSize = s.Val
+			})
+		case http2.SettingMaxFrameSize:
+			updateFuncs = append(updateFuncs, func() {
+				t.maxFrameSize = new(uint32)
+				*t.maxFrameSize = s.Val
 			})
 		default:
 			ss = append(ss, s)

@@ -170,11 +170,11 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 		return
 	}
 	var sent int
-	p := make([]byte, http2MaxFrameLen)
+	p := make([]byte, defaultFrameSize)
 	for sent < initialWindowSize {
 		n := initialWindowSize - sent
 		// The last message may be smaller than http2MaxFrameLen
-		if n <= http2MaxFrameLen {
+		if n <= int(defaultFrameSize) {
 			if s.Method() == "foo.Connection" {
 				// Violate connection level flow control window of client but do not
 				// violate any stream level windows.
@@ -944,7 +944,7 @@ func (s) TestServerContextCanceledOnClosedConnection(t *testing.T) {
 		streamID:    s.id,
 		endStream:   false,
 		h:           nil,
-		d:           make([]byte, http2MaxFrameLen),
+		d:           make([]byte, defaultFrameSize),
 		onEachWrite: func() {},
 	})
 	// Loop until the server side stream is created.
@@ -1203,7 +1203,7 @@ func (s) TestServerWithMisbehavedClient(t *testing.T) {
 
 	// Test server behavior for violation of stream flow control window size restriction.
 	timer := time.NewTimer(time.Second * 5)
-	dbuf := make([]byte, http2MaxFrameLen)
+	dbuf := make([]byte, defaultFrameSize)
 	for {
 		select {
 		case <-timer.C:
@@ -1268,7 +1268,7 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 			case *http2.HeadersFrame:
 				// When the client creates a stream, violate the stream flow control.
 				go func() {
-					buf := make([]byte, http2MaxFrameLen)
+					buf := make([]byte, defaultFrameSize)
 					for {
 						mu.Lock()
 						if err := sfr.WriteData(1, false, buf); err != nil {
@@ -1338,7 +1338,7 @@ func (s) TestEncodingRequiredStatus(t *testing.T) {
 	if err := ct.Write(s, nil, expectedRequest, &opts); err != nil && err != errStreamDone {
 		t.Fatalf("Failed to write the request: %v", err)
 	}
-	p := make([]byte, http2MaxFrameLen)
+	p := make([]byte, defaultFrameSize)
 	if _, err := s.trReader.(*transportReader).Read(p); err != io.EOF {
 		t.Fatalf("Read got error %v, want %v", err, io.EOF)
 	}
@@ -1362,7 +1362,7 @@ func (s) TestInvalidHeaderField(t *testing.T) {
 	if err != nil {
 		return
 	}
-	p := make([]byte, http2MaxFrameLen)
+	p := make([]byte, defaultFrameSize)
 	_, err = s.trReader.(*transportReader).Read(p)
 	if se, ok := status.FromError(err); !ok || se.Code() != codes.Internal || !strings.Contains(err.Error(), expectedInvalidHeaderField) {
 		t.Fatalf("Read got error %v, want error with code %s and contains %q", err, codes.Internal, expectedInvalidHeaderField)
