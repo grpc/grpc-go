@@ -33,7 +33,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
-	xtestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -258,9 +257,9 @@ func commonSetup(ctx context.Context, t *testing.T) (xdsclient.XDSClient, *e2e.M
 	}
 	v3statuspbgrpc.RegisterClientStatusDiscoveryServiceServer(server, csdss)
 	// Create a local listener and pass it to Serve().
-	lis, err := xtestutils.LocalTCPListener()
+	lis, err := testutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("xtestutils.LocalTCPListener() failed: %v", err)
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 	go func() {
 		if err := server.Serve(lis); err != nil {
@@ -504,9 +503,9 @@ func TestCSDSNoXDSClient(t *testing.T) {
 	defer csdss.Close()
 	v3statuspbgrpc.RegisterClientStatusDiscoveryServiceServer(server, csdss)
 	// Create a local listener and pass it to Serve().
-	lis, err := xtestutils.LocalTCPListener()
+	lis, err := testutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("xtestutils.LocalTCPListener() failed: %v", err)
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 	go func() {
 		if err := server.Serve(lis); err != nil {

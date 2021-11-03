@@ -29,15 +29,16 @@ import (
 	"testing"
 	"time"
 
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
-	testpb "google.golang.org/grpc/test/grpc_testing"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
+
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
 // TestServerSideXDS_RedundantUpdateSuppression tests the scenario where the
@@ -52,7 +53,7 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lis, err := xdstestutils.LocalTCPListener()
+	lis, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
@@ -168,11 +169,11 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 	}
 
 	// Create two local listeners and pass it to Serve().
-	lis1, err := xdstestutils.LocalTCPListener()
+	lis1, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
-	lis2, err := xdstestutils.LocalTCPListener()
+	lis2, err := testutils.LocalTCPListener()
 	if err != nil {
 		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}

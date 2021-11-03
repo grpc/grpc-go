@@ -20,6 +20,9 @@ set +e
 export TMPDIR=$(mktemp -d)
 trap "rm -rf ${TMPDIR}" EXIT
 
+export SERVER_PORT=50051
+export UNIX_ADDR=abstract-unix-socket
+
 clean () {
   for i in {1..10}; do
     jobs -p | xargs -n1 pkill -P
@@ -60,6 +63,36 @@ EXAMPLES=(
     "features/name_resolving"
     "features/unix_abstract"
 )
+
+declare -A SERVER_ARGS=(
+    ["features/unix_abstract"]="-addr $UNIX_ADDR"
+    ["default"]="-port $SERVER_PORT"
+)
+
+declare -A CLIENT_ARGS=(
+    ["features/unix_abstract"]="-addr $UNIX_ADDR"
+    ["default"]="-addr localhost:$SERVER_PORT"
+)
+
+declare -A SERVER_WAIT_COMMAND=(
+    ["features/unix_abstract"]="lsof -U | grep $UNIX_ADDR"
+    ["default"]="lsof -i :$SERVER_PORT | grep $SERVER_PORT"
+)
+
+wait_for_server () {
+    example=$1
+    wait_command=${SERVER_WAIT_COMMAND[$example]:-${SERVER_WAIT_COMMAND["default"]}}
+    echo "$(tput setaf 4) waiting for server to start $(tput sgr 0)"
+    for i in {1..10}; do
+        eval "$wait_command" 2>&1 &>/dev/null
+        if [ $? -eq 0 ]; then
+            pass "server started"
+            return
+        fi
+        sleep 1
+    done
+    fail "cannot determine if server started"
+}
 
 declare -A EXPECTED_SERVER_OUTPUT=(
     ["helloworld"]="Received: world"
@@ -105,6 +138,13 @@ for example in ${EXAMPLES[@]}; do
         pass "successfully built server"
     fi
 
+    # Start server
+    SERVER_LOG="$(mktemp)"
+    server_args=${SERVER_ARGS[$example]:-${SERVER_ARGS["default"]}}
+    go run ./$example/*server/*.go $server_args &> $SERVER_LOG  &
+
+    wait_for_server $example
+
     # Build client
     if ! go build -o /dev/null ./${example}/*client/*.go; then
         fail "failed to build client"
@@ -112,12 +152,10 @@ for example in ${EXAMPLES[@]}; do
         pass "successfully built client"
     fi
 
-    # Start server
-    SERVER_LOG="$(mktemp)"
-    go run ./$example/*server/*.go &> $SERVER_LOG  &
-
+    # Start client
     CLIENT_LOG="$(mktemp)"
-    if ! timeout 20 go run ${example}/*client/*.go &> $CLIENT_LOG; then
+    client_args=${CLIENT_ARGS[$example]:-${CLIENT_ARGS["default"]}}
+    if ! timeout 20 go run ${example}/*client/*.go $client_args &> $CLIENT_LOG; then
         fail "client failed to communicate with server
         got server log:
         $(cat $SERVER_LOG)

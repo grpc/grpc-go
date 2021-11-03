@@ -21,9 +21,9 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"net"
-	"os"
 	"time"
 
 	"google.golang.org/grpc"
@@ -38,9 +38,15 @@ const (
 	defaultName = "world"
 )
 
+var (
+	addr = flag.String("addr", "localhost:50051", "the address to connect to")
+	name = flag.String("name", defaultName, "Name to greet")
+)
+
 func main() {
+	flag.Parse()
 	/***** Set up the server serving channelz service. *****/
-	lis, err := net.Listen("tcp", ":50052")
+	lis, err := net.Listen("tcp", *addr)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -64,17 +70,13 @@ func main() {
 	c := pb.NewGreeterClient(conn)
 
 	// Contact the server and print out its response.
-	name := defaultName
-	if len(os.Args) > 1 {
-		name = os.Args[1]
-	}
 
 	/***** Make 100 SayHello RPCs *****/
 	for i := 0; i < 100; i++ {
 		// Setting a 150ms timeout on the RPC.
 		ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 		defer cancel()
-		r, err := c.SayHello(ctx, &pb.HelloRequest{Name: name})
+		r, err := c.SayHello(ctx, &pb.HelloRequest{Name: *name})
 		if err != nil {
 			log.Printf("could not greet: %v", err)
 		} else {

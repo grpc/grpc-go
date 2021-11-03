@@ -25,12 +25,21 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"time"
 
 	"google.golang.org/grpc"
 	ecpb "google.golang.org/grpc/examples/features/proto/echo"
+)
+
+var (
+	// A dial target of `unix:@abstract-unix-socket` should also work fine for
+	// this example because of golang conventions (net.Dial behavior). But we do
+	// not recommend this since we explicitly added the `unix-abstract` scheme
+	// for cross-language compatibility.
+	addr = flag.String("addr", "abstract-unix-socket", "The unix abstract socket address")
 )
 
 func callUnaryEcho(c ecpb.EchoClient, message string) {
@@ -51,18 +60,15 @@ func makeRPCs(cc *grpc.ClientConn, n int) {
 }
 
 func main() {
-	// A dial target of `unix:@abstract-unix-socket` should also work fine for
-	// this example because of golang conventions (net.Dial behavior). But we do
-	// not recommend this since we explicitly added the `unix-abstract` scheme
-	// for cross-language compatibility.
-	addr := "unix-abstract:abstract-unix-socket"
-	cc, err := grpc.Dial(addr, grpc.WithInsecure(), grpc.WithBlock())
+	flag.Parse()
+	sockAddr := fmt.Sprintf("unix-abstract:%v", *addr)
+	cc, err := grpc.Dial(sockAddr, grpc.WithInsecure())
 	if err != nil {
-		log.Fatalf("grpc.Dial(%q) failed: %v", addr, err)
+		log.Fatalf("grpc.Dial(%q) failed: %v", sockAddr, err)
 	}
 	defer cc.Close()
 
-	fmt.Printf("--- calling echo.Echo/UnaryEcho to %s\n", addr)
+	fmt.Printf("--- calling echo.Echo/UnaryEcho to %s\n", sockAddr)
 	makeRPCs(cc, 10)
 	fmt.Println()
 }

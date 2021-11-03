@@ -115,12 +115,12 @@ func (lrsC *lrsClient) startStream() {
 	var cc *grpc.ClientConn
 
 	lrsC.parent.logger.Infof("Starting load report to server: %s", lrsC.server)
-	if lrsC.server == "" || lrsC.server == lrsC.parent.config.BalancerName {
+	if lrsC.server == "" || lrsC.server == lrsC.parent.config.XDSServer.ServerURI {
 		// Reuse the xDS client if server is the same.
 		cc = lrsC.parent.cc
 	} else {
 		lrsC.parent.logger.Infof("LRS server is different from management server, starting a new ClientConn")
-		ccNew, err := grpc.Dial(lrsC.server, lrsC.parent.config.Creds)
+		ccNew, err := grpc.Dial(lrsC.server, lrsC.parent.config.XDSServer.Creds)
 		if err != nil {
 			// An error from a non-blocking dial indicates something serious.
 			lrsC.parent.logger.Infof("xds: failed to dial load report server {%s}: %v", lrsC.server, err)
