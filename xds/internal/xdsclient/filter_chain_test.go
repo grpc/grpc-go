@@ -771,6 +771,40 @@ func TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
 		wantErr string
 	}{
 		{
+			name: "missing-route-specifier",
+			lis: &v3listenerpb.Listener{
+				FilterChains: []*v3listenerpb.FilterChain{
+					{
+						Name: "filter-chain-1",
+						Filters: []*v3listenerpb.Filter{
+							{
+								Name: "hcm",
+								ConfigType: &v3listenerpb.Filter_TypedConfig{
+
+									TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+										HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
+									}),
+								},
+							},
+						},
+					},
+				},
+				DefaultFilterChain: &v3listenerpb.FilterChain{
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "hcm",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
+								}),
+							},
+						},
+					},
+				},
+			},
+			wantErr: "no RouteSpecifier",
+		},
+		{
 			name: "not-ads",
 			lis: &v3listenerpb.Listener{
 				FilterChains: []*v3listenerpb.FilterChain{

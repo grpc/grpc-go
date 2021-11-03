@@ -637,8 +637,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 					}
 					filterChain.InlineRouteConfig = &routeU
 				case nil:
-					// No-op, as no route specifier is a valid configuration on
-					// the server side.
+					return nil, fmt.Errorf("no RouteSpecifier: %+v", hcm)
 				default:
 					return nil, fmt.Errorf("unsupported type %T for RouteSpecifier", hcm.RouteSpecifier)
 				}
