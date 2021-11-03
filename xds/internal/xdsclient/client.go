@@ -206,12 +206,12 @@ type ListenerUpdate struct {
 	// RouteConfigName is the route configuration name corresponding to the
 	// target which is being watched through LDS.
 	//
-	// Only one of RouteConfigName and InlineRouteConfig is set.
+	// Exactly one of RouteConfigName and InlineRouteConfig is set.
 	RouteConfigName string
 	// InlineRouteConfig is the inline route configuration (RDS response)
 	// returned inside LDS.
 	//
-	// Only one of RouteConfigName and InlineRouteConfig is set.
+	// Exactly one of RouteConfigName and InlineRouteConfig is set.
 	InlineRouteConfig *RouteConfigUpdate
 
 	// MaxStreamDuration contains the HTTP connection manager's
