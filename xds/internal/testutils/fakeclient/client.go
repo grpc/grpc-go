@@ -306,11 +306,11 @@ func NewClient() *Client {
 func NewClientWithName(name string) *Client {
 	return &Client{
 		name:         name,
-		ldsWatchCh:   testutils.NewChannel(),
+		ldsWatchCh:   testutils.NewChannelWithSize(10),
 		rdsWatchCh:   testutils.NewChannelWithSize(10),
 		cdsWatchCh:   testutils.NewChannelWithSize(10),
 		edsWatchCh:   testutils.NewChannelWithSize(10),
-		ldsCancelCh:  testutils.NewChannel(),
+		ldsCancelCh:  testutils.NewChannelWithSize(10),
 		rdsCancelCh:  testutils.NewChannelWithSize(10),
 		cdsCancelCh:  testutils.NewChannelWithSize(10),
 		edsCancelCh:  testutils.NewChannelWithSize(10),
