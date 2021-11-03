@@ -194,13 +194,20 @@ func (s) TestResolverBuilder(t *testing.T) {
 func (s) TestResolverBuilder_xdsCredsBootstrapMismatch(t *testing.T) {
 	// Fake out the xdsClient creation process by providing a fake, which does
 	// not have any certificate provider configuration.
+	fc := fakeclient.NewClient()
+	fc.SetBootstrapConfig(&bootstrap.Config{})
 	oldClientMaker := newXDSClient
 	newXDSClient = func() (xdsclient.XDSClient, error) {
-		fc := fakeclient.NewClient()
-		fc.SetBootstrapConfig(&bootstrap.Config{})
 		return fc, nil
 	}
 	defer func() { newXDSClient = oldClientMaker }()
+	defer func() {
+		select {
+		case <-time.After(defaultTestTimeout):
+			t.Fatalf("timeout waiting for close")
+		case <-fc.Closed.Done():
+		}
+	}()
 
 	builder := resolver.Get(xdsScheme)
 	if builder == nil {
