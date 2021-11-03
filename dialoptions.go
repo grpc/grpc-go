@@ -228,18 +228,14 @@ func WithServiceConfig(c <-chan ServiceConfig) DialOption {
 	})
 }
 
-// WithConnectParams configures the dialer to use the provided ConnectParams.
+// WithConnectParams configures the ClientConn to use the provided ConnectParams
+// for creating and maintaining connections to servers.
 //
 // The backoff configuration specified as part of the ConnectParams overrides
 // all defaults specified in
 // https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md. Consider
 // using the backoff.DefaultConfig as a base, in cases where you want to
 // override only a subset of the backoff configuration.
-//
-// Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
 func WithConnectParams(p ConnectParams) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.bs = internalbackoff.Exponential{Config: p.Backoff}
