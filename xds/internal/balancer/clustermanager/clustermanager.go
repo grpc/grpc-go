@@ -46,7 +46,7 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	b.logger = prefixLogger(b)
 	b.stateAggregator = newBalancerStateAggregator(cc, b.logger)
 	b.stateAggregator.start()
-	b.bg = balancergroup.New(cc, opts, b.stateAggregator, nil, b.logger)
+	b.bg = balancergroup.New(cc, opts, b.stateAggregator, b.logger)
 	b.bg.Start()
 	b.logger.Infof("Created")
 	return b

@@ -30,19 +30,17 @@ import (
 	"testing"
 	"time"
 
-	orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget/weightedaggregator"
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
 var (
@@ -64,6 +62,14 @@ func init() {
 	DefaultSubBalancerCloseTimeout = time.Millisecond
 }
 
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
 func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	return func() balancer.SubConn {
 		scst, _ := p.Pick(balancer.PickInfo{})
@@ -71,18 +77,18 @@ func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
 	}
 }
 
-func newTestBalancerGroup(t *testing.T, loadStore load.PerClusterReporter) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
+func newTestBalancerGroup(t *testing.T) (*testutils.TestClientConn, *weightedaggregator.Aggregator, *BalancerGroup) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, balancer.BuildOptions{}, gator, loadStore, nil)
+	bg := New(cc, balancer.BuildOptions{}, gator, nil)
 	bg.Start()
 	return cc, gator, bg
 }
 
 // 1 balancer, 1 backend -> 2 backends -> 1 backend.
 func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
-	cc, gator, bg := newTestBalancerGroup(t, nil)
+	cc, gator, bg := newTestBalancerGroup(t)
 
 	// Add one balancer to group.
 	gator.Add(testBalancerIDs[0], 1)
@@ -138,7 +144,7 @@ func (s) TestBalancerGroup_OneRR_AddRemoveBackend(t *testing.T) {
 
 // 2 balancers, each with 1 backend.
 func (s) TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
-	cc, gator, bg := newTestBalancerGroup(t, nil)
+	cc, gator, bg := newTestBalancerGroup(t)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
@@ -168,7 +174,7 @@ func (s) TestBalancerGroup_TwoRR_OneBackend(t *testing.T) {
 
 // 2 balancers, each with more than 1 backends.
 func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
-	cc, gator, bg := newTestBalancerGroup(t, nil)
+	cc, gator, bg := newTestBalancerGroup(t)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
@@ -253,7 +259,7 @@ func (s) TestBalancerGroup_TwoRR_MoreBackends(t *testing.T) {
 
 // 2 balancers with different weights.
 func (s) TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
-	cc, gator, bg := newTestBalancerGroup(t, nil)
+	cc, gator, bg := newTestBalancerGroup(t)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -289,7 +295,7 @@ func (s) TestBalancerGroup_TwoRR_DifferentWeight_MoreBackends(t *testing.T) {
 
 // totally 3 balancers, add/remove balancer.
 func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
-	cc, gator, bg := newTestBalancerGroup(t, nil)
+	cc, gator, bg := newTestBalancerGroup(t)
 
 	// Add three balancers to group and send one resolved address to both
 	// balancers.
@@ -356,7 +362,7 @@ func (s) TestBalancerGroup_ThreeRR_RemoveBalancer(t *testing.T) {
 
 // 2 balancers, change balancer weight.
 func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
-	cc, gator, bg := newTestBalancerGroup(t, nil)
+	cc, gator, bg := newTestBalancerGroup(t)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -400,95 +406,6 @@ func (s) TestBalancerGroup_TwoRR_ChangeWeight_MoreBackends(t *testing.T) {
 	}
 }
 
-func (s) TestBalancerGroup_LoadReport(t *testing.T) {
-	loadStore := load.NewStore()
-	const (
-		testCluster    = "test-cluster"
-		testEDSService = "test-eds-service"
-	)
-	cc, gator, bg := newTestBalancerGroup(t, loadStore.PerCluster(testCluster, testEDSService))
-
-	backendToBalancerID := make(map[balancer.SubConn]string)
-
-	// Add two balancers to group and send two resolved addresses to both
-	// balancers.
-	gator.Add(testBalancerIDs[0], 2)
-	bg.Add(testBalancerIDs[0], rrBuilder)
-	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
-	sc1 := <-cc.NewSubConnCh
-	sc2 := <-cc.NewSubConnCh
-	backendToBalancerID[sc1] = testBalancerIDs[0]
-	backendToBalancerID[sc2] = testBalancerIDs[0]
-
-	gator.Add(testBalancerIDs[1], 1)
-	bg.Add(testBalancerIDs[1], rrBuilder)
-	bg.UpdateClientConnState(testBalancerIDs[1], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}})
-	sc3 := <-cc.NewSubConnCh
-	sc4 := <-cc.NewSubConnCh
-	backendToBalancerID[sc3] = testBalancerIDs[1]
-	backendToBalancerID[sc4] = testBalancerIDs[1]
-
-	// Send state changes for both subconns.
-	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	bg.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	bg.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	bg.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.Ready})
-	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	bg.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Ready})
-
-	// Test roundrobin on the last picker.
-	p1 := <-cc.NewPickerCh
-	// bg1 has a weight of 2, while bg2 has a weight of 1. So, we expect 20 of
-	// these picks to go to bg1 and 10 of them to bg2. And since there are two
-	// subConns in each group, we expect the picks to be equally split between
-	// the subConns. We do not call Done() on picks routed to sc1, so we expect
-	// these to show up as pending rpcs.
-	wantStoreData := []*load.Data{{
-		Cluster: testCluster,
-		Service: testEDSService,
-		LocalityStats: map[string]load.LocalityData{
-			testBalancerIDs[0]: {
-				RequestStats: load.RequestData{Succeeded: 10, InProgress: 10},
-				LoadStats: map[string]load.ServerLoadData{
-					"cpu_utilization": {Count: 10, Sum: 100},
-					"mem_utilization": {Count: 10, Sum: 50},
-					"pic":             {Count: 10, Sum: 31.4},
-					"piu":             {Count: 10, Sum: 31.4},
-				},
-			},
-			testBalancerIDs[1]: {
-				RequestStats: load.RequestData{Succeeded: 10},
-				LoadStats: map[string]load.ServerLoadData{
-					"cpu_utilization": {Count: 10, Sum: 100},
-					"mem_utilization": {Count: 10, Sum: 50},
-					"pic":             {Count: 10, Sum: 31.4},
-					"piu":             {Count: 10, Sum: 31.4},
-				},
-			},
-		},
-	}}
-	for i := 0; i < 30; i++ {
-		scst, _ := p1.Pick(balancer.PickInfo{})
-		if scst.Done != nil && scst.SubConn != sc1 {
-			scst.Done(balancer.DoneInfo{
-				ServerLoad: &orcapb.OrcaLoadReport{
-					CpuUtilization: 10,
-					MemUtilization: 5,
-					RequestCost:    map[string]float64{"pic": 3.14},
-					Utilization:    map[string]float64{"piu": 3.14},
-				},
-			})
-		}
-	}
-
-	gotStoreData := loadStore.Stats([]string{testCluster})
-	if diff := cmp.Diff(wantStoreData, gotStoreData, cmpopts.EquateEmpty(), cmpopts.EquateApprox(0, 0.1), cmpopts.IgnoreFields(load.Data{}, "ReportInterval")); diff != "" {
-		t.Errorf("store.stats() returned unexpected diff (-want +got):\n%s", diff)
-	}
-}
-
 // Create a new balancer group, add balancer and backends, but not start.
 // - b1, weight 2, backends [0,1]
 // - b2, weight 1, backends [2,3]
@@ -502,7 +419,7 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, balancer.BuildOptions{}, gator, nil, nil)
+	bg := New(cc, balancer.BuildOptions{}, gator, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -598,7 +515,7 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, balancer.BuildOptions{}, gator, nil, nil)
+	bg := New(cc, balancer.BuildOptions{}, gator, nil)
 
 	gator.Add(testBalancerIDs[0], 2)
 	bg.Add(testBalancerIDs[0], builder)
@@ -614,7 +531,7 @@ func (s) TestBalancerGroup_start_close_deadlock(t *testing.T) {
 // transient_failure, the picks won't fail with transient_failure, and should
 // instead wait for the other sub-balancer.
 func (s) TestBalancerGroup_InitOneSubBalancerTransientFailure(t *testing.T) {
-	cc, gator, bg := newTestBalancerGroup(t, nil)
+	cc, gator, bg := newTestBalancerGroup(t)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
@@ -645,7 +562,7 @@ func (s) TestBalancerGroup_InitOneSubBalancerTransientFailure(t *testing.T) {
 // connecting, the overall state stays in transient_failure, and all picks
 // return transient failure error.
 func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *testing.T) {
-	cc, gator, bg := newTestBalancerGroup(t, nil)
+	cc, gator, bg := newTestBalancerGroup(t)
 
 	// Add two balancers to group and send one resolved address to both
 	// balancers.
@@ -700,7 +617,7 @@ func initBalancerGroupForCachingTest(t *testing.T) (*weightedaggregator.Aggregat
 	cc := testutils.NewTestClientConn(t)
 	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
 	gator.Start()
-	bg := New(cc, balancer.BuildOptions{}, gator, nil, nil)
+	bg := New(cc, balancer.BuildOptions{}, gator, nil)
 
 	// Add two balancers to group and send two resolved addresses to both
 	// balancers.
@@ -993,7 +910,7 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 		},
 	})
 	cc := testutils.NewTestClientConn(t)
-	bg := New(cc, bOpts, nil, nil, nil)
+	bg := New(cc, bOpts, nil, nil)
 	bg.Start()
 
 	// Add the stub balancer build above as a child policy.
