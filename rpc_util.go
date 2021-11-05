@@ -570,7 +570,7 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max length allowed on current machine (%d vs. %d)", length, maxInt)
 	}
 	if int(length) > maxReceiveMessageSize {
-		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max (%d vs. %d)", length, maxReceiveMessageSize)
+		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
 	// TODO(bradfitz,zhaoq): garbage. reuse buffer after proto decoding instead
 	// of making it for each message:
@@ -712,13 +712,13 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
 		}
+		if size > maxReceiveMessageSize {
+			// TODO: Revisit the error code. Currently keep it consistent with java
+			// implementation.
+			return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max (%d vs. %d)", size, maxReceiveMessageSize)
+		}
 	} else {
 		size = len(d)
-	}
-	if size > maxReceiveMessageSize {
-		// TODO: Revisit the error code. Currently keep it consistent with java
-		// implementation.
-		return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", size, maxReceiveMessageSize)
 	}
 	return d, nil
 }
