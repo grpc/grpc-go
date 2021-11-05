@@ -64,7 +64,7 @@ type lookupCallback func(targets []string, headerData string, err error)
 
 // lookup starts a RouteLookup RPC in a separate goroutine and returns the
 // results (and error, if any) in the provided callback.
-func (c *rlsClient) lookup(path string, keyMap map[string]string, cb lookupCallback) {
+func (c *rlsClient) lookup(keyMap map[string]string, cb lookupCallback) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), c.rpcTimeout)
 		resp, err := c.stub.RouteLookup(ctx, &rlspb.RouteLookupRequest{

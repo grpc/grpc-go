@@ -58,7 +58,7 @@ func setup(t *testing.T, opts testOpts) (*controlPlane, *client, []*server) {
 		backendCount = opts.backendCount
 	}
 
-	cp, err := newControlPlane(opts.testName)
+	cp, err := newControlPlane()
 	if err != nil {
 		t.Fatalf("failed to start control-plane: %v", err)
 	}
