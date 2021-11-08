@@ -2187,6 +2187,43 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 	}
 }
 
+// TestClientHandshakeInfoDialer adds attributes to the resolver.Address passes to
+// NewClientTransport and verifies that these attributes are received by a custom
+// dialer.
+func (s) TestClientHandshakeInfoDialer(t *testing.T) {
+	server := setUpServerOnly(t, 0, &ServerConfig{}, pingpong)
+	defer server.stop()
+
+	const (
+		testAttrKey = "foo"
+		testAttrVal = "bar"
+	)
+	addr := resolver.Address{
+		Addr:       "localhost:" + server.port,
+		Attributes: attributes.New(testAttrKey, testAttrVal),
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
+	defer cancel()
+
+	var attr *attributes.Attributes
+	dialer := func(ctx context.Context, addr string) (net.Conn, error) {
+		ai := credentials.ClientHandshakeInfoFromContext(ctx)
+		attr = ai.Attributes
+		return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	}
+
+	tr, err := NewClientTransport(ctx, context.Background(), addr, ConnectOptions{Dialer: dialer}, func() {}, func(GoAwayReason) {}, func() {})
+	if err != nil {
+		t.Fatalf("NewClientTransport(): %v", err)
+	}
+	defer tr.Close(fmt.Errorf("closed manually by test"))
+
+	wantAttr := attributes.New(testAttrKey, testAttrVal)
+	if gotAttr := attr; !cmp.Equal(gotAttr, wantAttr, cmp.AllowUnexported(attributes.Attributes{})) {
+		t.Errorf("Received attributes %v in custom dialer, want %v", gotAttr, wantAttr)
+	}
+}
+
 func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 	testStream := func() *Stream {
 		return &Stream{

@@ -201,6 +201,12 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		}
 	}()
 
+	// gRPC, resolver, balancer etc. can specify arbitrary data in the
+	// Attributes field of resolver.Address, which is shoved into connectCtx
+	// and passed to the dialer and credential handshaker. This makes it possible for
+	// address specific arbitrary data to reach custom dialers and credential handshakers.
+	connectCtx = icredentials.NewClientHandshakeInfoContext(connectCtx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
+
 	conn, err := dial(connectCtx, opts.Dialer, addr, opts.UseProxy, opts.UserAgent)
 	if err != nil {
 		if opts.FailOnNonTempDialError {
@@ -245,11 +251,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		}
 	}
 	if transportCreds != nil {
-		// gRPC, resolver, balancer etc. can specify arbitrary data in the
-		// Attributes field of resolver.Address, which is shoved into connectCtx
-		// and passed to the credential handshaker. This makes it possible for
-		// address specific arbitrary data to reach the credential handshaker.
-		connectCtx = icredentials.NewClientHandshakeInfoContext(connectCtx, credentials.ClientHandshakeInfo{Attributes: addr.Attributes})
 		rawConn := conn
 		// Pull the deadline from the connectCtx, which will be used for
 		// timeouts in the authentication protocol handshake. Can ignore the
