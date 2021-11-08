@@ -33,8 +33,9 @@ import (
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
-	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // V2 client registration.
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+
+	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // V2 client registration.
 )
 
 const (
