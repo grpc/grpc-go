@@ -230,7 +230,7 @@ func (s) TestResolverBuilder_xdsCredsBootstrapMismatch(t *testing.T) {
 
 type setupOpts struct {
 	bootstrapC *bootstrap.Config
-	target     *resolver.Target
+	target     resolver.Target
 }
 
 func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *fakeclient.Client, *testClientConn, func()) {
@@ -254,18 +254,13 @@ func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *fakeclient.Client, 
 		}
 		newXDSClient = oldClientMaker
 	}
-
 	builder := resolver.Get(xdsScheme)
 	if builder == nil {
 		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
 	}
 
 	tcc := newTestClientConn()
-	tgt := target
-	if opts.target != nil {
-		tgt = *opts.target
-	}
-	r, err := builder.Build(tgt, tcc, resolver.BuildOptions{})
+	r, err := builder.Build(opts.target, tcc, resolver.BuildOptions{})
 	if err != nil {
 		t.Fatalf("builder.Build(%v) returned err: %v", target, err)
 	}
@@ -312,7 +307,7 @@ func (s) TestXDSResolverResourceNameToWatch(t *testing.T) {
 	tests := []struct {
 		name   string
 		bc     *bootstrap.Config
-		target *resolver.Target
+		target resolver.Target
 		want   string
 	}{
 		{
@@ -320,7 +315,7 @@ func (s) TestXDSResolverResourceNameToWatch(t *testing.T) {
 			bc: &bootstrap.Config{
 				ClientDefaultListenerResourceNameTemplate: "%s",
 			},
-			target: &resolver.Target{
+			target: resolver.Target{
 				URL: url.URL{Path: "/" + targetStr},
 			},
 			want: targetStr,
@@ -330,7 +325,7 @@ func (s) TestXDSResolverResourceNameToWatch(t *testing.T) {
 			bc: &bootstrap.Config{
 				ClientDefaultListenerResourceNameTemplate: "/path/to/%s",
 			},
-			target: &resolver.Target{
+			target: resolver.Target{
 				URL: url.URL{Path: "/" + targetStr},
 			},
 			want: "/path/to/" + targetStr,
@@ -341,7 +336,7 @@ func (s) TestXDSResolverResourceNameToWatch(t *testing.T) {
 				ClientDefaultListenerResourceNameTemplate: "xdstp://authority.com/%s",
 				Authorities: nil,
 			},
-			target: &resolver.Target{
+			target: resolver.Target{
 				URL: url.URL{Path: "/0.0.0.0:8080"},
 			},
 			want: "xdstp://authority.com/0.0.0.0:8080",
@@ -352,7 +347,7 @@ func (s) TestXDSResolverResourceNameToWatch(t *testing.T) {
 				ClientDefaultListenerResourceNameTemplate: "xdstp://authority.com/%s",
 				Authorities: nil,
 			},
-			target: &resolver.Target{
+			target: resolver.Target{
 				URL: url.URL{Path: "/[::1]:8080"},
 			},
 			want: "xdstp://authority.com/%5B::1%5D:8080",
@@ -367,7 +362,7 @@ func (s) TestXDSResolverResourceNameToWatch(t *testing.T) {
 					},
 				},
 			},
-			target: &resolver.Target{
+			target: resolver.Target{
 				URL: url.URL{
 					Host: "test-authority",
 					Path: "/" + targetStr,
@@ -395,7 +390,7 @@ func (s) TestXDSResolverResourceNameToWatch(t *testing.T) {
 // TestXDSResolverWatchCallbackAfterClose tests the case where a service update
 // from the underlying xdsClient is received after the resolver is closed.
 func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
-	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -424,7 +419,7 @@ func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 // TestXDSResolverCloseClosesXDSClient tests that the XDS resolver's Close
 // method closes the XDS client.
 func (s) TestXDSResolverCloseClosesXDSClient(t *testing.T) {
-	xdsR, xdsC, _, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, _, cancel := testSetup(t, setupOpts{target: target})
 	defer cancel()
 	xdsR.Close()
 	if !xdsC.Closed.HasFired() {
@@ -435,7 +430,7 @@ func (s) TestXDSResolverCloseClosesXDSClient(t *testing.T) {
 // TestXDSResolverBadServiceUpdate tests the case the xdsClient returns a bad
 // service update.
 func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
-	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer xdsR.Close()
 	defer cancel()
 
@@ -458,7 +453,7 @@ func (s) TestXDSResolverBadServiceUpdate(t *testing.T) {
 // TestXDSResolverGoodServiceUpdate tests the happy case where the resolver
 // gets a good service update from the xdsClient.
 func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
-	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer xdsR.Close()
 	defer cancel()
 
@@ -594,7 +589,7 @@ func (s) TestXDSResolverRequestHash(t *testing.T) {
 	env.RingHashSupport = true
 	defer func() { env.RingHashSupport = oldRH }()
 
-	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer xdsR.Close()
 	defer cancel()
 
@@ -651,7 +646,7 @@ func (s) TestXDSResolverRequestHash(t *testing.T) {
 // TestXDSResolverRemovedWithRPCs tests the case where a config selector sends
 // an empty update to the resolver after the resource is removed.
 func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
-	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer cancel()
 	defer xdsR.Close()
 
@@ -708,7 +703,7 @@ func (s) TestXDSResolverRemovedWithRPCs(t *testing.T) {
 // TestXDSResolverRemovedResource tests for proper behavior after a resource is
 // removed.
 func (s) TestXDSResolverRemovedResource(t *testing.T) {
-	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer cancel()
 	defer xdsR.Close()
 
@@ -813,7 +808,7 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 }
 
 func (s) TestXDSResolverWRR(t *testing.T) {
-	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer xdsR.Close()
 	defer cancel()
 
@@ -870,7 +865,7 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 }
 
 func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
-	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer xdsR.Close()
 	defer cancel()
 
@@ -960,7 +955,7 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 // TestXDSResolverDelayedOnCommitted tests that clusters remain in service
 // config if RPCs are in flight.
 func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
-	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer xdsR.Close()
 	defer cancel()
 
@@ -1106,7 +1101,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 // TestXDSResolverUpdates tests the cases where the resolver gets a good update
 // after an error, and an error after the good update.
 func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
-	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer xdsR.Close()
 	defer cancel()
 
@@ -1157,7 +1152,7 @@ func (s) TestXDSResolverGoodUpdateAfterError(t *testing.T) {
 // a ResourceNotFoundError. It should generate a service config picking
 // weighted_target, but no child balancers.
 func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
-	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer xdsR.Close()
 	defer cancel()
 
@@ -1200,7 +1195,7 @@ func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 //
 // This test case also makes sure the resolver doesn't panic.
 func (s) TestXDSResolverMultipleLDSUpdates(t *testing.T) {
-	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer xdsR.Close()
 	defer cancel()
 
@@ -1372,7 +1367,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 
 	for i, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{})
+			xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 			defer xdsR.Close()
 			defer cancel()
 
