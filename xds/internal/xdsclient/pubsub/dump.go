@@ -25,29 +25,25 @@ import (
 func rawFromCache(s string, cache interface{}) *anypb.Any {
 	switch c := cache.(type) {
 	case map[string]xdsresource.ListenerUpdate:
-		v, ok := c[s]
-		if !ok {
-			return nil
+		if v, ok := c[s]; ok {
+			return v.Raw
 		}
-		return v.Raw
+		return nil
 	case map[string]xdsresource.RouteConfigUpdate:
-		v, ok := c[s]
-		if !ok {
-			return nil
+		if v, ok := c[s]; ok {
+			return v.Raw
 		}
-		return v.Raw
+		return nil
 	case map[string]xdsresource.ClusterUpdate:
-		v, ok := c[s]
-		if !ok {
-			return nil
+		if v, ok := c[s]; ok {
+			return v.Raw
 		}
-		return v.Raw
+		return nil
 	case map[string]xdsresource.EndpointsUpdate:
-		v, ok := c[s]
-		if !ok {
-			return nil
+		if v, ok := c[s]; ok {
+			return v.Raw
 		}
-		return v.Raw
+		return nil
 	default:
 		return nil
 	}
