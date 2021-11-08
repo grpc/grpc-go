@@ -39,6 +39,7 @@ import (
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 const (
@@ -58,7 +59,7 @@ func Test(t *testing.T) {
 
 // cdsWatchInfo wraps the update and the error sent in a CDS watch callback.
 type cdsWatchInfo struct {
-	update xdsclient.ClusterUpdate
+	update xdsresource.ClusterUpdate
 	err    error
 }
 
@@ -361,25 +362,25 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		cdsUpdate xdsclient.ClusterUpdate
+		cdsUpdate xdsresource.ClusterUpdate
 		updateErr error
 		wantCCS   balancer.ClientConnState
 	}{
 		{
 			name:      "happy-case-with-lrs",
-			cdsUpdate: xdsclient.ClusterUpdate{ClusterName: serviceName, EnableLRS: true},
+			cdsUpdate: xdsresource.ClusterUpdate{ClusterName: serviceName, EnableLRS: true},
 			wantCCS:   edsCCS(serviceName, nil, true, nil),
 		},
 		{
 			name:      "happy-case-without-lrs",
-			cdsUpdate: xdsclient.ClusterUpdate{ClusterName: serviceName},
+			cdsUpdate: xdsresource.ClusterUpdate{ClusterName: serviceName},
 			wantCCS:   edsCCS(serviceName, nil, false, nil),
 		},
 		{
 			name: "happy-case-with-ring-hash-lb-policy",
-			cdsUpdate: xdsclient.ClusterUpdate{
+			cdsUpdate: xdsresource.ClusterUpdate{
 				ClusterName: serviceName,
-				LBPolicy:    &xdsclient.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
+				LBPolicy:    &xdsresource.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
 			},
 			wantCCS: edsCCS(serviceName, nil, false, &internalserviceconfig.BalancerConfig{
 				Name:   ringhash.Name,
@@ -417,7 +418,7 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// resolver error at this point should result in the CDS balancer returning
 	// an error picker.
 	watcherErr := errors.New("cdsBalancer watcher error")
-	xdsC.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, watcherErr)
+	xdsC.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{}, watcherErr)
 
 	// Since the error being pushed here is not a resource-not-found-error, the
 	// registered watch should not be cancelled.
@@ -451,14 +452,14 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
+	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false, nil)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
 
 	// Again push a non-resource-not-found-error through the watcher callback.
-	xdsC.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, watcherErr)
+	xdsC.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{}, watcherErr)
 	// Make sure the registered watch is not cancelled.
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
@@ -472,7 +473,7 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 
 	// Push a resource-not-found-error this time around.
 	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
-	xdsC.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, resourceErr)
+	xdsC.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{}, resourceErr)
 	// Make sure that the watch is not cancelled. This error indicates that the
 	// request cluster resource is not found. We should continue to watch it.
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
@@ -536,7 +537,7 @@ func (s) TestResolverError(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
+	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false, nil)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
@@ -585,7 +586,7 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
+	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -620,7 +621,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	// will trigger the watch handler on the CDS balancer, which will update
 	// the service's counter with the new max requests.
 	var maxRequests uint32 = 1
-	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: clusterName, MaxRequests: &maxRequests}
+	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: clusterName, MaxRequests: &maxRequests}
 	wantCCS := edsCCS(clusterName, &maxRequests, false, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -653,7 +654,7 @@ func (s) TestClose(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
+	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -724,7 +725,7 @@ func (s) TestExitIdle(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	cdsUpdate := xdsclient.ClusterUpdate{ClusterName: serviceName}
+	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
 	wantCCS := edsCCS(serviceName, nil, false, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()

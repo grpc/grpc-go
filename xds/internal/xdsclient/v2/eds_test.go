@@ -30,6 +30,7 @@ import (
 	xtestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 var (
@@ -76,8 +77,8 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 		name          string
 		edsResponse   *v2xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    map[string]xdsclient.EndpointsUpdateErrTuple
-		wantUpdateMD  xdsclient.UpdateMetadata
+		wantUpdate    map[string]xdsresource.EndpointsUpdateErrTuple
+		wantUpdateMD  xdsresource.UpdateMetadata
 		wantUpdateErr bool
 	}{
 		// Any in resource is badly marshaled.
@@ -86,9 +87,9 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			edsResponse: badlyMarshaledEDSResponse,
 			wantErr:     true,
 			wantUpdate:  nil,
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusNACKed,
-				ErrState: &xdsclient.UpdateErrorMetadata{
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusNACKed,
+				ErrState: &xdsresource.UpdateErrorMetadata{
 					Err: cmpopts.AnyError,
 				},
 			},
@@ -100,9 +101,9 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			edsResponse: badResourceTypeInEDSResponse,
 			wantErr:     true,
 			wantUpdate:  nil,
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusNACKed,
-				ErrState: &xdsclient.UpdateErrorMetadata{
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusNACKed,
+				ErrState: &xdsresource.UpdateErrorMetadata{
 					Err: cmpopts.AnyError,
 				},
 			},
@@ -113,11 +114,11 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			name:        "one-uninterestring-assignment",
 			edsResponse: goodEDSResponse2,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.EndpointsUpdateErrTuple{
-				"not-goodEDSName": {Update: xdsclient.EndpointsUpdate{
-					Localities: []xdsclient.Locality{
+			wantUpdate: map[string]xdsresource.EndpointsUpdateErrTuple{
+				"not-goodEDSName": {Update: xdsresource.EndpointsUpdate{
+					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsclient.Endpoint{{Address: "addr1:314"}},
+							Endpoints: []xdsresource.Endpoint{{Address: "addr1:314"}},
 							ID:        internal.LocalityID{SubZone: "locality-1"},
 							Priority:  0,
 							Weight:    1,
@@ -126,8 +127,8 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 					Raw: marshaledGoodCLA2,
 				}},
 			},
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusACKed,
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -136,17 +137,17 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 			name:        "one-good-assignment",
 			edsResponse: goodEDSResponse1,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.EndpointsUpdateErrTuple{
-				goodEDSName: {Update: xdsclient.EndpointsUpdate{
-					Localities: []xdsclient.Locality{
+			wantUpdate: map[string]xdsresource.EndpointsUpdateErrTuple{
+				goodEDSName: {Update: xdsresource.EndpointsUpdate{
+					Localities: []xdsresource.Locality{
 						{
-							Endpoints: []xdsclient.Endpoint{{Address: "addr1:314"}},
+							Endpoints: []xdsresource.Endpoint{{Address: "addr1:314"}},
 							ID:        internal.LocalityID{SubZone: "locality-1"},
 							Priority:  1,
 							Weight:    1,
 						},
 						{
-							Endpoints: []xdsclient.Endpoint{{Address: "addr2:159"}},
+							Endpoints: []xdsresource.Endpoint{{Address: "addr2:159"}},
 							ID:        internal.LocalityID{SubZone: "locality-2"},
 							Priority:  0,
 							Weight:    1,
@@ -155,8 +156,8 @@ func (s) TestEDSHandleResponse(t *testing.T) {
 					Raw: marshaledGoodCLA1,
 				}},
 			},
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusACKed,
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -183,7 +184,7 @@ func (s) TestEDSHandleResponseWithoutWatch(t *testing.T) {
 	defer cleanup()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}, xdsclient.UpdateMetadata) {},
+		f: func(xdsclient.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)

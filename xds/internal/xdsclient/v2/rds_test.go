@@ -25,9 +25,9 @@ import (
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/google/go-cmp/cmp/cmpopts"
-
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 // doLDS makes a LDS watch, and waits for the response and ack to finish.
@@ -50,8 +50,8 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 		name          string
 		rdsResponse   *xdspb.DiscoveryResponse
 		wantErr       bool
-		wantUpdate    map[string]xdsclient.RouteConfigUpdateErrTuple
-		wantUpdateMD  xdsclient.UpdateMetadata
+		wantUpdate    map[string]xdsresource.RouteConfigUpdateErrTuple
+		wantUpdateMD  xdsresource.UpdateMetadata
 		wantUpdateErr bool
 	}{
 		// Badly marshaled RDS response.
@@ -60,9 +60,9 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			rdsResponse: badlyMarshaledRDSResponse,
 			wantErr:     true,
 			wantUpdate:  nil,
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusNACKed,
-				ErrState: &xdsclient.UpdateErrorMetadata{
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusNACKed,
+				ErrState: &xdsresource.UpdateErrorMetadata{
 					Err: cmpopts.AnyError,
 				},
 			},
@@ -74,9 +74,9 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			rdsResponse: badResourceTypeInRDSResponse,
 			wantErr:     true,
 			wantUpdate:  nil,
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusNACKed,
-				ErrState: &xdsclient.UpdateErrorMetadata{
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusNACKed,
+				ErrState: &xdsresource.UpdateErrorMetadata{
 					Err: cmpopts.AnyError,
 				},
 			},
@@ -89,14 +89,14 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			name:        "no-virtual-hosts-in-response",
 			rdsResponse: noVirtualHostsInRDSResponse,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.RouteConfigUpdateErrTuple{
-				goodRouteName1: {Update: xdsclient.RouteConfigUpdate{
+			wantUpdate: map[string]xdsresource.RouteConfigUpdateErrTuple{
+				goodRouteName1: {Update: xdsresource.RouteConfigUpdate{
 					VirtualHosts: nil,
 					Raw:          marshaledNoVirtualHostsRouteConfig,
 				}},
 			},
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusACKed,
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -105,28 +105,28 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			name:        "one-uninteresting-route-config",
 			rdsResponse: goodRDSResponse2,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.RouteConfigUpdateErrTuple{
-				goodRouteName2: {Update: xdsclient.RouteConfigUpdate{
-					VirtualHosts: []*xdsclient.VirtualHost{
+			wantUpdate: map[string]xdsresource.RouteConfigUpdateErrTuple{
+				goodRouteName2: {Update: xdsresource.RouteConfigUpdate{
+					VirtualHosts: []*xdsresource.VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes: []*xdsclient.Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]xdsclient.WeightedCluster{uninterestingClusterName: {Weight: 1}},
-								RouteAction:      xdsclient.RouteActionRoute}},
+							Routes: []*xdsresource.Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]xdsresource.WeightedCluster{uninterestingClusterName: {Weight: 1}},
+								RouteAction:      xdsresource.RouteActionRoute}},
 						},
 						{
 							Domains: []string{goodLDSTarget1},
-							Routes: []*xdsclient.Route{{
+							Routes: []*xdsresource.Route{{
 								Prefix:           newStringP(""),
-								WeightedClusters: map[string]xdsclient.WeightedCluster{goodClusterName2: {Weight: 1}},
-								RouteAction:      xdsclient.RouteActionRoute}},
+								WeightedClusters: map[string]xdsresource.WeightedCluster{goodClusterName2: {Weight: 1}},
+								RouteAction:      xdsresource.RouteActionRoute}},
 						},
 					},
 					Raw: marshaledGoodRouteConfig2,
 				}},
 			},
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusACKed,
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -135,28 +135,28 @@ func (s) TestRDSHandleResponseWithRouting(t *testing.T) {
 			name:        "one-good-route-config",
 			rdsResponse: goodRDSResponse1,
 			wantErr:     false,
-			wantUpdate: map[string]xdsclient.RouteConfigUpdateErrTuple{
-				goodRouteName1: {Update: xdsclient.RouteConfigUpdate{
-					VirtualHosts: []*xdsclient.VirtualHost{
+			wantUpdate: map[string]xdsresource.RouteConfigUpdateErrTuple{
+				goodRouteName1: {Update: xdsresource.RouteConfigUpdate{
+					VirtualHosts: []*xdsresource.VirtualHost{
 						{
 							Domains: []string{uninterestingDomain},
-							Routes: []*xdsclient.Route{{
+							Routes: []*xdsresource.Route{{
 								Prefix:           newStringP(""),
-								WeightedClusters: map[string]xdsclient.WeightedCluster{uninterestingClusterName: {Weight: 1}},
-								RouteAction:      xdsclient.RouteActionRoute}},
+								WeightedClusters: map[string]xdsresource.WeightedCluster{uninterestingClusterName: {Weight: 1}},
+								RouteAction:      xdsresource.RouteActionRoute}},
 						},
 						{
 							Domains: []string{goodLDSTarget1},
-							Routes: []*xdsclient.Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]xdsclient.WeightedCluster{goodClusterName1: {Weight: 1}},
-								RouteAction:      xdsclient.RouteActionRoute}},
+							Routes: []*xdsresource.Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]xdsresource.WeightedCluster{goodClusterName1: {Weight: 1}},
+								RouteAction:      xdsresource.RouteActionRoute}},
 						},
 					},
 					Raw: marshaledGoodRouteConfig1,
 				}},
 			},
-			wantUpdateMD: xdsclient.UpdateMetadata{
-				Status: xdsclient.ServiceStatusACKed,
+			wantUpdateMD: xdsresource.UpdateMetadata{
+				Status: xdsresource.ServiceStatusACKed,
 			},
 			wantUpdateErr: false,
 		},
@@ -183,7 +183,7 @@ func (s) TestRDSHandleResponseWithoutRDSWatch(t *testing.T) {
 	defer cleanup()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}, xdsclient.UpdateMetadata) {},
+		f: func(xdsclient.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)

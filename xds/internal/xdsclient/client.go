@@ -24,27 +24,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal/xds/matcher"
-	"google.golang.org/grpc/xds/internal/httpfilter"
-	"google.golang.org/grpc/xds/internal/xdsclient/load"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 var (
@@ -70,12 +63,6 @@ func getAPIClientBuilder(version version.TransportAPI) APIClientBuilder {
 	return nil
 }
 
-// UpdateValidatorFunc performs validations on update structs using
-// context/logic available at the xdsClient layer. Since these validation are
-// performed on internal update structs, they can be shared between different
-// API clients.
-type UpdateValidatorFunc func(interface{}) error
-
 // BuildOptions contains options to be passed to client builders.
 type BuildOptions struct {
 	// Parent is a top-level xDS client which has the intelligence to take
@@ -83,7 +70,7 @@ type BuildOptions struct {
 	// server.
 	Parent UpdateHandler
 	// Validator performs post unmarshal validation checks.
-	Validator UpdateValidatorFunc
+	Validator xdsresource.UpdateValidatorFunc
 	// NodeProto contains the Node proto to be used in xDS requests. The actual
 	// type depends on the transport protocol version used.
 	NodeProto proto.Message
@@ -140,435 +127,17 @@ type loadReportingOptions struct {
 // resource updates from an APIClient for a specific version.
 type UpdateHandler interface {
 	// NewListeners handles updates to xDS listener resources.
-	NewListeners(map[string]ListenerUpdateErrTuple, UpdateMetadata)
+	NewListeners(map[string]xdsresource.ListenerUpdateErrTuple, xdsresource.UpdateMetadata)
 	// NewRouteConfigs handles updates to xDS RouteConfiguration resources.
-	NewRouteConfigs(map[string]RouteConfigUpdateErrTuple, UpdateMetadata)
+	NewRouteConfigs(map[string]xdsresource.RouteConfigUpdateErrTuple, xdsresource.UpdateMetadata)
 	// NewClusters handles updates to xDS Cluster resources.
-	NewClusters(map[string]ClusterUpdateErrTuple, UpdateMetadata)
+	NewClusters(map[string]xdsresource.ClusterUpdateErrTuple, xdsresource.UpdateMetadata)
 	// NewEndpoints handles updates to xDS ClusterLoadAssignment (or tersely
 	// referred to as Endpoints) resources.
-	NewEndpoints(map[string]EndpointsUpdateErrTuple, UpdateMetadata)
+	NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple, xdsresource.UpdateMetadata)
 	// NewConnectionError handles connection errors from the xDS stream. The
 	// error will be reported to all the resource watchers.
 	NewConnectionError(err error)
-}
-
-// ServiceStatus is the status of the update.
-type ServiceStatus int
-
-const (
-	// ServiceStatusUnknown is the default state, before a watch is started for
-	// the resource.
-	ServiceStatusUnknown ServiceStatus = iota
-	// ServiceStatusRequested is when the watch is started, but before and
-	// response is received.
-	ServiceStatusRequested
-	// ServiceStatusNotExist is when the resource doesn't exist in
-	// state-of-the-world responses (e.g. LDS and CDS), which means the resource
-	// is removed by the management server.
-	ServiceStatusNotExist // Resource is removed in the server, in LDS/CDS.
-	// ServiceStatusACKed is when the resource is ACKed.
-	ServiceStatusACKed
-	// ServiceStatusNACKed is when the resource is NACKed.
-	ServiceStatusNACKed
-)
-
-// UpdateErrorMetadata is part of UpdateMetadata. It contains the error state
-// when a response is NACKed.
-type UpdateErrorMetadata struct {
-	// Version is the version of the NACKed response.
-	Version string
-	// Err contains why the response was NACKed.
-	Err error
-	// Timestamp is when the NACKed response was received.
-	Timestamp time.Time
-}
-
-// UpdateMetadata contains the metadata for each update, including timestamp,
-// raw message, and so on.
-type UpdateMetadata struct {
-	// Status is the status of this resource, e.g. ACKed, NACKed, or
-	// Not_exist(removed).
-	Status ServiceStatus
-	// Version is the version of the xds response. Note that this is the version
-	// of the resource in use (previous ACKed). If a response is NACKed, the
-	// NACKed version is in ErrState.
-	Version string
-	// Timestamp is when the response is received.
-	Timestamp time.Time
-	// ErrState is set when the update is NACKed.
-	ErrState *UpdateErrorMetadata
-}
-
-// ListenerUpdate contains information received in an LDS response, which is of
-// interest to the registered LDS watcher.
-type ListenerUpdate struct {
-	// RouteConfigName is the route configuration name corresponding to the
-	// target which is being watched through LDS.
-	//
-	// Exactly one of RouteConfigName and InlineRouteConfig is set.
-	RouteConfigName string
-	// InlineRouteConfig is the inline route configuration (RDS response)
-	// returned inside LDS.
-	//
-	// Exactly one of RouteConfigName and InlineRouteConfig is set.
-	InlineRouteConfig *RouteConfigUpdate
-
-	// MaxStreamDuration contains the HTTP connection manager's
-	// common_http_protocol_options.max_stream_duration field, or zero if
-	// unset.
-	MaxStreamDuration time.Duration
-	// HTTPFilters is a list of HTTP filters (name, config) from the LDS
-	// response.
-	HTTPFilters []HTTPFilter
-	// InboundListenerCfg contains inbound listener configuration.
-	InboundListenerCfg *InboundListenerConfig
-
-	// Raw is the resource from the xds response.
-	Raw *anypb.Any
-}
-
-// HTTPFilter represents one HTTP filter from an LDS response's HTTP connection
-// manager field.
-type HTTPFilter struct {
-	// Name is an arbitrary name of the filter.  Used for applying override
-	// settings in virtual host / route / weighted cluster configuration (not
-	// yet supported).
-	Name string
-	// Filter is the HTTP filter found in the registry for the config type.
-	Filter httpfilter.Filter
-	// Config contains the filter's configuration
-	Config httpfilter.FilterConfig
-}
-
-// InboundListenerConfig contains information about the inbound listener, i.e
-// the server-side listener.
-type InboundListenerConfig struct {
-	// Address is the local address on which the inbound listener is expected to
-	// accept incoming connections.
-	Address string
-	// Port is the local port on which the inbound listener is expected to
-	// accept incoming connections.
-	Port string
-	// FilterChains is the list of filter chains associated with this listener.
-	FilterChains *FilterChainManager
-}
-
-// RouteConfigUpdate contains information received in an RDS response, which is
-// of interest to the registered RDS watcher.
-type RouteConfigUpdate struct {
-	VirtualHosts []*VirtualHost
-	// Raw is the resource from the xds response.
-	Raw *anypb.Any
-}
-
-// VirtualHost contains the routes for a list of Domains.
-//
-// Note that the domains in this slice can be a wildcard, not an exact string.
-// The consumer of this struct needs to find the best match for its hostname.
-type VirtualHost struct {
-	Domains []string
-	// Routes contains a list of routes, each containing matchers and
-	// corresponding action.
-	Routes []*Route
-	// HTTPFilterConfigOverride contains any HTTP filter config overrides for
-	// the virtual host which may be present.  An individual filter's override
-	// may be unused if the matching Route contains an override for that
-	// filter.
-	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
-	RetryConfig              *RetryConfig
-}
-
-// RetryConfig contains all retry-related configuration in either a VirtualHost
-// or Route.
-type RetryConfig struct {
-	// RetryOn is a set of status codes on which to retry.  Only Canceled,
-	// DeadlineExceeded, Internal, ResourceExhausted, and Unavailable are
-	// supported; any other values will be omitted.
-	RetryOn      map[codes.Code]bool
-	NumRetries   uint32       // maximum number of retry attempts
-	RetryBackoff RetryBackoff // retry backoff policy
-}
-
-// RetryBackoff describes the backoff policy for retries.
-type RetryBackoff struct {
-	BaseInterval time.Duration // initial backoff duration between attempts
-	MaxInterval  time.Duration // maximum backoff duration
-}
-
-// HashPolicyType specifies the type of HashPolicy from a received RDS Response.
-type HashPolicyType int
-
-const (
-	// HashPolicyTypeHeader specifies to hash a Header in the incoming request.
-	HashPolicyTypeHeader HashPolicyType = iota
-	// HashPolicyTypeChannelID specifies to hash a unique Identifier of the
-	// Channel. In grpc-go, this will be done using the ClientConn pointer.
-	HashPolicyTypeChannelID
-)
-
-// HashPolicy specifies the HashPolicy if the upstream cluster uses a hashing
-// load balancer.
-type HashPolicy struct {
-	HashPolicyType HashPolicyType
-	Terminal       bool
-	// Fields used for type HEADER.
-	HeaderName        string
-	Regex             *regexp.Regexp
-	RegexSubstitution string
-}
-
-// RouteAction is the action of the route from a received RDS response.
-type RouteAction int
-
-const (
-	// RouteActionUnsupported are routing types currently unsupported by grpc.
-	// According to A36, "A Route with an inappropriate action causes RPCs
-	// matching that route to fail."
-	RouteActionUnsupported RouteAction = iota
-	// RouteActionRoute is the expected route type on the client side. Route
-	// represents routing a request to some upstream cluster. On the client
-	// side, if an RPC matches to a route that is not RouteActionRoute, the RPC
-	// will fail according to A36.
-	RouteActionRoute
-	// RouteActionNonForwardingAction is the expected route type on the server
-	// side. NonForwardingAction represents when a route will generate a
-	// response directly, without forwarding to an upstream host.
-	RouteActionNonForwardingAction
-)
-
-// Route is both a specification of how to match a request as well as an
-// indication of the action to take upon match.
-type Route struct {
-	Path   *string
-	Prefix *string
-	Regex  *regexp.Regexp
-	// Indicates if prefix/path matching should be case insensitive. The default
-	// is false (case sensitive).
-	CaseInsensitive bool
-	Headers         []*HeaderMatcher
-	Fraction        *uint32
-
-	HashPolicies []*HashPolicy
-
-	// If the matchers above indicate a match, the below configuration is used.
-	WeightedClusters map[string]WeightedCluster
-	// If MaxStreamDuration is nil, it indicates neither of the route action's
-	// max_stream_duration fields (grpc_timeout_header_max nor
-	// max_stream_duration) were set.  In this case, the ListenerUpdate's
-	// MaxStreamDuration field should be used.  If MaxStreamDuration is set to
-	// an explicit zero duration, the application's deadline should be used.
-	MaxStreamDuration *time.Duration
-	// HTTPFilterConfigOverride contains any HTTP filter config overrides for
-	// the route which may be present.  An individual filter's override may be
-	// unused if the matching WeightedCluster contains an override for that
-	// filter.
-	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
-	RetryConfig              *RetryConfig
-
-	RouteAction RouteAction
-}
-
-// WeightedCluster contains settings for an xds RouteAction.WeightedCluster.
-type WeightedCluster struct {
-	// Weight is the relative weight of the cluster.  It will never be zero.
-	Weight uint32
-	// HTTPFilterConfigOverride contains any HTTP filter config overrides for
-	// the weighted cluster which may be present.
-	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
-}
-
-// HeaderMatcher represents header matchers.
-type HeaderMatcher struct {
-	Name         string
-	InvertMatch  *bool
-	ExactMatch   *string
-	RegexMatch   *regexp.Regexp
-	PrefixMatch  *string
-	SuffixMatch  *string
-	RangeMatch   *Int64Range
-	PresentMatch *bool
-}
-
-// Int64Range is a range for header range match.
-type Int64Range struct {
-	Start int64
-	End   int64
-}
-
-// SecurityConfig contains the security configuration received as part of the
-// Cluster resource on the client-side, and as part of the Listener resource on
-// the server-side.
-type SecurityConfig struct {
-	// RootInstanceName identifies the certProvider plugin to be used to fetch
-	// root certificates. This instance name will be resolved to the plugin name
-	// and its associated configuration from the certificate_providers field of
-	// the bootstrap file.
-	RootInstanceName string
-	// RootCertName is the certificate name to be passed to the plugin (looked
-	// up from the bootstrap file) while fetching root certificates.
-	RootCertName string
-	// IdentityInstanceName identifies the certProvider plugin to be used to
-	// fetch identity certificates. This instance name will be resolved to the
-	// plugin name and its associated configuration from the
-	// certificate_providers field of the bootstrap file.
-	IdentityInstanceName string
-	// IdentityCertName is the certificate name to be passed to the plugin
-	// (looked up from the bootstrap file) while fetching identity certificates.
-	IdentityCertName string
-	// SubjectAltNameMatchers is an optional list of match criteria for SANs
-	// specified on the peer certificate. Used only on the client-side.
-	//
-	// Some intricacies:
-	// - If this field is empty, then any peer certificate is accepted.
-	// - If the peer certificate contains a wildcard DNS SAN, and an `exact`
-	//   matcher is configured, a wildcard DNS match is performed instead of a
-	//   regular string comparison.
-	SubjectAltNameMatchers []matcher.StringMatcher
-	// RequireClientCert indicates if the server handshake process expects the
-	// client to present a certificate. Set to true when performing mTLS. Used
-	// only on the server-side.
-	RequireClientCert bool
-}
-
-// Equal returns true if sc is equal to other.
-func (sc *SecurityConfig) Equal(other *SecurityConfig) bool {
-	switch {
-	case sc == nil && other == nil:
-		return true
-	case (sc != nil) != (other != nil):
-		return false
-	}
-	switch {
-	case sc.RootInstanceName != other.RootInstanceName:
-		return false
-	case sc.RootCertName != other.RootCertName:
-		return false
-	case sc.IdentityInstanceName != other.IdentityInstanceName:
-		return false
-	case sc.IdentityCertName != other.IdentityCertName:
-		return false
-	case sc.RequireClientCert != other.RequireClientCert:
-		return false
-	default:
-		if len(sc.SubjectAltNameMatchers) != len(other.SubjectAltNameMatchers) {
-			return false
-		}
-		for i := 0; i < len(sc.SubjectAltNameMatchers); i++ {
-			if !sc.SubjectAltNameMatchers[i].Equal(other.SubjectAltNameMatchers[i]) {
-				return false
-			}
-		}
-	}
-	return true
-}
-
-// ClusterType is the type of cluster from a received CDS response.
-type ClusterType int
-
-const (
-	// ClusterTypeEDS represents the EDS cluster type, which will delegate endpoint
-	// discovery to the management server.
-	ClusterTypeEDS ClusterType = iota
-	// ClusterTypeLogicalDNS represents the Logical DNS cluster type, which essentially
-	// maps to the gRPC behavior of using the DNS resolver with pick_first LB policy.
-	ClusterTypeLogicalDNS
-	// ClusterTypeAggregate represents the Aggregate Cluster type, which provides a
-	// prioritized list of clusters to use. It is used for failover between clusters
-	// with a different configuration.
-	ClusterTypeAggregate
-)
-
-// ClusterLBPolicyRingHash represents ring_hash lb policy, and also contains its
-// config.
-type ClusterLBPolicyRingHash struct {
-	MinimumRingSize uint64
-	MaximumRingSize uint64
-}
-
-// ClusterUpdate contains information from a received CDS response, which is of
-// interest to the registered CDS watcher.
-type ClusterUpdate struct {
-	ClusterType ClusterType
-	// ClusterName is the clusterName being watched for through CDS.
-	ClusterName string
-	// EDSServiceName is an optional name for EDS. If it's not set, the balancer
-	// should watch ClusterName for the EDS resources.
-	EDSServiceName string
-	// EnableLRS indicates whether or not load should be reported through LRS.
-	EnableLRS bool
-	// SecurityCfg contains security configuration sent by the control plane.
-	SecurityCfg *SecurityConfig
-	// MaxRequests for circuit breaking, if any (otherwise nil).
-	MaxRequests *uint32
-	// DNSHostName is used only for cluster type DNS. It's the DNS name to
-	// resolve in "host:port" form
-	DNSHostName string
-	// PrioritizedClusterNames is used only for cluster type aggregate. It represents
-	// a prioritized list of cluster names.
-	PrioritizedClusterNames []string
-
-	// LBPolicy is the lb policy for this cluster.
-	//
-	// This only support round_robin and ring_hash.
-	// - if it's nil, the lb policy is round_robin
-	// - if it's not nil, the lb policy is ring_hash, the this field has the config.
-	//
-	// When we add more support policies, this can be made an interface, and
-	// will be set to different types based on the policy type.
-	LBPolicy *ClusterLBPolicyRingHash
-
-	// Raw is the resource from the xds response.
-	Raw *anypb.Any
-}
-
-// OverloadDropConfig contains the config to drop overloads.
-type OverloadDropConfig struct {
-	Category    string
-	Numerator   uint32
-	Denominator uint32
-}
-
-// EndpointHealthStatus represents the health status of an endpoint.
-type EndpointHealthStatus int32
-
-const (
-	// EndpointHealthStatusUnknown represents HealthStatus UNKNOWN.
-	EndpointHealthStatusUnknown EndpointHealthStatus = iota
-	// EndpointHealthStatusHealthy represents HealthStatus HEALTHY.
-	EndpointHealthStatusHealthy
-	// EndpointHealthStatusUnhealthy represents HealthStatus UNHEALTHY.
-	EndpointHealthStatusUnhealthy
-	// EndpointHealthStatusDraining represents HealthStatus DRAINING.
-	EndpointHealthStatusDraining
-	// EndpointHealthStatusTimeout represents HealthStatus TIMEOUT.
-	EndpointHealthStatusTimeout
-	// EndpointHealthStatusDegraded represents HealthStatus DEGRADED.
-	EndpointHealthStatusDegraded
-)
-
-// Endpoint contains information of an endpoint.
-type Endpoint struct {
-	Address      string
-	HealthStatus EndpointHealthStatus
-	Weight       uint32
-}
-
-// Locality contains information of a locality.
-type Locality struct {
-	Endpoints []Endpoint
-	ID        internal.LocalityID
-	Priority  uint32
-	Weight    uint32
-}
-
-// EndpointsUpdate contains an EDS update.
-type EndpointsUpdate struct {
-	Drops      []OverloadDropConfig
-	Localities []Locality
-
-	// Raw is the resource from the xds response.
-	Raw *anypb.Any
 }
 
 // Function to be overridden in tests.
@@ -603,20 +172,20 @@ type clientImpl struct {
 	mu          sync.Mutex
 	ldsWatchers map[string]map[*watchInfo]bool
 	ldsVersion  string // Only used in CSDS.
-	ldsCache    map[string]ListenerUpdate
-	ldsMD       map[string]UpdateMetadata
+	ldsCache    map[string]xdsresource.ListenerUpdate
+	ldsMD       map[string]xdsresource.UpdateMetadata
 	rdsWatchers map[string]map[*watchInfo]bool
 	rdsVersion  string // Only used in CSDS.
-	rdsCache    map[string]RouteConfigUpdate
-	rdsMD       map[string]UpdateMetadata
+	rdsCache    map[string]xdsresource.RouteConfigUpdate
+	rdsMD       map[string]xdsresource.UpdateMetadata
 	cdsWatchers map[string]map[*watchInfo]bool
 	cdsVersion  string // Only used in CSDS.
-	cdsCache    map[string]ClusterUpdate
-	cdsMD       map[string]UpdateMetadata
+	cdsCache    map[string]xdsresource.ClusterUpdate
+	cdsMD       map[string]xdsresource.UpdateMetadata
 	edsWatchers map[string]map[*watchInfo]bool
 	edsVersion  string // Only used in CSDS.
-	edsCache    map[string]EndpointsUpdate
-	edsMD       map[string]UpdateMetadata
+	edsCache    map[string]xdsresource.EndpointsUpdate
+	edsMD       map[string]xdsresource.UpdateMetadata
 
 	// Changes to map lrsClients and the lrsClient inside the map need to be
 	// protected by lrsMu.
@@ -652,17 +221,17 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),
-		ldsCache:    make(map[string]ListenerUpdate),
-		ldsMD:       make(map[string]UpdateMetadata),
+		ldsCache:    make(map[string]xdsresource.ListenerUpdate),
+		ldsMD:       make(map[string]xdsresource.UpdateMetadata),
 		rdsWatchers: make(map[string]map[*watchInfo]bool),
-		rdsCache:    make(map[string]RouteConfigUpdate),
-		rdsMD:       make(map[string]UpdateMetadata),
+		rdsCache:    make(map[string]xdsresource.RouteConfigUpdate),
+		rdsMD:       make(map[string]xdsresource.UpdateMetadata),
 		cdsWatchers: make(map[string]map[*watchInfo]bool),
-		cdsCache:    make(map[string]ClusterUpdate),
-		cdsMD:       make(map[string]UpdateMetadata),
+		cdsCache:    make(map[string]xdsresource.ClusterUpdate),
+		cdsMD:       make(map[string]xdsresource.UpdateMetadata),
 		edsWatchers: make(map[string]map[*watchInfo]bool),
-		edsCache:    make(map[string]EndpointsUpdate),
-		edsMD:       make(map[string]UpdateMetadata),
+		edsCache:    make(map[string]xdsresource.EndpointsUpdate),
+		edsMD:       make(map[string]xdsresource.UpdateMetadata),
 		lrsClients:  make(map[string]*lrsClient),
 	}
 
@@ -732,14 +301,14 @@ func (c *clientImpl) Close() {
 	c.logger.Infof("Shutdown")
 }
 
-func (c *clientImpl) filterChainUpdateValidator(fc *FilterChain) error {
+func (c *clientImpl) filterChainUpdateValidator(fc *xdsresource.FilterChain) error {
 	if fc == nil {
 		return nil
 	}
 	return c.securityConfigUpdateValidator(fc.SecurityCfg)
 }
 
-func (c *clientImpl) securityConfigUpdateValidator(sc *SecurityConfig) error {
+func (c *clientImpl) securityConfigUpdateValidator(sc *xdsresource.SecurityConfig) error {
 	if sc == nil {
 		return nil
 	}
@@ -758,28 +327,12 @@ func (c *clientImpl) securityConfigUpdateValidator(sc *SecurityConfig) error {
 
 func (c *clientImpl) updateValidator(u interface{}) error {
 	switch update := u.(type) {
-	case ListenerUpdate:
+	case xdsresource.ListenerUpdate:
 		if update.InboundListenerCfg == nil || update.InboundListenerCfg.FilterChains == nil {
 			return nil
 		}
-
-		fcm := update.InboundListenerCfg.FilterChains
-		for _, dst := range fcm.dstPrefixMap {
-			for _, srcType := range dst.srcTypeArr {
-				if srcType == nil {
-					continue
-				}
-				for _, src := range srcType.srcPrefixMap {
-					for _, fc := range src.srcPortMap {
-						if err := c.filterChainUpdateValidator(fc); err != nil {
-							return err
-						}
-					}
-				}
-			}
-		}
-		return c.filterChainUpdateValidator(fcm.def)
-	case ClusterUpdate:
+		return update.InboundListenerCfg.FilterChains.Validate(c.filterChainUpdateValidator)
+	case xdsresource.ClusterUpdate:
 		return c.securityConfigUpdateValidator(update.SecurityCfg)
 	default:
 		// We currently invoke this update validation function only for LDS and
@@ -820,34 +373,4 @@ func (r ResourceType) String() string {
 	default:
 		return "UnknownResource"
 	}
-}
-
-// IsListenerResource returns true if the provider URL corresponds to an xDS
-// Listener resource.
-func IsListenerResource(url string) bool {
-	return url == version.V2ListenerURL || url == version.V3ListenerURL
-}
-
-// IsHTTPConnManagerResource returns true if the provider URL corresponds to an xDS
-// HTTPConnManager resource.
-func IsHTTPConnManagerResource(url string) bool {
-	return url == version.V2HTTPConnManagerURL || url == version.V3HTTPConnManagerURL
-}
-
-// IsRouteConfigResource returns true if the provider URL corresponds to an xDS
-// RouteConfig resource.
-func IsRouteConfigResource(url string) bool {
-	return url == version.V2RouteConfigURL || url == version.V3RouteConfigURL
-}
-
-// IsClusterResource returns true if the provider URL corresponds to an xDS
-// Cluster resource.
-func IsClusterResource(url string) bool {
-	return url == version.V2ClusterURL || url == version.V3ClusterURL
-}
-
-// IsEndpointsResource returns true if the provider URL corresponds to an xDS
-// Endpoints resource.
-func IsEndpointsResource(url string) bool {
-	return url == version.V2EndpointsURL || url == version.V3EndpointsURL
 }

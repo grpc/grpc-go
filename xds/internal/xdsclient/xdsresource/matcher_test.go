@@ -13,10 +13,9 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package xdsclient
+package xdsresource
 
 import (
 	"context"
@@ -29,7 +28,7 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-func TestAndMatcherMatch(t *testing.T) {
+func (s) TestAndMatcherMatch(t *testing.T) {
 	tests := []struct {
 		name string
 		pm   pathMatcher
@@ -114,7 +113,7 @@ func TestAndMatcherMatch(t *testing.T) {
 	}
 }
 
-func TestFractionMatcherMatch(t *testing.T) {
+func (s) TestFractionMatcherMatch(t *testing.T) {
 	const fraction = 500000
 	fm := newFractionMatcher(fraction)
 	defer func() {

@@ -41,6 +41,7 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -429,7 +430,7 @@ func (s) TestServeSuccess(t *testing.T) {
 
 	// Push an error to the registered listener watch callback and make sure
 	// that Serve does not return.
-	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{}, xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "LDS resource not found"))
+	client.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{}, xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "LDS resource not found"))
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := serveDone.Receive(sCtx); err != context.DeadlineExceeded {
@@ -447,14 +448,14 @@ func (s) TestServeSuccess(t *testing.T) {
 
 	// Push a good LDS response, and wait for Serve() to be invoked on the
 	// underlying grpc.Server.
-	fcm, err := xdsclient.NewFilterChainManager(listenerWithFilterChains)
+	fcm, err := xdsresource.NewFilterChainManager(listenerWithFilterChains, nil)
 	if err != nil {
 		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
 	}
 	addr, port := splitHostPort(lis.Addr().String())
-	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
+	client.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{
 		RouteConfigName: "routeconfig",
-		InboundListenerCfg: &xdsclient.InboundListenerConfig{
+		InboundListenerCfg: &xdsresource.InboundListenerConfig{
 			Address:      addr,
 			Port:         port,
 			FilterChains: fcm,
@@ -476,9 +477,9 @@ func (s) TestServeSuccess(t *testing.T) {
 	// Push an update to the registered listener watch callback with a Listener
 	// resource whose host:port does not match the actual listening address and
 	// port. This will push the listener to "not-serving" mode.
-	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
+	client.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{
 		RouteConfigName: "routeconfig",
-		InboundListenerCfg: &xdsclient.InboundListenerConfig{
+		InboundListenerCfg: &xdsresource.InboundListenerConfig{
 			Address:      "10.20.30.40",
 			Port:         "666",
 			FilterChains: fcm,
@@ -749,7 +750,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	// Push a good LDS response with security config, and wait for Serve() to be
 	// invoked on the underlying grpc.Server. Also make sure that certificate
 	// providers are not created.
-	fcm, err := xdsclient.NewFilterChainManager(&v3listenerpb.Listener{
+	fcm, err := xdsresource.NewFilterChainManager(&v3listenerpb.Listener{
 		FilterChains: []*v3listenerpb.FilterChain{
 			{
 				TransportSocket: &v3corepb.TransportSocket{
@@ -789,14 +790,14 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
 	}
 	addr, port := splitHostPort(lis.Addr().String())
-	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{
+	client.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{
 		RouteConfigName: "routeconfig",
-		InboundListenerCfg: &xdsclient.InboundListenerConfig{
+		InboundListenerCfg: &xdsresource.InboundListenerConfig{
 			Address:      addr,
 			Port:         port,
 			FilterChains: fcm,
@@ -862,7 +863,7 @@ func (s) TestHandleListenerUpdate_ErrorUpdate(t *testing.T) {
 
 	// Push an error to the registered listener watch callback and make sure
 	// that Serve does not return.
-	client.InvokeWatchListenerCallback(xdsclient.ListenerUpdate{}, errors.New("LDS error"))
+	client.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{}, errors.New("LDS error"))
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := serveDone.Receive(sCtx); err != context.DeadlineExceeded {

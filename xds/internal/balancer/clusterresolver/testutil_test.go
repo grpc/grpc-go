@@ -30,14 +30,14 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 // parseEDSRespProtoForTesting parses EDS response, and panic if parsing fails.
 //
 // TODO: delete this. The EDS balancer tests should build an EndpointsUpdate
 // directly, instead of building and parsing a proto message.
-func parseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) xdsclient.EndpointsUpdate {
+func parseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) xdsresource.EndpointsUpdate {
 	u, err := parseEDSRespProto(m)
 	if err != nil {
 		panic(err.Error())
@@ -46,8 +46,8 @@ func parseEDSRespProtoForTesting(m *xdspb.ClusterLoadAssignment) xdsclient.Endpo
 }
 
 // parseEDSRespProto turns EDS response proto message to EndpointsUpdate.
-func parseEDSRespProto(m *xdspb.ClusterLoadAssignment) (xdsclient.EndpointsUpdate, error) {
-	ret := xdsclient.EndpointsUpdate{}
+func parseEDSRespProto(m *xdspb.ClusterLoadAssignment) (xdsresource.EndpointsUpdate, error) {
+	ret := xdsresource.EndpointsUpdate{}
 	for _, dropPolicy := range m.GetPolicy().GetDropOverloads() {
 		ret.Drops = append(ret.Drops, parseDropPolicy(dropPolicy))
 	}
@@ -55,7 +55,7 @@ func parseEDSRespProto(m *xdspb.ClusterLoadAssignment) (xdsclient.EndpointsUpdat
 	for _, locality := range m.Endpoints {
 		l := locality.GetLocality()
 		if l == nil {
-			return xdsclient.EndpointsUpdate{}, fmt.Errorf("EDS response contains a locality without ID, locality: %+v", locality)
+			return xdsresource.EndpointsUpdate{}, fmt.Errorf("EDS response contains a locality without ID, locality: %+v", locality)
 		}
 		lid := internal.LocalityID{
 			Region:  l.Region,
@@ -64,7 +64,7 @@ func parseEDSRespProto(m *xdspb.ClusterLoadAssignment) (xdsclient.EndpointsUpdat
 		}
 		priority := locality.GetPriority()
 		priorities[priority] = struct{}{}
-		ret.Localities = append(ret.Localities, xdsclient.Locality{
+		ret.Localities = append(ret.Localities, xdsresource.Locality{
 			ID:        lid,
 			Endpoints: parseEndpoints(locality.GetLbEndpoints()),
 			Weight:    locality.GetLoadBalancingWeight().GetValue(),
@@ -73,7 +73,7 @@ func parseEDSRespProto(m *xdspb.ClusterLoadAssignment) (xdsclient.EndpointsUpdat
 	}
 	for i := 0; i < len(priorities); i++ {
 		if _, ok := priorities[uint32(i)]; !ok {
-			return xdsclient.EndpointsUpdate{}, fmt.Errorf("priority %v missing (with different priorities %v received)", i, priorities)
+			return xdsresource.EndpointsUpdate{}, fmt.Errorf("priority %v missing (with different priorities %v received)", i, priorities)
 		}
 	}
 	return ret, nil
@@ -83,7 +83,7 @@ func parseAddress(socketAddress *corepb.SocketAddress) string {
 	return net.JoinHostPort(socketAddress.GetAddress(), strconv.Itoa(int(socketAddress.GetPortValue())))
 }
 
-func parseDropPolicy(dropPolicy *xdspb.ClusterLoadAssignment_Policy_DropOverload) xdsclient.OverloadDropConfig {
+func parseDropPolicy(dropPolicy *xdspb.ClusterLoadAssignment_Policy_DropOverload) xdsresource.OverloadDropConfig {
 	percentage := dropPolicy.GetDropPercentage()
 	var (
 		numerator   = percentage.GetNumerator()
@@ -97,18 +97,18 @@ func parseDropPolicy(dropPolicy *xdspb.ClusterLoadAssignment_Policy_DropOverload
 	case typepb.FractionalPercent_MILLION:
 		denominator = 1000000
 	}
-	return xdsclient.OverloadDropConfig{
+	return xdsresource.OverloadDropConfig{
 		Category:    dropPolicy.GetCategory(),
 		Numerator:   numerator,
 		Denominator: denominator,
 	}
 }
 
-func parseEndpoints(lbEndpoints []*endpointpb.LbEndpoint) []xdsclient.Endpoint {
-	endpoints := make([]xdsclient.Endpoint, 0, len(lbEndpoints))
+func parseEndpoints(lbEndpoints []*endpointpb.LbEndpoint) []xdsresource.Endpoint {
+	endpoints := make([]xdsresource.Endpoint, 0, len(lbEndpoints))
 	for _, lbEndpoint := range lbEndpoints {
-		endpoints = append(endpoints, xdsclient.Endpoint{
-			HealthStatus: xdsclient.EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
+		endpoints = append(endpoints, xdsresource.Endpoint{
+			HealthStatus: xdsresource.EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Address:      parseAddress(lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()),
 			Weight:       lbEndpoint.GetLoadBalancingWeight().GetValue(),
 		})

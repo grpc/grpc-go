@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 var (
@@ -405,7 +406,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	defer func() { balancergroup.DefaultSubBalancerCloseTimeout = oldCacheTimeout }()
 
 	// The first update is an empty update.
-	xdsC.InvokeWatchEDSCallback("", xdsclient.EndpointsUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback("", xdsresource.EndpointsUpdate{}, nil)
 	// Pick should fail with transient failure, and all priority removed error.
 	if err := testErrPickerFromCh(cc.NewPickerCh, priority.ErrAllPrioritiesRemoved); err != nil {
 		t.Fatal(err)
@@ -425,7 +426,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	xdsC.InvokeWatchEDSCallback("", xdsclient.EndpointsUpdate{}, nil)
+	xdsC.InvokeWatchEDSCallback("", xdsresource.EndpointsUpdate{}, nil)
 	// Pick should fail with transient failure, and all priority removed error.
 	if err := testErrPickerFromCh(cc.NewPickerCh, priority.ErrAllPrioritiesRemoved); err != nil {
 		t.Fatal(err)

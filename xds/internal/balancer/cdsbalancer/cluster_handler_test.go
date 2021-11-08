@@ -23,7 +23,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 const (
@@ -50,32 +50,32 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 	tests := []struct {
 		name          string
 		clusterName   string
-		clusterUpdate xdsclient.ClusterUpdate
-		lbPolicy      *xdsclient.ClusterLBPolicyRingHash
+		clusterUpdate xdsresource.ClusterUpdate
+		lbPolicy      *xdsresource.ClusterLBPolicyRingHash
 	}{
 		{
 			name:        "test-update-root-cluster-EDS-success",
 			clusterName: edsService,
-			clusterUpdate: xdsclient.ClusterUpdate{
-				ClusterType: xdsclient.ClusterTypeEDS,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterType: xdsresource.ClusterTypeEDS,
 				ClusterName: edsService,
 			},
 		},
 		{
 			name:        "test-update-root-cluster-EDS-with-ring-hash",
 			clusterName: logicalDNSService,
-			clusterUpdate: xdsclient.ClusterUpdate{
-				ClusterType: xdsclient.ClusterTypeLogicalDNS,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterType: xdsresource.ClusterTypeLogicalDNS,
 				ClusterName: logicalDNSService,
-				LBPolicy:    &xdsclient.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
+				LBPolicy:    &xdsresource.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
 			},
-			lbPolicy: &xdsclient.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
+			lbPolicy: &xdsresource.ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
 		},
 		{
 			name:        "test-update-root-cluster-Logical-DNS-success",
 			clusterName: logicalDNSService,
-			clusterUpdate: xdsclient.ClusterUpdate{
-				ClusterType: xdsclient.ClusterTypeLogicalDNS,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterType: xdsresource.ClusterTypeLogicalDNS,
 				ClusterName: logicalDNSService,
 			},
 		},
@@ -107,7 +107,7 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 			fakeClient.InvokeWatchClusterCallback(test.clusterUpdate, nil)
 			select {
 			case chu := <-ch.updateChannel:
-				if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{test.clusterUpdate}); diff != "" {
+				if diff := cmp.Diff(chu.updates, []xdsresource.ClusterUpdate{test.clusterUpdate}); diff != "" {
 					t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
 				}
 				if diff := cmp.Diff(chu.lbPolicy, test.lbPolicy); diff != "" {
@@ -140,29 +140,29 @@ func (s) TestSuccessCaseLeafNodeThenNewUpdate(t *testing.T) {
 	tests := []struct {
 		name             string
 		clusterName      string
-		clusterUpdate    xdsclient.ClusterUpdate
-		newClusterUpdate xdsclient.ClusterUpdate
+		clusterUpdate    xdsresource.ClusterUpdate
+		newClusterUpdate xdsresource.ClusterUpdate
 	}{
 		{name: "test-update-root-cluster-then-new-update-EDS-success",
 			clusterName: edsService,
-			clusterUpdate: xdsclient.ClusterUpdate{
-				ClusterType: xdsclient.ClusterTypeEDS,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterType: xdsresource.ClusterTypeEDS,
 				ClusterName: edsService,
 			},
-			newClusterUpdate: xdsclient.ClusterUpdate{
-				ClusterType: xdsclient.ClusterTypeEDS,
+			newClusterUpdate: xdsresource.ClusterUpdate{
+				ClusterType: xdsresource.ClusterTypeEDS,
 				ClusterName: edsService2,
 			},
 		},
 		{
 			name:        "test-update-root-cluster-then-new-update-Logical-DNS-success",
 			clusterName: logicalDNSService,
-			clusterUpdate: xdsclient.ClusterUpdate{
-				ClusterType: xdsclient.ClusterTypeLogicalDNS,
+			clusterUpdate: xdsresource.ClusterUpdate{
+				ClusterType: xdsresource.ClusterTypeLogicalDNS,
 				ClusterName: logicalDNSService,
 			},
-			newClusterUpdate: xdsclient.ClusterUpdate{
-				ClusterType: xdsclient.ClusterTypeLogicalDNS,
+			newClusterUpdate: xdsresource.ClusterUpdate{
+				ClusterType: xdsresource.ClusterTypeLogicalDNS,
 				ClusterName: logicalDNSService2,
 			},
 		},
@@ -204,7 +204,7 @@ func (s) TestSuccessCaseLeafNodeThenNewUpdate(t *testing.T) {
 			fakeClient.InvokeWatchClusterCallback(test.newClusterUpdate, nil)
 			select {
 			case chu := <-ch.updateChannel:
-				if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{test.newClusterUpdate}); diff != "" {
+				if diff := cmp.Diff(chu.updates, []xdsresource.ClusterUpdate{test.newClusterUpdate}); diff != "" {
 					t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
@@ -242,8 +242,8 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	// start watches for the aggregate cluster's children. The ping to the
 	// clusterHandler at the end of handleResp should be a no-op, as neither the
 	// EDS or LogicalDNS child clusters have received an update yet.
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType:             xdsclient.ClusterTypeAggregate,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
 		ClusterName:             aggregateClusterService,
 		PrioritizedClusterNames: []string{edsService, logicalDNSService},
 	}, nil)
@@ -290,8 +290,8 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	}
 
 	// Send callback for the EDS child cluster.
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType: xdsclient.ClusterTypeEDS,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeEDS,
 		ClusterName: edsService,
 	}, nil)
 
@@ -306,8 +306,8 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 
 	// Invoke callback for Logical DNS child cluster.
 
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType: xdsclient.ClusterTypeLogicalDNS,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeLogicalDNS,
 		ClusterName: logicalDNSService,
 	}, nil)
 
@@ -320,11 +320,11 @@ func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
 	// ordered as per the cluster update.
 	select {
 	case chu := <-ch.updateChannel:
-		if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{{
-			ClusterType: xdsclient.ClusterTypeEDS,
+		if diff := cmp.Diff(chu.updates, []xdsresource.ClusterUpdate{{
+			ClusterType: xdsresource.ClusterTypeEDS,
 			ClusterName: edsService,
 		}, {
-			ClusterType: xdsclient.ClusterTypeLogicalDNS,
+			ClusterType: xdsresource.ClusterTypeLogicalDNS,
 			ClusterName: logicalDNSService,
 		}}); diff != "" {
 			t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
@@ -352,19 +352,19 @@ func (s) TestUpdateRootClusterAggregateThenChangeChild(t *testing.T) {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
 
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType:             xdsclient.ClusterTypeAggregate,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
 		ClusterName:             aggregateClusterService,
 		PrioritizedClusterNames: []string{edsService, logicalDNSService},
 	}, nil)
 	fakeClient.WaitForWatchCluster(ctx)
 	fakeClient.WaitForWatchCluster(ctx)
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType: xdsclient.ClusterTypeEDS,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeEDS,
 		ClusterName: edsService,
 	}, nil)
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType: xdsclient.ClusterTypeLogicalDNS,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeLogicalDNS,
 		ClusterName: logicalDNSService,
 	}, nil)
 
@@ -374,8 +374,8 @@ func (s) TestUpdateRootClusterAggregateThenChangeChild(t *testing.T) {
 		t.Fatal("Timed out waiting for the cluster update to be written to the update buffer.")
 	}
 
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType:             xdsclient.ClusterTypeAggregate,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
 		ClusterName:             aggregateClusterService,
 		PrioritizedClusterNames: []string{edsService, logicalDNSService2},
 	}, nil)
@@ -414,8 +414,8 @@ func (s) TestUpdateRootClusterAggregateThenChangeChild(t *testing.T) {
 
 	// Invoke a callback for the new logicalDNSService2 - this will fill out the
 	// tree with successful updates.
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType: xdsclient.ClusterTypeLogicalDNS,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeLogicalDNS,
 		ClusterName: logicalDNSService2,
 	}, nil)
 
@@ -427,11 +427,11 @@ func (s) TestUpdateRootClusterAggregateThenChangeChild(t *testing.T) {
 
 	select {
 	case chu := <-ch.updateChannel:
-		if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{{
-			ClusterType: xdsclient.ClusterTypeEDS,
+		if diff := cmp.Diff(chu.updates, []xdsresource.ClusterUpdate{{
+			ClusterType: xdsresource.ClusterTypeEDS,
 			ClusterName: edsService,
 		}, {
-			ClusterType: xdsclient.ClusterTypeLogicalDNS,
+			ClusterType: xdsresource.ClusterTypeLogicalDNS,
 			ClusterName: logicalDNSService2,
 		}}); diff != "" {
 			t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
@@ -459,19 +459,19 @@ func (s) TestUpdateRootClusterAggregateThenChangeRootToEDS(t *testing.T) {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
 
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType:             xdsclient.ClusterTypeAggregate,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
 		ClusterName:             aggregateClusterService,
 		PrioritizedClusterNames: []string{edsService, logicalDNSService},
 	}, nil)
 	fakeClient.WaitForWatchCluster(ctx)
 	fakeClient.WaitForWatchCluster(ctx)
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType: xdsclient.ClusterTypeEDS,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeEDS,
 		ClusterName: edsService,
 	}, nil)
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType: xdsclient.ClusterTypeLogicalDNS,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeLogicalDNS,
 		ClusterName: logicalDNSService,
 	}, nil)
 
@@ -536,7 +536,7 @@ func (s) TestHandleRespInvokedWithError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{}, errors.New("some error"))
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{}, errors.New("some error"))
 	select {
 	case chu := <-ch.updateChannel:
 		if chu.err.Error() != "some error" {
@@ -563,8 +563,8 @@ func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType: xdsclient.ClusterTypeEDS,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeEDS,
 		ClusterName: edsService2,
 	}, nil)
 	select {
@@ -574,8 +574,8 @@ func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
 	}
 	// Switch the cluster to an aggregate cluster, this should cause two new
 	// child watches to be created.
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType:             xdsclient.ClusterTypeAggregate,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
 		ClusterName:             edsService2,
 		PrioritizedClusterNames: []string{edsService, logicalDNSService},
 	}, nil)
@@ -632,8 +632,8 @@ func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
 
 	// Switch the cluster back to an EDS Cluster. This should cause the two
 	// children to be deleted.
-	fakeClient.InvokeWatchClusterCallback(xdsclient.ClusterUpdate{
-		ClusterType: xdsclient.ClusterTypeEDS,
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeEDS,
 		ClusterName: edsService2,
 	}, nil)
 
@@ -673,8 +673,8 @@ func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
 	// Then an update should successfully be written to the update buffer.
 	select {
 	case chu := <-ch.updateChannel:
-		if diff := cmp.Diff(chu.updates, []xdsclient.ClusterUpdate{{
-			ClusterType: xdsclient.ClusterTypeEDS,
+		if diff := cmp.Diff(chu.updates, []xdsresource.ClusterUpdate{{
+			ClusterType: xdsresource.ClusterTypeEDS,
 			ClusterName: edsService2,
 		}}); diff != "" {
 			t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)

@@ -35,6 +35,7 @@ import (
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -140,16 +141,16 @@ func TestCSDS(t *testing.T) {
 	defer cleanup()
 
 	for _, target := range ldsTargets {
-		xdsC.WatchListener(target, func(xdsclient.ListenerUpdate, error) {})
+		xdsC.WatchListener(target, func(xdsresource.ListenerUpdate, error) {})
 	}
 	for _, target := range rdsTargets {
-		xdsC.WatchRouteConfig(target, func(xdsclient.RouteConfigUpdate, error) {})
+		xdsC.WatchRouteConfig(target, func(xdsresource.RouteConfigUpdate, error) {})
 	}
 	for _, target := range cdsTargets {
-		xdsC.WatchCluster(target, func(xdsclient.ClusterUpdate, error) {})
+		xdsC.WatchCluster(target, func(xdsresource.ClusterUpdate, error) {})
 	}
 	for _, target := range edsTargets {
-		xdsC.WatchEndpoints(target, func(xdsclient.EndpointsUpdate, error) {})
+		xdsC.WatchEndpoints(target, func(xdsresource.EndpointsUpdate, error) {})
 	}
 
 	for i := 0; i < retryCount; i++ {

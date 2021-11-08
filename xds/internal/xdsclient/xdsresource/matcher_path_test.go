@@ -13,17 +13,16 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
  */
 
-package xdsclient
+package xdsresource
 
 import (
 	"regexp"
 	"testing"
 )
 
-func TestPathFullMatcherMatch(t *testing.T) {
+func (s) TestPathFullMatcherMatch(t *testing.T) {
 	tests := []struct {
 		name            string
 		fullPath        string
@@ -47,7 +46,7 @@ func TestPathFullMatcherMatch(t *testing.T) {
 	}
 }
 
-func TestPathPrefixMatcherMatch(t *testing.T) {
+func (s) TestPathPrefixMatcherMatch(t *testing.T) {
 	tests := []struct {
 		name            string
 		prefix          string
@@ -71,7 +70,7 @@ func TestPathPrefixMatcherMatch(t *testing.T) {
 	}
 }
 
-func TestPathRegexMatcherMatch(t *testing.T) {
+func (s) TestPathRegexMatcherMatch(t *testing.T) {
 	tests := []struct {
 		name      string
 		regexPath string

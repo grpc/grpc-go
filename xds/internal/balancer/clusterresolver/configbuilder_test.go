@@ -38,7 +38,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/balancer/weightedtarget"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 const (
@@ -55,9 +55,9 @@ const (
 var (
 	testLocalityIDs []internal.LocalityID
 	testAddressStrs [][]string
-	testEndpoints   [][]xdsclient.Endpoint
+	testEndpoints   [][]xdsresource.Endpoint
 
-	testLocalitiesP0, testLocalitiesP1 []xdsclient.Locality
+	testLocalitiesP0, testLocalitiesP1 []xdsresource.Locality
 
 	addrCmpOpts = cmp.Options{
 		cmp.AllowUnexported(attributes.Attributes{}),
@@ -75,21 +75,21 @@ func init() {
 		testLocalityIDs = append(testLocalityIDs, internal.LocalityID{Zone: fmt.Sprintf("test-zone-%d", i)})
 		var (
 			addrs []string
-			ends  []xdsclient.Endpoint
+			ends  []xdsresource.Endpoint
 		)
 		for j := 0; j < addressPerLocality; j++ {
 			addr := fmt.Sprintf("addr-%d-%d", i, j)
 			addrs = append(addrs, addr)
-			ends = append(ends, xdsclient.Endpoint{
+			ends = append(ends, xdsresource.Endpoint{
 				Address:      addr,
-				HealthStatus: xdsclient.EndpointHealthStatusHealthy,
+				HealthStatus: xdsresource.EndpointHealthStatusHealthy,
 			})
 		}
 		testAddressStrs = append(testAddressStrs, addrs)
 		testEndpoints = append(testEndpoints, ends)
 	}
 
-	testLocalitiesP0 = []xdsclient.Locality{
+	testLocalitiesP0 = []xdsresource.Locality{
 		{
 			Endpoints: testEndpoints[0],
 			ID:        testLocalityIDs[0],
@@ -103,7 +103,7 @@ func init() {
 			Priority:  0,
 		},
 	}
-	testLocalitiesP1 = []xdsclient.Locality{
+	testLocalitiesP1 = []xdsresource.Locality{
 		{
 			Endpoints: testEndpoints[2],
 			ID:        testLocalityIDs[2],
@@ -131,15 +131,15 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 				Type:                    DiscoveryMechanismTypeEDS,
 				EDSServiceName:          testEDSServiceName,
 			},
-			edsResp: xdsclient.EndpointsUpdate{
-				Drops: []xdsclient.OverloadDropConfig{
+			edsResp: xdsresource.EndpointsUpdate{
+				Drops: []xdsresource.OverloadDropConfig{
 					{
 						Category:    testDropCategory,
 						Numerator:   testDropOverMillion,
 						Denominator: million,
 					},
 				},
-				Localities: []xdsclient.Locality{
+				Localities: []xdsresource.Locality{
 					testLocalitiesP0[0],
 					testLocalitiesP0[1],
 					testLocalitiesP1[0],
@@ -181,15 +181,15 @@ func TestBuildPriorityConfig(t *testing.T) {
 				Type:                    DiscoveryMechanismTypeEDS,
 				EDSServiceName:          testEDSServiceName,
 			},
-			edsResp: xdsclient.EndpointsUpdate{
-				Drops: []xdsclient.OverloadDropConfig{
+			edsResp: xdsresource.EndpointsUpdate{
+				Drops: []xdsresource.OverloadDropConfig{
 					{
 						Category:    testDropCategory,
 						Numerator:   testDropOverMillion,
 						Denominator: million,
 					},
 				},
-				Localities: []xdsclient.Locality{
+				Localities: []xdsresource.Locality{
 					testLocalitiesP0[0],
 					testLocalitiesP0[1],
 					testLocalitiesP1[0],
@@ -333,15 +333,15 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 func TestBuildClusterImplConfigForEDS(t *testing.T) {
 	gotNames, gotConfigs, gotAddrs, _ := buildClusterImplConfigForEDS(
 		2,
-		xdsclient.EndpointsUpdate{
-			Drops: []xdsclient.OverloadDropConfig{
+		xdsresource.EndpointsUpdate{
+			Drops: []xdsresource.OverloadDropConfig{
 				{
 					Category:    testDropCategory,
 					Numerator:   testDropOverMillion,
 					Denominator: million,
 				},
 			},
-			Localities: []xdsclient.Locality{
+			Localities: []xdsresource.Locality{
 				{
 					Endpoints: testEndpoints[3],
 					ID:        testLocalityIDs[3],
@@ -461,42 +461,42 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 func TestGroupLocalitiesByPriority(t *testing.T) {
 	tests := []struct {
 		name           string
-		localities     []xdsclient.Locality
+		localities     []xdsresource.Locality
 		wantPriorities []string
-		wantLocalities map[string][]xdsclient.Locality
+		wantLocalities map[string][]xdsresource.Locality
 	}{
 		{
 			name:           "1 locality 1 priority",
-			localities:     []xdsclient.Locality{testLocalitiesP0[0]},
+			localities:     []xdsresource.Locality{testLocalitiesP0[0]},
 			wantPriorities: []string{"0"},
-			wantLocalities: map[string][]xdsclient.Locality{
+			wantLocalities: map[string][]xdsresource.Locality{
 				"0": {testLocalitiesP0[0]},
 			},
 		},
 		{
 			name:           "2 locality 1 priority",
-			localities:     []xdsclient.Locality{testLocalitiesP0[0], testLocalitiesP0[1]},
+			localities:     []xdsresource.Locality{testLocalitiesP0[0], testLocalitiesP0[1]},
 			wantPriorities: []string{"0"},
-			wantLocalities: map[string][]xdsclient.Locality{
+			wantLocalities: map[string][]xdsresource.Locality{
 				"0": {testLocalitiesP0[0], testLocalitiesP0[1]},
 			},
 		},
 		{
 			name:           "1 locality in each",
-			localities:     []xdsclient.Locality{testLocalitiesP0[0], testLocalitiesP1[0]},
+			localities:     []xdsresource.Locality{testLocalitiesP0[0], testLocalitiesP1[0]},
 			wantPriorities: []string{"0", "1"},
-			wantLocalities: map[string][]xdsclient.Locality{
+			wantLocalities: map[string][]xdsresource.Locality{
 				"0": {testLocalitiesP0[0]},
 				"1": {testLocalitiesP1[0]},
 			},
 		},
 		{
 			name: "2 localities in each sorted",
-			localities: []xdsclient.Locality{
+			localities: []xdsresource.Locality{
 				testLocalitiesP0[0], testLocalitiesP0[1],
 				testLocalitiesP1[0], testLocalitiesP1[1]},
 			wantPriorities: []string{"0", "1"},
-			wantLocalities: map[string][]xdsclient.Locality{
+			wantLocalities: map[string][]xdsresource.Locality{
 				"0": {testLocalitiesP0[0], testLocalitiesP0[1]},
 				"1": {testLocalitiesP1[0], testLocalitiesP1[1]},
 			},
@@ -506,11 +506,11 @@ func TestGroupLocalitiesByPriority(t *testing.T) {
 			// returned priority list must be sorted [p0, p1], because the list
 			// order is the priority order.
 			name: "2 localities in each needs to sort",
-			localities: []xdsclient.Locality{
+			localities: []xdsresource.Locality{
 				testLocalitiesP1[1], testLocalitiesP0[1],
 				testLocalitiesP1[0], testLocalitiesP0[0]},
 			wantPriorities: []string{"0", "1"},
-			wantLocalities: map[string][]xdsclient.Locality{
+			wantLocalities: map[string][]xdsresource.Locality{
 				"0": {testLocalitiesP0[1], testLocalitiesP0[0]},
 				"1": {testLocalitiesP1[1], testLocalitiesP1[0]},
 			},
@@ -563,7 +563,7 @@ func TestDedupSortedIntSlice(t *testing.T) {
 func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 	tests := []struct {
 		name         string
-		localities   []xdsclient.Locality
+		localities   []xdsresource.Locality
 		priorityName string
 		mechanism    DiscoveryMechanism
 		childPolicy  *internalserviceconfig.BalancerConfig
@@ -572,19 +572,19 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 		wantErr      bool
 	}{{
 		name: "round robin as child, no LRS",
-		localities: []xdsclient.Locality{
+		localities: []xdsresource.Locality{
 			{
-				Endpoints: []xdsclient.Endpoint{
-					{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
-					{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+				Endpoints: []xdsresource.Endpoint{
+					{Address: "addr-1-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+					{Address: "addr-1-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 				},
 				ID:     internal.LocalityID{Zone: "test-zone-1"},
 				Weight: 20,
 			},
 			{
-				Endpoints: []xdsclient.Endpoint{
-					{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
-					{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+				Endpoints: []xdsresource.Endpoint{
+					{Address: "addr-2-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+					{Address: "addr-2-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 				},
 				ID:     internal.LocalityID{Zone: "test-zone-2"},
 				Weight: 80,
@@ -630,19 +630,19 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 	},
 		{
 			name: "ring_hash as child",
-			localities: []xdsclient.Locality{
+			localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
-						{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-1-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-1-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-1"},
 					Weight: 20,
 				},
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
-						{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-2-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-2-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-2"},
 					Weight: 80,
@@ -666,10 +666,10 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 		},
 		{
 			name: "unsupported child",
-			localities: []xdsclient.Locality{{
-				Endpoints: []xdsclient.Endpoint{
-					{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
-					{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+			localities: []xdsresource.Locality{{
+				Endpoints: []xdsresource.Endpoint{
+					{Address: "addr-1-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+					{Address: "addr-1-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 				},
 				ID:     internal.LocalityID{Zone: "test-zone-1"},
 				Weight: 20,
@@ -698,7 +698,7 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 func TestLocalitiesToWeightedTarget(t *testing.T) {
 	tests := []struct {
 		name         string
-		localities   []xdsclient.Locality
+		localities   []xdsresource.Locality
 		priorityName string
 		childPolicy  *internalserviceconfig.BalancerConfig
 		lrsServer    *string
@@ -707,19 +707,19 @@ func TestLocalitiesToWeightedTarget(t *testing.T) {
 	}{
 		{
 			name: "roundrobin as child, with LRS",
-			localities: []xdsclient.Locality{
+			localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
-						{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-1-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy},
+						{Address: "addr-1-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-1"},
 					Weight: 20,
 				},
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
-						{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-2-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy},
+						{Address: "addr-2-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-2"},
 					Weight: 80,
@@ -749,19 +749,19 @@ func TestLocalitiesToWeightedTarget(t *testing.T) {
 		},
 		{
 			name: "roundrobin as child, no LRS",
-			localities: []xdsclient.Locality{
+			localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
-						{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-1-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy},
+						{Address: "addr-1-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-1"},
 					Weight: 20,
 				},
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
-						{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-2-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy},
+						{Address: "addr-2-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-2"},
 					Weight: 80,
@@ -795,19 +795,19 @@ func TestLocalitiesToWeightedTarget(t *testing.T) {
 		},
 		{
 			name: "weighted round robin as child, no LRS",
-			localities: []xdsclient.Locality{
+			localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
-						{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-1-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-1-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-1"},
 					Weight: 20,
 				},
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
-						{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-2-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-2-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-2"},
 					Weight: 80,
@@ -856,26 +856,26 @@ func TestLocalitiesToWeightedTarget(t *testing.T) {
 func TestLocalitiesToRingHash(t *testing.T) {
 	tests := []struct {
 		name         string
-		localities   []xdsclient.Locality
+		localities   []xdsresource.Locality
 		priorityName string
 		wantAddrs    []resolver.Address
 	}{
 		{
 			// Check that address weights are locality_weight * endpoint_weight.
 			name: "with locality and endpoint weight",
-			localities: []xdsclient.Locality{
+			localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
-						{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-1-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-1-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-1"},
 					Weight: 20,
 				},
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
-						{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-2-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-2-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-2"},
 					Weight: 80,
@@ -892,19 +892,19 @@ func TestLocalitiesToRingHash(t *testing.T) {
 		{
 			// Check that endpoint_weight is 0, weight is the locality weight.
 			name: "locality weight only",
-			localities: []xdsclient.Locality{
+			localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
-						{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-1-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy},
+						{Address: "addr-1-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-1"},
 					Weight: 20,
 				},
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
-						{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-2-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy},
+						{Address: "addr-2-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy},
 					},
 					ID:     internal.LocalityID{Zone: "test-zone-2"},
 					Weight: 80,
@@ -921,18 +921,18 @@ func TestLocalitiesToRingHash(t *testing.T) {
 		{
 			// Check that locality_weight is 0, weight is the endpoint weight.
 			name: "endpoint weight only",
-			localities: []xdsclient.Locality{
+			localities: []xdsresource.Locality{
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-1-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
-						{Address: "addr-1-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-1-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-1-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 					},
 					ID: internal.LocalityID{Zone: "test-zone-1"},
 				},
 				{
-					Endpoints: []xdsclient.Endpoint{
-						{Address: "addr-2-1", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 90},
-						{Address: "addr-2-2", HealthStatus: xdsclient.EndpointHealthStatusHealthy, Weight: 10},
+					Endpoints: []xdsresource.Endpoint{
+						{Address: "addr-2-1", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 90},
+						{Address: "addr-2-2", HealthStatus: xdsresource.EndpointHealthStatusHealthy, Weight: 10},
 					},
 					ID: internal.LocalityID{Zone: "test-zone-2"},
 				},

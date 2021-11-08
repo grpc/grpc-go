@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc/internal/testutils"
@@ -31,15 +32,15 @@ import (
 )
 
 var (
-	testLocalities = []Locality{
+	testLocalities = []xdsresource.Locality{
 		{
-			Endpoints: []Endpoint{{Address: "addr1:314"}},
+			Endpoints: []xdsresource.Endpoint{{Address: "addr1:314"}},
 			ID:        internal.LocalityID{SubZone: "locality-1"},
 			Priority:  1,
 			Weight:    1,
 		},
 		{
-			Endpoints: []Endpoint{{Address: "addr2:159"}},
+			Endpoints: []xdsresource.Endpoint{{Address: "addr2:159"}},
 			ID:        internal.LocalityID{SubZone: "locality-2"},
 			Priority:  0,
 			Weight:    1,
@@ -70,15 +71,15 @@ func (s) TestEndpointsWatch(t *testing.T) {
 	apiClient := c.(*testAPIClient)
 
 	endpointsUpdateCh := testutils.NewChannel()
-	cancelWatch := client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
-		endpointsUpdateCh.Send(EndpointsUpdateErrTuple{Update: update, Err: err})
+	cancelWatch := client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
+		endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
+	wantUpdate := xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}
+	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
 	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -88,17 +89,17 @@ func (s) TestEndpointsWatch(t *testing.T) {
 	// new update is not considered equal to the old one.
 	newUpdate := wantUpdate
 	newUpdate.Raw = &anypb.Any{}
-	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{
+	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{
 		testCDSName:  {Update: newUpdate},
 		"randomName": {},
-	}, UpdateMetadata{})
+	}, xdsresource.UpdateMetadata{})
 	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, newUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	// Cancel watch, and send update again.
 	cancelWatch()
-	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
+	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := endpointsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
@@ -134,8 +135,8 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	for i := 0; i < count; i++ {
 		endpointsUpdateCh := testutils.NewChannel()
 		endpointsUpdateChs = append(endpointsUpdateChs, endpointsUpdateCh)
-		cancelLastWatch = client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
-			endpointsUpdateCh.Send(EndpointsUpdateErrTuple{Update: update, Err: err})
+		cancelLastWatch = client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
+			endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 		})
 
 		if i == 0 {
@@ -147,8 +148,8 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 		}
 	}
 
-	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
+	wantUpdate := xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}
+	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
 	for i := 0; i < count; i++ {
 		if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[i], wantUpdate, nil); err != nil {
 			t.Fatal(err)
@@ -159,7 +160,7 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	// be notified because one has been cancelled, and the other is receiving
 	// the same update.
 	cancelLastWatch()
-	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
+	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
 	for i := 0; i < count; i++ {
 		func() {
 			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
@@ -173,8 +174,8 @@ func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
 	// Push a new update and make sure the uncancelled watcher is invoked.
 	// Specify a non-nil raw proto to ensure that the new update is not
 	// considered equal to the old one.
-	newUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}, Raw: &anypb.Any{}}
-	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{testCDSName: {Update: newUpdate}}, UpdateMetadata{})
+	newUpdate := xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}, Raw: &anypb.Any{}}
+	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Update: newUpdate}}, xdsresource.UpdateMetadata{})
 	if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[0], newUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -206,8 +207,8 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 	for i := 0; i < count; i++ {
 		endpointsUpdateCh := testutils.NewChannel()
 		endpointsUpdateChs = append(endpointsUpdateChs, endpointsUpdateCh)
-		client.WatchEndpoints(testCDSName+"1", func(update EndpointsUpdate, err error) {
-			endpointsUpdateCh.Send(EndpointsUpdateErrTuple{Update: update, Err: err})
+		client.WatchEndpoints(testCDSName+"1", func(update xdsresource.EndpointsUpdate, err error) {
+			endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 		})
 
 		if i == 0 {
@@ -221,19 +222,19 @@ func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
 
 	// Third watch for a different name.
 	endpointsUpdateCh2 := testutils.NewChannel()
-	client.WatchEndpoints(testCDSName+"2", func(update EndpointsUpdate, err error) {
-		endpointsUpdateCh2.Send(EndpointsUpdateErrTuple{Update: update, Err: err})
+	client.WatchEndpoints(testCDSName+"2", func(update xdsresource.EndpointsUpdate, err error) {
+		endpointsUpdateCh2.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate1 := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	wantUpdate2 := EndpointsUpdate{Localities: []Locality{testLocalities[1]}}
-	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{
+	wantUpdate1 := xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}
+	wantUpdate2 := xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[1]}}
+	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{
 		testCDSName + "1": {Update: wantUpdate1},
 		testCDSName + "2": {Update: wantUpdate2},
-	}, UpdateMetadata{})
+	}, xdsresource.UpdateMetadata{})
 
 	for i := 0; i < count; i++ {
 		if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[i], wantUpdate1, nil); err != nil {
@@ -266,23 +267,23 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 	apiClient := c.(*testAPIClient)
 
 	endpointsUpdateCh := testutils.NewChannel()
-	client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
-		endpointsUpdateCh.Send(EndpointsUpdateErrTuple{Update: update, Err: err})
+	client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
+		endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
-	wantUpdate := EndpointsUpdate{Localities: []Locality{testLocalities[0]}}
-	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, UpdateMetadata{})
+	wantUpdate := xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}
+	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
 	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	// Another watch for the resource in cache.
 	endpointsUpdateCh2 := testutils.NewChannel()
-	client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
-		endpointsUpdateCh2.Send(EndpointsUpdateErrTuple{Update: update, Err: err})
+	client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
+		endpointsUpdateCh2.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 	})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
@@ -325,8 +326,8 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 	apiClient := c.(*testAPIClient)
 
 	endpointsUpdateCh := testutils.NewChannel()
-	client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
-		endpointsUpdateCh.Send(EndpointsUpdateErrTuple{Update: update, Err: err})
+	client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
+		endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 	})
 	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
@@ -336,8 +337,8 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for endpoints update: %v", err)
 	}
-	gotUpdate := u.(EndpointsUpdateErrTuple)
-	if gotUpdate.Err == nil || !cmp.Equal(gotUpdate.Update, EndpointsUpdate{}) {
+	gotUpdate := u.(xdsresource.EndpointsUpdateErrTuple)
+	if gotUpdate.Err == nil || !cmp.Equal(gotUpdate.Update, xdsresource.EndpointsUpdate{}) {
 		t.Fatalf("unexpected endpointsUpdate: (%v, %v), want: (EndpointsUpdate{}, nil)", gotUpdate.Update, gotUpdate.Err)
 	}
 }
@@ -363,8 +364,8 @@ func (s) TestEndpointsWatchNACKError(t *testing.T) {
 	apiClient := c.(*testAPIClient)
 
 	endpointsUpdateCh := testutils.NewChannel()
-	cancelWatch := client.WatchEndpoints(testCDSName, func(update EndpointsUpdate, err error) {
-		endpointsUpdateCh.Send(EndpointsUpdateErrTuple{Update: update, Err: err})
+	cancelWatch := client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
+		endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 	})
 	defer cancelWatch()
 	if _, err := apiClient.addWatches[EndpointsResource].Receive(ctx); err != nil {
@@ -372,8 +373,8 @@ func (s) TestEndpointsWatchNACKError(t *testing.T) {
 	}
 
 	wantError := fmt.Errorf("testing error")
-	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{testCDSName: {Err: wantError}}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
-	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, EndpointsUpdate{}, wantError); err != nil {
+	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Err: wantError}}, xdsresource.UpdateMetadata{ErrState: &xdsresource.UpdateErrorMetadata{Err: wantError}})
+	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, xdsresource.EndpointsUpdate{}, wantError); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -405,8 +406,8 @@ func (s) TestEndpointsWatchPartialValid(t *testing.T) {
 
 	for _, name := range []string{testCDSName, badResourceName} {
 		endpointsUpdateCh := testutils.NewChannel()
-		cancelWatch := client.WatchEndpoints(name, func(update EndpointsUpdate, err error) {
-			endpointsUpdateCh.Send(EndpointsUpdateErrTuple{Update: update, Err: err})
+		cancelWatch := client.WatchEndpoints(name, func(update xdsresource.EndpointsUpdate, err error) {
+			endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
 		})
 		defer func() {
 			cancelWatch()
@@ -422,18 +423,18 @@ func (s) TestEndpointsWatchPartialValid(t *testing.T) {
 
 	wantError := fmt.Errorf("testing error")
 	wantError2 := fmt.Errorf("individual error")
-	client.NewEndpoints(map[string]EndpointsUpdateErrTuple{
-		testCDSName:     {Update: EndpointsUpdate{Localities: []Locality{testLocalities[0]}}},
+	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{
+		testCDSName:     {Update: xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}},
 		badResourceName: {Err: wantError2},
-	}, UpdateMetadata{ErrState: &UpdateErrorMetadata{Err: wantError}})
+	}, xdsresource.UpdateMetadata{ErrState: &xdsresource.UpdateErrorMetadata{Err: wantError}})
 
 	// The valid resource should be sent to the watcher.
-	if err := verifyEndpointsUpdate(ctx, updateChs[testCDSName], EndpointsUpdate{Localities: []Locality{testLocalities[0]}}, nil); err != nil {
+	if err := verifyEndpointsUpdate(ctx, updateChs[testCDSName], xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	// The failed watcher should receive an error.
-	if err := verifyEndpointsUpdate(ctx, updateChs[badResourceName], EndpointsUpdate{}, wantError2); err != nil {
+	if err := verifyEndpointsUpdate(ctx, updateChs[badResourceName], xdsresource.EndpointsUpdate{}, wantError2); err != nil {
 		t.Fatal(err)
 	}
 }
