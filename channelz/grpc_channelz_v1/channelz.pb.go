@@ -167,7 +167,7 @@ type Channel struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// The identifier for this channel. This should bet set.
+	// The identifier for this channel. This should be set.
 	Ref *ChannelRef `protobuf:"bytes,1,opt,name=ref,proto3" json:"ref,omitempty"`
 	// Data specific to this channel.
 	Data *ChannelData `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"` // At most one of 'channel_ref+subchannel_ref' and 'socket' is set.
