@@ -147,7 +147,7 @@ func processClusterSpecifierPlugins(csps []*v3routepb.ClusterSpecifierPlugin) (m
 			// "If a plugin is found, the value of the typed_config field will
 			// be passed to it's conversion method, and if an error is
 			// encountered, the resource will be NACKED." - RLS in xDS design
-			return nil, fmt.Errorf("error: %v parsing config %v for cluster specifier %v of type %v", err, csp.GetExtension().GetTypedConfig(), csp.GetExtension().GetName(), csp.GetExtension().GetTypedConfig().GetTypeUrl())
+			return nil, fmt.Errorf("error: %q parsing config %q for cluster specifier %q of type %q", err, csp.GetExtension().GetTypedConfig(), csp.GetExtension().GetName(), csp.GetExtension().GetTypedConfig().GetTypeUrl())
 		}
 		// "If all cluster specifiers are valid, the xDS client will store the
 		// configurations in a map keyed by the name of the extension instance." -
