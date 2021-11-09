@@ -35,7 +35,9 @@ import (
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	v2routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	rpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/rbac/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	anypb "github.com/golang/protobuf/ptypes/any"
@@ -532,6 +534,25 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			name:       "good-route-config-with-http-optional-unknown-filter-config",
 			rc:         goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"foo": wrappedOptionalFilter("unknown.custom.filter")}),
 			wantUpdate: goodUpdateWithFilterConfigs(nil),
+		},
+		{
+			name: "good-route-config-with-bad-rbac-http-filter-configuration",
+			rc: goodRouteConfigWithFilterConfigs(map[string]*anypb.Any{"rbac": testutils.MarshalAny(&v3rbacpb.RBACPerRoute{Rbac: &v3rbacpb.RBAC{
+				Rules: &rpb.RBAC{
+					Action: rpb.RBAC_ALLOW,
+					Policies: map[string]*rpb.Policy{
+						"certain-destination-ip": {
+							Permissions: []*rpb.Permission{
+								{Rule: &rpb.Permission_DestinationIp{DestinationIp: &v3corepb.CidrRange{AddressPrefix: "not a correct address", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+							},
+							Principals: []*rpb.Principal{
+								{Identifier: &rpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			}})}),
+			wantError: true,
 		},
 		{
 			name: "good-route-config-with-retry-policy",

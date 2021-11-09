@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
+	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/version"
@@ -42,9 +43,12 @@ import (
 	v2httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
 	v2listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	rpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/rbac/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	spb "github.com/golang/protobuf/ptypes/struct"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
@@ -990,6 +994,60 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			},
 		})
 	}
+	v3LisWithBadRBACConfiguration := func(rbacCfg *v3rbacpb.RBAC) *anypb.Any {
+		return testutils.MarshalAny(&v3listenerpb.Listener{
+			Name:    v3LDSTarget,
+			Address: localSocketAddress,
+			FilterChains: []*v3listenerpb.FilterChain{
+				{
+					Name: "filter-chain-1",
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "filter-1",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+										RouteConfig: routeConfig,
+									},
+									HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("rbac", rbacCfg), e2e.RouterHTTPFilter},
+								}),
+							},
+						},
+					},
+				},
+			},
+		})
+	}
+	badRBACCfgRegex := &v3rbacpb.RBAC{
+		Rules: &rpb.RBAC{
+			Action: rpb.RBAC_ALLOW,
+			Policies: map[string]*rpb.Policy{
+				"bad-regex-value": {
+					Permissions: []*rpb.Permission{
+						{Rule: &rpb.Permission_Any{Any: true}},
+					},
+					Principals: []*rpb.Principal{
+						{Identifier: &rpb.Principal_Header{Header: &v3routepb.HeaderMatcher{Name: ":method", HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{SafeRegexMatch: &v3matcherpb.RegexMatcher{Regex: "["}}}}},
+					},
+				},
+			},
+		},
+	}
+	badRBACCfgDestIP := &v3rbacpb.RBAC{
+		Rules: &rpb.RBAC{
+			Action: rpb.RBAC_ALLOW,
+			Policies: map[string]*rpb.Policy{
+				"certain-destination-ip": {
+					Permissions: []*rpb.Permission{
+						{Rule: &rpb.Permission_DestinationIp{DestinationIp: &v3corepb.CidrRange{AddressPrefix: "not a correct address", PrefixLen: &wrapperspb.UInt32Value{Value: uint32(10)}}}},
+					},
+					Principals: []*rpb.Principal{
+						{Identifier: &rpb.Principal_Any{Any: true}},
+					},
+				},
+			},
+		},
+	}
 
 	tests := []struct {
 		name       string
@@ -1444,6 +1502,20 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
 			wantMD:     errMD,
 			wantErr:    "original_ip_detection_extensions must be empty",
+		},
+		{
+			name:       "rbac-with-invalid-regex",
+			resources:  []*anypb.Any{v3LisWithBadRBACConfiguration(badRBACCfgRegex)},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
+			wantMD:     errMD,
+			wantErr:    "error parsing config for filter",
+		},
+		{
+			name:       "rbac-with-invalid-destination-ip-matcher",
+			resources:  []*anypb.Any{v3LisWithBadRBACConfiguration(badRBACCfgDestIP)},
+			wantUpdate: map[string]ListenerUpdateErrTuple{v3LDSTarget: {Err: cmpopts.AnyError}},
+			wantMD:     errMD,
+			wantErr:    "error parsing config for filter",
 		},
 		{
 			name: "unsupported validation context in transport socket",
