@@ -18,6 +18,7 @@
 package xdsresource
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 	"testing"
@@ -28,6 +29,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/env"
+	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -38,6 +40,7 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
+	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 )
@@ -67,6 +70,31 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				}},
 			}
 		}
+		goodRouteConfigWithClusterSpecifierPlugins = func(csps []*v3routepb.ClusterSpecifierPlugin, cspReferences []string) *v3routepb.RouteConfiguration {
+			var rs []*v3routepb.Route
+
+			for i, cspReference := range cspReferences {
+				rs = append(rs, &v3routepb.Route{
+					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: fmt.Sprint(i + 1)}},
+					Action: &v3routepb.Route_Route{
+						Route: &v3routepb.RouteAction{
+							ClusterSpecifier: &v3routepb.RouteAction_ClusterSpecifierPlugin{ClusterSpecifierPlugin: cspReference},
+						},
+					},
+				})
+			}
+
+			rc := &v3routepb.RouteConfiguration{
+				Name: routeName,
+				VirtualHosts: []*v3routepb.VirtualHost{{
+					Domains: []string{ldsTarget},
+					Routes:  rs,
+				}},
+				ClusterSpecifierPlugins: csps,
+			}
+
+			return rc
+		}
 		goodUpdateWithFilterConfigs = func(cfgs map[string]httpfilter.FilterConfig) RouteConfigUpdate {
 			return RouteConfigUpdate{
 				VirtualHosts: []*VirtualHost{{
@@ -79,6 +107,18 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 					HTTPFilterConfigOverride: cfgs,
 				}},
 			}
+		}
+		goodUpdateWithClusterSpecifierPlugins = RouteConfigUpdate{
+			VirtualHosts: []*VirtualHost{{
+				Domains: []string{ldsTarget},
+				Routes: []*Route{{
+					Prefix:      newStringP("1"),
+					RouteAction: RouteActionRoute,
+				}},
+			}},
+			ClusterSpecifierPlugins: map[string]clusterspecifier.BalancerConfig{
+				"cspA": nil,
+			},
 		}
 		goodRouteConfigWithRetryPolicy = func(vhrp *v3routepb.RetryPolicy, rrp *v3routepb.RetryPolicy) *v3routepb.RouteConfiguration {
 			return &v3routepb.RouteConfiguration{
@@ -575,6 +615,72 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			wantUpdate: goodUpdateIfRetryDisabled(),
 			wantError:  env.RetrySupport,
 		},
+		{
+			name: "cluster-specifier-declared-which-not-registered",
+			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
+				{
+					Extension: &v3corepb.TypedExtensionConfig{
+						Name:        "cspA",
+						TypedConfig: configOfClusterSpecifierDoesntExist,
+					},
+				},
+			}, []string{"cspA"}),
+			wantError: true,
+		},
+		{
+			name: "error-in-cluster-specifier-plugin-conversion-method",
+			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
+				{
+					Extension: &v3corepb.TypedExtensionConfig{
+						Name:        "cspA",
+						TypedConfig: errorClusterSpecifierConfig,
+					},
+				},
+			}, []string{"cspA"}),
+			wantError: true,
+		},
+		{
+			name: "route-action-that-references-undeclared-cluster-specifier-plugin",
+			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
+				{
+					Extension: &v3corepb.TypedExtensionConfig{
+						Name:        "cspA",
+						TypedConfig: mockClusterSpecifierConfig,
+					},
+				},
+			}, []string{"cspA", "cspB"}),
+			wantError: true,
+		},
+		{
+			name: "emitted-cluster-specifier-plugins",
+			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
+				{
+					Extension: &v3corepb.TypedExtensionConfig{
+						Name:        "cspA",
+						TypedConfig: mockClusterSpecifierConfig,
+					},
+				},
+			}, []string{"cspA"}),
+			wantUpdate: goodUpdateWithClusterSpecifierPlugins,
+		},
+		{
+			name: "deleted-cluster-specifier-plugins-not-referenced",
+			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
+				{
+					Extension: &v3corepb.TypedExtensionConfig{
+						Name:        "cspA",
+						TypedConfig: mockClusterSpecifierConfig,
+					},
+				},
+				{
+					Extension: &v3corepb.TypedExtensionConfig{
+						Name:        "cspB",
+						TypedConfig: mockClusterSpecifierConfig,
+					},
+				},
+			}, []string{"cspA"}),
+			wantUpdate: goodUpdateWithClusterSpecifierPlugins,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -588,6 +694,47 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			}
 		})
 	}
+}
+
+var configOfClusterSpecifierDoesntExist = &anypb.Any{
+	TypeUrl: "does.not.exist",
+	Value:   []byte{1, 2, 3},
+}
+
+var mockClusterSpecifierConfig = &anypb.Any{
+	TypeUrl: "mock.cluster.specifier.plugin",
+	Value:   []byte{1, 2, 3},
+}
+
+var errorClusterSpecifierConfig = &anypb.Any{
+	TypeUrl: "error.cluster.specifier.plugin",
+	Value:   []byte{1, 2, 3},
+}
+
+func init() {
+	clusterspecifier.Register(mockClusterSpecifierPlugin{})
+	clusterspecifier.Register(errorClusterSpecifierPlugin{})
+}
+
+type mockClusterSpecifierPlugin struct {
+}
+
+func (mockClusterSpecifierPlugin) TypeURLs() []string {
+	return []string{"mock.cluster.specifier.plugin"}
+}
+
+func (mockClusterSpecifierPlugin) ParseClusterSpecifierConfig(proto.Message) (clusterspecifier.BalancerConfig, error) {
+	return nil, nil
+}
+
+type errorClusterSpecifierPlugin struct{}
+
+func (errorClusterSpecifierPlugin) TypeURLs() []string {
+	return []string{"error.cluster.specifier.plugin"}
+}
+
+func (errorClusterSpecifierPlugin) ParseClusterSpecifierConfig(proto.Message) (clusterspecifier.BalancerConfig, error) {
+	return nil, errors.New("error from cluster specifier conversion function")
 }
 
 func (s) TestUnmarshalRouteConfig(t *testing.T) {
@@ -1468,7 +1615,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 	defer func() { env.RingHashSupport = oldRingHashSupport }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := routesProtoToSlice(tt.routes, nil, false)
+			got, _, err := routesProtoToSlice(tt.routes, nil, nil, false)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 			}
