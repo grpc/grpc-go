@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedtarget/weightedaggregator"
@@ -36,7 +35,6 @@ import (
 
 var (
 	rrBuilder        = balancer.Get(roundrobin.Name)
-	pfBuilder        = balancer.Get(grpc.PickFirstBalancerName)
 	testBalancerIDs  = []string{"b1", "b2", "b3"}
 	testBackendAddrs []resolver.Address
 )
