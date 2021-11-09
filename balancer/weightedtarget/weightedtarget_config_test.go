@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-
 	"google.golang.org/grpc/balancer"
 	_ "google.golang.org/grpc/balancer/grpclb"
 	"google.golang.org/grpc/balancer/roundrobin"

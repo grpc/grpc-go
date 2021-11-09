@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
