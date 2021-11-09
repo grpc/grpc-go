@@ -25,14 +25,13 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
-	grpctestutils "google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/testutils"
 )
 
 const resolveNowBalancerName = "test-resolve-now-balancer"
 
-var resolveNowBalancerCCCh = grpctestutils.NewChannel()
+var resolveNowBalancerCCCh = testutils.NewChannel()
 
 type resolveNowBalancerBuilder struct {
 	balancer.Builder

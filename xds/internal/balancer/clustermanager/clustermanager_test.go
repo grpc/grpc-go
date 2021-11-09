@@ -31,13 +31,12 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
-	itestutils "google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
-	"google.golang.org/grpc/xds/internal/testutils"
 )
 
 type s struct {
@@ -524,7 +523,7 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 
 	// Setup the stub balancer such that we can read the build options passed to
 	// it in the UpdateClientConnState method.
-	ccsCh := itestutils.NewChannel()
+	ccsCh := testutils.NewChannel()
 	bOpts := balancer.BuildOptions{
 		DialCreds:        insecure.NewCredentials(),
 		ChannelzParentID: parent,

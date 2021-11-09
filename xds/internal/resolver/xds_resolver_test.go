@@ -48,7 +48,6 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -819,7 +818,7 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	defer func(oldNewWRR func() wrr.WRR) { newWRR = oldNewWRR }(newWRR)
-	newWRR = xdstestutils.NewTestWRR
+	newWRR = testutils.NewTestWRR
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
@@ -876,7 +875,7 @@ func (s) TestXDSResolverMaxStreamDuration(t *testing.T) {
 	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
 
 	defer func(oldNewWRR func() wrr.WRR) { newWRR = oldNewWRR }(newWRR)
-	newWRR = xdstestutils.NewTestWRR
+	newWRR = testutils.NewTestWRR
 
 	// Invoke the watchAPI callback with a good service update and wait for the
 	// UpdateState method to be called on the ClientConn.
@@ -1384,7 +1383,7 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 			}
 
 			defer func(oldNewWRR func() wrr.WRR) { newWRR = oldNewWRR }(newWRR)
-			newWRR = xdstestutils.NewTestWRR
+			newWRR = testutils.NewTestWRR
 
 			// Invoke the watchAPI callback with a good service update and wait for the
 			// UpdateState method to be called on the ClientConn.

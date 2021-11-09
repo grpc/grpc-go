@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/clusterresolver"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -225,14 +224,14 @@ func edsCCS(service string, countMax *uint32, enableLRS bool, xdslbpolicy *inter
 
 // setup creates a cdsBalancer and an edsBalancer (and overrides the
 // newChildBalancer function to return it), and also returns a cleanup function.
-func setup(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
+func setup(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *testutils.TestClientConn, func()) {
 	t.Helper()
 	xdsC := fakeclient.NewClient()
 	builder := balancer.Get(cdsName)
 	if builder == nil {
 		t.Fatalf("balancer.Get(%q) returned nil", cdsName)
 	}
-	tcc := xdstestutils.NewTestClientConn(t)
+	tcc := testutils.NewTestClientConn(t)
 	cdsB := builder.Build(tcc, balancer.BuildOptions{})
 
 	edsB := newTestEDSBalancer()
@@ -250,7 +249,7 @@ func setup(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *x
 
 // setupWithWatch does everything that setup does, and also pushes a ClientConn
 // update to the cdsBalancer and waits for a CDS watch call to be registered.
-func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
+func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *testutils.TestClientConn, func()) {
 	t.Helper()
 
 	xdsC, cdsB, edsB, tcc, cancel := setup(t)
@@ -692,7 +691,7 @@ func (s) TestClose(t *testing.T) {
 
 	// Make sure that the UpdateSubConnState() method on the CDS balancer does
 	// not forward the update to the EDS balancer.
-	cdsB.UpdateSubConnState(&xdstestutils.TestSubConn{}, balancer.SubConnState{})
+	cdsB.UpdateSubConnState(&testutils.TestSubConn{}, balancer.SubConnState{})
 	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	if err := edsB.waitForSubConnUpdate(sCtx, subConnWithState{}); err != context.DeadlineExceeded {

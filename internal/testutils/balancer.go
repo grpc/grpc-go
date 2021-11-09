@@ -16,7 +16,6 @@
  *
  */
 
-// Package testutils provides utility types, for use in xds tests.
 package testutils
 
 import (
@@ -242,18 +241,6 @@ func IsRoundRobin(want []balancer.SubConn, f func() balancer.SubConn) error {
 	}
 
 	return nil
-}
-
-// testClosure is a test util for TestIsRoundRobin.
-type testClosure struct {
-	r []balancer.SubConn
-	i int
-}
-
-func (tc *testClosure) next() balancer.SubConn {
-	ret := tc.r[tc.i]
-	tc.i = (tc.i + 1) % len(tc.r)
-	return ret
 }
 
 // ErrTestConstPicker is error returned by test const picker.

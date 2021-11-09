@@ -26,14 +26,15 @@ import (
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/weightedtarget"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/balancergroup"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/balancer/balancergroup"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
-	"google.golang.org/grpc/xds/internal/balancer/weightedtarget"
-	"google.golang.org/grpc/xds/internal/testutils"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -101,7 +102,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	defer cleanup()
 
 	// One locality with one backend.
-	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 
@@ -115,7 +116,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	}
 
 	// The same locality, add one more backend.
-	clab2 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab2 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:2], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab2.Build()), nil)
 
@@ -129,7 +130,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	}
 
 	// The same locality, delete first backend.
-	clab3 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab3 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab3.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[1:2], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab3.Build()), nil)
 
@@ -145,7 +146,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	}
 
 	// The same locality, replace backend.
-	clab4 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab4 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab4.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab4.Build()), nil)
 
@@ -164,7 +165,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	}
 
 	// The same locality, different drop rate, dropping 50%.
-	clab5 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], map[string]uint32{"test-drop": 50})
+	clab5 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], map[string]uint32{"test-drop": 50})
 	clab5.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab5.Build()), nil)
 
@@ -186,7 +187,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	}
 
 	// The same locality, remove drops.
-	clab6 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab6 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab6.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[2:3], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab6.Build()), nil)
 
@@ -207,7 +208,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	defer cleanup()
 
 	// Two localities, each with one backend.
-	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 	sc1 := <-cc.NewSubConnCh
@@ -229,7 +230,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	}
 
 	// Add another locality, with one backend.
-	clab2 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab2 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab2.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	clab2.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2], nil)
 	clab2.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:3], nil)
@@ -245,7 +246,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	}
 
 	// Remove first locality.
-	clab3 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab3 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab3.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2], nil)
 	clab3.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:3], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab3.Build()), nil)
@@ -262,7 +263,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	}
 
 	// Add a backend to the last locality.
-	clab4 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab4 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab4.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2], nil)
 	clab4.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:4], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab4.Build()), nil)
@@ -281,7 +282,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	}
 
 	// Change weight of the locality[1].
-	clab5 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab5 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab5.AddLocality(testSubZones[1], 2, 0, testEndpointAddrs[1:2], nil)
 	clab5.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:4], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab5.Build()), nil)
@@ -296,7 +297,7 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	}
 
 	// Change weight of the locality[1] to 0, it should never be picked.
-	clab6 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab6 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab6.AddLocality(testSubZones[1], 0, 0, testEndpointAddrs[1:2], nil)
 	clab6.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:4], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab6.Build()), nil)
@@ -328,8 +329,8 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	defer cleanup()
 
 	// Two localities, each 3 backend, one Healthy, one Unhealthy, one Unknown.
-	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:6], &testutils.AddLocalityOptions{
+	clab1 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:6], &xdstestutils.AddLocalityOptions{
 		Health: []corepb.HealthStatus{
 			corepb.HealthStatus_HEALTHY,
 			corepb.HealthStatus_UNHEALTHY,
@@ -339,7 +340,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 			corepb.HealthStatus_DEGRADED,
 		},
 	})
-	clab1.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[6:12], &testutils.AddLocalityOptions{
+	clab1.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[6:12], &xdstestutils.AddLocalityOptions{
 		Health: []corepb.HealthStatus{
 			corepb.HealthStatus_HEALTHY,
 			corepb.HealthStatus_UNHEALTHY,
@@ -413,7 +414,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	}
 
 	// One locality with one backend.
-	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 
@@ -472,7 +473,7 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	}
 
 	// One locality with one backend.
-	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 	sc1 := <-cc.NewSubConnCh
