@@ -144,7 +144,7 @@ func (s) TestInsecureCreds(t *testing.T) {
 	}
 }
 
-func (s) TestInsecureCredsWith_PerRPCCredentials_AsCallOption(t *testing.T) {
+func (s) TestInsecureCreds_WithPerRPCCredentials_AsCallOption(t *testing.T) {
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -176,11 +176,11 @@ func (s) TestInsecureCredsWith_PerRPCCredentials_AsCallOption(t *testing.T) {
 	const wantErr = "transport: cannot send secure credentials on an insecure connection"
 	c := testpb.NewTestServiceClient(cc)
 	if _, err = c.EmptyCall(ctx, &testpb.Empty{}, copts...); err == nil || !strings.Contains(err.Error(), wantErr) {
-		t.Fatalf("InsecureCredsWithPerRPCCredentials/send_PerRPCCredentials_via_CallOptions  = %v; want %s", err, wantErr)
+		t.Fatalf("insecure credentials with per-RPC credentials requiring transport security returned error: %v; want %s", err, wantErr)
 	}
 }
 
-func (s) TestInsecureCredsWith_PerRPCCredentials_AsDialOption(t *testing.T) {
+func (s) TestInsecureCreds_WithPerRPCCredentials_AsDialOption(t *testing.T) {
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil

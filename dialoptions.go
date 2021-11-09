@@ -299,8 +299,14 @@ func WithReturnConnectionError() DialOption {
 }
 
 // WithInsecure returns a DialOption which disables transport security for this
-// ClientConn. Note that transport security is required unless WithInsecure is
-// set.
+// ClientConn. Under the hood, it uses insecure.NewCredentials().
+//
+// Note that using this DialOption with per-RPC credentials (through
+// WithCredentialsBundle or WithPerRPCCredentials) which require transport
+// security is incompatible and will cause grpc.Dial() to fail.
+//
+// Deprecated: use insecure.NewCredentials() instead.
+// Will be supported throughout 1.x.
 func WithInsecure() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.copts.TransportCredentials = insecure.NewCredentials()
