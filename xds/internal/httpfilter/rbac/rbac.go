@@ -64,7 +64,6 @@ type builder struct {
 
 type config struct {
 	httpfilter.FilterConfig
-	config      *rpb.RBAC
 	chainEngine *rbac.ChainEngine
 }
 
@@ -112,19 +111,24 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 	// grpc-go shifts both headers to in transport layer.
 	for _, policy := range rbacCfg.GetRules().GetPolicies() {
 		for _, principal := range policy.Principals {
-			if principal.GetHeader() != nil {
-				if principal.GetHeader().GetName() == "host" {
-					principal.GetHeader().Name = ":authority"
-				}
+			if principal.GetHeader().GetName() == "host" {
+				principal.GetHeader().Name = ":authority"
 			}
 		}
 		for _, permission := range policy.Permissions {
-			if permission.GetHeader() != nil {
-				if permission.GetHeader().GetName() == "host" {
-					permission.GetHeader().Name = ":authority"
-				}
+			if permission.GetHeader().GetName() == "host" {
+				permission.GetHeader().Name = ":authority"
 			}
 		}
+	}
+
+	// Two cases where this HTTP Filter is a no op:
+	// "If absent, no enforcing RBAC policy will be applied" - RBAC
+	// Documentation for Rules field.
+	// "At this time, if the RBAC.action is Action.LOG then the policy will be
+	// completely ignored, as if RBAC was not configurated." - A41
+	if rbacCfg.Rules == nil || rbacCfg.GetRules().GetAction() == v3rbacpb.RBAC_LOG {
+		return config{}, nil
 	}
 
 	ce, err := rbac.NewChainEngine([]*v3rbacpb.RBAC{rbacCfg.GetRules()})
@@ -136,7 +140,7 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 		}
 	}
 
-	return config{config: rbacCfg, chainEngine: ce}, nil
+	return config{chainEngine: ce}, nil
 }
 
 func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
@@ -196,19 +200,14 @@ func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override http
 		}
 	}
 
-	icfg := c.config
+	// RBAC HTTP Filter is a no op from one of these two cases:
 	// "If absent, no enforcing RBAC policy will be applied" - RBAC
 	// Documentation for Rules field.
-	if icfg.Rules == nil {
-		return nil, nil
-	}
-
 	// "At this time, if the RBAC.action is Action.LOG then the policy will be
 	// completely ignored, as if RBAC was not configurated." - A41
-	if icfg.Rules.Action == v3rbacpb.RBAC_LOG {
+	if c.chainEngine == nil {
 		return nil, nil
 	}
-
 	return &interceptor{chainEngine: c.chainEngine}, nil
 }
 
