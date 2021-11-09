@@ -194,12 +194,12 @@ func (h *testStreamHandler) handleStreamMisbehave(t *testing.T, s *Stream) {
 	}
 }
 
-func (h *testStreamHandler) handleStreamEncodingRequiredStatus(t *testing.T, s *Stream) {
+func (h *testStreamHandler) handleStreamEncodingRequiredStatus(s *Stream) {
 	// raw newline is not accepted by http2 framer so it must be encoded.
 	h.t.WriteStatus(s, encodingTestStatus)
 }
 
-func (h *testStreamHandler) handleStreamInvalidHeaderField(t *testing.T, s *Stream) {
+func (h *testStreamHandler) handleStreamInvalidHeaderField(s *Stream) {
 	headerFields := []hpack.HeaderField{}
 	headerFields = append(headerFields, hpack.HeaderField{Name: "content-type", Value: expectedInvalidHeaderField})
 	h.t.controlBuf.put(&headerFrame{
@@ -356,13 +356,13 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 			})
 		case encodingRequiredStatus:
 			go transport.HandleStreams(func(s *Stream) {
-				go h.handleStreamEncodingRequiredStatus(t, s)
+				go h.handleStreamEncodingRequiredStatus(s)
 			}, func(ctx context.Context, method string) context.Context {
 				return ctx
 			})
 		case invalidHeaderField:
 			go transport.HandleStreams(func(s *Stream) {
-				go h.handleStreamInvalidHeaderField(t, s)
+				go h.handleStreamInvalidHeaderField(s)
 			}, func(ctx context.Context, method string) context.Context {
 				return ctx
 			})

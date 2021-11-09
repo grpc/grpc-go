@@ -31,7 +31,7 @@ type controlPlane struct {
 	bootstrapContent string
 }
 
-func newControlPlane(testName string) (*controlPlane, error) {
+func newControlPlane() (*controlPlane, error) {
 	// Spin up an xDS management server on a local port.
 	server, err := e2e.StartManagementServer()
 	if err != nil {

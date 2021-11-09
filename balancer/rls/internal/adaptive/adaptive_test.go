@@ -156,7 +156,7 @@ func TestShouldThrottleOptions(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.desc, func(t *testing.T) {
 			m.SetNanos(0)
-			th := newWithArgs(time.Duration(time.Nanosecond), 1, test.ratioForAccepts, test.requestsPadding)
+			th := newWithArgs(time.Nanosecond, 1, test.ratioForAccepts, test.requestsPadding)
 			for i, response := range responses {
 				if response != E {
 					th.RegisterBackendResponse(response == T)

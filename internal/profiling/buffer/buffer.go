@@ -244,7 +244,7 @@ func (cb *CircularBuffer) Drain() []interface{} {
 	}
 
 	var wg sync.WaitGroup
-	wg.Add(int(len(qs)))
+	wg.Add(len(qs))
 	for i := 0; i < len(qs); i++ {
 		go func(qi int) {
 			qs[qi].drainWait()

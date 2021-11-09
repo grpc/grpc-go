@@ -36,7 +36,7 @@ const (
 
 // setupTests creates a clusterHandler with a fake xds client for control over
 // xds client.
-func setupTests(t *testing.T) (*clusterHandler, *fakeclient.Client) {
+func setupTests() (*clusterHandler, *fakeclient.Client) {
 	xdsC := fakeclient.NewClient()
 	ch := newClusterHandler(&cdsBalancer{xdsClient: xdsC})
 	return ch, xdsC
@@ -83,7 +83,7 @@ func (s) TestSuccessCaseLeafNode(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ch, fakeClient := setupTests(t)
+			ch, fakeClient := setupTests()
 			// When you first update the root cluster, it should hit the code
 			// path which will start a cluster node for that root. Updating the
 			// root cluster logically represents a ping from a ClientConn.
@@ -170,7 +170,7 @@ func (s) TestSuccessCaseLeafNodeThenNewUpdate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			ch, fakeClient := setupTests(t)
+			ch, fakeClient := setupTests()
 			ch.updateRootCluster(test.clusterName)
 			ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer ctxCancel()
@@ -220,7 +220,7 @@ func (s) TestSuccessCaseLeafNodeThenNewUpdate(t *testing.T) {
 // the children, and at the end there should be a successful clusterUpdate
 // written to the update buffer to send back to CDS.
 func (s) TestUpdateRootClusterAggregateSuccess(t *testing.T) {
-	ch, fakeClient := setupTests(t)
+	ch, fakeClient := setupTests()
 	ch.updateRootCluster(aggregateClusterService)
 
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -342,7 +342,7 @@ func (s) TestUpdateRootClusterAggregateThenChangeChild(t *testing.T) {
 	// This initial code is the same as the test for the aggregate success case,
 	// except without validations. This will get this test to the point where it
 	// can change one of the children.
-	ch, fakeClient := setupTests(t)
+	ch, fakeClient := setupTests()
 	ch.updateRootCluster(aggregateClusterService)
 
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -449,7 +449,7 @@ func (s) TestUpdateRootClusterAggregateThenChangeRootToEDS(t *testing.T) {
 	// This initial code is the same as the test for the aggregate success case,
 	// except without validations. This will get this test to the point where it
 	// can update the root cluster to one of type EDS.
-	ch, fakeClient := setupTests(t)
+	ch, fakeClient := setupTests()
 	ch.updateRootCluster(aggregateClusterService)
 
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -528,7 +528,7 @@ func (s) TestUpdateRootClusterAggregateThenChangeRootToEDS(t *testing.T) {
 // TestHandleRespInvokedWithError tests that when handleResp is invoked with an
 // error, that the error is successfully written to the update buffer.
 func (s) TestHandleRespInvokedWithError(t *testing.T) {
-	ch, fakeClient := setupTests(t)
+	ch, fakeClient := setupTests()
 	ch.updateRootCluster(edsService)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
@@ -555,7 +555,7 @@ func (s) TestHandleRespInvokedWithError(t *testing.T) {
 func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
 	// Getting the test to the point where there's a root cluster which is a eds
 	// leaf.
-	ch, fakeClient := setupTests(t)
+	ch, fakeClient := setupTests()
 	ch.updateRootCluster(edsService2)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()

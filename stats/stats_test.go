@@ -753,7 +753,7 @@ func checkEnd(t *testing.T, d *gotData, e *expectedData) {
 	}
 }
 
-func checkConnBegin(t *testing.T, d *gotData, e *expectedData) {
+func checkConnBegin(t *testing.T, d *gotData) {
 	var (
 		ok bool
 		st *stats.ConnBegin
@@ -767,7 +767,7 @@ func checkConnBegin(t *testing.T, d *gotData, e *expectedData) {
 	st.IsClient() // TODO remove this.
 }
 
-func checkConnEnd(t *testing.T, d *gotData, e *expectedData) {
+func checkConnEnd(t *testing.T, d *gotData) {
 	var (
 		ok bool
 		st *stats.ConnEnd
@@ -815,9 +815,9 @@ func checkConnStats(t *testing.T, got []*gotData) {
 		t.Fatalf("got %v stats, want even positive number", len(got))
 	}
 	// The first conn stats must be a ConnBegin.
-	checkConnBegin(t, got[0], nil)
+	checkConnBegin(t, got[0])
 	// The last conn stats must be a ConnEnd.
-	checkConnEnd(t, got[len(got)-1], nil)
+	checkConnEnd(t, got[len(got)-1])
 }
 
 func checkServerStats(t *testing.T, got []*gotData, expect *expectedData, checkFuncs []func(t *testing.T, d *gotData, e *expectedData)) {

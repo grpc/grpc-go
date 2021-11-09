@@ -299,12 +299,10 @@ func init() {
 }
 
 func (s) TestDoneLoads(t *testing.T) {
-	for _, e := range listTestEnv() {
-		testDoneLoads(t, e)
-	}
+	testDoneLoads(t)
 }
 
-func testDoneLoads(t *testing.T, e env) {
+func testDoneLoads(t *testing.T) {
 	b := &testBalancer{}
 	balancer.Register(b)
 

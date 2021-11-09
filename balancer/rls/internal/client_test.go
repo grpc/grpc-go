@@ -71,7 +71,7 @@ func (s) TestLookupFailure(t *testing.T) {
 	rlsClient := newRLSClient(cc, defaultDialTarget, defaultRPCTimeout)
 
 	errCh := testutils.NewChannel()
-	rlsClient.lookup("", nil, func(targets []string, headerData string, err error) {
+	rlsClient.lookup(nil, func(targets []string, headerData string, err error) {
 		if err == nil {
 			errCh.Send(errors.New("rlsClient.lookup() succeeded, should have failed"))
 			return
@@ -101,7 +101,7 @@ func (s) TestLookupDeadlineExceeded(t *testing.T) {
 	rlsClient := newRLSClient(cc, defaultDialTarget, 100*time.Millisecond)
 
 	errCh := testutils.NewChannel()
-	rlsClient.lookup("", nil, func(_ []string, _ string, err error) {
+	rlsClient.lookup(nil, func(_ []string, _ string, err error) {
 		if st, ok := status.FromError(err); !ok || st.Code() != codes.DeadlineExceeded {
 			errCh.Send(fmt.Errorf("rlsClient.lookup() returned error: %v, want %v", err, codes.DeadlineExceeded))
 			return
@@ -121,10 +121,7 @@ func (s) TestLookupSuccess(t *testing.T) {
 	server, cc, cleanup := setup(t)
 	defer cleanup()
 
-	const (
-		rlsReqPath     = "/service/method"
-		wantHeaderData = "headerData"
-	)
+	const wantHeaderData = "headerData"
 
 	rlsReqKeyMap := map[string]string{
 		"k1": "v1",
@@ -141,7 +138,7 @@ func (s) TestLookupSuccess(t *testing.T) {
 	rlsClient := newRLSClient(cc, defaultDialTarget, defaultRPCTimeout)
 
 	errCh := testutils.NewChannel()
-	rlsClient.lookup(rlsReqPath, rlsReqKeyMap, func(targets []string, hd string, err error) {
+	rlsClient.lookup(rlsReqKeyMap, func(targets []string, hd string, err error) {
 		if err != nil {
 			errCh.Send(fmt.Errorf("rlsClient.Lookup() failed: %v", err))
 			return

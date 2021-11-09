@@ -1557,7 +1557,7 @@ func minTime(a, b time.Duration) time.Duration {
 	return b
 }
 
-// keepalive running in a separate goroutune makes sure the connection is alive by sending pings.
+// keepalive running in a separate goroutine makes sure the connection is alive by sending pings.
 func (t *http2Client) keepalive() {
 	p := &ping{data: [8]byte{}}
 	// True iff a ping has been sent, and no data has been received since then.

@@ -86,7 +86,7 @@ func (s) TestConn(t *testing.T) {
 	wantSleeps(latency) // Connection creation delay.
 
 	// 1 kbps = 128 Bps.  Divides evenly by 1 second using nanos.
-	byteLatency := time.Duration(time.Second / 128)
+	byteLatency := time.Second / 128
 
 	write := func(b []byte) {
 		n, err := c.Write(b)

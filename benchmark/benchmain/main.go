@@ -206,7 +206,7 @@ func streamBenchmark(start startFunc, stop stopFunc, bf stats.Features, s *stats
 	runBenchmark(caller, start, stop, bf, s, workloadsStreaming)
 }
 
-func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Features, s *stats.Stats) {
+func unconstrainedStreamBenchmark(start startFunc, stop ucStopFunc, bf stats.Features) {
 	var sender rpcSendFunc
 	var recver rpcRecvFunc
 	var cleanup rpcCleanupFunc
@@ -771,7 +771,7 @@ func main() {
 			streamBenchmark(start, stop, bf, s)
 		}
 		if opts.rModes.unconstrained {
-			unconstrainedStreamBenchmark(start, ucStop, bf, s)
+			unconstrainedStreamBenchmark(start, ucStop, bf)
 		}
 	}
 	after(opts, s.GetResults())

@@ -32,12 +32,12 @@ import (
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
-func cmd(path string, logger io.Writer, args []string, env []string) (*exec.Cmd, error) {
+func cmd(path string, logger io.Writer, args []string, env []string) *exec.Cmd {
 	cmd := exec.Command(path, args...)
 	cmd.Env = append(os.Environ(), env...)
 	cmd.Stdout = logger
 	cmd.Stderr = logger
-	return cmd, nil
+	return cmd
 }
 
 const (
@@ -53,7 +53,7 @@ type client struct {
 
 // newClient create a client with the given target and bootstrap content.
 func newClient(target, binaryPath, bootstrap string, logger io.Writer, flags ...string) (*client, error) {
-	cmd, err := cmd(
+	cmd := cmd(
 		binaryPath,
 		logger,
 		append([]string{
@@ -68,9 +68,6 @@ func newClient(target, binaryPath, bootstrap string, logger io.Writer, flags ...
 			"GRPC_XDS_BOOTSTRAP_CONFIG=" + bootstrap, // The bootstrap content doesn't need to be quoted.
 		},
 	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to run client cmd: %v", err)
-	}
 	cmd.Start()
 
 	cc, err := grpc.Dial(fmt.Sprintf("localhost:%d", clientStatsPort), grpc.WithInsecure(), grpc.WithDefaultCallOptions(grpc.WaitForReady(true)))
@@ -150,7 +147,7 @@ func newServers(hostnamePrefix, binaryPath, bootstrap string, logger io.Writer, 
 	}()
 	for i := 0; i < count; i++ {
 		port := serverPort + i
-		cmd, err := cmd(
+		cmd := cmd(
 			binaryPath,
 			logger,
 			[]string{
@@ -163,9 +160,6 @@ func newServers(hostnamePrefix, binaryPath, bootstrap string, logger io.Writer, 
 				"GRPC_XDS_BOOTSTRAP_CONFIG=" + bootstrap, // The bootstrap content doesn't need to be quoted.,
 			},
 		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to run server cmd: %v", err)
-		}
 		cmd.Start()
 		ret = append(ret, &server{cmd: cmd, port: port})
 	}

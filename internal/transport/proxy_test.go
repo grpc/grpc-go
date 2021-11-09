@@ -211,11 +211,8 @@ func (s) TestMapAddressEnv(t *testing.T) {
 	}
 	defer overwrite(hpfe)()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
 	// envTestAddr should be handled by ProxyFromEnvironment.
-	got, err := mapAddress(ctx, envTestAddr)
+	got, err := mapAddress(envTestAddr)
 	if err != nil {
 		t.Error(err)
 	}

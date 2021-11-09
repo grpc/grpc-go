@@ -252,13 +252,10 @@ func (te *test) tearDown() {
 	te.srv.Stop()
 }
 
-type testConfig struct {
-}
-
 // newTest returns a new test using the provided testing.T and
 // environment.  It is returned with default values. Tests should
 // modify it before calling its startServer and clientConn methods.
-func newTest(t *testing.T, tc *testConfig) *test {
+func newTest(t *testing.T) *test {
 	te := &test{
 		t: t,
 	}
@@ -794,8 +791,8 @@ func (ed *expectedData) toServerLogEntries() []*pb.GrpcLogEntry {
 	return ret
 }
 
-func runRPCs(t *testing.T, tc *testConfig, cc *rpcConfig) *expectedData {
-	te := newTest(t, tc)
+func runRPCs(t *testing.T, cc *rpcConfig) *expectedData {
+	te := newTest(t)
 	te.startServer(&testServer{te: te})
 	defer te.tearDown()
 
@@ -869,7 +866,7 @@ func equalLogEntry(entries ...*pb.GrpcLogEntry) (equal bool) {
 
 func testClientBinaryLog(t *testing.T, c *rpcConfig) error {
 	defer testSink.clear()
-	expect := runRPCs(t, &testConfig{}, c)
+	expect := runRPCs(t, c)
 	want := expect.toClientLogEntries()
 	var got []*pb.GrpcLogEntry
 	// In racy cases, some entries are not logged when the RPC is finished (e.g.
@@ -969,7 +966,7 @@ func (s) TestClientBinaryLogCancel(t *testing.T) {
 
 func testServerBinaryLog(t *testing.T, c *rpcConfig) error {
 	defer testSink.clear()
-	expect := runRPCs(t, &testConfig{}, c)
+	expect := runRPCs(t, c)
 	want := expect.toServerLogEntries()
 	var got []*pb.GrpcLogEntry
 	// In racy cases, some entries are not logged when the RPC is finished (e.g.
