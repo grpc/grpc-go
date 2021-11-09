@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -52,7 +53,7 @@ type testCredsBundle struct {
 
 func (c *testCredsBundle) TransportCredentials() credentials.TransportCredentials {
 	if c.mode == bundlePerRPCOnly {
-		return nil
+		return insecure.NewCredentials()
 	}
 
 	creds, err := credentials.NewClientTLSFromFile(testdata.Path("x509/server_ca_cert.pem"), "x.test.example.com")

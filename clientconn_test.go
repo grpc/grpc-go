@@ -500,6 +500,11 @@ func (c securePerRPCCredentials) RequireTransportSecurity() bool {
 
 type fakeBundleCreds struct {
 	credentials.Bundle
+	transportCreds credentials.TransportCredentials
+}
+
+func (b *fakeBundleCreds) TransportCredentials() credentials.TransportCredentials {
+	return b.transportCreds
 }
 
 func (s) TestCredentialsMisuse(t *testing.T) {
@@ -513,7 +518,11 @@ func (s) TestCredentialsMisuse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create authenticator %v", err)
 	}
-	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithTransportCredentials(creds), WithCredentialsBundle(&fakeBundleCreds{})); err != errTransportCredsAndBundle {
+	dopts := []DialOption{
+		WithTransportCredentials(creds),
+		WithCredentialsBundle(&fakeBundleCreds{transportCreds: creds}),
+	}
+	if _, err := Dial("passthrough:///Non-Existent.Server:80", dopts...); err != errTransportCredsAndBundle {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredsAndBundle)
 	}
 
@@ -521,6 +530,11 @@ func (s) TestCredentialsMisuse(t *testing.T) {
 	// transport must fail.
 	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithPerRPCCredentials(securePerRPCCredentials{}), WithInsecure()); err != errTransportCredentialsMissing {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredentialsMissing)
+	}
+
+	// Use of a creds bundle with nil transport credentials must fail.
+	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithCredentialsBundle(&fakeBundleCreds{})); err != errNoTransportCredsInBundle {
+		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredsAndBundle)
 	}
 }
 

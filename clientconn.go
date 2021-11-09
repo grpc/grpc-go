@@ -83,9 +83,12 @@ var (
 	// errTransportCredsAndBundle indicates that creds bundle is used together
 	// with other individual Transport Credentials.
 	errTransportCredsAndBundle = errors.New("grpc: credentials.Bundle may not be used with individual TransportCredentials")
-	// errTransportCredentialsMissing indicates that users want to transmit security
-	// information (e.g., OAuth2 token) which requires secure connection on an insecure
-	// connection.
+	// errNoTransportCredsInBundle indicated that the configured creds bundle
+	// returned a transport credentials which was nil.
+	errNoTransportCredsInBundle = errors.New("grpc: credentials.Bundle must return non-nil transport credentials")
+	// errTransportCredentialsMissing indicates that users want to transmit
+	// security information (e.g., OAuth2 token) which requires secure
+	// connection on an insecure connection.
 	errTransportCredentialsMissing = errors.New("grpc: the credentials require transport level security (use grpc.WithTransportCredentials() to set)")
 )
 
@@ -180,11 +183,14 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if cc.dopts.copts.TransportCredentials != nil && cc.dopts.copts.CredsBundle != nil {
 		return nil, errTransportCredsAndBundle
 	}
+	if cc.dopts.copts.CredsBundle != nil && cc.dopts.copts.CredsBundle.TransportCredentials() == nil {
+		return nil, errNoTransportCredsInBundle
+	}
 	transportCreds := cc.dopts.copts.TransportCredentials
 	if transportCreds == nil {
 		transportCreds = cc.dopts.copts.CredsBundle.TransportCredentials()
 	}
-	if transportCreds != nil && transportCreds.Info().SecurityProtocol == "insecure" {
+	if transportCreds.Info().SecurityProtocol == "insecure" {
 		for _, cd := range cc.dopts.copts.PerRPCCredentials {
 			if cd.RequireTransportSecurity() {
 				return nil, errTransportCredentialsMissing
