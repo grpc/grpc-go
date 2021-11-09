@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
@@ -576,7 +575,6 @@ func withHealthCheckFunc(f internal.HealthChecker) DialOption {
 
 func defaultDialOptions() dialOptions {
 	return dialOptions{
-		disableRetry:    !envconfig.Retry,
 		healthCheckFunc: internal.HealthCheckFunc,
 		copts: transport.ConnectOptions{
 			WriteBufferSize: defaultWriteBufSize,

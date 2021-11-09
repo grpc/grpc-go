@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 
@@ -105,11 +104,6 @@ func (s) TestClientSideXDS(t *testing.T) {
 }
 
 func (s) TestClientSideRetry(t *testing.T) {
-	if !env.RetrySupport {
-		// Skip this test if retry is not enabled.
-		return
-	}
-
 	ctr := 0
 	errs := []codes.Code{codes.ResourceExhausted}
 	ss := &stubserver.StubServer{

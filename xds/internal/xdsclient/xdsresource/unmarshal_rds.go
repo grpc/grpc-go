@@ -109,7 +109,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 }
 
 func generateRetryConfig(rp *v3routepb.RetryPolicy) (*RetryConfig, error) {
-	if !env.RetrySupport || rp == nil {
+	if rp == nil {
 		return nil, nil
 	}
 
