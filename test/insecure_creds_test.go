@@ -144,64 +144,66 @@ func (s) TestInsecureCreds(t *testing.T) {
 	}
 }
 
-func (s) TestInsecureCredsWithPerRPCCredentials(t *testing.T) {
-	tests := []struct {
-		desc                      string
-		perRPCCredsViaDialOptions bool
-		perRPCCredsViaCallOptions bool
-	}{
-		{
-			desc:                      "send PerRPCCredentials via DialOptions",
-			perRPCCredsViaDialOptions: true,
-			perRPCCredsViaCallOptions: false,
-		},
-		{
-			desc:                      "send PerRPCCredentials via CallOptions",
-			perRPCCredsViaDialOptions: false,
-			perRPCCredsViaCallOptions: true,
+func (s) TestInsecureCreds_WithPerRPCCredentials_AsCallOption(t *testing.T) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
 		},
 	}
-	for _, test := range tests {
-		t.Run(test.desc, func(t *testing.T) {
-			ss := &stubserver.StubServer{
-				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-					return &testpb.Empty{}, nil
-				},
-			}
 
-			s := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
-			defer s.Stop()
-			testpb.RegisterTestServiceServer(s, ss)
+	s := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
+	defer s.Stop()
+	testpb.RegisterTestServiceServer(s, ss)
 
-			lis, err := net.Listen("tcp", "localhost:0")
-			if err != nil {
-				t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
-			}
-			go s.Serve(lis)
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
+	}
+	go s.Serve(lis)
 
-			addr := lis.Addr().String()
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
+	addr := lis.Addr().String()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
-			dopts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-			if test.perRPCCredsViaDialOptions {
-				dopts = append(dopts, grpc.WithPerRPCCredentials(testLegacyPerRPCCredentials{}))
-			}
-			copts := []grpc.CallOption{}
-			if test.perRPCCredsViaCallOptions {
-				copts = append(copts, grpc.PerRPCCredentials(testLegacyPerRPCCredentials{}))
-			}
-			cc, err := grpc.Dial(addr, dopts...)
-			if err != nil {
-				t.Fatalf("grpc.Dial(%q) failed: %v", addr, err)
-			}
-			defer cc.Close()
+	dopts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	copts := []grpc.CallOption{grpc.PerRPCCredentials(testLegacyPerRPCCredentials{})}
+	cc, err := grpc.Dial(addr, dopts...)
+	if err != nil {
+		t.Fatalf("grpc.Dial(%q) failed: %v", addr, err)
+	}
+	defer cc.Close()
 
-			const wantErr = "transport: cannot send secure credentials on an insecure connection"
-			c := testpb.NewTestServiceClient(cc)
-			if _, err = c.EmptyCall(ctx, &testpb.Empty{}, copts...); err == nil || !strings.Contains(err.Error(), wantErr) {
-				t.Fatalf("InsecureCredsWithPerRPCCredentials/send_PerRPCCredentials_via_CallOptions  = %v; want %s", err, wantErr)
-			}
-		})
+	const wantErr = "transport: cannot send secure credentials on an insecure connection"
+	c := testpb.NewTestServiceClient(cc)
+	if _, err = c.EmptyCall(ctx, &testpb.Empty{}, copts...); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("insecure credentials with per-RPC credentials requiring transport security returned error: %v; want %s", err, wantErr)
+	}
+}
+
+func (s) TestInsecureCreds_WithPerRPCCredentials_AsDialOption(t *testing.T) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(_ context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+
+	s := grpc.NewServer(grpc.Creds(insecure.NewCredentials()))
+	defer s.Stop()
+	testpb.RegisterTestServiceServer(s, ss)
+
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("net.Listen(tcp, localhost:0) failed: %v", err)
+	}
+	go s.Serve(lis)
+
+	addr := lis.Addr().String()
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithPerRPCCredentials(testLegacyPerRPCCredentials{}),
+	}
+	const wantErr = "the credentials require transport level security"
+	if _, err := grpc.Dial(addr, dopts...); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("grpc.Dial(%q) returned err %v, want: %v", addr, err, wantErr)
 	}
 }
