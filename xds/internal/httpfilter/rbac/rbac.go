@@ -64,8 +64,8 @@ type builder struct {
 
 type config struct {
 	httpfilter.FilterConfig
-	config *rpb.RBAC
-	ce     *rbac.ChainEngine
+	config      *rpb.RBAC
+	chainEngine *rbac.ChainEngine
 }
 
 func (builder) TypeURLs() []string {
@@ -91,19 +91,15 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 		// "It is also a validation failure if Permission or Principal has a
 		// header matcher for a grpc- prefixed header name or :scheme." - A41
 		for _, principal := range policy.Principals {
-			if principal.GetHeader() != nil {
-				name := principal.GetHeader().GetName()
-				if name == ":scheme" || strings.HasPrefix(name, "grpc-") {
-					return nil, fmt.Errorf("rbac: principal header matcher for %v is :scheme or starts with grpc", name)
-				}
+			name := principal.GetHeader().GetName()
+			if name == ":scheme" || strings.HasPrefix(name, "grpc-") {
+				return nil, fmt.Errorf("rbac: principal header matcher for %v is :scheme or starts with grpc", name)
 			}
 		}
 		for _, permission := range policy.Permissions {
-			if permission.GetHeader() != nil {
-				name := permission.GetHeader().GetName()
-				if name == ":scheme" || strings.HasPrefix(name, "grpc-") {
-					return nil, fmt.Errorf("rbac: permission header matcher for %v is :scheme or starts with grpc", name)
-				}
+			name := permission.GetHeader().GetName()
+			if name == ":scheme" || strings.HasPrefix(name, "grpc-") {
+				return nil, fmt.Errorf("rbac: permission header matcher for %v is :scheme or starts with grpc", name)
 			}
 		}
 	}
@@ -117,16 +113,14 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 	for _, policy := range rbacCfg.GetRules().GetPolicies() {
 		for _, principal := range policy.Principals {
 			if principal.GetHeader() != nil {
-				name := principal.GetHeader().GetName()
-				if name == "host" {
+				if principal.GetHeader().GetName() == "host" {
 					principal.GetHeader().Name = ":authority"
 				}
 			}
 		}
 		for _, permission := range policy.Permissions {
 			if permission.GetHeader() != nil {
-				name := permission.GetHeader().GetName()
-				if name == "host" {
+				if permission.GetHeader().GetName() == "host" {
 					permission.GetHeader().Name = ":authority"
 				}
 			}
@@ -137,12 +131,12 @@ func parseConfig(rbacCfg *rpb.RBAC) (httpfilter.FilterConfig, error) {
 	if err != nil {
 		// "At this time, if the RBAC.action is Action.LOG then the policy will be
 		// completely ignored, as if RBAC was not configurated." - A41
-		if rbacCfg.GetRules().Action != v3rbacpb.RBAC_LOG {
+		if rbacCfg.GetRules().GetAction() != v3rbacpb.RBAC_LOG {
 			return nil, fmt.Errorf("rbac: error constructing matching engine: %v", err)
 		}
 	}
 
-	return config{config: rbacCfg, ce: ce}, nil
+	return config{config: rbacCfg, chainEngine: ce}, nil
 }
 
 func (builder) ParseFilterConfig(cfg proto.Message) (httpfilter.FilterConfig, error) {
@@ -215,7 +209,7 @@ func (builder) BuildServerInterceptor(cfg httpfilter.FilterConfig, override http
 		return nil, nil
 	}
 
-	return &interceptor{chainEngine: c.ce}, nil
+	return &interceptor{chainEngine: c.chainEngine}, nil
 }
 
 type interceptor struct {
