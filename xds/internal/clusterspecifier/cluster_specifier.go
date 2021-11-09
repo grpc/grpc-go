@@ -30,10 +30,14 @@ type BalancerConfig []map[string]interface{}
 
 // ClusterSpecifier defines the parsing functionality of a Cluster Specifier.
 type ClusterSpecifier interface {
+	// TypeURLs are the proto message types supported by this
+	// ClusterSpecifierPlugin. A ClusterSpecifierPlugin will be registered by
+	// each of its supported message types.
 	TypeURLs() []string
-	// "The plugin will consist of a single method to convert from the
-	// TypedConfig instance to an LB policy configuration, with the ability to
-	// signal an error." - RLS in xDS Design
+	// ParseClusterSpecifierConfig parses the provided configuration
+	// proto.Message from the top level RDS configuration. The resulting
+	// BalancerConfig will be used as configuration for a child LB Policy of the
+	// Cluster Manager LB Policy.
 	ParseClusterSpecifierConfig(proto.Message) (BalancerConfig, error)
 }
 

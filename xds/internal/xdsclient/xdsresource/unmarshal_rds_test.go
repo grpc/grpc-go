@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/codes"
@@ -40,7 +41,6 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"github.com/golang/protobuf/proto"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 )
@@ -108,7 +108,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				}},
 			}
 		}
-		goodUpdateWithClusterSpecifierPlugins = RouteConfigUpdate{
+		goodUpdateWithClusterSpecifierPluginA = RouteConfigUpdate{
 			VirtualHosts: []*VirtualHost{{
 				Domains: []string{ldsTarget},
 				Routes: []*Route{{
@@ -119,6 +119,14 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			ClusterSpecifierPlugins: map[string]clusterspecifier.BalancerConfig{
 				"cspA": nil,
 			},
+		}
+		clusterSpecifierPlugin = func(name string, config *anypb.Any) *v3routepb.ClusterSpecifierPlugin {
+			return &v3routepb.ClusterSpecifierPlugin{
+				Extension: &v3corepb.TypedExtensionConfig{
+					Name:        name,
+					TypedConfig: config,
+				},
+			}
 		}
 		goodRouteConfigWithRetryPolicy = func(vhrp *v3routepb.RetryPolicy, rrp *v3routepb.RetryPolicy) *v3routepb.RouteConfiguration {
 			return &v3routepb.RouteConfiguration{
@@ -618,68 +626,38 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		{
 			name: "cluster-specifier-declared-which-not-registered",
 			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
-				{
-					Extension: &v3corepb.TypedExtensionConfig{
-						Name:        "cspA",
-						TypedConfig: configOfClusterSpecifierDoesntExist,
-					},
-				},
+				clusterSpecifierPlugin("cspA", configOfClusterSpecifierDoesntExist),
 			}, []string{"cspA"}),
 			wantError: true,
 		},
 		{
 			name: "error-in-cluster-specifier-plugin-conversion-method",
 			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
-				{
-					Extension: &v3corepb.TypedExtensionConfig{
-						Name:        "cspA",
-						TypedConfig: errorClusterSpecifierConfig,
-					},
-				},
+				clusterSpecifierPlugin("cspA", errorClusterSpecifierConfig),
 			}, []string{"cspA"}),
 			wantError: true,
 		},
 		{
 			name: "route-action-that-references-undeclared-cluster-specifier-plugin",
 			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
-				{
-					Extension: &v3corepb.TypedExtensionConfig{
-						Name:        "cspA",
-						TypedConfig: mockClusterSpecifierConfig,
-					},
-				},
+				clusterSpecifierPlugin("cspA", mockClusterSpecifierConfig),
 			}, []string{"cspA", "cspB"}),
 			wantError: true,
 		},
 		{
 			name: "emitted-cluster-specifier-plugins",
 			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
-				{
-					Extension: &v3corepb.TypedExtensionConfig{
-						Name:        "cspA",
-						TypedConfig: mockClusterSpecifierConfig,
-					},
-				},
+				clusterSpecifierPlugin("cspA", mockClusterSpecifierConfig),
 			}, []string{"cspA"}),
-			wantUpdate: goodUpdateWithClusterSpecifierPlugins,
+			wantUpdate: goodUpdateWithClusterSpecifierPluginA,
 		},
 		{
 			name: "deleted-cluster-specifier-plugins-not-referenced",
 			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
-				{
-					Extension: &v3corepb.TypedExtensionConfig{
-						Name:        "cspA",
-						TypedConfig: mockClusterSpecifierConfig,
-					},
-				},
-				{
-					Extension: &v3corepb.TypedExtensionConfig{
-						Name:        "cspB",
-						TypedConfig: mockClusterSpecifierConfig,
-					},
-				},
+				clusterSpecifierPlugin("cspA", mockClusterSpecifierConfig),
+				clusterSpecifierPlugin("cspB", mockClusterSpecifierConfig),
 			}, []string{"cspA"}),
-			wantUpdate: goodUpdateWithClusterSpecifierPlugins,
+			wantUpdate: goodUpdateWithClusterSpecifierPluginA,
 		},
 	}
 	for _, test := range tests {

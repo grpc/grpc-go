@@ -83,28 +83,9 @@ func unmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (s
 // we are looking for.
 func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, logger *grpclog.PrefixLogger, v2 bool) (RouteConfigUpdate, error) {
 	vhs := make([]*VirtualHost, 0, len(rc.GetVirtualHosts()))
-	csps := make(map[string]clusterspecifier.BalancerConfig)
-	// "The xDS client will inspect all elements of the
-	// cluster_specifier_plugins field looking up a plugin based on the
-	// extension.typed_config of each." - RLS in xDS design
-	for _, csp := range rc.ClusterSpecifierPlugins {
-		cs := clusterspecifier.Get(csp.GetExtension().GetTypedConfig().GetTypeUrl())
-		if cs == nil {
-			// "If no plugin is registered for it, the resource will be NACKed."
-			// - RLS in xDS design
-			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid, cluster specifier %v of type %v was not found", csp.GetExtension().GetName(), csp.GetExtension().GetTypedConfig().GetTypeUrl())
-		}
-		lbCfg, err := cs.ParseClusterSpecifierConfig(csp.GetExtension().GetTypedConfig())
-		if err != nil {
-			// "If a plugin is found, the value of the typed_config field will
-			// be passed to it's conversion method, and if an error is
-			// encountered, the resource will be NACKED." - RLS in xDS design
-			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid, error: %v parsing config %v for cluster specifier %v of type %v", err, csp.GetExtension().GetTypedConfig(), csp.GetExtension().GetName(), csp.GetExtension().GetTypedConfig().GetTypeUrl())
-		}
-		// "If all cluster specifiers are valid, the xDS client will store the
-		// configurations in a map keyed by the name of the extension instance." -
-		// RLS in xDS Design
-		csps[csp.GetExtension().GetName()] = lbCfg
+	csps, err := processClusterSpecifierPlugins(rc.ClusterSpecifierPlugins)
+	if err != nil {
+		return RouteConfigUpdate{}, fmt.Errorf("received route is invalid %v", err)
 	}
 	// cspNames represents all the cluster specifiers referenced by Route
 	// Actions - any cluster specifiers not referenced by a Route Action can be
@@ -139,7 +120,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 
 	// "For any entry in the RouteConfiguration.cluster_specifier_plugins not
 	// referenced by an enclosed RouteAction's cluster_specifier_plugin, the xDS
-	// client should not provide it to its consumers." - RlS in xDS Design
+	// client should not provide it to its consumers." - RLS in xDS Design
 	for name := range csps {
 		if !cspNames[name] {
 			delete(csps, name)
@@ -147,6 +128,33 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 	}
 
 	return RouteConfigUpdate{VirtualHosts: vhs, ClusterSpecifierPlugins: csps}, nil
+}
+
+func processClusterSpecifierPlugins(csps []*v3routepb.ClusterSpecifierPlugin) (map[string]clusterspecifier.BalancerConfig, error) {
+	cspCfgs := make(map[string]clusterspecifier.BalancerConfig)
+	// "The xDS client will inspect all elements of the
+	// cluster_specifier_plugins field looking up a plugin based on the
+	// extension.typed_config of each." - RLS in xDS design
+	for _, csp := range csps {
+		cs := clusterspecifier.Get(csp.GetExtension().GetTypedConfig().GetTypeUrl())
+		if cs == nil {
+			// "If no plugin is registered for it, the resource will be NACKed."
+			// - RLS in xDS design
+			return nil, fmt.Errorf("cluster specifier %q of type %q was not found", csp.GetExtension().GetName(), csp.GetExtension().GetTypedConfig().GetTypeUrl())
+		}
+		lbCfg, err := cs.ParseClusterSpecifierConfig(csp.GetExtension().GetTypedConfig())
+		if err != nil {
+			// "If a plugin is found, the value of the typed_config field will
+			// be passed to it's conversion method, and if an error is
+			// encountered, the resource will be NACKED." - RLS in xDS design
+			return nil, fmt.Errorf("error: %v parsing config %v for cluster specifier %v of type %v", err, csp.GetExtension().GetTypedConfig(), csp.GetExtension().GetName(), csp.GetExtension().GetTypedConfig().GetTypeUrl())
+		}
+		// "If all cluster specifiers are valid, the xDS client will store the
+		// configurations in a map keyed by the name of the extension instance." -
+		// RLS in xDS Design
+		cspCfgs[csp.GetExtension().GetName()] = lbCfg
+	}
+	return cspCfgs, nil
 }
 
 func generateRetryConfig(rp *v3routepb.RetryPolicy) (*RetryConfig, error) {
