@@ -36,7 +36,6 @@ import (
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/xds/env"
-	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
@@ -365,7 +364,7 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 	}
 	if update.err != nil {
 		l.logger.Warningf("Received error for rds names specified in resource %q: %+v", l.name, update.err)
-		if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
+		if xdsresource.ErrType(update.err) == xdsresource.ErrorTypeResourceNotFound {
 			l.switchMode(nil, connectivity.ServingModeNotServing, update.err)
 		}
 		// For errors which are anything other than "resource-not-found", we
@@ -381,7 +380,7 @@ func (l *listenerWrapper) handleRDSUpdate(update rdsHandlerUpdate) {
 func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	if update.err != nil {
 		l.logger.Warningf("Received error for resource %q: %+v", l.name, update.err)
-		if xdsclient.ErrType(update.err) == xdsclient.ErrorTypeResourceNotFound {
+		if xdsresource.ErrType(update.err) == xdsresource.ErrorTypeResourceNotFound {
 			l.switchMode(nil, connectivity.ServingModeNotServing, update.err)
 		}
 		// For errors which are anything other than "resource-not-found", we

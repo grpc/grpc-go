@@ -56,7 +56,7 @@ func (s) TestClusterWatch(t *testing.T) {
 	cancelWatch := client.WatchCluster(testCDSName, func(update xdsresource.ClusterUpdate, err error) {
 		clusterUpdateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -122,7 +122,7 @@ func (s) TestClusterTwoWatchSameResourceName(t *testing.T) {
 		if i == 0 {
 			// A new watch is registered on the underlying API client only for
 			// the first iteration because we are using the same resource name.
-			if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+			if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 				t.Fatalf("want new watch to start, got error %v", err)
 			}
 		}
@@ -194,7 +194,7 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 		if i == 0 {
 			// A new watch is registered on the underlying API client only for
 			// the first iteration because we are using the same resource name.
-			if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+			if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 				t.Fatalf("want new watch to start, got error %v", err)
 			}
 		}
@@ -205,7 +205,7 @@ func (s) TestClusterThreeWatchDifferentResourceName(t *testing.T) {
 	client.WatchCluster(testCDSName+"2", func(update xdsresource.ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -250,7 +250,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	client.WatchCluster(testCDSName, func(update xdsresource.ClusterUpdate, err error) {
 		clusterUpdateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -269,7 +269,7 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 	})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if n, err := apiClient.addWatches[ClusterResource].Receive(sCtx); err != context.DeadlineExceeded {
+	if n, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
@@ -311,7 +311,7 @@ func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 	client.WatchCluster(testCDSName, func(u xdsresource.ClusterUpdate, err error) {
 		clusterUpdateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -350,7 +350,7 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 	client.WatchCluster(testCDSName, func(u xdsresource.ClusterUpdate, err error) {
 		clusterUpdateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -398,7 +398,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	client.WatchCluster(testCDSName+"1", func(update xdsresource.ClusterUpdate, err error) {
 		clusterUpdateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -407,7 +407,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	client.WatchCluster(testCDSName+"2", func(update xdsresource.ClusterUpdate, err error) {
 		clusterUpdateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -428,7 +428,7 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 	client.NewClusters(map[string]xdsresource.ClusterUpdateErrTuple{testCDSName + "2": {Update: wantUpdate2}}, xdsresource.UpdateMetadata{})
 
 	// Watcher 1 should get an error.
-	if u, err := clusterUpdateCh1.Receive(ctx); err != nil || ErrType(u.(xdsresource.ClusterUpdateErrTuple).Err) != ErrorTypeResourceNotFound {
+	if u, err := clusterUpdateCh1.Receive(ctx); err != nil || xdsresource.ErrType(u.(xdsresource.ClusterUpdateErrTuple).Err) != xdsresource.ErrorTypeResourceNotFound {
 		t.Errorf("unexpected clusterUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
 	}
 
@@ -482,7 +482,7 @@ func (s) TestClusterWatchNACKError(t *testing.T) {
 		clusterUpdateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: update, Err: err})
 	})
 	defer cancelWatch()
-	if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -527,11 +527,11 @@ func (s) TestClusterWatchPartialValid(t *testing.T) {
 		})
 		defer func() {
 			cancelWatch()
-			if _, err := apiClient.removeWatches[ClusterResource].Receive(ctx); err != nil {
+			if _, err := apiClient.removeWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 				t.Fatalf("want watch to be canceled, got err: %v", err)
 			}
 		}()
-		if _, err := apiClient.addWatches[ClusterResource].Receive(ctx); err != nil {
+		if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 		updateChs[name] = clusterUpdateCh

@@ -56,7 +56,7 @@ func (s) TestRDSWatch(t *testing.T) {
 	cancelWatch := client.WatchRouteConfig(testRDSName, func(update xdsresource.RouteConfigUpdate, err error) {
 		rdsUpdateCh.Send(xdsresource.RouteConfigUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.RouteConfigResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -131,7 +131,7 @@ func (s) TestRDSTwoWatchSameResourceName(t *testing.T) {
 		if i == 0 {
 			// A new watch is registered on the underlying API client only for
 			// the first iteration because we are using the same resource name.
-			if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
+			if _, err := apiClient.addWatches[xdsresource.RouteConfigResource].Receive(ctx); err != nil {
 				t.Fatalf("want new watch to start, got error %v", err)
 			}
 		}
@@ -211,7 +211,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 		if i == 0 {
 			// A new watch is registered on the underlying API client only for
 			// the first iteration because we are using the same resource name.
-			if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
+			if _, err := apiClient.addWatches[xdsresource.RouteConfigResource].Receive(ctx); err != nil {
 				t.Fatalf("want new watch to start, got error %v", err)
 			}
 		}
@@ -222,7 +222,7 @@ func (s) TestRDSThreeWatchDifferentResourceName(t *testing.T) {
 	client.WatchRouteConfig(testRDSName+"2", func(update xdsresource.RouteConfigUpdate, err error) {
 		rdsUpdateCh2.Send(xdsresource.RouteConfigUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.RouteConfigResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -281,7 +281,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	client.WatchRouteConfig(testRDSName, func(update xdsresource.RouteConfigUpdate, err error) {
 		rdsUpdateCh.Send(xdsresource.RouteConfigUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.RouteConfigResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -305,7 +305,7 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 	})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if n, err := apiClient.addWatches[RouteConfigResource].Receive(sCtx); err != context.DeadlineExceeded {
+	if n, err := apiClient.addWatches[xdsresource.RouteConfigResource].Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
@@ -347,7 +347,7 @@ func (s) TestRouteWatchNACKError(t *testing.T) {
 		rdsUpdateCh.Send(xdsresource.RouteConfigUpdateErrTuple{Update: update, Err: err})
 	})
 	defer cancelWatch()
-	if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.RouteConfigResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -390,11 +390,11 @@ func (s) TestRouteWatchPartialValid(t *testing.T) {
 		})
 		defer func() {
 			cancelWatch()
-			if _, err := apiClient.removeWatches[RouteConfigResource].Receive(ctx); err != nil {
+			if _, err := apiClient.removeWatches[xdsresource.RouteConfigResource].Receive(ctx); err != nil {
 				t.Fatalf("want watch to be canceled, got err: %v", err)
 			}
 		}()
-		if _, err := apiClient.addWatches[RouteConfigResource].Receive(ctx); err != nil {
+		if _, err := apiClient.addWatches[xdsresource.RouteConfigResource].Receive(ctx); err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 		updateChs[name] = rdsUpdateCh

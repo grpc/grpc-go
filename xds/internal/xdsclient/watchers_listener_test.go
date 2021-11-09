@@ -56,7 +56,7 @@ func (s) TestLDSWatch(t *testing.T) {
 	cancelWatch := client.WatchListener(testLDSName, func(update xdsresource.ListenerUpdate, err error) {
 		ldsUpdateCh.Send(xdsresource.ListenerUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -124,7 +124,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 		if i == 0 {
 			// A new watch is registered on the underlying API client only for
 			// the first iteration because we are using the same resource name.
-			if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
+			if _, err := apiClient.addWatches[xdsresource.ListenerResource].Receive(ctx); err != nil {
 				t.Fatalf("want new watch to start, got error %v", err)
 			}
 		}
@@ -197,7 +197,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 		if i == 0 {
 			// A new watch is registered on the underlying API client only for
 			// the first iteration because we are using the same resource name.
-			if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
+			if _, err := apiClient.addWatches[xdsresource.ListenerResource].Receive(ctx); err != nil {
 				t.Fatalf("want new watch to start, got error %v", err)
 			}
 		}
@@ -208,7 +208,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 	client.WatchListener(testLDSName+"2", func(update xdsresource.ListenerUpdate, err error) {
 		ldsUpdateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -253,7 +253,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	client.WatchListener(testLDSName, func(update xdsresource.ListenerUpdate, err error) {
 		ldsUpdateCh.Send(xdsresource.ListenerUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -270,7 +270,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if n, err := apiClient.addWatches[ListenerResource].Receive(sCtx); err != context.DeadlineExceeded {
+	if n, err := apiClient.addWatches[xdsresource.ListenerResource].Receive(sCtx); err != context.DeadlineExceeded {
 		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
 	}
 
@@ -315,7 +315,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	client.WatchListener(testLDSName+"1", func(update xdsresource.ListenerUpdate, err error) {
 		ldsUpdateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 	// Another watch for a different name.
@@ -323,7 +323,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	client.WatchListener(testLDSName+"2", func(update xdsresource.ListenerUpdate, err error) {
 		ldsUpdateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -344,7 +344,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	client.NewListeners(map[string]xdsresource.ListenerUpdateErrTuple{testLDSName + "2": {Update: wantUpdate2}}, xdsresource.UpdateMetadata{})
 
 	// Watcher 1 should get an error.
-	if u, err := ldsUpdateCh1.Receive(ctx); err != nil || ErrType(u.(xdsresource.ListenerUpdateErrTuple).Err) != ErrorTypeResourceNotFound {
+	if u, err := ldsUpdateCh1.Receive(ctx); err != nil || xdsresource.ErrType(u.(xdsresource.ListenerUpdateErrTuple).Err) != xdsresource.ErrorTypeResourceNotFound {
 		t.Errorf("unexpected ListenerUpdate: %v, error receiving from channel: %v, want update with error resource not found", u, err)
 	}
 
@@ -398,7 +398,7 @@ func (s) TestListenerWatchNACKError(t *testing.T) {
 		ldsUpdateCh.Send(xdsresource.ListenerUpdateErrTuple{Update: update, Err: err})
 	})
 	defer cancelWatch()
-	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
@@ -441,11 +441,11 @@ func (s) TestListenerWatchPartialValid(t *testing.T) {
 		})
 		defer func() {
 			cancelWatch()
-			if _, err := apiClient.removeWatches[ListenerResource].Receive(ctx); err != nil {
+			if _, err := apiClient.removeWatches[xdsresource.ListenerResource].Receive(ctx); err != nil {
 				t.Fatalf("want watch to be canceled, got err: %v", err)
 			}
 		}()
-		if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
+		if _, err := apiClient.addWatches[xdsresource.ListenerResource].Receive(ctx); err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 		updateChs[name] = ldsUpdateCh
@@ -493,7 +493,7 @@ func (s) TestListenerWatch_RedundantUpdateSupression(t *testing.T) {
 	client.WatchListener(testLDSName, func(update xdsresource.ListenerUpdate, err error) {
 		ldsUpdateCh.Send(xdsresource.ListenerUpdateErrTuple{Update: update, Err: err})
 	})
-	if _, err := apiClient.addWatches[ListenerResource].Receive(ctx); err != nil {
+	if _, err := apiClient.addWatches[xdsresource.ListenerResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 

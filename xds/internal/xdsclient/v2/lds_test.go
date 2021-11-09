@@ -24,7 +24,6 @@ import (
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -163,7 +162,7 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			testWatchHandle(t, &watchHandleTestcase{
-				rType:            xdsclient.ListenerResource,
+				rType:            xdsresource.ListenerResource,
 				resourceName:     goodLDSTarget1,
 				responseToHandle: test.ldsResponse,
 				wantHandleErr:    test.wantErr,
@@ -182,7 +181,7 @@ func (s) TestLDSHandleResponseWithoutWatch(t *testing.T) {
 	defer cleanup()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) {},
+		f: func(xdsresource.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) {},
 	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)

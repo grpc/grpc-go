@@ -94,7 +94,7 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsresource.ListenerUpdate, 
 		// type we check is ResourceNotFound, which indicates the LDS resource
 		// was removed, and besides sending the error to callback, we also
 		// cancel the RDS watch.
-		if xdsclient.ErrType(err) == xdsclient.ErrorTypeResourceNotFound && w.rdsCancel != nil {
+		if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound && w.rdsCancel != nil {
 			w.rdsCancel()
 			w.rdsName = ""
 			w.rdsCancel = nil

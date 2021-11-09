@@ -288,7 +288,7 @@ var (
 )
 
 type watchHandleTestcase struct {
-	rType        xdsclient.ResourceType
+	rType        xdsresource.ResourceType
 	resourceName string
 
 	responseToHandle *xdspb.DiscoveryResponse
@@ -299,7 +299,7 @@ type watchHandleTestcase struct {
 }
 
 type testUpdateReceiver struct {
-	f func(rType xdsclient.ResourceType, d map[string]interface{}, md xdsresource.UpdateMetadata)
+	f func(rType xdsresource.ResourceType, d map[string]interface{}, md xdsresource.UpdateMetadata)
 }
 
 func (t *testUpdateReceiver) NewListeners(d map[string]xdsresource.ListenerUpdateErrTuple, metadata xdsresource.UpdateMetadata) {
@@ -307,7 +307,7 @@ func (t *testUpdateReceiver) NewListeners(d map[string]xdsresource.ListenerUpdat
 	for k, v := range d {
 		dd[k] = v
 	}
-	t.newUpdate(xdsclient.ListenerResource, dd, metadata)
+	t.newUpdate(xdsresource.ListenerResource, dd, metadata)
 }
 
 func (t *testUpdateReceiver) NewRouteConfigs(d map[string]xdsresource.RouteConfigUpdateErrTuple, metadata xdsresource.UpdateMetadata) {
@@ -315,7 +315,7 @@ func (t *testUpdateReceiver) NewRouteConfigs(d map[string]xdsresource.RouteConfi
 	for k, v := range d {
 		dd[k] = v
 	}
-	t.newUpdate(xdsclient.RouteConfigResource, dd, metadata)
+	t.newUpdate(xdsresource.RouteConfigResource, dd, metadata)
 }
 
 func (t *testUpdateReceiver) NewClusters(d map[string]xdsresource.ClusterUpdateErrTuple, metadata xdsresource.UpdateMetadata) {
@@ -323,7 +323,7 @@ func (t *testUpdateReceiver) NewClusters(d map[string]xdsresource.ClusterUpdateE
 	for k, v := range d {
 		dd[k] = v
 	}
-	t.newUpdate(xdsclient.ClusterResource, dd, metadata)
+	t.newUpdate(xdsresource.ClusterResource, dd, metadata)
 }
 
 func (t *testUpdateReceiver) NewEndpoints(d map[string]xdsresource.EndpointsUpdateErrTuple, metadata xdsresource.UpdateMetadata) {
@@ -331,12 +331,12 @@ func (t *testUpdateReceiver) NewEndpoints(d map[string]xdsresource.EndpointsUpda
 	for k, v := range d {
 		dd[k] = v
 	}
-	t.newUpdate(xdsclient.EndpointsResource, dd, metadata)
+	t.newUpdate(xdsresource.EndpointsResource, dd, metadata)
 }
 
 func (t *testUpdateReceiver) NewConnectionError(error) {}
 
-func (t *testUpdateReceiver) newUpdate(rType xdsclient.ResourceType, d map[string]interface{}, metadata xdsresource.UpdateMetadata) {
+func (t *testUpdateReceiver) newUpdate(rType xdsresource.ResourceType, d map[string]interface{}, metadata xdsresource.UpdateMetadata) {
 	t.f(rType, d, metadata)
 }
 
@@ -360,28 +360,28 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	gotUpdateCh := testutils.NewChannel()
 
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType xdsclient.ResourceType, d map[string]interface{}, md xdsresource.UpdateMetadata) {
+		f: func(rType xdsresource.ResourceType, d map[string]interface{}, md xdsresource.UpdateMetadata) {
 			if rType == test.rType {
 				switch test.rType {
-				case xdsclient.ListenerResource:
+				case xdsresource.ListenerResource:
 					dd := make(map[string]xdsresource.ListenerUpdateErrTuple)
 					for n, u := range d {
 						dd[n] = u.(xdsresource.ListenerUpdateErrTuple)
 					}
 					gotUpdateCh.Send(updateErr{dd, md, nil})
-				case xdsclient.RouteConfigResource:
+				case xdsresource.RouteConfigResource:
 					dd := make(map[string]xdsresource.RouteConfigUpdateErrTuple)
 					for n, u := range d {
 						dd[n] = u.(xdsresource.RouteConfigUpdateErrTuple)
 					}
 					gotUpdateCh.Send(updateErr{dd, md, nil})
-				case xdsclient.ClusterResource:
+				case xdsresource.ClusterResource:
 					dd := make(map[string]xdsresource.ClusterUpdateErrTuple)
 					for n, u := range d {
 						dd[n] = u.(xdsresource.ClusterUpdateErrTuple)
 					}
 					gotUpdateCh.Send(updateErr{dd, md, nil})
-				case xdsclient.EndpointsResource:
+				case xdsresource.EndpointsResource:
 					dd := make(map[string]xdsresource.EndpointsUpdateErrTuple)
 					for n, u := range d {
 						dd[n] = u.(xdsresource.EndpointsUpdateErrTuple)
@@ -416,13 +416,13 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	// request channel afterwards.
 	var handleXDSResp func(response *xdspb.DiscoveryResponse) error
 	switch test.rType {
-	case xdsclient.ListenerResource:
+	case xdsresource.ListenerResource:
 		handleXDSResp = v2c.handleLDSResponse
-	case xdsclient.RouteConfigResource:
+	case xdsresource.RouteConfigResource:
 		handleXDSResp = v2c.handleRDSResponse
-	case xdsclient.ClusterResource:
+	case xdsresource.ClusterResource:
 		handleXDSResp = v2c.handleCDSResponse
-	case xdsclient.EndpointsResource:
+	case xdsresource.EndpointsResource:
 		handleXDSResp = v2c.handleEDSResponse
 	}
 	if err := handleXDSResp(test.responseToHandle); (err != nil) != test.wantHandleErr {
@@ -504,7 +504,7 @@ func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 
 	callbackCh := make(chan struct{})
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(xdsclient.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) { close(callbackCh) },
+		f: func(xdsresource.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) { close(callbackCh) },
 	}, cc, goodNodeProto, clientBackoff, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -512,7 +512,7 @@ func (s) TestV2ClientBackoffAfterRecvError(t *testing.T) {
 	defer v2c.Close()
 	t.Log("Started xds v2Client...")
 
-	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
+	v2c.AddWatch(xdsresource.ListenerResource, goodLDSTarget1)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
@@ -549,8 +549,8 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 
 	callbackCh := testutils.NewChannel()
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType xdsclient.ResourceType, d map[string]interface{}, md xdsresource.UpdateMetadata) {
-			if rType == xdsclient.ListenerResource {
+		f: func(rType xdsresource.ResourceType, d map[string]interface{}, md xdsresource.UpdateMetadata) {
+			if rType == xdsresource.ListenerResource {
 				if u, ok := d[goodLDSTarget1]; ok {
 					t.Logf("Received LDS callback with ldsUpdate {%+v}", u)
 					callbackCh.Send(struct{}{})
@@ -564,7 +564,7 @@ func (s) TestV2ClientRetriesAfterBrokenStream(t *testing.T) {
 	defer v2c.Close()
 	t.Log("Started xds v2Client...")
 
-	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
+	v2c.AddWatch(xdsresource.ListenerResource, goodLDSTarget1)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := fakeServer.XDSRequestChan.Receive(ctx); err != nil {
@@ -621,8 +621,8 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 
 	callbackCh := testutils.NewChannel()
 	v2c, err := newV2Client(&testUpdateReceiver{
-		f: func(rType xdsclient.ResourceType, d map[string]interface{}, md xdsresource.UpdateMetadata) {
-			if rType == xdsclient.ListenerResource {
+		f: func(rType xdsresource.ResourceType, d map[string]interface{}, md xdsresource.UpdateMetadata) {
+			if rType == xdsresource.ListenerResource {
 				if u, ok := d[goodLDSTarget1]; ok {
 					t.Logf("Received LDS callback with ldsUpdate {%+v}", u)
 					callbackCh.Send(u)
@@ -638,7 +638,7 @@ func (s) TestV2ClientWatchWithoutStream(t *testing.T) {
 
 	// This watch is started when the xds-ClientConn is in Transient Failure,
 	// and no xds stream is created.
-	v2c.AddWatch(xdsclient.ListenerResource, goodLDSTarget1)
+	v2c.AddWatch(xdsresource.ListenerResource, goodLDSTarget1)
 
 	// The watcher should receive an update, with a timeout error in it.
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)

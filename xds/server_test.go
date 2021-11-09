@@ -430,7 +430,7 @@ func (s) TestServeSuccess(t *testing.T) {
 
 	// Push an error to the registered listener watch callback and make sure
 	// that Serve does not return.
-	client.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{}, xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "LDS resource not found"))
+	client.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{}, xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "LDS resource not found"))
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	if _, err := serveDone.Receive(sCtx); err != context.DeadlineExceeded {

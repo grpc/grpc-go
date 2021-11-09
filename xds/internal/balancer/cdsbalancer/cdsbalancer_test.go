@@ -472,7 +472,7 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	}
 
 	// Push a resource-not-found-error this time around.
-	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
+	resourceErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
 	xdsC.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{}, resourceErr)
 	// Make sure that the watch is not cancelled. This error indicates that the
 	// request cluster resource is not found. We should continue to watch it.
@@ -557,7 +557,7 @@ func (s) TestResolverError(t *testing.T) {
 	}
 
 	// Push a resource-not-found-error this time around.
-	resourceErr := xdsclient.NewErrorf(xdsclient.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
+	resourceErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "cdsBalancer resource not found error")
 	cdsB.ResolverError(resourceErr)
 	// Make sure the registered watch is cancelled.
 	if _, err := xdsC.WaitForCancelClusterWatch(ctx); err != nil {
