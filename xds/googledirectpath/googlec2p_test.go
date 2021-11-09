@@ -91,7 +91,7 @@ func TestBuildWithBootstrapEnvSet(t *testing.T) {
 	defer replaceResolvers()()
 	builder := resolver.Get(c2pScheme)
 
-	for i, envP := range []*string{&envconfig.BootstrapFileName, &envconfig.BootstrapFileContent} {
+	for i, envP := range []*string{&envconfig.XDSBootstrapFileName, &envconfig.XDSBootstrapFileContent} {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
 			// Set bootstrap config env var.
 			oldEnv := *envP

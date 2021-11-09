@@ -380,7 +380,7 @@ func routeAndProcess(ctx context.Context) error {
 // xdsUnaryInterceptor is the unary interceptor added to the gRPC server to
 // perform any xDS specific functionality on unary RPCs.
 func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-	if envconfig.RBACSupport {
+	if envconfig.XDSRBAC {
 		if err := routeAndProcess(ctx); err != nil {
 			return nil, err
 		}
@@ -391,7 +391,7 @@ func xdsUnaryInterceptor(ctx context.Context, req interface{}, _ *grpc.UnaryServ
 // xdsStreamInterceptor is the stream interceptor added to the gRPC server to
 // perform any xDS specific functionality on streaming RPCs.
 func xdsStreamInterceptor(srv interface{}, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	if envconfig.RBACSupport {
+	if envconfig.XDSRBAC {
 		if err := routeAndProcess(ss.Context()); err != nil {
 			return err
 		}

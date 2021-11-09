@@ -87,9 +87,9 @@ func ringhashCluster(clusterName, edsServiceName string) *v3clusterpb.Cluster {
 // behavior in ring_hash policy.
 func (s) TestClientSideAffinitySanityCheck(t *testing.T) {
 	defer func() func() {
-		old := envconfig.RingHashSupport
-		envconfig.RingHashSupport = true
-		return func() { envconfig.RingHashSupport = old }
+		old := envconfig.XDSRingHash
+		envconfig.XDSRingHash = true
+		return func() { envconfig.XDSRingHash = old }
 	}()()
 
 	managementServer, nodeID, _, resolver, cleanup1 := setupManagementServer(t)

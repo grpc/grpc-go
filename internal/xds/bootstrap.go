@@ -79,11 +79,11 @@ func SetupBootstrapFile(opts BootstrapOptions) (func(), error) {
 	}
 	logger.Infof("Created bootstrap file at %q with contents: %s\n", f.Name(), bootstrapContents)
 
-	origBootstrapFileName := envconfig.BootstrapFileName
-	envconfig.BootstrapFileName = f.Name()
+	origBootstrapFileName := envconfig.XDSBootstrapFileName
+	envconfig.XDSBootstrapFileName = f.Name()
 	return func() {
 		os.Remove(f.Name())
-		envconfig.BootstrapFileName = origBootstrapFileName
+		envconfig.XDSBootstrapFileName = origBootstrapFileName
 	}, nil
 }
 

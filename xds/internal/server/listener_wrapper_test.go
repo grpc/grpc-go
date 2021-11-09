@@ -326,10 +326,10 @@ func (s) TestNewListenerWrapper(t *testing.T) {
 // the update from the rds handler should it move the server to
 // ServingModeServing.
 func (s) TestNewListenerWrapperWithRouteUpdate(t *testing.T) {
-	oldRBAC := envconfig.RBACSupport
-	envconfig.RBACSupport = true
+	oldRBAC := envconfig.XDSRBAC
+	envconfig.XDSRBAC = true
 	defer func() {
-		envconfig.RBACSupport = oldRBAC
+		envconfig.XDSRBAC = oldRBAC
 	}()
 	_, readyCh, xdsC, _, cleanup := newListenerWrapper(t)
 	defer cleanup()

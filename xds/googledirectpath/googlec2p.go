@@ -75,7 +75,7 @@ var (
 )
 
 func init() {
-	if envconfig.C2PResolverSupport {
+	if envconfig.C2PResolver {
 		resolver.Register(c2pResolverBuilder{})
 	}
 }
@@ -177,5 +177,5 @@ func newNode(zone string, ipv6Capable bool) *v3corepb.Node {
 // direct path is enabled if this client is running on GCE, and the normal xDS
 // is not used (bootstrap env vars are not set).
 func runDirectPath() bool {
-	return envconfig.BootstrapFileName == "" && envconfig.BootstrapFileContent == "" && onGCE()
+	return envconfig.XDSBootstrapFileName == "" && envconfig.XDSBootstrapFileContent == "" && onGCE()
 }

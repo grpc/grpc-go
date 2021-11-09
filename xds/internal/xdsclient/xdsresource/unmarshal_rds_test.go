@@ -1599,9 +1599,9 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 			return fmt.Sprint(fc)
 		}),
 	}
-	oldRingHashSupport := envconfig.RingHashSupport
-	envconfig.RingHashSupport = true
-	defer func() { envconfig.RingHashSupport = oldRingHashSupport }()
+	oldRingHashSupport := envconfig.XDSRingHash
+	envconfig.XDSRingHash = true
+	defer func() { envconfig.XDSRingHash = oldRingHashSupport }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, _, err := routesProtoToSlice(tt.routes, nil, nil, false)
@@ -1712,9 +1712,9 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 		},
 	}
 
-	oldRingHashSupport := envconfig.RingHashSupport
-	envconfig.RingHashSupport = true
-	defer func() { envconfig.RingHashSupport = oldRingHashSupport }()
+	oldRingHashSupport := envconfig.XDSRingHash
+	envconfig.XDSRingHash = true
+	defer func() { envconfig.XDSRingHash = oldRingHashSupport }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := hashPoliciesProtoToSlice(tt.hashPolicies, nil)

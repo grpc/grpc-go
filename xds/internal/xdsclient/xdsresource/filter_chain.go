@@ -632,7 +632,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 				// TODO: Implement terminal filter logic, as per A36.
 				filterChain.HTTPFilters = filters
 				seenHCM = true
-				if !envconfig.RBACSupport {
+				if !envconfig.XDSRBAC {
 					continue
 				}
 				switch hcm.RouteSpecifier.(type) {

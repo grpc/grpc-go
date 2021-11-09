@@ -584,9 +584,9 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 // with a HashPolicy specifying to generate a hash. The configSelector generated should
 // successfully generate a Hash.
 func (s) TestXDSResolverRequestHash(t *testing.T) {
-	oldRH := envconfig.RingHashSupport
-	envconfig.RingHashSupport = true
-	defer func() { envconfig.RingHashSupport = oldRH }()
+	oldRH := envconfig.XDSRingHash
+	envconfig.XDSRingHash = true
+	defer func() { envconfig.XDSRingHash = oldRH }()
 
 	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
 	defer xdsR.Close()

@@ -273,7 +273,7 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			conn.Close()
 			continue
 		}
-		if !envconfig.RBACSupport {
+		if !envconfig.XDSRBAC {
 			return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
 		}
 		var rc xdsresource.RouteConfigUpdate
@@ -414,7 +414,7 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	// Server's state to ServingModeNotServing. That prevents new connections
 	// from being accepted, whereas here we simply want the clients to reconnect
 	// to get the updated configuration.
-	if envconfig.RBACSupport {
+	if envconfig.XDSRBAC {
 		if l.drainCallback != nil {
 			l.drainCallback(l.Listener.Addr())
 		}

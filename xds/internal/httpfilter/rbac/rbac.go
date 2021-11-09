@@ -38,7 +38,7 @@ import (
 )
 
 func init() {
-	if envconfig.RBACSupport {
+	if envconfig.XDSRBAC {
 		httpfilter.Register(builder{})
 	}
 }

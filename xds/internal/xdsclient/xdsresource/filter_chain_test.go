@@ -519,10 +519,10 @@ func (s) TestNewFilterChainImpl_Failure_BadSecurityConfig(t *testing.T) {
 // TestNewFilterChainImpl_Success_RouteUpdate tests the construction of the
 // filter chain with valid HTTP Filters present.
 func (s) TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
-	oldRBAC := envconfig.RBACSupport
-	envconfig.RBACSupport = true
+	oldRBAC := envconfig.XDSRBAC
+	envconfig.XDSRBAC = true
 	defer func() {
-		envconfig.RBACSupport = oldRBAC
+		envconfig.XDSRBAC = oldRBAC
 	}()
 	tests := []struct {
 		name   string
@@ -759,10 +759,10 @@ func (s) TestNewFilterChainImpl_Success_RouteUpdate(t *testing.T) {
 // TestNewFilterChainImpl_Failure_BadRouteUpdate verifies cases where the Route
 // Update in the filter chain are invalid.
 func (s) TestNewFilterChainImpl_Failure_BadRouteUpdate(t *testing.T) {
-	oldRBAC := envconfig.RBACSupport
-	envconfig.RBACSupport = true
+	oldRBAC := envconfig.XDSRBAC
+	envconfig.XDSRBAC = true
 	defer func() {
-		envconfig.RBACSupport = oldRBAC
+		envconfig.XDSRBAC = oldRBAC
 	}()
 	tests := []struct {
 		name    string
@@ -971,10 +971,10 @@ func (s) TestNewFilterChainImpl_Failure_BadHTTPFilters(t *testing.T) {
 // TestNewFilterChainImpl_Success_HTTPFilters tests the construction of the
 // filter chain with valid HTTP Filters present.
 func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
-	oldRBAC := envconfig.RBACSupport
-	envconfig.RBACSupport = true
+	oldRBAC := envconfig.XDSRBAC
+	envconfig.XDSRBAC = true
 	defer func() {
-		envconfig.RBACSupport = oldRBAC
+		envconfig.XDSRBAC = oldRBAC
 	}()
 	tests := []struct {
 		name   string
@@ -1294,10 +1294,10 @@ func (s) TestNewFilterChainImpl_Success_HTTPFilters(t *testing.T) {
 // TestNewFilterChainImpl_Success_SecurityConfig verifies cases where the
 // security configuration in the filter chain contains valid data.
 func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
-	oldRBAC := envconfig.RBACSupport
-	envconfig.RBACSupport = true
+	oldRBAC := envconfig.XDSRBAC
+	envconfig.XDSRBAC = true
 	defer func() {
-		envconfig.RBACSupport = oldRBAC
+		envconfig.XDSRBAC = oldRBAC
 	}()
 	tests := []struct {
 		desc   string
@@ -1526,10 +1526,10 @@ func (s) TestNewFilterChainImpl_Success_SecurityConfig(t *testing.T) {
 // success at config validation time and the filter chains which contains
 // unsupported match fields will be skipped at lookup time.
 func (s) TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
-	oldRBAC := envconfig.RBACSupport
-	envconfig.RBACSupport = true
+	oldRBAC := envconfig.XDSRBAC
+	envconfig.XDSRBAC = true
 	defer func() {
-		envconfig.RBACSupport = oldRBAC
+		envconfig.XDSRBAC = oldRBAC
 	}()
 	unspecifiedEntry := &destPrefixEntry{
 		srcTypeArr: [3]*sourcePrefixes{
@@ -1696,10 +1696,10 @@ func (s) TestNewFilterChainImpl_Success_UnsupportedMatchFields(t *testing.T) {
 // TestNewFilterChainImpl_Success_AllCombinations verifies different
 // combinations of the supported match criteria.
 func (s) TestNewFilterChainImpl_Success_AllCombinations(t *testing.T) {
-	oldRBAC := envconfig.RBACSupport
-	envconfig.RBACSupport = true
+	oldRBAC := envconfig.XDSRBAC
+	envconfig.XDSRBAC = true
 	defer func() {
-		envconfig.RBACSupport = oldRBAC
+		envconfig.XDSRBAC = oldRBAC
 	}()
 	tests := []struct {
 		desc   string
@@ -2347,10 +2347,10 @@ func (s) TestLookup_Failures(t *testing.T) {
 }
 
 func (s) TestLookup_Successes(t *testing.T) {
-	oldRBAC := envconfig.RBACSupport
-	envconfig.RBACSupport = true
+	oldRBAC := envconfig.XDSRBAC
+	envconfig.XDSRBAC = true
 	defer func() {
-		envconfig.RBACSupport = oldRBAC
+		envconfig.XDSRBAC = oldRBAC
 	}()
 	lisWithDefaultChain := &v3listenerpb.Listener{
 		FilterChains: []*v3listenerpb.FilterChain{

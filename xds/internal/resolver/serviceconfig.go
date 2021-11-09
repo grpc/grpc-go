@@ -174,7 +174,7 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 
 	lbCtx := clustermanager.SetPickedCluster(rpcInfo.Context, cluster.name)
 	// Request Hashes are only applicable for a Ring Hash LB.
-	if envconfig.RingHashSupport {
+	if envconfig.XDSRingHash {
 		lbCtx = ringhash.SetRequestHash(lbCtx, cs.generateHash(rpcInfo, rt.hashPolicies))
 	}
 

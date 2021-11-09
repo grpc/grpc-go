@@ -32,9 +32,6 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
-	"google.golang.org/grpc/xds/internal/version"
-	"google.golang.org/grpc/internal/xds/env"
-	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -306,7 +303,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 			action := r.GetRoute()
 
 			// Hash Policies are only applicable for a Ring Hash LB.
-			if envconfig.RingHashSupport {
+			if envconfig.XDSRingHash {
 				hp, err := hashPoliciesProtoToSlice(action.HashPolicy, logger)
 				if err != nil {
 					return nil, nil, err
