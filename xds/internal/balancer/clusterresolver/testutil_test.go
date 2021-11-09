@@ -28,8 +28,8 @@ import (
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 

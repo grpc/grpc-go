@@ -22,13 +22,14 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/internal/testutils"
 )
 
 func TestIsRoundRobin(t *testing.T) {
 	var (
-		sc1 = TestSubConns[0]
-		sc2 = TestSubConns[1]
-		sc3 = TestSubConns[2]
+		sc1 = testutils.TestSubConns[0]
+		sc2 = testutils.TestSubConns[1]
+		sc3 = testutils.TestSubConns[2]
 	)
 
 	testCases := []struct {
@@ -125,10 +126,22 @@ func TestIsRoundRobin(t *testing.T) {
 	}
 	for _, tC := range testCases {
 		t.Run(tC.desc, func(t *testing.T) {
-			err := IsRoundRobin(tC.want, (&testClosure{r: tC.got}).next)
+			err := testutils.IsRoundRobin(tC.want, (&testClosure{r: tC.got}).next)
 			if err == nil != tC.pass {
 				t.Errorf("want pass %v, want %v, got err %v", tC.pass, tC.want, err)
 			}
 		})
 	}
+}
+
+// testClosure is a test util for TestIsRoundRobin.
+type testClosure struct {
+	r []balancer.SubConn
+	i int
+}
+
+func (tc *testClosure) next() balancer.SubConn {
+	ret := tc.r[tc.i]
+	tc.i = (tc.i + 1) % len(tc.r)
+	return ret
 }

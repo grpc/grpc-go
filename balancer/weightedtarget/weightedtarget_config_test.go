@@ -22,35 +22,40 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
 	"google.golang.org/grpc/balancer"
+	_ "google.golang.org/grpc/balancer/grpclb"
+	"google.golang.org/grpc/balancer/roundrobin"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
-	"google.golang.org/grpc/xds/internal/balancer/priority"
 )
 
 const (
 	testJSONConfig = `{
   "targets": {
-	"cluster_1" : {
-	  "weight":75,
-	  "childPolicy":[{"priority_experimental":{"priorities": ["child-1"], "children": {"child-1": {"config": [{"round_robin":{}}]}}}}]
+	"cluster_1": {
+	  "weight": 75,
+	  "childPolicy": [{
+        "grpclb": {
+          "childPolicy": [{"pick_first":{}}],
+          "targetName": "foo-service"
+        }
+      }]
 	},
-	"cluster_2" : {
-	  "weight":25,
-	  "childPolicy":[{"priority_experimental":{"priorities": ["child-2"], "children": {"child-2": {"config": [{"round_robin":{}}]}}}}]
+	"cluster_2": {
+	  "weight": 25,
+	  "childPolicy": [{"round_robin": ""}]
 	}
   }
 }`
 )
 
 var (
-	testConfigParser = balancer.Get(priority.Name).(balancer.ConfigParser)
-	testConfigJSON1  = `{"priorities": ["child-1"], "children": {"child-1": {"config": [{"round_robin":{}}]}}}`
-	testConfig1, _   = testConfigParser.ParseConfig([]byte(testConfigJSON1))
-	testConfigJSON2  = `{"priorities": ["child-2"], "children": {"child-2": {"config": [{"round_robin":{}}]}}}`
-	testConfig2, _   = testConfigParser.ParseConfig([]byte(testConfigJSON2))
+	grpclbConfigParser = balancer.Get("grpclb").(balancer.ConfigParser)
+	grpclbConfigJSON   = `{"childPolicy": [{"pick_first":{}}], "targetName": "foo-service"}`
+	grpclbConfig, _    = grpclbConfigParser.ParseConfig([]byte(grpclbConfigJSON))
 )
 
-func Test_parseConfig(t *testing.T) {
+func (s) TestParseConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		js      string
@@ -71,15 +76,14 @@ func Test_parseConfig(t *testing.T) {
 					"cluster_1": {
 						Weight: 75,
 						ChildPolicy: &internalserviceconfig.BalancerConfig{
-							Name:   priority.Name,
-							Config: testConfig1,
+							Name:   "grpclb",
+							Config: grpclbConfig,
 						},
 					},
 					"cluster_2": {
 						Weight: 25,
 						ChildPolicy: &internalserviceconfig.BalancerConfig{
-							Name:   priority.Name,
-							Config: testConfig2,
+							Name: roundrobin.Name,
 						},
 					},
 				},
@@ -91,8 +95,7 @@ func Test_parseConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := parseConfig([]byte(tt.js))
 			if (err != nil) != tt.wantErr {
-				t.Errorf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)
-				return
+				t.Fatalf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			if !cmp.Equal(got, tt.want) {
 				t.Errorf("parseConfig() got unexpected result, diff: %v", cmp.Diff(got, tt.want))

@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/credentials/local"
@@ -34,7 +35,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/resolver"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -129,7 +129,7 @@ func (p *fakeProvider) Close() {
 
 // setupWithXDSCreds performs all the setup steps required for tests which use
 // xDSCredentials.
-func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *xdstestutils.TestClientConn, func()) {
+func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *testutils.TestClientConn, func()) {
 	t.Helper()
 	xdsC := fakeclient.NewClient()
 	builder := balancer.Get(cdsName)
@@ -145,7 +145,7 @@ func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDS
 	}
 	// Create a new CDS balancer and pass it a fake balancer.ClientConn which we
 	// can use to inspect the different calls made by the balancer.
-	tcc := xdstestutils.NewTestClientConn(t)
+	tcc := testutils.NewTestClientConn(t)
 	cdsB := builder.Build(tcc, balancer.BuildOptions{DialCreds: creds})
 
 	// Override the creation of the EDS balancer to return a fake EDS balancer
@@ -184,7 +184,7 @@ func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDS
 // passed to the EDS balancer, and verifies that the CDS balancer forwards the
 // call appropriately to its parent balancer.ClientConn with or without
 // attributes bases on the value of wantFallback.
-func makeNewSubConn(ctx context.Context, edsCC balancer.ClientConn, parentCC *xdstestutils.TestClientConn, wantFallback bool) (balancer.SubConn, error) {
+func makeNewSubConn(ctx context.Context, edsCC balancer.ClientConn, parentCC *testutils.TestClientConn, wantFallback bool) (balancer.SubConn, error) {
 	dummyAddr := "foo-address"
 	addrs := []resolver.Address{{Addr: dummyAddr}}
 	sc, err := edsCC.NewSubConn(addrs, balancer.NewSubConnOptions{})

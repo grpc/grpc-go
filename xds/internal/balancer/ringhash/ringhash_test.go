@@ -30,8 +30,8 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal/testutils"
 )
 
 var (
