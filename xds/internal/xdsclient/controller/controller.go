@@ -126,9 +126,7 @@ func New(config *bootstrap.ServerConfig, updateHandler pubsub.UpdateHandler, val
 
 	defer func() {
 		if retErr != nil {
-			if ret.cc != nil {
-				ret.cc.Close()
-			}
+			ret.Close()
 		}
 	}()
 
@@ -158,6 +156,13 @@ func New(config *bootstrap.ServerConfig, updateHandler pubsub.UpdateHandler, val
 
 // Close closes the controller.
 func (t *Controller) Close() {
-	t.stopRunGoroutine()
-	t.cc.Close()
+	// Note that Close needs to check for nils even if some of them are always
+	// set in the constructor. This is because the constructor defers Close() in
+	// error cases, and the fields might not be set when the error happens.
+	if t.stopRunGoroutine != nil {
+		t.stopRunGoroutine()
+	}
+	if t.cc != nil {
+		t.cc.Close()
+	}
 }

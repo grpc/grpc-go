@@ -57,12 +57,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 
 	defer func() {
 		if retErr != nil {
-			if c.controller != nil {
-				c.controller.Close()
-			}
-			if c.pubsub != nil {
-				c.pubsub.Close()
-			}
+			c.Close()
 		}
 	}()
 
@@ -95,8 +90,16 @@ func (c *clientImpl) Close() {
 	c.done.Fire()
 	// TODO: Should we invoke the registered callbacks here with an error that
 	// the client is closed?
-	c.controller.Close()
-	c.pubsub.Close()
+
+	// Note that Close needs to check for nils even if some of them are always
+	// set in the constructor. This is because the constructor defers Close() in
+	// error cases, and the fields might not be set when the error happens.
+	if c.controller != nil {
+		c.controller.Close()
+	}
+	if c.pubsub != nil {
+		c.pubsub.Close()
+	}
 	c.logger.Infof("Shutdown")
 }
 
