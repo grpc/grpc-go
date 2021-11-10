@@ -23,6 +23,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -31,6 +32,9 @@ import (
 // of interest to the registered RDS watcher.
 type RouteConfigUpdate struct {
 	VirtualHosts []*VirtualHost
+	// ClusterSpecifierPlugins are the LB Configurations for any
+	// ClusterSpecifierPlugins referenced by the Route Table.
+	ClusterSpecifierPlugins map[string]clusterspecifier.BalancerConfig
 	// Raw is the resource from the xds response.
 	Raw *anypb.Any
 }
