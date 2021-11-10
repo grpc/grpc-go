@@ -35,7 +35,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 
-	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // V2 client registration.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2" // V2 client registration.
 )
 
 const (

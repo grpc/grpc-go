@@ -26,6 +26,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"google.golang.org/grpc/xds/internal/xdsclient/pubsub"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -35,7 +38,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/protobuf/testing/protocmp"
 )
@@ -79,24 +81,24 @@ func clientOpts(balancerName string, overrideWatchExpiryTimeout bool) (*bootstra
 	}, watchExpiryTimeout
 }
 
-type testAPIClient struct {
+type testController struct {
 	done          *grpcsync.Event
 	addWatches    map[xdsresource.ResourceType]*testutils.Channel
 	removeWatches map[xdsresource.ResourceType]*testutils.Channel
 }
 
-func overrideNewAPIClient() (*testutils.Channel, func()) {
-	origNewAPIClient := newAPIClient
+func overrideNewController() (*testutils.Channel, func()) {
+	origNewController := newController
 	ch := testutils.NewChannel()
-	newAPIClient = func(apiVersion version.TransportAPI, cc *grpc.ClientConn, opts BuildOptions) (APIClient, error) {
-		ret := newTestAPIClient()
+	newController = func(config *bootstrap.ServerConfig, pubsub *pubsub.Pubsub, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger) (controllerInterface, error) {
+		ret := newTestController()
 		ch.Send(ret)
 		return ret, nil
 	}
-	return ch, func() { newAPIClient = origNewAPIClient }
+	return ch, func() { newController = origNewController }
 }
 
-func newTestAPIClient() *testAPIClient {
+func newTestController() *testController {
 	addWatches := map[xdsresource.ResourceType]*testutils.Channel{
 		xdsresource.ListenerResource:    testutils.NewChannel(),
 		xdsresource.RouteConfigResource: testutils.NewChannel(),
@@ -109,32 +111,33 @@ func newTestAPIClient() *testAPIClient {
 		xdsresource.ClusterResource:     testutils.NewChannel(),
 		xdsresource.EndpointsResource:   testutils.NewChannel(),
 	}
-	return &testAPIClient{
+	return &testController{
 		done:          grpcsync.NewEvent(),
 		addWatches:    addWatches,
 		removeWatches: removeWatches,
 	}
 }
 
-func (c *testAPIClient) AddWatch(resourceType xdsresource.ResourceType, resourceName string) {
+func (c *testController) AddWatch(resourceType xdsresource.ResourceType, resourceName string) {
 	c.addWatches[resourceType].Send(resourceName)
 }
 
-func (c *testAPIClient) RemoveWatch(resourceType xdsresource.ResourceType, resourceName string) {
+func (c *testController) RemoveWatch(resourceType xdsresource.ResourceType, resourceName string) {
 	c.removeWatches[resourceType].Send(resourceName)
 }
 
-func (c *testAPIClient) reportLoad(context.Context, *grpc.ClientConn, loadReportingOptions) {
+func (c *testController) ReportLoad(server string) (*load.Store, func()) {
+	panic("ReportLoad is not implemented")
 }
 
-func (c *testAPIClient) Close() {
+func (c *testController) Close() {
 	c.done.Fire()
 }
 
 // TestWatchCallAnotherWatch covers the case where watch() is called inline by a
 // callback. It makes sure it doesn't cause a deadlock.
 func (s) TestWatchCallAnotherWatch(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -149,7 +152,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	clusterUpdateCh := testutils.NewChannel()
 	firstTime := true
@@ -269,7 +272,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	}
 	defer func() { bootstrapNewConfig = oldBootstrapNewConfig }()
 
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	// The first New(). Should create a Client and a new APIClient.
@@ -284,7 +287,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	// Call New() again. They should all return the same client implementation,
 	// and should not create new API client.
@@ -343,7 +346,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient2 := c2.(*testAPIClient)
+	apiClient2 := c2.(*testController)
 
 	// The client wrapper with ref count should be the same.
 	if client2 != client {

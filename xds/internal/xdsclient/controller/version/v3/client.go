@@ -29,9 +29,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
-	"google.golang.org/grpc/xds/internal/version"
-	"google.golang.org/grpc/xds/internal/xdsclient"
+	controllerversion "google.golang.org/grpc/xds/internal/xdsclient/controller/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	xdsresourceversion "google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
@@ -39,42 +40,26 @@ import (
 )
 
 func init() {
-	xdsclient.RegisterAPIClientBuilder(clientBuilder{})
+	controllerversion.RegisterAPIClientBuilder(xdsresourceversion.TransportV3, newClient)
 }
 
 var (
 	resourceTypeToURL = map[xdsresource.ResourceType]string{
-		xdsresource.ListenerResource:    version.V3ListenerURL,
-		xdsresource.RouteConfigResource: version.V3RouteConfigURL,
-		xdsresource.ClusterResource:     version.V3ClusterURL,
-		xdsresource.EndpointsResource:   version.V3EndpointsURL,
+		xdsresource.ListenerResource:    xdsresourceversion.V3ListenerURL,
+		xdsresource.RouteConfigResource: xdsresourceversion.V3RouteConfigURL,
+		xdsresource.ClusterResource:     xdsresourceversion.V3ClusterURL,
+		xdsresource.EndpointsResource:   xdsresourceversion.V3EndpointsURL,
 	}
 )
 
-type clientBuilder struct{}
-
-func (clientBuilder) Build(cc *grpc.ClientConn, opts xdsclient.BuildOptions) (xdsclient.APIClient, error) {
-	return newClient(cc, opts)
-}
-
-func (clientBuilder) Version() version.TransportAPI {
-	return version.TransportV3
-}
-
-func newClient(cc *grpc.ClientConn, opts xdsclient.BuildOptions) (xdsclient.APIClient, error) {
+func newClient(opts controllerversion.BuildOptions) (controllerversion.VersionedClient, error) {
 	nodeProto, ok := opts.NodeProto.(*v3corepb.Node)
 	if !ok {
 		return nil, fmt.Errorf("xds: unsupported Node proto type: %T, want %T", opts.NodeProto, v3corepb.Node{})
 	}
 	v3c := &client{
-		cc:              cc,
-		parent:          opts.Parent,
-		nodeProto:       nodeProto,
-		logger:          opts.Logger,
-		updateValidator: opts.Validator,
+		nodeProto: nodeProto, logger: opts.Logger,
 	}
-	v3c.ctx, v3c.cancelCtx = context.WithCancel(context.Background())
-	v3c.TransportHelper = xdsclient.NewTransportHelper(v3c, opts.Logger, opts.Backoff)
 	return v3c, nil
 }
 
@@ -84,24 +69,15 @@ type adsStream v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesCli
 // single ADS stream on which the different types of xDS requests and responses
 // are multiplexed.
 type client struct {
-	*xdsclient.TransportHelper
-
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	parent    xdsclient.UpdateHandler
+	nodeProto *v3corepb.Node
 	logger    *grpclog.PrefixLogger
-
-	// ClientConn to the xDS gRPC server. Owned by the parent xdsClient.
-	cc              *grpc.ClientConn
-	nodeProto       *v3corepb.Node
-	updateValidator xdsresource.UpdateValidatorFunc
 }
 
-func (v3c *client) NewStream(ctx context.Context) (grpc.ClientStream, error) {
-	return v3adsgrpc.NewAggregatedDiscoveryServiceClient(v3c.cc).StreamAggregatedResources(v3c.ctx, grpc.WaitForReady(true))
+func (v3c *client) NewStream(ctx context.Context, cc *grpc.ClientConn) (grpc.ClientStream, error) {
+	return v3adsgrpc.NewAggregatedDiscoveryServiceClient(cc).StreamAggregatedResources(ctx, grpc.WaitForReady(true))
 }
 
-// sendRequest sends out a DiscoveryRequest for the given resourceNames, of type
+// SendRequest sends out a DiscoveryRequest for the given resourceNames, of type
 // rType, on the provided stream.
 //
 // version is the ack version to be sent with the request
@@ -143,7 +119,6 @@ func (v3c *client) RecvResponse(s grpc.ClientStream) (proto.Message, error) {
 
 	resp, err := stream.Recv()
 	if err != nil {
-		v3c.parent.NewConnectionError(err)
 		return nil, fmt.Errorf("xds: stream.Recv() failed: %v", err)
 	}
 	v3c.logger.Infof("ADS response received, type: %v", resp.GetTypeUrl())
@@ -151,11 +126,11 @@ func (v3c *client) RecvResponse(s grpc.ClientStream) (proto.Message, error) {
 	return resp, nil
 }
 
-func (v3c *client) HandleResponse(r proto.Message) (xdsresource.ResourceType, string, string, error) {
+func (v3c *client) ParseResponse(r proto.Message) (xdsresource.ResourceType, []*anypb.Any, string, string, error) {
 	rType := xdsresource.UnknownResource
 	resp, ok := r.(*v3discoverypb.DiscoveryResponse)
 	if !ok {
-		return rType, "", "", fmt.Errorf("xds: unsupported message type: %T", resp)
+		return rType, nil, "", "", fmt.Errorf("xds: unsupported message type: %T", resp)
 	}
 
 	// Note that the xDS transport protocol is versioned independently of
@@ -166,74 +141,17 @@ func (v3c *client) HandleResponse(r proto.Message) (xdsresource.ResourceType, st
 	url := resp.GetTypeUrl()
 	switch {
 	case xdsresource.IsListenerResource(url):
-		err = v3c.handleLDSResponse(resp)
 		rType = xdsresource.ListenerResource
 	case xdsresource.IsRouteConfigResource(url):
-		err = v3c.handleRDSResponse(resp)
 		rType = xdsresource.RouteConfigResource
 	case xdsresource.IsClusterResource(url):
-		err = v3c.handleCDSResponse(resp)
 		rType = xdsresource.ClusterResource
 	case xdsresource.IsEndpointsResource(url):
-		err = v3c.handleEDSResponse(resp)
 		rType = xdsresource.EndpointsResource
 	default:
-		return rType, "", "", xdsclient.ErrResourceTypeUnsupported{
+		return rType, nil, "", "", controllerversion.ErrResourceTypeUnsupported{
 			ErrStr: fmt.Sprintf("Resource type %v unknown in response from server", resp.GetTypeUrl()),
 		}
 	}
-	return rType, resp.GetVersionInfo(), resp.GetNonce(), err
-}
-
-// handleLDSResponse processes an LDS response received from the management
-// server. On receipt of a good response, it also invokes the registered watcher
-// callback.
-func (v3c *client) handleLDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
-	update, md, err := xdsresource.UnmarshalListener(&xdsresource.UnmarshalOptions{
-		Version:         resp.GetVersionInfo(),
-		Resources:       resp.GetResources(),
-		Logger:          v3c.logger,
-		UpdateValidator: v3c.updateValidator,
-	})
-	v3c.parent.NewListeners(update, md)
-	return err
-}
-
-// handleRDSResponse processes an RDS response received from the management
-// server. On receipt of a good response, it caches validated resources and also
-// invokes the registered watcher callback.
-func (v3c *client) handleRDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
-	update, md, err := xdsresource.UnmarshalRouteConfig(&xdsresource.UnmarshalOptions{
-		Version:         resp.GetVersionInfo(),
-		Resources:       resp.GetResources(),
-		Logger:          v3c.logger,
-		UpdateValidator: v3c.updateValidator,
-	})
-	v3c.parent.NewRouteConfigs(update, md)
-	return err
-}
-
-// handleCDSResponse processes an CDS response received from the management
-// server. On receipt of a good response, it also invokes the registered watcher
-// callback.
-func (v3c *client) handleCDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
-	update, md, err := xdsresource.UnmarshalCluster(&xdsresource.UnmarshalOptions{
-		Version:         resp.GetVersionInfo(),
-		Resources:       resp.GetResources(),
-		Logger:          v3c.logger,
-		UpdateValidator: v3c.updateValidator,
-	})
-	v3c.parent.NewClusters(update, md)
-	return err
-}
-
-func (v3c *client) handleEDSResponse(resp *v3discoverypb.DiscoveryResponse) error {
-	update, md, err := xdsresource.UnmarshalEndpoints(&xdsresource.UnmarshalOptions{
-		Version:         resp.GetVersionInfo(),
-		Resources:       resp.GetResources(),
-		Logger:          v3c.logger,
-		UpdateValidator: v3c.updateValidator,
-	})
-	v3c.parent.NewEndpoints(update, md)
-	return err
+	return rType, resp.GetResources(), resp.GetVersionInfo(), resp.GetNonce(), err
 }

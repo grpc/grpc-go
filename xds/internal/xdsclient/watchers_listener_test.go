@@ -35,7 +35,7 @@ import (
 // - an update for another resource name
 // - an update is received after cancel()
 func (s) TestLDSWatch(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -50,7 +50,7 @@ func (s) TestLDSWatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	ldsUpdateCh := testutils.NewChannel()
 	cancelWatch := client.WatchListener(testLDSName, func(update xdsresource.ListenerUpdate, err error) {
@@ -91,7 +91,7 @@ func (s) TestLDSWatch(t *testing.T) {
 // TestLDSTwoWatchSameResourceName covers the case where an update is received
 // after two watch() for the same resource name.
 func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -106,7 +106,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	const count = 2
 	var (
@@ -166,7 +166,7 @@ func (s) TestLDSTwoWatchSameResourceName(t *testing.T) {
 // TestLDSThreeWatchDifferentResourceName covers the case where an update is
 // received after three watch() for different resource names.
 func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -181,7 +181,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	var ldsUpdateChs []*testutils.Channel
 	const count = 2
@@ -232,7 +232,7 @@ func (s) TestLDSThreeWatchDifferentResourceName(t *testing.T) {
 // TestLDSWatchAfterCache covers the case where watch is called after the update
 // is in cache.
 func (s) TestLDSWatchAfterCache(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -247,7 +247,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	ldsUpdateCh := testutils.NewChannel()
 	client.WatchListener(testLDSName, func(update xdsresource.ListenerUpdate, err error) {
@@ -294,7 +294,7 @@ func (s) TestLDSWatchAfterCache(t *testing.T) {
 // - one more update without the removed resource
 //   - the callback (above) shouldn't receive any update
 func (s) TestLDSResourceRemoved(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -309,7 +309,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	ldsUpdateCh1 := testutils.NewChannel()
 	client.WatchListener(testLDSName+"1", func(update xdsresource.ListenerUpdate, err error) {
@@ -376,7 +376,7 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 // TestListenerWatchNACKError covers the case that an update is NACK'ed, and the
 // watcher should also receive the error.
 func (s) TestListenerWatchNACKError(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -391,7 +391,7 @@ func (s) TestListenerWatchNACKError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	ldsUpdateCh := testutils.NewChannel()
 	cancelWatch := client.WatchListener(testLDSName, func(update xdsresource.ListenerUpdate, err error) {
@@ -414,7 +414,7 @@ func (s) TestListenerWatchNACKError(t *testing.T) {
 // But the watchers with valid resources should receive the update, those with
 // invalida resources should receive an error.
 func (s) TestListenerWatchPartialValid(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -429,7 +429,7 @@ func (s) TestListenerWatchPartialValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	const badResourceName = "bad-resource"
 	updateChs := make(map[string]*testutils.Channel)
@@ -472,7 +472,7 @@ func (s) TestListenerWatchPartialValid(t *testing.T) {
 // TestListenerWatch_RedundantUpdateSupression tests scenarios where an update
 // with an unmodified resource is suppressed, and modified resource is not.
 func (s) TestListenerWatch_RedundantUpdateSupression(t *testing.T) {
-	apiClientCh, cleanup := overrideNewAPIClient()
+	apiClientCh, cleanup := overrideNewController()
 	defer cleanup()
 
 	client, err := newWithConfig(clientOpts(testXDSServer, false))
@@ -487,7 +487,7 @@ func (s) TestListenerWatch_RedundantUpdateSupression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testAPIClient)
+	apiClient := c.(*testController)
 
 	ldsUpdateCh := testutils.NewChannel()
 	client.WatchListener(testLDSName, func(update xdsresource.ListenerUpdate, err error) {

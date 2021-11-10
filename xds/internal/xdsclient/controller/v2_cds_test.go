@@ -16,7 +16,7 @@
  *
  */
 
-package v2
+package controller
 
 import (
 	"testing"
@@ -27,8 +27,8 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/xds/internal/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 const (
@@ -119,31 +119,6 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 			},
 			wantUpdateErr: false,
 		},
-		// Response does not contain Cluster proto.
-		{
-			name:        "no-cluster-proto-in-response",
-			cdsResponse: badResourceTypeInLDSResponse,
-			wantErr:     true,
-			wantUpdate:  nil,
-			wantUpdateMD: xdsresource.UpdateMetadata{
-				Status: xdsresource.ServiceStatusNACKed,
-				ErrState: &xdsresource.UpdateErrorMetadata{
-					Err: cmpopts.AnyError,
-				},
-			},
-			wantUpdateErr: false,
-		},
-		// Response contains no clusters.
-		{
-			name:        "no-cluster",
-			cdsResponse: &xdspb.DiscoveryResponse{},
-			wantErr:     false,
-			wantUpdate:  nil,
-			wantUpdateMD: xdsresource.UpdateMetadata{
-				Status: xdsresource.ServiceStatusACKed,
-			},
-			wantUpdateErr: false,
-		},
 		// Response contains one good cluster we are not interested in.
 		{
 			name:        "one-uninteresting-cluster",
@@ -190,22 +165,22 @@ func (s) TestCDSHandleResponse(t *testing.T) {
 // TestCDSHandleResponseWithoutWatch tests the case where the v2Client receives
 // a CDS response without a registered watcher.
 func (s) TestCDSHandleResponseWithoutWatch(t *testing.T) {
-	_, cc, cleanup := startServerAndGetCC(t)
+	fakeServer, cleanup := startServer(t)
 	defer cleanup()
 
-	v2c, err := newV2Client(&testUpdateReceiver{
+	v2c, err := newTestController(&testUpdateReceiver{
 		f: func(xdsresource.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) {},
-	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	}, fakeServer.Address, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer v2c.Close()
 
-	if v2c.handleCDSResponse(badResourceTypeInLDSResponse) == nil {
+	if _, _, _, err := v2c.handleResponse(badResourceTypeInLDSResponse); err == nil {
 		t.Fatal("v2c.handleCDSResponse() succeeded, should have failed")
 	}
 
-	if v2c.handleCDSResponse(goodCDSResponse1) != nil {
+	if _, _, _, err := v2c.handleResponse(goodCDSResponse1); err != nil {
 		t.Fatal("v2c.handleCDSResponse() succeeded, should have failed")
 	}
 }

@@ -16,7 +16,7 @@
  *
  */
 
-package xdsclient_test
+package xdsclient
 
 import (
 	"context"
@@ -33,17 +33,14 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
-	"google.golang.org/grpc/xds/internal/version"
-	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	_ "google.golang.org/grpc/xds/internal/xdsclient/v2" // Register the v2 xDS API client.
+	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2" // Register the v2 xDS API client.
 )
 
 const (
-	defaultTestTimeout              = 5 * time.Second
-	defaultTestShortTimeout         = 10 * time.Millisecond // For events expected to *not* happen.
 	defaultClientWatchExpiryTimeout = 15 * time.Second
 )
 
@@ -54,7 +51,7 @@ func (s) TestLRSClient(t *testing.T) {
 	}
 	defer sCleanup()
 
-	xdsC, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	xdsC, err := NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI:    fs.Address,
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),

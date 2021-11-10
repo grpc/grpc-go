@@ -73,9 +73,7 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, op
 	}
 	defer func() {
 		if retErr != nil {
-			if r.client != nil {
-				r.client.Close()
-			}
+			r.Close()
 		}
 	}()
 	r.logger = prefixLogger(r)
@@ -304,8 +302,15 @@ func (*xdsResolver) ResolveNow(o resolver.ResolveNowOptions) {}
 
 // Close closes the resolver, and also closes the underlying xdsClient.
 func (r *xdsResolver) Close() {
-	r.cancelWatch()
-	r.client.Close()
+	// Note that Close needs to check for nils even if some of them are always
+	// set in the constructor. This is because the constructor defers Close() in
+	// error cases, and the fields might not be set when the error happens.
+	if r.cancelWatch != nil {
+		r.cancelWatch()
+	}
+	if r.client != nil {
+		r.client.Close()
+	}
 	r.closed.Fire()
 	r.logger.Infof("Shutdown")
 }

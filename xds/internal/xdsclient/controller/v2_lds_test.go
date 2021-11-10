@@ -16,7 +16,7 @@
  *
  */
 
-package v2
+package controller
 
 import (
 	"testing"
@@ -177,22 +177,22 @@ func (s) TestLDSHandleResponse(t *testing.T) {
 // TestLDSHandleResponseWithoutWatch tests the case where the client receives
 // an LDS response without a registered watcher.
 func (s) TestLDSHandleResponseWithoutWatch(t *testing.T) {
-	_, cc, cleanup := startServerAndGetCC(t)
+	fakeServer, cleanup := startServer(t)
 	defer cleanup()
 
-	v2c, err := newV2Client(&testUpdateReceiver{
+	v2c, err := newTestController(&testUpdateReceiver{
 		f: func(xdsresource.ResourceType, map[string]interface{}, xdsresource.UpdateMetadata) {},
-	}, cc, goodNodeProto, func(int) time.Duration { return 0 }, nil)
+	}, fakeServer.Address, goodNodeProto, func(int) time.Duration { return 0 }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer v2c.Close()
 
-	if v2c.handleLDSResponse(badResourceTypeInLDSResponse) == nil {
+	if _, _, _, err := v2c.handleResponse(badResourceTypeInLDSResponse); err == nil {
 		t.Fatal("v2c.handleLDSResponse() succeeded, should have failed")
 	}
 
-	if v2c.handleLDSResponse(goodLDSResponse1) != nil {
+	if _, _, _, err := v2c.handleResponse(goodLDSResponse1); err != nil {
 		t.Fatal("v2c.handleLDSResponse() succeeded, should have failed")
 	}
 }
