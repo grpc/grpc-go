@@ -633,8 +633,10 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	}
 
 	var ret error
-	if cc.dopts.disableServiceConfig || s.ServiceConfig == nil {
-		channelz.Infof(logger, cc.channelzID, "ignoring service config from resolver (%v) and applying default service. dopts.disableServiceConfig is %v", s.ServiceConfig, cc.dopts.disableServiceConfig)
+	if cc.dopts.disableServiceConfig {
+		channelz.Infof(logger, cc.channelzID, "ignoring service config from resolver (%v) and applying default service because service config is disabled", s.ServiceConfig)
+		cc.maybeApplyDefaultServiceConfig(s.Addresses)
+	} else if s.ServiceConfig == nil {
 		cc.maybeApplyDefaultServiceConfig(s.Addresses)
 		// TODO: do we need to apply a failing LB policy if there is no
 		// default, per the error handling design?
