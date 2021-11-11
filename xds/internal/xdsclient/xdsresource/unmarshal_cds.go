@@ -28,9 +28,9 @@ import (
 	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/golang/protobuf/proto"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -85,7 +85,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	case v3clusterpb.Cluster_ROUND_ROBIN:
 		lbPolicy = nil // The default is round_robin, and there's no config to set.
 	case v3clusterpb.Cluster_RING_HASH:
-		if !env.RingHashSupport {
+		if !envconfig.XDSRingHash {
 			return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 		}
 		rhc := cluster.GetRingHashLbConfig()
@@ -118,7 +118,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	// Process security configuration received from the control plane iff the
 	// corresponding environment variable is set.
 	var sc *SecurityConfig
-	if env.ClientSideSecuritySupport {
+	if envconfig.XDSClientSideSecurity {
 		var err error
 		if sc, err = securityConfigFromCluster(cluster); err != nil {
 			return ClusterUpdate{}, err
@@ -143,7 +143,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		ret.EDSServiceName = cluster.GetEdsClusterConfig().GetServiceName()
 		return ret, nil
 	case cluster.GetType() == v3clusterpb.Cluster_LOGICAL_DNS:
-		if !env.AggregateAndDNSSupportEnv {
+		if !envconfig.XDSAggregateAndDNS {
 			return ClusterUpdate{}, fmt.Errorf("unsupported cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
 		}
 		ret.ClusterType = ClusterTypeLogicalDNS
@@ -154,7 +154,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		ret.DNSHostName = dnsHN
 		return ret, nil
 	case cluster.GetClusterType() != nil && cluster.GetClusterType().Name == "envoy.clusters.aggregate":
-		if !env.AggregateAndDNSSupportEnv {
+		if !envconfig.XDSAggregateAndDNS {
 			return ClusterUpdate{}, fmt.Errorf("unsupported cluster type (%v, %v) in response: %+v", cluster.GetType(), cluster.GetClusterType(), cluster)
 		}
 		clusters := &v3aggregateclusterpb.ClusterConfig{}

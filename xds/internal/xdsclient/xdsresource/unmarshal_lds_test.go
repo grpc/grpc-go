@@ -26,8 +26,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
@@ -702,10 +702,10 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 }
 
 func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
-	oldRBAC := env.RBACSupport
-	env.RBACSupport = true
+	oldRBAC := envconfig.XDSRBAC
+	envconfig.XDSRBAC = true
 	defer func() {
-		env.RBACSupport = oldRBAC
+		envconfig.XDSRBAC = oldRBAC
 	}()
 	const (
 		v3LDSTarget = "grpc/server?xds.resource.listening_address=0.0.0.0:9999"

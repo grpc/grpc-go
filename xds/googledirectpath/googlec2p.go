@@ -29,20 +29,21 @@ import (
 	"fmt"
 	"time"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/googlecloud"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/resolver"
 	_ "google.golang.org/grpc/xds" // To register xds resolvers and balancers.
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/structpb"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 const (
@@ -74,7 +75,7 @@ var (
 )
 
 func init() {
-	if env.C2PResolverSupport {
+	if envconfig.C2PResolver {
 		resolver.Register(c2pResolverBuilder{})
 	}
 }
@@ -98,7 +99,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	go func() { zoneCh <- getZone(httpReqTimeout) }()
 	go func() { ipv6CapableCh <- getIPv6Capable(httpReqTimeout) }()
 
-	balancerName := env.C2PResolverTestOnlyTrafficDirectorURI
+	balancerName := envconfig.C2PResolverTestOnlyTrafficDirectorURI
 	if balancerName == "" {
 		balancerName = tdURL
 	}
@@ -176,5 +177,5 @@ func newNode(zone string, ipv6Capable bool) *v3corepb.Node {
 // direct path is enabled if this client is running on GCE, and the normal xDS
 // is not used (bootstrap env vars are not set).
 func runDirectPath() bool {
-	return env.BootstrapFileName == "" && env.BootstrapFileContent == "" && onGCE()
+	return envconfig.XDSBootstrapFileName == "" && envconfig.XDSBootstrapFileContent == "" && onGCE()
 }

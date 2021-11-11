@@ -33,9 +33,9 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/internal/envconfig"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/internal/xds/env"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
@@ -273,7 +273,7 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 			conn.Close()
 			continue
 		}
-		if !env.RBACSupport {
+		if !envconfig.XDSRBAC {
 			return &connWrapper{Conn: conn, filterChain: fc, parent: l}, nil
 		}
 		var rc xdsresource.RouteConfigUpdate
@@ -414,7 +414,7 @@ func (l *listenerWrapper) handleLDSUpdate(update ldsUpdateWithError) {
 	// Server's state to ServingModeNotServing. That prevents new connections
 	// from being accepted, whereas here we simply want the clients to reconnect
 	// to get the updated configuration.
-	if env.RBACSupport {
+	if envconfig.XDSRBAC {
 		if l.drainCallback != nil {
 			l.drainCallback(l.Listener.Addr())
 		}

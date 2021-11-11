@@ -26,14 +26,15 @@ import (
 	"fmt"
 	"testing"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/xds/internal/testutils/e2e"
+
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/xds/env"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-	"google.golang.org/grpc/xds/internal/testutils/e2e"
 )
 
 const hashHeaderName = "session_id"
@@ -86,9 +87,9 @@ func ringhashCluster(clusterName, edsServiceName string) *v3clusterpb.Cluster {
 // behavior in ring_hash policy.
 func (s) TestClientSideAffinitySanityCheck(t *testing.T) {
 	defer func() func() {
-		old := env.RingHashSupport
-		env.RingHashSupport = true
-		return func() { env.RingHashSupport = old }
+		old := envconfig.XDSRingHash
+		envconfig.XDSRingHash = true
+		return func() { envconfig.XDSRingHash = old }
 	}()()
 
 	managementServer, nodeID, _, resolver, cleanup1 := setupManagementServer(t)
