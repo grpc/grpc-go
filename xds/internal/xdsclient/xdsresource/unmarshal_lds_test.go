@@ -633,7 +633,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 					InlineRouteConfig: &RouteConfigUpdate{
 						VirtualHosts: []*VirtualHost{{
 							Domains: []string{v3LDSTarget},
-							Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}, RouteAction: RouteActionRoute}},
+							Routes:  []*Route{{Prefix: newStringP("/"), WeightedClusters: map[string]WeightedCluster{clusterName: {Weight: 1}}, ActionType: RouteActionRoute}},
 						}}},
 					MaxStreamDuration: time.Second,
 					Raw:               v3LisWithInlineRoute,
@@ -730,7 +730,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		inlineRouteConfig = &RouteConfigUpdate{
 			VirtualHosts: []*VirtualHost{{
 				Domains: []string{"lds.target.good:3333"},
-				Routes:  []*Route{{Prefix: newStringP("/"), RouteAction: RouteActionNonForwardingAction}},
+				Routes:  []*Route{{Prefix: newStringP("/"), ActionType: RouteActionNonForwardingAction}},
 			}}}
 		emptyValidNetworkFilters = []*v3listenerpb.Filter{
 			{

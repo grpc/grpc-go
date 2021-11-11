@@ -119,7 +119,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 	}
 
 	// "For any entry in the RouteConfiguration.cluster_specifier_plugins not
-	// referenced by an enclosed RouteAction's cluster_specifier_plugin, the xDS
+	// referenced by an enclosed ActionType's cluster_specifier_plugin, the xDS
 	// client should not provide it to its consumers." - RLS in xDS Design
 	for name := range csps {
 		if !cspNames[name] {
@@ -378,13 +378,13 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 				return nil, nil, fmt.Errorf("route %+v, action %+v: %v", r, action, err)
 			}
 
-			route.RouteAction = RouteActionRoute
+			route.ActionType = RouteActionRoute
 
 		case *v3routepb.Route_NonForwardingAction:
 			// Expected to be used on server side.
-			route.RouteAction = RouteActionNonForwardingAction
+			route.ActionType = RouteActionNonForwardingAction
 		default:
-			route.RouteAction = RouteActionUnsupported
+			route.ActionType = RouteActionUnsupported
 		}
 
 		if !v2 {

@@ -95,14 +95,14 @@ type HashPolicy struct {
 	RegexSubstitution string
 }
 
-// RouteAction is the action of the route from a received RDS response.
-type RouteAction int
+// RouteActionType is the action of the route from a received RDS response.
+type RouteActionType int
 
 const (
 	// RouteActionUnsupported are routing types currently unsupported by grpc.
 	// According to A36, "A Route with an inappropriate action causes RPCs
 	// matching that route to fail."
-	RouteActionUnsupported RouteAction = iota
+	RouteActionUnsupported RouteActionType = iota
 	// RouteActionRoute is the expected route type on the client side. Route
 	// represents routing a request to some upstream cluster. On the client
 	// side, if an RPC matches to a route that is not RouteActionRoute, the RPC
@@ -129,7 +129,6 @@ type Route struct {
 	HashPolicies []*HashPolicy
 
 	// If the matchers above indicate a match, the below configuration is used.
-	WeightedClusters map[string]WeightedCluster
 	// If MaxStreamDuration is nil, it indicates neither of the route action's
 	// max_stream_duration fields (grpc_timeout_header_max nor
 	// max_stream_duration) were set.  In this case, the ListenerUpdate's
@@ -143,14 +142,17 @@ type Route struct {
 	HTTPFilterConfigOverride map[string]httpfilter.FilterConfig
 	RetryConfig              *RetryConfig
 
-	RouteAction RouteAction
+	ActionType RouteActionType
 
+	// Exactly one of the following fields (Weighted Clusters or
+	// ClusterSpecifierPlugin) will be set for a route.
+	WeightedClusters map[string]WeightedCluster
 	// ClusterSpecifierPlugin is the name of the Cluster Specifier Plugin that
 	// this Route is linked to, if specified by xDS.
 	ClusterSpecifierPlugin string
 }
 
-// WeightedCluster contains settings for an xds RouteAction.WeightedCluster.
+// WeightedCluster contains settings for an xds ActionType.WeightedCluster.
 type WeightedCluster struct {
 	// Weight is the relative weight of the cluster.  It will never be zero.
 	Weight uint32
