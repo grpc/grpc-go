@@ -717,8 +717,6 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 			// implementation.
 			return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max (%d vs. %d)", size, maxReceiveMessageSize)
 		}
-	} else {
-		size = len(d)
 	}
 	return d, nil
 }
