@@ -144,6 +144,10 @@ type Route struct {
 	RetryConfig              *RetryConfig
 
 	RouteAction RouteAction
+
+	// ClusterSpecifierPlugin is the name of the Cluster Specifier Plugin that
+	// this Route is linked to, if specified by xDS.
+	ClusterSpecifierPlugin string
 }
 
 // WeightedCluster contains settings for an xds RouteAction.WeightedCluster.

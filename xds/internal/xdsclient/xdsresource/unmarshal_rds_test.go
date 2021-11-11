@@ -114,8 +114,9 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			VirtualHosts: []*VirtualHost{{
 				Domains: []string{ldsTarget},
 				Routes: []*Route{{
-					Prefix:      newStringP("1"),
-					RouteAction: RouteActionRoute,
+					Prefix:                 newStringP("1"),
+					RouteAction:            RouteActionRoute,
+					ClusterSpecifierPlugin: "cspA",
 				}},
 			}},
 			ClusterSpecifierPlugins: map[string]clusterspecifier.BalancerConfig{
