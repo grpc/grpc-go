@@ -144,7 +144,7 @@ type Route struct {
 
 	ActionType RouteActionType
 
-	// Exactly one of the following fields (Weighted Clusters or
+	// Only one of the following fields (WeightedClusters or
 	// ClusterSpecifierPlugin) will be set for a route.
 	WeightedClusters map[string]WeightedCluster
 	// ClusterSpecifierPlugin is the name of the Cluster Specifier Plugin that

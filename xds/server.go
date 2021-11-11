@@ -359,7 +359,7 @@ func routeAndProcess(ctx context.Context) error {
 		if r.M.Match(rpcInfo) {
 			// "NonForwardingAction is expected for all Routes used on server-side; a route with an inappropriate action causes
 			// RPCs matching that route to fail with UNAVAILABLE." - A36
-			if r.RouteAction != xdsresource.RouteActionNonForwardingAction {
+			if r.ActionType != xdsresource.RouteActionNonForwardingAction {
 				return status.Error(codes.Unavailable, "the incoming RPC matched to a route that was not of action type non forwarding")
 			}
 			rwi = &r
