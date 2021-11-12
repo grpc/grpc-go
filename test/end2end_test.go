@@ -492,6 +492,7 @@ type test struct {
 	maxClientReceiveMsgSize *int
 	maxClientSendMsgSize    *int
 	maxClientHeaderListSize *uint32
+	maxFrameSize            *uint32
 	userAgent               string
 	// Used to test the deprecated API WithCompressor and WithDecompressor.
 	clientCompression bool
@@ -581,6 +582,9 @@ func (te *test) listenAndServe(ts testpb.TestServiceServer, listen func(network,
 	}
 	if te.maxServerHeaderListSize != nil {
 		sopts = append(sopts, grpc.MaxHeaderListSize(*te.maxServerHeaderListSize))
+	}
+	if te.maxFrameSize != nil {
+		sopts = append(sopts, grpc.MaxFrameSize(*te.maxFrameSize))
 	}
 	if te.tapHandle != nil {
 		sopts = append(sopts, grpc.InTapHandle(te.tapHandle))
@@ -790,6 +794,9 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	}
 	if te.maxClientHeaderListSize != nil {
 		opts = append(opts, grpc.WithMaxHeaderListSize(*te.maxClientHeaderListSize))
+	}
+	if te.maxFrameSize != nil {
+		opts = append(opts, grpc.WithMaxFrameSize(*te.maxFrameSize))
 	}
 	switch te.e.security {
 	case "tls":
@@ -2289,6 +2296,74 @@ func (s) TestPreloaderSenderSend(t *testing.T) {
 	}
 	if got, want := buf.String(), "0,1,2,3,4,5,6,7,8,9"; got != want {
 		t.Errorf("Got replies %q; want %q", got, want)
+	}
+}
+
+func (s) TestMaxFrameSizeClient(t *testing.T) {
+	for _, e := range listTestEnv() {
+		if e.httpHandler {
+			continue
+		}
+		testMaxFrameSizeClient(t, e)
+	}
+}
+
+func testMaxFrameSizeClient(t *testing.T, e env) {
+	te := newTest(t, e)
+	te.userAgent = testAppUA
+	te.declareLogNoise(
+		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
+		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
+		"grpc: addrConn.resetTransport failed to create client transport: connection error",
+		"Failed to dial : context canceled; please retry.",
+	)
+	te.startServer(&testServer{security: e.security})
+
+	defer te.tearDown()
+	options := make([]grpc.DialOption, 0, 10)
+	options = append(options, grpc.WithMaxFrameSize(16*1024*1024))
+	tc := testpb.NewTestServiceClient(te.clientConn(options...))
+
+	const smallSize = 1
+	const largeSize = 32 * 1024 * 1024
+	smallPayload, err := newPayload(testpb.PayloadType_COMPRESSABLE, smallSize)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &testpb.SimpleRequest{
+		ResponseType: testpb.PayloadType_COMPRESSABLE,
+		ResponseSize: int32(largeSize),
+		Payload:      smallPayload,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Test for unary RPC recv.
+	if _, err := tc.UnaryCall(ctx, req); err == nil || status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("TestService/UnaryCall(_, _) = _, %v, want _, error code: %s", err, codes.ResourceExhausted)
+	}
+
+	respParam := []*testpb.ResponseParameters{
+		{
+			Size: int32(largeSize),
+		},
+	}
+	sreq := &testpb.StreamingOutputCallRequest{
+		ResponseType:       testpb.PayloadType_COMPRESSABLE,
+		ResponseParameters: respParam,
+		Payload:            smallPayload,
+	}
+
+	// Test for streaming RPC recv.
+	stream, err := tc.FullDuplexCall(te.ctx)
+	if err != nil {
+		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
+	}
+	if err := stream.Send(sreq); err != nil {
+		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, sreq, err)
+	}
+	if _, err := stream.Recv(); err == nil || status.Code(err) != codes.ResourceExhausted {
+		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 }
 
