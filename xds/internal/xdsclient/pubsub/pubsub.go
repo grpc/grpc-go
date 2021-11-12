@@ -46,19 +46,15 @@ type Pubsub struct {
 	// All the following maps are to keep the updates/metadata in a cache.
 	mu          sync.Mutex
 	ldsWatchers map[string]map[*watchInfo]bool
-	ldsVersion  string // Only used in CSDS.
 	ldsCache    map[string]xdsresource.ListenerUpdate
 	ldsMD       map[string]xdsresource.UpdateMetadata
 	rdsWatchers map[string]map[*watchInfo]bool
-	rdsVersion  string // Only used in CSDS.
 	rdsCache    map[string]xdsresource.RouteConfigUpdate
 	rdsMD       map[string]xdsresource.UpdateMetadata
 	cdsWatchers map[string]map[*watchInfo]bool
-	cdsVersion  string // Only used in CSDS.
 	cdsCache    map[string]xdsresource.ClusterUpdate
 	cdsMD       map[string]xdsresource.UpdateMetadata
 	edsWatchers map[string]map[*watchInfo]bool
-	edsVersion  string // Only used in CSDS.
 	edsCache    map[string]xdsresource.EndpointsUpdate
 	edsMD       map[string]xdsresource.UpdateMetadata
 }

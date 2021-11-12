@@ -23,21 +23,21 @@ import (
 )
 
 // DumpLDS returns the status and contents of LDS.
-func (c *clientImpl) DumpLDS() (string, map[string]xdsresource.UpdateWithMD) {
+func (c *clientImpl) DumpLDS() map[string]xdsresource.UpdateWithMD {
 	return c.pubsub.Dump(xdsresource.ListenerResource)
 }
 
 // DumpRDS returns the status and contents of RDS.
-func (c *clientImpl) DumpRDS() (string, map[string]xdsresource.UpdateWithMD) {
+func (c *clientImpl) DumpRDS() map[string]xdsresource.UpdateWithMD {
 	return c.pubsub.Dump(xdsresource.RouteConfigResource)
 }
 
 // DumpCDS returns the status and contents of CDS.
-func (c *clientImpl) DumpCDS() (string, map[string]xdsresource.UpdateWithMD) {
+func (c *clientImpl) DumpCDS() map[string]xdsresource.UpdateWithMD {
 	return c.pubsub.Dump(xdsresource.ClusterResource)
 }
 
 // DumpEDS returns the status and contents of EDS.
-func (c *clientImpl) DumpEDS() (string, map[string]xdsresource.UpdateWithMD) {
+func (c *clientImpl) DumpEDS() map[string]xdsresource.UpdateWithMD {
 	return c.pubsub.Dump(xdsresource.EndpointsResource)
 }

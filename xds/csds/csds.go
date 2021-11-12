@@ -174,8 +174,8 @@ func nodeProtoToV3(n proto.Message) *v3corepb.Node {
 	return node
 }
 
-func dumpToGenericXdsConfig(typeURL string, dumpF func() (string, map[string]xdsresource.UpdateWithMD)) []*v3statuspb.ClientConfig_GenericXdsConfig {
-	_, dump := dumpF()
+func dumpToGenericXdsConfig(typeURL string, dumpF func() map[string]xdsresource.UpdateWithMD) []*v3statuspb.ClientConfig_GenericXdsConfig {
+	dump := dumpF()
 	ret := make([]*v3statuspb.ClientConfig_GenericXdsConfig, 0, len(dump))
 	for name, d := range dump {
 		config := &v3statuspb.ClientConfig_GenericXdsConfig{

@@ -16,7 +16,7 @@
  *
  */
 
-package xdsclient_test
+package xdsclient
 
 import (
 	"fmt"
@@ -40,11 +40,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
-
-const defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 
 func (s) TestLDSConfigDump(t *testing.T) {
 	const testVersion = "test-version-lds"
@@ -76,7 +73,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		listenerRaws[ldsTargets[i]] = testutils.MarshalAny(listenersT)
 	}
 
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, err := NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -90,7 +87,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	updateHandler := client.(pubsub.UpdateHandler)
 
 	// Expected unknown.
-	if err := compareDump(client.DumpLDS, "", map[string]xdsresource.UpdateWithMD{}); err != nil {
+	if err := compareDump(client.DumpLDS, map[string]xdsresource.UpdateWithMD{}); err != nil {
 		t.Fatalf(err.Error())
 	}
 
@@ -101,7 +98,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		wantRequested[n] = xdsresource.UpdateWithMD{MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}}
 	}
 	// Expected requested.
-	if err := compareDump(client.DumpLDS, "", wantRequested); err != nil {
+	if err := compareDump(client.DumpLDS, wantRequested); err != nil {
 		t.Fatalf(err.Error())
 	}
 
@@ -117,7 +114,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 	updateHandler.NewListeners(update0, xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: testVersion})
 
 	// Expect ACK.
-	if err := compareDump(client.DumpLDS, testVersion, want0); err != nil {
+	if err := compareDump(client.DumpLDS, want0); err != nil {
 		t.Fatalf(err.Error())
 	}
 
@@ -157,7 +154,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: nackVersion},
 		Raw: listenerRaws[ldsTargets[1]],
 	}
-	if err := compareDump(client.DumpLDS, nackVersion, wantDump); err != nil {
+	if err := compareDump(client.DumpLDS, wantDump); err != nil {
 		t.Fatalf(err.Error())
 	}
 }
@@ -192,7 +189,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		routeRaws[rdsTargets[i]] = testutils.MarshalAny(routeConfigT)
 	}
 
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, err := NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -206,7 +203,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	updateHandler := client.(pubsub.UpdateHandler)
 
 	// Expected unknown.
-	if err := compareDump(client.DumpRDS, "", map[string]xdsresource.UpdateWithMD{}); err != nil {
+	if err := compareDump(client.DumpRDS, map[string]xdsresource.UpdateWithMD{}); err != nil {
 		t.Fatalf(err.Error())
 	}
 
@@ -217,7 +214,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		wantRequested[n] = xdsresource.UpdateWithMD{MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}}
 	}
 	// Expected requested.
-	if err := compareDump(client.DumpRDS, "", wantRequested); err != nil {
+	if err := compareDump(client.DumpRDS, wantRequested); err != nil {
 		t.Fatalf(err.Error())
 	}
 
@@ -233,7 +230,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 	updateHandler.NewRouteConfigs(update0, xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: testVersion})
 
 	// Expect ACK.
-	if err := compareDump(client.DumpRDS, testVersion, want0); err != nil {
+	if err := compareDump(client.DumpRDS, want0); err != nil {
 		t.Fatalf(err.Error())
 	}
 
@@ -272,7 +269,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: nackVersion},
 		Raw: routeRaws[rdsTargets[1]],
 	}
-	if err := compareDump(client.DumpRDS, nackVersion, wantDump); err != nil {
+	if err := compareDump(client.DumpRDS, wantDump); err != nil {
 		t.Fatalf(err.Error())
 	}
 }
@@ -308,7 +305,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		clusterRaws[cdsTargets[i]] = testutils.MarshalAny(clusterT)
 	}
 
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, err := NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -322,7 +319,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	updateHandler := client.(pubsub.UpdateHandler)
 
 	// Expected unknown.
-	if err := compareDump(client.DumpCDS, "", map[string]xdsresource.UpdateWithMD{}); err != nil {
+	if err := compareDump(client.DumpCDS, map[string]xdsresource.UpdateWithMD{}); err != nil {
 		t.Fatalf(err.Error())
 	}
 
@@ -333,7 +330,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		wantRequested[n] = xdsresource.UpdateWithMD{MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}}
 	}
 	// Expected requested.
-	if err := compareDump(client.DumpCDS, "", wantRequested); err != nil {
+	if err := compareDump(client.DumpCDS, wantRequested); err != nil {
 		t.Fatalf(err.Error())
 	}
 
@@ -349,7 +346,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 	updateHandler.NewClusters(update0, xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: testVersion})
 
 	// Expect ACK.
-	if err := compareDump(client.DumpCDS, testVersion, want0); err != nil {
+	if err := compareDump(client.DumpCDS, want0); err != nil {
 		t.Fatalf(err.Error())
 	}
 
@@ -388,7 +385,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: nackVersion},
 		Raw: clusterRaws[cdsTargets[1]],
 	}
-	if err := compareDump(client.DumpCDS, nackVersion, wantDump); err != nil {
+	if err := compareDump(client.DumpCDS, wantDump); err != nil {
 		t.Fatalf(err.Error())
 	}
 }
@@ -410,7 +407,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		endpointRaws[edsTargets[i]] = testutils.MarshalAny(claT)
 	}
 
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, err := NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -424,7 +421,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	updateHandler := client.(pubsub.UpdateHandler)
 
 	// Expected unknown.
-	if err := compareDump(client.DumpEDS, "", map[string]xdsresource.UpdateWithMD{}); err != nil {
+	if err := compareDump(client.DumpEDS, map[string]xdsresource.UpdateWithMD{}); err != nil {
 		t.Fatalf(err.Error())
 	}
 
@@ -435,7 +432,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		wantRequested[n] = xdsresource.UpdateWithMD{MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}}
 	}
 	// Expected requested.
-	if err := compareDump(client.DumpEDS, "", wantRequested); err != nil {
+	if err := compareDump(client.DumpEDS, wantRequested); err != nil {
 		t.Fatalf(err.Error())
 	}
 
@@ -451,7 +448,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 	updateHandler.NewEndpoints(update0, xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: testVersion})
 
 	// Expect ACK.
-	if err := compareDump(client.DumpEDS, testVersion, want0); err != nil {
+	if err := compareDump(client.DumpEDS, want0); err != nil {
 		t.Fatalf(err.Error())
 	}
 
@@ -490,16 +487,13 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		MD:  xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: nackVersion},
 		Raw: endpointRaws[edsTargets[1]],
 	}
-	if err := compareDump(client.DumpEDS, nackVersion, wantDump); err != nil {
+	if err := compareDump(client.DumpEDS, wantDump); err != nil {
 		t.Fatalf(err.Error())
 	}
 }
 
-func compareDump(dumpFunc func() (string, map[string]xdsresource.UpdateWithMD), wantVersion string, wantDump interface{}) error {
-	v, dump := dumpFunc()
-	if v != wantVersion {
-		return fmt.Errorf("Dump() returned version %q, want %q", v, wantVersion)
-	}
+func compareDump(dumpFunc func() map[string]xdsresource.UpdateWithMD, wantDump interface{}) error {
+	dump := dumpFunc()
 	cmpOpts := cmp.Options{
 		cmpopts.EquateEmpty(),
 		cmp.Comparer(func(a, b time.Time) bool { return true }),
