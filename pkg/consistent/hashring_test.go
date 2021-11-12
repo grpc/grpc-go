@@ -23,7 +23,7 @@ func (tn testNode) Key() string {
 
 func TestHashring(t *testing.T) {
 	testCases := []struct {
-		replicationFactor uint8
+		replicationFactor uint16
 		nodes             []testNode
 	}{
 		{1, []testNode{}},

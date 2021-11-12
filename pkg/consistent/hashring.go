@@ -27,7 +27,7 @@ type Member interface {
 // nodes. It is internally synchronized and thread-safe.
 type Hashring struct {
 	hasher            HasherFunc
-	replicationFactor uint8
+	replicationFactor uint16
 
 	sync.RWMutex
 	nodes        map[string]nodeRecord
@@ -41,7 +41,7 @@ type Hashring struct {
 // of the mean. At a replicationFactor of 1000 it will be about 3.2%. The replicationFactor should
 // be chosen carefully because a higher replicationFactor will require more memory and worse member
 // selection performance.
-func NewHashring(hasher HasherFunc, replicationFactor uint8) *Hashring {
+func NewHashring(hasher HasherFunc, replicationFactor uint16) *Hashring {
 	if replicationFactor < 1 {
 		panic("replicationFactor must be at least 1")
 	}
@@ -84,7 +84,7 @@ func (h *Hashring) Add(member Member) error {
 	virtualNodeBuffer := make([]byte, 9)
 	binary.LittleEndian.PutUint64(virtualNodeBuffer, nodeHash)
 
-	for i := uint8(0); i < h.replicationFactor; i++ {
+	for i := uint16(0); i < h.replicationFactor; i++ {
 		virtualNodeBuffer[8] = byte(i)
 		virtualNodeHash := h.hasher(virtualNodeBuffer)
 

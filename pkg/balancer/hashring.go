@@ -31,7 +31,7 @@ var (
 // will create a consistent hashring balancer with the given config.
 // Before making a connection, register it with grpc with:
 // `balancer.Register(consistent.NewConsistentHashringBuilder(hasher, factor, spread))`
-func NewConsistentHashringBuilder(hasher consistent.HasherFunc, replicationFactor, spread uint8) balancer.Builder {
+func NewConsistentHashringBuilder(hasher consistent.HasherFunc, replicationFactor uint16, spread uint8) balancer.Builder {
 	return base.NewBalancerBuilder(
 		BalancerName,
 		&consistentHashringPickerBuilder{hasher: hasher, replicationFactor: replicationFactor, spread: spread},
@@ -53,8 +53,9 @@ func (s subConnMember) Key() string {
 var _ consistent.Member = &subConnMember{}
 
 type consistentHashringPickerBuilder struct {
-	hasher                    consistent.HasherFunc
-	replicationFactor, spread uint8
+	hasher            consistent.HasherFunc
+	replicationFactor uint16
+	spread            uint8
 }
 
 func (b *consistentHashringPickerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
