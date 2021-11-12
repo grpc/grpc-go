@@ -66,7 +66,7 @@ var (
 	inlineRouteConfig = &RouteConfigUpdate{
 		VirtualHosts: []*VirtualHost{{
 			Domains: []string{"lds.target.good:3333"},
-			Routes:  []*Route{{Prefix: newStringP("/"), RouteAction: RouteActionNonForwardingAction}},
+			Routes:  []*Route{{Prefix: newStringP("/"), ActionType: RouteActionNonForwardingAction}},
 		}}}
 	emptyValidNetworkFilters = []*v3listenerpb.Filter{
 		{
