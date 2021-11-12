@@ -46,5 +46,5 @@ const (
 	defaultWriteQuota              = 64 * 1024
 	defaultClientMaxHeaderListSize = uint32(16 << 20)
 	defaultServerMaxHeaderListSize = uint32(16 << 20)
-	defaultFrameSize               = uint32(16384)
+	defaultFrameSize               = uint32(16 * 1024)
 )

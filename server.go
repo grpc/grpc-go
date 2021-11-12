@@ -163,7 +163,7 @@ type serverOptions struct {
 	readBufferSize        int
 	connectionTimeout     time.Duration
 	maxHeaderListSize     *uint32
-	maxFrameSize          *uint32
+	maxFrameSize          uint32
 	headerTableSize       *uint32
 	numServerWorkers      uint32
 }
@@ -485,7 +485,7 @@ func MaxHeaderListSize(s uint32) ServerOption {
 // of header list that the server is prepared to accept.
 func MaxFrameSize(s uint32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
-		o.maxFrameSize = &s
+		o.maxFrameSize = s
 	})
 }
 

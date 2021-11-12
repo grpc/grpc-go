@@ -559,7 +559,7 @@ func WithMaxHeaderListSize(s uint32) DialOption {
 // (uncompressed) size of frame that the client is prepared to accept.
 func WithMaxFrameSize(s uint32) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.MaxFrameSize = &s
+		o.copts.MaxFrameSize = s
 	})
 }
 

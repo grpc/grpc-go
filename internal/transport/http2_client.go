@@ -98,7 +98,7 @@ type http2Client struct {
 	maxSendHeaderListSize *uint32
 
 	// configured by peer SETTINGS_MAX_FRAME_SIZE
-	maxFrameSize *uint32
+	maxFrameSize uint32
 
 	bdpEst *bdpEstimator
 	// onPrefaceReceipt is a callback that client transport calls upon
@@ -295,8 +295,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		maxHeaderListSize = *opts.MaxHeaderListSize
 	}
 	maxFrameSize := defaultFrameSize
-	if opts.MaxFrameSize != nil {
-		maxFrameSize = *opts.MaxFrameSize
+	if opts.MaxFrameSize != maxFrameSize && opts.MaxFrameSize != 0 {
+		maxFrameSize = opts.MaxFrameSize
 	}
 	t := &http2Client{
 		ctx:                   ctx,
@@ -395,10 +395,10 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 			Val: *opts.MaxHeaderListSize,
 		})
 	}
-	if opts.MaxFrameSize != nil {
+	if opts.MaxFrameSize != defaultFrameSize && opts.MaxFrameSize != 0 {
 		ss = append(ss, http2.Setting{
 			ID:  http2.SettingMaxFrameSize,
-			Val: *opts.MaxFrameSize,
+			Val: opts.MaxFrameSize,
 		})
 	}
 	err = t.framer.fr.WriteSettings(ss...)
@@ -1144,8 +1144,7 @@ func (t *http2Client) handleSettings(f *http2.SettingsFrame, isFirst bool) {
 			})
 		case http2.SettingMaxFrameSize:
 			updateFuncs = append(updateFuncs, func() {
-				t.maxFrameSize = new(uint32)
-				*t.maxFrameSize = s.Val
+				t.maxFrameSize = s.Val
 			})
 		default:
 			ss = append(ss, s)
