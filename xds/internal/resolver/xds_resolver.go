@@ -206,7 +206,7 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 	}
 
 	// Produce the service config.
-	sc, err := serviceConfigJSON(r.activeClusters)
+	sc, err := serviceConfigJSON(r.activeClusters, cs.clusterSpecifierPlugins)
 	if err != nil {
 		// JSON marshal error; should never happen.
 		r.logger.Errorf("%v", err)

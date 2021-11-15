@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
+	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -83,12 +84,23 @@ func (r *xdsResolver) pruneActiveClusters() {
 // serviceConfigJSON produces a service config in JSON format representing all
 // the clusters referenced in activeClusters.  This includes clusters with zero
 // references, so they must be pruned first.
-func serviceConfigJSON(activeClusters map[string]*clusterInfo) ([]byte, error) {
+func serviceConfigJSON(activeClusters map[string]*clusterInfo, clusterSpecifierPlugins map[string]clusterspecifier.BalancerConfig) ([]byte, error) {
 	// Generate children (all entries in activeClusters).
 	children := make(map[string]xdsChildConfig)
 	for cluster := range activeClusters {
-		children[cluster] = xdsChildConfig{
-			ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: cluster}),
+		// Look into cluster specifier plugins, which hasn't had any prefix attached to it's cluster specifier plugin names,
+		// to determine the LB Config if the cluster is a CSP.
+		cspCfg, ok := clusterSpecifierPlugins[strings.TrimPrefix(cluster, "cluster_specifier_plugin:")]
+		if ok {
+			children[cluster] = xdsChildConfig{
+				ChildPolicy: balancerConfig(cspCfg),
+			}
+		} else {
+			// Will now have "cluster:" prefixing the cluster name...CDS policy
+			// will now have to trim this off when it queries CDS.
+			children[cluster] = xdsChildConfig{
+				ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: cluster}),
+			}
 		}
 	}
 
@@ -121,7 +133,11 @@ type routeCluster struct {
 
 type route struct {
 	m                 *xdsresource.CompositeMatcher // converted from route matchers
+
+	// Exactly one of clusterSpecifierPlugin or clusters will be set.
+    clusterSpecifierPlugin string
 	clusters          wrr.WRR                       // holds *routeCluster entries
+
 	maxStreamDuration time.Duration
 	// map from filter name to its config
 	httpFilterConfigOverride map[string]httpfilter.FilterConfig
@@ -134,11 +150,15 @@ func (r route) String() string {
 }
 
 type configSelector struct {
-	r                *xdsResolver
-	virtualHost      virtualHost
-	routes           []route
-	clusters         map[string]*clusterInfo
-	httpFilterConfig []xdsresource.HTTPFilter
+	r                       *xdsResolver
+	virtualHost             virtualHost
+	routes                  []route
+	clusters                map[string]*clusterInfo
+	httpFilterConfig        []xdsresource.HTTPFilter
+	clusterSpecifierPlugins map[string]clusterspecifier.BalancerConfig
+	// Will be used for:
+	// a. serviceConfigJSON (this will build out the service config...but you still need to keep ref
+	// counts in active clusters), this will be used to get the LB Configurations.
 }
 
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
@@ -158,10 +178,19 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	if rt == nil || rt.clusters == nil {
 		return nil, errNoMatchedRouteFound
 	}
-	cluster, ok := rt.clusters.Next().(*routeCluster)
-	if !ok {
-		return nil, status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster)
+
+	var cluster *routeCluster
+	if rt.clusterSpecifierPlugin != "" {
+		cluster.name = rt.clusterSpecifierPlugin
+		// cluster.httpFilterConfigOverride = /*Do cluster specifier plugins even have http filter config overrides*/
+	} else {
+		cluster, ok := rt.clusters.Next().(*routeCluster)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster)
+		}
 	}
+
+
 	// Add a ref to the selected cluster, as this RPC needs this cluster until
 	// it is committed.
 	ref := &cs.clusters[cluster.name].refCount
@@ -352,24 +381,35 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 	}
 
 	for i, rt := range su.virtualHost.Routes {
-		clusters := newWRR()
-		for cluster, wc := range rt.WeightedClusters {
-			clusters.Add(&routeCluster{
-				name:                     cluster,
-				httpFilterConfigOverride: wc.HTTPFilterConfigOverride,
-			}, int64(wc.Weight))
-
-			// Initialize entries in cs.clusters map, creating entries in
-			// r.activeClusters as necessary.  Set to zero as they will be
-			// incremented by incRefs.
-			ci := r.activeClusters[cluster]
+		if rt.ClusterSpecifierPlugin != "" {
+			ci := r.activeClusters["cluster_specifier_plugin:" + rt.ClusterSpecifierPlugin]
 			if ci == nil {
 				ci = &clusterInfo{refCount: 0}
-				r.activeClusters[cluster] = ci
+				r.activeClusters["cluster_specifier_plugin:" + rt.ClusterSpecifierPlugin] = ci
 			}
-			cs.clusters[cluster] = ci
+			cs.clusters["cluster_specifier_plugin:" + rt.ClusterSpecifierPlugin] = ci
+
+			cs.routes[i].clusterSpecifierPlugin = "cluster_specifier_plugin:" + rt.ClusterSpecifierPlugin
+		} else {
+			clusters := newWRR()
+			for cluster, wc := range rt.WeightedClusters {
+				clusters.Add(&routeCluster{
+					name:                     "cluster:" + cluster,
+					httpFilterConfigOverride: wc.HTTPFilterConfigOverride,
+				}, int64(wc.Weight))
+
+				// Initialize entries in cs.clusters map, creating entries in
+				// r.activeClusters as necessary.  Set to zero as they will be
+				// incremented by incRefs.
+				ci := r.activeClusters["cluster:" + cluster]
+				if ci == nil {
+					ci = &clusterInfo{refCount: 0}
+					r.activeClusters["cluster:" + cluster] = ci
+				}
+				cs.clusters["cluster:" + cluster] = ci
+			}
+			cs.routes[i].clusters = clusters
 		}
-		cs.routes[i].clusters = clusters
 
 		var err error
 		cs.routes[i].m, err = xdsresource.RouteToMatcher(rt)

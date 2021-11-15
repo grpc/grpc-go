@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
@@ -35,6 +36,9 @@ import (
 type serviceUpdate struct {
 	// virtualHost contains routes and other configuration to route RPCs.
 	virtualHost *xdsresource.VirtualHost
+	// clusterSpecifierPlugins contain the configurations for any cluster
+	// specifier plugins emitted by the xdsclient.
+	clusterSpecifierPlugins map[string]clusterspecifier.BalancerConfig
 	// ldsConfig contains configuration that applies to all routes.
 	ldsConfig ldsConfig
 }
@@ -160,6 +164,7 @@ func (w *serviceUpdateWatcher) updateVirtualHostsFromRDS(update xdsresource.Rout
 	}
 
 	w.lastUpdate.virtualHost = matchVh
+	w.lastUpdate.clusterSpecifierPlugins = update.ClusterSpecifierPlugins
 	w.serviceCb(w.lastUpdate, nil)
 }
 
