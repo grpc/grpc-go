@@ -16,7 +16,7 @@
  *
  */
 
-package xdsclient
+package xdsclient_test
 
 import (
 	"fmt"
@@ -30,6 +30,7 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/pubsub"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -42,6 +43,8 @@ import (
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
+
+const defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 
 func (s) TestLDSConfigDump(t *testing.T) {
 	const testVersion = "test-version-lds"
@@ -73,7 +76,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		listenerRaws[ldsTargets[i]] = testutils.MarshalAny(listenersT)
 	}
 
-	client, err := NewWithConfigForTesting(&bootstrap.Config{
+	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -189,7 +192,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		routeRaws[rdsTargets[i]] = testutils.MarshalAny(routeConfigT)
 	}
 
-	client, err := NewWithConfigForTesting(&bootstrap.Config{
+	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -305,7 +308,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		clusterRaws[cdsTargets[i]] = testutils.MarshalAny(clusterT)
 	}
 
-	client, err := NewWithConfigForTesting(&bootstrap.Config{
+	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -407,7 +410,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		endpointRaws[edsTargets[i]] = testutils.MarshalAny(claT)
 	}
 
-	client, err := NewWithConfigForTesting(&bootstrap.Config{
+	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
