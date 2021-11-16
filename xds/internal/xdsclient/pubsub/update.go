@@ -79,10 +79,6 @@ func (pb *Pubsub) NewListeners(updates map[string]xdsresource.ListenerUpdateErrT
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
-	pb.ldsVersion = metadata.Version
-	if metadata.ErrState != nil {
-		pb.ldsVersion = metadata.ErrState.Version
-	}
 	for name, uErr := range updates {
 		if s, ok := pb.ldsWatchers[name]; ok {
 			if uErr.Err != nil {
@@ -145,10 +141,6 @@ func (pb *Pubsub) NewRouteConfigs(updates map[string]xdsresource.RouteConfigUpda
 	defer pb.mu.Unlock()
 
 	// If no error received, the status is ACK.
-	pb.rdsVersion = metadata.Version
-	if metadata.ErrState != nil {
-		pb.rdsVersion = metadata.ErrState.Version
-	}
 	for name, uErr := range updates {
 		if s, ok := pb.rdsWatchers[name]; ok {
 			if uErr.Err != nil {
@@ -193,10 +185,6 @@ func (pb *Pubsub) NewClusters(updates map[string]xdsresource.ClusterUpdateErrTup
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
-	pb.cdsVersion = metadata.Version
-	if metadata.ErrState != nil {
-		pb.cdsVersion = metadata.ErrState.Version
-	}
 	for name, uErr := range updates {
 		if s, ok := pb.cdsWatchers[name]; ok {
 			if uErr.Err != nil {
@@ -260,10 +248,6 @@ func (pb *Pubsub) NewEndpoints(updates map[string]xdsresource.EndpointsUpdateErr
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
-	pb.edsVersion = metadata.Version
-	if metadata.ErrState != nil {
-		pb.edsVersion = metadata.ErrState.Version
-	}
 	for name, uErr := range updates {
 		if s, ok := pb.edsWatchers[name]; ok {
 			if uErr.Err != nil {

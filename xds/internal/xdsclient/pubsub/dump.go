@@ -50,35 +50,30 @@ func rawFromCache(s string, cache interface{}) *anypb.Any {
 }
 
 // Dump dumps the resource for the given type.
-func (pb *Pubsub) Dump(t xdsresource.ResourceType) (string, map[string]xdsresource.UpdateWithMD) {
+func (pb *Pubsub) Dump(t xdsresource.ResourceType) map[string]xdsresource.UpdateWithMD {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
 	var (
-		version string
-		md      map[string]xdsresource.UpdateMetadata
-		cache   interface{}
+		md    map[string]xdsresource.UpdateMetadata
+		cache interface{}
 	)
 	switch t {
 	case xdsresource.ListenerResource:
-		version = pb.ldsVersion
 		md = pb.ldsMD
 		cache = pb.ldsCache
 	case xdsresource.RouteConfigResource:
-		version = pb.rdsVersion
 		md = pb.rdsMD
 		cache = pb.rdsCache
 	case xdsresource.ClusterResource:
-		version = pb.cdsVersion
 		md = pb.cdsMD
 		cache = pb.cdsCache
 	case xdsresource.EndpointsResource:
-		version = pb.edsVersion
 		md = pb.edsMD
 		cache = pb.edsCache
 	default:
 		pb.logger.Errorf("dumping resource of unknown type: %v", t)
-		return "", nil
+		return nil
 	}
 
 	ret := make(map[string]xdsresource.UpdateWithMD, len(md))
@@ -88,5 +83,5 @@ func (pb *Pubsub) Dump(t xdsresource.ResourceType) (string, map[string]xdsresour
 			Raw: rawFromCache(s, cache),
 		}
 	}
-	return version, ret
+	return ret
 }
