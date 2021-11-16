@@ -124,7 +124,7 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsresource.ListenerUpdate, 
 		}
 
 		// Handle the inline RDS update as if it's from an RDS watch.
-		w.updateVirtualHostsFromRDS(*update.InlineRouteConfig)
+		w.applyRouteConfigUpdate(*update.InlineRouteConfig)
 		return
 	}
 
@@ -155,7 +155,7 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsresource.ListenerUpdate, 
 	w.rdsCancel = w.c.WatchRouteConfig(update.RouteConfigName, w.handleRDSResp)
 }
 
-func (w *serviceUpdateWatcher) updateVirtualHostsFromRDS(update xdsresource.RouteConfigUpdate) {
+func (w *serviceUpdateWatcher) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdate) {
 	matchVh := xdsresource.FindBestMatchingVirtualHost(w.serviceName, update.VirtualHosts)
 	if matchVh == nil {
 		// No matching virtual host found.
@@ -184,7 +184,7 @@ func (w *serviceUpdateWatcher) handleRDSResp(update xdsresource.RouteConfigUpdat
 		w.serviceCb(serviceUpdate{}, err)
 		return
 	}
-	w.updateVirtualHostsFromRDS(update)
+	w.applyRouteConfigUpdate(update)
 }
 
 func (w *serviceUpdateWatcher) close() {

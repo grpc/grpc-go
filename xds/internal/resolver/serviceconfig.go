@@ -133,11 +133,7 @@ type routeCluster struct {
 
 type route struct {
 	m                 *xdsresource.CompositeMatcher // converted from route matchers
-
-	// Exactly one of clusterSpecifierPlugin or clusters will be set.
-    clusterSpecifierPlugin string
 	clusters          wrr.WRR                       // holds *routeCluster entries
-
 	maxStreamDuration time.Duration
 	// map from filter name to its config
 	httpFilterConfigOverride map[string]httpfilter.FilterConfig
@@ -179,15 +175,9 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 		return nil, errNoMatchedRouteFound
 	}
 
-	var cluster *routeCluster
-	if rt.clusterSpecifierPlugin != "" {
-		cluster.name = rt.clusterSpecifierPlugin
-		// cluster.httpFilterConfigOverride = /*Do cluster specifier plugins even have http filter config overrides*/
-	} else {
-		cluster, ok := rt.clusters.Next().(*routeCluster)
-		if !ok {
-			return nil, status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster)
-		}
+	cluster, ok := rt.clusters.Next().(*routeCluster)
+	if !ok {
+		return nil, status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster)
 	}
 
 
@@ -381,17 +371,19 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 	}
 
 	for i, rt := range su.virtualHost.Routes {
+		clusters := newWRR()
 		if rt.ClusterSpecifierPlugin != "" {
+			clusters.Add(&routeCluster{
+				name:                     "cluster:" + rt.ClusterSpecifierPlugin,
+			}, 1)
+
 			ci := r.activeClusters["cluster_specifier_plugin:" + rt.ClusterSpecifierPlugin]
 			if ci == nil {
 				ci = &clusterInfo{refCount: 0}
 				r.activeClusters["cluster_specifier_plugin:" + rt.ClusterSpecifierPlugin] = ci
 			}
 			cs.clusters["cluster_specifier_plugin:" + rt.ClusterSpecifierPlugin] = ci
-
-			cs.routes[i].clusterSpecifierPlugin = "cluster_specifier_plugin:" + rt.ClusterSpecifierPlugin
 		} else {
-			clusters := newWRR()
 			for cluster, wc := range rt.WeightedClusters {
 				clusters.Add(&routeCluster{
 					name:                     "cluster:" + cluster,
@@ -408,8 +400,8 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 				}
 				cs.clusters["cluster:" + cluster] = ci
 			}
-			cs.routes[i].clusters = clusters
 		}
+		cs.routes[i].clusters = clusters
 
 		var err error
 		cs.routes[i].m, err = xdsresource.RouteToMatcher(rt)
