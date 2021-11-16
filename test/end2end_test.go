@@ -6730,6 +6730,73 @@ func testRPCTimeout(t *testing.T, e env) {
 	}
 }
 
+type FakeCompressor struct {
+	name string
+}
+
+type customWriterCloser struct {
+	io.Writer
+}
+
+func (d *customWriterCloser) Close() error {
+	return nil
+}
+
+func (c *FakeCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
+	customCloser := &customWriterCloser{w}
+	return customCloser, nil
+}
+
+func (c *FakeCompressor) Decompress(r io.Reader) (io.Reader, error) {
+	return bytes.NewBuffer(make([]byte, 10098)), nil
+}
+
+func (c *FakeCompressor) Name() string {
+	return "fakeCompressor"
+}
+
+func (s) TestDecompressionWithMaximumBytes(t *testing.T) {
+	encoding.RegisterCompressor(&FakeCompressor{name: "fakeCompressor"})
+	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, 10098)
+	if err != nil {
+		t.Fatalf("Failed to create payload: %v", err)
+	}
+	req := &testpb.SimpleRequest{
+		Payload: payload,
+	}
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, _ *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+	s := grpc.NewServer()
+	testpb.RegisterTestServiceServer(s, ss)
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to create listener: %v", err)
+	}
+
+	go func() {
+		s.Serve(lis)
+	}()
+	defer s.Stop()
+
+	dctx, dcancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer dcancel()
+	cc, err := grpc.DialContext(dctx, lis.Addr().String(), grpc.WithInsecure(), grpc.WithDefaultCallOptions(grpc.UseCompressor("fakeCompressor"), grpc.MaxCallRecvMsgSize(10098)))
+	if err != nil {
+		t.Fatalf("Failed to dial server")
+	}
+	defer cc.Close()
+	c := testpb.NewTestServiceClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err = c.UnaryCall(ctx, req, grpc.WaitForReady(true))
+	if err != nil {
+		t.Fatalf("c.UnaryCall(_) = %v, want <nil>", err)
+	}
+}
+
 func (s) TestDisabledIOBuffers(t *testing.T) {
 	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(60000))
 	if err != nil {
