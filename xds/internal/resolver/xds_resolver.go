@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -206,7 +207,11 @@ func (r *xdsResolver) sendNewServiceConfig(cs *configSelector) bool {
 	}
 
 	// Produce the service config.
-	sc, err := serviceConfigJSON(r.activeClusters, cs.clusterSpecifierPlugins)
+	csps := make(map[string]clusterspecifier.BalancerConfig)
+	if cs != nil {
+		csps = cs.clusterSpecifierPlugins
+	}
+	sc, err := serviceConfigJSON(r.activeClusters, csps)
 	if err != nil {
 		// JSON marshal error; should never happen.
 		r.logger.Errorf("%v", err)

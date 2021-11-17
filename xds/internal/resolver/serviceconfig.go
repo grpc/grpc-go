@@ -92,7 +92,7 @@ func serviceConfigJSON(activeClusters map[string]*clusterInfo, clusterSpecifierP
 	for cluster := range activeClusters {
 		// Look into cluster specifier plugins, which hasn't had any prefix attached to it's cluster specifier plugin names,
 		// to determine the LB Config if the cluster is a CSP.
-		cspCfg, ok := clusterSpecifierPlugins[strings.TrimPrefix(cluster, "cluster_specifier_plugin:")]
+		cspCfg, ok := clusterSpecifierPlugins[strings.TrimPrefix(cluster, clusterSpecifierPluginPrefix)]
 		if ok {
 			children[cluster] = xdsChildConfig{
 				ChildPolicy: balancerConfig(cspCfg),
@@ -366,9 +366,10 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 			httpFilterConfigOverride: su.virtualHost.HTTPFilterConfigOverride,
 			retryConfig:              su.virtualHost.RetryConfig,
 		},
-		routes:           make([]route, len(su.virtualHost.Routes)),
-		clusters:         make(map[string]*clusterInfo),
-		httpFilterConfig: su.ldsConfig.httpFilterConfig,
+		routes:                  make([]route, len(su.virtualHost.Routes)),
+		clusters:                make(map[string]*clusterInfo),
+		clusterSpecifierPlugins: su.clusterSpecifierPlugins,
+		httpFilterConfig:        su.ldsConfig.httpFilterConfig,
 	}
 
 	for i, rt := range su.virtualHost.Routes {

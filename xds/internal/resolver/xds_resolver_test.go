@@ -29,6 +29,7 @@ import (
 
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
@@ -46,6 +47,7 @@ import (
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
+	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
@@ -473,12 +475,12 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			wantJSON: `{"loadBalancingConfig":[{
     "xds_cluster_manager_experimental":{
       "children":{
-        "test-cluster-1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+        "cluster:test-cluster-1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster:test-cluster-1"}}]
         }
       }
     }}]}`,
-			wantClusters: map[string]bool{"test-cluster-1": true},
+			wantClusters: map[string]bool{"cluster:test-cluster-1": true},
 		},
 		{
 			routes: []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{
@@ -491,18 +493,18 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			wantJSON: `{"loadBalancingConfig":[{
     "xds_cluster_manager_experimental":{
       "children":{
-        "test-cluster-1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+        "cluster:test-cluster-1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster:test-cluster-1"}}]
         },
-        "cluster_1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
+        "cluster:cluster_1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster:cluster_1"}}]
         },
-        "cluster_2":{
-          "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
+        "cluster:cluster_2":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster:cluster_2"}}]
         }
       }
     }}]}`,
-			wantClusters: map[string]bool{"cluster_1": true, "cluster_2": true},
+			wantClusters: map[string]bool{"cluster:cluster_1": true, "cluster:cluster_2": true},
 		},
 		{
 			routes: []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{
@@ -515,15 +517,15 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			wantJSON: `{"loadBalancingConfig":[{
     "xds_cluster_manager_experimental":{
       "children":{
-        "cluster_1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
+        "cluster:cluster_1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster:cluster_1"}}]
         },
-        "cluster_2":{
-          "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
+        "cluster:cluster_2":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster:cluster_2"}}]
         }
       }
     }}]}`,
-			wantClusters: map[string]bool{"cluster_1": true, "cluster_2": true},
+			wantClusters: map[string]bool{"cluster:cluster_1": true, "cluster:cluster_2": true},
 		},
 	} {
 		// Invoke the watchAPI callback with a good service update and wait for the
@@ -725,8 +727,8 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 	wantJSON := `{"loadBalancingConfig":[{
     "xds_cluster_manager_experimental":{
       "children":{
-        "test-cluster-1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+        "cluster:test-cluster-1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster:test-cluster-1"}}]
         }
       }
     }}]}`
@@ -857,9 +859,91 @@ func (s) TestXDSResolverWRR(t *testing.T) {
 		picks[clustermanager.GetPickedClusterForTesting(res.Context)]++
 		res.OnCommitted()
 	}
-	want := map[string]int{"A": 10, "B": 20}
+	want := map[string]int{"cluster:A": 10, "cluster:B": 20}
 	if !reflect.DeepEqual(picks, want) {
 		t.Errorf("picked clusters = %v; want %v", picks, want)
+	}
+}
+
+func init() {
+	balancer.Register(cspB{})
+}
+
+type cspB struct{}
+
+func (cspB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return nil
+}
+
+func (cspB) Name() string {
+	return "csp_experimental"
+}
+
+type cspConfig struct {
+	ArbitraryField string `json:"arbitrary_field"`
+}
+
+func TestXDSResolverClusterSpecifierPlugin(t *testing.T) {
+	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
+	defer xdsR.Close()
+	defer cancel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	waitForWatchListener(ctx, t, xdsC, targetStr)
+	xdsC.InvokeWatchListenerCallback(xdsresource.ListenerUpdate{RouteConfigName: routeStr, HTTPFilters: routerFilterList}, nil)
+
+	waitForWatchRouteConfig(ctx, t, xdsC, routeStr)
+	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{
+		VirtualHosts: []*xdsresource.VirtualHost{
+			{
+				Domains: []string{targetStr},
+				Routes:  []*xdsresource.Route{{Prefix: newStringP(""), ClusterSpecifierPlugin: "cspA"}},
+			},
+		},
+		// Top level csp config here - the value of cspA should get directly
+		// placed as a child policy of xds cluster manager.
+		ClusterSpecifierPlugins: map[string]clusterspecifier.BalancerConfig{"cspA": []map[string]interface{}{{"csp_experimental": cspConfig{ArbitraryField: "anything"}}}},
+	}, nil)
+
+	gotState, err := tcc.stateCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
+	}
+	rState := gotState.(resolver.State)
+	if err := rState.ServiceConfig.Err; err != nil {
+		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
+	}
+	wantJSON := `{"loadBalancingConfig":[{
+    "xds_cluster_manager_experimental":{
+      "children":{
+        "cluster_specifier_plugin:cspA":{
+          "childPolicy":[{"csp_experimental":{"arbitrary_field":"anything"}}]
+        }
+      }
+    }}]}`
+
+	wantSCParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON)
+	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
+		t.Errorf("ClientConn.UpdateState received different service config")
+		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
+		t.Fatal("want: ", cmp.Diff(nil, wantSCParsed.Config))
+	}
+
+	cs := iresolver.GetConfigSelector(rState)
+	if cs == nil {
+		t.Fatal("received nil config selector")
+	}
+
+	res, err := cs.SelectConfig(iresolver.RPCInfo{Context: context.Background()})
+	if err != nil {
+		t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
+	}
+
+	cluster := clustermanager.GetPickedClusterForTesting(res.Context)
+	clusterWant := clusterSpecifierPluginPrefix + "cspA"
+	if cluster != clusterWant {
+		t.Fatalf("cluster: %+v, want: %+v", cluster, clusterWant)
 	}
 }
 
@@ -987,8 +1071,8 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	wantJSON := `{"loadBalancingConfig":[{
     "xds_cluster_manager_experimental":{
       "children":{
-        "test-cluster-1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+        "cluster:test-cluster-1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster:test-cluster-1"}}]
         }
       }
     }}]}`
@@ -1009,7 +1093,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 		t.Fatalf("Unexpected error from cs.SelectConfig(_): %v", err)
 	}
 	cluster := clustermanager.GetPickedClusterForTesting(res.Context)
-	if cluster != "test-cluster-1" {
+	if cluster != "cluster:test-cluster-1" {
 		t.Fatalf("")
 	}
 	// delay res.OnCommitted()
@@ -1046,11 +1130,11 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	wantJSON2 := `{"loadBalancingConfig":[{
     "xds_cluster_manager_experimental":{
       "children":{
-        "test-cluster-1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+        "cluster:test-cluster-1":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster:test-cluster-1"}}]
         },
-        "NEW":{
-          "childPolicy":[{"cds_experimental":{"cluster":"NEW"}}]
+        "cluster:NEW":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster:NEW"}}]
         }
       }
     }}]}`
@@ -1084,8 +1168,8 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	wantJSON3 := `{"loadBalancingConfig":[{
     "xds_cluster_manager_experimental":{
       "children":{
-        "NEW":{
-          "childPolicy":[{"cds_experimental":{"cluster":"NEW"}}]
+        "cluster:NEW":{
+          "childPolicy":[{"cds_experimental":{"cluster":"cluster:NEW"}}]
         }
       }
     }}]}`
