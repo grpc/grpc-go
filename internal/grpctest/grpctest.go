@@ -97,9 +97,13 @@ func RunSubTests(t *testing.T, x interface{}) {
 		}
 		tfunc := getTestFunc(t, xv, methodName)
 		t.Run(strings.TrimPrefix(methodName, "Test"), func(t *testing.T) {
+			// Run leakcheck in t.Cleanup() to guarantee it is run even if tfunc
+			// or setup uses t.Fatal().
+			//
+			// Note that a defer would run before t.Cleanup, so if a goroutine
+			// is closed by a test's t.Cleanup, a deferred leakcheck would fail.
+			t.Cleanup(func() { teardown(t) })
 			setup(t)
-			// defer teardown to guarantee it is run even if tfunc uses t.Fatal()
-			defer teardown(t)
 			tfunc(t)
 		})
 	}
