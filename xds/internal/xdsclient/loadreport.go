@@ -17,7 +17,10 @@
 
 package xdsclient
 
-import "google.golang.org/grpc/xds/internal/xdsclient/load"
+import (
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+)
 
 // ReportLoad starts an load reporting stream to the given server. If the server
 // is not an empty string, and is different from the management server, a new
@@ -29,5 +32,11 @@ import "google.golang.org/grpc/xds/internal/xdsclient/load"
 // It returns a Store for the user to report loads, a function to cancel the
 // load reporting stream.
 func (c *clientImpl) ReportLoad(server string) (*load.Store, func()) {
-	return c.controller.ReportLoad(server)
+	// TODO: load reporting with federation needs special handling. This is to
+	//  avoid a nil pointer panic.
+	a, err := c.findAuthority(xdsresource.ParseName(""))
+	if err != nil {
+		return nil, func() {}
+	}
+	return a.reportLoad(server)
 }

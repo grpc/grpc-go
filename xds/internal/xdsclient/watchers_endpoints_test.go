@@ -25,9 +25,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-	"google.golang.org/protobuf/types/known/anypb"
 
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
 )
 
@@ -53,285 +51,37 @@ var (
 // - an update for another resource name (which doesn't trigger callback)
 // - an update is received after cancel()
 func (s) TestEndpointsWatch(t *testing.T) {
-	apiClientCh, cleanup := overrideNewController()
-	defer cleanup()
-
-	client, err := newWithConfig(clientOpts(testXDSServer, false))
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	c, err := apiClientCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for API client to be created: %v", err)
-	}
-	apiClient := c.(*testController)
-
-	endpointsUpdateCh := testutils.NewChannel()
-	cancelWatch := client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
-		endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
-	})
-	if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
-		t.Fatalf("want new watch to start, got error %v", err)
-	}
-
-	wantUpdate := xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}
-	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
-	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, wantUpdate, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	// Push an update, with an extra resource for a different resource name.
-	// Specify a non-nil raw proto in the original resource to ensure that the
-	// new update is not considered equal to the old one.
-	newUpdate := wantUpdate
-	newUpdate.Raw = &anypb.Any{}
-	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{
-		testCDSName:  {Update: newUpdate},
-		"randomName": {},
-	}, xdsresource.UpdateMetadata{})
-	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, newUpdate, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	// Cancel watch, and send update again.
-	cancelWatch()
-	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if u, err := endpointsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
-	}
+	testWatch(t, xdsresource.EndpointsResource, xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}, testCDSName)
 }
 
 // TestEndpointsTwoWatchSameResourceName covers the case where an update is received
 // after two watch() for the same resource name.
 func (s) TestEndpointsTwoWatchSameResourceName(t *testing.T) {
-	apiClientCh, cleanup := overrideNewController()
-	defer cleanup()
-
-	client, err := newWithConfig(clientOpts(testXDSServer, false))
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	c, err := apiClientCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for API client to be created: %v", err)
-	}
-	apiClient := c.(*testController)
-
-	const count = 2
-	var (
-		endpointsUpdateChs []*testutils.Channel
-		cancelLastWatch    func()
-	)
-	for i := 0; i < count; i++ {
-		endpointsUpdateCh := testutils.NewChannel()
-		endpointsUpdateChs = append(endpointsUpdateChs, endpointsUpdateCh)
-		cancelLastWatch = client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
-			endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
-		})
-
-		if i == 0 {
-			// A new watch is registered on the underlying API client only for
-			// the first iteration because we are using the same resource name.
-			if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
-				t.Fatalf("want new watch to start, got error %v", err)
-			}
-		}
-	}
-
-	wantUpdate := xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}
-	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
-	for i := 0; i < count; i++ {
-		if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[i], wantUpdate, nil); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	// Cancel the last watch, and send update again. None of the watchers should
-	// be notified because one has been cancelled, and the other is receiving
-	// the same update.
-	cancelLastWatch()
-	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
-	for i := 0; i < count; i++ {
-		func() {
-			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-			defer sCancel()
-			if u, err := endpointsUpdateChs[i].Receive(sCtx); err != context.DeadlineExceeded {
-				t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
-			}
-		}()
-	}
-
-	// Push a new update and make sure the uncancelled watcher is invoked.
-	// Specify a non-nil raw proto to ensure that the new update is not
-	// considered equal to the old one.
-	newUpdate := xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}, Raw: &anypb.Any{}}
-	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Update: newUpdate}}, xdsresource.UpdateMetadata{})
-	if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[0], newUpdate, nil); err != nil {
-		t.Fatal(err)
-	}
+	testTwoWatchSameResourceName(t, xdsresource.EndpointsResource, xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}, testCDSName)
 }
 
 // TestEndpointsThreeWatchDifferentResourceName covers the case where an update is
 // received after three watch() for different resource names.
 func (s) TestEndpointsThreeWatchDifferentResourceName(t *testing.T) {
-	apiClientCh, cleanup := overrideNewController()
-	defer cleanup()
-
-	client, err := newWithConfig(clientOpts(testXDSServer, false))
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	c, err := apiClientCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for API client to be created: %v", err)
-	}
-	apiClient := c.(*testController)
-
-	// Two watches for the same name.
-	var endpointsUpdateChs []*testutils.Channel
-	const count = 2
-	for i := 0; i < count; i++ {
-		endpointsUpdateCh := testutils.NewChannel()
-		endpointsUpdateChs = append(endpointsUpdateChs, endpointsUpdateCh)
-		client.WatchEndpoints(testCDSName+"1", func(update xdsresource.EndpointsUpdate, err error) {
-			endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
-		})
-
-		if i == 0 {
-			// A new watch is registered on the underlying API client only for
-			// the first iteration because we are using the same resource name.
-			if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
-				t.Fatalf("want new watch to start, got error %v", err)
-			}
-		}
-	}
-
-	// Third watch for a different name.
-	endpointsUpdateCh2 := testutils.NewChannel()
-	client.WatchEndpoints(testCDSName+"2", func(update xdsresource.EndpointsUpdate, err error) {
-		endpointsUpdateCh2.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
-	})
-	if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
-		t.Fatalf("want new watch to start, got error %v", err)
-	}
-
-	wantUpdate1 := xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}
-	wantUpdate2 := xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[1]}}
-	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{
-		testCDSName + "1": {Update: wantUpdate1},
-		testCDSName + "2": {Update: wantUpdate2},
-	}, xdsresource.UpdateMetadata{})
-
-	for i := 0; i < count; i++ {
-		if err := verifyEndpointsUpdate(ctx, endpointsUpdateChs[i], wantUpdate1, nil); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh2, wantUpdate2, nil); err != nil {
-		t.Fatal(err)
-	}
+	testThreeWatchDifferentResourceName(t, xdsresource.EndpointsResource,
+		xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}, testCDSName+"1",
+		xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[1]}}, testCDSName+"2",
+	)
 }
 
 // TestEndpointsWatchAfterCache covers the case where watch is called after the update
 // is in cache.
 func (s) TestEndpointsWatchAfterCache(t *testing.T) {
-	apiClientCh, cleanup := overrideNewController()
-	defer cleanup()
-
-	client, err := newWithConfig(clientOpts(testXDSServer, false))
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	c, err := apiClientCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for API client to be created: %v", err)
-	}
-	apiClient := c.(*testController)
-
-	endpointsUpdateCh := testutils.NewChannel()
-	client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
-		endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
-	})
-	if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
-		t.Fatalf("want new watch to start, got error %v", err)
-	}
-
-	wantUpdate := xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}
-	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
-	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, wantUpdate, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	// Another watch for the resource in cache.
-	endpointsUpdateCh2 := testutils.NewChannel()
-	client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
-		endpointsUpdateCh2.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
-	})
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if n, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(sCtx); err != context.DeadlineExceeded {
-		t.Fatalf("want no new watch to start (recv timeout), got resource name: %v error %v", n, err)
-	}
-
-	// New watch should receives the update.
-	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh2, wantUpdate, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	// Old watch should see nothing.
-	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if u, err := endpointsUpdateCh.Receive(sCtx); err != context.DeadlineExceeded {
-		t.Errorf("unexpected endpointsUpdate: %v, %v, want channel recv timeout", u, err)
-	}
+	testWatchAfterCache(t, xdsresource.EndpointsResource, xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}, testCDSName)
 }
 
 // TestEndpointsWatchExpiryTimer tests the case where the client does not receive
 // an CDS response for the request that it sends out. We want the watch callback
 // to be invoked with an error once the watchExpiryTimer fires.
 func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
-	apiClientCh, cleanup := overrideNewController()
-	defer cleanup()
-
-	client, err := newWithConfig(clientOpts(testXDSServer, true))
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer client.Close()
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	c, err := apiClientCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for API client to be created: %v", err)
-	}
-	apiClient := c.(*testController)
-
-	endpointsUpdateCh := testutils.NewChannel()
-	client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
-		endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
-	})
-	if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
-		t.Fatalf("want new watch to start, got error %v", err)
-	}
+	_, _, _, endpointsUpdateCh, _ := testWatchSetup(ctx, t, xdsresource.EndpointsResource, testCDSName, true)
 
 	u, err := endpointsUpdateCh.Receive(ctx)
 	if err != nil {
@@ -346,34 +96,12 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 // TestEndpointsWatchNACKError covers the case that an update is NACK'ed, and
 // the watcher should also receive the error.
 func (s) TestEndpointsWatchNACKError(t *testing.T) {
-	apiClientCh, cleanup := overrideNewController()
-	defer cleanup()
-
-	client, err := newWithConfig(clientOpts(testXDSServer, false))
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer client.Close()
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	c, err := apiClientCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for API client to be created: %v", err)
-	}
-	apiClient := c.(*testController)
-
-	endpointsUpdateCh := testutils.NewChannel()
-	cancelWatch := client.WatchEndpoints(testCDSName, func(update xdsresource.EndpointsUpdate, err error) {
-		endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
-	})
-	defer cancelWatch()
-	if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
-		t.Fatalf("want new watch to start, got error %v", err)
-	}
+	_, _, updateHandler, endpointsUpdateCh, _ := testWatchSetup(ctx, t, xdsresource.EndpointsResource, testCDSName, false)
 
 	wantError := fmt.Errorf("testing error")
-	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Err: wantError}}, xdsresource.UpdateMetadata{ErrState: &xdsresource.UpdateErrorMetadata{Err: wantError}})
+	updateHandler.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Err: wantError}}, xdsresource.UpdateMetadata{ErrState: &xdsresource.UpdateErrorMetadata{Err: wantError}})
 	if err := verifyEndpointsUpdate(ctx, endpointsUpdateCh, xdsresource.EndpointsUpdate{}, wantError); err != nil {
 		t.Fatal(err)
 	}
@@ -384,57 +112,5 @@ func (s) TestEndpointsWatchNACKError(t *testing.T) {
 // But the watchers with valid resources should receive the update, those with
 // invalida resources should receive an error.
 func (s) TestEndpointsWatchPartialValid(t *testing.T) {
-	apiClientCh, cleanup := overrideNewController()
-	defer cleanup()
-
-	client, err := newWithConfig(clientOpts(testXDSServer, false))
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	c, err := apiClientCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for API client to be created: %v", err)
-	}
-	apiClient := c.(*testController)
-
-	const badResourceName = "bad-resource"
-	updateChs := make(map[string]*testutils.Channel)
-
-	for _, name := range []string{testCDSName, badResourceName} {
-		endpointsUpdateCh := testutils.NewChannel()
-		cancelWatch := client.WatchEndpoints(name, func(update xdsresource.EndpointsUpdate, err error) {
-			endpointsUpdateCh.Send(xdsresource.EndpointsUpdateErrTuple{Update: update, Err: err})
-		})
-		defer func() {
-			cancelWatch()
-			if _, err := apiClient.removeWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
-				t.Fatalf("want watch to be canceled, got err: %v", err)
-			}
-		}()
-		if _, err := apiClient.addWatches[xdsresource.EndpointsResource].Receive(ctx); err != nil {
-			t.Fatalf("want new watch to start, got error %v", err)
-		}
-		updateChs[name] = endpointsUpdateCh
-	}
-
-	wantError := fmt.Errorf("testing error")
-	wantError2 := fmt.Errorf("individual error")
-	client.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{
-		testCDSName:     {Update: xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}},
-		badResourceName: {Err: wantError2},
-	}, xdsresource.UpdateMetadata{ErrState: &xdsresource.UpdateErrorMetadata{Err: wantError}})
-
-	// The valid resource should be sent to the watcher.
-	if err := verifyEndpointsUpdate(ctx, updateChs[testCDSName], xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	// The failed watcher should receive an error.
-	if err := verifyEndpointsUpdate(ctx, updateChs[badResourceName], xdsresource.EndpointsUpdate{}, wantError2); err != nil {
-		t.Fatal(err)
-	}
+	testWatchPartialValid(t, xdsresource.EndpointsResource, xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}}, testCDSName)
 }

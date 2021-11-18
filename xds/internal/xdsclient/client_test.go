@@ -51,12 +51,14 @@ func Test(t *testing.T) {
 }
 
 const (
-	testXDSServer = "xds-server"
+	testXDSServer          = "xds-server"
+	testXDSServerAuthority = "xds-server-authority"
 
-	testLDSName = "test-lds"
-	testRDSName = "test-rds"
-	testCDSName = "test-cds"
-	testEDSName = "test-eds"
+	testAuthority = "test-authority"
+	testLDSName   = "test-lds"
+	testRDSName   = "test-rds"
+	testCDSName   = "test-cds"
+	testEDSName   = "test-eds"
 
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 	defaultTestTimeout            = 5 * time.Second
@@ -67,21 +69,29 @@ func newStringP(s string) *string {
 	return &s
 }
 
-func clientOpts(balancerName string, overrideWatchExpiryTimeout bool) (*bootstrap.Config, time.Duration) {
-	watchExpiryTimeout := defaultWatchExpiryTimeout
-	if overrideWatchExpiryTimeout {
-		watchExpiryTimeout = defaultTestWatchExpiryTimeout
-	}
+func clientOpts() *bootstrap.Config {
 	return &bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
-			ServerURI: balancerName,
+			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 			NodeProto: xdstestutils.EmptyNodeProtoV2,
 		},
-	}, watchExpiryTimeout
+		Authorities: map[string]*bootstrap.Authority{
+			testAuthority: {
+				XDSServer: &bootstrap.ServerConfig{
+					ServerURI: testXDSServerAuthority,
+					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+					NodeProto: xdstestutils.EmptyNodeProtoV2,
+				},
+			},
+		},
+	}
 }
 
 type testController struct {
+	// config is the config this controller is created with.
+	config *bootstrap.ServerConfig
+
 	done          *grpcsync.Event
 	addWatches    map[xdsresource.ResourceType]*testutils.Channel
 	removeWatches map[xdsresource.ResourceType]*testutils.Channel
@@ -91,14 +101,14 @@ func overrideNewController() (*testutils.Channel, func()) {
 	origNewController := newController
 	ch := testutils.NewChannel()
 	newController = func(config *bootstrap.ServerConfig, pubsub *pubsub.Pubsub, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger) (controllerInterface, error) {
-		ret := newTestController()
+		ret := newTestController(config)
 		ch.Send(ret)
 		return ret, nil
 	}
 	return ch, func() { newController = origNewController }
 }
 
-func newTestController() *testController {
+func newTestController(config *bootstrap.ServerConfig) *testController {
 	addWatches := map[xdsresource.ResourceType]*testutils.Channel{
 		xdsresource.ListenerResource:    testutils.NewChannel(),
 		xdsresource.RouteConfigResource: testutils.NewChannel(),
@@ -112,6 +122,7 @@ func newTestController() *testController {
 		xdsresource.EndpointsResource:   testutils.NewChannel(),
 	}
 	return &testController{
+		config:        config,
 		done:          grpcsync.NewEvent(),
 		addWatches:    addWatches,
 		removeWatches: removeWatches,
@@ -137,22 +148,12 @@ func (c *testController) Close() {
 // TestWatchCallAnotherWatch covers the case where watch() is called inline by a
 // callback. It makes sure it doesn't cause a deadlock.
 func (s) TestWatchCallAnotherWatch(t *testing.T) {
-	apiClientCh, cleanup := overrideNewController()
-	defer cleanup()
-
-	client, err := newWithConfig(clientOpts(testXDSServer, false))
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer client.Close()
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	c, err := apiClientCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for API client to be created: %v", err)
-	}
-	apiClient := c.(*testController)
+	// Start a watch for some resource, so that the controller and update
+	// handlers are built for this authority. The test needs these to make an
+	// inline watch in a callback.
+	client, controller, updateHandler, _, _ := testWatchSetup(ctx, t, xdsresource.ClusterResource, "doesnot-matter", false)
 
 	clusterUpdateCh := testutils.NewChannel()
 	firstTime := true
@@ -161,17 +162,17 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		// Calls another watch inline, to ensure there's deadlock.
 		client.WatchCluster("another-random-name", func(xdsresource.ClusterUpdate, error) {})
 
-		if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); firstTime && err != nil {
+		if _, err := controller.addWatches[xdsresource.ClusterResource].Receive(ctx); firstTime && err != nil {
 			t.Fatalf("want new watch to start, got error %v", err)
 		}
 		firstTime = false
 	})
-	if _, err := apiClient.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
+	if _, err := controller.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	wantUpdate := xdsresource.ClusterUpdate{ClusterName: testEDSName}
-	client.NewClusters(map[string]xdsresource.ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
+	updateHandler.NewClusters(map[string]xdsresource.ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -179,7 +180,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	// The second update needs to be different in the underlying resource proto
 	// for the watch callback to be invoked.
 	wantUpdate2 := xdsresource.ClusterUpdate{ClusterName: testEDSName + "2", Raw: &anypb.Any{}}
-	client.NewClusters(map[string]xdsresource.ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate2}}, xdsresource.UpdateMetadata{})
+	updateHandler.NewClusters(map[string]xdsresource.ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate2}}, xdsresource.UpdateMetadata{})
 	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate2, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -280,6 +281,10 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
+
+	// Call a watch to create the controller.
+	client.WatchCluster("doesnot-matter", func(update xdsresource.ClusterUpdate, err error) {})
+
 	clientImpl := client.clientImpl
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -342,6 +347,10 @@ func (s) TestClientNewSingleton(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client2.Close()
+
+	// Call a watch to create the controller.
+	client2.WatchCluster("abc", func(update xdsresource.ClusterUpdate, err error) {})
+
 	c2, err := apiClientCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)

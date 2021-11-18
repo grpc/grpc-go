@@ -27,31 +27,39 @@ import (
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchListener(serviceName string, cb func(xdsresource.ListenerUpdate, error)) (cancel func()) {
-	first, cancelF := c.pubsub.WatchListener(serviceName, cb)
-	if first {
-		c.controller.AddWatch(xdsresource.ListenerResource, serviceName)
+	n := xdsresource.ParseName(serviceName)
+	name := n.String()
+
+	a, err := c.findAuthority(n)
+	if err != nil {
+		cb(xdsresource.ListenerUpdate{}, err)
+		return func() {}
 	}
+	cancelF := a.watchListener(name, cb)
 	return func() {
-		if cancelF() {
-			c.controller.RemoveWatch(xdsresource.ListenerResource, serviceName)
-		}
+		cancelF()
+		c.unrefAuthority(a)
 	}
 }
 
-// WatchRouteConfig starts a listener watcher for the service..
+// WatchRouteConfig starts a listener watcher for the service.
 //
 // Note that during race (e.g. an xDS response is received while the user is
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchRouteConfig(routeName string, cb func(xdsresource.RouteConfigUpdate, error)) (cancel func()) {
-	first, cancelF := c.pubsub.WatchRouteConfig(routeName, cb)
-	if first {
-		c.controller.AddWatch(xdsresource.RouteConfigResource, routeName)
+	n := xdsresource.ParseName(routeName)
+	name := n.String()
+
+	a, err := c.findAuthority(n)
+	if err != nil {
+		cb(xdsresource.RouteConfigUpdate{}, err)
+		return func() {}
 	}
+	cancelF := a.watchRouteConfig(name, cb)
 	return func() {
-		if cancelF() {
-			c.controller.RemoveWatch(xdsresource.RouteConfigResource, routeName)
-		}
+		cancelF()
+		c.unrefAuthority(a)
 	}
 }
 
@@ -65,14 +73,18 @@ func (c *clientImpl) WatchRouteConfig(routeName string, cb func(xdsresource.Rout
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchCluster(clusterName string, cb func(xdsresource.ClusterUpdate, error)) (cancel func()) {
-	first, cancelF := c.pubsub.WatchCluster(clusterName, cb)
-	if first {
-		c.controller.AddWatch(xdsresource.ClusterResource, clusterName)
+	n := xdsresource.ParseName(clusterName)
+	name := n.String()
+
+	a, err := c.findAuthority(n)
+	if err != nil {
+		cb(xdsresource.ClusterUpdate{}, err)
+		return func() {}
 	}
+	cancelF := a.watchCluster(name, cb)
 	return func() {
-		if cancelF() {
-			c.controller.RemoveWatch(xdsresource.ClusterResource, clusterName)
-		}
+		cancelF()
+		c.unrefAuthority(a)
 	}
 }
 
@@ -85,13 +97,17 @@ func (c *clientImpl) WatchCluster(clusterName string, cb func(xdsresource.Cluste
 // calling cancel()), there's a small window where the callback can be called
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchEndpoints(clusterName string, cb func(xdsresource.EndpointsUpdate, error)) (cancel func()) {
-	first, cancelF := c.pubsub.WatchEndpoints(clusterName, cb)
-	if first {
-		c.controller.AddWatch(xdsresource.EndpointsResource, clusterName)
+	n := xdsresource.ParseName(clusterName)
+	name := n.String()
+
+	a, err := c.findAuthority(n)
+	if err != nil {
+		cb(xdsresource.EndpointsUpdate{}, err)
+		return func() {}
 	}
+	cancelF := a.watchEndpoints(name, cb)
 	return func() {
-		if cancelF() {
-			c.controller.RemoveWatch(xdsresource.EndpointsResource, clusterName)
-		}
+		cancelF()
+		c.unrefAuthority(a)
 	}
 }
