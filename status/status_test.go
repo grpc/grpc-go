@@ -364,6 +364,8 @@ func (s) TestFromContextError(t *testing.T) {
 		{in: context.DeadlineExceeded, want: New(codes.DeadlineExceeded, context.DeadlineExceeded.Error())},
 		{in: context.Canceled, want: New(codes.Canceled, context.Canceled.Error())},
 		{in: errors.New("other"), want: New(codes.Unknown, "other")},
+		{in: fmt.Errorf("wrapped: %w", context.DeadlineExceeded), want: New(codes.DeadlineExceeded, "wrapped: "+context.DeadlineExceeded.Error())},
+		{in: fmt.Errorf("wrapped: %w", context.Canceled), want: New(codes.Canceled, "wrapped: "+context.Canceled.Error())},
 	}
 	for _, tc := range testCases {
 		got := FromContextError(tc.in)
