@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	rlspb "google.golang.org/grpc/balancer/rls/internal/proto/grpc_lookup_v1"
+	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 )
 
 // For gRPC services using RLS, the value of target_type in the
