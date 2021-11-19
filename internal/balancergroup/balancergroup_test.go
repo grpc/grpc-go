@@ -509,3 +509,29 @@ func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func (s) TestBalancerExitIdleOne(t *testing.T) {
+	const balancerName = "stub-balancer-test-balancergroup-exit-idle-one"
+	exitIdleCh := make(chan struct{}, 1)
+	stub.Register(balancerName, stub.BalancerFuncs{
+		ExitIdle: func(*stub.BalancerData) {
+			exitIdleCh <- struct{}{}
+		},
+	})
+	cc := testutils.NewTestClientConn(t)
+	bg := New(cc, balancer.BuildOptions{}, nil, nil)
+	bg.Start()
+	defer bg.Close()
+
+	// Add the stub balancer build above as a child policy.
+	builder := balancer.Get(balancerName)
+	bg.Add(testBalancerIDs[0], builder)
+
+	// Call ExitIdle on the child policy.
+	bg.ExitIdleOne(testBalancerIDs[0])
+	select {
+	case <-time.After(time.Second):
+		t.Fatal("Timeout when waiting for ExitIdle to be invoked on child policy")
+	case <-exitIdleCh:
+	}
+}
