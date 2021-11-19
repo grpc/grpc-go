@@ -37,6 +37,15 @@ var (
 			{Key: "k1", Names: []string{"n1"}},
 			{Key: "k2", Names: []string{"n1"}},
 		},
+		ExtraKeys: &rlspb.GrpcKeyBuilder_ExtraKeys{
+			Host:    "host",
+			Service: "service",
+			Method:  "method",
+		},
+		ConstantKeys: map[string]string{
+			"const-key-1": "const-val-1",
+			"const-key-2": "const-val-2",
+		},
 	}
 	goodKeyBuilder2 = &rlspb.GrpcKeyBuilder{
 		Names: []*rlspb.GrpcKeyBuilder_Name{
@@ -50,13 +59,21 @@ var (
 )
 
 func TestMakeBuilderMap(t *testing.T) {
-	wantBuilderMap1 := map[string]builder{
-		"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}, {key: "k2", names: []string{"n1"}}}},
+	gFooBuilder := builder{
+		headerKeys: []matcher{{key: "k1", names: []string{"n1"}}, {key: "k2", names: []string{"n1"}}},
+		constantKeys: map[string]string{
+			"const-key-1": "const-val-1",
+			"const-key-2": "const-val-2",
+		},
+		hostKey:    "host",
+		serviceKey: "service",
+		methodKey:  "method",
 	}
+	wantBuilderMap1 := map[string]builder{"/gFoo/": gFooBuilder}
 	wantBuilderMap2 := map[string]builder{
-		"/gFoo/":        {matchers: []matcher{{key: "k1", names: []string{"n1"}}, {key: "k2", names: []string{"n1"}}}},
-		"/gBar/method1": {matchers: []matcher{{key: "k1", names: []string{"n1", "n2"}}}},
-		"/gFoobar/":     {matchers: []matcher{{key: "k1", names: []string{"n1", "n2"}}}},
+		"/gFoo/":        gFooBuilder,
+		"/gBar/method1": {headerKeys: []matcher{{key: "k1", names: []string{"n1", "n2"}}}},
+		"/gFoobar/":     {headerKeys: []matcher{{key: "k1", names: []string{"n1", "n2"}}}},
 	}
 
 	tests := []struct {
@@ -91,33 +108,6 @@ func TestMakeBuilderMap(t *testing.T) {
 }
 
 func TestMakeBuilderMapErrors(t *testing.T) {
-	emptyServiceKeyBuilder := &rlspb.GrpcKeyBuilder{
-		Names: []*rlspb.GrpcKeyBuilder_Name{
-			{Service: "bFoo", Method: "method1"},
-			{Service: "bBar"},
-			{Method: "method1"},
-		},
-		Headers: []*rlspb.NameMatcher{{Key: "k1", Names: []string{"n1", "n2"}}},
-	}
-	requiredMatchKeyBuilder := &rlspb.GrpcKeyBuilder{
-		Names:   []*rlspb.GrpcKeyBuilder_Name{{Service: "bFoo", Method: "method1"}},
-		Headers: []*rlspb.NameMatcher{{Key: "k1", Names: []string{"n1", "n2"}, RequiredMatch: true}},
-	}
-	repeatedHeadersKeyBuilder := &rlspb.GrpcKeyBuilder{
-		Names: []*rlspb.GrpcKeyBuilder_Name{
-			{Service: "gBar", Method: "method1"},
-			{Service: "gFoobar"},
-		},
-		Headers: []*rlspb.NameMatcher{
-			{Key: "k1", Names: []string{"n1", "n2"}},
-			{Key: "k1", Names: []string{"n1", "n2"}},
-		},
-	}
-	methodNameWithSlashKeyBuilder := &rlspb.GrpcKeyBuilder{
-		Names:   []*rlspb.GrpcKeyBuilder_Name{{Service: "gBar", Method: "method1/foo"}},
-		Headers: []*rlspb.NameMatcher{{Key: "k1", Names: []string{"n1", "n2"}}},
-	}
-
 	tests := []struct {
 		desc          string
 		cfg           *rlspb.RouteLookupConfig
@@ -138,7 +128,17 @@ func TestMakeBuilderMapErrors(t *testing.T) {
 		{
 			desc: "GrpcKeyBuilder with empty Service field",
 			cfg: &rlspb.RouteLookupConfig{
-				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{emptyServiceKeyBuilder, goodKeyBuilder1},
+				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
+					{
+						Names: []*rlspb.GrpcKeyBuilder_Name{
+							{Service: "bFoo", Method: "method1"},
+							{Service: "bBar"},
+							{Method: "method1"},
+						},
+						Headers: []*rlspb.NameMatcher{{Key: "k1", Names: []string{"n1", "n2"}}},
+					},
+					goodKeyBuilder1,
+				},
 			},
 			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains a Name field with no Service",
 		},
@@ -152,21 +152,96 @@ func TestMakeBuilderMapErrors(t *testing.T) {
 		{
 			desc: "GrpcKeyBuilder with requiredMatch field set",
 			cfg: &rlspb.RouteLookupConfig{
-				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{requiredMatchKeyBuilder, goodKeyBuilder1},
+				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
+					{
+						Names:   []*rlspb.GrpcKeyBuilder_Name{{Service: "bFoo", Method: "method1"}},
+						Headers: []*rlspb.NameMatcher{{Key: "k1", Names: []string{"n1", "n2"}, RequiredMatch: true}},
+					},
+					goodKeyBuilder1,
+				},
 			},
 			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig has required_match field set",
 		},
 		{
 			desc: "GrpcKeyBuilder two headers with same key",
 			cfg: &rlspb.RouteLookupConfig{
-				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{repeatedHeadersKeyBuilder, goodKeyBuilder1},
+				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
+					{
+						Names: []*rlspb.GrpcKeyBuilder_Name{
+							{Service: "gBar", Method: "method1"},
+							{Service: "gFoobar"},
+						},
+						Headers: []*rlspb.NameMatcher{
+							{Key: "k1", Names: []string{"n1", "n2"}},
+							{Key: "k1", Names: []string{"n1", "n2"}},
+						},
+					},
+					goodKeyBuilder1,
+				},
 			},
-			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated Key field in headers",
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key across headers, constant_keys and extra_keys",
+		},
+		{
+			desc: "GrpcKeyBuilder repeated keys across headers and constant_keys",
+			cfg: &rlspb.RouteLookupConfig{
+				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
+					{
+						Names: []*rlspb.GrpcKeyBuilder_Name{
+							{Service: "gBar", Method: "method1"},
+							{Service: "gFoobar"},
+						},
+						Headers:      []*rlspb.NameMatcher{{Key: "k1", Names: []string{"n1", "n2"}}},
+						ConstantKeys: map[string]string{"k1": "v1"},
+					},
+					goodKeyBuilder1,
+				},
+			},
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key across headers, constant_keys and extra_keys",
+		},
+		{
+			desc: "GrpcKeyBuilder repeated keys across headers and extra_keys",
+			cfg: &rlspb.RouteLookupConfig{
+				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
+					{
+						Names: []*rlspb.GrpcKeyBuilder_Name{
+							{Service: "gBar", Method: "method1"},
+							{Service: "gFoobar"},
+						},
+						Headers:   []*rlspb.NameMatcher{{Key: "k1", Names: []string{"n1", "n2"}}},
+						ExtraKeys: &rlspb.GrpcKeyBuilder_ExtraKeys{Method: "k1"},
+					},
+					goodKeyBuilder1,
+				},
+			},
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key across headers, constant_keys and extra_keys",
+		},
+		{
+			desc: "GrpcKeyBuilder repeated keys across constant_keys and extra_keys",
+			cfg: &rlspb.RouteLookupConfig{
+				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
+					{
+						Names: []*rlspb.GrpcKeyBuilder_Name{
+							{Service: "gBar", Method: "method1"},
+							{Service: "gFoobar"},
+						},
+						Headers:      []*rlspb.NameMatcher{{Key: "k1", Names: []string{"n1", "n2"}}},
+						ConstantKeys: map[string]string{"host": "v1"},
+						ExtraKeys:    &rlspb.GrpcKeyBuilder_ExtraKeys{Host: "host"},
+					},
+					goodKeyBuilder1,
+				},
+			},
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key across headers, constant_keys and extra_keys",
 		},
 		{
 			desc: "GrpcKeyBuilder with slash in method name",
 			cfg: &rlspb.RouteLookupConfig{
-				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{methodNameWithSlashKeyBuilder},
+				GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
+					{
+						Names:   []*rlspb.GrpcKeyBuilder_Name{{Service: "gBar", Method: "method1/foo"}},
+						Headers: []*rlspb.NameMatcher{{Key: "k1", Names: []string{"n1", "n2"}}},
+					},
+				},
 			},
 			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains a method with a slash",
 		},
@@ -257,11 +332,22 @@ func TestRLSKey(t *testing.T) {
 			wantKM: KeyMap{Map: map[string]string{"k1": "v1"}, Str: "k1=v1"},
 		},
 		{
-			// Multiple matchers find hits in the provided request headers.
-			desc:   "multipleMatchers",
-			path:   "/gFoo/method1",
-			md:     metadata.Pairs("n2", "v2", "n1", "v1"),
-			wantKM: KeyMap{Map: map[string]string{"k1": "v1", "k2": "v1"}, Str: "k1=v1,k2=v1"},
+			// Multiple headerKeys find hits in the provided request headers.
+			desc: "multipleMatchers",
+			path: "/gFoo/method1",
+			md:   metadata.Pairs("n2", "v2", "n1", "v1"),
+			wantKM: KeyMap{
+				Map: map[string]string{
+					"const-key-1": "const-val-1",
+					"const-key-2": "const-val-2",
+					"host":        "dummy-host",
+					"service":     "/gFoo/",
+					"method":      "method1",
+					"k1":          "v1",
+					"k2":          "v1",
+				},
+				Str: "const-key-1=const-val-1,const-key-2=const-val-2,host=dummy-host,k1=v1,k2=v1,method=method1,service=/gFoo/",
+			},
 		},
 		{
 			// A match is found for a header which is specified multiple times.
@@ -275,7 +361,7 @@ func TestRLSKey(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			if gotKM := bm.RLSKey(test.md, test.path); !cmp.Equal(gotKM, test.wantKM) {
+			if gotKM := bm.RLSKey(test.md, "dummy-host", test.path); !cmp.Equal(gotKM, test.wantKM) {
 				t.Errorf("RLSKey(%+v, %s) = %+v, want %+v", test.md, test.path, gotKM, test.wantKM)
 			}
 		})
@@ -351,57 +437,57 @@ func TestBuilderMapEqual(t *testing.T) {
 		{
 			desc:      "nil and non-nil builder maps",
 			a:         nil,
-			b:         map[string]builder{"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}}},
+			b:         map[string]builder{"/gFoo/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}}},
 			wantEqual: false,
 		},
 		{
 			desc:      "empty and non-empty builder maps",
 			a:         make(map[string]builder),
-			b:         map[string]builder{"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}}},
+			b:         map[string]builder{"/gFoo/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}}},
 			wantEqual: false,
 		},
 		{
 			desc: "different number of map keys",
 			a: map[string]builder{
-				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
-				"/gBar/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gFoo/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gBar/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}},
 			},
 			b: map[string]builder{
-				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gFoo/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}},
 			},
 			wantEqual: false,
 		},
 		{
 			desc: "different map keys",
 			a: map[string]builder{
-				"/gBar/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gBar/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}},
 			},
 			b: map[string]builder{
-				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gFoo/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}},
 			},
 			wantEqual: false,
 		},
 		{
 			desc: "equal keys different values",
 			a: map[string]builder{
-				"/gBar/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
-				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1", "n2"}}}},
+				"/gBar/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gFoo/": {headerKeys: []matcher{{key: "k1", names: []string{"n1", "n2"}}}},
 			},
 			b: map[string]builder{
-				"/gBar/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
-				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gBar/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gFoo/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}},
 			},
 			wantEqual: false,
 		},
 		{
 			desc: "good match",
 			a: map[string]builder{
-				"/gBar/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
-				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gBar/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gFoo/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}},
 			},
 			b: map[string]builder{
-				"/gBar/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
-				"/gFoo/": {matchers: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gBar/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}},
+				"/gFoo/": {headerKeys: []matcher{{key: "k1", names: []string{"n1"}}}},
 			},
 			wantEqual: true,
 		},
@@ -425,44 +511,80 @@ func TestBuilderEqual(t *testing.T) {
 	}{
 		{
 			desc:      "nil builders",
-			a:         builder{matchers: nil},
-			b:         builder{matchers: nil},
+			a:         builder{headerKeys: nil},
+			b:         builder{headerKeys: nil},
 			wantEqual: true,
 		},
 		{
 			desc:      "empty builders",
-			a:         builder{matchers: []matcher{}},
-			b:         builder{matchers: []matcher{}},
+			a:         builder{headerKeys: []matcher{}},
+			b:         builder{headerKeys: []matcher{}},
 			wantEqual: true,
 		},
 		{
-			desc:      "nil and non-nil builders",
-			a:         builder{matchers: nil},
-			b:         builder{matchers: []matcher{}},
-			wantEqual: false,
-		},
-		{
 			desc:      "empty and non-empty builders",
-			a:         builder{matchers: []matcher{}},
-			b:         builder{matchers: []matcher{{key: "foo"}}},
+			a:         builder{headerKeys: []matcher{}},
+			b:         builder{headerKeys: []matcher{{key: "foo"}}},
 			wantEqual: false,
 		},
 		{
-			desc:      "different number of matchers",
-			a:         builder{matchers: []matcher{{key: "foo"}, {key: "bar"}}},
-			b:         builder{matchers: []matcher{{key: "foo"}}},
+			desc:      "different number of headerKeys",
+			a:         builder{headerKeys: []matcher{{key: "foo"}, {key: "bar"}}},
+			b:         builder{headerKeys: []matcher{{key: "foo"}}},
 			wantEqual: false,
 		},
 		{
-			desc:      "equal number but differing matchers",
-			a:         builder{matchers: []matcher{{key: "bar"}}},
-			b:         builder{matchers: []matcher{{key: "foo"}}},
+			desc:      "equal number but differing headerKeys",
+			a:         builder{headerKeys: []matcher{{key: "bar"}}},
+			b:         builder{headerKeys: []matcher{{key: "foo"}}},
 			wantEqual: false,
 		},
 		{
-			desc:      "good match",
-			a:         builder{matchers: []matcher{{key: "foo"}}},
-			b:         builder{matchers: []matcher{{key: "foo"}}},
+			desc:      "different number of constantKeys",
+			a:         builder{constantKeys: map[string]string{"k1": "v1"}},
+			b:         builder{constantKeys: map[string]string{"k1": "v1", "k2": "v2"}},
+			wantEqual: false,
+		},
+		{
+			desc:      "equal number but differing constantKeys",
+			a:         builder{constantKeys: map[string]string{"k1": "v1"}},
+			b:         builder{constantKeys: map[string]string{"k2": "v2"}},
+			wantEqual: false,
+		},
+		{
+			desc:      "different hostKey",
+			a:         builder{hostKey: "host1"},
+			b:         builder{hostKey: "host2"},
+			wantEqual: false,
+		},
+		{
+			desc:      "different serviceKey",
+			a:         builder{hostKey: "service1"},
+			b:         builder{hostKey: "service2"},
+			wantEqual: false,
+		},
+		{
+			desc:      "different methodKey",
+			a:         builder{hostKey: "method1"},
+			b:         builder{hostKey: "method2"},
+			wantEqual: false,
+		},
+		{
+			desc: "equal",
+			a: builder{
+				headerKeys:   []matcher{{key: "foo"}},
+				constantKeys: map[string]string{"k1": "v1"},
+				hostKey:      "host",
+				serviceKey:   "/service/",
+				methodKey:    "method",
+			},
+			b: builder{
+				headerKeys:   []matcher{{key: "foo"}},
+				constantKeys: map[string]string{"k1": "v1"},
+				hostKey:      "host",
+				serviceKey:   "/service/",
+				methodKey:    "method",
+			},
 			wantEqual: true,
 		},
 	}
