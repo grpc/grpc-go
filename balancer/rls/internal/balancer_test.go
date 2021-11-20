@@ -33,7 +33,10 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
-const defaultTestTimeout = 1 * time.Second
+const (
+	defaultTestTimeout      = 5 * time.Second
+	defaultTestShortTimeout = 100 * time.Millisecond
+)
 
 type s struct {
 	grpctest.Tester
