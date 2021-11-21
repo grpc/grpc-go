@@ -1103,20 +1103,38 @@ func chainUnaryServerInterceptors(s *Server) {
 }
 
 func chainUnaryInterceptors(interceptors []UnaryServerInterceptor) UnaryServerInterceptor {
+	// the struct ensures the variables are allocated together, rather than separately, since we
+	// know they should be garbage collected together. This, together with the sync.Pool, saves
+	// 2 allocation and decreases time/call by about 25% on the microbenchmark.
+	type state struct {
+		i            int
+		next         UnaryHandler
+		info         *UnaryServerInfo
+		handler      UnaryHandler
+		interceptors []UnaryServerInterceptor
+	}
+	var statePool = sync.Pool{
+		New: func() interface{} {
+			return &state{}
+		},
+	}
+
 	return func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (interface{}, error) {
-		// the struct ensures the variables are allocated together, rather than separately, since we
-		// know they should be garbage collected together. This saves 1 allocation and decreases
-		// time/call by about 10% on the microbenchmark.
-		var state struct {
-			i    int
-			next UnaryHandler
-		}
+		state := statePool.Get().(*state)
+		defer statePool.Put(state)
+
+		state.i = 0
+		state.info = info
+		state.handler = handler
+		state.interceptors = interceptors
 		state.next = func(ctx context.Context, req interface{}) (interface{}, error) {
-			if state.i == len(interceptors)-1 {
-				return interceptors[state.i](ctx, req, info, handler)
+			interceptor := state.interceptors[state.i]
+			next := state.next
+			if state.i == len(state.interceptors)-1 {
+				next = state.handler
 			}
 			state.i++
-			return interceptors[state.i-1](ctx, req, info, state.next)
+			return interceptor(ctx, req, state.info, next)
 		}
 		return state.next(ctx, req)
 	}
@@ -1393,20 +1411,38 @@ func chainStreamServerInterceptors(s *Server) {
 }
 
 func chainStreamInterceptors(interceptors []StreamServerInterceptor) StreamServerInterceptor {
+	// the struct ensures the variables are allocated together, rather than separately, since we
+	// know they should be garbage collected together. This, together with the sync.Pool, saves
+	// 2 allocation and decreases time/call by about 25% on the microbenchmark.
+	type state struct {
+		i            int
+		next         StreamHandler
+		info         *StreamServerInfo
+		handler      StreamHandler
+		interceptors []StreamServerInterceptor
+	}
+	var statePool = sync.Pool{
+		New: func() interface{} {
+			return &state{}
+		},
+	}
+
 	return func(srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error {
-		// the struct ensures the variables are allocated together, rather than separately, since we
-		// know they should be garbage collected together. This saves 1 allocation and decreases
-		// time/call by about 10% on the microbenchmark.
-		var state struct {
-			i    int
-			next StreamHandler
-		}
+		state := statePool.Get().(*state)
+		defer statePool.Put(state)
+
+		state.i = 0
+		state.info = info
+		state.handler = handler
+		state.interceptors = interceptors
 		state.next = func(srv interface{}, ss ServerStream) error {
-			if state.i == len(interceptors)-1 {
-				return interceptors[state.i](srv, ss, info, handler)
+			interceptor := state.interceptors[state.i]
+			next := state.next
+			if state.i == len(state.interceptors)-1 {
+				next = state.handler
 			}
 			state.i++
-			return interceptors[state.i-1](srv, ss, info, state.next)
+			return interceptor(srv, ss, state.info, next)
 		}
 		return state.next(srv, ss)
 	}
