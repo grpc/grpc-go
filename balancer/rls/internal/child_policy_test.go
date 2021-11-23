@@ -150,12 +150,6 @@ func (s) TestChildPolicyWrapperReferenceCounting(t *testing.T) {
 	}
 	cpw := newChildPolicyWrapper(args)
 
-	// Verify that the child policy is not added to the balancer group yet.
-	verifyChildPolicyIsNotAddedToGroup(t, fakeBG)
-
-	// Acquire a reference to the child policy wrapper.
-	cpw.acquireRef()
-
 	// Verify that the child policy is added to the balancer group.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -214,9 +208,7 @@ func (s) TestChildPolicyConfigUpdates(t *testing.T) {
 	}
 	cpw := newChildPolicyWrapper(args)
 
-	// Acquire a reference to the child policy wrapper and verify that it is
-	// added to the balancer group.
-	cpw.acquireRef()
+	// Verify that the child policy is added to the balancer group.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	childPolicyBuilder := balancer.Get(childPolicyName1)
@@ -288,10 +280,7 @@ func (s) TestChildPolicyBadConfigs(t *testing.T) {
 		bg:            fakeBG,
 	}
 	cpw := newChildPolicyWrapper(args)
-
-	// Acquire a reference to the child policy wrapper.
-	cpw.acquireRef()
-	if state := cpw.stateToAggregate; state != connectivity.TransientFailure {
+	if state := cpw.state.ConnectivityState; state != connectivity.TransientFailure {
 		t.Fatalf("Child policy wrapper in state %s, want %s", state, connectivity.TransientFailure)
 	}
 }

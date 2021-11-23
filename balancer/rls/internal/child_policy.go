@@ -45,7 +45,7 @@ import (
 // The child policy wrapper also caches the connectivity state and most recent
 // picker from the child policy. Once the child policy wrapper reports
 // TRANSIENT_FAILURE, it will continue reporting that state until it goes READY;
-// transitions from TRANSIENT_FAILURE to CONNECTING are be ignored.
+// transitions from TRANSIENT_FAILURE to CONNECTING are ignored.
 //
 // Whenever a child policy wrapper changes its connectivity state, the LB policy
 // returns a new picker to the channel, since the channel may need to re-process
@@ -56,16 +56,11 @@ type childPolicyWrapper struct {
 	bg     balancerGroup // BalancerGroup to which this child policy belongs.
 	logger *internalgrpclog.PrefixLogger
 
-	target        string                     // RLS target corresponding to this child policy.
-	targetField   string                     // Child policy config field to plug in the above target.
-	config        map[string]json.RawMessage // Child policy config.
-	builder       balancer.Builder           // Child policy builder to be passed to the balancer group.
-	parser        balancer.ConfigParser      // Child policy config parser for building the config.
-	resolverState resolver.State             // Resolver state as reported to the RLS LB policy.
+	target  string           // RLS target corresponding to this child policy.
+	builder balancer.Builder // Child policy builder to be passed to the balancer group.
 
-	refCnt           int                // Reference count.
-	state            balancer.State     // Balancer state reported by the child policy.
-	stateToAggregate connectivity.State // Child policy state reported for aggregation.
+	refCnt int            // Reference count.
+	state  balancer.State // Balancer state reported by the child policy.
 }
 
 // childPolicyWrapperArgs is simply a collection of the arguments to be passed
@@ -80,35 +75,29 @@ type childPolicyWrapperArgs struct {
 }
 
 // newChildPolicyWrapper creates a new child policy wrapper for the given
-// arguments. The wrapper is initialized with no references and starts off in
-// CONNECTING state.
-//
-// It is important to note that the child policy is not added to the balancer
-// group at this point. It is added only when the reference to the child policy
-// is taken.
+// arguments. The following happen:
+// - wrapper is initialized with one reference
+// - wrapper starts off in CONNECTING state
+// - child policy is added to the balancer
 func newChildPolicyWrapper(args childPolicyWrapperArgs) *childPolicyWrapper {
-	// Config parsing ensures that the child policy is registered.
-	builder := balancer.Get(args.policyName)
-	parser, _ := builder.(balancer.ConfigParser)
-
 	c := &childPolicyWrapper{
-		target:        args.target,
-		targetField:   args.targetField,
-		config:        args.config,
-		builder:       builder,
-		parser:        parser,
-		resolverState: args.resolverState,
-		bg:            args.bg,
-
-		refCnt: 0,
+		target:  args.target,
+		builder: balancer.Get(args.policyName), // Config parsing ensures that the child policy is registered.
+		bg:      args.bg,
+		refCnt:  1,
 		state: balancer.State{
 			ConnectivityState: connectivity.Connecting,
 			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
 		},
-		stateToAggregate: connectivity.Connecting,
 	}
 	c.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-child-policy-wrapper %s %p] ", c.target, c))
 	c.logger.Infof("Created")
+
+	c.bg.Add(c.target, c.builder)
+	c.logger.Infof("Added to balancergroup")
+	if err := c.buildAndPushChildPolicyConfigs(args.config, args.targetField, args.resolverState); err != nil {
+		c.lamify(err)
+	}
 	return c
 }
 
@@ -119,60 +108,45 @@ func (c *childPolicyWrapper) handleNewConfigs(args childPolicyWrapperArgs) {
 		// from the balancer group and add a new one. The balancer group takes
 		// care of closing the old one in this case.
 		c.builder = balancer.Get(args.policyName)
-		c.parser, _ = c.builder.(balancer.ConfigParser)
 		c.bg.Remove(c.target)
 		c.bg.Add(c.target, c.builder)
 	}
-	c.targetField = args.targetField
-	c.config = args.config
-	c.resolverState = args.resolverState
-	c.buildAndPushChildPolicyConfigs()
+	if err := c.buildAndPushChildPolicyConfigs(args.config, args.targetField, args.resolverState); err != nil {
+		c.lamify(err)
+	}
 }
 
 // buildAndPushChildPolicyConfigs builds the child policy configuration by
 // adding the `targetField` to the provided configuration with the value set to
-// `target`. It then pushes the new configuration to the child policy through
+// `c.target`. It then pushes the new configuration to the child policy through
 // the balancer group.
-func (c *childPolicyWrapper) buildAndPushChildPolicyConfigs() (err error) {
-	defer func() {
-		if err != nil {
-			c.lamify(err)
-		}
-	}()
-
+func (c *childPolicyWrapper) buildAndPushChildPolicyConfigs(config map[string]json.RawMessage, targetField string, state resolver.State) error {
 	jsonTarget, err := json.Marshal(c.target)
 	if err != nil {
 		return fmt.Errorf("failed to marshal child policy target %q: %v", c.target, err)
 	}
-	c.config[c.targetField] = jsonTarget
-	jsonCfg, err := json.Marshal(c.config)
+	config[targetField] = jsonTarget
+	jsonCfg, err := json.Marshal(config)
 	if err != nil {
-		return fmt.Errorf("failed to marshal child policy config %+v: %v", c.config, err)
+		return fmt.Errorf("failed to marshal child policy config %+v: %v", config, err)
 	}
-	parsedCfg, err := c.parser.ParseConfig(jsonCfg)
+	parser, _ := c.builder.(balancer.ConfigParser)
+	parsedCfg, err := parser.ParseConfig(jsonCfg)
 	if err != nil {
 		return fmt.Errorf("childPolicy config parsing failed: %v", err)
 	}
 
-	state := balancer.ClientConnState{ResolverState: c.resolverState, BalancerConfig: parsedCfg}
-	c.logger.Infof("Pushing new state to child policy: %+v", state)
-	if err := c.bg.UpdateClientConnState(c.target, state); err != nil {
-		c.logger.Warningf("UpdateClientConnState(%q, %+v) failed : %v", c.target, state, err)
+	ccs := balancer.ClientConnState{ResolverState: state, BalancerConfig: parsedCfg}
+	c.logger.Infof("Pushing new state to child policy: %+v", ccs)
+	if err := c.bg.UpdateClientConnState(c.target, ccs); err != nil {
+		c.logger.Warningf("UpdateClientConnState(%q, %+v) failed : %v", c.target, ccs, err)
 	}
 	return nil
 }
 
-// acquireRef takes a reference to the child policy wrapper. It this is the
-// first reference to the wrapper, the underlying child policy is added to the
-// balancer group, and configs are pushed to it.
+// acquireRef takes a reference to the child policy wrapper.
 func (c *childPolicyWrapper) acquireRef() {
 	c.refCnt++
-	if c.refCnt != 1 {
-		return
-	}
-	c.bg.Add(c.target, c.builder)
-	c.logger.Infof("Added to balancergroup")
-	c.buildAndPushChildPolicyConfigs()
 }
 
 // releaseRef releases a reference to the child policy wrapper. If this was the
@@ -197,7 +171,6 @@ func (c *childPolicyWrapper) lamify(err error) {
 		ConnectivityState: connectivity.TransientFailure,
 		Picker:            &lamePicker{err: err},
 	}
-	c.stateToAggregate = connectivity.TransientFailure
 }
 
 type lamePicker struct {

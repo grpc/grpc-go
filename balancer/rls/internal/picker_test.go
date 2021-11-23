@@ -341,7 +341,7 @@ func TestPick_DataCacheMiss_PendingCacheHit(t *testing.T) {
 			}
 
 			// Make sure that no RLS request was sent out.
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 			defer cancel()
 			if _, err := rlsCh.Receive(ctx); err != context.DeadlineExceeded {
 				t.Fatalf("RLS request sent out when pending entry exists")
@@ -596,7 +596,7 @@ func TestPick_DataCacheHit_PendingCacheHit(t *testing.T) {
 				t.Fatalf("Pick() returned error {%v}, want {%v}", err, test.wantErr)
 			}
 			// Make sure that no RLS request was sent out.
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 			defer cancel()
 			if _, err := rlsCh.Receive(ctx); err != context.DeadlineExceeded {
 				t.Fatalf("RLS request sent out when pending entry exists")
