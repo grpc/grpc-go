@@ -78,14 +78,14 @@ func (h *Hashring) Add(member Member) error {
 		nil,
 	}
 
-	// virtualNodeBuffer is a 9-byte array, where 8 bytes are the hash value of the
-	// member key, and the final byte is an offset of the virtual node itself. This
-	// value is then hashed to get the final hash value of the virtual node.
-	virtualNodeBuffer := make([]byte, 9)
+	// virtualNodeBuffer is a 10-byte array, where 8 bytes are the hash value of
+	// the member key, and the final 2 bytes are an offset of the virtual node
+	// itself. This value is then hashed to get the final hash value of the virtual node.
+	virtualNodeBuffer := make([]byte, 10)
 	binary.LittleEndian.PutUint64(virtualNodeBuffer, nodeHash)
 
 	for i := uint16(0); i < h.replicationFactor; i++ {
-		virtualNodeBuffer[8] = byte(i)
+		binary.LittleEndian.PutUint16(virtualNodeBuffer[8:], i)
 		virtualNodeHash := h.hasher(virtualNodeBuffer)
 
 		virtualNode := virtualNode{
