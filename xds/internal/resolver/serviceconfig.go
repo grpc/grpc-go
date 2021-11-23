@@ -86,22 +86,17 @@ func (r *xdsResolver) pruneActiveClusters() {
 // serviceConfigJSON produces a service config in JSON format representing all
 // the clusters referenced in activeClusters.  This includes clusters with zero
 // references, so they must be pruned first.
-func serviceConfigJSON(activeClusters map[string]*clusterInfo, clusterSpecifierPlugins map[string]clusterspecifier.BalancerConfig) ([]byte, error) {
+func serviceConfigJSON(activeClusters map[string]*clusterInfo) ([]byte, error) {
 	// Generate children (all entries in activeClusters).
 	children := make(map[string]xdsChildConfig)
-	for cluster := range activeClusters {
-		// Look into cluster specifier plugins, which hasn't had any prefix attached to it's cluster specifier plugin names,
-		// to determine the LB Config if the cluster is a CSP.
-		cspCfg, ok := clusterSpecifierPlugins[strings.TrimPrefix(cluster, clusterSpecifierPluginPrefix)]
-		if ok {
+	for cluster, ci := range activeClusters {
+		if ci.cspCfg != nil {
 			children[cluster] = xdsChildConfig{
-				ChildPolicy: balancerConfig(cspCfg),
+				ChildPolicy: balancerConfig(ci.cspCfg),
 			}
 		} else {
-			// Will now have "cluster:" prefixing the cluster name...CDS policy
-			// will now have to trim this off when it queries CDS.
 			children[cluster] = xdsChildConfig{
-				ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: cluster}),
+				ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: strings.TrimPrefix(cluster, clusterPrefix)}),
 			}
 		}
 	}
@@ -148,15 +143,11 @@ func (r route) String() string {
 }
 
 type configSelector struct {
-	r                       *xdsResolver
-	virtualHost             virtualHost
-	routes                  []route
-	clusters                map[string]*clusterInfo
-	httpFilterConfig        []xdsresource.HTTPFilter
-	clusterSpecifierPlugins map[string]clusterspecifier.BalancerConfig
-	// Will be used for:
-	// a. serviceConfigJSON (this will build out the service config...but you still need to keep ref
-	// counts in active clusters), this will be used to get the LB Configurations.
+	r                *xdsResolver
+	virtualHost      virtualHost
+	routes           []route
+	clusters         map[string]*clusterInfo
+	httpFilterConfig []xdsresource.HTTPFilter
 }
 
 var errNoMatchedRouteFound = status.Errorf(codes.Unavailable, "no matched route was found")
@@ -366,10 +357,9 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 			httpFilterConfigOverride: su.virtualHost.HTTPFilterConfigOverride,
 			retryConfig:              su.virtualHost.RetryConfig,
 		},
-		routes:                  make([]route, len(su.virtualHost.Routes)),
-		clusters:                make(map[string]*clusterInfo),
-		clusterSpecifierPlugins: su.clusterSpecifierPlugins,
-		httpFilterConfig:        su.ldsConfig.httpFilterConfig,
+		routes:           make([]route, len(su.virtualHost.Routes)),
+		clusters:         make(map[string]*clusterInfo),
+		httpFilterConfig: su.ldsConfig.httpFilterConfig,
 	}
 
 	for i, rt := range su.virtualHost.Routes {
@@ -380,6 +370,7 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 				name: clusterName,
 			}, 1)
 			r.initializeCluster(clusterName, cs)
+			r.activeClusters[clusterName].cspCfg = su.clusterSpecifierPlugins[rt.ClusterSpecifierPlugin]
 		} else {
 			for cluster, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + cluster
@@ -433,6 +424,9 @@ func (r *xdsResolver) initializeCluster(clusterName string, cs *configSelector) 
 type clusterInfo struct {
 	// number of references to this cluster; accessed atomically
 	refCount int32
+	// cspCfg is the configuration for this cluster if the cluster is a cluster
+	// specifier plugin. This will be nil otherwise.
+	cspCfg clusterspecifier.BalancerConfig
 }
 
 type interceptorList struct {

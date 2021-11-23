@@ -21,7 +21,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
@@ -43,8 +42,7 @@ import (
 )
 
 const (
-	cdsName       = "cds_experimental"
-	clusterPrefix = "cluster:"
+	cdsName = "cds_experimental"
 )
 
 var (
@@ -181,7 +179,7 @@ func (b *cdsBalancer) handleClientConnUpdate(update *ccUpdate) {
 		b.handleErrorFromUpdate(err, true)
 		return
 	}
-	b.clusterHandler.updateRootCluster(strings.TrimPrefix(update.clusterName, clusterPrefix))
+	b.clusterHandler.updateRootCluster(update.clusterName)
 }
 
 // handleSecurityConfig processes the security configuration received from the
