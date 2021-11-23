@@ -1446,11 +1446,20 @@ func (ss *serverStream) SetHeader(md metadata.MD) error {
 	if md.Len() == 0 {
 		return nil
 	}
+	err := md.Validate()
+	if err != nil {
+		return err
+	}
 	return ss.s.SetHeader(md)
 }
 
 func (ss *serverStream) SendHeader(md metadata.MD) error {
-	err := ss.t.WriteHeader(ss.s, md)
+	err := md.Validate()
+	if err != nil {
+		return err
+	}
+
+	err = ss.t.WriteHeader(ss.s, md)
 	if ss.binlog != nil && !ss.serverHeaderBinlogged {
 		h, _ := ss.s.Header()
 		ss.binlog.Log(&binarylog.ServerHeader{
@@ -1463,6 +1472,9 @@ func (ss *serverStream) SendHeader(md metadata.MD) error {
 
 func (ss *serverStream) SetTrailer(md metadata.MD) {
 	if md.Len() == 0 {
+		return
+	}
+	if md.Validate() != nil {
 		return
 	}
 	ss.s.SetTrailer(md)
