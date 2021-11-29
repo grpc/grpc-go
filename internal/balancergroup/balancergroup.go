@@ -506,3 +506,13 @@ func (bg *BalancerGroup) ExitIdle() {
 	}
 	bg.outgoingMu.Unlock()
 }
+
+// ExitIdleOne instructs the sub-balancer `id` to exit IDLE state, if
+// appropriate and possible.
+func (bg *BalancerGroup) ExitIdleOne(id string) {
+	bg.outgoingMu.Lock()
+	if config := bg.idToBalancerConfig[id]; config != nil {
+		config.exitIdle()
+	}
+	bg.outgoingMu.Unlock()
+}
