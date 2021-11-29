@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	rlsgrpc "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 )
 
@@ -43,7 +44,7 @@ const grpcTargetType = "grpc"
 // throttling and asks this client to make an RPC call only after checking with
 // the throttler.
 type rlsClient struct {
-	stub rlspb.RouteLookupServiceClient
+	stub rlsgrpc.RouteLookupServiceClient
 	// origDialTarget is the original dial target of the user and sent in each
 	// RouteLookup RPC made to the RLS server.
 	origDialTarget string
@@ -54,7 +55,7 @@ type rlsClient struct {
 
 func newRLSClient(cc *grpc.ClientConn, dialTarget string, rpcTimeout time.Duration) *rlsClient {
 	return &rlsClient{
-		stub:           rlspb.NewRouteLookupServiceClient(cc),
+		stub:           rlsgrpc.NewRouteLookupServiceClient(cc),
 		origDialTarget: dialTarget,
 		rpcTimeout:     rpcTimeout,
 	}
