@@ -110,11 +110,7 @@ func (sbc *subBalancerWrapper) exitIdle() {
 		ei.ExitIdle()
 		return
 	}
-	for sc, b := range sbc.group.scToSubBalancer {
-		if b == sbc {
-			sc.Connect()
-		}
-	}
+	sbc.group.connect(sbc)
 }
 
 func (sbc *subBalancerWrapper) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
@@ -378,6 +374,17 @@ func (bg *BalancerGroup) cleanupSubConns(config *subBalancerWrapper) {
 		if b == config {
 			bg.cc.RemoveSubConn(sc)
 			delete(bg.scToSubBalancer, sc)
+		}
+	}
+	bg.incomingMu.Unlock()
+}
+
+// connect attempts to connect to all subConns belonging to sb.
+func (bg *BalancerGroup) connect(sb *subBalancerWrapper) {
+	bg.incomingMu.Lock()
+	for sc, b := range bg.scToSubBalancer {
+		if b == sb {
+			sc.Connect()
 		}
 	}
 	bg.incomingMu.Unlock()
