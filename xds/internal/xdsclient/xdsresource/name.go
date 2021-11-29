@@ -26,6 +26,13 @@ import (
 )
 
 // Name contains the parsed component of an xDS resource name.
+//
+// An xDS resource name is in the format of
+// xdstp://[{authority}]/{resource type}/{id/*}?{context parameters}{#processing directive,*}
+//
+// See
+// https://github.com/cncf/xds/blob/main/proposals/TP1-xds-transport-next.md#uri-based-xds-resource-names
+// for details, and examples.
 type Name struct {
 	Scheme    string
 	Authority string
@@ -33,6 +40,8 @@ type Name struct {
 	ID        string
 
 	ContextParams map[string]string
+
+	processingDirective string
 }
 
 // ParseName splits the name and returns a struct representation of the Name.
@@ -76,8 +85,9 @@ func ParseName(name string) *Name {
 		}
 	}
 	// TODO: processing directive (the part comes after "#" in the URL, stored
-	// in parsed.RawFragment) is not processed. Add support for that when it's
-	// needed.
+	// in parsed.RawFragment) is kept but not processed. Add support for that
+	// when it's needed.
+	ret.processingDirective = parsed.RawFragment
 	return ret
 }
 
@@ -106,10 +116,11 @@ func (n *Name) String() string {
 	}
 
 	tempURL := &url.URL{
-		Scheme:   n.Scheme,
-		Host:     n.Authority,
-		Path:     path,
-		RawQuery: rawQuery,
+		Scheme:      n.Scheme,
+		Host:        n.Authority,
+		Path:        path,
+		RawQuery:    rawQuery,
+		RawFragment: n.processingDirective,
 	}
 	return tempURL.String()
 }

@@ -101,6 +101,6 @@ func TestNameStringCtxParamsOrder(t *testing.T) {
 	bParsed := ParseName(b).String()
 
 	if aParsed != bParsed {
-		t.Fatalf("aParsed.String() = %q, bParsed.String() =%q, want them to be the same", aParsed, bParsed)
+		t.Fatalf("aParsed.String() = %q, bParsed.String() = %q, want them to be the same", aParsed, bParsed)
 	}
 }
