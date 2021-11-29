@@ -179,7 +179,7 @@ func TestMakeBuilderMapErrors(t *testing.T) {
 					goodKeyBuilder1,
 				},
 			},
-			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key across headers, constant_keys and extra_keys",
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key \"k1\" across headers, constant_keys and extra_keys",
 		},
 		{
 			desc: "GrpcKeyBuilder repeated keys across headers and constant_keys",
@@ -196,7 +196,7 @@ func TestMakeBuilderMapErrors(t *testing.T) {
 					goodKeyBuilder1,
 				},
 			},
-			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key across headers, constant_keys and extra_keys",
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key \"k1\" across headers, constant_keys and extra_keys",
 		},
 		{
 			desc: "GrpcKeyBuilder repeated keys across headers and extra_keys",
@@ -213,7 +213,7 @@ func TestMakeBuilderMapErrors(t *testing.T) {
 					goodKeyBuilder1,
 				},
 			},
-			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key across headers, constant_keys and extra_keys",
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key \"k1\" in extra_keys from constant_keys or headers",
 		},
 		{
 			desc: "GrpcKeyBuilder repeated keys across constant_keys and extra_keys",
@@ -231,7 +231,7 @@ func TestMakeBuilderMapErrors(t *testing.T) {
 					goodKeyBuilder1,
 				},
 			},
-			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key across headers, constant_keys and extra_keys",
+			wantErrPrefix: "rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key \"host\" in extra_keys from constant_keys or headers",
 		},
 		{
 			desc: "GrpcKeyBuilder with slash in method name",

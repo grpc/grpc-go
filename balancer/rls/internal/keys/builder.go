@@ -58,13 +58,19 @@ func MakeBuilderMap(cfg *rlspb.RouteLookupConfig) (BuilderMap, error) {
 			}
 			key := h.GetKey()
 			if seenKeys[key] {
-				return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key across headers, constant_keys and extra_keys {%+v}", kbs)
+				return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key %q across headers, constant_keys and extra_keys {%+v}", key, kbs)
 			}
 			seenKeys[key] = true
 			matchers = append(matchers, matcher{key: h.GetKey(), names: h.GetNames()})
 		}
-		if seenKeys[kb.GetExtraKeys().GetHost()] || seenKeys[kb.GetExtraKeys().GetService()] || seenKeys[kb.GetExtraKeys().GetMethod()] {
-			return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key across headers, constant_keys and extra_keys {%+v}", kbs)
+		if seenKeys[kb.GetExtraKeys().GetHost()] {
+			return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key %q in extra_keys from constant_keys or headers {%+v}", kb.GetExtraKeys().GetHost(), kbs)
+		}
+		if seenKeys[kb.GetExtraKeys().GetService()] {
+			return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key %q in extra_keys from constant_keys or headers {%+v}", kb.GetExtraKeys().GetService(), kbs)
+		}
+		if seenKeys[kb.GetExtraKeys().GetMethod()] {
+			return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key %q in extra_keys from constant_keys or headers {%+v}", kb.GetExtraKeys().GetMethod(), kbs)
 		}
 		b := builder{
 			headerKeys:   matchers,
@@ -166,7 +172,7 @@ func (bm BuilderMap) Equal(am BuilderMap) bool {
 type builder struct {
 	headerKeys   []matcher
 	constantKeys map[string]string
-	// The following keys mirror corresponding field in `extra_keys`.
+	// The following keys mirror corresponding fields in `extra_keys`.
 	hostKey    string
 	serviceKey string
 	methodKey  string
@@ -227,7 +233,7 @@ func (m matcher) Equal(a matcher) bool {
 
 func (b builder) buildHeaderKeys(md metadata.MD) map[string]string {
 	kvMap := make(map[string]string)
-	if md == nil {
+	if len(md) == 0 {
 		return kvMap
 	}
 	for _, m := range b.headerKeys {
