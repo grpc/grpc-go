@@ -57,6 +57,10 @@ func ParseName(name string) *Name {
 		// Return "" scheme to use the default authority for the server.
 		return &Name{ID: name}
 	}
+	if !strings.Contains(name, "://") {
+		// Only the long form URL, with ://, is valid.
+		return &Name{ID: name}
+	}
 	parsed, err := url.Parse(name)
 	if err != nil {
 		return &Name{ID: name}
