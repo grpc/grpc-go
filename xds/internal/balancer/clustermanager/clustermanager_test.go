@@ -559,12 +559,12 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if v, err := ccsCh.Receive(ctx); err != nil {
-		if v == nil {
-			t.Fatalf("received nil")
-		}
-		err2 := v.(error)
-		t.Fatal(err2)
+	v, err := ccsCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timed out waiting for UpdateClientConnState result: %v", err)
+	}
+	if v != nil {
+		t.Fatal(v)
 	}
 }
 
