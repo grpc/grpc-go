@@ -13,7 +13,13 @@ shopt -s extglob
 branch="${branch//[[:space:]]}"
 branch="${branch##remotes/origin/}"
 shopt -u extglob
-go build
+# Install go >= 1.14 for the new features, e.g. errors.Is()
+sudo apt-get install -y wget
+wget https://dl.google.com/go/go1.16.5.linux-amd64.tar.gz
+sudo tar -C /usr/local -xvf go1.16.5.linux-amd64.tar.gz
+sudo cp /usr/local/go/bin/go /usr/bin/go
+# Retry go build on error, for at most 3 times
+for i in 1 2 3; do go build && break || sleep 5; done
 popd
 
 git clone -b "${branch}" --single-branch --depth=1 https://github.com/grpc/grpc.git
