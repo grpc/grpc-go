@@ -38,7 +38,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
-	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -90,15 +89,7 @@ func serviceConfigJSON(activeClusters map[string]*clusterInfo) ([]byte, error) {
 	// Generate children (all entries in activeClusters).
 	children := make(map[string]xdsChildConfig)
 	for cluster, ci := range activeClusters {
-		if ci.cspCfg != nil {
-			children[cluster] = xdsChildConfig{
-				ChildPolicy: balancerConfig(ci.cspCfg),
-			}
-		} else {
-			children[cluster] = xdsChildConfig{
-				ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: strings.TrimPrefix(cluster, clusterPrefix)}),
-			}
-		}
+		children[cluster] = ci.cfg
 	}
 
 	sc := serviceConfig{
@@ -369,8 +360,9 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 			clusters.Add(&routeCluster{
 				name: clusterName,
 			}, 1)
-			r.initializeCluster(clusterName, cs)
-			r.activeClusters[clusterName].cspCfg = su.clusterSpecifierPlugins[rt.ClusterSpecifierPlugin]
+			cs.initializeCluster(clusterName, xdsChildConfig{
+				ChildPolicy: balancerConfig(su.clusterSpecifierPlugins[rt.ClusterSpecifierPlugin]),
+			})
 		} else {
 			for cluster, wc := range rt.WeightedClusters {
 				clusterName := clusterPrefix + cluster
@@ -378,7 +370,9 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 					name:                     clusterName,
 					httpFilterConfigOverride: wc.HTTPFilterConfigOverride,
 				}, int64(wc.Weight))
-				r.initializeCluster(clusterName, cs)
+				cs.initializeCluster(clusterName, xdsChildConfig{
+					ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: cluster}),
+				})
 			}
 		}
 		cs.routes[i].clusters = clusters
@@ -410,23 +404,24 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 }
 
 // initializeCluster initializes entries in cs.clusters map, creating entries in
-// r.activeClusters as necessary.  Any created entries will be set to zero as
-// they will be incremented by incRefs.
-func (r *xdsResolver) initializeCluster(clusterName string, cs *configSelector) {
-	ci := r.activeClusters[clusterName]
+// r.activeClusters as necessary.  Any created entries will have a ref count set
+// to zero as their ref count will be incremented by incRefs.
+func (cs *configSelector) initializeCluster(clusterName string, cfg xdsChildConfig) {
+	ci := cs.r.activeClusters[clusterName]
 	if ci == nil {
 		ci = &clusterInfo{refCount: 0}
-		r.activeClusters[clusterName] = ci
+		cs.r.activeClusters[clusterName] = ci
 	}
 	cs.clusters[clusterName] = ci
+	cs.clusters[clusterName].cfg = cfg
 }
 
 type clusterInfo struct {
 	// number of references to this cluster; accessed atomically
 	refCount int32
-	// cspCfg is the configuration for this cluster if the cluster is a cluster
-	// specifier plugin. This will be nil otherwise.
-	cspCfg clusterspecifier.BalancerConfig
+	// cfg is the child configuration for this cluster, containing either the
+	// csp config or the cds cluster config.
+	cfg xdsChildConfig
 }
 
 type interceptorList struct {
