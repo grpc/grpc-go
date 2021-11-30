@@ -13,12 +13,13 @@ shopt -s extglob
 branch="${branch//[[:space:]]}"
 branch="${branch##remotes/origin/}"
 shopt -u extglob
-# Install go >= 1.14 for the new features, e.g. errors.Is()
+# Install a version of Go supported by gRPC for the new features, e.g.
+# errors.Is()
 sudo apt-get install -y wget
 wget https://go.dev/dl/go1.17.3.linux-amd64.tar.gz
 sudo tar -C /usr/local -xvf go1.17.3.linux-amd64.tar.gz
 sudo cp /usr/local/go/bin/go /usr/bin/go
-# Retry go build on error, for at most 3 times
+# Retry go build on errors (e.g. go get connection errors), for at most 3 times
 for i in 1 2 3; do go build && break || sleep 5; done
 popd
 
