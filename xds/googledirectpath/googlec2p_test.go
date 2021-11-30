@@ -217,6 +217,7 @@ func TestBuildXDS(t *testing.T) {
 					TransportAPI: version.TransportV3,
 					NodeProto:    wantNode,
 				},
+				ClientDefaultListenerResourceNameTemplate: "%s",
 			}
 			if tt.tdURI != "" {
 				wantConfig.XDSServer.ServerURI = tt.tdURI

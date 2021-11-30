@@ -49,7 +49,7 @@ import (
 const (
 	c2pScheme = "google-c2p"
 
-	tdURL          = "directpath-pa.googleapis.com"
+	tdURL          = "dns:///directpath-pa.googleapis.com"
 	httpReqTimeout = 10 * time.Second
 	zoneURL        = "http://metadata.google.internal/computeMetadata/v1/instance/zone"
 	ipv6URL        = "http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/ipv6s"
@@ -110,6 +110,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 			TransportAPI: version.TransportV3,
 			NodeProto:    newNode(<-zoneCh, <-ipv6CapableCh),
 		},
+		ClientDefaultListenerResourceNameTemplate: "%s",
 	}
 
 	// Create singleton xds client with this config. The xds client will be
