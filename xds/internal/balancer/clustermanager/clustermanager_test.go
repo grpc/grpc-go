@@ -560,6 +560,9 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if v, err := ccsCh.Receive(ctx); err != nil {
+		if v == nil {
+			t.Fatalf("received nil")
+		}
 		err2 := v.(error)
 		t.Fatal(err2)
 	}
