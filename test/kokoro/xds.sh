@@ -17,7 +17,7 @@ shopt -u extglob
 # errors.Is()
 curl --retry 3 -O -L https://go.dev/dl/go1.17.3.linux-amd64.tar.gz
 sudo tar -C /usr/local -xvf go1.17.3.linux-amd64.tar.gz
-sudo cp /usr/local/go/bin/go /usr/bin/go
+sudo ln -s /usr/local/go/bin/go /usr/bin/go
 # Retry go build on errors (e.g. go get connection errors), for at most 3 times
 for i in 1 2 3; do go build && break || sleep 5; done
 popd
