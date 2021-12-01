@@ -197,7 +197,7 @@ func (xdsC *Client) WatchEndpoints(clusterName string, callback func(xdsresource
 	xdsC.edsCbs[clusterName] = callback
 	xdsC.edsWatchCh.Send(clusterName)
 	return func() {
-		xdsC.edsCancelCh.Send(clusterName)
+		xdsC.edsCancelCh.SendOrFail(clusterName)
 	}
 }
 
