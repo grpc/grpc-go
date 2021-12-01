@@ -857,11 +857,14 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 	defer lis3.Close()
 
 	closeServer2 := make(chan struct{})
+	exitCh := make(chan struct{})
 	server1ContactedFirstTime := make(chan struct{})
 	server1ContactedSecondTime := make(chan struct{})
 	server2ContactedFirstTime := make(chan struct{})
 	server2ContactedSecondTime := make(chan struct{})
 	server3Contacted := make(chan struct{})
+
+	defer close(exitCh)
 
 	// Launch server 1.
 	go func() {
@@ -886,12 +889,18 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 		// until balancer is built to process the addresses.
 		stateNotifications := testBalancerBuilder.nextStateNotifier()
 		// Wait for the transport to become ready.
-		for s := range stateNotifications {
-			if s == connectivity.Ready {
-				break
+		for {
+			select {
+			case st := <-stateNotifications:
+				if st == connectivity.Ready {
+					goto ready
+				}
+			case <-exitCh:
+				return
 			}
 		}
 
+	ready:
 		// Once it's ready, curAddress has been set. So let's close this
 		// connection prompting the first reconnect cycle.
 		conn1.Close()
