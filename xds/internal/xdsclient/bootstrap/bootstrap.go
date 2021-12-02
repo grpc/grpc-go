@@ -88,9 +88,13 @@ type ServerConfig struct {
 
 // String returns the string representation of the ServerConfig.
 //
-// Note that it covers (almost) all the fields so the string can be used map
-// keys. Except NodeProto because NodeProto isn't used by federation (and this
-// is only used as key in federation).
+// This string representation will be used as map keys in federation
+// (`map[ServerConfig]authority`), so that the xDS ClientConn and stream will be
+// shared by authorities with different names but the same server config.
+//
+// It covers (almost) all the fields so the string can represent the config
+// content. It doesn't cover NodeProto because NodeProto isn't used by
+// federation.
 func (sc *ServerConfig) String() string {
 	var ver string
 	switch sc.TransportAPI {
