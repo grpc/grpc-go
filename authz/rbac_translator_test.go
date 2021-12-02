@@ -127,7 +127,7 @@ func TestTranslatePolicy(t *testing.T) {
 									Ids: []*v3rbacpb.Principal{
 										{Identifier: &v3rbacpb.Principal_Authenticated_{
 											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
-												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{},
+												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".*"}},
 											}},
 										}},
 									},
