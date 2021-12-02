@@ -95,8 +95,7 @@ var sdkTests = map[string]struct {
 						"request": {
 							"paths":
 							[
-								"/grpc.testing.TestService/UnaryCall",
-								"/grpc.testing.TestService/StreamingInputCall"
+								"/grpc.testing.TestService/*"
 							],
 							"headers":
 							[
@@ -122,11 +121,11 @@ var sdkTests = map[string]struct {
 				"allow_rules":
 				[
 					{
-						"name": "allow_TestServiceCalls",
+						"name": "allow_all",
 						"request": {
 							"paths":
 							[
-								"/grpc.testing.TestService/*"
+								"*"
 							]
 						}
 					}
@@ -134,11 +133,11 @@ var sdkTests = map[string]struct {
 				"deny_rules":
 				[
 					{
-						"name": "deny_TestServiceCalls",
+						"name": "deny_all",
 						"request": {
 							"paths":
 							[
-								"/grpc.testing.TestService/*"
+								"*"
 							]
 						}
 					}
