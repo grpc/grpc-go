@@ -212,7 +212,7 @@ var (
 		XDSServer: &ServerConfig{
 			ServerURI: "trafficdirector.googleapis.com:443",
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			credsType: "insecure",
+			CredsType: "insecure",
 			NodeProto: v2NodeProto,
 		},
 		ClientDefaultListenerResourceNameTemplate: "%s",
@@ -221,7 +221,7 @@ var (
 		XDSServer: &ServerConfig{
 			ServerURI: "trafficdirector.googleapis.com:443",
 			Creds:     grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-			credsType: "google_default",
+			CredsType: "google_default",
 			NodeProto: v2NodeProto,
 		},
 		ClientDefaultListenerResourceNameTemplate: "%s",
@@ -230,7 +230,7 @@ var (
 		XDSServer: &ServerConfig{
 			ServerURI:    "trafficdirector.googleapis.com:443",
 			Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-			credsType:    "google_default",
+			CredsType:    "google_default",
 			TransportAPI: version.TransportV3,
 			NodeProto:    v3NodeProto,
 		},
@@ -395,7 +395,7 @@ func TestNewConfigV2ProtoSuccess(t *testing.T) {
 				XDSServer: &ServerConfig{
 					ServerURI: "trafficdirector.googleapis.com:443",
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-					credsType: "insecure",
+					CredsType: "insecure",
 					NodeProto: &v2corepb.Node{
 						BuildVersion:         gRPCVersion,
 						UserAgentName:        gRPCUserAgentName,
@@ -665,7 +665,7 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 		XDSServer: &ServerConfig{
 			ServerURI:    "trafficdirector.googleapis.com:443",
 			Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-			credsType:    "google_default",
+			CredsType:    "google_default",
 			TransportAPI: version.TransportV3,
 			NodeProto:    v3NodeProto,
 		},
@@ -759,7 +759,7 @@ func TestNewConfigWithServerListenerResourceNameTemplate(t *testing.T) {
 				XDSServer: &ServerConfig{
 					ServerURI:    "trafficdirector.googleapis.com:443",
 					Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-					credsType:    "google_default",
+					CredsType:    "google_default",
 					TransportAPI: version.TransportV2,
 					NodeProto:    v2NodeProto,
 				},
@@ -908,7 +908,7 @@ func TestNewConfigWithFederation(t *testing.T) {
 				XDSServer: &ServerConfig{
 					ServerURI:    "trafficdirector.googleapis.com:443",
 					Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-					credsType:    "google_default",
+					CredsType:    "google_default",
 					TransportAPI: version.TransportV2,
 					NodeProto:    v2NodeProto,
 				},
@@ -920,7 +920,7 @@ func TestNewConfigWithFederation(t *testing.T) {
 						XDSServer: &ServerConfig{
 							ServerURI:    "td.com",
 							Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-							credsType:    "google_default",
+							CredsType:    "google_default",
 							TransportAPI: version.TransportV3,
 							NodeProto:    v3NodeProto,
 						},
@@ -934,7 +934,7 @@ func TestNewConfigWithFederation(t *testing.T) {
 				XDSServer: &ServerConfig{
 					ServerURI:    "trafficdirector.googleapis.com:443",
 					Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-					credsType:    "google_default",
+					CredsType:    "google_default",
 					TransportAPI: version.TransportV2,
 					NodeProto:    v2NodeProto,
 				},
@@ -947,7 +947,7 @@ func TestNewConfigWithFederation(t *testing.T) {
 				XDSServer: &ServerConfig{
 					ServerURI:    "trafficdirector.googleapis.com:443",
 					Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-					credsType:    "google_default",
+					CredsType:    "google_default",
 					TransportAPI: version.TransportV2,
 					NodeProto:    v2NodeProto,
 				},
@@ -965,7 +965,7 @@ func TestNewConfigWithFederation(t *testing.T) {
 				XDSServer: &ServerConfig{
 					ServerURI:    "trafficdirector.googleapis.com:443",
 					Creds:        grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
-					credsType:    "google_default",
+					CredsType:    "google_default",
 					TransportAPI: version.TransportV2,
 					NodeProto:    v2NodeProto,
 				},
