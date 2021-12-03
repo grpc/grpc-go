@@ -41,6 +41,9 @@ type rlsPicker struct {
 	// The keyBuilder map used to generate RLS keys for the RPC. This is built
 	// by the LB policy based on the received ServiceConfig.
 	kbm keys.BuilderMap
+	// Endpoint from the user's original dial target. Used to set the `host_key`
+	// field in `extra_keys`.
+	origEndpoint string
 
 	// The following hooks are setup by the LB policy to enable the rlsPicker to
 	// access state stored in the policy. This approach has the following
@@ -76,14 +79,9 @@ type rlsPicker struct {
 
 // Pick makes the routing decision for every outbound RPC.
 func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	// For every incoming request, we first build the RLS keys using the
-	// keyBuilder we received from the LB policy. If no metadata is present in
-	// the context, we end up using an empty key.
-	km := keys.KeyMap{}
-	md, ok := metadata.FromOutgoingContext(info.Ctx)
-	if ok {
-		km = p.kbm.RLSKey(md, info.FullMethodName)
-	}
+	// Build the request's keys using the key builders from LB config.
+	md, _ := metadata.FromOutgoingContext(info.Ctx)
+	km := p.kbm.RLSKey(md, p.origEndpoint, info.FullMethodName)
 
 	// We use the LB policy hook to read the data cache and the pending request
 	// map (whether or not an entry exists) for the RPC path and the generated

@@ -29,25 +29,11 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// BuilderMap provides a mapping from a request path to the key builder to be
-// used for that path.
-// The BuilderMap is constructed by parsing the RouteLookupConfig received by
-// the RLS balancer as part of its ServiceConfig, and is used by the picker in
-// the data path to build the RLS keys to be used for a given request.
+// BuilderMap maps from request path to the key builder for that path.
 type BuilderMap map[string]builder
 
 // MakeBuilderMap parses the provided RouteLookupConfig proto and returns a map
 // from paths to key builders.
-//
-// The following conditions are validated, and an error is returned if any of
-// them is not met:
-// grpc_keybuilders field
-// * must have at least one entry
-// * must not have two entries with the same Name
-// * must not have any entry with a Name with the service field unset or empty
-// * must not have any entries without a Name
-// * must not have a headers entry that has required_match set
-// * must not have two headers entries with the same key within one entry
 func MakeBuilderMap(cfg *rlspb.RouteLookupConfig) (BuilderMap, error) {
 	kbs := cfg.GetGrpcKeybuilders()
 	if len(kbs) == 0 {
@@ -56,21 +42,46 @@ func MakeBuilderMap(cfg *rlspb.RouteLookupConfig) (BuilderMap, error) {
 
 	bm := make(map[string]builder)
 	for _, kb := range kbs {
+		// Extract keys from `headers`, `constant_keys` and `extra_keys` fields
+		// and populate appropriate values in the builder struct. Also ensure
+		// that keys are not repeated.
 		var matchers []matcher
 		seenKeys := make(map[string]bool)
+		constantKeys := kb.GetConstantKeys()
+		for k := range kb.GetConstantKeys() {
+			seenKeys[k] = true
+		}
 		for _, h := range kb.GetHeaders() {
 			if h.GetRequiredMatch() {
 				return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig has required_match field set {%+v}", kbs)
 			}
 			key := h.GetKey()
 			if seenKeys[key] {
-				return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated Key field in headers {%+v}", kbs)
+				return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key %q across headers, constant_keys and extra_keys {%+v}", key, kbs)
 			}
 			seenKeys[key] = true
 			matchers = append(matchers, matcher{key: h.GetKey(), names: h.GetNames()})
 		}
-		b := builder{matchers: matchers}
+		if seenKeys[kb.GetExtraKeys().GetHost()] {
+			return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key %q in extra_keys from constant_keys or headers {%+v}", kb.GetExtraKeys().GetHost(), kbs)
+		}
+		if seenKeys[kb.GetExtraKeys().GetService()] {
+			return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key %q in extra_keys from constant_keys or headers {%+v}", kb.GetExtraKeys().GetService(), kbs)
+		}
+		if seenKeys[kb.GetExtraKeys().GetMethod()] {
+			return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig contains repeated key %q in extra_keys from constant_keys or headers {%+v}", kb.GetExtraKeys().GetMethod(), kbs)
+		}
+		b := builder{
+			headerKeys:   matchers,
+			constantKeys: constantKeys,
+			hostKey:      kb.GetExtraKeys().GetHost(),
+			serviceKey:   kb.GetExtraKeys().GetService(),
+			methodKey:    kb.GetExtraKeys().GetMethod(),
+		}
 
+		// Store the builder created above in the BuilderMap based on the value
+		// of the `Names` field, which wraps incoming request's service and
+		// method. Also, ensure that there are no repeated `Names` field.
 		names := kb.GetNames()
 		if len(names) == 0 {
 			return nil, fmt.Errorf("rls: GrpcKeyBuilder in RouteLookupConfig does not contain any Name {%+v}", kbs)
@@ -108,16 +119,31 @@ type KeyMap struct {
 
 // RLSKey builds the RLS keys to be used for the given request, identified by
 // the request path and the request headers stored in metadata.
-func (bm BuilderMap) RLSKey(md metadata.MD, path string) KeyMap {
+func (bm BuilderMap) RLSKey(md metadata.MD, host, path string) KeyMap {
+	i := strings.LastIndex(path, "/")
+	service, method := path[:i+1], path[i+1:]
 	b, ok := bm[path]
 	if !ok {
-		i := strings.LastIndex(path, "/")
-		b, ok = bm[path[:i+1]]
+		b, ok = bm[service]
 		if !ok {
 			return KeyMap{}
 		}
 	}
-	return b.keys(md)
+
+	kvMap := b.buildHeaderKeys(md)
+	if b.hostKey != "" {
+		kvMap[b.hostKey] = host
+	}
+	if b.serviceKey != "" {
+		kvMap[b.serviceKey] = service
+	}
+	if b.methodKey != "" {
+		kvMap[b.methodKey] = method
+	}
+	for k, v := range b.constantKeys {
+		kvMap[k] = v
+	}
+	return KeyMap{Map: kvMap, Str: mapToString(kvMap)}
 }
 
 // Equal reports whether bm and am represent equivalent BuilderMaps.
@@ -141,26 +167,19 @@ func (bm BuilderMap) Equal(am BuilderMap) bool {
 	return true
 }
 
-// builder provides the actual functionality of building RLS keys. These are
-// stored in the BuilderMap.
-// While processing a pick, the picker looks in the BuilderMap for the
-// appropriate builder to be used for the given RPC.  For each of the matchers
-// in the found builder, we iterate over the list of request headers (available
-// as metadata in the context). Once a header matches one of the names in the
-// matcher, we set the value of the header in the keyMap (with the key being
-// the one found in the matcher) and move on to the next matcher.  If no
-// KeyBuilder was found in the map, or no header match was found, an empty
-// keyMap is returned.
+// builder provides the actual functionality of building RLS keys.
 type builder struct {
-	matchers []matcher
+	headerKeys   []matcher
+	constantKeys map[string]string
+	// The following keys mirror corresponding fields in `extra_keys`.
+	hostKey    string
+	serviceKey string
+	methodKey  string
 }
 
 // Equal reports whether b and a represent equivalent key builders.
 func (b builder) Equal(a builder) bool {
-	if (b.matchers == nil) != (a.matchers == nil) {
-		return false
-	}
-	if len(b.matchers) != len(a.matchers) {
+	if len(b.headerKeys) != len(a.headerKeys) {
 		return false
 	}
 	// Protobuf serialization maintains the order of repeated fields. Matchers
@@ -168,13 +187,23 @@ func (b builder) Equal(a builder) bool {
 	// order changes, it means that the order in the protobuf changed. We report
 	// this case as not being equal even though the builders could possible be
 	// functionally equal.
-	for i, bMatcher := range b.matchers {
-		aMatcher := a.matchers[i]
+	for i, bMatcher := range b.headerKeys {
+		aMatcher := a.headerKeys[i]
 		if !bMatcher.Equal(aMatcher) {
 			return false
 		}
 	}
-	return true
+
+	if len(b.constantKeys) != len(a.constantKeys) {
+		return false
+	}
+	for k, v := range b.constantKeys {
+		if a.constantKeys[k] != v {
+			return false
+		}
+	}
+
+	return b.hostKey == a.hostKey && b.serviceKey == a.serviceKey && b.methodKey == a.methodKey
 }
 
 // matcher helps extract a key from request headers based on a given name.
@@ -185,12 +214,9 @@ type matcher struct {
 	names []string
 }
 
-// Equal reports if m and are are equivalent matchers.
+// Equal reports if m and are are equivalent headerKeys.
 func (m matcher) Equal(a matcher) bool {
 	if m.key != a.key {
-		return false
-	}
-	if (m.names == nil) != (a.names == nil) {
 		return false
 	}
 	if len(m.names) != len(a.names) {
@@ -204,9 +230,12 @@ func (m matcher) Equal(a matcher) bool {
 	return true
 }
 
-func (b builder) keys(md metadata.MD) KeyMap {
+func (b builder) buildHeaderKeys(md metadata.MD) map[string]string {
 	kvMap := make(map[string]string)
-	for _, m := range b.matchers {
+	if len(md) == 0 {
+		return kvMap
+	}
+	for _, m := range b.headerKeys {
 		for _, name := range m.names {
 			if vals := md.Get(name); vals != nil {
 				kvMap[m.key] = strings.Join(vals, ",")
@@ -214,7 +243,7 @@ func (b builder) keys(md metadata.MD) KeyMap {
 			}
 		}
 	}
-	return KeyMap{Map: kvMap, Str: mapToString(kvMap)}
+	return kvMap
 }
 
 func mapToString(kv map[string]string) string {
