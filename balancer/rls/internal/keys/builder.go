@@ -47,10 +47,9 @@ func MakeBuilderMap(cfg *rlspb.RouteLookupConfig) (BuilderMap, error) {
 		// that keys are not repeated.
 		var matchers []matcher
 		seenKeys := make(map[string]bool)
-		constantKeys := make(map[string]string)
-		for k, v := range kb.GetConstantKeys() {
+		constantKeys := kb.GetConstantKeys()
+		for k := range kb.GetConstantKeys() {
 			seenKeys[k] = true
-			constantKeys[k] = v
 		}
 		for _, h := range kb.GetHeaders() {
 			if h.GetRequiredMatch() {
