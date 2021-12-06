@@ -44,8 +44,10 @@ import (
 )
 
 const (
-	cdsName               = "cds_experimental"
-	xdsClusterManagerName = "xds_cluster_manager_experimental"
+	cdsName                      = "cds_experimental"
+	xdsClusterManagerName        = "xds_cluster_manager_experimental"
+	clusterPrefix                = "cluster:"
+	clusterSpecifierPluginPrefix = "cluster_specifier_plugin:"
 )
 
 type serviceConfig struct {
@@ -86,10 +88,8 @@ func (r *xdsResolver) pruneActiveClusters() {
 func serviceConfigJSON(activeClusters map[string]*clusterInfo) ([]byte, error) {
 	// Generate children (all entries in activeClusters).
 	children := make(map[string]xdsChildConfig)
-	for cluster := range activeClusters {
-		children[cluster] = xdsChildConfig{
-			ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: cluster}),
-		}
+	for cluster, ci := range activeClusters {
+		children[cluster] = ci.cfg
 	}
 
 	sc := serviceConfig{
@@ -158,10 +158,12 @@ func (cs *configSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*iresolver.RP
 	if rt == nil || rt.clusters == nil {
 		return nil, errNoMatchedRouteFound
 	}
+
 	cluster, ok := rt.clusters.Next().(*routeCluster)
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "error retrieving cluster for match: %v (%T)", cluster, cluster)
 	}
+
 	// Add a ref to the selected cluster, as this RPC needs this cluster until
 	// it is committed.
 	ref := &cs.clusters[cluster.name].refCount
@@ -353,21 +355,25 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 
 	for i, rt := range su.virtualHost.Routes {
 		clusters := newWRR()
-		for cluster, wc := range rt.WeightedClusters {
+		if rt.ClusterSpecifierPlugin != "" {
+			clusterName := clusterSpecifierPluginPrefix + rt.ClusterSpecifierPlugin
 			clusters.Add(&routeCluster{
-				name:                     cluster,
-				httpFilterConfigOverride: wc.HTTPFilterConfigOverride,
-			}, int64(wc.Weight))
-
-			// Initialize entries in cs.clusters map, creating entries in
-			// r.activeClusters as necessary.  Set to zero as they will be
-			// incremented by incRefs.
-			ci := r.activeClusters[cluster]
-			if ci == nil {
-				ci = &clusterInfo{refCount: 0}
-				r.activeClusters[cluster] = ci
+				name: clusterName,
+			}, 1)
+			cs.initializeCluster(clusterName, xdsChildConfig{
+				ChildPolicy: balancerConfig(su.clusterSpecifierPlugins[rt.ClusterSpecifierPlugin]),
+			})
+		} else {
+			for cluster, wc := range rt.WeightedClusters {
+				clusterName := clusterPrefix + cluster
+				clusters.Add(&routeCluster{
+					name:                     clusterName,
+					httpFilterConfigOverride: wc.HTTPFilterConfigOverride,
+				}, int64(wc.Weight))
+				cs.initializeCluster(clusterName, xdsChildConfig{
+					ChildPolicy: newBalancerConfig(cdsName, cdsBalancerConfig{Cluster: cluster}),
+				})
 			}
-			cs.clusters[cluster] = ci
 		}
 		cs.routes[i].clusters = clusters
 
@@ -397,9 +403,25 @@ func (r *xdsResolver) newConfigSelector(su serviceUpdate) (*configSelector, erro
 	return cs, nil
 }
 
+// initializeCluster initializes entries in cs.clusters map, creating entries in
+// r.activeClusters as necessary.  Any created entries will have a ref count set
+// to zero as their ref count will be incremented by incRefs.
+func (cs *configSelector) initializeCluster(clusterName string, cfg xdsChildConfig) {
+	ci := cs.r.activeClusters[clusterName]
+	if ci == nil {
+		ci = &clusterInfo{refCount: 0}
+		cs.r.activeClusters[clusterName] = ci
+	}
+	cs.clusters[clusterName] = ci
+	cs.clusters[clusterName].cfg = cfg
+}
+
 type clusterInfo struct {
 	// number of references to this cluster; accessed atomically
 	refCount int32
+	// cfg is the child configuration for this cluster, containing either the
+	// csp config or the cds cluster config.
+	cfg xdsChildConfig
 }
 
 type interceptorList struct {
