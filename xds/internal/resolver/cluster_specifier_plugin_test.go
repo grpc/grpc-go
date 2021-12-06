@@ -314,7 +314,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
         "cluster_specifier_plugin:cspA":{
           "childPolicy":[{"csp_experimental":{"arbitrary_field":"anythingA"}}]
         },
-		"cluster_specifier_plugin:cspB":{
+        "cluster_specifier_plugin:cspB":{
           "childPolicy":[{"csp_experimental":{"arbitrary_field":"anythingB"}}]
         }
       }
@@ -353,7 +353,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 	wantJSON3 := `{"loadBalancingConfig":[{
     "xds_cluster_manager_experimental":{
       "children":{
-		"cluster_specifier_plugin:cspB":{
+        "cluster_specifier_plugin:cspB":{
           "childPolicy":[{"csp_experimental":{"arbitrary_field":"anythingB"}}]
         }
       }
