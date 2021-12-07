@@ -85,10 +85,10 @@ func (l *RestartableListener) Stop() {
 	l.stopped = true
 	tmp := l.conns
 	l.conns = nil
-	l.mu.Unlock()
 	for _, conn := range tmp {
 		conn.Close()
 	}
+	l.mu.Unlock()
 }
 
 // Restart gets a previously stopped listener to start accepting connections.

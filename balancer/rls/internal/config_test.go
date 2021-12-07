@@ -61,7 +61,7 @@ func testEqual(a, b *lbConfig) bool {
 		childPolicyConfigEqual(a.childPolicyConfig, b.childPolicyConfig)
 }
 
-func TestParseConfig(t *testing.T) {
+func (s) TestParseConfig(t *testing.T) {
 	childPolicyTargetFieldVal, _ := json.Marshal(dummyChildPolicyTarget)
 	tests := []struct {
 		desc    string
@@ -158,7 +158,7 @@ func TestParseConfig(t *testing.T) {
 	}
 }
 
-func TestParseConfigErrors(t *testing.T) {
+func (s) TestParseConfigErrors(t *testing.T) {
 	tests := []struct {
 		desc    string
 		input   []byte

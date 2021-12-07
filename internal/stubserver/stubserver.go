@@ -51,6 +51,10 @@ type StubServer struct {
 	CC     *grpc.ClientConn
 	S      *grpc.Server
 
+	// SkipClient instructs the Start() method to not create a client connected
+	// to this service.
+	SkipClient bool
+
 	// Parameters for Listen and Dial. Defaults will be used if these are empty
 	// before Start.
 	Network string
@@ -102,6 +106,11 @@ func (ss *StubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
 	ss.S = s
+
+	if ss.SkipClient {
+		// If we were asked to not create a client, return early.
+		return nil
+	}
 
 	opts := append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
 	if ss.R != nil {
