@@ -101,16 +101,18 @@ func (sbc *subBalancerWrapper) startBalancer() {
 	}
 }
 
-func (sbc *subBalancerWrapper) exitIdle() {
+// exitIdle invokes the sub-balancer's ExitIdle method. Returns a boolean
+// indicating whether or not the operation was completed.
+func (sbc *subBalancerWrapper) exitIdle() (complete bool) {
 	b := sbc.balancer
 	if b == nil {
-		return
+		return true
 	}
 	if ei, ok := b.(balancer.ExitIdler); ok {
 		ei.ExitIdle()
-		return
+		return true
 	}
-	sbc.group.connect(sbc)
+	return false
 }
 
 func (sbc *subBalancerWrapper) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
@@ -509,7 +511,9 @@ func (bg *BalancerGroup) Close() {
 func (bg *BalancerGroup) ExitIdle() {
 	bg.outgoingMu.Lock()
 	for _, config := range bg.idToBalancerConfig {
-		config.exitIdle()
+		if !config.exitIdle() {
+			bg.connect(config)
+		}
 	}
 	bg.outgoingMu.Unlock()
 }
@@ -519,7 +523,9 @@ func (bg *BalancerGroup) ExitIdle() {
 func (bg *BalancerGroup) ExitIdleOne(id string) {
 	bg.outgoingMu.Lock()
 	if config := bg.idToBalancerConfig[id]; config != nil {
-		config.exitIdle()
+		if !config.exitIdle() {
+			bg.connect(config)
+		}
 	}
 	bg.outgoingMu.Unlock()
 }
