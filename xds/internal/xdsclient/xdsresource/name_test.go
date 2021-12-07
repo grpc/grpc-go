@@ -87,11 +87,9 @@ func TestParseName(t *testing.T) {
 // TestNameStringCtxParamsOrder covers the case that if two names differ only in
 // context parameter __order__, the parsed name.String() has the same value.
 func TestNameStringCtxParamsOrder(t *testing.T) {
-	defer func() func() {
-		oldEnv := envconfig.XDSFederation
-		envconfig.XDSFederation = true
-		return func() { envconfig.XDSFederation = oldEnv }
-	}()()
+	oldEnv := envconfig.XDSFederation
+	envconfig.XDSFederation = true
+	defer func() { envconfig.XDSFederation = oldEnv }()
 
 	const (
 		a = "xdstp://auth/type/id?a=1&b=2"
