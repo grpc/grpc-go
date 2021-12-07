@@ -95,7 +95,7 @@ func getStringMatcher(value string) *v3matcherpb.StringMatcher {
 	case value == "*":
 		return &v3matcherpb.StringMatcher{
 			MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{
-				SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".*"}},
+				SafeRegex: &v3matcherpb.RegexMatcher{Regex: "^\\S+$"}},
 		}
 	case strings.HasSuffix(value, "*"):
 		prefix := strings.TrimSuffix(value, "*")
@@ -120,7 +120,7 @@ func getHeaderMatcher(key, value string) *v3routepb.HeaderMatcher {
 		return &v3routepb.HeaderMatcher{
 			Name: key,
 			HeaderMatchSpecifier: &v3routepb.HeaderMatcher_SafeRegexMatch{
-				SafeRegexMatch: &v3matcherpb.RegexMatcher{Regex: ".*"}},
+				SafeRegexMatch: &v3matcherpb.RegexMatcher{Regex: "^\\S+$"}},
 		}
 	case strings.HasSuffix(value, "*"):
 		prefix := strings.TrimSuffix(value, "*")

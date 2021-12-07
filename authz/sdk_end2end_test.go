@@ -299,6 +299,35 @@ var sdkTests = map[string]struct {
 			}`,
 		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
 	},
+	"DeniesRPCRequestNoMatchInAllowFailsPresenceMatch": {
+		authzPolicy: `{
+				"name": "authz",
+				"allow_rules":
+				[
+					{
+						"name": "allow_TestServiceCalls",
+						"request": {
+							"paths":
+							[
+								"/grpc.testing.TestService/*"
+							],
+							"headers":
+							[
+								{
+									"key": "key-abc",
+									"values":
+									[
+										"*"
+									]
+								}
+							]
+						}
+					}
+				]
+			}`,
+		md:         metadata.Pairs("key-abc", ""),
+		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
+	},
 }
 
 func (s) TestSDKStaticPolicyEnd2End(t *testing.T) {
