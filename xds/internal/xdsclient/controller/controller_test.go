@@ -31,7 +31,7 @@ const testXDSServer = "xds-server"
 
 // TestNew covers that New() returns an error if the input *ServerConfig
 // contains invalid content.
-func TestNew(t *testing.T) {
+func (s) TestNew(t *testing.T) {
 	tests := []struct {
 		name    string
 		config  *bootstrap.ServerConfig
