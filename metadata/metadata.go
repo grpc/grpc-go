@@ -90,9 +90,10 @@ func Pairs(kv ...string) MD {
 // - if header-name does not end with a "-bin" suffix, header-value should only contain one or more characters from the set ( %x20-%x7E ) which includes space and printable ASCII.
 func (md MD) Validate() error {
 	for k, vals := range md {
-		// check key
-		for _, rc := range []rune(k) {
-			if !(rc >= 'a' && rc <= 'z') && !(rc >= '0' && rc <= '9') && rc != '.' && rc != '-' && rc != '_' {
+		// check key, for i that saving a conversion if not using for range
+		for i := 0; i< len(k); i++ {
+			r := k[i]
+			if !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '.' && r != '-' && r != '_' {
 				return errors.New("header key is not 0-9a-z-_.")
 			}
 		}
@@ -111,8 +112,9 @@ func (md MD) Validate() error {
 
 // hasNotPrintable return true if msg has character not in %x20-%x7E
 func hasNotPrintable(msg string) bool {
-	for _, rc := range []rune(msg) {
-		if rc < 0x20 || rc > 0x7E {
+	// for i that saving a conversion if not using for range
+	for i := 0; i < len(msg); i++ {
+		if msg[i] < 0x20 || msg[i] > 0x7E {
 			return true
 		}
 	}
