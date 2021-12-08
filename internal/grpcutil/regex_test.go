@@ -48,6 +48,18 @@ func TestFullMatchWithRegex(t *testing.T) {
 			string:   "ab",
 			want:     true,
 		},
+		{
+			name:     "match all",
+			regexStr: ".*",
+			string:   "",
+			want:     true,
+		},
+		{
+			name:     "matches non-empty strings",
+			regexStr: "^\\S+$",
+			string:   "",
+			want:     false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
