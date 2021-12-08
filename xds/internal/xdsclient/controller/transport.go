@@ -81,6 +81,7 @@ func (t *Controller) run(ctx context.Context) {
 		retries++
 		stream, err := t.vClient.NewStream(ctx, t.cc)
 		if err != nil {
+			t.updateHandler.NewConnectionError(err)
 			t.logger.Warningf("xds: ADS stream creation failed: %v", err)
 			continue
 		}
