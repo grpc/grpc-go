@@ -20,16 +20,8 @@ package xdsclient_test
 
 import (
 	"testing"
-	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
-
 	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2" // Register the v2 API client.
 )
 
@@ -42,82 +34,3 @@ func Test(t *testing.T) {
 }
 
 const testXDSServer = "xds-server"
-
-func (s) TestNew(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  *bootstrap.Config
-		wantErr bool
-	}{
-		{
-			name:    "empty-opts",
-			config:  &bootstrap.Config{},
-			wantErr: true,
-		},
-		{
-			name: "empty-balancer-name",
-			config: &bootstrap.Config{
-				XDSServer: &bootstrap.ServerConfig{
-					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-					NodeProto: testutils.EmptyNodeProtoV2,
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "empty-dial-creds",
-			config: &bootstrap.Config{
-				XDSServer: &bootstrap.ServerConfig{
-					ServerURI: testXDSServer,
-					NodeProto: testutils.EmptyNodeProtoV2,
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "empty-node-proto",
-			config: &bootstrap.Config{
-				XDSServer: &bootstrap.ServerConfig{
-					ServerURI: testXDSServer,
-					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "node-proto-version-mismatch",
-			config: &bootstrap.Config{
-				XDSServer: &bootstrap.ServerConfig{
-					ServerURI:    testXDSServer,
-					Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-					TransportAPI: version.TransportV2,
-					NodeProto:    testutils.EmptyNodeProtoV3,
-				},
-			},
-			wantErr: true,
-		},
-		// TODO(easwars): Add cases for v3 API client.
-		{
-			name: "happy-case",
-			config: &bootstrap.Config{
-				XDSServer: &bootstrap.ServerConfig{
-					ServerURI: testXDSServer,
-					Creds:     grpc.WithInsecure(),
-					NodeProto: testutils.EmptyNodeProtoV2,
-				},
-			},
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			c, err := xdsclient.NewWithConfigForTesting(test.config, 15*time.Second)
-			if (err != nil) != test.wantErr {
-				t.Fatalf("New(%+v) = %v, wantErr: %v", test.config, err, test.wantErr)
-			}
-			if c != nil {
-				c.Close()
-			}
-		})
-	}
-}
