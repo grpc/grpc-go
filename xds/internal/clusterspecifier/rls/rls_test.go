@@ -20,11 +20,10 @@ package rls
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	_ "google.golang.org/grpc/balancer/rls"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/proto/grpc_lookup_v1"
@@ -33,6 +32,10 @@ import (
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
+
+func init() {
+	clusterspecifier.Register(rls{})
+}
 
 type s struct {
 	grpctest.Tester
@@ -73,8 +76,18 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 			t.Fatalf("ParseClusterSpecifierConfig(%+v) returned err: %v, wantErr: %v", test.rlcs, err, test.wantErr)
 		}
 
-		if !cmp.Equal(test.wantConfig, lbCfg, cmpopts.EquateEmpty()) {
-			t.Fatalf("ParseClusterSpecifierConfig(%+v) returned expected, diff (-want +got):\\n%s", test.rlcs, cmp.Diff(test.wantConfig, lbCfg, cmpopts.EquateEmpty()))
+		// Marshal and then unmarshal into interface{} to get rid of
+		// nondeterministic protojson Marshaling.
+		lbCfgJSON, err := json.Marshal(lbCfg)
+		if err != nil {
+			t.Fatalf("json.Marshal(%+v) returned err %v", lbCfg, err)
+		}
+		wantCfgJSON, err := json.Marshal(test.wantConfig)
+		if err != nil {
+			t.Fatalf("json.Marshal(%+v) returned err %v", test.wantConfig, err)
+		}
+		if !reflect.DeepEqual(lbCfgJSON, wantCfgJSON) {
+			t.Fatalf("ParseClusterSpecifierConfig(%+v) = %v, want %v", test.rlcs, lbCfgJSON, wantCfgJSON)
 		}
 	}
 }

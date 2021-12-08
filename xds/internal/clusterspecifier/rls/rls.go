@@ -26,6 +26,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -38,7 +39,9 @@ import (
 const rlsBalancerName = "rls"
 
 func init() {
-	clusterspecifier.Register(rls{})
+	if envconfig.XDSRLS {
+		clusterspecifier.Register(rls{})
+	}
 }
 
 type rls struct{}
