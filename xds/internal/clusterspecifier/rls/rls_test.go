@@ -19,9 +19,12 @@
 package rls
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	_ "google.golang.org/grpc/balancer/rls"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/proto/grpc_lookup_v1"
@@ -43,9 +46,10 @@ func Test(t *testing.T) {
 // Cluster Specifier Plugin.
 func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 	tests := []struct {
-		name    string
-		rlcs    proto.Message
-		wantErr bool
+		name       string
+		rlcs       proto.Message
+		wantConfig clusterspecifier.BalancerConfig
+		wantErr    bool
 	}{
 		{
 			name:    "invalid-rls-cluster-specifier",
@@ -53,8 +57,9 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "valid-rls-cluster-specifier",
-			rlcs: rlsClusterSpecifierConfigWithoutTransformations,
+			name:       "valid-rls-cluster-specifier",
+			rlcs:       rlsClusterSpecifierConfigWithoutTransformations,
+			wantConfig: configWithoutTransformationsWant,
 		},
 	}
 	for _, test := range tests {
@@ -62,10 +67,14 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 		if cs == nil {
 			t.Fatal("Error getting cluster specifier")
 		}
-		_, err := cs.ParseClusterSpecifierConfig(test.rlcs)
+		lbCfg, err := cs.ParseClusterSpecifierConfig(test.rlcs)
 
 		if (err != nil) != test.wantErr {
 			t.Fatalf("ParseClusterSpecifierConfig(%+v) returned err: %v, wantErr: %v", test.rlcs, err, test.wantErr)
+		}
+
+		if !cmp.Equal(test.wantConfig, lbCfg, cmpopts.EquateEmpty()) {
+			t.Fatalf("ParseClusterSpecifierConfig(%+v) returned expected, diff (-want +got):\\n%s", test.rlcs, cmp.Diff(test.wantConfig, lbCfg, cmpopts.EquateEmpty()))
 		}
 	}
 }
@@ -121,3 +130,13 @@ var rlsClusterSpecifierConfigWithoutTransformations = testutils.MarshalAny(&grpc
 		DefaultTarget:        "passthrough:///default",
 	},
 })
+
+var configWithoutTransformationsWant = clusterspecifier.BalancerConfig{{"rls": &lbConfigJSON{
+	RouteLookupConfig: []byte(`{"grpcKeybuilders":[{"names":[{"service":"service","method":"method"}],"headers":[{"key":"k1","names":["v1"]}]}],"lookupService":"target","lookupServiceTimeout":"100s","maxAge":"60s","staleAge":"50s","cacheSizeBytes":"1000","defaultTarget":"passthrough:///default"}`),
+	ChildPolicy: []map[string]json.RawMessage{
+		{
+			"cds_experimental": []byte(`{}`),
+		},
+	},
+	ChildPolicyConfigTargetFieldName: "cluster",
+}}}

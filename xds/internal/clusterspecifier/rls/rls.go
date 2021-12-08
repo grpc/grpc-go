@@ -30,7 +30,12 @@ import (
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
+
+	// Blank import to init the RLS LB policy.
+	_ "google.golang.org/grpc/balancer/rls"
 )
+
+const rlsBalancerName = "rls"
 
 func init() {
 	clusterspecifier.Register(rls{})
@@ -68,15 +73,11 @@ func (rls) ParseClusterSpecifierConfig(cfg proto.Message) (clusterspecifier.Bala
 	if err != nil {
 		return nil, fmt.Errorf("rls_csp: error marshaling route lookup config: %v: %v", rlcs.GetRouteLookupConfig(), err)
 	}
-	emptyJSON, err := json.Marshal(struct{}{})
-	if err != nil {
-		return nil, fmt.Errorf("rls_csp: error marshaling empty JSON")
-	}
 	lbCfgJSON := &lbConfigJSON{
 		RouteLookupConfig: rlcJSON, // "JSON form of RouteLookupClusterSpecifier.config" - RLS in xDS Design Doc
 		ChildPolicy: []map[string]json.RawMessage{
 			{
-				"cds_experimental": emptyJSON,
+				"cds_experimental": json.RawMessage("{}"),
 			},
 		},
 		ChildPolicyConfigTargetFieldName: "cluster",
@@ -87,7 +88,7 @@ func (rls) ParseClusterSpecifierConfig(cfg proto.Message) (clusterspecifier.Bala
 		return nil, fmt.Errorf("rls_csp: error marshaling load balancing config %v: %v", lbCfgJSON, err)
 	}
 
-	rlsBB := balancer.Get("rls")
+	rlsBB := balancer.Get(rlsBalancerName)
 	if rlsBB == nil {
 		return nil, fmt.Errorf("RLS LB policy not registered")
 	}
@@ -96,5 +97,5 @@ func (rls) ParseClusterSpecifierConfig(cfg proto.Message) (clusterspecifier.Bala
 		return nil, fmt.Errorf("rls_csp: validation error from rls lb policy parsing %v", err)
 	}
 
-	return clusterspecifier.BalancerConfig{{"rls_experimental": lbCfgJSON}}, nil
+	return clusterspecifier.BalancerConfig{{rlsBalancerName: lbCfgJSON}}, nil
 }

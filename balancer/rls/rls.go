@@ -20,6 +20,6 @@
 package rls
 
 import (
-	// Blank import to init the rls lb policy for testing purposes.
+	// Blank import to init the rls lb policy for external use.
 	_ "google.golang.org/grpc/balancer/rls/internal"
 )
