@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcutil"
+	imetadata "google.golang.org/grpc/internal/metadata"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/transport"
@@ -1446,7 +1447,7 @@ func (ss *serverStream) SetHeader(md metadata.MD) error {
 	if md.Len() == 0 {
 		return nil
 	}
-	err := md.Validate()
+	err := imetadata.Validate(md)
 	if err != nil {
 		return err
 	}
@@ -1454,7 +1455,7 @@ func (ss *serverStream) SetHeader(md metadata.MD) error {
 }
 
 func (ss *serverStream) SendHeader(md metadata.MD) error {
-	err := md.Validate()
+	err := imetadata.Validate(md)
 	if err != nil {
 		return err
 	}
@@ -1474,7 +1475,7 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 	if md.Len() == 0 {
 		return
 	}
-	if md.Validate() != nil {
+	if imetadata.Validate(md) != nil {
 		return
 	}
 	ss.s.SetTrailer(md)

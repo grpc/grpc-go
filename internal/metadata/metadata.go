@@ -22,6 +22,9 @@
 package metadata
 
 import (
+	"errors"
+	"strings"
+
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 )
@@ -71,4 +74,42 @@ func Get(addr resolver.Address) metadata.MD {
 func Set(addr resolver.Address, md metadata.MD) resolver.Address {
 	addr.Attributes = addr.Attributes.WithValue(mdKey, mdValue(md))
 	return addr
+}
+
+// Validate returns error if md is not valid
+// There are check items:
+// - header names contain one or more characters from this set [0-9 a-z _ - .]
+// - if the header-name ends with a "-bin" suffix, the header-value could contain an arbitrary octet sequence. So no real validation required here.
+// - if header-name does not end with a "-bin" suffix, header-value should only contain one or more characters from the set ( %x20-%x7E ) which includes space and printable ASCII.
+func Validate(md metadata.MD) error {
+	for k, vals := range md {
+		// check key, for i that saving a conversion if not using for range
+		for i := 0; i< len(k); i++ {
+			r := k[i]
+			if !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '.' && r != '-' && r != '_' {
+				return errors.New("header key is not 0-9a-z-_.")
+			}
+		}
+		if strings.HasSuffix(k, "-bin") {
+			continue
+		}
+		// check value
+		for _, val := range vals {
+			if hasNotPrintable(val) {
+				return errors.New("header val has not printable ASCII")
+			}
+		}
+	}
+	return nil
+}
+
+// hasNotPrintable return true if msg has character not in %x20-%x7E
+func hasNotPrintable(msg string) bool {
+	// for i that saving a conversion if not using for range
+	for i := 0; i < len(msg); i++ {
+		if msg[i] < 0x20 || msg[i] > 0x7E {
+			return true
+		}
+	}
+	return false
 }

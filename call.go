@@ -22,6 +22,7 @@ import (
 	"context"
 
 	"google.golang.org/grpc/metadata"
+	imetadata "google.golang.org/grpc/internal/metadata"
 )
 
 // Invoke sends the RPC request on the wire and returns after response is
@@ -30,7 +31,7 @@ import (
 // All errors returned by Invoke are compatible with the status package.
 func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply interface{}, opts ...CallOption) error {
 	if md, _ ,ok := metadata.FromOutgoingContextRaw(ctx); ok {
-		if err := md.Validate(); err != nil {
+		if err := imetadata.Validate(md); err != nil {
 			return err
 		}
 	}

@@ -263,31 +263,6 @@ func (s) TestAppendToOutgoingContext_FromKVSlice(t *testing.T) {
 	}
 }
 
-func (s) TestValidate(t *testing.T) {
-	for _, test := range []struct {
-		md        MD
-		want      error
-	}{
-		{
-			md:        Pairs(string(rune(0x19)), "testVal"),
-			want:      errors.New("header key is not 0-9a-z-_."),
-		},
-		{
-			md:        Pairs("test", string(rune(0x19))),
-			want:      errors.New("header val has not printable ASCII"),
-		},
-		{
-			md:        Pairs("test-bin", string(rune(0x19))),
-			want:      nil,
-		},
-	} {
-		err := test.md.Validate()
-		if !reflect.DeepEqual(err, test.want) {
-			t.Errorf("validating metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
-		}
-	}
-}
-
 // Old/slow approach to adding metadata to context
 func Benchmark_AddingMetadata_ContextManipulationApproach(b *testing.B) {
 	// TODO: Add in N=1-100 tests once Go1.6 support is removed.
