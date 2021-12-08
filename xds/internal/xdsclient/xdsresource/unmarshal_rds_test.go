@@ -166,6 +166,12 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		defaultRetryBackoff = RetryBackoff{BaseInterval: 25 * time.Millisecond, MaxInterval: 250 * time.Millisecond}
 	)
 
+	oldRLS := envconfig.XDSRLS
+	envconfig.XDSRLS = true
+	defer func() {
+		envconfig.XDSRLS = oldRLS
+	}()
+
 	tests := []struct {
 		name       string
 		rc         *v3routepb.RouteConfiguration
