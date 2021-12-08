@@ -588,7 +588,7 @@ func (t *http2Client) getTrAuthData(ctx context.Context, audience string) (map[s
 				return nil, err
 			}
 
-			return nil, status.Errorf(codes.Unauthenticated, "transport: %v", err)
+			return nil, status.Errorf(codes.Unauthenticated, "transport: per-RPC creds failed due to error: %v", err)
 		}
 		for k, v := range data {
 			// Capital header names are illegal in HTTP/2.
