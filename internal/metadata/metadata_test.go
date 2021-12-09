@@ -95,15 +95,15 @@ func TestValidate(t *testing.T) {
 		want      error
 	}{
 		{
-			md:        Pairs(string(rune(0x19)), "testVal"),
+			md:        metadata.Pairs(string(rune(0x19)), "testVal"),
 			want:      errors.New("header key is not 0-9a-z-_."),
 		},
 		{
-			md:        Pairs("test", string(rune(0x19))),
+			md:        metadata.Pairs("test", string(rune(0x19))),
 			want:      errors.New("header val has not printable ASCII"),
 		},
 		{
-			md:        Pairs("test-bin", string(rune(0x19))),
+			md:        metadata.Pairs("test-bin", string(rune(0x19))),
 			want:      nil,
 		},
 	} {
@@ -112,29 +112,4 @@ func TestValidate(t *testing.T) {
 			t.Errorf("validating metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
 		}
 	}
-}
-
-
-// Pairs returns an MD formed by the mapping of key, value ...
-// Pairs panics if len(kv) is odd.
-//
-// Only the following ASCII characters are allowed in keys:
-//  - digits: 0-9
-//  - uppercase letters: A-Z (normalized to lower)
-//  - lowercase letters: a-z
-//  - special characters: -_.
-// Uppercase letters are automatically converted to lowercase.
-//
-// Keys beginning with "grpc-" are reserved for grpc-internal use only and may
-// result in errors if set in metadata.
-func Pairs(kv ...string) metadata.MD {
-	if len(kv)%2 == 1 {
-		panic(fmt.Sprintf("metadata: Pairs got the odd number of input pairs for metadata: %d", len(kv)))
-	}
-	md := metadata.MD{}
-	for i := 0; i < len(kv); i += 2 {
-		key := strings.ToLower(kv[i])
-		md[key] = append(md[key], kv[i+1])
-	}
-	return md
 }

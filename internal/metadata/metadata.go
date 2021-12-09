@@ -76,7 +76,7 @@ func Set(addr resolver.Address, md metadata.MD) resolver.Address {
 	return addr
 }
 
-// Validate returns error if md is not valid
+// Validate returns an error if the input md contains invalid keys or values.
 // There are check items:
 // - header names contain one or more characters from this set [0-9 a-z _ - .]
 // - if the header-name ends with a "-bin" suffix, the header-value could contain an arbitrary octet sequence. So no real validation required here.

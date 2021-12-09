@@ -20,7 +20,6 @@ package metadata
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"strconv"
 	"testing"
