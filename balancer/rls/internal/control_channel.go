@@ -47,9 +47,6 @@ type controlChannel struct {
 	// rpcTimeout specifies the timeout for the RouteLookup RPC call. The LB
 	// policy receives this value in its service config.
 	rpcTimeout time.Duration
-	// buildOpts is the balancer.BuildOptions passed to the RLS LB policy. This
-	// will used to determine the dial options for the control channel.
-	buildOpts balancer.BuildOptions
 	// backToReadyCh is the channel on which an update is pushed when the
 	// connectivity state changes from READY --> TRANSIENT_FAILURE --> READY.
 	backToReadyCh chan struct{}
@@ -70,13 +67,12 @@ func newControlChannel(rlsServerName string, rpcTimeout time.Duration, bOpts bal
 		ctx:           ctx,
 		ctxCancel:     cancel,
 		rpcTimeout:    rpcTimeout,
-		buildOpts:     bOpts,
 		backToReadyCh: backToReadyCh,
 		throttler:     newAdaptiveThrottler(),
 	}
 	ctrlCh.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-control-channel %p] ", ctrlCh))
 
-	dopts, err := ctrlCh.dialOpts()
+	dopts, err := ctrlCh.dialOpts(bOpts)
 	if err != nil {
 		return nil, err
 	}
@@ -93,29 +89,29 @@ func newControlChannel(rlsServerName string, rpcTimeout time.Duration, bOpts bal
 }
 
 // dialOpts constructs the dial options for the control plane channel.
-func (cc *controlChannel) dialOpts() ([]grpc.DialOption, error) {
+func (cc *controlChannel) dialOpts(bOpts balancer.BuildOptions) ([]grpc.DialOption, error) {
 	// The control plane channel will use the same authority as the parent
 	// channel for server authorization. This ensures that the identity of the
 	// RLS server and the identity of the backends is the same, so if the RLS
 	// config is injected by an attacker, it cannot cause leakage of private
 	// information contained in headers set by the application.
-	dopts := []grpc.DialOption{grpc.WithAuthority(cc.buildOpts.Authority)}
-	if cc.buildOpts.Dialer != nil {
-		dopts = append(dopts, grpc.WithContextDialer(cc.buildOpts.Dialer))
+	dopts := []grpc.DialOption{grpc.WithAuthority(bOpts.Authority)}
+	if bOpts.Dialer != nil {
+		dopts = append(dopts, grpc.WithContextDialer(bOpts.Dialer))
 	}
 
 	// The control channel will use the channel credentials from the parent
 	// channel, including any call creds associated with the channel creds.
 	var credsOpt grpc.DialOption
 	switch {
-	case cc.buildOpts.DialCreds != nil:
-		credsOpt = grpc.WithTransportCredentials(cc.buildOpts.DialCreds.Clone())
-	case cc.buildOpts.CredsBundle != nil:
+	case bOpts.DialCreds != nil:
+		credsOpt = grpc.WithTransportCredentials(bOpts.DialCreds.Clone())
+	case bOpts.CredsBundle != nil:
 		// The "fallback" mode in google default credentials (which is the only
 		// type of credentials we expect to be used with RLS) uses TLS/ALTS
 		// creds for transport and uses the same call creds as that on the
 		// parent bundle.
-		bundle, err := cc.buildOpts.CredsBundle.NewWithMode(internal.CredsBundleModeFallback)
+		bundle, err := bOpts.CredsBundle.NewWithMode(internal.CredsBundleModeFallback)
 		if err != nil {
 			return nil, err
 		}
