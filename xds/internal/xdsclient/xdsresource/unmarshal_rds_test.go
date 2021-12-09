@@ -110,6 +110,12 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				}},
 			}
 		}
+		goodUpdate = RouteConfigUpdate{
+			VirtualHosts: []*VirtualHost{{
+				Domains: []string{ldsTarget},
+				Routes:  nil,
+			}},
+		}
 		goodUpdateWithClusterSpecifierPluginA = RouteConfigUpdate{
 			VirtualHosts: []*VirtualHost{{
 				Domains: []string{ldsTarget},
@@ -167,7 +173,6 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 	)
 
 	oldRLS := envconfig.XDSRLS
-	envconfig.XDSRLS = true
 	defer func() {
 		envconfig.XDSRLS = oldRLS
 	}()
@@ -177,6 +182,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 		rc         *v3routepb.RouteConfiguration
 		wantUpdate RouteConfigUpdate
 		wantError  bool
+		rlsEnabled bool
 	}{
 		{
 			name: "default-route-match-field-is-nil",
@@ -646,21 +652,24 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
 				clusterSpecifierPlugin("cspA", configOfClusterSpecifierDoesntExist),
 			}, []string{"cspA"}),
-			wantError: true,
+			wantError:  true,
+			rlsEnabled: true,
 		},
 		{
 			name: "error-in-cluster-specifier-plugin-conversion-method",
 			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
 				clusterSpecifierPlugin("cspA", errorClusterSpecifierConfig),
 			}, []string{"cspA"}),
-			wantError: true,
+			wantError:  true,
+			rlsEnabled: true,
 		},
 		{
 			name: "route-action-that-references-undeclared-cluster-specifier-plugin",
 			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
 				clusterSpecifierPlugin("cspA", mockClusterSpecifierConfig),
 			}, []string{"cspA", "cspB"}),
-			wantError: true,
+			wantError:  true,
+			rlsEnabled: true,
 		},
 		{
 			name: "emitted-cluster-specifier-plugins",
@@ -668,6 +677,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				clusterSpecifierPlugin("cspA", mockClusterSpecifierConfig),
 			}, []string{"cspA"}),
 			wantUpdate: goodUpdateWithClusterSpecifierPluginA,
+			rlsEnabled: true,
 		},
 		{
 			name: "deleted-cluster-specifier-plugins-not-referenced",
@@ -676,10 +686,26 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				clusterSpecifierPlugin("cspB", mockClusterSpecifierConfig),
 			}, []string{"cspA"}),
 			wantUpdate: goodUpdateWithClusterSpecifierPluginA,
+			rlsEnabled: true,
+		},
+		{
+			name: "ignore-error-in-cluster-specifier-plugin",
+			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
+				clusterSpecifierPlugin("cspA", configOfClusterSpecifierDoesntExist),
+			}, []string{}),
+			wantUpdate: goodUpdate,
+		},
+		{
+			name: "cluster-specifier-plugin-referenced-env-var-off",
+			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
+				clusterSpecifierPlugin("cspA", mockClusterSpecifierConfig),
+			}, []string{"cspA"}),
+			wantError: true,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			envconfig.XDSRLS = test.rlsEnabled
 			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil, false)
 			if (gotError != nil) != test.wantError ||
 				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),
