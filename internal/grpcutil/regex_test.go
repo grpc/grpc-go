@@ -56,7 +56,7 @@ func TestFullMatchWithRegex(t *testing.T) {
 		},
 		{
 			name:     "matches non-empty strings",
-			regexStr: "^\\S+$",
+			regexStr: ".+",
 			string:   "",
 			want:     false,
 		},
