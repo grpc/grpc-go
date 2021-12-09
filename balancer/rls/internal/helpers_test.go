@@ -242,9 +242,8 @@ func startBackend(t *testing.T, sopts ...grpc.ServerOption) (rpcCh chan struct{}
 			}
 			return &testpb.Empty{}, nil
 		},
-		SkipClient: true,
 	}
-	if err := backend.Start(sopts); err != nil {
+	if err := backend.StartServer(sopts); err != nil {
 		t.Fatalf("Failed to start backend: %v", err)
 	}
 	t.Logf("Started TestService backend at: %q", backend.Address)

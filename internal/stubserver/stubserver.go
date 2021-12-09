@@ -51,10 +51,6 @@ type StubServer struct {
 	CC     *grpc.ClientConn
 	S      *grpc.Server
 
-	// SkipClient instructs the Start() method to not create a client connected
-	// to this service.
-	SkipClient bool
-
 	// Parameters for Listen and Dial. Defaults will be used if these are empty
 	// before Start.
 	Network string
@@ -84,6 +80,14 @@ func (ss *StubServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallSer
 
 // Start starts the server and creates a client connected to it.
 func (ss *StubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption) error {
+	if err := ss.StartServer(sopts); err != nil {
+		return err
+	}
+	return ss.StartClient(dopts...)
+}
+
+// StartServer only starts the server. It does not create a client to it.
+func (ss *StubServer) StartServer(sopts []grpc.ServerOption) error {
 	if ss.Network == "" {
 		ss.Network = "tcp"
 	}
@@ -106,12 +110,10 @@ func (ss *StubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
 	ss.S = s
+	return nil
+}
 
-	if ss.SkipClient {
-		// If we were asked to not create a client, return early.
-		return nil
-	}
-
+func (ss *StubServer) StartClient(dopts ...grpc.DialOption) error {
 	opts := append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
 	if ss.R != nil {
 		ss.Target = ss.R.Scheme() + ":///" + ss.Address
