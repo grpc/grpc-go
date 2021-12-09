@@ -95,15 +95,15 @@ func TestValidate(t *testing.T) {
 		want      error
 	}{
 		{
-			md:        metadata.Pairs(string(rune(0x19)), "testVal"),
+			md:        map[string][]string{string(rune(0x19)): []string{"testVal"}},
 			want:      errors.New("header key is not 0-9a-z-_."),
 		},
 		{
-			md:        metadata.Pairs("test", string(rune(0x19))),
+			md:        map[string][]string{"test": []string{string(rune(0x19))},
 			want:      errors.New("header val has not printable ASCII"),
 		},
 		{
-			md:        metadata.Pairs("test-bin", string(rune(0x19))),
+			md:        map[string][]string{"test-bin": []string{rune(0x19)}},
 			want:      nil,
 		},
 	} {
