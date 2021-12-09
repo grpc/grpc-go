@@ -113,6 +113,8 @@ func (ss *StubServer) StartServer(sopts []grpc.ServerOption) error {
 	return nil
 }
 
+// StartClient creates a client connected to this service that the test may use.
+// The newly created client will be available in the Client field of StubServer.
 func (ss *StubServer) StartClient(dopts ...grpc.DialOption) error {
 	opts := append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
 	if ss.R != nil {
