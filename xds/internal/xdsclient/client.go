@@ -43,7 +43,7 @@ type clientImpl struct {
 	done   *grpcsync.Event
 	config *bootstrap.Config
 
-	// authorityMu protects the authority fields. It necessary because an
+	// authorityMu protects the authority fields. It's necessary because an
 	// authority is created when it's used.
 	authorityMu sync.Mutex
 	// authorityPerConfig is a map from ServerConfig to authority. So that
@@ -109,13 +109,11 @@ func (c *clientImpl) Close() {
 	// error cases, and the fields might not be set when the error happens.
 
 	c.authorityMu.Lock()
-	authorities := c.authorityPerConfig
-	idleCache := c.idleAuthorityPerConfig
-	c.authorityMu.Unlock()
-	for _, a := range authorities {
+	for _, a := range c.authorityPerConfig {
 		a.close()
 	}
-	idleCache.Clear(true)
+	c.idleAuthorityPerConfig.Clear(true)
+	c.authorityMu.Unlock()
 
 	c.logger.Infof("Shutdown")
 }

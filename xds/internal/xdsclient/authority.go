@@ -128,7 +128,6 @@ func (c *clientImpl) unrefAuthority(a *authority) {
 	c.authorityMu.Lock()
 	defer c.authorityMu.Unlock()
 	if a.unref() == 0 {
-		fmt.Println(" --- adding auth to idle cache")
 		configStr := a.config.String()
 		delete(c.authorityPerConfig, configStr)
 		c.idleAuthorityPerConfig.Add(configStr, a, func() {
