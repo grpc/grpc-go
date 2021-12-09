@@ -54,18 +54,13 @@ type controlChannel struct {
 	// hammering the RLS service while it is overloaded or down.
 	throttler adaptiveThrottler
 
-	ctx       context.Context
-	ctxCancel context.CancelFunc
-	cc        *grpc.ClientConn
-	stub      rlsgrpc.RouteLookupServiceClient
-	logger    *internalgrpclog.PrefixLogger
+	cc     *grpc.ClientConn
+	stub   rlsgrpc.RouteLookupServiceClient
+	logger *internalgrpclog.PrefixLogger
 }
 
 func newControlChannel(rlsServerName string, rpcTimeout time.Duration, bOpts balancer.BuildOptions, backToReadyCh chan struct{}) (*controlChannel, error) {
-	ctx, cancel := context.WithCancel(context.Background())
 	ctrlCh := &controlChannel{
-		ctx:           ctx,
-		ctxCancel:     cancel,
 		rpcTimeout:    rpcTimeout,
 		backToReadyCh: backToReadyCh,
 		throttler:     newAdaptiveThrottler(),
@@ -76,12 +71,11 @@ func newControlChannel(rlsServerName string, rpcTimeout time.Duration, bOpts bal
 	if err != nil {
 		return nil, err
 	}
-	cc, err := grpc.Dial(rlsServerName, dopts...)
+	ctrlCh.cc, err = grpc.Dial(rlsServerName, dopts...)
 	if err != nil {
 		return nil, err
 	}
-	ctrlCh.cc = cc
-	ctrlCh.stub = rlsgrpc.NewRouteLookupServiceClient(cc)
+	ctrlCh.stub = rlsgrpc.NewRouteLookupServiceClient(ctrlCh.cc)
 	ctrlCh.logger.Infof("Control channel created to RLS server at: %v", rlsServerName)
 
 	go ctrlCh.monitorConnectivityState()
@@ -146,9 +140,16 @@ func (cc *controlChannel) monitorConnectivityState() {
 	// returning only one new picker, regardless of how many backoff timers are
 	// cancelled.
 
+	// Using the background context is fine here since we check for the ClientConn
+	// entering SHUTDOWN and return early in that case.
+	ctx := context.Background()
+
 	// Wait for the control channel to become READY.
 	for s := cc.cc.GetState(); s != connectivity.Ready; s = cc.cc.GetState() {
-		if !cc.cc.WaitForStateChange(cc.ctx, s) {
+		if s == connectivity.Shutdown {
+			return
+		}
+		if !cc.cc.WaitForStateChange(ctx, s) {
 			// cc.ctx has expired. Can happen only if close() was called.
 			return
 		}
@@ -156,18 +157,23 @@ func (cc *controlChannel) monitorConnectivityState() {
 	cc.logger.Infof("Connectivity state is %s", cc.cc.GetState())
 
 	for {
-
 		// Wait for the control channel to enter anything other than READY.
 		state := cc.cc.GetState()
-		if !cc.cc.WaitForStateChange(cc.ctx, state) {
+		if !cc.cc.WaitForStateChange(ctx, state) {
 			// cc.ctx has expired. Can happen only if close() was called.
+			return
+		}
+		if state == connectivity.Shutdown {
 			return
 		}
 		cc.logger.Infof("Connectivity state is %s", cc.cc.GetState())
 
 		// Wait for the control channel to become READY again.
 		for s := cc.cc.GetState(); s != connectivity.Ready; s = cc.cc.GetState() {
-			if !cc.cc.WaitForStateChange(cc.ctx, s) {
+			if s == connectivity.Shutdown {
+				return
+			}
+			if !cc.cc.WaitForStateChange(ctx, s) {
 				// cc.ctx has expired. Can happen only if close() was called.
 				return
 			}
@@ -183,7 +189,6 @@ func (cc *controlChannel) monitorConnectivityState() {
 
 func (cc *controlChannel) close() {
 	cc.logger.Infof("Closing control channel")
-	cc.ctxCancel()
 	cc.cc.Close()
 }
 
@@ -209,7 +214,7 @@ func (cc *controlChannel) lookup(reqKeys map[string]string, reason rlspb.RouteLo
 		}
 		cc.logger.Infof("Sending RLS request %+v", pretty.ToJSON(req))
 
-		ctx, cancel := context.WithTimeout(cc.ctx, cc.rpcTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), cc.rpcTimeout)
 		resp, err := cc.stub.RouteLookup(ctx, req)
 		cb(resp.GetTargets(), resp.GetHeaderData(), err)
 		cancel()
