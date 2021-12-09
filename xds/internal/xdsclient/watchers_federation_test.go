@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -35,8 +36,8 @@ func testFedTwoWatchDifferentContextParameterOrder(t *testing.T, typ xdsresource
 	overrideFedEnvVar(t)
 	var (
 		// Two resource names only differ in context parameter __order__.
-		resourceName1 = buildResourceName(typ, testAuthority, "test-resource-name", nil) + "?a=1&b=2"
-		resourceName2 = buildResourceName(typ, testAuthority, "test-resource-name", nil) + "?b=2&a=1"
+		resourceName1 = testutils.BuildResourceName(typ, testAuthority, "test-resource-name", nil) + "?a=1&b=2"
+		resourceName2 = testutils.BuildResourceName(typ, testAuthority, "test-resource-name", nil) + "?b=2&a=1"
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

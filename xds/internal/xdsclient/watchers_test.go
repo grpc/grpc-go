@@ -23,10 +23,10 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/internal/testutils"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/pubsub"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -221,34 +221,13 @@ func typeToTestFuncs(typ xdsresource.ResourceType) (
 	return
 }
 
-func buildResourceName(typ xdsresource.ResourceType, auth, id string, ctxParams map[string]string) string {
-	var typS string
-	switch typ {
-	case xdsresource.ListenerResource:
-		typS = version.V3ListenerType
-	case xdsresource.RouteConfigResource:
-		typS = version.V3RouteConfigType
-	case xdsresource.ClusterResource:
-		typS = version.V3ClusterType
-	case xdsresource.EndpointsResource:
-		typS = version.V3EndpointsType
-	}
-	return (&xdsresource.Name{
-		Scheme:        "xdstp",
-		Authority:     auth,
-		Type:          typS,
-		ID:            id,
-		ContextParams: ctxParams,
-	}).String()
-}
-
 // TestClusterWatch covers the cases:
 // - an update is received after a watch()
 // - an update for another resource name
 // - an update is received after cancel()
 func testWatch(t *testing.T, typ xdsresource.ResourceType, update interface{}, resourceName string) {
 	overrideFedEnvVar(t)
-	for _, rName := range []string{resourceName, buildResourceName(typ, testAuthority, resourceName, nil)} {
+	for _, rName := range []string{resourceName, xdstestutils.BuildResourceName(typ, testAuthority, resourceName, nil)} {
 		t.Run(rName, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
@@ -302,7 +281,7 @@ func testWatch(t *testing.T, typ xdsresource.ResourceType, update interface{}, r
 // received after two watch() for the same resource name.
 func testTwoWatchSameResourceName(t *testing.T, typ xdsresource.ResourceType, update interface{}, resourceName string) {
 	overrideFedEnvVar(t)
-	for _, rName := range []string{resourceName, buildResourceName(typ, testAuthority, resourceName, nil)} {
+	for _, rName := range []string{resourceName, xdstestutils.BuildResourceName(typ, testAuthority, resourceName, nil)} {
 		t.Run(rName, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
@@ -375,7 +354,7 @@ func testThreeWatchDifferentResourceName(t *testing.T, typ xdsresource.ResourceT
 	overrideFedEnvVar(t)
 	for _, rName := range [][]string{
 		{resourceName1, resourceName2},
-		{buildResourceName(typ, testAuthority, resourceName1, nil), buildResourceName(typ, testAuthority, resourceName2, nil)},
+		{xdstestutils.BuildResourceName(typ, testAuthority, resourceName1, nil), xdstestutils.BuildResourceName(typ, testAuthority, resourceName2, nil)},
 	} {
 		t.Run(rName[0], func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -417,7 +396,7 @@ func testThreeWatchDifferentResourceName(t *testing.T, typ xdsresource.ResourceT
 // in cache.
 func testWatchAfterCache(t *testing.T, typ xdsresource.ResourceType, update interface{}, resourceName string) {
 	overrideFedEnvVar(t)
-	for _, rName := range []string{resourceName, buildResourceName(typ, testAuthority, resourceName, nil)} {
+	for _, rName := range []string{resourceName, xdstestutils.BuildResourceName(typ, testAuthority, resourceName, nil)} {
 		t.Run(rName, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
@@ -455,7 +434,7 @@ func testResourceRemoved(t *testing.T, typ xdsresource.ResourceType, update1 int
 	overrideFedEnvVar(t)
 	for _, rName := range [][]string{
 		{resourceName1, resourceName2},
-		{buildResourceName(typ, testAuthority, resourceName1, nil), buildResourceName(typ, testAuthority, resourceName2, nil)},
+		{xdstestutils.BuildResourceName(typ, testAuthority, resourceName1, nil), xdstestutils.BuildResourceName(typ, testAuthority, resourceName2, nil)},
 	} {
 		t.Run(rName[0], func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -559,7 +538,7 @@ func testWatchPartialValid(t *testing.T, typ xdsresource.ResourceType, update in
 
 	for _, rName := range [][]string{
 		{resourceName, badResourceName},
-		{buildResourceName(typ, testAuthority, resourceName, nil), buildResourceName(typ, testAuthority, badResourceName, nil)},
+		{xdstestutils.BuildResourceName(typ, testAuthority, resourceName, nil), xdstestutils.BuildResourceName(typ, testAuthority, badResourceName, nil)},
 	} {
 		t.Run(rName[0], func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
