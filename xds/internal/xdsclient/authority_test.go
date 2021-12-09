@@ -86,7 +86,7 @@ func watchAndFetchNewController(t *testing.T, client *clientImpl, resourceName s
 		}
 		config = authConfig.XDSServer
 	}
-	a := client.authorityPerConfig[config.String()]
+	a := client.authorities[config.String()]
 	if a == nil {
 		t.Fatalf("authority for %q is not created", authority)
 	}

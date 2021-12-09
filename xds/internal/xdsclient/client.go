@@ -46,20 +46,20 @@ type clientImpl struct {
 	// authorityMu protects the authority fields. It's necessary because an
 	// authority is created when it's used.
 	authorityMu sync.Mutex
-	// authorityPerConfig is a map from ServerConfig to authority. So that
+	// authorities is a map from ServerConfig to authority. So that
 	// different authorities sharing the same ServerConfig can share the
 	// authority. The key is ServerConfig.String().
 	//
-	// An authority is either in authorityPerConfig, or idleAuthorityPerConfig,
+	// An authority is either in authorities, or idleAuthorities,
 	// never both.
-	authorityPerConfig map[string]*authority
-	// idleAuthorityPerConfig keeps the authorities that are not used (the last
+	authorities map[string]*authority
+	// idleAuthorities keeps the authorities that are not used (the last
 	// watch on it was canceled). They are kept in the cache and will be deleted
 	// after a timeout. The key is ServerConfig.String().
 	//
-	// An authority is either in authorityPerConfig, or idleAuthorityPerConfig,
+	// An authority is either in authorities, or idleAuthorities,
 	// never both.
-	idleAuthorityPerConfig *cache.TimeoutCache
+	idleAuthorities *cache.TimeoutCache
 
 	logger             *grpclog.PrefixLogger
 	watchExpiryTimeout time.Duration
@@ -72,8 +72,8 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration, i
 		config:             config,
 		watchExpiryTimeout: watchExpiryTimeout,
 
-		authorityPerConfig:     make(map[string]*authority),
-		idleAuthorityPerConfig: cache.NewTimeoutCache(idleAuthorityDeleteTimeout),
+		authorities:     make(map[string]*authority),
+		idleAuthorities: cache.NewTimeoutCache(idleAuthorityDeleteTimeout),
 	}
 
 	defer func() {
@@ -109,10 +109,10 @@ func (c *clientImpl) Close() {
 	// error cases, and the fields might not be set when the error happens.
 
 	c.authorityMu.Lock()
-	for _, a := range c.authorityPerConfig {
+	for _, a := range c.authorities {
 		a.close()
 	}
-	c.idleAuthorityPerConfig.Clear(true)
+	c.idleAuthorities.Clear(true)
 	c.authorityMu.Unlock()
 
 	c.logger.Infof("Shutdown")

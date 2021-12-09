@@ -91,7 +91,7 @@ func findPubsubForTest(t *testing.T, c *clientImpl, authority string) pubsub.Upd
 		}
 		config = authConfig.XDSServer
 	}
-	a := c.authorityPerConfig[config.String()]
+	a := c.authorities[config.String()]
 	if a == nil {
 		t.Fatalf("authority for %q is not created", authority)
 	}

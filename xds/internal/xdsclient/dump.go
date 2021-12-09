@@ -35,8 +35,8 @@ func mergeMaps(maps []map[string]xdsresource.UpdateWithMD) map[string]xdsresourc
 func (c *clientImpl) dump(t xdsresource.ResourceType) map[string]xdsresource.UpdateWithMD {
 	c.authorityMu.Lock()
 	defer c.authorityMu.Unlock()
-	maps := make([]map[string]xdsresource.UpdateWithMD, 0, len(c.authorityPerConfig))
-	for _, a := range c.authorityPerConfig {
+	maps := make([]map[string]xdsresource.UpdateWithMD, 0, len(c.authorities))
+	for _, a := range c.authorities {
 		maps = append(maps, a.dump(t))
 	}
 	return mergeMaps(maps)

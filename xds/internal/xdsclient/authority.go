@@ -88,17 +88,17 @@ func (c *clientImpl) newAuthority(config *bootstrap.ServerConfig) (_ *authority,
 	// means there was another watch with a different authority name but the
 	// same server config. Return it.
 	configStr := config.String()
-	if a, ok := c.authorityPerConfig[configStr]; ok {
+	if a, ok := c.authorities[configStr]; ok {
 		return a, nil
 	}
 	// Second check if there's an authority in the idle cache. If found, it
 	// means this authority was created, but moved to the idle cache because the
 	// watch was canceled. Move it from idle cache to the authority cache, and
 	// return.
-	if old, ok := c.idleAuthorityPerConfig.Remove(configStr); ok {
+	if old, ok := c.idleAuthorities.Remove(configStr); ok {
 		oldA, _ := old.(*authority)
 		if oldA != nil {
-			c.authorityPerConfig[configStr] = oldA
+			c.authorities[configStr] = oldA
 			return oldA, nil
 		}
 	}
@@ -116,7 +116,7 @@ func (c *clientImpl) newAuthority(config *bootstrap.ServerConfig) (_ *authority,
 	}
 	ret.controller = ctr
 	// Add it to the cache, so it will be reused.
-	c.authorityPerConfig[configStr] = ret
+	c.authorities[configStr] = ret
 	return ret, nil
 }
 
@@ -129,8 +129,8 @@ func (c *clientImpl) unrefAuthority(a *authority) {
 	defer c.authorityMu.Unlock()
 	if a.unref() == 0 {
 		configStr := a.config.String()
-		delete(c.authorityPerConfig, configStr)
-		c.idleAuthorityPerConfig.Add(configStr, a, func() {
+		delete(c.authorities, configStr)
+		c.idleAuthorities.Add(configStr, a, func() {
 			a.close()
 		})
 	}
