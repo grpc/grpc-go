@@ -145,46 +145,51 @@ func (cc *controlChannel) monitorConnectivityState() {
 	ctx := context.Background()
 
 	// Wait for the control channel to become READY.
-	for s := cc.cc.GetState(); s != connectivity.Ready; s = cc.cc.GetState() {
-		if s == connectivity.Shutdown {
-			return
-		}
-		if !cc.cc.WaitForStateChange(ctx, s) {
-			// cc.ctx has expired. Can happen only if close() was called.
-			return
-		}
+	if !cc.waitForReady(ctx) {
+		return
 	}
-	cc.logger.Infof("Connectivity state is %s", cc.cc.GetState())
+	cc.logger.Infof("Connectivity state is READY")
 
 	for {
-		// Wait for the control channel to enter anything other than READY.
-		state := cc.cc.GetState()
-		if !cc.cc.WaitForStateChange(ctx, state) {
+		// There is a small chance that the control channel has moved out of READY
+		// since the time we last saw it enter READY. Wait for it to enter anything
+		// other than READY.
+		if !cc.cc.WaitForStateChange(ctx, connectivity.Ready) {
 			// cc.ctx has expired. Can happen only if close() was called.
 			return
 		}
-		if state == connectivity.Shutdown {
+		if cc.cc.GetState() == connectivity.Shutdown {
 			return
 		}
 		cc.logger.Infof("Connectivity state is %s", cc.cc.GetState())
 
 		// Wait for the control channel to become READY again.
-		for s := cc.cc.GetState(); s != connectivity.Ready; s = cc.cc.GetState() {
-			if s == connectivity.Shutdown {
-				return
-			}
-			if !cc.cc.WaitForStateChange(ctx, s) {
-				// cc.ctx has expired. Can happen only if close() was called.
-				return
-			}
+		if !cc.waitForReady(ctx) {
+			return
 		}
-		cc.logger.Infof("Connectivity state is %s", cc.cc.GetState())
+		cc.logger.Infof("Connectivity state is READY")
 
 		if cc.backToReadyCh != nil {
 			cc.logger.Infof("Control channel back to READY")
 			cc.backToReadyCh <- struct{}{}
 		}
 	}
+}
+
+// waitForReady waits for the control channel to become READY. If the provided
+// context expires or the control channel enters SHUTDOWN, it returns early and
+// returns false.
+func (cc *controlChannel) waitForReady(ctx context.Context) (ready bool) {
+	for s := cc.cc.GetState(); s != connectivity.Ready; s = cc.cc.GetState() {
+		if s == connectivity.Shutdown {
+			return false
+		}
+		if !cc.cc.WaitForStateChange(ctx, s) {
+			// cc.ctx has expired. Can happen only if close() was called.
+			return false
+		}
+	}
+	return true
 }
 
 func (cc *controlChannel) close() {
@@ -215,9 +220,9 @@ func (cc *controlChannel) lookup(reqKeys map[string]string, reason rlspb.RouteLo
 		cc.logger.Infof("Sending RLS request %+v", pretty.ToJSON(req))
 
 		ctx, cancel := context.WithTimeout(context.Background(), cc.rpcTimeout)
+		defer cancel()
 		resp, err := cc.stub.RouteLookup(ctx, req)
 		cb(resp.GetTargets(), resp.GetHeaderData(), err)
-		cancel()
 	}()
 	return false
 }
