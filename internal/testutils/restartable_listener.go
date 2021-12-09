@@ -83,11 +83,10 @@ func (l *RestartableListener) Addr() net.Addr {
 func (l *RestartableListener) Stop() {
 	l.mu.Lock()
 	l.stopped = true
-	tmp := l.conns
-	l.conns = nil
-	for _, conn := range tmp {
+	for _, conn := range l.conns {
 		conn.Close()
 	}
+	l.conns = nil
 	l.mu.Unlock()
 }
 
