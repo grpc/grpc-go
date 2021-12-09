@@ -84,8 +84,8 @@ func unmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (s
 func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, logger *grpclog.PrefixLogger, v2 bool) (RouteConfigUpdate, error) {
 	vhs := make([]*VirtualHost, 0, len(rc.GetVirtualHosts()))
 	csps := make(map[string]clusterspecifier.BalancerConfig)
-	var err error
 	if envconfig.XDSRLS {
+		var err error
 		csps, err = processClusterSpecifierPlugins(rc.ClusterSpecifierPlugins)
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid %v", err)
