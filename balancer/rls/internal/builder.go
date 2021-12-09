@@ -23,7 +23,7 @@ import (
 	"google.golang.org/grpc/balancer"
 )
 
-const rlsBalancerName = "rls"
+const rlsBalancerName = "rls_experimental"
 
 func init() {
 	balancer.Register(&rlsBB{})
