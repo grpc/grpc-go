@@ -266,33 +266,9 @@ var sdkTests = map[string]struct {
 				"allow_rules":
 				[
 					{
-						"name": "allow_TestServiceCalls",
-						"source": {
-							"principals":
-							[
-								"foo"
-							]
-						},
-						"request": {
-							"paths":
-							[
-								"/grpc.testing.TestService/*"
-							]
-						}
-					}
-				]
-			}`,
-		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
-	},
-	"DeniesRPCRequestWithEmptyPrincipalsOnUnauthenticatedConnection": {
-		authzPolicy: `{
-				"name": "authz",
-				"allow_rules":
-				[
-					{
 						"name": "allow_authenticated",
 						"source": {
-							"principals": []
+							"principals": ["*"]
 						}
 					}
 				]
@@ -394,7 +370,7 @@ func (s) TestSDKAllowsRPCRequestWithEmptyPrincipalsOnTLSAuthenticatedConnection(
 					{
 						"name": "allow_authenticated",
 						"source": {
-							"principals": []
+							"principals": ["*"]
 						}
 					}
 				]
@@ -446,7 +422,7 @@ func (s) TestSDKAllowsRPCRequestWithEmptyPrincipalsOnMTLSAuthenticatedConnection
 					{
 						"name": "allow_authenticated",
 						"source": {
-							"principals": []
+							"principals": ["*"]
 						}
 					}
 				]
