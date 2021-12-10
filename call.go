@@ -20,9 +20,6 @@ package grpc
 
 import (
 	"context"
-
-	"google.golang.org/grpc/metadata"
-	imetadata "google.golang.org/grpc/internal/metadata"
 )
 
 // Invoke sends the RPC request on the wire and returns after response is
@@ -30,11 +27,6 @@ import (
 //
 // All errors returned by Invoke are compatible with the status package.
 func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply interface{}, opts ...CallOption) error {
-	if md, _ ,ok := metadata.FromOutgoingContextRaw(ctx); ok {
-		if err := imetadata.Validate(md); err != nil {
-			return err
-		}
-	}
 	// allow interceptor to see all applicable call options, which means those
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)

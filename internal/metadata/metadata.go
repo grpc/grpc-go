@@ -77,6 +77,7 @@ func Set(addr resolver.Address, md metadata.MD) resolver.Address {
 }
 
 // Validate returns an error if the input md contains invalid keys or values.
+//
 // There are check items:
 // - header names contain one or more characters from this set [0-9 a-z _ - .]
 // - if the header-name ends with a "-bin" suffix, the header-value could contain an arbitrary octet sequence. So no real validation required here.
@@ -103,7 +104,7 @@ func Validate(md metadata.MD) error {
 	return nil
 }
 
-// hasNotPrintable return true if msg has character not in %x20-%x7E
+// hasNotPrintable return true if msg contains any characters which are not in %x20-%x7E
 func hasNotPrintable(msg string) bool {
 	// for i that saving a conversion if not using for range
 	for i := 0; i < len(msg); i++ {
