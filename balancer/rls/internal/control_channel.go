@@ -144,52 +144,32 @@ func (cc *controlChannel) monitorConnectivityState() {
 	// entering SHUTDOWN and return early in that case.
 	ctx := context.Background()
 
-	// Wait for the control channel to become READY.
-	if !cc.waitForReady(ctx) {
-		return
-	}
-	cc.logger.Infof("Connectivity state is READY")
-
+	first := true
 	for {
-		// There is a small chance that the control channel has moved out of READY
-		// since the time we last saw it enter READY. Wait for it to enter anything
-		// other than READY.
-		if !cc.cc.WaitForStateChange(ctx, connectivity.Ready) {
-			// cc.ctx has expired. Can happen only if close() was called.
-			return
+		// Wait for the control channel to become READY.
+		for s := cc.cc.GetState(); s != connectivity.Ready; s = cc.cc.GetState() {
+			if s == connectivity.Shutdown {
+				return
+			}
+			cc.cc.WaitForStateChange(ctx, s)
 		}
+		cc.logger.Infof("Connectivity state is READY")
+
+		if !first {
+			if cc.backToReadyCh != nil {
+				cc.logger.Infof("Control channel back to READY")
+				cc.backToReadyCh <- struct{}{}
+			}
+		}
+		first = false
+
+		// Wait for the control channel to move out of READY.
+		cc.cc.WaitForStateChange(ctx, connectivity.Ready)
 		if cc.cc.GetState() == connectivity.Shutdown {
 			return
 		}
 		cc.logger.Infof("Connectivity state is %s", cc.cc.GetState())
-
-		// Wait for the control channel to become READY again.
-		if !cc.waitForReady(ctx) {
-			return
-		}
-		cc.logger.Infof("Connectivity state is READY")
-
-		if cc.backToReadyCh != nil {
-			cc.logger.Infof("Control channel back to READY")
-			cc.backToReadyCh <- struct{}{}
-		}
 	}
-}
-
-// waitForReady waits for the control channel to become READY. If the provided
-// context expires or the control channel enters SHUTDOWN, it returns early and
-// returns false.
-func (cc *controlChannel) waitForReady(ctx context.Context) (ready bool) {
-	for s := cc.cc.GetState(); s != connectivity.Ready; s = cc.cc.GetState() {
-		if s == connectivity.Shutdown {
-			return false
-		}
-		if !cc.cc.WaitForStateChange(ctx, s) {
-			// cc.ctx has expired. Can happen only if close() was called.
-			return false
-		}
-	}
-	return true
 }
 
 func (cc *controlChannel) close() {
