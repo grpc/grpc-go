@@ -55,7 +55,7 @@ type controlChannel struct {
 	throttler adaptiveThrottler
 
 	cc     *grpc.ClientConn
-	stub   rlsgrpc.RouteLookupServiceClient
+	client rlsgrpc.RouteLookupServiceClient
 	logger *internalgrpclog.PrefixLogger
 }
 
@@ -75,7 +75,7 @@ func newControlChannel(rlsServerName string, rpcTimeout time.Duration, bOpts bal
 	if err != nil {
 		return nil, err
 	}
-	ctrlCh.stub = rlsgrpc.NewRouteLookupServiceClient(ctrlCh.cc)
+	ctrlCh.client = rlsgrpc.NewRouteLookupServiceClient(ctrlCh.cc)
 	ctrlCh.logger.Infof("Control channel created to RLS server at: %v", rlsServerName)
 
 	go ctrlCh.monitorConnectivityState()
@@ -201,7 +201,7 @@ func (cc *controlChannel) lookup(reqKeys map[string]string, reason rlspb.RouteLo
 
 		ctx, cancel := context.WithTimeout(context.Background(), cc.rpcTimeout)
 		defer cancel()
-		resp, err := cc.stub.RouteLookup(ctx, req)
+		resp, err := cc.client.RouteLookup(ctx, req)
 		cb(resp.GetTargets(), resp.GetHeaderData(), err)
 	}()
 	return false
