@@ -20,9 +20,7 @@ package metadata
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -95,15 +93,15 @@ func TestValidate(t *testing.T) {
 		want      error
 	}{
 		{
-			md:        map[string][]string{string(rune(0x19)): []string{"testVal"}},
+			md:        map[string][]string{string(rune(0x19)): {"testVal"}},
 			want:      errors.New("header key is not 0-9a-z-_."),
 		},
 		{
-			md:        map[string][]string{"test": []string{string(rune(0x19))},
+			md:        map[string][]string{"test": {string(rune(0x19))}},
 			want:      errors.New("header val has not printable ASCII"),
 		},
 		{
-			md:        map[string][]string{"test-bin": []string{rune(0x19)}},
+			md:        map[string][]string{"test-bin": {string(rune(0x19))}},
 			want:      nil,
 		},
 	} {
