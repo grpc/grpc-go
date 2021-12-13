@@ -35,13 +35,13 @@ func (c *clientImpl) ReportLoad(server string) (*load.Store, func()) {
 	// TODO: load reporting with federation also needs find the authority for
 	// this server first, than report load to it. Currently always report to the
 	// default authority. This is needed to avoid a nil pointer panic.
-	a, err := c.findAuthority(xdsresource.ParseName(""))
+	a, unref, err := c.findAuthority(xdsresource.ParseName(""))
 	if err != nil {
 		return nil, func() {}
 	}
 	store, cancelF := a.reportLoad(server)
 	return store, func() {
 		cancelF()
-		c.unrefAuthority(a)
+		unref()
 	}
 }

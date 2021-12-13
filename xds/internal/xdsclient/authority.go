@@ -35,48 +35,44 @@ const federationScheme = "xdstp"
 // Note that this doesn't always create new authority. authorities with the same
 // config but different names are shared.
 //
+// The returned unref function must be called when the caller is done using this
+// authority, without holding c.authorityMu.
+//
 // Caller must not hold c.authorityMu.
-func (c *clientImpl) findAuthority(n *xdsresource.Name) (retA *authority, _ error) {
+func (c *clientImpl) findAuthority(n *xdsresource.Name) (_ *authority, unref func(), _ error) {
 	scheme, authority := n.Scheme, n.Authority
 
 	c.authorityMu.Lock()
 	defer c.authorityMu.Unlock()
 	if c.done.HasFired() {
-		return nil, errors.New("the xds-client is closed")
+		return nil, nil, errors.New("the xds-client is closed")
 	}
 
-	defer func() {
-		// All returned authority from this function will be used by a watch,
-		// holding the ref here.
-		//
-		// Note that this must be done while c.authorityMu is held, to avoid the
-		// race that an authority is returned, but before the watch starts, the
-		// old last watch is canceled (in another goroutine), causing this
-		// authority to be removed, and then a watch will start on a removed
-		// authority.
-		//
-		// unref() will be done when the watch is canceled.
-		if retA != nil {
-			retA.ref()
-		}
-	}()
-
-	var config *bootstrap.ServerConfig
-	if scheme != federationScheme {
-		config = c.config.XDSServer
-	} else {
-		authConfig, ok := c.config.Authorities[authority]
+	config := c.config.XDSServer
+	if scheme == federationScheme {
+		cfg, ok := c.config.Authorities[authority]
 		if !ok {
-			return nil, fmt.Errorf("xds: failed to find authority %q", authority)
+			return nil, nil, fmt.Errorf("xds: failed to find authority %q", authority)
 		}
-		config = authConfig.XDSServer
+		config = cfg.XDSServer
 	}
 
 	a, err := c.newAuthority(config)
 	if err != nil {
-		return nil, fmt.Errorf("xds: failed to connect to the control plane for authority %q: %v", authority, err)
+		return nil, nil, fmt.Errorf("xds: failed to connect to the control plane for authority %q: %v", authority, err)
 	}
-	return a, nil
+	// All returned authority from this function will be used by a watch,
+	// holding the ref here.
+	//
+	// Note that this must be done while c.authorityMu is held, to avoid the
+	// race that an authority is returned, but before the watch starts, the
+	// old last watch is canceled (in another goroutine), causing this
+	// authority to be removed, and then a watch will start on a removed
+	// authority.
+	//
+	// unref() will be done when the watch is canceled.
+	a.ref()
+	return a, func() { c.unrefAuthority(a) }, nil
 }
 
 // newAuthority creates a new authority for the config. But before that, it
@@ -85,8 +81,9 @@ func (c *clientImpl) findAuthority(n *xdsresource.Name) (retA *authority, _ erro
 // caller must hold c.authorityMu
 func (c *clientImpl) newAuthority(config *bootstrap.ServerConfig) (_ *authority, retErr error) {
 	// First check if there's already an authority for this config. If found, it
-	// means there was another watch with a different authority name but the
-	// same server config. Return it.
+	// means this authority is used by other watches (could be the same
+	// authority name, or a different authority name but the same server
+	// config). Return it.
 	configStr := config.String()
 	if a, ok := c.authorities[configStr]; ok {
 		return a, nil
@@ -122,6 +119,9 @@ func (c *clientImpl) newAuthority(config *bootstrap.ServerConfig) (_ *authority,
 
 // unrefAuthority unrefs the authority. It also moves the authority to idle
 // cache if it's ref count is 0.
+//
+// This function doesn't need to called explicitly. It's called by the returned
+// unref from findAuthority().
 //
 // Caller must not hold c.authorityMu.
 func (c *clientImpl) unrefAuthority(a *authority) {

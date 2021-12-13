@@ -30,7 +30,7 @@ func (c *clientImpl) WatchListener(serviceName string, cb func(xdsresource.Liste
 	n := xdsresource.ParseName(serviceName)
 	name := n.String()
 
-	a, err := c.findAuthority(n)
+	a, unref, err := c.findAuthority(n)
 	if err != nil {
 		cb(xdsresource.ListenerUpdate{}, err)
 		return func() {}
@@ -38,7 +38,7 @@ func (c *clientImpl) WatchListener(serviceName string, cb func(xdsresource.Liste
 	cancelF := a.watchListener(name, cb)
 	return func() {
 		cancelF()
-		c.unrefAuthority(a)
+		unref()
 	}
 }
 
@@ -51,7 +51,7 @@ func (c *clientImpl) WatchRouteConfig(routeName string, cb func(xdsresource.Rout
 	n := xdsresource.ParseName(routeName)
 	name := n.String()
 
-	a, err := c.findAuthority(n)
+	a, unref, err := c.findAuthority(n)
 	if err != nil {
 		cb(xdsresource.RouteConfigUpdate{}, err)
 		return func() {}
@@ -59,7 +59,7 @@ func (c *clientImpl) WatchRouteConfig(routeName string, cb func(xdsresource.Rout
 	cancelF := a.watchRouteConfig(name, cb)
 	return func() {
 		cancelF()
-		c.unrefAuthority(a)
+		unref()
 	}
 }
 
@@ -76,7 +76,7 @@ func (c *clientImpl) WatchCluster(clusterName string, cb func(xdsresource.Cluste
 	n := xdsresource.ParseName(clusterName)
 	name := n.String()
 
-	a, err := c.findAuthority(n)
+	a, unref, err := c.findAuthority(n)
 	if err != nil {
 		cb(xdsresource.ClusterUpdate{}, err)
 		return func() {}
@@ -84,7 +84,7 @@ func (c *clientImpl) WatchCluster(clusterName string, cb func(xdsresource.Cluste
 	cancelF := a.watchCluster(name, cb)
 	return func() {
 		cancelF()
-		c.unrefAuthority(a)
+		unref()
 	}
 }
 
@@ -100,7 +100,7 @@ func (c *clientImpl) WatchEndpoints(clusterName string, cb func(xdsresource.Endp
 	n := xdsresource.ParseName(clusterName)
 	name := n.String()
 
-	a, err := c.findAuthority(n)
+	a, unref, err := c.findAuthority(n)
 	if err != nil {
 		cb(xdsresource.EndpointsUpdate{}, err)
 		return func() {}
@@ -108,6 +108,6 @@ func (c *clientImpl) WatchEndpoints(clusterName string, cb func(xdsresource.Endp
 	cancelF := a.watchEndpoints(name, cb)
 	return func() {
 		cancelF()
-		c.unrefAuthority(a)
+		unref()
 	}
 }

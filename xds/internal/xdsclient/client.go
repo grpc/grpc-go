@@ -48,7 +48,9 @@ type clientImpl struct {
 	authorityMu sync.Mutex
 	// authorities is a map from ServerConfig to authority. So that
 	// different authorities sharing the same ServerConfig can share the
-	// authority. The key is ServerConfig.String().
+	// authority.
+	//
+	// The key is **ServerConfig.String()**, not the authority name.
 	//
 	// An authority is either in authorities, or idleAuthorities,
 	// never both.
