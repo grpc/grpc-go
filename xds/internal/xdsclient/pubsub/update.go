@@ -295,6 +295,21 @@ func (pb *Pubsub) NewConnectionError(err error) {
 	pb.mu.Lock()
 	defer pb.mu.Unlock()
 
+	for _, s := range pb.ldsWatchers {
+		for wi := range s {
+			wi.newError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err))
+		}
+	}
+	for _, s := range pb.rdsWatchers {
+		for wi := range s {
+			wi.newError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err))
+		}
+	}
+	for _, s := range pb.cdsWatchers {
+		for wi := range s {
+			wi.newError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err))
+		}
+	}
 	for _, s := range pb.edsWatchers {
 		for wi := range s {
 			wi.newError(xdsresource.NewErrorf(xdsresource.ErrorTypeConnection, "xds: error received from xDS stream: %v", err))
