@@ -156,10 +156,8 @@ func (cc *controlChannel) monitorConnectivityState() {
 		cc.logger.Infof("Connectivity state is READY")
 
 		if !first {
-			if cc.backToReadyCh != nil {
-				cc.logger.Infof("Control channel back to READY")
-				cc.backToReadyCh <- struct{}{}
-			}
+			cc.logger.Infof("Control channel back to READY")
+			cc.backToReadyCh <- struct{}{}
 		}
 		first = false
 
