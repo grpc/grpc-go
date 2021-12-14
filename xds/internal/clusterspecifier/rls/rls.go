@@ -36,7 +36,7 @@ import (
 	_ "google.golang.org/grpc/balancer/rls"
 )
 
-const rlsBalancerName = "rls"
+const rlsBalancerName = "rls_experimental"
 
 func init() {
 	if envconfig.XDSRLS {

@@ -20,10 +20,11 @@ package rls
 
 import (
 	"encoding/json"
-	"reflect"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	_ "google.golang.org/grpc/balancer/rls"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/proto/grpc_lookup_v1"
@@ -75,19 +76,31 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 		if (err != nil) != test.wantErr {
 			t.Fatalf("ParseClusterSpecifierConfig(%+v) returned err: %v, wantErr: %v", test.rlcs, err, test.wantErr)
 		}
-
+		if test.wantErr { // Successfully received an error.
+			return
+		}
 		// Marshal and then unmarshal into interface{} to get rid of
 		// nondeterministic protojson Marshaling.
 		lbCfgJSON, err := json.Marshal(lbCfg)
 		if err != nil {
 			t.Fatalf("json.Marshal(%+v) returned err %v", lbCfg, err)
 		}
+		var got interface{}
+		err = json.Unmarshal(lbCfgJSON, got)
+		if err != nil {
+			t.Fatalf("json.Unmarshal(%+v) returned err %v", lbCfgJSON, err)
+		}
 		wantCfgJSON, err := json.Marshal(test.wantConfig)
 		if err != nil {
 			t.Fatalf("json.Marshal(%+v) returned err %v", test.wantConfig, err)
 		}
-		if !reflect.DeepEqual(lbCfgJSON, wantCfgJSON) {
-			t.Fatalf("ParseClusterSpecifierConfig(%+v) = %v, want %v", test.rlcs, lbCfgJSON, wantCfgJSON)
+		var want interface{}
+		err = json.Unmarshal(wantCfgJSON, want)
+		if err != nil {
+			t.Fatalf("json.Unmarshal(%+v) returned err %v", lbCfgJSON, err)
+		}
+		if !cmp.Equal(want, got, cmpopts.EquateEmpty()) {
+			t.Fatalf("ParseClusterSpecifierConfig(%+v) returned expected, diff (-want +got):\\n%s", test.rlcs, cmp.Diff(want, got, cmpopts.EquateEmpty()))
 		}
 	}
 }
@@ -144,7 +157,7 @@ var rlsClusterSpecifierConfigWithoutTransformations = testutils.MarshalAny(&grpc
 	},
 })
 
-var configWithoutTransformationsWant = clusterspecifier.BalancerConfig{{"rls": &lbConfigJSON{
+var configWithoutTransformationsWant = clusterspecifier.BalancerConfig{{"rls_experimental": &lbConfigJSON{
 	RouteLookupConfig: []byte(`{"grpcKeybuilders":[{"names":[{"service":"service","method":"method"}],"headers":[{"key":"k1","names":["v1"]}]}],"lookupService":"target","lookupServiceTimeout":"100s","maxAge":"60s","staleAge":"50s","cacheSizeBytes":"1000","defaultTarget":"passthrough:///default"}`),
 	ChildPolicy: []map[string]json.RawMessage{
 		{
