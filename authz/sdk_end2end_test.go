@@ -268,7 +268,7 @@ var sdkTests = map[string]struct {
 					{
 						"name": "allow_authenticated",
 						"source": {
-							"principals": ["*"]
+							"principals": ["*", ""]
 						}
 					}
 				]
