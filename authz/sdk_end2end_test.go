@@ -362,7 +362,7 @@ func (s) TestSDKStaticPolicyEnd2End(t *testing.T) {
 	}
 }
 
-func (s) TestSDKAllowsRPCRequestWithEmptyPrincipalsOnTLSAuthenticatedConnection(t *testing.T) {
+func (s) TestSDKAllowsRPCRequestWithPrincipalsFieldOnTLSAuthenticatedConnection(t *testing.T) {
 	authzPolicy := `{
 				"name": "authz",
 				"allow_rules":
@@ -370,7 +370,7 @@ func (s) TestSDKAllowsRPCRequestWithEmptyPrincipalsOnTLSAuthenticatedConnection(
 					{
 						"name": "allow_authenticated",
 						"source": {
-							"principals": ["*"]
+							"principals": ["*", ""]
 						}
 					}
 				]
@@ -414,7 +414,7 @@ func (s) TestSDKAllowsRPCRequestWithEmptyPrincipalsOnTLSAuthenticatedConnection(
 	}
 }
 
-func (s) TestSDKAllowsRPCRequestWithEmptyPrincipalsOnMTLSAuthenticatedConnection(t *testing.T) {
+func (s) TestSDKAllowsRPCRequestWithPrincipalsFieldOnMTLSAuthenticatedConnection(t *testing.T) {
 	authzPolicy := `{
 				"name": "authz",
 				"allow_rules":
@@ -422,7 +422,7 @@ func (s) TestSDKAllowsRPCRequestWithEmptyPrincipalsOnMTLSAuthenticatedConnection
 					{
 						"name": "allow_authenticated",
 						"source": {
-							"principals": ["*"]
+							"principals": ["*", ""]
 						}
 					}
 				]
