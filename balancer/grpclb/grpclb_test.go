@@ -656,7 +656,7 @@ func (s) TestDropRequest(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		var p peer.Peer
 		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if want := tss.bePorts[1]; p.Addr.(*net.TCPAddr).Port != want {
 			t.Errorf("got peer: %v, want peer port: %v", p.Addr, want)
@@ -667,7 +667,7 @@ func (s) TestDropRequest(t *testing.T) {
 		}
 
 		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if want := tss.bePorts[1]; p.Addr.(*net.TCPAddr).Port != want {
 			t.Errorf("got peer: %v, want peer port: %v", p.Addr, want)
