@@ -47,7 +47,7 @@ import (
 )
 
 const (
-	c2pScheme = "google-c2p"
+	c2pScheme = "google-c2p-experimental"
 
 	tdURL          = "dns:///directpath-pa.googleapis.com"
 	httpReqTimeout = 10 * time.Second
@@ -75,9 +75,7 @@ var (
 )
 
 func init() {
-	if envconfig.C2PResolver {
-		resolver.Register(c2pResolverBuilder{})
-	}
+	resolver.Register(c2pResolverBuilder{})
 }
 
 type c2pResolverBuilder struct{}
