@@ -43,7 +43,6 @@ const (
 	rbacSupportEnv               = "GRPC_XDS_EXPERIMENTAL_RBAC"
 	federationEnv                = "GRPC_EXPERIMENTAL_XDS_FEDERATION"
 
-	c2pResolverSupportEnv                    = "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER"
 	c2pResolverTestOnlyTrafficDirectorURIEnv = "GRPC_TEST_ONLY_GOOGLE_C2P_RESOLVER_TRAFFIC_DIRECTOR_URI"
 )
 
@@ -86,10 +85,6 @@ var (
 	// XDSFederation indicates whether federation support is enabled.
 	XDSFederation = strings.EqualFold(os.Getenv(federationEnv), "true")
 
-	// C2PResolver indicates whether support for C2P resolver is enabled.
-	// This can be enabled by setting the environment variable
-	// "GRPC_EXPERIMENTAL_GOOGLE_C2P_RESOLVER" to "true".
-	C2PResolver = strings.EqualFold(os.Getenv(c2pResolverSupportEnv), "true")
 	// C2PResolverTestOnlyTrafficDirectorURI is the TD URI for testing.
 	C2PResolverTestOnlyTrafficDirectorURI = os.Getenv(c2pResolverTestOnlyTrafficDirectorURIEnv)
 )
