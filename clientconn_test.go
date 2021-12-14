@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
@@ -658,7 +659,8 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		t.Fatalf("Failed to listen. Err: %v", err)
 	}
 	defer lis.Close()
-	connected := make(chan struct{})
+	connected := grpcsync.NewEvent()
+	defer connected.Fire()
 	go func() {
 		conn, err := lis.Accept()
 		if err != nil {
@@ -680,7 +682,7 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 			t.Errorf("error writing settings: %v", err)
 			return
 		}
-		<-connected
+		<-connected.Done()
 		if err := f.WriteGoAway(0, http2.ErrCodeEnhanceYourCalm, []byte("too_many_pings")); err != nil {
 			t.Errorf("error writing GOAWAY: %v", err)
 			return
@@ -698,7 +700,7 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
 	defer cc.Close()
-	close(connected)
+	connected.Fire()
 	for {
 		time.Sleep(10 * time.Millisecond)
 		cc.mu.RLock()
