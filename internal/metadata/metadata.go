@@ -85,7 +85,7 @@ func Set(addr resolver.Address, md metadata.MD) resolver.Address {
 func Validate(md metadata.MD) error {
 	for k, vals := range md {
 		// check key, for i that saving a conversion if not using for range
-		for i := 0; i< len(k); i++ {
+		for i := 0; i < len(k); i++ {
 			r := k[i]
 			if !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '.' && r != '-' && r != '_' {
 				return errors.New("header key is not 0-9a-z-_.")

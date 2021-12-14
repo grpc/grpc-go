@@ -89,20 +89,20 @@ func TestSet(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	for _, test := range []struct {
-		md        metadata.MD
-		want      error
+		md   metadata.MD
+		want error
 	}{
 		{
-			md:        map[string][]string{string(rune(0x19)): {"testVal"}},
-			want:      errors.New("header key is not 0-9a-z-_."),
+			md:   map[string][]string{string(rune(0x19)): {"testVal"}},
+			want: errors.New("header key is not 0-9a-z-_."),
 		},
 		{
-			md:        map[string][]string{"test": {string(rune(0x19))}},
-			want:      errors.New("header val has not printable ASCII"),
+			md:   map[string][]string{"test": {string(rune(0x19))}},
+			want: errors.New("header val has not printable ASCII"),
 		},
 		{
-			md:        map[string][]string{"test-bin": {string(rune(0x19))}},
-			want:      nil,
+			md:   map[string][]string{"test-bin": {string(rune(0x19))}},
+			want: nil,
 		},
 	} {
 		err := Validate(test.md)
