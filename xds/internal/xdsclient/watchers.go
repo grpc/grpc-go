@@ -28,14 +28,12 @@ import (
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchListener(serviceName string, cb func(xdsresource.ListenerUpdate, error)) (cancel func()) {
 	n := xdsresource.ParseName(serviceName)
-	name := n.String()
-
 	a, unref, err := c.findAuthority(n)
 	if err != nil {
 		cb(xdsresource.ListenerUpdate{}, err)
 		return func() {}
 	}
-	cancelF := a.watchListener(name, cb)
+	cancelF := a.watchListener(n.String(), cb)
 	return func() {
 		cancelF()
 		unref()
@@ -49,14 +47,12 @@ func (c *clientImpl) WatchListener(serviceName string, cb func(xdsresource.Liste
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchRouteConfig(routeName string, cb func(xdsresource.RouteConfigUpdate, error)) (cancel func()) {
 	n := xdsresource.ParseName(routeName)
-	name := n.String()
-
 	a, unref, err := c.findAuthority(n)
 	if err != nil {
 		cb(xdsresource.RouteConfigUpdate{}, err)
 		return func() {}
 	}
-	cancelF := a.watchRouteConfig(name, cb)
+	cancelF := a.watchRouteConfig(n.String(), cb)
 	return func() {
 		cancelF()
 		unref()
@@ -74,14 +70,12 @@ func (c *clientImpl) WatchRouteConfig(routeName string, cb func(xdsresource.Rout
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchCluster(clusterName string, cb func(xdsresource.ClusterUpdate, error)) (cancel func()) {
 	n := xdsresource.ParseName(clusterName)
-	name := n.String()
-
 	a, unref, err := c.findAuthority(n)
 	if err != nil {
 		cb(xdsresource.ClusterUpdate{}, err)
 		return func() {}
 	}
-	cancelF := a.watchCluster(name, cb)
+	cancelF := a.watchCluster(n.String(), cb)
 	return func() {
 		cancelF()
 		unref()
@@ -98,14 +92,12 @@ func (c *clientImpl) WatchCluster(clusterName string, cb func(xdsresource.Cluste
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchEndpoints(clusterName string, cb func(xdsresource.EndpointsUpdate, error)) (cancel func()) {
 	n := xdsresource.ParseName(clusterName)
-	name := n.String()
-
 	a, unref, err := c.findAuthority(n)
 	if err != nil {
 		cb(xdsresource.EndpointsUpdate{}, err)
 		return func() {}
 	}
-	cancelF := a.watchEndpoints(name, cb)
+	cancelF := a.watchEndpoints(n.String(), cb)
 	return func() {
 		cancelF()
 		unref()

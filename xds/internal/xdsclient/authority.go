@@ -127,13 +127,14 @@ func (c *clientImpl) newAuthority(config *bootstrap.ServerConfig) (_ *authority,
 func (c *clientImpl) unrefAuthority(a *authority) {
 	c.authorityMu.Lock()
 	defer c.authorityMu.Unlock()
-	if a.unref() == 0 {
-		configStr := a.config.String()
-		delete(c.authorities, configStr)
-		c.idleAuthorities.Add(configStr, a, func() {
-			a.close()
-		})
+	if a.unref() > 0 {
+		return
 	}
+	configStr := a.config.String()
+	delete(c.authorities, configStr)
+	c.idleAuthorities.Add(configStr, a, func() {
+		a.close()
+	})
 }
 
 // authority is a combination of pubsub and the controller for this authority.
@@ -144,12 +145,10 @@ func (c *clientImpl) unrefAuthority(a *authority) {
 // will need to keep lists of resources from each control plane, to know what
 // are removed.
 type authority struct {
-	config *bootstrap.ServerConfig
-
+	config     *bootstrap.ServerConfig
 	pubsub     *pubsub.Pubsub
 	controller controllerInterface
-
-	refCount int
+	refCount   int
 }
 
 // caller must hold parent's authorityMu.

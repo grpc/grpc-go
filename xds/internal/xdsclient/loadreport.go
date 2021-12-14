@@ -33,8 +33,8 @@ import (
 // load reporting stream.
 func (c *clientImpl) ReportLoad(server string) (*load.Store, func()) {
 	// TODO: load reporting with federation also needs find the authority for
-	// this server first, than report load to it. Currently always report to the
-	// default authority. This is needed to avoid a nil pointer panic.
+	// this server first, then reports load to it. Currently always report to
+	// the default authority. This is needed to avoid a nil pointer panic.
 	a, unref, err := c.findAuthority(xdsresource.ParseName(""))
 	if err != nil {
 		return nil, func() {}
