@@ -99,8 +99,8 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 		if err != nil {
 			t.Fatalf("json.Unmarshal(%+v) returned err %v", lbCfgJSON, err)
 		}
-		if !cmp.Equal(want, got, cmpopts.EquateEmpty()) {
-			t.Fatalf("ParseClusterSpecifierConfig(%+v) returned expected, diff (-want +got):\\n%s", test.rlcs, cmp.Diff(want, got, cmpopts.EquateEmpty()))
+		if diff := cmp.Diff(want, got, cmpopts.EquateEmpty()); diff != "" {
+			t.Fatalf("ParseClusterSpecifierConfig(%+v) returned expected, diff (-want +got) %v", test.rlcs, diff)
 		}
 	}
 }
