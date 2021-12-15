@@ -54,11 +54,12 @@ const (
 	testXDSServer          = "xds-server"
 	testXDSServerAuthority = "xds-server-authority"
 
-	testAuthority = "test-authority"
-	testLDSName   = "test-lds"
-	testRDSName   = "test-rds"
-	testCDSName   = "test-cds"
-	testEDSName   = "test-eds"
+	testAuthority  = "test-authority"
+	testAuthority2 = "test-authority-2"
+	testLDSName    = "test-lds"
+	testRDSName    = "test-rds"
+	testCDSName    = "test-cds"
+	testEDSName    = "test-eds"
 
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 	defaultTestTimeout            = 5 * time.Second
@@ -97,7 +98,7 @@ type testController struct {
 	removeWatches map[xdsresource.ResourceType]*testutils.Channel
 }
 
-func overrideNewController() (*testutils.Channel, func()) {
+func overrideNewController(t *testing.T) *testutils.Channel {
 	origNewController := newController
 	ch := testutils.NewChannel()
 	newController = func(config *bootstrap.ServerConfig, pubsub *pubsub.Pubsub, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger) (controllerInterface, error) {
@@ -105,7 +106,8 @@ func overrideNewController() (*testutils.Channel, func()) {
 		ch.Send(ret)
 		return ret, nil
 	}
-	return ch, func() { newController = origNewController }
+	t.Cleanup(func() { newController = origNewController })
+	return ch
 }
 
 func newTestController(config *bootstrap.ServerConfig) *testController {
@@ -273,8 +275,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	}
 	defer func() { bootstrapNewConfig = oldBootstrapNewConfig }()
 
-	apiClientCh, cleanup := overrideNewController()
-	defer cleanup()
+	ctrlCh := overrideNewController(t)
 
 	// The first New(). Should create a Client and a new APIClient.
 	client, err := newRefCounted()
@@ -288,7 +289,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	clientImpl := client.clientImpl
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	c, err := apiClientCh.Receive(ctx)
+	c, err := ctrlCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
@@ -311,7 +312,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 
 		sctx, scancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 		defer scancel()
-		_, err := apiClientCh.Receive(sctx)
+		_, err := ctrlCh.Receive(sctx)
 		if err == nil {
 			client.Close()
 			t.Fatalf("%d-th call to New() created a new API client", i)
@@ -351,7 +352,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	// Call a watch to create the controller.
 	client2.WatchCluster("abc", func(update xdsresource.ClusterUpdate, err error) {})
 
-	c2, err := apiClientCh.Receive(ctx)
+	c2, err := ctrlCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}

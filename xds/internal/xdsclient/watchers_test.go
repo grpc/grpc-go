@@ -38,9 +38,7 @@ import (
 // new behavior after federation.
 func testWatchSetup(ctx context.Context, t *testing.T, typ xdsresource.ResourceType, resourceName string, overrideWatchExpiryTimeout bool) (_ *clientImpl, _ *testController, _ pubsub.UpdateHandler, updateCh *testutils.Channel, cancelWatch func()) {
 	t.Helper()
-
-	apiClientCh, cleanupController := overrideNewController()
-	t.Cleanup(cleanupController)
+	ctrlCh := overrideNewController(t)
 
 	watchExpiryTimeout := defaultWatchExpiryTimeout
 	if overrideWatchExpiryTimeout {
@@ -61,19 +59,19 @@ func testWatchSetup(ctx context.Context, t *testing.T, typ xdsresource.ResourceT
 		t.Fatalf("received unexpected update immediately after watch: %+v", u)
 	}
 
-	c, err := apiClientCh.Receive(ctx)
+	c, err := ctrlCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
 	}
-	apiClient := c.(*testController)
+	ctrl := c.(*testController)
 
-	if _, err := apiClient.addWatches[typ].Receive(ctx); err != nil {
+	if _, err := ctrl.addWatches[typ].Receive(ctx); err != nil {
 		t.Fatalf("want new watch to start, got error %v", err)
 	}
 
 	updateHandler := findPubsubForTest(t, client, xdsresource.ParseName(resourceName).Authority)
 
-	return client, apiClient, updateHandler, updateCh, cancelWatch
+	return client, ctrl, updateHandler, updateCh, cancelWatch
 }
 
 // findPubsubForTest returns the pubsub for the given authority, to send updates

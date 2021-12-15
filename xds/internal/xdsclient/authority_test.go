@@ -91,6 +91,7 @@ func watchAndFetchNewController(t *testing.T, client *clientImpl, resourceName s
 		t.Fatalf("authority for %q is not created", authority)
 	}
 	ctrlTemp := a.controller.(*testController)
+	// Clear the channel so the next watch on this controller can proceed.
 	ctrlTemp.addWatches[xdsresource.ClusterResource].ReceiveOrFail()
 
 	cancelWatchRet := func() {
@@ -112,9 +113,7 @@ func watchAndFetchNewController(t *testing.T, client *clientImpl, resourceName s
 // config.
 func (s) TestAuthorityDefaultAuthority(t *testing.T) {
 	overrideFedEnvVar(t)
-
-	ctrlCh, cleanupController := overrideNewController()
-	t.Cleanup(cleanupController)
+	ctrlCh := overrideNewController(t)
 
 	client, err := newWithConfig(&bootstrap.Config{
 		XDSServer:   serverConfigs[0],
@@ -127,7 +126,7 @@ func (s) TestAuthorityDefaultAuthority(t *testing.T) {
 
 	ctrl, ok, _ := watchAndFetchNewController(t, client, testCDSName, ctrlCh)
 	if !ok {
-		t.Fatalf("want a new controller to be build, got none")
+		t.Fatalf("want a new controller to be built, got none")
 	}
 	// Want the default server config.
 	wantConfig := serverConfigs[0]
@@ -140,9 +139,7 @@ func (s) TestAuthorityDefaultAuthority(t *testing.T) {
 // resource name creates a controller with the corresponding server config.
 func (s) TestAuthorityNoneDefaultAuthority(t *testing.T) {
 	overrideFedEnvVar(t)
-
-	ctrlCh, cleanupController := overrideNewController()
-	t.Cleanup(cleanupController)
+	ctrlCh := overrideNewController(t)
 
 	client, err := newWithConfig(&bootstrap.Config{
 		XDSServer:   serverConfigs[0],
@@ -156,7 +153,7 @@ func (s) TestAuthorityNoneDefaultAuthority(t *testing.T) {
 	resourceName := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
 	ctrl, ok, _ := watchAndFetchNewController(t, client, resourceName, ctrlCh)
 	if !ok {
-		t.Fatalf("want a new controller to be build, got none")
+		t.Fatalf("want a new controller to be built, got none")
 	}
 	// Want the server config for this authority.
 	wantConfig := serverConfigs[1]
@@ -171,15 +168,13 @@ func (s) TestAuthorityNoneDefaultAuthority(t *testing.T) {
 //   create new authority
 func (s) TestAuthorityShare(t *testing.T) {
 	overrideFedEnvVar(t)
-
-	ctrlCh, cleanupController := overrideNewController()
-	t.Cleanup(cleanupController)
+	ctrlCh := overrideNewController(t)
 
 	client, err := newWithConfig(&bootstrap.Config{
 		XDSServer: serverConfigs[0],
 		Authorities: map[string]*bootstrap.Authority{
-			testAuthority:              {XDSServer: serverConfigs[1]},
-			testAuthority + "-another": {XDSServer: serverConfigs[1]}, // Another authority name, but with the same config.
+			testAuthority:  {XDSServer: serverConfigs[1]},
+			testAuthority2: {XDSServer: serverConfigs[1]}, // Another authority name, but with the same config.
 		},
 	}, defaultWatchExpiryTimeout, defaultIdleAuthorityDeleteTimeout)
 	if err != nil {
@@ -190,7 +185,7 @@ func (s) TestAuthorityShare(t *testing.T) {
 	resourceName := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
 	ctrl1, ok1, _ := watchAndFetchNewController(t, client, resourceName, ctrlCh)
 	if !ok1 {
-		t.Fatalf("want a new controller to be build, got none")
+		t.Fatalf("want a new controller to be built, got none")
 	}
 	// Want the server config for this authority.
 	wantConfig := serverConfigs[1]
@@ -208,7 +203,7 @@ func (s) TestAuthorityShare(t *testing.T) {
 
 	// Call the watch with a different authority name, but the same server
 	// config. This shouldn't create a new controller.
-	resourceNameSameConfig := buildResourceName(xdsresource.ClusterResource, testAuthority+"-another", testCDSName+"1", nil)
+	resourceNameSameConfig := buildResourceName(xdsresource.ClusterResource, testAuthority2, testCDSName+"1", nil)
 	if ctrl, ok, _ := watchAndFetchNewController(t, client, resourceNameSameConfig, ctrlCh); ok {
 		t.Fatalf("an unexpected controller is built with config: %v", ctrl.config)
 	}
@@ -220,11 +215,9 @@ func (s) TestAuthorityShare(t *testing.T) {
 //   timeout.
 func (s) TestAuthorityIdleTimeout(t *testing.T) {
 	overrideFedEnvVar(t)
+	ctrlCh := overrideNewController(t)
 
-	ctrlCh, cleanupController := overrideNewController()
-	t.Cleanup(cleanupController)
-
-	const idleTimeout = 500 * time.Millisecond
+	const idleTimeout = 50 * time.Millisecond
 
 	client, err := newWithConfig(&bootstrap.Config{
 		XDSServer: serverConfigs[0],
@@ -240,7 +233,7 @@ func (s) TestAuthorityIdleTimeout(t *testing.T) {
 	resourceName := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
 	ctrl1, ok1, cancelWatch1 := watchAndFetchNewController(t, client, resourceName, ctrlCh)
 	if !ok1 {
-		t.Fatalf("want a new controller to be build, got none")
+		t.Fatalf("want a new controller to be built, got none")
 	}
 
 	var cancelWatch2 func()
@@ -273,9 +266,7 @@ func (s) TestAuthorityIdleTimeout(t *testing.T) {
 // are all closed when the client is closed.
 func (s) TestAuthorityClientClose(t *testing.T) {
 	overrideFedEnvVar(t)
-
-	ctrlCh, cleanupController := overrideNewController()
-	t.Cleanup(cleanupController)
+	ctrlCh := overrideNewController(t)
 
 	client, err := newWithConfig(&bootstrap.Config{
 		XDSServer: serverConfigs[0],
@@ -291,13 +282,13 @@ func (s) TestAuthorityClientClose(t *testing.T) {
 	resourceName := testCDSName
 	ctrl1, ok1, cancelWatch1 := watchAndFetchNewController(t, client, resourceName, ctrlCh)
 	if !ok1 {
-		t.Fatalf("want a new controller to be build, got none")
+		t.Fatalf("want a new controller to be built, got none")
 	}
 
 	resourceNameWithAuthority := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
 	ctrl2, ok2, _ := watchAndFetchNewController(t, client, resourceNameWithAuthority, ctrlCh)
 	if !ok2 {
-		t.Fatalf("want a new controller to be build, got none")
+		t.Fatalf("want a new controller to be built, got none")
 	}
 
 	cancelWatch1()
@@ -321,11 +312,9 @@ func (s) TestAuthorityClientClose(t *testing.T) {
 // when a new watch is started on this authority.
 func (s) TestAuthorityRevive(t *testing.T) {
 	overrideFedEnvVar(t)
+	ctrlCh := overrideNewController(t)
 
-	ctrlCh, cleanupController := overrideNewController()
-	t.Cleanup(cleanupController)
-
-	const idleTimeout = 500 * time.Millisecond
+	const idleTimeout = 50 * time.Millisecond
 
 	client, err := newWithConfig(&bootstrap.Config{
 		XDSServer: serverConfigs[0],
@@ -343,7 +332,7 @@ func (s) TestAuthorityRevive(t *testing.T) {
 	resourceName := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
 	ctrl1, ok1, cancelWatch1 := watchAndFetchNewController(t, client, resourceName, ctrlCh)
 	if !ok1 {
-		t.Fatalf("want a new controller to be build, got none")
+		t.Fatalf("want a new controller to be built, got none")
 	}
 	cancelWatch1()
 
