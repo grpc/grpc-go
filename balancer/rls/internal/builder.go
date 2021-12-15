@@ -20,7 +20,11 @@
 package rls
 
 import (
+	"encoding/json"
+
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/serviceconfig"
 )
 
 const rlsBalancerName = "rls_experimental"
@@ -42,4 +46,9 @@ func (*rlsBB) Name() string {
 func (*rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	// TODO(easwars): Fix this once the LB policy implementation is pulled in.
 	return &rlsBalancer{}
+}
+
+func (*rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	logger.Infof("Received JSON service config: %v", pretty.ToJSON(c))
+	return parseConfig(c)
 }
