@@ -21,10 +21,9 @@ package rls
 
 import (
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/internal/grpcsync"
 )
 
-const rlsBalancerName = "rls"
+const rlsBalancerName = "rls_experimental"
 
 func init() {
 	balancer.Register(&rlsBB{})
@@ -41,13 +40,6 @@ func (*rlsBB) Name() string {
 }
 
 func (*rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	lb := &rlsBalancer{
-		done:       grpcsync.NewEvent(),
-		cc:         cc,
-		opts:       opts,
-		lbCfg:      &lbConfig{},
-		ccUpdateCh: make(chan *balancer.ClientConnState),
-	}
-	go lb.run()
-	return lb
+	// TODO(easwars): Fix this once the LB policy implementation is pulled in.
+	return &rlsBalancer{}
 }
