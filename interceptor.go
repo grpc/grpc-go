@@ -40,6 +40,14 @@ type UnaryInvoker func(ctx context.Context, method string, req, reply interface{
 // defaults from the ClientConn as well as per-call options.
 //
 // The returned error must be compatible with the status package.
+//
+// A simple example that logs the method name when called and then invokes the
+// the unary method.
+//
+//	func Interceptor(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+//		log.Println("Intercepting:", method)
+//		return invoker(ctx, method, req, reply, cc, opts...)
+//	}
 type UnaryClientInterceptor func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error
 
 // Streamer is called by StreamClientInterceptor to create a ClientStream.
@@ -60,6 +68,14 @@ type Streamer func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method
 //
 // StreamClientInterceptor may return a custom ClientStream to intercept all I/O
 // operations. The returned error must be compatible with the status package.
+//
+// A simple example that logs the method name when called and then invokes the
+// the stream.
+//
+//	func Interceptor(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
+//		log.Println("Intercepting:", method)
+//		return streamer(ctx, deesc, cc, method, opts...)
+//	}
 type StreamClientInterceptor func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error)
 
 // UnaryServerInfo consists of various information about a unary RPC on

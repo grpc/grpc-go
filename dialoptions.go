@@ -446,6 +446,11 @@ func WithKeepaliveParams(kp keepalive.ClientParameters) DialOption {
 
 // WithUnaryInterceptor returns a DialOption that specifies the interceptor for
 // unary RPCs.
+//
+// At most one UnaryClientInterceptor DialOption may be passed when dialing.
+// The last WithUnaryInterceptor option wins in case multiple are passed.  If
+// you want more than one interceptor attached, use WithChainUnaryInterceptor
+// instead.
 func WithUnaryInterceptor(f UnaryClientInterceptor) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.unaryInt = f
@@ -465,6 +470,11 @@ func WithChainUnaryInterceptor(interceptors ...UnaryClientInterceptor) DialOptio
 
 // WithStreamInterceptor returns a DialOption that specifies the interceptor for
 // streaming RPCs.
+//
+// At most one StreamClientInterceptor DialOption may be passed when dialing.
+// The last WithStreamInterceptor option wins in case multiple are passed.  If
+// you want more than one interceptor attached, use WithChainStreamInterceptor
+// instead.
 func WithStreamInterceptor(f StreamClientInterceptor) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.streamInt = f
