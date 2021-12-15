@@ -81,7 +81,8 @@ func (s) TestEndpointsWatchAfterCache(t *testing.T) {
 func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, _, _, endpointsUpdateCh, _ := testWatchSetup(ctx, t, xdsresource.EndpointsResource, testCDSName, true)
+	client, _ := testClientSetup(t, true)
+	endpointsUpdateCh, _ := newWatch(t, client, xdsresource.EndpointsResource, testCDSName)
 
 	u, err := endpointsUpdateCh.Receive(ctx)
 	if err != nil {
@@ -98,7 +99,9 @@ func (s) TestEndpointsWatchExpiryTimer(t *testing.T) {
 func (s) TestEndpointsWatchNACKError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, _, updateHandler, endpointsUpdateCh, _ := testWatchSetup(ctx, t, xdsresource.EndpointsResource, testCDSName, false)
+	client, ctrlCh := testClientSetup(t, false)
+	endpointsUpdateCh, _ := newWatch(t, client, xdsresource.EndpointsResource, testCDSName)
+	_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, xdsresource.EndpointsResource, testCDSName)
 
 	wantError := fmt.Errorf("testing error")
 	updateHandler.NewEndpoints(map[string]xdsresource.EndpointsUpdateErrTuple{testCDSName: {Err: wantError}}, xdsresource.UpdateMetadata{ErrState: &xdsresource.UpdateErrorMetadata{Err: wantError}})

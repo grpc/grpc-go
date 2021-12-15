@@ -77,7 +77,9 @@ func (s) TestLDSResourceRemoved(t *testing.T) {
 func (s) TestListenerWatchNACKError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, _, updateHandler, ldsUpdateCh, _ := testWatchSetup(ctx, t, xdsresource.ListenerResource, testLDSName, false)
+	client, ctrlCh := testClientSetup(t, false)
+	ldsUpdateCh, _ := newWatch(t, client, xdsresource.ListenerResource, testLDSName)
+	_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, xdsresource.ListenerResource, testLDSName)
 
 	wantError := fmt.Errorf("testing error")
 	updateHandler.NewListeners(map[string]xdsresource.ListenerUpdateErrTuple{testLDSName: {Err: wantError}}, xdsresource.UpdateMetadata{ErrState: &xdsresource.UpdateErrorMetadata{Err: wantError}})
@@ -99,7 +101,9 @@ func (s) TestListenerWatchPartialValid(t *testing.T) {
 func (s) TestListenerWatch_RedundantUpdateSupression(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, _, updateHandler, ldsUpdateCh, _ := testWatchSetup(ctx, t, xdsresource.ListenerResource, testLDSName, false)
+	client, ctrlCh := testClientSetup(t, false)
+	ldsUpdateCh, _ := newWatch(t, client, xdsresource.ListenerResource, testLDSName)
+	_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, xdsresource.ListenerResource, testLDSName)
 
 	basicListener := testutils.MarshalAny(&v3listenerpb.Listener{
 		Name: testLDSName,

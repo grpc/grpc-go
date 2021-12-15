@@ -41,7 +41,9 @@ func testFedTwoWatchDifferentContextParameterOrder(t *testing.T, typ xdsresource
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	client, _, updateHandler, updateCh, _ := testWatchSetup(ctx, t, typ, resourceName1, false)
+	client, ctrlCh := testClientSetup(t, false)
+	updateCh, _ := newWatch(t, client, typ, resourceName1)
+	_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, typ, resourceName1)
 	newWatchF, newUpdateF, verifyUpdateF := typeToTestFuncs(typ)
 
 	// Start a watch on the second resource name.

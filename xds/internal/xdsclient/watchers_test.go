@@ -30,13 +30,9 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// testWatchSetup starts the client and makes a watch on it for the resourceName.
-// The caller can make new watchers, or start sending updates for this watch
-// afterwards.
-//
-// Note that this function checks for the controller after watching. This is the
-// new behavior after federation.
-func testWatchSetup(ctx context.Context, t *testing.T, typ xdsresource.ResourceType, resourceName string, overrideWatchExpiryTimeout bool) (_ *clientImpl, _ *testController, _ pubsub.UpdateHandler, updateCh *testutils.Channel, cancelWatch func()) {
+// testClientSetup sets up the client and controller for the test. It returns a
+// newly created client, and a channel where new controllers will be sent to.
+func testClientSetup(t *testing.T, overrideWatchExpiryTimeout bool) (*clientImpl, *testutils.Channel) {
 	t.Helper()
 	ctrlCh := overrideNewController(t)
 
@@ -50,7 +46,11 @@ func testWatchSetup(ctx context.Context, t *testing.T, typ xdsresource.ResourceT
 		t.Fatalf("failed to create client: %v", err)
 	}
 	t.Cleanup(client.Close)
+	return client, ctrlCh
+}
 
+// newWatch starts a new watch on the client.
+func newWatch(t *testing.T, client *clientImpl, typ xdsresource.ResourceType, resourceName string) (updateCh *testutils.Channel, cancelWatch func()) {
 	newWatchF, _, _ := typeToTestFuncs(typ)
 	updateCh, cancelWatch = newWatchF(client, resourceName)
 	t.Cleanup(cancelWatch)
@@ -58,7 +58,12 @@ func testWatchSetup(ctx context.Context, t *testing.T, typ xdsresource.ResourceT
 	if u, ok := updateCh.ReceiveOrFail(); ok {
 		t.Fatalf("received unexpected update immediately after watch: %+v", u)
 	}
+	return
+}
 
+// getControllerAndPubsub returns the controller and pubsub for the given
+// type+resourceName from the client.
+func getControllerAndPubsub(ctx context.Context, t *testing.T, client *clientImpl, ctrlCh *testutils.Channel, typ xdsresource.ResourceType, resourceName string) (*testController, pubsub.UpdateHandler) {
 	c, err := ctrlCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for API client to be created: %v", err)
@@ -71,7 +76,7 @@ func testWatchSetup(ctx context.Context, t *testing.T, typ xdsresource.ResourceT
 
 	updateHandler := findPubsubForTest(t, client, xdsresource.ParseName(resourceName).Authority)
 
-	return client, ctrl, updateHandler, updateCh, cancelWatch
+	return ctrl, updateHandler
 }
 
 // findPubsubForTest returns the pubsub for the given authority, to send updates
@@ -247,7 +252,9 @@ func testWatch(t *testing.T, typ xdsresource.ResourceType, update interface{}, r
 		t.Run(rName, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			_, _, updateHandler, updateCh, cancelWatch := testWatchSetup(ctx, t, typ, rName, false)
+			client, ctrlCh := testClientSetup(t, false)
+			updateCh, cancelWatch := newWatch(t, client, typ, rName)
+			_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, typ, rName)
 			_, newUpdateF, verifyUpdateF := typeToTestFuncs(typ)
 
 			// Send an update, and check the result.
@@ -299,7 +306,9 @@ func testTwoWatchSameResourceName(t *testing.T, typ xdsresource.ResourceType, up
 		t.Run(rName, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			client, _, updateHandler, updateCh, _ := testWatchSetup(ctx, t, typ, resourceName, false)
+			client, ctrlCh := testClientSetup(t, false)
+			updateCh, _ := newWatch(t, client, typ, resourceName)
+			_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, typ, resourceName)
 			newWatchF, newUpdateF, verifyUpdateF := typeToTestFuncs(typ)
 
 			updateChs := []*testutils.Channel{updateCh}
@@ -371,7 +380,9 @@ func testThreeWatchDifferentResourceName(t *testing.T, typ xdsresource.ResourceT
 		t.Run(rName[0], func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			client, _, updateHandler, updateCh, _ := testWatchSetup(ctx, t, typ, rName[0], false)
+			client, ctrlCh := testClientSetup(t, false)
+			updateCh, _ := newWatch(t, client, typ, rName[0])
+			_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, typ, rName[0])
 			newWatchF, newUpdateF, verifyUpdateF := typeToTestFuncs(typ)
 
 			// Two watches for the same name.
@@ -410,7 +421,9 @@ func testWatchAfterCache(t *testing.T, typ xdsresource.ResourceType, update inte
 		t.Run(rName, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			client, _, updateHandler, updateCh, _ := testWatchSetup(ctx, t, typ, rName, false)
+			client, ctrlCh := testClientSetup(t, false)
+			updateCh, _ := newWatch(t, client, typ, rName)
+			_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, typ, rName)
 			newWatchF, newUpdateF, verifyUpdateF := typeToTestFuncs(typ)
 
 			newUpdateF(updateHandler, map[string]interface{}{rName: update})
@@ -447,7 +460,9 @@ func testResourceRemoved(t *testing.T, typ xdsresource.ResourceType, update1 int
 		t.Run(rName[0], func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			client, _, updateHandler, updateCh, _ := testWatchSetup(ctx, t, typ, rName[0], false)
+			client, ctrlCh := testClientSetup(t, false)
+			updateCh, _ := newWatch(t, client, typ, rName[0])
+			_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, typ, rName[0])
 			newWatchF, newUpdateF, verifyUpdateF := typeToTestFuncs(typ)
 
 			// Another watch for a different name.
@@ -549,7 +564,9 @@ func testWatchPartialValid(t *testing.T, typ xdsresource.ResourceType, update in
 		t.Run(rName[0], func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			client, _, updateHandler, updateCh, _ := testWatchSetup(ctx, t, typ, rName[0], false)
+			client, ctrlCh := testClientSetup(t, false)
+			updateCh, _ := newWatch(t, client, typ, rName[0])
+			_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, typ, rName[0])
 			newWatchF, _, verifyUpdateF := typeToTestFuncs(typ)
 
 			updateChs := map[string]*testutils.Channel{

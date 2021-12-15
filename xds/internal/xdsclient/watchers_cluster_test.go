@@ -62,7 +62,8 @@ func (s) TestClusterWatchAfterCache(t *testing.T) {
 func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, _, _, clusterUpdateCh, _ := testWatchSetup(ctx, t, xdsresource.ClusterResource, testCDSName, true)
+	client, _ := testClientSetup(t, true)
+	clusterUpdateCh, _ := newWatch(t, client, xdsresource.ClusterResource, testCDSName)
 
 	u, err := clusterUpdateCh.Receive(ctx)
 	if err != nil {
@@ -80,7 +81,9 @@ func (s) TestClusterWatchExpiryTimer(t *testing.T) {
 func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, _, updateHandler, clusterUpdateCh, _ := testWatchSetup(ctx, t, xdsresource.ClusterResource, testCDSName, true)
+	client, ctrlCh := testClientSetup(t, true)
+	clusterUpdateCh, _ := newWatch(t, client, xdsresource.ClusterResource, testCDSName)
+	_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, xdsresource.ClusterResource, testCDSName)
 
 	wantUpdate := xdsresource.ClusterUpdate{ClusterName: testEDSName}
 	updateHandler.NewClusters(map[string]xdsresource.ClusterUpdateErrTuple{
@@ -116,7 +119,9 @@ func (s) TestClusterResourceRemoved(t *testing.T) {
 func (s) TestClusterWatchNACKError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, _, updateHandler, clusterUpdateCh, _ := testWatchSetup(ctx, t, xdsresource.ClusterResource, testCDSName, false)
+	client, ctrlCh := testClientSetup(t, false)
+	clusterUpdateCh, _ := newWatch(t, client, xdsresource.ClusterResource, testCDSName)
+	_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, xdsresource.ClusterResource, testCDSName)
 
 	wantError := fmt.Errorf("testing error")
 	updateHandler.NewClusters(map[string]xdsresource.ClusterUpdateErrTuple{testCDSName: {

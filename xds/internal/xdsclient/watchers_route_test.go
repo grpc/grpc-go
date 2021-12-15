@@ -95,7 +95,9 @@ func (s) TestRDSWatchAfterCache(t *testing.T) {
 func (s) TestRouteWatchNACKError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, _, updateHandler, rdsUpdateCh, _ := testWatchSetup(ctx, t, xdsresource.RouteConfigResource, testRDSName, false)
+	client, ctrlCh := testClientSetup(t, false)
+	rdsUpdateCh, _ := newWatch(t, client, xdsresource.RouteConfigResource, testRDSName)
+	_, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, xdsresource.RouteConfigResource, testRDSName)
 
 	wantError := fmt.Errorf("testing error")
 	updateHandler.NewRouteConfigs(map[string]xdsresource.RouteConfigUpdateErrTuple{testRDSName: {Err: wantError}}, xdsresource.UpdateMetadata{ErrState: &xdsresource.UpdateErrorMetadata{Err: wantError}})

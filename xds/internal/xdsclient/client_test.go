@@ -155,7 +155,9 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	// Start a watch for some resource, so that the controller and update
 	// handlers are built for this authority. The test needs these to make an
 	// inline watch in a callback.
-	client, controller, updateHandler, _, _ := testWatchSetup(ctx, t, xdsresource.ClusterResource, "doesnot-matter", false)
+	client, ctrlCh := testClientSetup(t, false)
+	newWatch(t, client, xdsresource.ClusterResource, "doesnot-matter")
+	controller, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, xdsresource.ClusterResource, "doesnot-matter")
 
 	clusterUpdateCh := testutils.NewChannel()
 	firstTime := true
