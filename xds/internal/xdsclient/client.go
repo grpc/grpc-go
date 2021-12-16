@@ -24,12 +24,42 @@ import (
 	"fmt"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/pubsub"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
+
+var controllerDialOpts []grpc.DialOption
+
+// SetControllerDialOpts sets extra dial options for the xds controller
+// which connects to the xDS server.
+// Must be called before client is created(ex: in init()), or the xds Client
+// might have been created before reading the set dial options.
+//
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func SetControllerDialOpts(opts ...grpc.DialOption) {
+	controllerDialOpts = opts
+}
+
+// ControllerDialOpts returns the current dial options set for the xds controller.
+//
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func ControllerDialOpts() []grpc.DialOption {
+	return controllerDialOpts
+}
+
+func ResetControllerDialOpts() {
+	controllerDialOpts = []grpc.DialOption{}
+}
 
 // clientImpl is the real implementation of the xds client. The exported Client
 // is a wrapper of this struct with a ref count.
@@ -66,7 +96,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration) (
 
 	c.pubsub = pubsub.New(watchExpiryTimeout, c.logger)
 
-	controller, err := newController(config.XDSServer, c.pubsub, c.updateValidator, c.logger)
+	controller, err := newController(config.XDSServer, c.pubsub, c.updateValidator, c.logger, ControllerDialOpts()...)
 	if err != nil {
 		return nil, fmt.Errorf("xds: failed to connect to the control plane: %v", err)
 	}

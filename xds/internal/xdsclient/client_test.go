@@ -90,7 +90,7 @@ type testController struct {
 func overrideNewController() (*testutils.Channel, func()) {
 	origNewController := newController
 	ch := testutils.NewChannel()
-	newController = func(config *bootstrap.ServerConfig, pubsub *pubsub.Pubsub, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger) (controllerInterface, error) {
+	newController = func(config *bootstrap.ServerConfig, pubsub *pubsub.Pubsub, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger, opts ...grpc.DialOption) (controllerInterface, error) {
 		ret := newTestController()
 		ch.Send(ret)
 		return ret, nil
@@ -357,5 +357,35 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	}
 	if apiClient2 == apiClient {
 		t.Fatalf("New() after Close() should return different API client, got the same %p", apiClient2)
+	}
+}
+
+func (s) TestControllerOptions(t *testing.T) {
+	// Pick a few dial opts to make sure all of them are being passed.
+	SetControllerDialOpts(grpc.WithReturnConnectionError(), grpc.WithNoProxy(), grpc.WithBlock())
+	origNewController := newController
+	defer func() {
+		ResetControllerDialOpts()
+		newController = origNewController
+	}()
+
+	var gotDialOpts int
+	// We are only interested in the dial options, so fail the creation of the controller.
+	newController = func(_ *bootstrap.ServerConfig, pubsub *pubsub.Pubsub, _ xdsresource.UpdateValidatorFunc, _ *grpclog.PrefixLogger, dialOpts ...grpc.DialOption) (controllerInterface, error) {
+		gotDialOpts = len(dialOpts)
+		return nil, fmt.Errorf("simulating error")
+	}
+
+	_, err := newWithConfig(clientOpts(testXDSServer, false))
+	if err == nil {
+		t.Fatalf("Client creation succeeded: %v", err)
+	}
+
+	if got, want := gotDialOpts, 3; got != want {
+		t.Errorf("newController dialOpts len = %v, want %v", got, want)
+	}
+
+	if got, want := len(ControllerDialOpts()), 3; got != want {
+		t.Errorf("ControllerDialOpts dialOpts len = %v, want %v", got, want)
 	}
 }
