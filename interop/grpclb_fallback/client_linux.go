@@ -99,7 +99,6 @@ func dialTCPUserTimeout(ctx context.Context, addr string) (net.Conn, error) {
 func createTestConn() *grpc.ClientConn {
 	opts := []grpc.DialOption{
 		grpc.WithContextDialer(dialTCPUserTimeout),
-		grpc.WithBlock(),
 	}
 	switch *customCredentialsType {
 	case "tls":
