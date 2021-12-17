@@ -115,4 +115,5 @@ func (s) TestEdfWrrNext(t *testing.T) {
 func init() {
 	r := rand.New(rand.NewSource(0))
 	grpcrandInt63n = r.Int63n
+	grpcrandIntn = r.Intn
 }
