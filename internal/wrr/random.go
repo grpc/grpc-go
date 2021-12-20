@@ -53,7 +53,6 @@ func NewRandom() WRR {
 }
 
 var grpcrandInt63n = grpcrand.Int63n
-var grpcrandIntn = grpcrand.Intn
 
 func (rw *randomWRR) Next() (item interface{}) {
 	rw.mu.RLock()
@@ -63,7 +62,7 @@ func (rw *randomWRR) Next() (item interface{}) {
 		return nil
 	}
 	if rw.equalWeights {
-		return rw.items[grpcrandIntn(len(rw.items))].Item
+		return rw.items[grpcrandInt63n(int64(len(rw.items)))].Item
 	}
 	// Random number in [0, sumOfWeights).
 	randomWeight := grpcrandInt63n(sumOfWeights)
