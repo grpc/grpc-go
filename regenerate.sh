@@ -85,7 +85,6 @@ for src in ${SOURCES[@]}; do
     -I${WORKDIR}/grpc-proto \
     -I${WORKDIR}/googleapis \
     -I${WORKDIR}/protobuf/src \
-    -I${WORKDIR}/istio \
     ${src}
 done
 
@@ -96,7 +95,6 @@ for src in ${LEGACY_SOURCES[@]}; do
     -I${WORKDIR}/grpc-proto \
     -I${WORKDIR}/googleapis \
     -I${WORKDIR}/protobuf/src \
-    -I${WORKDIR}/istio \
     ${src}
 done
 
