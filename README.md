@@ -1,3 +1,7 @@
+```
+go run server/server.go
+go run client/client.go
+```
 # gRPC-Go
 
 [![Build Status](https://travis-ci.org/grpc/grpc-go.svg)](https://travis-ci.org/grpc/grpc-go)
