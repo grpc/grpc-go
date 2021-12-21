@@ -78,11 +78,11 @@ func newChildPolicyWrapper(target string) *childPolicyWrapper {
 	c := &childPolicyWrapper{
 		target: target,
 		refCnt: 1,
+		state: unsafe.Pointer(&balancer.State{
+			ConnectivityState: connectivity.Connecting,
+			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
+		}),
 	}
-	atomic.StorePointer(&c.state, unsafe.Pointer(&balancer.State{
-		ConnectivityState: connectivity.Connecting,
-		Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
-	}))
 	c.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-child-policy-wrapper %s %p] ", c.target, c))
 	c.logger.Infof("Created")
 	return c
@@ -107,14 +107,6 @@ func (c *childPolicyWrapper) lamify(err error) {
 	c.logger.Warningf("Entering lame mode: %v", err)
 	atomic.StorePointer(&c.state, unsafe.Pointer(&balancer.State{
 		ConnectivityState: connectivity.TransientFailure,
-		Picker:            &lamePicker{err: err},
+		Picker:            base.NewErrPicker(err),
 	}))
-}
-
-type lamePicker struct {
-	err error
-}
-
-func (lp *lamePicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	return balancer.PickResult{}, lp.err
 }

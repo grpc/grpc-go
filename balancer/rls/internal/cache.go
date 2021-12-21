@@ -44,12 +44,6 @@ type cacheKey struct {
 
 // cacheEntry wraps all the data to be stored in a data cache entry.
 type cacheEntry struct {
-	// size stores the size of this cache entry. Used to enforce the cache size
-	// specified in the LB policy configuration.
-	size int64 // Keep this field 64-bit aligned.
-	// callback is the function to be invoked when this cache entry is evicted.
-	callback func()
-
 	// childPolicyWrappers contains the list of child policy wrappers
 	// corresponding to the targets returned by the RLS server for this entry.
 	childPolicyWrappers []*childPolicyWrapper
@@ -96,6 +90,12 @@ type cacheEntry struct {
 	//
 	// Set to zero time instant upon a successful RLS response.
 	backoffExpiryTime time.Time
+
+	// size stores the size of this cache entry. Used to enforce the cache size
+	// specified in the LB policy configuration.
+	size int64
+	// onEvict is the callback to be invoked when this cache entry is evicted.
+	onEvict func()
 }
 
 // backoffState wraps all backoff related state associated with a cache entry.
@@ -180,7 +180,7 @@ func (l *lru) iterateAndRun(f func(cacheKey)) {
 //
 // It is not safe for concurrent access.
 type dataCache struct {
-	targetSize  int64 // Maximum allowed size.
+	maxSize     int64 // Maximum allowed size.
 	currentSize int64 // Current size.
 	keys        *lru  // Cache keys maintained in lru order.
 	entries     map[cacheKey]*cacheEntry
@@ -190,11 +190,11 @@ type dataCache struct {
 
 func newDataCache(size int64, logger *internalgrpclog.PrefixLogger) *dataCache {
 	return &dataCache{
-		targetSize: size,
-		keys:       newLRU(),
-		entries:    make(map[cacheKey]*cacheEntry),
-		logger:     logger,
-		shutdown:   grpcsync.NewEvent(),
+		maxSize:  size,
+		keys:     newLRU(),
+		entries:  make(map[cacheKey]*cacheEntry),
+		logger:   logger,
+		shutdown: grpcsync.NewEvent(),
 	}
 }
 
@@ -204,7 +204,7 @@ func newDataCache(size int64, logger *internalgrpclog.PrefixLogger) *dataCache {
 // evicted. This is important to the RLS LB policy which would send a new picker
 // on the channel to re-process any RPCs queued as a result of this backoff
 // timer.
-func (dc *dataCache) resize(size int64) bool {
+func (dc *dataCache) resize(size int64) (updatePicker bool) {
 	if dc.shutdown.HasFired() {
 		return false
 	}
@@ -242,7 +242,7 @@ func (dc *dataCache) resize(size int64) bool {
 		}
 		dc.deleteAndcleanup(key, entry)
 	}
-	dc.targetSize = size
+	dc.maxSize = size
 	return backoffCancelled
 }
 
@@ -253,7 +253,7 @@ func (dc *dataCache) resize(size int64) bool {
 // The return value indicates if any expired entries were evicted.
 //
 // The LB policy invokes this method periodically to purge expired entries.
-func (dc *dataCache) evictExpiredEntries() bool {
+func (dc *dataCache) evictExpiredEntries() (updatePicker bool) {
 	if dc.shutdown.HasFired() {
 		return false
 	}
@@ -286,7 +286,7 @@ func (dc *dataCache) evictExpiredEntries() bool {
 // The LB policy invokes this method when the control channel moves from READY
 // to TRANSIENT_FAILURE back to READY. See `monitorConnectivityState` method on
 // the `controlChannel` type for more details.
-func (dc *dataCache) resetBackoffState(newBackoffState *backoffState) bool {
+func (dc *dataCache) resetBackoffState(newBackoffState *backoffState) (updatePicker bool) {
 	if dc.shutdown.HasFired() {
 		return false
 	}
@@ -320,29 +320,28 @@ func (dc *dataCache) resetBackoffState(newBackoffState *backoffState) bool {
 
 // addEntry adds a cache entry for the given key.
 //
-// Return value evicted indicates if other cache entries were evicted to make
-// space for the current entry. Return value ok indicates if the current entry
-// was successfully added to the cache.
-func (dc *dataCache) addEntry(key cacheKey, entry *cacheEntry) (evicted bool, ok bool) {
+// Return value updatePicker indicates if a cache entry with a valid backoff
+// timer was evicted to make space for the current entry. Return value ok
+// indicates if the current entry was successfully added to the cache.
+func (dc *dataCache) addEntry(key cacheKey, entry *cacheEntry) (updatePicker bool, ok bool) {
 	if dc.shutdown.HasFired() {
 		return false, false
 	}
 
-	evicted = false
 	// Handle the extremely unlikely case that a single entry is bigger than the
 	// size of the cache.
-	if entry.size > dc.targetSize {
-		return evicted, false
+	if entry.size > dc.maxSize {
+		return false, false
 	}
 	dc.entries[key] = entry
 	dc.currentSize += entry.size
 	dc.keys.addEntry(key)
 	// If the new entry makes the cache go over its configured size, remove some
 	// old entries.
-	if dc.currentSize > dc.targetSize {
-		evicted = dc.resize(dc.targetSize)
+	if dc.currentSize > dc.maxSize {
+		updatePicker = dc.resize(dc.maxSize)
 	}
-	return evicted, true
+	return updatePicker, true
 }
 
 // updateEntrySize updates the size of a cache entry and the current size of the
@@ -379,13 +378,13 @@ func (dc *dataCache) removeEntryForTesting(key cacheKey) {
 // - the entry is removed from the map of entries
 // - current size of the data cache is update
 // - the key is removed from the LRU
-// - eviction callback is invoked in a separate goroutine
+// - onEvict is invoked in a separate goroutine
 func (dc *dataCache) deleteAndcleanup(key cacheKey, entry *cacheEntry) {
 	delete(dc.entries, key)
 	dc.currentSize -= entry.size
 	dc.keys.removeEntry(key)
-	if entry.callback != nil {
-		go entry.callback()
+	if entry.onEvict != nil {
+		go entry.onEvict()
 	}
 }
 
