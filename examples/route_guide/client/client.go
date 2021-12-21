@@ -39,7 +39,7 @@ import (
 var (
 	tls                = flag.Bool("tls", false, "Connection uses TLS if true, else plain TCP")
 	caFile             = flag.String("ca_file", "", "The file containing the CA root cert file")
-	serverAddr         = flag.String("addr", "localhost:50051", "The server address in the format of host:port")
+	serverAddr         = flag.String("addr", "localhost:8980", "The server address in the format of host:port")
 	serverHostOverride = flag.String("server_host_override", "x.test.example.com", "The server name used to verify the hostname returned by the TLS handshake")
 )
 
@@ -81,7 +81,8 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 func runRecordRoute(client pb.RouteGuideClient) {
 	// Create a random number of random points
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	pointCount := int(r.Int31n(100)) + 2 // Traverse at least two points
+	// pointCount := int(r.Int31n(100)) + 2 // Traverse at least two points
+	pointCount := 1 // Traverse at least two points
 	var points []*pb.Point
 	for i := 0; i < pointCount; i++ {
 		points = append(points, randomPoint(r))
@@ -109,12 +110,13 @@ func runRecordRoute(client pb.RouteGuideClient) {
 func runRouteChat(client pb.RouteGuideClient) {
 	notes := []*pb.RouteNote{
 		{Location: &pb.Point{Latitude: 0, Longitude: 1}, Message: "First message"},
-		{Location: &pb.Point{Latitude: 0, Longitude: 2}, Message: "Second message"},
-		{Location: &pb.Point{Latitude: 0, Longitude: 3}, Message: "Third message"},
-		{Location: &pb.Point{Latitude: 0, Longitude: 1}, Message: "Fourth message"},
-		{Location: &pb.Point{Latitude: 0, Longitude: 2}, Message: "Fifth message"},
-		{Location: &pb.Point{Latitude: 0, Longitude: 3}, Message: "Sixth message"},
+		// {Location: &pb.Point{Latitude: 0, Longitude: 2}, Message: "Second message"},
+		// {Location: &pb.Point{Latitude: 0, Longitude: 3}, Message: "Third message"},
+		// {Location: &pb.Point{Latitude: 0, Longitude: 1}, Message: "Fourth message"},
+		// {Location: &pb.Point{Latitude: 0, Longitude: 2}, Message: "Fifth message"},
+		// {Location: &pb.Point{Latitude: 0, Longitude: 3}, Message: "Sixth message"},
 	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	stream, err := client.RouteChat(ctx)
@@ -176,15 +178,17 @@ func main() {
 
 	// Looking for a valid feature
 	printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906})
-
-	// Feature missing.
-	printFeature(client, &pb.Point{Latitude: 0, Longitude: 0})
+	// printFeature(client, &pb.Point{Latitude: 9999, Longitude: -8888})
+	// // Feature missing.
+	// printFeature(client, &pb.Point{Latitude: 0, Longitude: 0})
 
 	// Looking for features between 40, -75 and 42, -73.
-	printFeatures(client, &pb.Rectangle{
-		Lo: &pb.Point{Latitude: 400000000, Longitude: -750000000},
-		Hi: &pb.Point{Latitude: 420000000, Longitude: -730000000},
-	})
+	// printFeatures(client, &pb.Rectangle{
+	// 	Lo: &pb.Point{Latitude: 400000000, Longitude: -750000000},
+	// 	// Hi: &pb.Point{Latitude: 420000000, Longitude: -730000000},
+
+	// 	Hi: &pb.Point{Latitude: 987000000, Longitude: 876000000},
+	// })
 
 	// RecordRoute
 	runRecordRoute(client)
