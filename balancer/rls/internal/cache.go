@@ -109,10 +109,6 @@ type backoffState struct {
 	// timer fires when the backoff period ends and incoming requests after this
 	// will trigger a new RLS request.
 	timer *time.Timer
-	// callback provided by the LB policy to be notified when the backoff timer
-	// expires. This will trigger a new picker to be returned to gRPC, to force
-	// queued up RPCs to be retried.
-	callback func()
 }
 
 // lru is a cache implementation with a least recently used eviction policy.
@@ -307,10 +303,7 @@ func (dc *dataCache) resetBackoffState(newBackoffState *backoffState) (updatePic
 			entry.backoffState.timer.Stop()
 			entry.backoffState.timer = nil
 		}
-		entry.backoffState = &backoffState{
-			bs:       newBackoffState.bs,
-			callback: newBackoffState.callback,
-		}
+		entry.backoffState = &backoffState{bs: newBackoffState.bs}
 		entry.backoffTime = time.Time{}
 		entry.backoffExpiryTime = time.Time{}
 		modified = true
