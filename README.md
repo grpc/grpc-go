@@ -1,9 +1,10 @@
 ```
 cd ~/grpc-go/examples/route_guide
 
+go run server/server.go
+
 go run client/client.go
 
-go run server/server.go
 
 ```
 # gRPC-Go
