@@ -178,7 +178,7 @@ func main() {
 
 	// Looking for a valid feature
 	printFeature(client, &pb.Point{Latitude: 409146138, Longitude: -746188906})
-	// printFeature(client, &pb.Point{Latitude: 9999, Longitude: -8888})
+	printFeature(client, &pb.Point{Latitude: 9999, Longitude: -8888})
 	// // Feature missing.
 	// printFeature(client, &pb.Point{Latitude: 0, Longitude: 0})
 
