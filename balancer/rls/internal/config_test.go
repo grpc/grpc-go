@@ -134,7 +134,7 @@ func (s) TestParseConfig(t *testing.T) {
 		},
 	}
 
-	builder := &rlsBB{}
+	builder := rlsBB{}
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			lbCfg, err := builder.ParseConfig(test.input)
@@ -393,7 +393,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 		},
 	}
 
-	builder := &rlsBB{}
+	builder := rlsBB{}
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			lbCfg, err := builder.ParseConfig(test.input)
