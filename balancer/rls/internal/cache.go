@@ -200,12 +200,12 @@ func newDataCache(size int64, logger *internalgrpclog.PrefixLogger) *dataCache {
 // evicted. This is important to the RLS LB policy which would send a new picker
 // on the channel to re-process any RPCs queued as a result of this backoff
 // timer.
-func (dc *dataCache) resize(size int64) (updatePicker bool) {
+func (dc *dataCache) resize(size int64) (backoffCancelled bool) {
 	if dc.shutdown.HasFired() {
 		return false
 	}
 
-	backoffCancelled := false
+	backoffCancelled = false
 	for dc.currentSize > size {
 		key := dc.keys.getLeastRecentlyUsed()
 		entry, ok := dc.entries[key]
@@ -249,12 +249,12 @@ func (dc *dataCache) resize(size int64) (updatePicker bool) {
 // The return value indicates if any expired entries were evicted.
 //
 // The LB policy invokes this method periodically to purge expired entries.
-func (dc *dataCache) evictExpiredEntries() (updatePicker bool) {
+func (dc *dataCache) evictExpiredEntries() (evicted bool) {
 	if dc.shutdown.HasFired() {
 		return false
 	}
 
-	evicted := false
+	evicted = false
 	dc.keys.iterateAndRun(func(key cacheKey) {
 		entry, ok := dc.entries[key]
 		if !ok {
@@ -282,12 +282,12 @@ func (dc *dataCache) evictExpiredEntries() (updatePicker bool) {
 // The LB policy invokes this method when the control channel moves from READY
 // to TRANSIENT_FAILURE back to READY. See `monitorConnectivityState` method on
 // the `controlChannel` type for more details.
-func (dc *dataCache) resetBackoffState(newBackoffState *backoffState) (updatePicker bool) {
+func (dc *dataCache) resetBackoffState(newBackoffState *backoffState) (backoffReset bool) {
 	if dc.shutdown.HasFired() {
 		return false
 	}
 
-	modified := false
+	backoffReset = false
 	dc.keys.iterateAndRun(func(key cacheKey) {
 		entry, ok := dc.entries[key]
 		if !ok {
@@ -306,17 +306,20 @@ func (dc *dataCache) resetBackoffState(newBackoffState *backoffState) (updatePic
 		entry.backoffState = &backoffState{bs: newBackoffState.bs}
 		entry.backoffTime = time.Time{}
 		entry.backoffExpiryTime = time.Time{}
-		modified = true
+		backoffReset = true
 	})
-	return modified
+	return backoffReset
 }
 
 // addEntry adds a cache entry for the given key.
 //
-// Return value updatePicker indicates if a cache entry with a valid backoff
-// timer was evicted to make space for the current entry. Return value ok
-// indicates if the current entry was successfully added to the cache.
-func (dc *dataCache) addEntry(key cacheKey, entry *cacheEntry) (updatePicker bool, ok bool) {
+// Return value backoffCancelled indicates if a cache entry with a valid backoff
+// timer was evicted to make space for the current entry. This is important to
+// the RLS LB policy which would send a new picker on the channel to re-process
+// any RPCs queued as a result of this backoff timer.
+//
+// Return value ok indicates if entry was successfully added to the cache.
+func (dc *dataCache) addEntry(key cacheKey, entry *cacheEntry) (backoffCancelled bool, ok bool) {
 	if dc.shutdown.HasFired() {
 		return false, false
 	}
@@ -332,9 +335,9 @@ func (dc *dataCache) addEntry(key cacheKey, entry *cacheEntry) (updatePicker boo
 	// If the new entry makes the cache go over its configured size, remove some
 	// old entries.
 	if dc.currentSize > dc.maxSize {
-		updatePicker = dc.resize(dc.maxSize)
+		backoffCancelled = dc.resize(dc.maxSize)
 	}
-	return updatePicker, true
+	return backoffCancelled, true
 }
 
 // updateEntrySize updates the size of a cache entry and the current size of the
