@@ -26,7 +26,7 @@ import (
 const rlsBalancerName = "rls_experimental"
 
 func init() {
-	balancer.Register(&rlsBB{})
+	balancer.Register(rlsBB{})
 }
 
 // rlsBB helps build RLS load balancers and parse the service config to be
@@ -35,11 +35,11 @@ type rlsBB struct{}
 
 // Name returns the name of the RLS LB policy and helps implement the
 // balancer.Balancer interface.
-func (*rlsBB) Name() string {
+func (rlsBB) Name() string {
 	return rlsBalancerName
 }
 
-func (*rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+func (rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	// TODO(easwars): Fix this once the LB policy implementation is pulled in.
 	return &rlsBalancer{}
 }
