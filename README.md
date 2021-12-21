@@ -1,3 +1,6 @@
+`cd /root/grpc-java/examples && ./gradlew installDist`  
+
+
 ```
 cd ~/grpc-go/examples/route_guide
 
