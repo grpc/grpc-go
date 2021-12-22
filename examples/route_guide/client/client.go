@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/examples/data"
+	"google.golang.org/grpc/examples/route_guide/routeguide"
 	pb "google.golang.org/grpc/examples/route_guide/routeguide"
 )
 
@@ -43,7 +44,7 @@ var (
 	serverHostOverride = flag.String("server_host_override", "x.test.example.com", "The server name used to verify the hostname returned by the TLS handshake")
 )
 
-func printMachineType(client pb.RouteGuideClient, idstring *string) {
+func printMachineType(client pb.RouteGuideClient, idstring *routeguide.Idstring) {
 	log.Printf("Getting feature for idstring (%d, %d)", idstring)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -52,7 +53,7 @@ func printMachineType(client pb.RouteGuideClient, idstring *string) {
 		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
 	}
 	log.Println("printMachineType")
-	log.Println(feature.getName())
+	log.Println(feature.GetIdstring())
 }
 
 // printFeature gets the feature for the given point.
@@ -64,8 +65,8 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	if err != nil {
 		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
 	}
-	log.Println("printFeature")
-	log.Println(feature)
+	log.Println("printFeature.GetName()")
+	log.Println(feature.GetName())
 }
 
 // printFeatures lists all the features within the given bounding Rectangle.
