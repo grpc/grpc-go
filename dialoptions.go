@@ -272,7 +272,7 @@ func withBackoff(bs internalbackoff.Strategy) DialOption {
 	})
 }
 
-// WithBlock returns a DialOption which makes caller of Dial blocks until the
+// WithBlock returns a DialOption which makes callers of Dial block until the
 // underlying connection is up. Without this, Dial returns immediately and
 // connecting the server happens in background.
 func WithBlock() DialOption {
