@@ -38,31 +38,16 @@ var controllerDialOpts []grpc.DialOption
 // which connects to the xDS server.
 // Must be called before client is created(ex: in init()), or the xds Client
 // might have been created before reading the set dial options.
-//
-// Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
 func SetControllerDialOpts(opts ...grpc.DialOption) {
 	controllerDialOpts = opts
 }
 
 // ControllerDialOpts returns the current dial options set for the xds controller.
-//
-// Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
 func ControllerDialOpts() []grpc.DialOption {
 	return controllerDialOpts
 }
 
 // ResetControllerDialOpts resets the controller dial options.
-//
-// Experimental
-//
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
 func ResetControllerDialOpts() {
 	controllerDialOpts = []grpc.DialOption{}
 }
