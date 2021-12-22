@@ -50,7 +50,7 @@ func printMachineType(client pb.RouteGuideClient, idstring *routeguide.Idstring)
 	defer cancel()
 	feature, err := client.GetFeatureByIDString(ctx, idstring)
 	if err != nil {
-		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
+		log.Fatalf("%v.GetFeatureByIDString(_) = _, %v: ", client, err)
 	}
 	log.Println("printMachineType")
 	log.Println(feature.GetIdstring())
