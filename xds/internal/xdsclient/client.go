@@ -49,7 +49,7 @@ func ControllerDialOpts() []grpc.DialOption {
 
 // ResetControllerDialOpts resets the controller dial options.
 func ResetControllerDialOpts() {
-	controllerDialOpts = []grpc.DialOption{}
+	controllerDialOpts = nil
 }
 
 // clientImpl is the real implementation of the xds client. The exported Client
