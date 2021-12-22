@@ -304,7 +304,7 @@ func WithReturnConnectionError() DialOption {
 // WithCredentialsBundle or WithPerRPCCredentials) which require transport
 // security is incompatible and will cause grpc.Dial() to fail.
 //
-// Deprecated: use insecure.NewCredentials() instead.
+// Deprecated: use WithTransportCredentials and insecure.NewCredentials() instead.
 // Will be supported throughout 1.x.
 func WithInsecure() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
