@@ -159,6 +159,12 @@ func (l *lru) getLeastRecentlyUsed() cacheKey {
 	return e.Value.(cacheKey)
 }
 
+// iterateAndRun traverses the lru in least-recently-used order and calls the
+// provided function for every element.
+//
+// Callers may delete the cache entry associated with the cacheKey passed into
+// f, but they may not perform any other operation which reorders the elements
+// in the lru.
 func (l *lru) iterateAndRun(f func(cacheKey)) {
 	var next *list.Element
 	for e := l.ll.Front(); e != nil; e = next {

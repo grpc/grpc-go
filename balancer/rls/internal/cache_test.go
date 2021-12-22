@@ -29,11 +29,11 @@ import (
 
 var (
 	cacheKeys = []cacheKey{
-		{path: "0", keys: "0"},
-		{path: "1", keys: "1"},
-		{path: "2", keys: "2"},
-		{path: "3", keys: "3"},
-		{path: "4", keys: "4"},
+		{path: "0", keys: "a"},
+		{path: "1", keys: "b"},
+		{path: "2", keys: "c"},
+		{path: "3", keys: "d"},
+		{path: "4", keys: "e"},
 	}
 
 	longDuration  = 10 * time.Minute
