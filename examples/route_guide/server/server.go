@@ -73,6 +73,18 @@ func (s *routeGuideServer) GetFeature(ctx context.Context, point *pb.Point) (*pb
 	return &pb.Feature{Location: point}, nil
 }
 
+// GetFeature returns the feature at the given point.
+func (s *routeGuideServer) GetFeatureByIDString(ctx context.Context, idstring *string) (*pb.Feature, error) {
+	for _, feature := range s.savedFeatures {
+		// if proto.Equal(feature.idstring, idstring) {
+		if feature.idstring == idstring {
+			return feature, nil
+		}
+	}
+	// No feature was found, return an unnamed feature
+	return &pb.Feature{idstring: idstring}, nil
+}
+
 // ListFeatures lists all features contained within the given bounding Rectangle.
 func (s *routeGuideServer) ListFeatures(rect *pb.Rectangle, stream pb.RouteGuide_ListFeaturesServer) error {
 	for _, feature := range s.savedFeatures {

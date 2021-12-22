@@ -43,6 +43,18 @@ var (
 	serverHostOverride = flag.String("server_host_override", "x.test.example.com", "The server name used to verify the hostname returned by the TLS handshake")
 )
 
+func printMachineType(client pb.RouteGuideClient, idstring *string) {
+	log.Printf("Getting feature for idstring (%d, %d)", idstring)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	feature, err := client.GetFeatureByIDString(ctx, idstring)
+	if err != nil {
+		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
+	}
+	log.Println("printMachineType")
+	log.Println(feature.getName())
+}
+
 // printFeature gets the feature for the given point.
 func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	log.Printf("Getting feature for point (%d, %d)", point.Latitude, point.Longitude)
@@ -52,6 +64,7 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	if err != nil {
 		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
 	}
+	log.Println("printFeature")
 	log.Println(feature)
 }
 

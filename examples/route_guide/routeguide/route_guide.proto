@@ -31,6 +31,7 @@ service RouteGuide {
   // position.
   rpc GetFeature(Point) returns (Feature) {}
 
+  rpc GetFeatureByIDString(idstring) returns (Feature) {}
   // A server-to-client streaming RPC.
   //
   // Obtains the Features available within the given Rectangle.  Results are
@@ -61,6 +62,9 @@ message Point {
   int32 longitude = 2;
 }
 
+message idstring{
+  string idstring = 1;
+}
 // A latitude-longitude rectangle, represented as two diagonally opposite
 // points "lo" and "hi".
 message Rectangle {
@@ -80,6 +84,8 @@ message Feature {
 
   // The point where the feature is detected.
   Point location = 2;
+
+  string idstring = 3;
 }
 
 // A RouteNote is a message sent while at a given point.
