@@ -21,6 +21,7 @@ import (
 	"errors"
 	"math"
 	"math/rand"
+	"strconv"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -110,6 +111,70 @@ func (s) TestRandomWRRNext(t *testing.T) {
 
 func (s) TestEdfWrrNext(t *testing.T) {
 	testWRRNext(t, NewEDF)
+}
+
+func BenchmarkRandomWRRNext(b *testing.B) {
+	for _, n := range []int{100, 500, 1000} {
+		b.Run("equal-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
+			w := NewRandom().(*randomWRR)
+			sumOfWeights := n
+			for i := 0; i < n; i++ {
+				w.Add(i, 1)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < sumOfWeights; i++ {
+					w.Next()
+				}
+			}
+		})
+	}
+
+	var maxWeight int64 = 1024
+	for _, n := range []int{100, 500, 1000} {
+		b.Run("random-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
+			w := NewRandom()
+			var sumOfWeights int64
+			for i := 0; i < n; i++ {
+				weight := rand.Int63n(maxWeight + 1)
+				w.Add(i, weight)
+				sumOfWeights += weight
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < int(sumOfWeights); i++ {
+					w.Next()
+				}
+			}
+		})
+	}
+
+	itemsNum := 200
+	heavyWeight := int64(itemsNum)
+	lightWeight := int64(1)
+	heavyIndices := []int{0, itemsNum / 2, itemsNum - 1}
+	for _, heavyIndex := range heavyIndices {
+		b.Run("skew-weights-heavy-index-"+strconv.Itoa(heavyIndex), func(b *testing.B) {
+			w := NewRandom()
+			var sumOfWeights int64
+			for i := 0; i < itemsNum; i++ {
+				var weight int64
+				if i == heavyIndex {
+					weight = heavyWeight
+				} else {
+					weight = lightWeight
+				}
+				sumOfWeights += weight
+				w.Add(i, weight)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for i := 0; i < int(sumOfWeights); i++ {
+					w.Next()
+				}
+			}
+		})
+	}
 }
 
 func init() {
