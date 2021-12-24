@@ -50,6 +50,20 @@ func newWriteQuota(sz int32, done <-chan struct{}) *writeQuota {
 	return w
 }
 
+// the write quota is similar to a condition variable where the signal to wake comes from
+// replenish. However, that signal does not Signal all waiting threads, since it is
+// the channel: [w.ch]. This creates a potential race condition shown in the test, where if
+// there are two concurrent calls to get(sz) when the quota is less than or equal to zero,
+// it's possible for both to go to sleep.
+// Then, in the case that replenish is called and an empty struct is added to [w.ch], only one
+// will wake up.
+// Given the style of code here, it looks like this is intended for concurrent access, however,
+// I have not yet confirmed where this would go wrong in production use.
+// This being said, it is not as simple as simply changing to a SignalAll call instead of adding
+// an item to the channel because this also introduces a race condition in the critical section below.
+// Speciifcally, we atomically check that the quota is greater than 0, but there could be two concurrent
+// operations that both check this and pass through the if condition, which would then allow them both
+// to successfully require their requested sizes (although this would most likely not be a terrible issue).
 func (w *writeQuota) get(sz int32) error {
 	for {
 		if atomic.LoadInt32(&w.quota) > 0 {
