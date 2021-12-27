@@ -2,6 +2,7 @@ package balancer
 
 import (
 	"math/rand"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc/balancer"
@@ -22,10 +23,7 @@ const (
 	CtxKey ctxKey = "requestKey"
 )
 
-var (
-	logger = grpclog.Component("consistenthashring")
-	r      = rand.New(rand.NewSource(time.Now().UnixNano()))
-)
+var logger = grpclog.Component("consistenthashring")
 
 // NewConsistentHashringBuilder creates a new balancer.Builder that
 // will create a consistent hashring balancer with the given config.
@@ -75,12 +73,15 @@ func (b *consistentHashringPickerBuilder) Build(info base.PickerBuildInfo) balan
 	return &consistentHashringPicker{
 		hashring: hashring,
 		spread:   b.spread,
+		rand:     rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
 type consistentHashringPicker struct {
+	sync.Mutex
 	hashring *consistent.Hashring
 	spread   uint8
+	rand     *rand.Rand
 }
 
 func (p *consistentHashringPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
@@ -89,7 +90,13 @@ func (p *consistentHashringPicker) Pick(info balancer.PickInfo) (balancer.PickRe
 	if err != nil {
 		return balancer.PickResult{}, err
 	}
-	chosen := members[r.Intn(int(p.spread))].(subConnMember)
+
+	// rand is not safe for concurrent use
+	p.Lock()
+	index := p.rand.Intn(int(p.spread))
+	p.Unlock()
+
+	chosen := members[index].(subConnMember)
 	return balancer.PickResult{
 		SubConn: chosen.SubConn,
 	}, nil
