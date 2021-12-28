@@ -157,7 +157,7 @@ func parsePrincipalNames(principalNames []string) []*v3rbacpb.Principal {
 }
 
 func parsePeer(source peer) *v3rbacpb.Principal {
-	if source.Principals == nil || len(source.Principals) == 0 {
+	if len(source.Principals) == 0 {
 		return &v3rbacpb.Principal{
 			Identifier: &v3rbacpb.Principal_Any{
 				Any: true,

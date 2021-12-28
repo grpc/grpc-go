@@ -205,6 +205,46 @@ func TestTranslatePolicy(t *testing.T) {
 				},
 			},
 		},
+		"allow authenticated": {
+			authzPolicy: `{
+						"name": "authz",
+						"allow_rules": [
+						{
+							"name": "allow_authenticated",
+							"source": {
+								"principals":["*", ""]
+							}
+						}]
+					}`,
+			wantPolicies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"authz_allow_authenticated": {
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
+									Ids: []*v3rbacpb.Principal{
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".+"}},
+											}},
+										}},
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""},
+											}},
+										}},
+									},
+								}}},
+							},
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+		},
 		"unknown field": {
 			authzPolicy: `{"random": 123}`,
 			wantErr:     "failed to unmarshal policy",
