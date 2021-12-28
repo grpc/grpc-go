@@ -75,6 +75,8 @@ func newRefCounted() (*clientRefCounted, error) {
 	if singletonClient.clientImpl != nil {
 		singletonClient.refCount++
 		return singletonClient, nil
+	} else {
+		singletonClient.refCount = 0
 	}
 
 	// Create the new client implementation.
