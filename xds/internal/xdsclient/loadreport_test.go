@@ -65,13 +65,15 @@ func (s) TestLRSClient(t *testing.T) {
 	defer xdsC.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if u, err := fs.NewConnChan.Receive(ctx); err != nil {
-		t.Errorf("unexpected timeout: %v, %v, want NewConn", u, err)
-	}
 
 	// Report to the same address should not create new ClientConn.
 	store1, lrsCancel1 := xdsC.ReportLoad(fs.Address)
 	defer lrsCancel1()
+
+	if u, err := fs.NewConnChan.Receive(ctx); err != nil {
+		t.Errorf("unexpected timeout: %v, %v, want NewConn", u, err)
+	}
+
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := fs.NewConnChan.Receive(sCtx); err != context.DeadlineExceeded {
