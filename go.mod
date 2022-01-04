@@ -1,6 +1,6 @@
 module google.golang.org/grpc
 
-go 1.14
+go 1.15
 
 require (
 	github.com/cespare/xxhash/v2 v2.1.1
