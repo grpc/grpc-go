@@ -1546,6 +1546,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	loopyServerStreams := map[uint32]*outStream{}
 	// Get all the streams from server reader and writer and client writer.
 	st.mu.Lock()
+	client.mu.Lock()
 	for _, stream := range clientStreams {
 		id := stream.id
 		serverStreams[id] = st.activeStreams[id]
@@ -1553,6 +1554,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 		loopyClientStreams[id] = client.loopy.estdStreams[id]
 
 	}
+	client.mu.Unlock()
 	st.mu.Unlock()
 	// Close all streams
 	for _, stream := range clientStreams {
