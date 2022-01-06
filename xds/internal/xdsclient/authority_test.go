@@ -203,7 +203,7 @@ func (s) TestAuthorityShare(t *testing.T) {
 
 	// Call the watch with a different authority name, but the same server
 	// config. This shouldn't create a new controller.
-	resourceNameSameConfig := xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority+"-another", testCDSName+"1", nil)
+	resourceNameSameConfig := xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority2, testCDSName+"1", nil)
 	if ctrl, ok, _ := watchAndFetchNewController(t, client, resourceNameSameConfig, ctrlCh); ok {
 		t.Fatalf("an unexpected controller is built with config: %v", ctrl.config)
 	}
