@@ -100,3 +100,48 @@ func (s) TestNew(t *testing.T) {
 		})
 	}
 }
+
+func (s) TestNewWithInterceptor(t *testing.T) {
+	config := &bootstrap.ServerConfig{
+		ServerURI: testXDSServer,
+		Creds:     grpc.WithInsecure(),
+		NodeProto: testutils.EmptyNodeProtoV2,
+	}
+
+	interceptorCalled := false
+	interceptor := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+		interceptorCalled = true
+		return grpc.Dial(target, opts...)
+	}
+
+	// Set an interceptor and make sure it is called.
+	SetDialInterceptor(interceptor)
+	c, err := New(config, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("New(%+v) = %v, want no error", config, err)
+	}
+	if c != nil {
+		c.Close()
+	}
+
+	if !interceptorCalled {
+		t.Errorf("New(%+v) interceptor called = false, want true", config)
+	}
+	interceptorCalled = false
+
+	// Reset the interceptor and make sure it is not called.
+	ResetDialInterceptor()
+	c, err = New(config, nil, nil, nil)
+	defer func() {
+		if c != nil {
+			c.Close()
+		}
+	}()
+	if err != nil {
+		t.Fatalf("New(%+v) = %v, want no error", config, err)
+	}
+
+	if interceptorCalled {
+		t.Errorf("New(%+v) interceptor called = true, want false", config)
+	}
+}
