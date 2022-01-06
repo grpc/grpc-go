@@ -27,13 +27,8 @@ import (
 
 // weightedItem is a wrapped weighted item that is used to implement weighted random algorithm.
 type weightedItem struct {
-	Item interface{}
-	// TODO Delete Weight? This field is not necessary for randomWRR to work.
-	// But without this field, if we want to know an item's weight in randomWRR.Add , we have to
-	// calculate it (i.e. weight = items.AccumulatedWeight - previousItem.AccumulatedWeight)
-	// which is a bit less concise than items.Weight
-	Weight            int64
-	AccumulatedWeight int64
+	item interface{}
+	accumulatedWeight int64
 }
 
 func (w *weightedItem) String() string {
@@ -44,6 +39,7 @@ func (w *weightedItem) String() string {
 type randomWRR struct {
 	mu           sync.RWMutex
 	items        []*weightedItem
+	// Are all item's weights equal
 	equalWeights bool
 }
 
@@ -57,20 +53,21 @@ var grpcrandInt63n = grpcrand.Int63n
 func (rw *randomWRR) Next() (item interface{}) {
 	rw.mu.RLock()
 	defer rw.mu.RUnlock()
-	sumOfWeights := rw.items[len(rw.items)-1].AccumulatedWeight
-	if sumOfWeights == 0 {
+	var sumOfWeights int64
+	if len(rw.items) == 0 {
 		return nil
 	}
+	sumOfWeights = rw.items[len(rw.items)-1].accumulatedWeight
 	if rw.equalWeights {
-		return rw.items[grpcrandInt63n(int64(len(rw.items)))].Item
+		return rw.items[grpcrandInt63n(int64(len(rw.items)))].item
 	}
 	// Random number in [0, sumOfWeights).
 	randomWeight := grpcrandInt63n(sumOfWeights)
 	// Item's accumulated weights are in ascending order, because item's weight >= 0.
-	// Binary search rw.items to find first item whose AccumulatedWeight > randomWeight
-	// The return i is guaranteed to be in range [0, len(rw.items)) because randomWeight < last item's AccumulatedWeight
-	i := sort.Search(len(rw.items), func(i int) bool { return rw.items[i].AccumulatedWeight > randomWeight })
-	return rw.items[i].Item
+	// Binary search rw.items to find first item whose accumulatedWeight > randomWeight
+	// The return i is guaranteed to be in range [0, len(rw.items)) because randomWeight < last item's accumulatedWeight
+	i := sort.Search(len(rw.items), func(i int) bool { return rw.items[i].accumulatedWeight > randomWeight })
+	return rw.items[i].item
 }
 
 func (rw *randomWRR) Add(item interface{}, weight int64) {
@@ -80,11 +77,15 @@ func (rw *randomWRR) Add(item interface{}, weight int64) {
 	equalWeights := true
 	if len(rw.items) > 0 {
 		lastItem := rw.items[len(rw.items)-1]
-		accumulatedWeight = lastItem.AccumulatedWeight + weight
-		equalWeights = rw.equalWeights && weight == lastItem.Weight
+		accumulatedWeight = lastItem.accumulatedWeight + weight
+		lastItemWeight := lastItem.accumulatedWeight
+		if len(rw.items) > 1 {
+			lastItemWeight = lastItem.accumulatedWeight - rw.items[len(rw.items)-2].accumulatedWeight
+		}
+		equalWeights = rw.equalWeights && weight == lastItemWeight
 	}
 	rw.equalWeights = equalWeights
-	rItem := &weightedItem{Item: item, Weight: weight, AccumulatedWeight: accumulatedWeight}
+	rItem := &weightedItem{item: item, accumulatedWeight: accumulatedWeight}
 	rw.items = append(rw.items, rItem)
 }
 

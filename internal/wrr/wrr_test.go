@@ -71,6 +71,10 @@ func testWRRNext(t *testing.T, newWRR func() WRR) {
 			name:    "17-23-37",
 			weights: []int64{17, 23, 37},
 		},
+		{
+			name: "no items",
+			weights: []int64{},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -80,6 +84,13 @@ func testWRRNext(t *testing.T, newWRR func() WRR) {
 			for i, weight := range tt.weights {
 				w.Add(i, weight)
 				sumOfWeights += weight
+			}
+			if len(tt.weights) == 0 {
+				if w.Next() != nil {
+					t.Fatalf("w.Next returns non nil value when there is no item")
+				} else {
+					return
+				}
 			}
 
 			results := make(map[int]int)
@@ -116,7 +127,7 @@ func (s) TestEdfWrrNext(t *testing.T) {
 func BenchmarkRandomWRRNext(b *testing.B) {
 	for _, n := range []int{100, 500, 1000} {
 		b.Run("equal-weights-"+strconv.Itoa(n)+"-items", func(b *testing.B) {
-			w := NewRandom().(*randomWRR)
+			w := NewRandom()
 			sumOfWeights := n
 			for i := 0; i < n; i++ {
 				w.Add(i, 1)
