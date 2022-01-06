@@ -25,24 +25,9 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/balancer"
 	_ "google.golang.org/grpc/balancer/grpclb"               // grpclb for config parsing.
 	_ "google.golang.org/grpc/internal/resolver/passthrough" // passthrough resolver.
 )
-
-const balancerWithoutConfigParserName = "dummy_balancer"
-
-type dummyBB struct {
-	balancer.Builder
-}
-
-func (*dummyBB) Name() string {
-	return balancerWithoutConfigParserName
-}
-
-func init() {
-	balancer.Register(&dummyBB{})
-}
 
 // testEqual reports whether the lbCfgs a and b are equal. This is to be used
 // only from tests. This ignores the keyBuilderMap field because its internals
@@ -61,6 +46,7 @@ func testEqual(a, b *lbConfig) bool {
 		childPolicyConfigEqual(a.childPolicyConfig, b.childPolicyConfig)
 }
 
+// TestParseConfig verifies successful config parsing scenarios.
 func (s) TestParseConfig(t *testing.T) {
 	childPolicyTargetFieldVal, _ := json.Marshal(dummyChildPolicyTarget)
 	tests := []struct {
@@ -68,14 +54,15 @@ func (s) TestParseConfig(t *testing.T) {
 		input   []byte
 		wantCfg *lbConfig
 	}{
-		// This input validates a few cases:
-		// - A top-level unknown field should not fail.
-		// - An unknown field in routeLookupConfig proto should not fail.
-		// - lookupServiceTimeout is set to its default value, since it is not specified in the input.
-		// - maxAge is set to maxMaxAge since the value is too large in the input.
-		// - staleAge is ignore because it is higher than maxAge in the input.
 		{
-			desc: "with transformations",
+			// This input validates a few cases:
+			// - A top-level unknown field should not fail.
+			// - An unknown field in routeLookupConfig proto should not fail.
+			// - lookupServiceTimeout is set to its default value, since it is not specified in the input.
+			// - maxAge is set to maxMaxAge since the value is too large in the input.
+			// - staleAge is ignore because it is higher than maxAge in the input.
+			// - cacheSizeBytes is greater than the hard upper limit of 5MB
+			desc: "with transformations 1",
 			input: []byte(`{
 				"top-level-unknown-field": "unknown-value",
 				"routeLookupConfig": {
@@ -87,7 +74,7 @@ func (s) TestParseConfig(t *testing.T) {
 					"lookupService": ":///target",
 					"maxAge" : "500s",
 					"staleAge": "600s",
-					"cacheSizeBytes": 1000,
+					"cacheSizeBytes": 100000000,
 					"defaultTarget": "passthrough:///default"
 				},
 				"childPolicy": [
@@ -102,7 +89,7 @@ func (s) TestParseConfig(t *testing.T) {
 				lookupServiceTimeout:   10 * time.Second, // This is the default value.
 				maxAge:                 5 * time.Minute,  // This is max maxAge.
 				staleAge:               time.Duration(0), // StaleAge is ignore because it was higher than maxAge.
-				cacheSizeBytes:         1000,
+				cacheSizeBytes:         maxCacheSize,
 				defaultTarget:          "passthrough:///default",
 				childPolicyName:        "grpclb",
 				childPolicyTargetField: "service_name",
@@ -147,7 +134,7 @@ func (s) TestParseConfig(t *testing.T) {
 		},
 	}
 
-	builder := &rlsBB{}
+	builder := rlsBB{}
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			lbCfg, err := builder.ParseConfig(test.input)
@@ -158,6 +145,7 @@ func (s) TestParseConfig(t *testing.T) {
 	}
 }
 
+// TestParseConfigErrors verifies config parsing failure scenarios.
 func (s) TestParseConfigErrors(t *testing.T) {
 	tests := []struct {
 		desc    string
@@ -223,7 +211,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 					"lookupServiceTimeout" : "315576000001s"
 				}
 			}`),
-			wantErr: "bad Duration: time: invalid duration",
+			wantErr: "google.protobuf.Duration value out of range",
 		},
 		{
 			desc: "invalid max age",
@@ -238,7 +226,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 					"maxAge" : "315576000001s"
 				}
 			}`),
-			wantErr: "bad Duration: time: invalid duration",
+			wantErr: "google.protobuf.Duration value out of range",
 		},
 		{
 			desc: "invalid stale age",
@@ -254,7 +242,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 					"staleAge" : "315576000001s"
 				}
 			}`),
-			wantErr: "bad Duration: time: invalid duration",
+			wantErr: "google.protobuf.Duration value out of range",
 		},
 		{
 			desc: "invalid max age stale age combo",
@@ -272,7 +260,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 			wantErr: "rls: stale_age is set, but max_age is not in route lookup config",
 		},
 		{
-			desc: "invalid cache size",
+			desc: "cache_size_bytes field is not set",
 			input: []byte(`{
 				"routeLookupConfig": {
 					"grpcKeybuilders": [{
@@ -282,10 +270,12 @@ func (s) TestParseConfigErrors(t *testing.T) {
 					"lookupService": "passthrough:///target",
 					"lookupServiceTimeout" : "10s",
 					"maxAge": "30s",
-					"staleAge" : "25s"
-				}
+					"staleAge" : "25s",
+					"defaultTarget": "passthrough:///default"
+				},
+				"childPolicyConfigTargetFieldName": "service_name"
 			}`),
-			wantErr: "rls: cache_size_bytes must be greater than 0 in route lookup config",
+			wantErr: "rls: cache_size_bytes must be set to a non-zero value",
 		},
 		{
 			desc: "no child policy",
@@ -403,7 +393,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 		},
 	}
 
-	builder := &rlsBB{}
+	builder := rlsBB{}
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			lbCfg, err := builder.ParseConfig(test.input)

@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/credentials/google"
+	_ "google.golang.org/grpc/xds/googledirectpath"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -98,7 +99,6 @@ func dialTCPUserTimeout(ctx context.Context, addr string) (net.Conn, error) {
 func createTestConn() *grpc.ClientConn {
 	opts := []grpc.DialOption{
 		grpc.WithContextDialer(dialTCPUserTimeout),
-		grpc.WithBlock(),
 	}
 	switch *customCredentialsType {
 	case "tls":

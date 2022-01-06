@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2021 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,19 +16,10 @@
  *
  */
 
-package xdsclient_test
+// Package rls imports to init the rls lb policy for testing purposes.
+package rls
 
 import (
-	"testing"
-
-	"google.golang.org/grpc/internal/grpctest"
-	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2" // Register the v2 API client.
+	// Blank import to init the rls lb policy for external use.
+	_ "google.golang.org/grpc/balancer/rls/internal"
 )
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}

@@ -16,7 +16,7 @@
  *
  */
 
-package xdsclient_test
+package xdsclient
 
 import (
 	"fmt"
@@ -30,8 +30,6 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"google.golang.org/grpc/xds/internal/xdsclient"
-	"google.golang.org/grpc/xds/internal/xdsclient/pubsub"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -43,8 +41,6 @@ import (
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
-
-const defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 
 func (s) TestLDSConfigDump(t *testing.T) {
 	const testVersion = "test-version-lds"
@@ -76,7 +72,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		listenerRaws[ldsTargets[i]] = testutils.MarshalAny(listenersT)
 	}
 
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, err := NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -87,7 +83,6 @@ func (s) TestLDSConfigDump(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client.Close()
-	updateHandler := client.(pubsub.UpdateHandler)
 
 	// Expected unknown.
 	if err := compareDump(client.DumpLDS, map[string]xdsresource.UpdateWithMD{}); err != nil {
@@ -114,6 +109,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 			Raw: r,
 		}
 	}
+	updateHandler := findPubsubForTest(t, client.(*clientRefCounted).clientImpl, "")
 	updateHandler.NewListeners(update0, xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: testVersion})
 
 	// Expect ACK.
@@ -192,7 +188,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		routeRaws[rdsTargets[i]] = testutils.MarshalAny(routeConfigT)
 	}
 
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, err := NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -203,7 +199,6 @@ func (s) TestRDSConfigDump(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client.Close()
-	updateHandler := client.(pubsub.UpdateHandler)
 
 	// Expected unknown.
 	if err := compareDump(client.DumpRDS, map[string]xdsresource.UpdateWithMD{}); err != nil {
@@ -230,6 +225,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 			Raw: r,
 		}
 	}
+	updateHandler := findPubsubForTest(t, client.(*clientRefCounted).clientImpl, "")
 	updateHandler.NewRouteConfigs(update0, xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: testVersion})
 
 	// Expect ACK.
@@ -308,7 +304,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		clusterRaws[cdsTargets[i]] = testutils.MarshalAny(clusterT)
 	}
 
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, err := NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -319,7 +315,6 @@ func (s) TestCDSConfigDump(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client.Close()
-	updateHandler := client.(pubsub.UpdateHandler)
 
 	// Expected unknown.
 	if err := compareDump(client.DumpCDS, map[string]xdsresource.UpdateWithMD{}); err != nil {
@@ -346,6 +341,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 			Raw: r,
 		}
 	}
+	updateHandler := findPubsubForTest(t, client.(*clientRefCounted).clientImpl, "")
 	updateHandler.NewClusters(update0, xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: testVersion})
 
 	// Expect ACK.
@@ -410,7 +406,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		endpointRaws[edsTargets[i]] = testutils.MarshalAny(claT)
 	}
 
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, err := NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: testXDSServer,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -421,7 +417,6 @@ func (s) TestEDSConfigDump(t *testing.T) {
 		t.Fatalf("failed to create client: %v", err)
 	}
 	defer client.Close()
-	updateHandler := client.(pubsub.UpdateHandler)
 
 	// Expected unknown.
 	if err := compareDump(client.DumpEDS, map[string]xdsresource.UpdateWithMD{}); err != nil {
@@ -448,6 +443,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 			Raw: r,
 		}
 	}
+	updateHandler := findPubsubForTest(t, client.(*clientRefCounted).clientImpl, "")
 	updateHandler.NewEndpoints(update0, xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusACKed, Version: testVersion})
 
 	// Expect ACK.
