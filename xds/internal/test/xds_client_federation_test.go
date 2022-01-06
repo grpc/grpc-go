@@ -47,11 +47,9 @@ import (
 // - CDS: old style, no authority (default authority)
 // - EDS: new style, in a different authority
 func (s) TestClientSideFederation(t *testing.T) {
-	defer func() func() {
-		old := envconfig.XDSFederation
-		envconfig.XDSFederation = true
-		return func() { envconfig.XDSFederation = old }
-	}()()
+	oldXDSFederation := envconfig.XDSFederation
+	envconfig.XDSFederation = true
+	defer func() { envconfig.XDSFederation = oldXDSFederation }()
 
 	// Start a management server as the default authority.
 	serverDefaultAuth, err := e2e.StartManagementServer()
@@ -86,8 +84,8 @@ func (s) TestClientSideFederation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
-	port, cleanup2 := clientSetup(t, &testService{})
-	defer cleanup2()
+	port, cleanup := clientSetup(t, &testService{})
+	defer cleanup()
 
 	const serviceName = "my-service-client-side-xds"
 	// LDS is old style name.

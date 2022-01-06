@@ -23,6 +23,8 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
+// BuildResourceName returns the resource name in the format of an xdstp://
+// resource.
 func BuildResourceName(typ xdsresource.ResourceType, auth, id string, ctxParams map[string]string) string {
 	var typS string
 	switch typ {
