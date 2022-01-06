@@ -1574,6 +1574,9 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 		sstream := serverStreams[id]
 		loopyServerStream := loopyServerStreams[id]
 		loopyClientStream := loopyClientStreams[id]
+		if loopyServerStream == nil {
+			t.Fatalf("Unexpected nil loopyServerStream")
+		}
 		// Check stream flow control.
 		if int(cstream.fc.limit+cstream.fc.delta-cstream.fc.pendingData-cstream.fc.pendingUpdate) != int(st.loopy.oiws)-loopyServerStream.bytesOutStanding {
 			t.Fatalf("Account mismatch: client stream inflow limit(%d) + delta(%d) - pendingData(%d) - pendingUpdate(%d) != server outgoing InitialWindowSize(%d) - outgoingStream.bytesOutStanding(%d)", cstream.fc.limit, cstream.fc.delta, cstream.fc.pendingData, cstream.fc.pendingUpdate, st.loopy.oiws, loopyServerStream.bytesOutStanding)
