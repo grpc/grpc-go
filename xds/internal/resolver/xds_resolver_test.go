@@ -390,8 +390,8 @@ func (s) TestXDSResolverResourceNameToWatch(t *testing.T) {
 // from the underlying xdsClient is received after the resolver is closed.
 func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 	xdsR, xdsC, tcc, cancel := testSetup(t, setupOpts{target: target})
+	defer xdsR.Close()
 	defer cancel()
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	waitForWatchListener(ctx, t, xdsC, targetStr)
