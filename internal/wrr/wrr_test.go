@@ -72,7 +72,7 @@ func testWRRNext(t *testing.T, newWRR func() WRR) {
 			weights: []int64{17, 23, 37},
 		},
 		{
-			name: "no items",
+			name:    "no items",
 			weights: []int64{},
 		},
 	}

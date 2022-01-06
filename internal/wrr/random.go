@@ -27,7 +27,7 @@ import (
 
 // weightedItem is a wrapped weighted item that is used to implement weighted random algorithm.
 type weightedItem struct {
-	item interface{}
+	item              interface{}
 	accumulatedWeight int64
 }
 
@@ -37,8 +37,8 @@ func (w *weightedItem) String() string {
 
 // randomWRR is a struct that contains weighted items implement weighted random algorithm.
 type randomWRR struct {
-	mu           sync.RWMutex
-	items        []*weightedItem
+	mu    sync.RWMutex
+	items []*weightedItem
 	// Are all item's weights equal
 	equalWeights bool
 }
