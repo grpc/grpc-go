@@ -61,8 +61,7 @@ func (rw *randomWRR) Next() (item interface{}) {
 		return rw.items[grpcrandInt63n(int64(len(rw.items)))].item
 	}
 
-	var sumOfWeights int64
-	sumOfWeights = rw.items[len(rw.items)-1].accumulatedWeight
+	sumOfWeights := rw.items[len(rw.items)-1].accumulatedWeight
 	// Random number in [0, sumOfWeights).
 	randomWeight := grpcrandInt63n(sumOfWeights)
 	// Item's accumulated weights are in ascending order, because item's weight >= 0.
