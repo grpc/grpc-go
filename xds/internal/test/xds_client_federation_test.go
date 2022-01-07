@@ -1,3 +1,6 @@
+//go:build !386
+// +build !386
+
 /*
  *
  * Copyright 2021 gRPC authors.
