@@ -28,6 +28,7 @@ import (
 // weightedItem is a wrapped weighted item that is used to implement weighted random algorithm.
 type weightedItem struct {
 	item              interface{}
+	weight            int64
 	accumulatedWeight int64
 }
 
@@ -53,13 +54,14 @@ var grpcrandInt63n = grpcrand.Int63n
 func (rw *randomWRR) Next() (item interface{}) {
 	rw.mu.RLock()
 	defer rw.mu.RUnlock()
-	var sumOfWeights int64
 	if len(rw.items) == 0 {
 		return nil
 	}
 	if rw.equalWeights {
 		return rw.items[grpcrandInt63n(int64(len(rw.items)))].item
 	}
+
+	var sumOfWeights int64
 	sumOfWeights = rw.items[len(rw.items)-1].accumulatedWeight
 	// Random number in [0, sumOfWeights).
 	randomWeight := grpcrandInt63n(sumOfWeights)
@@ -78,14 +80,10 @@ func (rw *randomWRR) Add(item interface{}, weight int64) {
 	if len(rw.items) > 0 {
 		lastItem := rw.items[len(rw.items)-1]
 		accumulatedWeight = lastItem.accumulatedWeight + weight
-		lastItemWeight := lastItem.accumulatedWeight
-		if len(rw.items) > 1 {
-			lastItemWeight = lastItem.accumulatedWeight - rw.items[len(rw.items)-2].accumulatedWeight
-		}
-		equalWeights = rw.equalWeights && weight == lastItemWeight
+		equalWeights = rw.equalWeights && weight == lastItem.weight
 	}
 	rw.equalWeights = equalWeights
-	rItem := &weightedItem{item: item, accumulatedWeight: accumulatedWeight}
+	rItem := &weightedItem{item: item, weight: weight, accumulatedWeight: accumulatedWeight}
 	rw.items = append(rw.items, rItem)
 }
 

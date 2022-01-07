@@ -78,19 +78,18 @@ func testWRRNext(t *testing.T, newWRR func() WRR) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var sumOfWeights int64
-
 			w := newWRR()
+			if len(tt.weights) == 0 {
+				if next := w.Next(); next != nil {
+					t.Fatalf("w.Next returns non nil value:%v when there is no item", next)
+				}
+				return
+			}
+
+			var sumOfWeights int64
 			for i, weight := range tt.weights {
 				w.Add(i, weight)
 				sumOfWeights += weight
-			}
-			if len(tt.weights) == 0 {
-				if w.Next() != nil {
-					t.Fatalf("w.Next returns non nil value when there is no item")
-				} else {
-					return
-				}
 			}
 
 			results := make(map[int]int)
