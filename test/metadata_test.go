@@ -20,10 +20,12 @@ package test
 
 import (
 	"context"
+	"io"
 	"reflect"
 	"testing"
 	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
@@ -56,6 +58,30 @@ func (s) TestInvalidMetadata(t *testing.T) {
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
 		},
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			for {
+				_, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				for _, test := range tests {
+					if err := stream.SetHeader(test.md); !reflect.DeepEqual(test.want, err) {
+						t.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
+					}
+					if err := stream.SendHeader(test.md); !reflect.DeepEqual(test.want, err) {
+						t.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
+					}
+					stream.SetTrailer(test.md)
+				}
+				err = stream.Send(&testpb.StreamingOutputCallResponse{})
+				if err != nil {
+					return err
+				}
+			}
+		},
 	}
 	if err := ss.Start(nil); err != nil {
 		t.Fatalf("Error starting ss endpoint server: %v", err)
@@ -72,28 +98,20 @@ func (s) TestInvalidMetadata(t *testing.T) {
 		}
 	}
 
-	ss2 := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-
-			for _, test := range tests {
-				if err := stream.SendHeader(test.md); !reflect.DeepEqual(test.want, err) {
-					t.Fatalf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
-				}
-				stream.SetTrailer(test.md)
-			}
-			if err := stream.Send(nil); err != nil {
-				t.Fatalf("call stream.Send(nil) will success but got err :%v", err)
-			}
-			return nil
-		},
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	stream, err := ss.Client.FullDuplexCall(ctx, grpc.WaitForReady(true))
+	defer cancel()
+	if err != nil {
+		t.Fatalf("call ss.Client.FullDuplexCall(context.Background()) will success but got err :%v", err)
 	}
-	if err := ss2.Start(nil); err != nil {
-		t.Fatalf("Error starting ss2 endpoint server: %v", err)
+	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+	 	t.Fatalf("call ss.Client stream Send(nil) will success but got err :%v", err)
 	}
-	defer ss2.Stop()
-
-	if _, err := ss2.Client.FullDuplexCall(context.Background()); err != nil {
-		t.Fatalf("call ss2.Client.FullDuplexCall(context.Background()) will success but got err :%v", err)
+	if _, err := stream.Header(); err != nil {
+	 	t.Fatalf("call ss.Client stream Send(nil) will success but got err :%v", err)
 	}
-
+	if _, err := stream.Recv(); err != nil {
+	 	t.Fatalf("stream.Recv() = _, %v", err)
+	}
+	stream.CloseSend()
 }

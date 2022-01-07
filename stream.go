@@ -1454,7 +1454,7 @@ func (ss *serverStream) SetHeader(md metadata.MD) error {
 	}
 	err := imetadata.Validate(md)
 	if err != nil {
-		return err
+		return status.Error(codes.Internal, err.Error())
 	}
 	return ss.s.SetHeader(md)
 }
@@ -1462,7 +1462,7 @@ func (ss *serverStream) SetHeader(md metadata.MD) error {
 func (ss *serverStream) SendHeader(md metadata.MD) error {
 	err := imetadata.Validate(md)
 	if err != nil {
-		return err
+		return status.Error(codes.Internal, err.Error())
 	}
 
 	err = ss.t.WriteHeader(ss.s, md)
