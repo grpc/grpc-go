@@ -78,13 +78,13 @@ func Set(addr resolver.Address, md metadata.MD) resolver.Address {
 
 // Validate returns an error if the input md contains invalid keys or values.
 //
-// if header name not presudo-header, there are check items:
+// if the header is not pseudo-header, there are check items:
 // - header names contain one or more characters from this set [0-9 a-z _ - .]
 // - if the header-name ends with a "-bin" suffix, the header-value could contain an arbitrary octet sequence. So no real validation required here.
 // - if header-name does not end with a "-bin" suffix, header-value should only contain one or more characters from the set ( %x20-%x7E ) which includes space and printable ASCII.
 func Validate(md metadata.MD) error {
 	for k, vals := range md {
-		// presudo-header will be ignored
+		// pseudo-header will be ignored
 		if k[0] == ':' {
 			continue
 		}

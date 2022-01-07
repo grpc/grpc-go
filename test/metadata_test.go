@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2014 gRPC authors.
+ * Copyright 2022 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,17 +34,7 @@ import (
 // TestInvalidMetadata test invalid metadata
 func (s) TestInvalidMetadata(t *testing.T) {
 
-	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			return &testpb.Empty{}, nil
-		},
-	}
-	if err := ss.Start(nil); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
-
-	for _, test := range []struct {
+	tests := []struct {
 		md   metadata.MD
 		want error
 	}{
@@ -60,7 +50,19 @@ func (s) TestInvalidMetadata(t *testing.T) {
 			md:   map[string][]string{"test-bin": {string(rune(0x19))}},
 			want: nil,
 		},
-	} {
+	}
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting ss endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	for _, test := range tests {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 
@@ -69,4 +71,29 @@ func (s) TestInvalidMetadata(t *testing.T) {
 			t.Fatalf("call ss.Client.EmptyCall() validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
 		}
 	}
+
+	ss2 := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+
+			for _, test := range tests {
+				if err := stream.SendHeader(test.md); !reflect.DeepEqual(test.want, err) {
+					t.Fatalf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
+				}
+				stream.SetTrailer(test.md)
+			}
+			if err := stream.Send(nil); err != nil {
+				t.Fatalf("call stream.Send(nil) will success but got err :%v", err)
+			}
+			return nil
+		},
+	}
+	if err := ss2.Start(nil); err != nil {
+		t.Fatalf("Error starting ss2 endpoint server: %v", err)
+	}
+	defer ss2.Stop()
+
+	if _, err := ss2.Client.FullDuplexCall(context.Background()); err != nil {
+		t.Fatalf("call ss2.Client.FullDuplexCall(context.Background()) will success but got err :%v", err)
+	}
+
 }
