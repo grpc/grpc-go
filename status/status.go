@@ -121,17 +121,23 @@ func Code(err error) codes.Code {
 // FromContextError converts a context error or wrapped context error into a
 // Status.  It returns a Status with codes.OK if err is nil, or a Status with
 // codes.Unknown if err is non-nil and not a context error.
-func FromContextError(err error) *Status {
+//
+// If msg != "" and err != nil, msg is used as the Status' message. If msg == "",
+// err.Error() is used.
+func FromContextError(err error, msg string) *Status {
 	if err == nil {
 		return nil
 	}
+	if msg == "" {
+		msg = err.Error()
+	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return New(codes.DeadlineExceeded, err.Error())
+		return New(codes.DeadlineExceeded, msg)
 	}
 	if errors.Is(err, context.Canceled) {
-		return New(codes.Canceled, err.Error())
+		return New(codes.Canceled, msg)
 	}
-	return New(codes.Unknown, err.Error())
+	return New(codes.Unknown, msg)
 }
 
 // MustFromContextError is like FromContextError, except that it expects err to
@@ -140,5 +146,5 @@ func MustFromContextError(err error) error {
 	if err == nil {
 		return status.New(codes.Internal, "Expected non-nil context error").Err()
 	}
-	return FromContextError(err).Err()
+	return FromContextError(err, "").Err()
 }

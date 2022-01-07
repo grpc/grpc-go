@@ -358,17 +358,20 @@ func mustMarshalAny(msg proto.Message) *apb.Any {
 func (s) TestFromContextError(t *testing.T) {
 	testCases := []struct {
 		in   error
+		msg  string
 		want *Status
 	}{
 		{in: nil, want: New(codes.OK, "")},
+		{in: nil, msg: "ignored", want: New(codes.OK, "")},
 		{in: context.DeadlineExceeded, want: New(codes.DeadlineExceeded, context.DeadlineExceeded.Error())},
 		{in: context.Canceled, want: New(codes.Canceled, context.Canceled.Error())},
 		{in: errors.New("other"), want: New(codes.Unknown, "other")},
+		{in: errors.New("other"), msg: "my msg", want: New(codes.Unknown, "my msg")},
 		{in: fmt.Errorf("wrapped: %w", context.DeadlineExceeded), want: New(codes.DeadlineExceeded, "wrapped: "+context.DeadlineExceeded.Error())},
 		{in: fmt.Errorf("wrapped: %w", context.Canceled), want: New(codes.Canceled, "wrapped: "+context.Canceled.Error())},
 	}
 	for _, tc := range testCases {
-		got := FromContextError(tc.in)
+		got := FromContextError(tc.in, tc.msg)
 		if got.Code() != tc.want.Code() || got.Message() != tc.want.Message() {
 			t.Errorf("FromContextError(%v) = %v; want %v", tc.in, got, tc.want)
 		}

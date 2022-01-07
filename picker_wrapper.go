@@ -105,15 +105,8 @@ func (pw *pickerWrapper) pick(ctx context.Context, failfast bool, info balancer.
 				var errStr string
 				if lastPickErr != nil {
 					errStr = "latest balancer error: " + lastPickErr.Error()
-				} else {
-					errStr = ctx.Err().Error()
 				}
-				switch ctx.Err() {
-				case context.DeadlineExceeded:
-					return nil, nil, status.Error(codes.DeadlineExceeded, errStr)
-				case context.Canceled:
-					return nil, nil, status.Error(codes.Canceled, errStr)
-				}
+				return nil, nil, status.FromContextError(ctx.Err(), errStr).Err()
 			case <-ch:
 			}
 			continue
