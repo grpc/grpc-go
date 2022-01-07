@@ -765,7 +765,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (_ *Strea
 		select {
 		case <-ch:
 		case <-ctx.Done():
-			return nil, &NewStreamError{Err: ContextErr(ctx.Err())}
+			return nil, &NewStreamError{Err: status.MustFromContextError(ctx.Err())}
 		case <-t.goAway:
 			return nil, &NewStreamError{Err: errStreamDrain}
 		case <-t.ctx.Done():

@@ -638,7 +638,7 @@ func (cs *clientStream) shouldRetry(err error) (bool, error) {
 		return false, nil
 	case <-cs.ctx.Done():
 		t.Stop()
-		return false, status.FromContextError(cs.ctx.Err()).Err()
+		return false, status.MustFromContextError(cs.ctx.Err())
 	}
 }
 

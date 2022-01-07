@@ -177,7 +177,7 @@ func (r *recvBufferReader) Read(p []byte) (n int, err error) {
 func (r *recvBufferReader) read(p []byte) (n int, err error) {
 	select {
 	case <-r.ctxDone:
-		return 0, ContextErr(r.ctx.Err())
+		return 0, status.MustFromContextError(r.ctx.Err())
 	case m := <-r.recv.get():
 		return r.readAdditional(m, p)
 	}
@@ -202,7 +202,7 @@ func (r *recvBufferReader) readClient(p []byte) (n int, err error) {
 		// TODO: delaying ctx error seems like a unnecessary side effect. What
 		// we really want is to mark the stream as done, and return ctx error
 		// faster.
-		r.closeStream(ContextErr(r.ctx.Err()))
+		r.closeStream(status.MustFromContextError(r.ctx.Err()))
 		m := <-r.recv.get()
 		return r.readAdditional(m, p)
 	case m := <-r.recv.get():
@@ -324,7 +324,7 @@ func (s *Stream) waitOnHeader() {
 	case <-s.ctx.Done():
 		// Close the stream to prevent headers/trailers from changing after
 		// this function returns.
-		s.ct.CloseStream(s, ContextErr(s.ctx.Err()))
+		s.ct.CloseStream(s, status.MustFromContextError(s.ctx.Err()))
 		// headerChan could possibly not be closed yet if closeStream raced
 		// with operateHeaders; wait until it is closed explicitly here.
 		<-s.headerChan
@@ -792,15 +792,4 @@ type channelzData struct {
 	msgRecv               int64
 	lastMsgSentTime       int64
 	lastMsgRecvTime       int64
-}
-
-// ContextErr converts the error from context package into a status error.
-func ContextErr(err error) error {
-	switch err {
-	case context.DeadlineExceeded:
-		return status.Error(codes.DeadlineExceeded, err.Error())
-	case context.Canceled:
-		return status.Error(codes.Canceled, err.Error())
-	}
-	return status.Errorf(codes.Internal, "Unexpected error from context packet: %v", err)
 }

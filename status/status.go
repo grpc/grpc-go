@@ -133,3 +133,12 @@ func FromContextError(err error) *Status {
 	}
 	return New(codes.Unknown, err.Error())
 }
+
+// MustFromContextError is like FromContextError, except that it expects err to
+// be non-nil, and it returns the status in form of an error.
+func MustFromContextError(err error) error {
+	if err == nil {
+		return status.New(codes.Internal, "Expected non-nil context error").Err()
+	}
+	return FromContextError(err).Err()
+}

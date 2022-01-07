@@ -578,7 +578,7 @@ func (cc *ClientConn) waitForResolvedAddrs(ctx context.Context) error {
 	case <-cc.firstResolveEvent.Done():
 		return nil
 	case <-ctx.Done():
-		return status.FromContextError(ctx.Err()).Err()
+		return status.MustFromContextError(ctx.Err())
 	case <-cc.ctx.Done():
 		return ErrClientConnClosing
 	}

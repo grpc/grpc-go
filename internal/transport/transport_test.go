@@ -818,7 +818,7 @@ func (s) TestLargeMessageSuspension(t *testing.T) {
 	// stream.go to keep track of context timeout and call CloseStream.
 	go func() {
 		<-ctx.Done()
-		ct.CloseStream(s, ContextErr(ctx.Err()))
+		ct.CloseStream(s, status.MustFromContextError(ctx.Err()))
 	}()
 	// Write should not be done successfully due to flow control.
 	msg := make([]byte, initialWindowSize*8)
@@ -1426,7 +1426,7 @@ func (s) TestContextErr(t *testing.T) {
 		{context.DeadlineExceeded, status.Error(codes.DeadlineExceeded, context.DeadlineExceeded.Error())},
 		{context.Canceled, status.Error(codes.Canceled, context.Canceled.Error())},
 	} {
-		err := ContextErr(test.errIn)
+		err := status.MustFromContextError(test.errIn)
 		if err.Error() != test.errOut.Error() {
 			t.Fatalf("ContextErr{%v} = %v \nwant %v", test.errIn, err, test.errOut)
 		}

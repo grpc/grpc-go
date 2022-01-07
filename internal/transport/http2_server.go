@@ -1072,7 +1072,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 				return ErrConnClosing
 			default:
 			}
-			return ContextErr(s.ctx.Err())
+			return status.MustFromContextError(s.ctx.Err())
 		}
 	}
 	df := &dataFrame{
@@ -1087,7 +1087,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			return ErrConnClosing
 		default:
 		}
-		return ContextErr(s.ctx.Err())
+		return status.MustFromContextError(s.ctx.Err())
 	}
 	return t.controlBuf.put(df)
 }
