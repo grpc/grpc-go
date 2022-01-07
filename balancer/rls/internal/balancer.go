@@ -22,7 +22,6 @@ package rls
 import (
 	"encoding/json"
 	"fmt"
-	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -80,7 +79,7 @@ func (rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 		lbCfg:                    &lbConfig{},
 		pendingMap:               make(map[cacheKey]*backoffState),
 		childPolicies:            make(map[string]*childPolicyWrapper),
-		ccUpdateCh:               make(chan *balancer.ClientConnState),
+		ccUpdateCh:               make(chan *balancer.ClientConnState, 1),
 		childPolicyStateUpdateCh: buffer.NewUnbounded(),
 		connectivityStateCh:      make(chan struct{}),
 	}
@@ -118,11 +117,16 @@ type rlsBalancer struct {
 	bg                 *balancergroup.BalancerGroup
 	childPolicies      map[string]*childPolicyWrapper
 	defaultPolicy      *childPolicyWrapper
+	// A reference to the most recent picker sent to gRPC as part of a state
+	// update is cached in this field so that we can release the reference to the
+	// default child policy wrapper when a new picker is created. See
+	// sendNewPickerLocked() for details.
+	lastPicker *rlsPicker
 
 	// Channels on which updates are received or pushed.
 	ccUpdateCh               chan *balancer.ClientConnState
-	childPolicyStateUpdateCh *buffer.Unbounded
-	connectivityStateCh      chan struct{}
+	childPolicyStateUpdateCh *buffer.Unbounded // idAndState from child policy.
+	connectivityStateCh      chan struct{}     // signalled when control channel becomes READY again.
 }
 
 // run is a long-running goroutine which handles all the updates that the
@@ -145,7 +149,7 @@ func (b *rlsBalancer) run() {
 			updatePicker := b.dataCache.resetBackoffState(&backoffState{bs: defaultBackoffStrategy})
 			b.cacheMu.Unlock()
 			if updatePicker {
-				b.sendNewPickerLocked()
+				b.sendNewPicker()
 			}
 		case <-b.done.Done():
 			return
@@ -169,17 +173,21 @@ func (b *rlsBalancer) purgeDataCache() {
 			updatePicker := b.dataCache.evictExpiredEntries()
 			b.cacheMu.Unlock()
 			if updatePicker {
-				b.sendNewPickerLocked()
+				b.sendNewPicker()
 			}
 		}
 	}
 }
 
 func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
+	// Remove unprocessed update from the channel, if one exists, and push the
+	// most recent one.
 	select {
 	case b.ccUpdateCh <- &ccs:
-	case <-b.done.Done():
+		return nil
+	case <-b.ccUpdateCh:
 	}
+	b.ccUpdateCh <- &ccs
 	return nil
 }
 
@@ -219,7 +227,7 @@ func (b *rlsBalancer) handleClientConnUpdate(ccs *balancer.ClientConnState) {
 
 	// Update the copy of the config in the LB policy and send a new picker.
 	b.lbCfg = newCfg
-	b.sendNewPicker()
+	b.sendNewPickerLocked()
 }
 
 // handleControlChannelUpdate handles updates to service config fields which
@@ -374,7 +382,7 @@ func (b *rlsBalancer) ExitIdle() {
 	b.bg.ExitIdle()
 }
 
-// sendNewPicker pushes a new picker on to the channel.
+// sendNewPickerLocked pushes a new picker on to the channel.
 //
 //
 // Note that regardless of what connectivity state is reported, the policy will
@@ -386,11 +394,8 @@ func (b *rlsBalancer) ExitIdle() {
 // receipt of RLS responses.
 //
 // Caller must hold lb.stateMu.
-func (b *rlsBalancer) sendNewPicker() {
+func (b *rlsBalancer) sendNewPickerLocked() {
 	aggregatedState := b.aggregatedConnectivityState()
-	if len(b.childPolicies) == 0 && b.lbCfg.defaultTarget == "" {
-		aggregatedState = connectivity.Idle
-	}
 
 	// Acquire a separate reference for the picker. This is required to ensure
 	// that the wrapper held by the old picker is not closed when the default
@@ -411,26 +416,24 @@ func (b *rlsBalancer) sendNewPicker() {
 		bg:            b.bg,
 	}
 	picker.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-picker %p] ", picker))
-	// Set a finalizer to release the reference held by the picker.
-	runtime.SetFinalizer(picker, func(p *rlsPicker) {
-		p.lb.stateMu.Lock()
-		if p.defaultPolicy != nil {
-			p.defaultPolicy.releaseRef()
-		}
-		p.lb.stateMu.Unlock()
-	})
-
 	state := balancer.State{
 		ConnectivityState: aggregatedState,
 		Picker:            picker,
 	}
 	b.logger.Infof("New balancer.State: %+v", state)
 	b.cc.UpdateState(state)
+
+	if b.lastPicker != nil {
+		if b.defaultPolicy != nil {
+			b.defaultPolicy.releaseRef()
+		}
+	}
+	b.lastPicker = picker
 }
 
-func (b *rlsBalancer) sendNewPickerLocked() {
+func (b *rlsBalancer) sendNewPicker() {
 	b.stateMu.Lock()
-	b.sendNewPicker()
+	b.sendNewPickerLocked()
 	b.stateMu.Unlock()
 }
 
@@ -449,6 +452,10 @@ func (b *rlsBalancer) sendNewPickerLocked() {
 //
 // Caller must hold lb.stateMu.
 func (b *rlsBalancer) aggregatedConnectivityState() connectivity.State {
+	if len(b.childPolicies) == 0 && b.lbCfg.defaultTarget == "" {
+		return connectivity.Idle
+	}
+
 	var readyN, connectingN, idleN int
 	for _, cpw := range b.childPolicies {
 		state := (*balancer.State)(atomic.LoadPointer(&cpw.state))
@@ -519,7 +526,7 @@ func (b *rlsBalancer) handleChildPolicyStateUpdate(id string, newState balancer.
 	}
 	atomic.StorePointer(&cpw.state, unsafe.Pointer(&newState))
 	b.logger.Infof("Child policy %q has new state %+v", id, cpw.state)
-	b.sendNewPicker()
+	b.sendNewPickerLocked()
 }
 
 // acquireChildPolicyReferences attempts to acquire references to

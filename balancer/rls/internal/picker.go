@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2022 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,7 +110,9 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 				}(dcEntry.backoffState)
 			}
 			// Delegate to child policies.
-			return p.delegateToChildPolicies(dcEntry, info, func() { p.lb.cacheMu.RUnlock() })
+			res, err := p.delegateToChildPolicies(dcEntry, info)
+			p.lb.cacheMu.RUnlock()
+			return res, err
 		}
 
 		// We get here only if the data cache entry has expired. If entry is in
@@ -129,7 +131,9 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	// Data cache hit. Pending request exists.
 	default:
 		if dcEntry.expiryTime.After(now) {
-			return p.delegateToChildPolicies(dcEntry, info, func() { p.lb.cacheMu.RUnlock() })
+			res, err := p.delegateToChildPolicies(dcEntry, info)
+			p.lb.cacheMu.RUnlock()
+			return res, err
 		}
 		// Data cache entry has expired and pending request exists. Queue pick.
 		p.lb.cacheMu.RUnlock()
@@ -142,15 +146,8 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // to which this RPC can be routed to. If there is no child policy in READY
 // state, we delegate to the first child policy arbitrarily.
 //
-// The passed in unlock function is invoked through a defer statement. Some code
-// paths which call this method hold a read-lock while some hold a write-lock.
-// And in all cases, the lock is to be released after this method. The unlock
-// function simplifies call sites.
-//
 // Caller must hold at least a read-lock on p.lb.cacheMu.
-func (p *rlsPicker) delegateToChildPolicies(dcEntry *cacheEntry, info balancer.PickInfo, unlock func()) (balancer.PickResult, error) {
-	defer unlock()
-
+func (p *rlsPicker) delegateToChildPolicies(dcEntry *cacheEntry, info balancer.PickInfo) (balancer.PickResult, error) {
 	for _, cpw := range dcEntry.childPolicyWrappers {
 		ok, res, err := p.pickIfFeasible(cpw, info)
 		if ok {
@@ -208,8 +205,7 @@ func (p *rlsPicker) sendRequestAndReturnPick(cacheKey cacheKey, bs *backoffState
 	switch {
 	// Valid data cache entry. Delegate to its child policies.
 	case dcEntry.expiryTime.After(now):
-		// No unlock function is specified here since it is deferred at the top.
-		return p.delegateToChildPolicies(dcEntry, info, func() {})
+		return p.delegateToChildPolicies(dcEntry, info)
 
 	// Entry is in backoff. Delegate to default target or fail the pick.
 	case dcEntry.backoffState != nil && dcEntry.backoffTime.After(now):
@@ -290,7 +286,7 @@ func (p *rlsPicker) handleRouteLookupResponse(cacheKey cacheKey, targets []strin
 		// no longer pending.
 		p.logger.Infof("Removing pending request entry for key %+v", cacheKey)
 		delete(p.lb.pendingMap, cacheKey)
-		p.lb.sendNewPickerLocked()
+		p.lb.sendNewPicker()
 		p.lb.cacheMu.Unlock()
 	}()
 
@@ -326,7 +322,7 @@ func (p *rlsPicker) handleRouteLookupResponse(cacheKey cacheKey, targets []strin
 		if dcEntry.backoffState.timer != nil {
 			dcEntry.backoffState.timer.Stop()
 		}
-		dcEntry.backoffState.timer = time.AfterFunc(backoffTime, p.lb.sendNewPickerLocked)
+		dcEntry.backoffState.timer = time.AfterFunc(backoffTime, p.lb.sendNewPicker)
 		return
 	}
 
