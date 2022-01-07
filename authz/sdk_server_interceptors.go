@@ -32,6 +32,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+const logLevel = 2
+
 var logger = grpclog.Component("authz")
 
 // StaticInterceptor contains engines used to make authorization decisions. It
@@ -62,7 +64,9 @@ func (i *StaticInterceptor) UnaryInterceptor(ctx context.Context, req interface{
 	err := i.engines.IsAuthorized(ctx)
 	if err != nil {
 		if status.Code(err) == codes.PermissionDenied {
-			logger.Infof("%v", err)
+			if logger.V(logLevel) {
+				logger.Infof("unauthorized RPC request rejected %v", err)
+			}
 			return nil, status.Errorf(codes.PermissionDenied, "unauthorized RPC request rejected")
 		}
 		return nil, err
@@ -77,7 +81,9 @@ func (i *StaticInterceptor) StreamInterceptor(srv interface{}, ss grpc.ServerStr
 	err := i.engines.IsAuthorized(ss.Context())
 	if err != nil {
 		if status.Code(err) == codes.PermissionDenied {
-			logger.Infof("%v", err)
+			if logger.V(logLevel) {
+				logger.Infof("unauthorized RPC request rejected %v", err)
+			}
 			return status.Errorf(codes.PermissionDenied, "unauthorized RPC request rejected")
 		}
 		return err
