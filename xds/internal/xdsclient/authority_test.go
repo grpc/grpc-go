@@ -150,7 +150,7 @@ func (s) TestAuthorityNoneDefaultAuthority(t *testing.T) {
 	}
 	t.Cleanup(client.Close)
 
-	resourceName := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
+	resourceName := xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
 	ctrl, ok, _ := watchAndFetchNewController(t, client, resourceName, ctrlCh)
 	if !ok {
 		t.Fatalf("want a new controller to be built, got none")
@@ -182,7 +182,7 @@ func (s) TestAuthorityShare(t *testing.T) {
 	}
 	t.Cleanup(client.Close)
 
-	resourceName := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
+	resourceName := xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
 	ctrl1, ok1, _ := watchAndFetchNewController(t, client, resourceName, ctrlCh)
 	if !ok1 {
 		t.Fatalf("want a new controller to be built, got none")
@@ -195,7 +195,7 @@ func (s) TestAuthorityShare(t *testing.T) {
 
 	// Call the watch with the same authority name. This shouldn't create a new
 	// controller.
-	resourceNameSameAuthority := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName+"1", nil)
+	resourceNameSameAuthority := xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName+"1", nil)
 	ctrl2, ok2, _ := watchAndFetchNewController(t, client, resourceNameSameAuthority, ctrlCh)
 	if ok2 {
 		t.Fatalf("an unexpected controller is built with config: %v", ctrl2.config)
@@ -203,7 +203,7 @@ func (s) TestAuthorityShare(t *testing.T) {
 
 	// Call the watch with a different authority name, but the same server
 	// config. This shouldn't create a new controller.
-	resourceNameSameConfig := buildResourceName(xdsresource.ClusterResource, testAuthority2, testCDSName+"1", nil)
+	resourceNameSameConfig := xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority2, testCDSName+"1", nil)
 	if ctrl, ok, _ := watchAndFetchNewController(t, client, resourceNameSameConfig, ctrlCh); ok {
 		t.Fatalf("an unexpected controller is built with config: %v", ctrl.config)
 	}
@@ -230,7 +230,7 @@ func (s) TestAuthorityIdleTimeout(t *testing.T) {
 	}
 	t.Cleanup(client.Close)
 
-	resourceName := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
+	resourceName := xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
 	ctrl1, ok1, cancelWatch1 := watchAndFetchNewController(t, client, resourceName, ctrlCh)
 	if !ok1 {
 		t.Fatalf("want a new controller to be built, got none")
@@ -239,7 +239,7 @@ func (s) TestAuthorityIdleTimeout(t *testing.T) {
 	var cancelWatch2 func()
 	// Call the watch with the same authority name. This shouldn't create a new
 	// controller.
-	resourceNameSameAuthority := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName+"1", nil)
+	resourceNameSameAuthority := xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName+"1", nil)
 	ctrl2, ok2, cancelWatch2 := watchAndFetchNewController(t, client, resourceNameSameAuthority, ctrlCh)
 	if ok2 {
 		t.Fatalf("an unexpected controller is built with config: %v", ctrl2.config)
@@ -285,7 +285,7 @@ func (s) TestAuthorityClientClose(t *testing.T) {
 		t.Fatalf("want a new controller to be built, got none")
 	}
 
-	resourceNameWithAuthority := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
+	resourceNameWithAuthority := xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
 	ctrl2, ok2, _ := watchAndFetchNewController(t, client, resourceNameWithAuthority, ctrlCh)
 	if !ok2 {
 		t.Fatalf("want a new controller to be built, got none")
@@ -329,7 +329,7 @@ func (s) TestAuthorityRevive(t *testing.T) {
 
 	// Start a watch on the authority, and cancel it. This puts the authority in
 	// the idle cache.
-	resourceName := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
+	resourceName := xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName, nil)
 	ctrl1, ok1, cancelWatch1 := watchAndFetchNewController(t, client, resourceName, ctrlCh)
 	if !ok1 {
 		t.Fatalf("want a new controller to be built, got none")
@@ -338,7 +338,7 @@ func (s) TestAuthorityRevive(t *testing.T) {
 
 	// Start another watch on this authority, it should retrieve the authority
 	// from the cache, instead of creating a new one.
-	resourceNameWithAuthority := buildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName+"1", nil)
+	resourceNameWithAuthority := xdstestutils.BuildResourceName(xdsresource.ClusterResource, testAuthority, testCDSName+"1", nil)
 	ctrl2, ok2, _ := watchAndFetchNewController(t, client, resourceNameWithAuthority, ctrlCh)
 	if ok2 {
 		t.Fatalf("an unexpected controller is built with config: %v", ctrl2.config)

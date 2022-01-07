@@ -17,3 +17,31 @@
 
 // Package testutils provides utility types, for use in xds tests.
 package testutils
+
+import (
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+)
+
+// BuildResourceName returns the resource name in the format of an xdstp://
+// resource.
+func BuildResourceName(typ xdsresource.ResourceType, auth, id string, ctxParams map[string]string) string {
+	var typS string
+	switch typ {
+	case xdsresource.ListenerResource:
+		typS = version.V3ListenerType
+	case xdsresource.RouteConfigResource:
+		typS = version.V3RouteConfigType
+	case xdsresource.ClusterResource:
+		typS = version.V3ClusterType
+	case xdsresource.EndpointsResource:
+		typS = version.V3EndpointsType
+	}
+	return (&xdsresource.Name{
+		Scheme:        "xdstp",
+		Authority:     auth,
+		Type:          typS,
+		ID:            id,
+		ContextParams: ctxParams,
+	}).String()
+}
