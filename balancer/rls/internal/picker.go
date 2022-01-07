@@ -310,6 +310,11 @@ func (p *rlsPicker) handleRouteLookupResponse(cacheKey cacheKey, targets []strin
 	// - backoffTime is set to the time indicated by the backoff state
 	// - backoffExpirationTime is set to twice the backoff time
 	// - backoffTimer is set to fire after backoffTime
+	//
+	// When a proactive cache refresh fails, this would leave the targets and the
+	// expiry time from the old entry unchanged. And this mean that the old valid
+	// entry would be used until expiration, and a new picker would be sent upon
+	// backoff expiry.
 	now := time.Now()
 	if err != nil {
 		dcEntry.status = err
