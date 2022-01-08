@@ -12,6 +12,11 @@ RPC framework that puts mobile and HTTP/2 first. For more information see the
 
 - **[Go][]**: any one of the **three latest major** [releases][go-releases].
 
+- Latest **protoc-gen-go-grpc** to fix an issue recompiling `.proto` files.
+  ```
+  go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+  ```
+
 ## Installation
 
 With [Go module][] support (Go 1.11+), simply add the following import
