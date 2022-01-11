@@ -59,10 +59,6 @@ func (t *testAuthInfo) AuthType() string {
 	return t.typ
 }
 
-type testPerRPCCreds struct {
-	credentials.PerRPCCredentials
-}
-
 var (
 	testTLS  = &testCreds{typ: "tls"}
 	testALTS = &testCreds{typ: "alts"}
@@ -79,7 +75,8 @@ func overrideNewCredsFuncs() func() {
 	}
 	origNewADC := newADC
 	newADC = func(context.Context) (credentials.PerRPCCredentials, error) {
-		return &testPerRPCCreds{}, nil
+		// We do not use perRPC creds in this test. It is safe to return nil here.
+		return nil, nil
 	}
 
 	return func() {
