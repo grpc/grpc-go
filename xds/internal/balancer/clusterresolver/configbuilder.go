@@ -135,7 +135,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			}
 			retAddrs = append(retAddrs, addrs...)
 		case DiscoveryMechanismTypeLogicalDNS:
-			name, config, addrs := buildClusterImplConfigForDNS(i, p.addresses)
+			name, config, addrs := buildClusterImplConfigForDNS(i, p.addresses, p.mechanism)
 			retConfig.Priorities = append(retConfig.Priorities, name)
 			retConfig.Children[name] = &priority.Child{
 				Config: &internalserviceconfig.BalancerConfig{Name: clusterimpl.Name, Config: config},
@@ -149,7 +149,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 	return retConfig, retAddrs, nil
 }
 
-func buildClusterImplConfigForDNS(parentPriority int, addrStrs []string) (string, *clusterimpl.LBConfig, []resolver.Address) {
+func buildClusterImplConfigForDNS(parentPriority int, addrStrs []string, mechanism DiscoveryMechanism) (string, *clusterimpl.LBConfig, []resolver.Address) {
 	// Endpoint picking policy for DNS is hardcoded to pick_first.
 	const childPolicy = "pick_first"
 	retAddrs := make([]resolver.Address, 0, len(addrStrs))
@@ -157,7 +157,10 @@ func buildClusterImplConfigForDNS(parentPriority int, addrStrs []string) (string
 	for _, addrStr := range addrStrs {
 		retAddrs = append(retAddrs, hierarchy.Set(resolver.Address{Addr: addrStr}, []string{pName}))
 	}
-	return pName, &clusterimpl.LBConfig{ChildPolicy: &internalserviceconfig.BalancerConfig{Name: childPolicy}}, retAddrs
+	return pName, &clusterimpl.LBConfig{
+		Cluster:     mechanism.Cluster,
+		ChildPolicy: &internalserviceconfig.BalancerConfig{Name: childPolicy},
+	}, retAddrs
 }
 
 // buildClusterImplConfigForEDS returns a list of cluster_impl configs, one for

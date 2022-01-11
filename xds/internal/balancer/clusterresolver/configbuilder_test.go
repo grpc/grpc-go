@@ -199,7 +199,8 @@ func TestBuildPriorityConfig(t *testing.T) {
 		},
 		{
 			mechanism: DiscoveryMechanism{
-				Type: DiscoveryMechanismTypeLogicalDNS,
+				Cluster: testClusterName2,
+				Type:    DiscoveryMechanismTypeLogicalDNS,
 			},
 			addresses: testAddressStrs[4],
 		},
@@ -277,6 +278,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 				Config: &internalserviceconfig.BalancerConfig{
 					Name: clusterimpl.Name,
 					Config: &clusterimpl.LBConfig{
+						Cluster:     testClusterName2,
 						ChildPolicy: &internalserviceconfig.BalancerConfig{Name: "pick_first"},
 					},
 				},
@@ -307,9 +309,10 @@ func TestBuildPriorityConfig(t *testing.T) {
 }
 
 func TestBuildClusterImplConfigForDNS(t *testing.T) {
-	gotName, gotConfig, gotAddrs := buildClusterImplConfigForDNS(3, testAddressStrs[0])
+	gotName, gotConfig, gotAddrs := buildClusterImplConfigForDNS(3, testAddressStrs[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS})
 	wantName := "priority-3"
 	wantConfig := &clusterimpl.LBConfig{
+		Cluster: testClusterName2,
 		ChildPolicy: &internalserviceconfig.BalancerConfig{
 			Name: "pick_first",
 		},
