@@ -59,23 +59,33 @@ func (t *testAuthInfo) AuthType() string {
 	return t.typ
 }
 
+type testPerRPCCreds struct {
+	credentials.PerRPCCredentials
+}
+
 var (
 	testTLS  = &testCreds{typ: "tls"}
 	testALTS = &testCreds{typ: "alts"}
 )
 
 func overrideNewCredsFuncs() func() {
-	oldNewTLS := newTLS
+	origNewTLS := newTLS
 	newTLS = func() credentials.TransportCredentials {
 		return testTLS
 	}
-	oldNewALTS := newALTS
+	origNewALTS := newALTS
 	newALTS = func() credentials.TransportCredentials {
 		return testALTS
 	}
+	origNewADC := newADC
+	newADC = func(context.Context) (credentials.PerRPCCredentials, error) {
+		return &testPerRPCCreds{}, nil
+	}
+
 	return func() {
-		newTLS = oldNewTLS
-		newALTS = oldNewALTS
+		newTLS = origNewTLS
+		newALTS = origNewALTS
+		newADC = origNewADC
 	}
 }
 
