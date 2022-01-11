@@ -65,17 +65,24 @@ var (
 )
 
 func overrideNewCredsFuncs() func() {
-	oldNewTLS := newTLS
+	origNewTLS := newTLS
 	newTLS = func() credentials.TransportCredentials {
 		return testTLS
 	}
-	oldNewALTS := newALTS
+	origNewALTS := newALTS
 	newALTS = func() credentials.TransportCredentials {
 		return testALTS
 	}
+	origNewADC := newADC
+	newADC = func(context.Context) (credentials.PerRPCCredentials, error) {
+		// We do not use perRPC creds in this test. It is safe to return nil here.
+		return nil, nil
+	}
+
 	return func() {
-		newTLS = oldNewTLS
-		newALTS = oldNewALTS
+		newTLS = origNewTLS
+		newALTS = origNewALTS
+		newADC = origNewADC
 	}
 }
 
