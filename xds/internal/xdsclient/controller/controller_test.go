@@ -130,7 +130,7 @@ func (s) TestNewWithInterceptor(t *testing.T) {
 	interceptorCalled = false
 
 	// Reset the interceptor and make sure it is not called.
-	ResetDialInterceptor()
+	SetDialInterceptor(grpc.Dial)
 	c, err = New(config, nil, nil, nil)
 	defer func() {
 		if c != nil {

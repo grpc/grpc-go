@@ -92,15 +92,11 @@ var interceptor func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, 
 
 // SetDialInterceptor sets an interceptor for the controller. The interceptor
 // can be used to manipulate the dial options or change the target if needed.
-// The SetDialInterceptor must be called before the controller is created
-// otherwise this is a no-op.
+// The SetDialInterceptor must be called before gRPC to make sure it affects
+// all the controllers created.
+// To reset any dial interceptor set, pass in grpc.Dial as the parameter.
 func SetDialInterceptor(dialer func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) {
 	interceptor = dialer
-}
-
-// ResetDialInterceptor resets any dial interceptors for the controller.
-func ResetDialInterceptor() {
-	interceptor = nil
 }
 
 // New creates a new controller.
