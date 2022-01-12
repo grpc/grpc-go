@@ -3,6 +3,7 @@ package gracefulswitch
 import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/grpc/internal/testutils"
 	"testing"
 )
 
@@ -66,26 +67,32 @@ func (s) TestFirstUpdate(t *testing.T) {
 			name: "successful-first-update",
 			ccs: balancer.ClientConnState{BalancerConfig: lbConfig{ChildBalancerType: balancerName1, Config: /*Any interesting logic here?*/}},
 		},
+
+		// Things that trigger error condition (I feel like none of these should happen in practice):
+		// Balancer has already been closed
+		// Wrong config itself
+		// Wrong type inside the config
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			builder := balancer.Get("graceful_switch_load_balancer")
 			gsb := builder.Build(/*Mock Client Conn here - should I use the one already in codebase?*/, balancer.BuildOptions{})
-			err := gsb.UpdateClientConnState(test.ccs/*Client Conn State here that triggers a balancer down low to build or error, test.ccs*/)
-
-			// Things that trigger error condition (I feel like none of these should happen in practice):
-
-
-			// Balancer has already been closed
-			// Wrong config itself
-			// Wrong type inside the config
-
+			if err := gsb.UpdateClientConnState(test.ccs/*Client Conn State here that triggers a balancer down low to build or error, test.ccs*/); err != test.wantErr { // Maybe switch to containing string?
+				t.Fatalf("gracefulSwitchBalancer.UpdateClientConnState failed with error: %v", err) // Make this more descriptive?
+			}
+			if test.wantErr != nil {
+				return
+			}
 
 
 
 			// If successful, verify one of the two balancers down below (config will
 			// specify right type) gets the right Update....ASSERT the balancer builds and calls UpdateClientConnState()...that should be the scope of this test
+
+			// ASSERT that the balancer builds (i.e. gsb.balancerCurrent != nil)
+
+			// and that it gets an UpdateClientConnState()
 
 		})
 	}
@@ -96,16 +103,22 @@ func (s) TestFirstUpdate(t *testing.T) {
 
 // Test that tests Update with 1 + Update with 1 = UpdateClientConnState twice
 
-// UpdateState() causes it to forward to ClientConn
+// UpdateState() causes it to forward to ClientConn...so mock balancer needs way
+// of pinging UpdateState() and NewSubConn()...flow goes mock balancer (->) ccw ->
+// gracefulswitch -> grpc.ClientConn (needs to verify gets UpdateState call with state + picker)
+
 
 
 
 
 // Test that tests Update with 1 + Update with 2 = two balancers
 
-// Pending being READY should cause it to switch current to pending (i.e. UpdateState())
+// Current says it's READY, then Pending being READY should cause it to switch current to pending (i.e. UpdateState())
 
 
+// Test that tests Update with 1 + Update with 2 = two balancers
+
+// Current isn't ready, Pending sending any Update should cause it to switch from current to pending ) i.e. UpdateState() call
 
 
 // Test that tests Update with 1 + Update with 2 = two balancers
@@ -152,6 +165,10 @@ type bb1 struct{}
 
 func (bb1) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	return &mockBalancer1{
+		ccsCh:         testutils.NewChannel(),
+		scStateCh:     testutils.NewChannel(),
+		resolverErrCh: testutils.NewChannel(),
+		closeCh:       testutils.NewChannel(),
 		cc: &cc,
 	}
 }
@@ -160,14 +177,29 @@ func (bb1) Name() string {
 	return balancerName1
 }
 
-
+// mockBalancer is a fake balancer used to verify different actions from
+// the gracefulswitch. It contains a bunch of channels to signal different events
+// to the test.
 type mockBalancer1 struct {
+	// ccsCh is a channel used to signal the receipt of a ClientConn update.
+	ccsCh *testutils.Channel
+	// scStateCh is a channel used to signal the receipt of a SubConn update.
+	scStateCh *testutils.Channel
+	// resolverErrCh is a channel used to signal a resolver error.
+	resolverErrCh *testutils.Channel
+	// closeCh is a channel used to signal the closing of this balancer.
+	closeCh    *testutils.Channel
 	// Hold onto Client Conn wrapper to communicate with it
 	cc *balancer.ClientConn
 }
 
-func (mb1 *mockBalancer1) UpdateClientConnState(ccs balancer.ClientConnState) error {
+type subConnWithState struct {
+	sc balancer.SubConn
+	state balancer.SubConnState
+}
 
+func (mb1 *mockBalancer1) UpdateClientConnState(ccs balancer.ClientConnState) error {
+	// Need to verify this call...use a channel?...all of these will need verification
 }
 
 func (mb1 *mockBalancer1) ResolverError(err error) {
@@ -182,5 +214,7 @@ func (mb1 *mockBalancer1) Close() {
 
 }
 
+// Needs some way of calling Client Conn UpdateState() upward and also what specific picker
+// the picker came from (i.e. mockBalancer1 or mockBalancer2)
 
 // it's determined by config type, so need a second balancer here

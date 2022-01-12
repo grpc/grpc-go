@@ -87,16 +87,17 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 }
 
 type gracefulSwitchBalancer struct {
-	bOpts          balancer.BuildOptions // One lock for just reading the data...and not to call downward...don't hold locks as we call downward, Channel can only call UpdateState()
+	bOpts          balancer.BuildOptions
 	cc balancer.ClientConn
 
-	outgoingMu sync.Mutex
-	recentConfig *lbConfig // Guaranteed to never been written to at same time
+	recentConfig *lbConfig
 	balancerCurrent balancer.Balancer
 	balancerPending balancer.Balancer
-	// One mutex...protecting incoming (updateState happening atomically, scToSubBalancer reads, and also reads from balancerCurrent/Pending...which will put into a local variable and call downward)
-	// I think this would work...I don't see any deadlock scenarios. Write about this in document
-	incomingMu sync.Mutex
+	// One mutex...protecting incoming (updateState happening atomically,
+	// scToSubBalancer reads/writes, and also reads from
+	// balancerCurrent/Pending...which will put into a local variable to call
+	// downward into, thus making it so that no lock is held when call downward).
+	mu sync.Mutex
 	scToSubBalancer map[balancer.SubConn]balancer.Balancer
 	pendingState balancer.State
 	currentLbIsReady bool
@@ -104,21 +105,19 @@ type gracefulSwitchBalancer struct {
 	closed *grpcsync.Event
 }
 
-func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state balancer.State) { // Doug agreed this should happen atomically
+func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state balancer.State) {
 	if gsb.closed.HasFired() {
 		return
 	}
 
 	// I want this to not intersplice with other updateState() calls and for
-	// this to happen atomically (i.e. writing to pending state concurrently and
-	// sending wrong one out). Can any codepaths call updateState() while
-	// holding either of these mutexes?
-	gsb.incomingMu.Lock()
-	defer gsb.incomingMu.Unlock()
+	// this to happen atomically (i.e. if this update isn't atomic writing to
+	// pending state concurrently and sending wrong one out for one
+	// updateState() call).
+	gsb.mu.Lock()
+	defer gsb.mu.Unlock()
 
-	gsb.outgoingMu.Lock()
 	if bal == gsb.balancerPending {
-		gsb.outgoingMu.Unlock()
 		// Cache the pending state and picker if you don't need to send at this instant (i.e. the LB policy is not ready)
 		// you can send it later on an event like current LB exits READY.
 		gsb.pendingState = state
@@ -127,8 +126,7 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 			gsb.swap()
 		}
 		// Note: no-op if comes from balancer that is already deleted
-	} else if bal == gsb.balancerCurrent { // Make a note that this copies Java behavior on swapping on exiting ready and also forwarding current updates to Client Conn even if there is pending lb present
-		gsb.outgoingMu.Unlock()
+	} else if bal == gsb.balancerCurrent { // Make a note that this copies Java behavior on swapping on exiting ready and also forwarding current updates to Client Conn even if there is pending lb present (me and Doug discussed this - if ignoring state + picker from current would cause undefined behavior/cause the system to behave incorrectly from the LB policies perspective)
 		// specific case that the current lb exits ready, and there is a pending
 		// lb, can forward it up to ClientConn. "Otherwise, the channel will
 		// keep using the old policy until...the old policy exits READY." - Java
@@ -145,6 +143,12 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 			// current balancer (UpdateClientConnState seems to subscribe to
 			// this philosophy too - maybe make it consistent?)
 			gsb.cc.UpdateState(state)
+			// Make a note that this copies Java behavior on swapping on exiting
+			// ready and also forwarding current updates to Client Conn even if
+			// there is pending lb present (me and Doug discussed this - if
+			// ignoring state + picker from current would cause undefined
+			// behavior/cause the system to behave incorrectly from the LB
+			// policies perspective)
 		}
 	}
 }
@@ -152,7 +156,6 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 // Swap swaps out the current lb with the pending LB and updates the ClientConn.
 func (gsb *gracefulSwitchBalancer) swap() {
 	gsb.cc.UpdateState(gsb.pendingState)
-	gsb.outgoingMu.Lock()
 	gsb.balancerCurrent.Close()
 	for sc, bal := range gsb.scToSubBalancer {
 		if bal == gsb.balancerCurrent {
@@ -163,7 +166,6 @@ func (gsb *gracefulSwitchBalancer) swap() {
 
 	gsb.balancerCurrent = gsb.balancerPending
 	gsb.balancerPending = nil
-	gsb.outgoingMu.Unlock()
 }
 
 func (gsb *gracefulSwitchBalancer) newSubConn(bal balancer.Balancer, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
@@ -171,48 +173,38 @@ func (gsb *gracefulSwitchBalancer) newSubConn(bal balancer.Balancer, addrs []res
 		// logger?
 		return nil, errBalancerClosed
 	}
+	gsb.mu.Lock()
 	if bal != gsb.balancerCurrent || bal != gsb.balancerPending { // Update came from a balancer no longer present.
 		return nil, errors.New("balancer that called NewSubConn is deleted")
 	}
 	sc, err := gsb.cc.NewSubConn(addrs, opts)
 	if err != nil {
+		gsb.mu.Unlock()
 		return nil, err
 	}
-	gsb.incomingMu.Lock() // Do we need to move this ^^^ before ClientConn read NewSubConn call?
 	gsb.scToSubBalancer[sc] = bal
-	gsb.incomingMu.Unlock()
+	gsb.mu.Unlock()
 	return sc, nil
 }
 
-// Eat newSubConn calls from current if pending?
+// Eat newSubConn calls from current if there is a pending?
 
-// Eat NewAddresses calls from current if pending? (Allowing ClientConn to do work that doesn't need)
+// Eat NewAddresses calls from current if there is a pending? (Allowing ClientConn to do work that doesn't need)
 
-// Eat ResolveNow calls from current if pending? Doug says so, just eat this, Resolver specifies creating a new policy/created a pending one
-
-
-
-// EXPLAIN REASONING OF EATING THIS CALL
 func (gsb *gracefulSwitchBalancer) resolveNow(bal balancer.Balancer, opts resolver.ResolveNowOptions) {
 	// If the resolver specifies an update with a whole new type of policy,
 	// there is no reason to forward a ResolveNow call from the balancer being
 	// switched from, as the most recent update from the Resolver does not
 	// concern the balancer being switched from.
+	gsb.mu.Lock()
 	if bal == gsb.balancerCurrent && gsb.balancerPending != nil {
+		gsb.mu.Unlock()
 		return
 	}
+	gsb.mu.Unlock()
 	gsb.cc.ResolveNow(opts)
 }
 
-
-// 1. Don't have mutexes when calling downward (one shared mutex, and then don't hold the mutex as you're calling downward...put this in design doc), one mutex to protect all the shared state, deadlock prevention, read into local variable
-// 2. Eat ResolveNow/newSubConn?/NewAddresses?
-// 3. Add that case in UpdateState on current policy not being READY
-
-
-
-
-// These all all guaranteed to be synchronously from same goroutine...so don't hold during call downward, only to read data
 func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if gsb.closed.HasFired() {
 		// logger?
@@ -244,14 +236,14 @@ func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientCo
 		// b.logger.Warningf("xds: unexpected LoadBalancingConfig type: %T", state.BalancerConfig)
 		return balancer.ErrBadResolverState
 	}
-	gsb.outgoingMu.Lock()
+	gsb.mu.Lock()
 	buildPolicy := gsb.balancerCurrent == nil || gsb.recentConfig.ChildBalancerType != lbCfg.ChildBalancerType
 	gsb.recentConfig = lbCfg
 	var balToUpdate balancer.Balancer // Hold a local variable pointer to the balancer, as current/pending pointers can be changed synchronously.
 	if buildPolicy {
 		builder := balancer.Get(lbCfg.ChildBalancerType)
 		if builder == nil {
-			gsb.outgoingMu.Unlock()
+			gsb.mu.Unlock()
 			return fmt.Errorf("balancer of type %v not supported", lbCfg.ChildBalancerType)
 		}
 		if gsb.balancerCurrent == nil {
@@ -264,15 +256,16 @@ func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientCo
 			gsb:        gsb,
 			bal:        balToUpdate,
 		}, gsb.bOpts)
-		balToUpdate = bal
+		// i.e. * = *, or does it write to the memory this pointer points to
+		balToUpdate = bal // Are we sure this doesn't just write to a local var? Learn inherent go struct pointer and how that works
 	} else {
 		if gsb.balancerPending != nil {
-			balToUpdate = gsb.balancerPending // TODO: Should we update current with new resolver state as well? Doug mentioned so, would keep it consistent with Java's way of not ignoring current on UpdateState() like C-core.
+			balToUpdate = gsb.balancerPending
 		} else {
 			balToUpdate = gsb.balancerCurrent
 		}
 	}
-	gsb.outgoingMu.Unlock() // Unlock before calling downward to prevent deadlock in Callback to UpdateState().
+	gsb.mu.Unlock()
 	balToUpdate.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: state.ResolverState,
 		BalancerConfig: lbCfg.LoadBalancingConfig,
@@ -285,14 +278,16 @@ func (gsb *gracefulSwitchBalancer) ResolverError(err error) {
 		// Logger?
 		return
 	}
-	gsb.outgoingMu.Lock()
-	if gsb.balancerCurrent != nil { // Can this cause deadlock (i.e. can this call back into UpdateState() inline)? If so do it like UpdateClientConnState where you read to a local variable
-		gsb.balancerCurrent.ResolverError(err)
+	gsb.mu.Lock()
+	currentBalancerToUpdate := gsb.balancerCurrent
+	pendingBalancerToUpdate := gsb.balancerPending
+	gsb.mu.Unlock()
+	if currentBalancerToUpdate != nil {
+		currentBalancerToUpdate.ResolverError(err)
 	}
-	if gsb.balancerPending != nil {
-		gsb.balancerPending.ResolverError(err)
+	if pendingBalancerToUpdate != nil {
+		pendingBalancerToUpdate.ResolverError(err)
 	}
-	gsb.outgoingMu.Unlock()
 }
 
 func (gsb *gracefulSwitchBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
@@ -300,41 +295,43 @@ func (gsb *gracefulSwitchBalancer) UpdateSubConnState(sc balancer.SubConn, state
 		// Logger
 		return
 	}
-	gsb.incomingMu.Lock()
+	gsb.mu.Lock()
 	bal, ok := gsb.scToSubBalancer[sc]
 	if !ok {
-		gsb.incomingMu.Unlock()
+		gsb.mu.Unlock()
 		return
 	}
 	if state.ConnectivityState == connectivity.Shutdown {
 		delete(gsb.scToSubBalancer, sc)
 	}
-	gsb.incomingMu.Unlock()
-	gsb.outgoingMu.Lock() // Do we need this? Now, will this cause deadlock (call back into update state)
+	gsb.mu.Unlock()
 	bal.UpdateSubConnState(sc, state)
-	gsb.outgoingMu.Unlock()
 }
 
 func (gsb *gracefulSwitchBalancer) Close() {
 	gsb.closed.Fire()
-
-	gsb.incomingMu.Lock()
+	gsb.mu.Lock()
 	for sc := range gsb.scToSubBalancer {
 		gsb.cc.RemoveSubConn(sc)
 		delete(gsb.scToSubBalancer, sc)
 	}
-	gsb.incomingMu.Unlock()
-
-	gsb.outgoingMu.Lock()
+	currentBalancerToUpdate := gsb.balancerCurrent
 	if gsb.balancerCurrent != nil {
-		gsb.balancerCurrent.Close() // Can this cause deadlock (i.e. can this call back into UpdateState() inline or just Add/RemoveSubconns())? If so do it like UpdateClientConnState where you read to a local variable
 		gsb.balancerCurrent = nil
 	}
+	pendingBalancerToUpdate := gsb.balancerPending
 	if gsb.balancerPending != nil {
 		gsb.balancerPending.Close()
 		gsb.balancerPending = nil
 	}
-	gsb.outgoingMu.Unlock()
+	gsb.mu.Unlock()
+
+	if currentBalancerToUpdate != nil {
+		currentBalancerToUpdate.Close()
+	}
+	if pendingBalancerToUpdate != nil {
+		pendingBalancerToUpdate.Close()
+	}
 }
 
 type clientConnWrapper struct {
