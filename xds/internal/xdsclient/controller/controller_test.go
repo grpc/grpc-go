@@ -108,14 +108,14 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 		NodeProto: testutils.EmptyNodeProtoV2,
 	}
 
-	interceptorCalled := false
-	interceptor := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-		interceptorCalled = true
+	customDialerCalled := false
+	customDialer := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+		customDialerCalled = true
 		return grpc.Dial(target, opts...)
 	}
 
 	// Set the dialer and make sure it is called.
-	SetGRPCDial(interceptor)
+	SetGRPCDial(customDialer)
 	c, err := New(config, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("New(%+v) = %v, want no error", config, err)
@@ -124,10 +124,10 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 		c.Close()
 	}
 
-	if !interceptorCalled {
-		t.Errorf("New(%+v) interceptor called = false, want true", config)
+	if !customDialerCalled {
+		t.Errorf("New(%+v) custom dialer called = false, want true", config)
 	}
-	interceptorCalled = false
+	customDialerCalled = false
 
 	// Reset the dialer and make sure it is not called.
 	SetGRPCDial(grpc.Dial)
@@ -141,7 +141,7 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 		t.Fatalf("New(%+v) = %v, want no error", config, err)
 	}
 
-	if interceptorCalled {
+	if customDialerCalled {
 		t.Errorf("New(%+v) interceptor called = true, want false", config)
 	}
 }
