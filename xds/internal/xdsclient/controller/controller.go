@@ -90,13 +90,13 @@ type Controller struct {
 
 var grpcDial = grpc.Dial
 
-// SetDialInterceptor sets an interceptor for the controller. The interceptor
+// SetGRPCDial sets the dialer for the controller. The dial
 // can be used to manipulate the dial options or change the target if needed.
-// The SetDialInterceptor must be called before gRPC to make sure it affects
-// all the controllers created.
-// To reset any dial interceptor set, pass in grpc.Dial as the parameter.
-func SetDialInterceptor(interceptor func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) {
-	grpcDial = interceptor
+// The SetGRPCDial must be called before gRPC initialization to make sure it
+// affects all the controllers created.
+// To reset any dialer set, pass in grpc.Dial as the parameter.
+func SetGRPCDial(dialer func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) {
+	grpcDial = dialer
 }
 
 // New creates a new controller.
