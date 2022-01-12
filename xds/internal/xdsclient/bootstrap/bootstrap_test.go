@@ -990,3 +990,24 @@ func TestNewConfigWithFederation(t *testing.T) {
 		})
 	}
 }
+
+func TestServerConfigMarshalAndUnmarshal(t *testing.T) {
+	c := ServerConfig{
+		ServerURI:    "test-server",
+		Creds:        nil,
+		CredsType:    "test-creds",
+		TransportAPI: version.TransportV3,
+	}
+
+	bs, err := json.Marshal(c)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+	var cUnmarshal ServerConfig
+	if err := json.Unmarshal(bs, &cUnmarshal); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+	if diff := cmp.Diff(cUnmarshal, c); diff != "" {
+		t.Fatalf("diff (-got +want): %v", diff)
+	}
+}
