@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/grpcsync"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
@@ -226,23 +225,20 @@ func (s) TestConfigUpdate_DefaultTarget(t *testing.T) {
 	// exactly when the default target will change. So, we keep retrying the RPC
 	// here until it gets routed to the new default policy or the context
 	// expires, at which point we fail the test.
-	done := grpcsync.NewEvent()
+Done:
 	for {
-		func() {
-			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-			defer sCancel()
+		if err := ctx.Err(); err != nil {
+			t.Fatalf("Timeout when waiting for RPCs to be routed to the new default target: %v", err)
+		}
+		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+		client := testgrpc.NewTestServiceClient(cc)
+		client.EmptyCall(sCtx, &testpb.Empty{})
 
-			client := testgrpc.NewTestServiceClient(cc)
-			client.EmptyCall(sCtx, &testpb.Empty{})
-			select {
-			case <-sCtx.Done():
-			case <-backendCh2:
-				done.Fire()
-			}
-			time.Sleep(defaultTestShortTimeout)
-		}()
-		if done.HasFired() {
-			break
+		select {
+		case <-sCtx.Done():
+		case <-backendCh2:
+			sCancel()
+			break Done
 		}
 	}
 }
@@ -305,7 +301,7 @@ func (s) TestConfigUpdate_ChildPolicyConfigs(t *testing.T) {
 	wantCfg := &e2e.RLSChildPolicyConfig{Backend: defBackendAddress}
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timed out when waiting for the default target child policy to received its config")
+		t.Fatal("Timed out when waiting for the default target child policy to receive its config")
 	case gotCfg := <-defBackendConfigsCh:
 		if !cmp.Equal(gotCfg, wantCfg) {
 			t.Fatalf("Default target child policy received config %+v, want %+v", gotCfg, wantCfg)
@@ -323,7 +319,7 @@ func (s) TestConfigUpdate_ChildPolicyConfigs(t *testing.T) {
 	wantCfg = &e2e.RLSChildPolicyConfig{Backend: testBackendAddress}
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timed out when waiting for the test target child policy to received its config")
+		t.Fatal("Timed out when waiting for the test target child policy to receive its config")
 	case gotCfg := <-testBackendConfigsCh:
 		if !cmp.Equal(gotCfg, wantCfg) {
 			t.Fatalf("Test target child policy received config %+v, want %+v", gotCfg, wantCfg)
@@ -352,7 +348,7 @@ func (s) TestConfigUpdate_ChildPolicyConfigs(t *testing.T) {
 	}
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timed out when waiting for the test target child policy to received its config")
+		t.Fatal("Timed out when waiting for the test target child policy to receive its config")
 	case gotCfg := <-testBackendConfigsCh:
 		if !cmp.Equal(gotCfg, wantCfg) {
 			t.Fatalf("Test target child policy received config %+v, want %+v", gotCfg, wantCfg)
@@ -366,7 +362,7 @@ func (s) TestConfigUpdate_ChildPolicyConfigs(t *testing.T) {
 	}
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timed out when waiting for the default target child policy to received its config")
+		t.Fatal("Timed out when waiting for the default target child policy to receive its config")
 	case gotCfg := <-defBackendConfigsCh:
 		if !cmp.Equal(gotCfg, wantCfg) {
 			t.Fatalf("Default target child policy received config %+v, want %+v", gotCfg, wantCfg)
@@ -420,7 +416,7 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	wantCfg := &e2e.RLSChildPolicyConfig{Backend: defaultBackend}
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timed out when waiting for the first child policy to received its config")
+		t.Fatal("Timed out when waiting for the first child policy to receive its config")
 	case gotCfg := <-configsCh1:
 		if !cmp.Equal(gotCfg, wantCfg) {
 			t.Fatalf("First child policy received config %+v, want %+v", gotCfg, wantCfg)
@@ -460,7 +456,7 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 
 	select {
 	case <-ctx.Done():
-		t.Fatal("Timed out when waiting for the second child policy to received its config")
+		t.Fatal("Timed out when waiting for the second child policy to receive its config")
 	case gotCfg := <-configsCh2:
 		if !cmp.Equal(gotCfg, wantCfg) {
 			t.Fatalf("First child policy received config %+v, want %+v", gotCfg, wantCfg)

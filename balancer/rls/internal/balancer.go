@@ -180,12 +180,11 @@ func (b *rlsBalancer) purgeDataCache() {
 }
 
 func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
-	// Remove unprocessed update from the channel, if one exists, and push the
-	// most recent one.
+	// Remove unprocessed update from the channel, if one exists, before pushing
+	// the most recent one.
 	select {
-	case b.ccUpdateCh <- &ccs:
-		return nil
 	case <-b.ccUpdateCh:
+	default:
 	}
 	b.ccUpdateCh <- &ccs
 	return nil
