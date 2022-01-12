@@ -90,8 +90,8 @@ type Controller struct {
 
 var grpcDial = grpc.Dial
 
-// SetGRPCDial sets the dialer for the controller. The dial
-// can be used to manipulate the dial options or change the target if needed.
+// SetGRPCDial sets the dialer for the controller. The dial can be used to
+// manipulate the dial options or change the target if needed.
 // The SetGRPCDial must be called before gRPC initialization to make sure it
 // affects all the controllers created.
 // To reset any dialer set, pass in grpc.Dial as the parameter.
