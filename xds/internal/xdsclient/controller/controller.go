@@ -88,15 +88,15 @@ type Controller struct {
 	lrsClients map[string]*lrsClient
 }
 
-var interceptor func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
+var dialer = grpc.Dial
 
 // SetDialInterceptor sets an interceptor for the controller. The interceptor
 // can be used to manipulate the dial options or change the target if needed.
 // The SetDialInterceptor must be called before gRPC to make sure it affects
 // all the controllers created.
 // To reset any dial interceptor set, pass in grpc.Dial as the parameter.
-func SetDialInterceptor(dialer func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) {
-	interceptor = dialer
+func SetDialInterceptor(interceptor func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) {
+	dialer = interceptor
 }
 
 // New creates a new controller.
@@ -141,13 +141,7 @@ func New(config *bootstrap.ServerConfig, updateHandler pubsub.UpdateHandler, val
 		}
 	}()
 
-	var cc *grpc.ClientConn
-	var err error
-	if interceptor != nil {
-		cc, err = interceptor(config.ServerURI, dopts...)
-	} else {
-		cc, err = grpc.Dial(config.ServerURI, dopts...)
-	}
+	cc, err := dialer(config.ServerURI, dopts...)
 	if err != nil {
 		// An error from a non-blocking dial indicates something serious.
 		return nil, fmt.Errorf("xds: failed to dial control plane {%s}: %v", config.ServerURI, err)
