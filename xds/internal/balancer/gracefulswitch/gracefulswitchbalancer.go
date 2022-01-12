@@ -87,22 +87,24 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 }
 
 type gracefulSwitchBalancer struct {
-	bOpts          balancer.BuildOptions
+	bOpts          balancer.BuildOptions // One lock for just reading the data...and not to call downward...don't hold locks as we call downward, Channel can only call UpdateState()
 	cc balancer.ClientConn
 
 	outgoingMu sync.Mutex
-	recentConfig *lbConfig
+	recentConfig *lbConfig // Guaranteed to never been written to at same time
 	balancerCurrent balancer.Balancer
 	balancerPending balancer.Balancer
-
+	// One mutex...protecting incoming (updateState happening atomically, scToSubBalancer reads, and also reads from balancerCurrent/Pending...which will put into a local variable and call downward)
+	// I think this would work...I don't see any deadlock scenarios. Write about this in document
 	incomingMu sync.Mutex
 	scToSubBalancer map[balancer.SubConn]balancer.Balancer
 	pendingState balancer.State
+	currentLbIsReady bool
 
 	closed *grpcsync.Event
 }
 
-func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state balancer.State) {
+func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state balancer.State) { // Doug agreed this should happen atomically
 	if gsb.closed.HasFired() {
 		return
 	}
@@ -117,16 +119,11 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 	gsb.outgoingMu.Lock()
 	if bal == gsb.balancerPending {
 		gsb.outgoingMu.Unlock()
-		// TODO: Java has a case here: If the channel is currently in a state other than READY, the new policy will be swapped into place immediately.
-
 		// Cache the pending state and picker if you don't need to send at this instant (i.e. the LB policy is not ready)
 		// you can send it later on an event like current LB exits READY.
 		gsb.pendingState = state
-		if state.ConnectivityState == connectivity.Ready { // "Otherwise, the channel will keep using the old policy until the new policy reports READY" - Java
-			// Close() and also "remove subconns it created", loop through map?
-			// Swap the pending to current
-			// Def update the Client Conn so that the Client Conn can use the new picker
-			// All of the logic is in this function
+		// "If the channel is currently in a state other than READY, the new policy will be swapped into place immediately."
+		if state.ConnectivityState == connectivity.Ready || !gsb.currentLbIsReady { // "Otherwise, the channel will keep using the old policy until the new policy reports READY" - Java
 			gsb.swap()
 		}
 		// Note: no-op if comes from balancer that is already deleted
@@ -135,7 +132,8 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 		// specific case that the current lb exits ready, and there is a pending
 		// lb, can forward it up to ClientConn. "Otherwise, the channel will
 		// keep using the old policy until...the old policy exits READY." - Java
-		if state.ConnectivityState != connectivity.Ready && gsb.balancerPending != nil {
+		gsb.currentLbIsReady = state.ConnectivityState != connectivity.Ready
+		if gsb.currentLbIsReady && gsb.balancerPending != nil {
 			gsb.swap()
 		} else {
 			// Java forwards the current balancer's update to the Client Conn
@@ -148,7 +146,6 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 			// this philosophy too - maybe make it consistent?)
 			gsb.cc.UpdateState(state)
 		}
-
 	}
 }
 
@@ -187,6 +184,35 @@ func (gsb *gracefulSwitchBalancer) newSubConn(bal balancer.Balancer, addrs []res
 	return sc, nil
 }
 
+// Eat newSubConn calls from current if pending?
+
+// Eat NewAddresses calls from current if pending? (Allowing ClientConn to do work that doesn't need)
+
+// Eat ResolveNow calls from current if pending? Doug says so, just eat this, Resolver specifies creating a new policy/created a pending one
+
+
+
+// EXPLAIN REASONING OF EATING THIS CALL
+func (gsb *gracefulSwitchBalancer) resolveNow(bal balancer.Balancer, opts resolver.ResolveNowOptions) {
+	// If the resolver specifies an update with a whole new type of policy,
+	// there is no reason to forward a ResolveNow call from the balancer being
+	// switched from, as the most recent update from the Resolver does not
+	// concern the balancer being switched from.
+	if bal == gsb.balancerCurrent && gsb.balancerPending != nil {
+		return
+	}
+	gsb.cc.ResolveNow(opts)
+}
+
+
+// 1. Don't have mutexes when calling downward (one shared mutex, and then don't hold the mutex as you're calling downward...put this in design doc), one mutex to protect all the shared state, deadlock prevention, read into local variable
+// 2. Eat ResolveNow/newSubConn?/NewAddresses?
+// 3. Add that case in UpdateState on current policy not being READY
+
+
+
+
+// These all all guaranteed to be synchronously from same goroutine...so don't hold during call downward, only to read data
 func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if gsb.closed.HasFired() {
 		// logger?
@@ -325,4 +351,8 @@ func (ccw *clientConnWrapper) UpdateState(state balancer.State) {
 
 func (ccw *clientConnWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	return ccw.gsb.newSubConn(ccw.bal, addrs, opts)
+}
+
+func (ccw *clientConnWrapper) ResolveNow(opts resolver.ResolveNowOptions) {
+	ccw.gsb.resolveNow(ccw.bal, opts)
 }
