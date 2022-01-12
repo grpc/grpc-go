@@ -1381,6 +1381,8 @@ type ServerStream interface {
 	SetTrailer(metadata.MD)
 	// Context returns the context for this stream.
 	Context() context.Context
+	// SetContext set the context for this stream.
+	SetContext(ctx context.Context)
 	// SendMsg sends a message. On error, SendMsg aborts the stream and the
 	// error is returned directly.
 	//
@@ -1440,6 +1442,10 @@ type serverStream struct {
 
 func (ss *serverStream) Context() context.Context {
 	return ss.ctx
+}
+
+func (ss *serverStream) SetContext(ctx context.Context) {
+	ss.ctx = ctx
 }
 
 func (ss *serverStream) SetHeader(md metadata.MD) error {
