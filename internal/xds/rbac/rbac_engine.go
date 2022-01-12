@@ -78,7 +78,7 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 		return status.Errorf(codes.Internal, "gRPC RBAC: %v", err)
 	}
 	if logger.V(logLevel) {
-		logger.Infof("checking request: %v", newRPCData)
+		logger.Infof("checking request: %v", rpcData)
 	}
 	for _, engine := range cre.chainedEngines {
 		matchingPolicyName, ok := engine.findMatchingPolicy(rpcData)
