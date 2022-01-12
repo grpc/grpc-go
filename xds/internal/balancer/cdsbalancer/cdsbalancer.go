@@ -328,6 +328,7 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 		case xdsresource.ClusterTypeLogicalDNS:
 			dms[i] = clusterresolver.DiscoveryMechanism{
 				Type:        clusterresolver.DiscoveryMechanismTypeLogicalDNS,
+				Cluster:     cu.ClusterName,
 				DNSHostname: cu.DNSHostName,
 			}
 		default:
