@@ -77,16 +77,15 @@ type recvMsg struct {
 }
 
 // recvBuffer is an unbounded channel of recvMsg structs.
-//
-// Note: recvBuffer differs from buffer.Unbounded only in the fact that it
-// holds a channel of recvMsg structs instead of objects implementing "item"
-// interface. recvBuffer is written to much more often and using strict recvMsg
-// structs helps avoid allocation in "recvBuffer.put"
+// Under the hood, it uses ring buffer to store buffered messages
 type recvBuffer struct {
-	c       chan recvMsg
-	mu      sync.Mutex
-	backlog []recvMsg
-	err     error
+	c           chan recvMsg
+	mu          sync.Mutex
+	backlog     []recvMsg
+	size        int // size of backlog
+	readPos     int // position of first readable message in backlog
+	numReadable int // number of readable message in backlog
+	err         error
 }
 
 func newRecvBuffer() *recvBuffer {
@@ -105,7 +104,7 @@ func (b *recvBuffer) put(r recvMsg) {
 		return
 	}
 	b.err = r.err
-	if len(b.backlog) == 0 {
+	if b.numReadable == 0 {
 		select {
 		case b.c <- r:
 			b.mu.Unlock()
@@ -113,17 +112,35 @@ func (b *recvBuffer) put(r recvMsg) {
 		default:
 		}
 	}
-	b.backlog = append(b.backlog, r)
+	if b.numReadable == b.size {
+		var newSize int
+		if b.size > 0 {
+			newSize = 2 * b.size
+		} else {
+			newSize = 1
+		}
+		newBacklog := make([]recvMsg, newSize)
+		copied := copy(newBacklog, b.backlog[b.readPos:])
+		if b.readPos > 0 {
+			copy(newBacklog[copied:], b.backlog[:b.readPos])
+		}
+		b.backlog = newBacklog
+		b.size = newSize
+		b.readPos = 0
+	}
+	b.backlog[(b.readPos+b.numReadable)%b.size] = r
+	b.numReadable++
 	b.mu.Unlock()
 }
 
 func (b *recvBuffer) load() {
 	b.mu.Lock()
-	if len(b.backlog) > 0 {
+	if b.numReadable > 0 {
 		select {
-		case b.c <- b.backlog[0]:
-			b.backlog[0] = recvMsg{}
-			b.backlog = b.backlog[1:]
+		case b.c <- b.backlog[b.readPos]:
+			b.backlog[b.readPos] = recvMsg{}
+			b.readPos = (b.readPos + 1) % b.size
+			b.numReadable--
 		default:
 		}
 	}

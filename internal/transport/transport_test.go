@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"net"
 	"runtime"
 	"strconv"
@@ -2395,6 +2396,55 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 			want := test.wantStatus
 			if got.Code() != want.Code() || got.Message() != want.Message() {
 				t.Fatalf("operateHeaders(%v); status = \ngot: %s\nwant: %s", test.metaHeaderFrame, got, want)
+			}
+		})
+	}
+}
+
+func BenchmarkRecvBuffer(b *testing.B) {
+	for _, test := range []struct {
+		name     string
+		ratio    float64
+		numWrite int
+	}{
+		{
+			name:     "write-read-1:2",
+			ratio:    0.5,
+			numWrite: 5000,
+		},
+		{
+			name:     "write-read-1:1",
+			ratio:    1,
+			numWrite: 5000,
+		},
+		{
+			name:     "write-read-2:1",
+			ratio:    2,
+			numWrite: 5000,
+		},
+		{
+			name:     "write-read-3:1",
+			ratio:    3,
+			numWrite: 5000,
+		},
+	} {
+		b.Run(test.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				recvBuf := newRecvBuffer()
+				for writeCnt := 0; writeCnt < test.numWrite; {
+					random := rand.Intn(100)
+					if random < int(100*test.ratio/(test.ratio+1)) {
+						recvBuf.put(recvMsg{})
+						writeCnt++
+					} else {
+						select {
+						case <-recvBuf.get():
+							recvBuf.load()
+						default:
+						}
+					}
+				}
 			}
 		})
 	}
