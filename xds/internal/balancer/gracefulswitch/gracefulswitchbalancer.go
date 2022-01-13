@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2021 gRPC authors.
+ * Copyright 2022 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  *
  */
 
-// Package graceful switch implements a graceful switch load balancer.
+// Package gracefulswitch implements a graceful switch load balancer.
 package gracefulswitch
 
 import (
@@ -34,7 +34,7 @@ import (
 
 var errBalancerClosed = errors.New("gracefulSwitchBalancer is closed")
 
-const balancerName = "graceful_switch_load_balancer"
+const gracefulSwitchBalancerName = "graceful_switch_load_balancer"
 
 func init() {
 	balancer.Register(bb{})
@@ -52,7 +52,7 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 }
 
 func (bb) Name() string {
-	return balancerName
+	return gracefulSwitchBalancerName
 }
 
 type lbConfig struct {
@@ -130,8 +130,8 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 		// specific case that the current lb exits ready, and there is a pending
 		// lb, can forward it up to ClientConn. "Otherwise, the channel will
 		// keep using the old policy until...the old policy exits READY." - Java
-		gsb.currentLbIsReady = state.ConnectivityState != connectivity.Ready
-		if gsb.currentLbIsReady && gsb.balancerPending != nil {
+		gsb.currentLbIsReady = state.ConnectivityState == connectivity.Ready
+		if !gsb.currentLbIsReady && gsb.balancerPending != nil {
 			gsb.swap()
 		} else {
 			// Java forwards the current balancer's update to the Client Conn
@@ -233,6 +233,7 @@ func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientCo
 
 	lbCfg, ok := state.BalancerConfig.(*lbConfig)
 	if !ok {
+		print("wtf")
 		// b.logger.Warningf("xds: unexpected LoadBalancingConfig type: %T", state.BalancerConfig)
 		return balancer.ErrBadResolverState
 	}
@@ -244,20 +245,40 @@ func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientCo
 		builder := balancer.Get(lbCfg.ChildBalancerType)
 		if builder == nil {
 			gsb.mu.Unlock()
-			return fmt.Errorf("balancer of type %v not supported", lbCfg.ChildBalancerType)
+			return balancer.ErrBadResolverState
+			// return fmt.Errorf("balancer of type %v not supported", lbCfg.ChildBalancerType) // Maybe make this ErrBadResolverState as well?
 		}
 		if gsb.balancerCurrent == nil {
 			balToUpdate = gsb.balancerCurrent
 		} else {
 			balToUpdate = gsb.balancerPending
 		}
-		bal := builder.Build(&clientConnWrapper{
+		ccw := &clientConnWrapper{
 			ClientConn: gsb.cc,
-			gsb:        gsb,
-			bal:        balToUpdate,
-		}, gsb.bOpts)
+			gsb:        gsb, // BalToUpdate will get 0, 0, and be done, need to write to this later // Type and value, so I think this is right
+		}
+		balToUpdate = builder.Build(ccw, gsb.bOpts)
+		ccw.bal = balToUpdate
+		print("wow")
 		// i.e. * = *, or does it write to the memory this pointer points to
-		balToUpdate = bal // Are we sure this doesn't just write to a local var? Learn inherent go struct pointer and how that works
+		//Are we sure this doesn't just write to a local var? Learn inherent go struct pointer and how that works
+		print(balToUpdate)
+		print(gsb.balancerCurrent)
+		if gsb.balancerCurrent == nil {
+			gsb.balancerCurrent = balToUpdate
+		} else {
+			// Clear out pendingState when updating balancerPending...this is
+			// logically equivalent to swapping without having received an
+			// UpdateState() call, which is valid. Also clear out
+			// scToSubbalancer that corresponds to pendingBalancer.
+			gsb.pendingState = balancer.State{}
+			for sc, sb := range gsb.scToSubBalancer {
+				if sb == gsb.balancerPending {
+					delete(gsb.scToSubBalancer, sc)
+				}
+			}
+			gsb.balancerPending = balToUpdate
+		}
 	} else {
 		if gsb.balancerPending != nil {
 			balToUpdate = gsb.balancerPending
@@ -268,7 +289,7 @@ func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientCo
 	gsb.mu.Unlock()
 	balToUpdate.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: state.ResolverState,
-		BalancerConfig: lbCfg.LoadBalancingConfig,
+		BalancerConfig: lbCfg.Config,
 	})
 	return nil
 }
