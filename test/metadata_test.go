@@ -105,13 +105,13 @@ func (s) TestInvalidMetadata(t *testing.T) {
 		t.Fatalf("call ss.Client.FullDuplexCall(context.Background()) will success but got err :%v", err)
 	}
 	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
-	 	t.Fatalf("call ss.Client stream Send(nil) will success but got err :%v", err)
+		t.Fatalf("call ss.Client stream Send(nil) will success but got err :%v", err)
 	}
 	if _, err := stream.Header(); err != nil {
-	 	t.Fatalf("call ss.Client stream Send(nil) will success but got err :%v", err)
+		t.Fatalf("call ss.Client stream Send(nil) will success but got err :%v", err)
 	}
 	if _, err := stream.Recv(); err != nil {
-	 	t.Fatalf("stream.Recv() = _, %v", err)
+		t.Fatalf("stream.Recv() = _, %v", err)
 	}
 	stream.CloseSend()
 }
