@@ -57,6 +57,12 @@ var (
 	// then we'd risk throwing away each RLS response as we receive it, in which
 	// case we would fail to actually route any of our incoming requests.
 	minEvictDuration = 5 * time.Second
+
+	// Following functions are no-ops in actual code, but can be overridden in
+	// tests to give tests visibility into exactly when certain events happen.
+	clientConnUpdateHook = func() {}
+	dataCachePurgeHook   = func() {}
+	resetBackoffHook     = func() {}
 )
 
 const balancerName = "rls_experimental"
@@ -151,6 +157,7 @@ func (b *rlsBalancer) run() {
 			if updatePicker {
 				b.sendNewPicker()
 			}
+			resetBackoffHook()
 		case <-b.done.Done():
 			return
 		}
@@ -175,6 +182,7 @@ func (b *rlsBalancer) purgeDataCache() {
 			if updatePicker {
 				b.sendNewPicker()
 			}
+			dataCachePurgeHook()
 		}
 	}
 }
@@ -227,6 +235,8 @@ func (b *rlsBalancer) handleClientConnUpdate(ccs *balancer.ClientConnState) {
 	// Update the copy of the config in the LB policy and send a new picker.
 	b.lbCfg = newCfg
 	b.sendNewPickerLocked()
+
+	clientConnUpdateHook()
 }
 
 // handleControlChannelUpdate handles updates to service config fields which

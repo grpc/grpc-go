@@ -250,7 +250,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry(t *testing.T) {
 // delegated to the child policy with a proactive cache refresh.
 func (s) TestPick_DataCacheHit_NoPendingEntry_StaleEntry(t *testing.T) {
 	// We expect the same pick behavior (i.e delegated to the child policy) for
-	// a proactive refresh whether or not the control channel is throttled.
+	// a proactive refresh whether the control channel is throttled or not.
 	tests := []struct {
 		name      string
 		throttled bool
@@ -269,10 +269,13 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_StaleEntry(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Start an RLS server and setup the throttler appropriately.
 			rlsServer, rlsReqCh := setupFakeRLSServer(t, nil)
+			var throttler *fakeThrottler
 			if test.throttled {
-				overrideAdaptiveThrottler(t, oneTimeAllowingThrottler())
+				throttler = oneTimeAllowingThrottler()
+				overrideAdaptiveThrottler(t, throttler)
 			} else {
-				overrideAdaptiveThrottler(t, neverThrottlingThrottler())
+				throttler = neverThrottlingThrottler()
+				overrideAdaptiveThrottler(t, throttler)
 			}
 
 			// Build the RLS config without a default target. Set the stale age
@@ -307,14 +310,33 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_StaleEntry(t *testing.T) {
 			// Make sure an RLS request is sent out.
 			verifyRLSRequest(t, rlsReqCh, true)
 
-			// Sleep enough to make the above cache entry stale.
-			time.Sleep(2 * defaultTestShortTimeout)
+			// The cache entry has a large maxAge, but a small stateAge. We keep
+			// retrying until the cache entry becomes stale, in which case we expect a
+			// proactive cache refresh.
+			//
+			// If the control channel is not throttled, then we expect an RLS request
+			// to be sent out. If the control channel is throttled, we expect the fake
+			// throttler's channel to be signalled.
+			for {
+				// Make another RPC and expect it to find the target in the data cache.
+				makeTestRPCAndExpectItToReachBackend(ctx, t, cc, testBackendCh)
 
-			// Make another RPC and expect it to find the target in the data cache.
-			makeTestRPCAndExpectItToReachBackend(ctx, t, cc, testBackendCh)
-
-			// Make sure no RLS request is sent out as a proactive refresh, only when the request is not throttled.
-			verifyRLSRequest(t, rlsReqCh, !test.throttled)
+				if !test.throttled {
+					select {
+					case <-time.After(defaultTestShortTimeout):
+						// Go back and retry the RPC.
+					case <-rlsReqCh:
+						return
+					}
+				} else {
+					select {
+					case <-time.After(defaultTestShortTimeout):
+						// Go back and retry the RPC.
+					case <-throttler.throttleCh:
+						return
+					}
+				}
+			}
 		})
 	}
 }
@@ -347,10 +369,13 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntry(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// Start an RLS server and setup the throttler appropriately.
 			rlsServer, rlsReqCh := setupFakeRLSServer(t, nil)
+			var throttler *fakeThrottler
 			if test.throttled {
-				overrideAdaptiveThrottler(t, oneTimeAllowingThrottler())
+				throttler = oneTimeAllowingThrottler()
+				overrideAdaptiveThrottler(t, throttler)
 			} else {
-				overrideAdaptiveThrottler(t, neverThrottlingThrottler())
+				throttler = neverThrottlingThrottler()
+				overrideAdaptiveThrottler(t, throttler)
 			}
 
 			// Build the RLS config with a very low value for maxAge. This will
@@ -392,27 +417,39 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntry(t *testing.T) {
 			// Make sure an RLS request is sent out.
 			verifyRLSRequest(t, rlsReqCh, true)
 
-			// Sleep enough to expire the above cache entry.
-			time.Sleep(2 * defaultTestShortTimeout)
-
-			// Make another RPC. The picker will find the expired entry.
-			// Different behavior is expected based on whether the control
-			// channel is throttled and whether a default target exists or not.
+			// Keep retrying the RPC until the cache entry expires. Expected behavior
+			// is dependent on the scenario being tested.
 			switch {
 			case test.throttled && test.withDefaultTarget:
-				makeTestRPCAndExpectItToReachBackend(ctx, t, cc, defBackendCh)
+				for {
+					makeTestRPCAndExpectItToReachBackend(ctx, t, cc, defBackendCh)
+					select {
+					case <-time.After(defaultTestShortTimeout):
+						// Go back and retry the RPC.
+					case <-throttler.throttleCh:
+						return
+					}
+				}
 			case test.throttled && !test.withDefaultTarget:
 				makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, errRLSThrottled)
+				<-throttler.throttleCh
 			case !test.throttled:
-				makeTestRPCAndExpectItToReachBackend(ctx, t, cc, testBackendCh)
+				for {
+					makeTestRPCAndExpectItToReachBackend(ctx, t, cc, testBackendCh)
+					select {
+					case <-time.After(defaultTestShortTimeout):
+						// Go back and retry the RPC.
+					case <-rlsReqCh:
+						return
+					}
+				}
 			}
-			verifyRLSRequest(t, rlsReqCh, !test.throttled)
 		})
 	}
 }
 
 // Test verifies scenarios where there is a matching entry in the data cache
-// which has expired and is backoff there is no pending request.
+// which has expired and is in backoff and there is no pending request.
 func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntryInBackoff(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -454,15 +491,14 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntryInBackoff(t *testing.T
 				rlsConfig.RouteLookupConfig.DefaultTarget = defBackendAddress
 			}
 
-			// Start a test backend, and setup the fake RLS server to return
-			// this as a target in the RLS response.
+			// Start a test backend, and set up the fake RLS server to return this as
+			// a target in the RLS response.
 			testBackendCh, testBackendAddress := startBackend(t)
 			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *e2e.RouteLookupResponse {
 				return &e2e.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 			})
 
-			// Register a manual resolver and push the RLS service config
-			// through it.
+			// Register a manual resolver and push the RLS service config through it.
 			r := startManualResolverWithConfig(t, rlsConfig)
 
 			// Dial the backend.
@@ -480,36 +516,21 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntryInBackoff(t *testing.T
 			// Make sure an RLS request is sent out.
 			verifyRLSRequest(t, rlsReqCh, true)
 
-			// Sleep enough to expire the above cache entry.
-			time.Sleep(2 * defaultTestShortTimeout)
-
-			// Setup the fake RLS server to return errors. This will push the
-			// cache entry into backoff.
+			// Set up the fake RLS server to return errors. This will push the cache
+			// entry into backoff.
 			var rlsLastErr = errors.New("last RLS request failed")
 			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *e2e.RouteLookupResponse {
 				return &e2e.RouteLookupResponse{Err: rlsLastErr}
 			})
 
-			// Make a few RPCs. Since the RLS server is now configured to return
-			// errors, this will push the cache entry into backoff. The pick
-			// will be delegated to the default backend if one exits, and will
-			// fail with the error returned by the RLS server otherwise.
-			for i := 0; i < 5; i++ {
-				if test.withDefaultTarget {
-					makeTestRPCAndExpectItToReachBackend(ctx, t, cc, defBackendCh)
-				} else {
-					makeTestRPCAndVerifyError(ctx, t, cc, codes.Unknown, rlsLastErr)
-				}
-
-				if i == 0 {
-					// Make sure an RLS request is sent out.
-					verifyRLSRequest(t, rlsReqCh, true)
-					// Sleep enough to expire the above cache entry.
-					time.Sleep(2 * defaultTestShortTimeout)
-				} else {
-					// Make sure no RLS request is sent out.
-					verifyRLSRequest(t, rlsReqCh, false)
-				}
+			// Since the RLS server is now configured to return errors, this will push
+			// the cache entry into backoff. The pick will be delegated to the default
+			// backend if one exits, and will fail with the error returned by the RLS
+			// server otherwise.
+			if test.withDefaultTarget {
+				makeTestRPCAndExpectItToReachBackend(ctx, t, cc, defBackendCh)
+			} else {
+				makeTestRPCAndVerifyError(ctx, t, cc, codes.Unknown, rlsLastErr)
 			}
 		})
 	}
@@ -540,6 +561,7 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_StaleEntry(t *testing.T) {
 			// for stale age, this allows us to simulate the condition where the
 			// LB policy has a stale entry and a pending entry in the cache.
 			doneCh := make(chan struct{})
+			defer close(doneCh)
 			rlsReqCh := make(chan struct{}, 1)
 			i := 0
 			interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
@@ -593,32 +615,19 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_StaleEntry(t *testing.T) {
 			// Make sure an RLS request is sent out.
 			verifyRLSRequest(t, rlsReqCh, true)
 
-			// Sleep enough to make the above cache entry stale.
-			time.Sleep(2 * defaultTestShortTimeout)
-
-			// Make a few RPCs. The first RPC will result in an RLS request
-			// being sent out as a proactive refresh, and since the RLS server
-			// is configured to block on that request, a pending entry will stay
-			// for the rest of the test and subsequent RPCs will not send out
-			// RLS requests.
-			//
-			// We expect the RPCs to be routed to the actual backend whether or
-			// not a default target is configured, since the cache entry is
-			// valid. It is simply stale.
-			for i := 0; i < 5; i++ {
+			// The cache entry has a large maxAge, but a small stateAge. We keep
+			// retrying until the cache entry becomes stale, in which case we expect a
+			// proactive cache refresh.
+			for {
 				makeTestRPCAndExpectItToReachBackend(ctx, t, cc, testBackendCh)
 
-				if i == 0 {
-					// Make sure an RLS request is sent out.
-					verifyRLSRequest(t, rlsReqCh, true)
-				} else {
-					// Make sure no RLS request is sent out.
-					verifyRLSRequest(t, rlsReqCh, false)
+				select {
+				case <-time.After(defaultTestShortTimeout):
+					// Go back and retry the RPC.
+				case <-rlsReqCh:
+					return
 				}
 			}
-
-			// Unblock the server interceptor.
-			close(doneCh)
 		})
 	}
 }
@@ -649,6 +658,7 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 			// the LB policy has an expired entry and a pending entry in the
 			// cache.
 			doneCh := make(chan struct{})
+			defer close(doneCh)
 			rlsReqCh := make(chan struct{}, 1)
 			i := 0
 			interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
@@ -700,36 +710,23 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 			// Make sure an RLS request is sent out.
 			verifyRLSRequest(t, rlsReqCh, true)
 
-			// Sleep enough to expire the above cache entry.
-			time.Sleep(2 * defaultTestShortTimeout)
+			// At this point, we have a cache entry with a small maxAge, and the RLS
+			// server is configured to block on further RLS requests. As we retry the
+			// RPC, at some point the cache entry would expire and force us to send an
+			// RLS request. But this request would exceed the deadline since the
+			// server blocks.
+			makeTestRPCAndVerifyError(ctx, t, cc, codes.DeadlineExceeded, context.DeadlineExceeded)
+			verifyRLSRequest(t, rlsReqCh, true)
 
-			// Make a few RPCs. The first RPC will result in an RLS request
-			// being sent out and since the RLS server is configured to block on
-			// that request, a pending entry will stay for the rest of the test
-			// and subsequent RPCs will not send out RLS requests.
-			//
-			// We expect the RPCs to be queued (and eventually exceed their
-			// deadline, since we don't return from the server interceptor until
-			// the test is done) whether or not a default target is configured,
-			// since the cache entry has expired.
-			for i := 0; i < 5; i++ {
-				func() {
-					ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-					defer cancel()
-					makeTestRPCAndVerifyError(ctx, t, cc, codes.DeadlineExceeded, context.DeadlineExceeded)
-
-					if i == 0 {
-						// Make sure an RLS request is sent out.
-						verifyRLSRequest(t, rlsReqCh, true)
-					} else {
-						// Make sure no RLS request is sent out.
-						verifyRLSRequest(t, rlsReqCh, false)
-					}
-				}()
-			}
-
-			// Unblock the server interceptor.
-			close(doneCh)
+			// Another RPC at this point should find the pending entry and be queued.
+			// But since we pass a small deadline, this RPC should fail with a
+			// deadline exceeded error since the pending request does not return until
+			// the test is done. And since we have a pending entry, we expect no RLS
+			// request to be sent out.
+			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+			defer sCancel()
+			makeTestRPCAndVerifyError(sCtx, t, cc, codes.DeadlineExceeded, context.DeadlineExceeded)
+			verifyRLSRequest(t, rlsReqCh, false)
 		})
 	}
 }

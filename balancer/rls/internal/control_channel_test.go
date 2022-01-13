@@ -108,12 +108,11 @@ func (s) TestLookupFailure(t *testing.T) {
 // TestLookupDeadlineExceeded tests the case where the RLS server does not
 // respond within the configured rpc timeout.
 func (s) TestLookupDeadlineExceeded(t *testing.T) {
-	// A unary interceptor which sleeps for long enough to cause lookup RPCs to
-	// exceed their deadline.
-	rlsReqCh := make(chan struct{}, 1)
+	// A unary interceptor which blocks until the test is done.
+	doneCh := make(chan struct{})
+	defer close(doneCh)
 	interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		rlsReqCh <- struct{}{}
-		time.Sleep(2 * defaultTestShortTimeout)
+		<-doneCh
 		return handler(ctx, req)
 	}
 

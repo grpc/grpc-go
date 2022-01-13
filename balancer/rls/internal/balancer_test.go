@@ -38,8 +38,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
@@ -93,9 +91,6 @@ func (s) TestConfigUpdate_ControlChannel(t *testing.T) {
 
 	// Make sure an RLS request is sent out.
 	verifyRLSRequest(t, rlsReqCh1, true)
-
-	// Sleep enough to expire the above cache entry.
-	time.Sleep(2 * defaultTestShortTimeout)
 
 	// Change lookup_service field of the RLS config to point to the second one.
 	rlsConfig.RouteLookupConfig.LookupService = rlsServer2.Address
@@ -220,27 +215,7 @@ func (s) TestConfigUpdate_DefaultTarget(t *testing.T) {
 	}
 	sc := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(scJSON)
 	r.UpdateState(resolver.State{ServiceConfig: sc})
-
-	// The update is handled asynchronously by the LB policy. So, we don't know
-	// exactly when the default target will change. So, we keep retrying the RPC
-	// here until it gets routed to the new default policy or the context
-	// expires, at which point we fail the test.
-Done:
-	for {
-		if err := ctx.Err(); err != nil {
-			t.Fatalf("Timeout when waiting for RPCs to be routed to the new default target: %v", err)
-		}
-		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-		client := testgrpc.NewTestServiceClient(cc)
-		client.EmptyCall(sCtx, &testpb.Empty{})
-
-		select {
-		case <-sCtx.Done():
-		case <-backendCh2:
-			sCancel()
-			break Done
-		}
-	}
+	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, backendCh2)
 }
 
 // TestConfigUpdate_ChildPolicyConfigs verifies that config changes which affect
@@ -511,6 +486,12 @@ func (s) TestConfigUpdate_BadChildPolicyConfigs(t *testing.T) {
 // update decreases the data cache size. Verifies that entries are evicted from
 // the cache.
 func (s) TestConfigUpdate_DataCacheSizeDecrease(t *testing.T) {
+	// Override the clientConn update hook to get notified.
+	clientConnUpdateDone := make(chan struct{}, 1)
+	origClientConnUpdateHook := clientConnUpdateHook
+	clientConnUpdateHook = func() { clientConnUpdateDone <- struct{}{} }
+	defer func() { clientConnUpdateHook = origClientConnUpdateHook }()
+
 	// Override the cache entry size func, and always return 1.
 	origEntrySizeFunc := computeDataCacheEntrySize
 	computeDataCacheEntrySize = func(cacheKey, *cacheEntry) int64 { return 1 }
@@ -520,7 +501,7 @@ func (s) TestConfigUpdate_DataCacheSizeDecrease(t *testing.T) {
 	// reduces the cache size, the resize operation is not stopped because
 	// we find an entry whose minExpiryDuration has not elapsed.
 	origMinEvictDuration := minEvictDuration
-	minEvictDuration = defaultTestShortTimeout
+	minEvictDuration = time.Duration(0)
 	defer func() { minEvictDuration = origMinEvictDuration }()
 
 	// Start an RLS server and set the throttler to never throttle requests.
@@ -558,6 +539,8 @@ func (s) TestConfigUpdate_DataCacheSizeDecrease(t *testing.T) {
 	}
 	defer cc.Close()
 
+	<-clientConnUpdateDone
+
 	// Make an RPC and ensure it gets routed to the first backend.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -576,9 +559,6 @@ func (s) TestConfigUpdate_DataCacheSizeDecrease(t *testing.T) {
 	// Make sure an RLS request is sent out.
 	verifyRLSRequest(t, rlsReqCh, true)
 
-	// To ensure that the data cache resize operation does not stop early.
-	time.Sleep(2 * defaultTestShortTimeout)
-
 	// We currently have two cache entries. Setting the size to 1, will cause
 	// the entry corresponding to backend1 to be evicted.
 	rlsConfig.RouteLookupConfig.CacheSizeBytes = 1
@@ -591,8 +571,7 @@ func (s) TestConfigUpdate_DataCacheSizeDecrease(t *testing.T) {
 	sc := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(scJSON)
 	r.UpdateState(resolver.State{ServiceConfig: sc})
 
-	// There is not an easy way to know when the above update has been applied.
-	time.Sleep(2 * defaultTestShortTimeout)
+	<-clientConnUpdateDone
 
 	// Make an RPC to match the cache entry which got evicted above, and expect
 	// an RLS request to be made to fetch the targets.
@@ -606,9 +585,16 @@ func (s) TestConfigUpdate_DataCacheSizeDecrease(t *testing.T) {
 // TestDataCachePurging verifies that the LB policy periodically evicts expired
 // entries from the data cache.
 func (s) TestDataCachePurging(t *testing.T) {
+	// Override the frequency of the data cache purger to a small one.
 	origPurgeFreq := periodicCachePurgeFreq
 	periodicCachePurgeFreq = defaultTestShortTimeout
 	defer func() { periodicCachePurgeFreq = origPurgeFreq }()
+
+	// Override the data cache purge hook to get notified.
+	dataCachePurgeDone := make(chan struct{}, 1)
+	origDataCachePurgeHook := dataCachePurgeHook
+	dataCachePurgeHook = func() { dataCachePurgeDone <- struct{}{} }
+	defer func() { dataCachePurgeHook = origDataCachePurgeHook }()
 
 	// Start an RLS server and set the throttler to never throttle requests.
 	rlsServer, rlsReqCh := setupFakeRLSServer(t, nil)
@@ -658,9 +644,8 @@ func (s) TestDataCachePurging(t *testing.T) {
 	// Make sure an RLS request is sent out.
 	verifyRLSRequest(t, rlsReqCh, true)
 
-	// Sleep enough to ensure that the above cache entries expire and are then
-	// purged by the periodic purger.
-	time.Sleep(2 * defaultTestShortTimeout)
+	// Wait for the data cache purging to happen before proceeding.
+	<-dataCachePurgeDone
 
 	// Perform the same RPCs again and verify that they result in RLS requests.
 	ctxOutgoing = metadata.AppendToOutgoingContext(ctx, "n1", "v1")
@@ -693,6 +678,12 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// never throttle requests.
 	rlsServer, rlsReqCh := setupFakeRLSServer(t, lis)
 	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
+
+	// Override the reset backoff hook to get notified.
+	resetBackoffDone := make(chan struct{}, 1)
+	origResetBackoffHook := resetBackoffHook
+	resetBackoffHook = func() { resetBackoffDone <- struct{}{} }
+	defer func() { resetBackoffHook = origResetBackoffHook }()
 
 	// Override the backoff strategy to return a large backoff which
 	// will make sure the date cache entry remains in backoff for the
@@ -735,9 +726,6 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// Make sure an RLS request is sent out.
 	verifyRLSRequest(t, rlsReqCh, true)
 
-	// Sleep enough to expire the above cache entry.
-	time.Sleep(2 * defaultTestShortTimeout)
-
 	// Stop the RLS server.
 	lis.Stop()
 
@@ -749,13 +737,6 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// of the test.
 	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, nil)
 
-	// Sleep enough to expire the above cache entry.
-	time.Sleep(2 * defaultTestShortTimeout)
-
-	// Verify entry is in backoff with another RPC.
-	makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, nil)
-	verifyRLSRequest(t, rlsReqCh, false)
-
 	// Restart the RLS server.
 	lis.Restart()
 
@@ -764,45 +745,22 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// TRANSIENT_FAILURE with a subConn backoff before moving to IDLE. This
 	// backoff will last for about a second. We need to keep retrying RPCs for the
 	// subConn to eventually come out of backoff and attempt to reconnect.
-	for {
-		// Make this RPC with a different set of headers leading to the creation of
-		// a new cache entry and a new RLS request. This RLS request will also fail
-		// till the control channel comes moves back to READY. So, override the
-		// backoff strategy to perform a small backoff on this entry.
-		defaultBackoffStrategy = &fakeBackoffStrategy{backoff: time.Duration(2 * defaultTestShortTimeout)}
-		ctxOutgoing := metadata.AppendToOutgoingContext(ctx, "n1", "v1")
-		client := testgrpc.NewTestServiceClient(cc)
-		if _, err := client.EmptyCall(ctxOutgoing, &testpb.Empty{}); err == nil {
-			// Make sure an RLS request is sent out.
-			verifyRLSRequest(t, rlsReqCh, true)
-			break
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatalf("Timeout when waiting for backend to receive RPC")
-		default:
-		}
-	}
+	//
+	// Make this RPC with a different set of headers leading to the creation of
+	// a new cache entry and a new RLS request. This RLS request will also fail
+	// till the control channel comes moves back to READY. So, override the
+	// backoff strategy to perform a small backoff on this entry.
+	defaultBackoffStrategy = &fakeBackoffStrategy{backoff: defaultTestShortTimeout}
+	ctxOutgoing := metadata.AppendToOutgoingContext(ctx, "n1", "v1")
+	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh)
+
+	<-resetBackoffDone
 
 	// The fact that the above RPC succeeded indicates that the control channel
 	// has moved back to READY. The connectivity state monitoring code should have
 	// realized this and should have reset all backoff timers (which in this case
 	// is the cache entry corresponding to the first RPC). Retrying that RPC now
 	// should succeed with an RLS request being sent out.
-	for {
-		// Retry the first RPC till the test times out, because we don't know
-		// exactly when the control channel monitoring code determines that the
-		// channel is back to READY.
-		client := testgrpc.NewTestServiceClient(cc)
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
-			// Make sure an RLS request is sent out.
-			verifyRLSRequest(t, rlsReqCh, true)
-			break
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatalf("Timeout when waiting for backend to receive RPC")
-		default:
-		}
-	}
+	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, backendCh)
+	verifyRLSRequest(t, rlsReqCh, true)
 }
