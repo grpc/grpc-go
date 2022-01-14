@@ -34,63 +34,21 @@ import (
 
 var errBalancerClosed = errors.New("gracefulSwitchBalancer is closed")
 
-const gracefulSwitchBalancerName = "graceful_switch_load_balancer"
-
-func init() {
-	balancer.Register(bb{})
-}
-
-type bb struct{}
-
+/*
 func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &gracefulSwitchBalancer{
-		cc: cc,
-		bOpts: opts,
+	return &gracefulSwitchBalancer{ // Will need to just construct this inline by user/tests
+		cc:              cc,
+		bOpts:           opts,
 		scToSubBalancer: make(map[balancer.SubConn]balancer.Balancer),
-		closed: grpcsync.NewEvent(),
+		closed:          grpcsync.NewEvent(),
 	}
 }
-
-func (bb) Name() string {
-	return gracefulSwitchBalancerName
-}
-
-type lbConfig struct {
-	serviceconfig.LoadBalancingConfig
-	ChildBalancerType string
-	Config serviceconfig.LoadBalancingConfig
-}
-
-type intermediateConfig struct {
-	serviceconfig.LoadBalancingConfig
-	ChildBalancerType string
-	ChildConfigJSON json.RawMessage
-}
-
-func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	var intermediateCfg intermediateConfig
-	if err := json.Unmarshal(c, &intermediateCfg); err != nil {
-		return nil, fmt.Errorf("graceful switch: unable to unmarshal lbconfig: %s, error: %v", string(c), err)
-	}
-	builder := balancer.Get(intermediateCfg.ChildBalancerType)
-	if builder == nil {
-		return nil, fmt.Errorf("balancer of type %v not supported", intermediateCfg.ChildBalancerType)
-	}
-	parsedChildCfg, err := builder.(balancer.ConfigParser).ParseConfig(intermediateCfg.ChildConfigJSON)
-	if err != nil {
-		return nil, fmt.Errorf("graceful switch: unable to unmarshal lbconfig: %s of type %v, error: %v", string(intermediateCfg.ChildConfigJSON), intermediateCfg.ChildBalancerType, err)
-	}
-	return &lbConfig{
-		ChildBalancerType: intermediateCfg.ChildBalancerType,
-		Config: parsedChildCfg,
-	}, nil
-}
+*/
 
 type gracefulSwitchBalancer struct {
 	bOpts          balancer.BuildOptions
 	cc balancer.ClientConn
 
-	recentConfig *lbConfig
 	balancerCurrent balancer.Balancer
 	balancerPending balancer.Balancer
 	// One mutex...protecting incoming (updateState happening atomically,
@@ -122,7 +80,7 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 		// you can send it later on an event like current LB exits READY.
 		gsb.pendingState = state
 		// "If the channel is currently in a state other than READY, the new policy will be swapped into place immediately."
-		if state.ConnectivityState == connectivity.Ready || !gsb.currentLbIsReady { // "Otherwise, the channel will keep using the old policy until the new policy reports READY" - Java
+		if state.ConnectivityState != connectivity.Connecting /*switch to a state other than CONNECTING*/ || !gsb.currentLbIsReady { // "Otherwise, the channel will keep using the old policy until the new policy reports READY" - Java
 			gsb.swap()
 		}
 		// Note: no-op if comes from balancer that is already deleted
@@ -205,93 +163,62 @@ func (gsb *gracefulSwitchBalancer) resolveNow(bal balancer.Balancer, opts resolv
 	gsb.cc.ResolveNow(opts)
 }
 
-func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
+func (gsb *gracefulSwitchBalancer) SwitchTo(childType string) error {
 	if gsb.closed.HasFired() {
 		// logger?
 		return errBalancerClosed
 	}
 
-	// First case described in c-core: we have no existing child policy, in this
-	// case, create a new child policy and store it in current child policy.
+	// Now, the question is whether we compare to previous type here or always
+	// switch to no matter what? If so you don't even need to persist
+	// recentChildType Used to be nested in the if buildPolicy block of
+	// UpdateClientConnState(). If you want to compare, have this be in that if
+	// conditional (compared to a persisted recentChildType), if not, that if
+	// conditional is determined by the caller.
 
-
-	// Second case described in c-core:
-	// Existing Child Policy (i.e. BalancerConfig == nil) but no pending
-
-	// a. If config is same type...simply pass update down to existing policy
-
-	// b. If config is different type...create a new policy and store in pending
-	// child policy. This will be swapped into child policy once the new child
-	// transitions into state READY.
-
-	// Third case described in c-core:
-	// We have an existing child policy nad a pending child policy from a previous update (i.e. Pending not transitioned into state READY)
-
-	// a. If going from current config to new config does not require a new policy, update existing pending child policy.
-
-	// b. If going from current to new does require a new, create a new policy, and replace the pending policy.
-
-	lbCfg, ok := state.BalancerConfig.(*lbConfig)
-	if !ok {
-		print("wtf")
-		// b.logger.Warningf("xds: unexpected LoadBalancingConfig type: %T", state.BalancerConfig)
+	builder := balancer.Get(childType)
+	if builder == nil {
 		return balancer.ErrBadResolverState
+		// return fmt.Errorf("balancer of type %v not supported", lbCfg.ChildBalancerType) // Maybe make this ErrBadResolverState as well?
 	}
 	gsb.mu.Lock()
-	buildPolicy := gsb.balancerCurrent == nil || gsb.recentConfig.ChildBalancerType != lbCfg.ChildBalancerType
-	gsb.recentConfig = lbCfg
-	var balToUpdate balancer.Balancer // Hold a local variable pointer to the balancer, as current/pending pointers can be changed synchronously.
-	if buildPolicy {
-		builder := balancer.Get(lbCfg.ChildBalancerType)
-		if builder == nil {
-			gsb.mu.Unlock()
-			return balancer.ErrBadResolverState
-			// return fmt.Errorf("balancer of type %v not supported", lbCfg.ChildBalancerType) // Maybe make this ErrBadResolverState as well?
-		}
-		if gsb.balancerCurrent == nil {
-			balToUpdate = gsb.balancerCurrent
-		} else {
-			balToUpdate = gsb.balancerPending
-		}
-		ccw := &clientConnWrapper{
-			ClientConn: gsb.cc,
-			gsb:        gsb, // BalToUpdate will get 0, 0, and be done, need to write to this later // Type and value, so I think this is right
-		}
-		balToUpdate = builder.Build(ccw, gsb.bOpts)
-		ccw.bal = balToUpdate
-		print("wow")
-		// i.e. * = *, or does it write to the memory this pointer points to
-		//Are we sure this doesn't just write to a local var? Learn inherent go struct pointer and how that works
-		print(balToUpdate)
-		print(gsb.balancerCurrent)
-		if gsb.balancerCurrent == nil {
-			gsb.balancerCurrent = balToUpdate
-		} else {
-			// Clear out pendingState when updating balancerPending...this is
-			// logically equivalent to swapping without having received an
-			// UpdateState() call, which is valid. Also clear out
-			// scToSubbalancer that corresponds to pendingBalancer.
-			gsb.pendingState = balancer.State{}
-			for sc, sb := range gsb.scToSubBalancer {
-				if sb == gsb.balancerPending {
-					delete(gsb.scToSubBalancer, sc)
-				}
-			}
-			gsb.balancerPending = balToUpdate
-		}
+	ccw := &clientConnWrapper{
+		ClientConn: gsb.cc,
+		gsb:        gsb,
+	}
+	newBalancer := builder.Build(ccw, gsb.bOpts)
+	ccw.bal = newBalancer
+	if gsb.balancerCurrent == nil {
+		gsb.balancerCurrent = newBalancer
 	} else {
-		if gsb.balancerPending != nil {
-			balToUpdate = gsb.balancerPending
-		} else {
-			balToUpdate = gsb.balancerCurrent
+		gsb.pendingState = balancer.State{}
+		// Clean up resources here that are from a previous pending lb.
+		for sc, sb := range gsb.scToSubBalancer {
+			if sb == gsb.balancerPending {
+				delete(gsb.scToSubBalancer, sc)
+			}
 		}
+		gsb.balancerPending = newBalancer
 	}
 	gsb.mu.Unlock()
-	balToUpdate.UpdateClientConnState(balancer.ClientConnState{
-		ResolverState: state.ResolverState,
-		BalancerConfig: lbCfg.Config,
-	})
 	return nil
+}
+
+// "Simply forwarding the update to one of the children"
+func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
+	if gsb.closed.HasFired() {
+		// logger?
+		return errBalancerClosed
+	}
+	gsb.mu.Lock()
+	var balToUpdate balancer.Balancer
+	if gsb.balancerPending != nil {
+		balToUpdate = gsb.balancerPending
+	} else {
+		balToUpdate = gsb.balancerCurrent
+	}
+	gsb.mu.Unlock()
+	balToUpdate.UpdateClientConnState(state)
 }
 
 func (gsb *gracefulSwitchBalancer) ResolverError(err error) {
@@ -354,6 +281,8 @@ func (gsb *gracefulSwitchBalancer) Close() {
 		pendingBalancerToUpdate.Close()
 	}
 }
+
+// ExitIdle()?
 
 type clientConnWrapper struct {
 	balancer.ClientConn

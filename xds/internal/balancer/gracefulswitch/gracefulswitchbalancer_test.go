@@ -47,6 +47,18 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+// no attributes or balancerconfig for passing type down
+
+// Interface - including ExitIdle
+
+// Two different things and reason to use this (at different layers): type of child balancer, cds name change and needs to use old one
+
+// switchTo for type (but now burden of parent), every time a config comes
+// switchTo(name)...sometimes you might want to switch on same type with a different config
+
+
+
+// setup - graceful switch with a mock client conn inside it, return both
 
 // cdsbalancer, balancergroup, rlsBalancer for examples
 
@@ -165,7 +177,7 @@ func (s) TestFirstUpdate(t *testing.T) {
 			// and that it gets an UpdateClientConnState()
 			// Receive from a channel? Typecast balancerCurrent into balancer declared below?
 			// ClientConnState is same Resolver State but lbCfg is looked into .Config
-			if err := gsb.(*gracefulSwitchBalancer).balancerCurrent.(*mockBalancer1).waitForClientConnUpdate(ctx, test.wantCCS); err != nil {
+			if err := gsb.(*gracefulSwitchBalancer).balancerCurrent.(*mockBalancer1).waitForClientConnUpdate(ctx, test.wantCCS); err != nil { // How to make this cleaner?
 				t.Fatalf("error in ClientConnState update: %v", err)
 			}
 		})
@@ -439,8 +451,25 @@ func (s) TestBalancerClose(t *testing.T) {
 }
 
 
+func (s) TestResolverError(t *testing.T) {
+	// Setup to a point where graceful switch with two child balancers
+	// Call ResolverError on graceful switch balancer
+	// Make sure the error is propagated to the child balancers
+}
 
-// Is there a way to test race conditions?
+
+// Is there a way to test race conditions (i.e. concurrently call UpdateState() and UpdateClientConnState())?
+
+
+
+// TEST CASE: (Menghan's comment specifically) - Current, Pending...new pending that replaces this pending
+
+// Clear pending state...remove subconns
+
+// When current switches to a state other than READY, the pending state sent up to the ClientConn needs to be of the new type
+
+// Also ASSERT that the ClientConn received closeSubConn calls
+
 
 
 
@@ -720,6 +749,6 @@ func (mb2 *mockBalancer2) updateState(state balancer.State) {
 // Order of what to do:
 
 // 1. Fix Menghan's PR comments wrt implementation, get three tests to continue to pass
-// 2. Add the tests that are give mes and get them to run, maybe factor the code out into reusable segments
+// 2. Add the tests that are give mes and get them to run, maybe factor the code out into reusable segments - setup() function
 // 3. Add Subconn tests/Close tests
 // 4. Think of any more tests you need to add that are special cases?
