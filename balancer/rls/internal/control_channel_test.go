@@ -109,11 +109,9 @@ func (s) TestLookupFailure(t *testing.T) {
 // respond within the configured rpc timeout.
 func (s) TestLookupDeadlineExceeded(t *testing.T) {
 	// A unary interceptor which blocks until the test is done.
-	doneCh := make(chan struct{})
-	defer close(doneCh)
 	interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		<-doneCh
-		return handler(ctx, req)
+		<-ctx.Done()
+		return nil, ctx.Err()
 	}
 
 	// Start an RLS server and set the throttler to never throttle.

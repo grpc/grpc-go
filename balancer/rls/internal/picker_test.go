@@ -150,12 +150,11 @@ func (s) TestPick_DataCacheMiss_PendingEntryExists(t *testing.T) {
 			// will cause the LB policy to send out an RLS request. This will
 			// also lead to creation of a pending entry, and further RPCs by the
 			// client should not result in RLS requests being sent out.
-			doneCh := make(chan struct{})
 			rlsReqCh := make(chan struct{}, 1)
 			interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
 				rlsReqCh <- struct{}{}
-				<-doneCh
-				return handler(ctx, req)
+				<-ctx.Done()
+				return nil, ctx.Err()
 			}
 
 			// Start an RLS server and set the throttler to never throttle.
@@ -195,9 +194,6 @@ func (s) TestPick_DataCacheMiss_PendingEntryExists(t *testing.T) {
 
 			// Make sure no RLS request is sent out this time around.
 			verifyRLSRequest(t, rlsReqCh, false)
-
-			// Unblock the server interceptor.
-			close(doneCh)
 		})
 	}
 }
@@ -421,15 +417,8 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntry(t *testing.T) {
 			// is dependent on the scenario being tested.
 			switch {
 			case test.throttled && test.withDefaultTarget:
-				for {
-					makeTestRPCAndExpectItToReachBackend(ctx, t, cc, defBackendCh)
-					select {
-					case <-time.After(defaultTestShortTimeout):
-						// Go back and retry the RPC.
-					case <-throttler.throttleCh:
-						return
-					}
-				}
+				makeTestRPCAndExpectItToReachBackend(ctx, t, cc, defBackendCh)
+				<-throttler.throttleCh
 			case test.throttled && !test.withDefaultTarget:
 				makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, errRLSThrottled)
 				<-throttler.throttleCh
@@ -560,8 +549,6 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_StaleEntry(t *testing.T) {
 			// is done. Since we configure the LB policy with a really low value
 			// for stale age, this allows us to simulate the condition where the
 			// LB policy has a stale entry and a pending entry in the cache.
-			doneCh := make(chan struct{})
-			defer close(doneCh)
 			rlsReqCh := make(chan struct{}, 1)
 			i := 0
 			interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
@@ -570,8 +557,8 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_StaleEntry(t *testing.T) {
 					i++
 					return handler(ctx, req)
 				}
-				<-doneCh
-				return handler(ctx, req)
+				<-ctx.Done()
+				return nil, ctx.Err()
 			}
 
 			// Start an RLS server and set the throttler to never throttle.
@@ -657,8 +644,6 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 			// value for max age, this allows us to simulate the condition where
 			// the LB policy has an expired entry and a pending entry in the
 			// cache.
-			doneCh := make(chan struct{})
-			defer close(doneCh)
 			rlsReqCh := make(chan struct{}, 1)
 			i := 0
 			interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
@@ -667,8 +652,8 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 					i++
 					return handler(ctx, req)
 				}
-				<-doneCh
-				return handler(ctx, req)
+				<-ctx.Done()
+				return nil, ctx.Err()
 			}
 
 			// Start an RLS server and set the throttler to never throttle.
