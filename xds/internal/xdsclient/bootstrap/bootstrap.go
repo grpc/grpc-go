@@ -31,12 +31,11 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/google"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/xds/credentials"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -49,9 +48,6 @@ const (
 	// server supports the v3 version of the xDS transport protocol.
 	serverFeaturesV3 = "xds_v3"
 
-	// Type name for Google default credentials.
-	credsGoogleDefault              = "google_default"
-	credsInsecure                   = "insecure"
 	gRPCUserAgentName               = "gRPC Go"
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 )
@@ -129,11 +125,8 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 	for _, cc := range server.ChannelCreds {
 		// We stop at the first credential type that we support.
 		sc.CredsType = cc.Type
-		if cc.Type == credsGoogleDefault {
-			sc.Creds = grpc.WithCredentialsBundle(google.NewDefaultCredentials())
-			break
-		} else if cc.Type == credsInsecure {
-			sc.Creds = grpc.WithTransportCredentials(insecure.NewCredentials())
+		if bundle := credentials.Bundle(cc.Type, cc.Config); bundle != nil {
+			sc.Creds = grpc.WithCredentialsBundle(bundle)
 			break
 		}
 	}
