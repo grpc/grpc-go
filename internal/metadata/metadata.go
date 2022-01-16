@@ -23,6 +23,7 @@ package metadata
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	"google.golang.org/grpc/metadata"
@@ -78,10 +79,10 @@ func Set(addr resolver.Address, md metadata.MD) resolver.Address {
 
 // Validate returns an error if the input md contains invalid keys or values.
 //
-// if the header is not pseudo-header, there are check items:
-// - header names contain one or more characters from this set [0-9 a-z _ - .]
-// - if the header-name ends with a "-bin" suffix, the header-value could contain an arbitrary octet sequence. So no real validation required here.
-// - if header-name does not end with a "-bin" suffix, header-value should only contain one or more characters from the set ( %x20-%x7E ) which includes space and printable ASCII.
+// If the header is not a pseudo-header, the following items are checked:
+// - header names must contain one or more characters from this set [0-9 a-z _ - .].
+// - if the header-name ends with a "-bin" suffix, no validation of the header value is performed.
+// - otherwise, the header value must contain one or more characters from the set [%x20-%x7E].
 func Validate(md metadata.MD) error {
 	for k, vals := range md {
 		// pseudo-header will be ignored
@@ -92,7 +93,7 @@ func Validate(md metadata.MD) error {
 		for i := 0; i < len(k); i++ {
 			r := k[i]
 			if !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '.' && r != '-' && r != '_' {
-				return errors.New("header key contains not 0-9a-z-_. characters")
+				return fmt.Errorf("header key %q contains not 0-9a-z-_. characters", k)
 			}
 		}
 		if strings.HasSuffix(k, "-bin") {
@@ -101,7 +102,7 @@ func Validate(md metadata.MD) error {
 		// check value
 		for _, val := range vals {
 			if hasNotPrintable(val) {
-				return errors.New("header val contains not printable ASCII characters")
+				return fmt.Errorf("header key %q contains value non-printable ASCII characters", k)
 			}
 		}
 	}

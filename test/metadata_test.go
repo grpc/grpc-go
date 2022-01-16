@@ -33,7 +33,6 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-// TestInvalidMetadata test invalid metadata
 func (s) TestInvalidMetadata(t *testing.T) {
 
 	tests := []struct {
@@ -52,8 +51,13 @@ func (s) TestInvalidMetadata(t *testing.T) {
 			md:   map[string][]string{"test-bin": {string(rune(0x19))}},
 			want: nil,
 		},
+		{
+			md:   map[string][]string{"test": {"value"}},
+			want: nil,
+		},
 	}
 
+	testNum := 0
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			return &testpb.Empty{}, nil
@@ -67,15 +71,15 @@ func (s) TestInvalidMetadata(t *testing.T) {
 				if err != nil {
 					return err
 				}
-				for _, test := range tests {
-					if err := stream.SetHeader(test.md); !reflect.DeepEqual(test.want, err) {
-						t.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
-					}
-					if err := stream.SendHeader(test.md); !reflect.DeepEqual(test.want, err) {
-						t.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
-					}
-					stream.SetTrailer(test.md)
+				test := tests[testNum]
+				testNum = testNum + 1
+				if err := stream.SetHeader(test.md); !reflect.DeepEqual(test.want, err) {
+					t.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
 				}
+				if err := stream.SendHeader(test.md); !reflect.DeepEqual(test.want, err) {
+					t.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
+				}
+				stream.SetTrailer(test.md)
 				err = stream.Send(&testpb.StreamingOutputCallResponse{})
 				if err != nil {
 					return err
@@ -98,20 +102,19 @@ func (s) TestInvalidMetadata(t *testing.T) {
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	stream, err := ss.Client.FullDuplexCall(ctx, grpc.WaitForReady(true))
-	defer cancel()
-	if err != nil {
-		t.Fatalf("call ss.Client.FullDuplexCall(context.Background()) will success but got err :%v", err)
+	for _, _ = range tests {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		stream, err := ss.Client.FullDuplexCall(ctx, grpc.WaitForReady(true))
+		defer cancel()
+		if err != nil {
+			t.Fatalf("call ss.Client.FullDuplexCall(context.Background()) will success but got err :%v", err)
+		}
+		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+			t.Fatalf("call ss.Client stream Send(nil) will success but got err :%v", err)
+		}
+		if _, err := stream.Recv(); err != nil {
+			t.Fatalf("stream.Recv() = _, %v", err)
+		}
+		stream.CloseSend()
 	}
-	if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
-		t.Fatalf("call ss.Client stream Send(nil) will success but got err :%v", err)
-	}
-	if _, err := stream.Header(); err != nil {
-		t.Fatalf("call ss.Client stream Send(nil) will success but got err :%v", err)
-	}
-	if _, err := stream.Recv(); err != nil {
-		t.Fatalf("stream.Recv() = _, %v", err)
-	}
-	stream.CloseSend()
 }
