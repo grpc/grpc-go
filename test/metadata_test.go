@@ -102,7 +102,7 @@ func (s) TestInvalidMetadata(t *testing.T) {
 		}
 	}
 
-	for _, _ = range tests {
+	for range tests {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		stream, err := ss.Client.FullDuplexCall(ctx, grpc.WaitForReady(true))
 		defer cancel()
