@@ -268,16 +268,12 @@ func parseServiceConfig(js string) *serviceconfig.ParseResult {
 			return &serviceconfig.ParseResult{Err: err}
 		}
 		if m.MaxRequestMessageBytes != nil {
-			if *m.MaxRequestMessageBytes > int64(maxInt) {
-				mc.MaxReqSize = newInt(maxInt)
-			} else {
+			if *m.MaxRequestMessageBytes < int64(maxInt) {
 				mc.MaxReqSize = newInt(int(*m.MaxRequestMessageBytes))
 			}
 		}
 		if m.MaxResponseMessageBytes != nil {
-			if *m.MaxResponseMessageBytes > int64(maxInt) {
-				mc.MaxRespSize = newInt(maxInt)
-			} else {
+			if *m.MaxResponseMessageBytes < int64(maxInt) {
 				mc.MaxRespSize = newInt(int(*m.MaxResponseMessageBytes))
 			}
 		}
