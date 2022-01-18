@@ -24,10 +24,17 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 const testXDSServer = "xds-server"
+
+// noopUpdateHandler ignores all updates. It's to be used in tests where the
+// updates don't matter. To avoid potential nil panic.
+var noopUpdateHandler = &testUpdateReceiver{
+	f: func(rType xdsresource.ResourceType, d map[string]interface{}, md xdsresource.UpdateMetadata) {},
+}
 
 // TestNew covers that New() returns an error if the input *ServerConfig
 // contains invalid content.
@@ -88,7 +95,7 @@ func (s) TestNew(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c, err := New(test.config, nil, nil, nil) // Only testing the config, other inputs are left as nil.
+			c, err := New(test.config, noopUpdateHandler, nil, nil) // Only testing the config, other inputs are left as nil.
 			defer func() {
 				if c != nil {
 					c.Close()
@@ -116,7 +123,7 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 
 	// Set the dialer and make sure it is called.
 	SetGRPCDial(customDialer)
-	c, err := New(config, nil, nil, nil)
+	c, err := New(config, noopUpdateHandler, nil, nil)
 	if err != nil {
 		t.Fatalf("New(%+v) = %v, want no error", config, err)
 	}
@@ -131,7 +138,7 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 
 	// Reset the dialer and make sure it is not called.
 	SetGRPCDial(grpc.Dial)
-	c, err = New(config, nil, nil, nil)
+	c, err = New(config, noopUpdateHandler, nil, nil)
 	defer func() {
 		if c != nil {
 			c.Close()
