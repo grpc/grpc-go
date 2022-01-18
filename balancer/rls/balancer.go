@@ -65,7 +65,8 @@ var (
 	resetBackoffHook     = func() {}
 )
 
-const balancerName = "rls_experimental"
+// Name is the name of the RLS LB policy.
+const Name = "rls_experimental"
 
 func init() {
 	balancer.Register(&rlsBB{})
@@ -74,7 +75,7 @@ func init() {
 type rlsBB struct{}
 
 func (rlsBB) Name() string {
-	return balancerName
+	return Name
 }
 
 func (rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {

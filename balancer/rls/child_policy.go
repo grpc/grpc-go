@@ -29,9 +29,6 @@ import (
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 )
 
-// TODO(easwars): Remove this once all RLS code is merged.
-//lint:file-ignore U1000 Ignore all unused code, not all code is merged yet.
-
 // childPolicyWrapper is a reference counted wrapper around a child policy.
 //
 // The LB policy maintains a map of these wrappers keyed by the target returned
