@@ -123,20 +123,36 @@ func (f *fakeBackoffStrategy) Backoff(retries int) time.Duration {
 
 // fakeThrottler is a fake implementation of the adaptiveThrottler interface.
 type fakeThrottler struct {
-	throttleFunc func() bool
+	throttleFunc func() bool   // Fake throttler implementation.
+	throttleCh   chan struct{} // Invocation of ShouldThrottle signals here.
 }
 
-func (f *fakeThrottler) ShouldThrottle() bool         { return f.throttleFunc() }
+func (f *fakeThrottler) ShouldThrottle() bool {
+	select {
+	case <-f.throttleCh:
+	default:
+	}
+	f.throttleCh <- struct{}{}
+
+	return f.throttleFunc()
+}
+
 func (f *fakeThrottler) RegisterBackendResponse(bool) {}
 
 // alwaysThrottlingThrottler returns a fake throttler which always throttles.
 func alwaysThrottlingThrottler() *fakeThrottler {
-	return &fakeThrottler{throttleFunc: func() bool { return true }}
+	return &fakeThrottler{
+		throttleFunc: func() bool { return true },
+		throttleCh:   make(chan struct{}, 1),
+	}
 }
 
 // neverThrottlingThrottler returns a fake throttler which never throttles.
 func neverThrottlingThrottler() *fakeThrottler {
-	return &fakeThrottler{throttleFunc: func() bool { return false }}
+	return &fakeThrottler{
+		throttleFunc: func() bool { return false },
+		throttleCh:   make(chan struct{}, 1),
+	}
 }
 
 // oneTimeAllowingThrottler returns a fake throttler which does not throttle the
@@ -150,6 +166,7 @@ func oneTimeAllowingThrottler() *fakeThrottler {
 			once.Do(func() { throttle = false })
 			return throttle
 		},
+		throttleCh: make(chan struct{}, 1),
 	}
 }
 
@@ -272,36 +289,72 @@ func startManualResolverWithConfig(t *testing.T, rlsConfig *e2e.RLSConfig) *manu
 // the EmptyCall RPC on the given ClientConn and verifies that it reaches a
 // backend. The latter is accomplished by listening on the provided channel
 // which gets pushed to whenever the backend in question gets an RPC.
+//
+// There are many instances where it can take a while before the attempted RPC
+// reaches the expected backend. Examples include, but are not limited to:
+// - control channel is changed in a config update. The RLS LB policy creates a
+//   new control channel, and sends a new picker to gRPC. But it takes a while
+//   before gRPC actually starts using the new picker.
+// - test is waiting for a cache entry to expire after which we expect a
+//   different behavior because we have configured the fake RLS server to return
+//   different backends.
+//
+// Therefore, we do not return an error when the RPC fails. Instead, we wait for
+// the context to expire before failing.
 func makeTestRPCAndExpectItToReachBackend(ctx context.Context, t *testing.T, cc *grpc.ClientConn, ch chan struct{}) {
 	t.Helper()
 
-	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-		t.Fatalf("TestService/EmptyCall() failed with error: %v", err)
-	}
+	// Drain the backend channel before performing the RPC to remove any
+	// notifications from previous RPCs.
 	select {
-	case <-ctx.Done():
-		t.Fatalf("Timeout when waiting for backend to receive RPC")
 	case <-ch:
+	default:
+	}
+
+	for {
+		if err := ctx.Err(); err != nil {
+			t.Fatalf("Timeout when waiting for RPCs to be routed to the given target: %v", err)
+		}
+		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+		client := testgrpc.NewTestServiceClient(cc)
+		client.EmptyCall(sCtx, &testpb.Empty{})
+
+		select {
+		case <-sCtx.Done():
+		case <-ch:
+			sCancel()
+			return
+		}
 	}
 }
 
 // makeTestRPCAndVerifyError is a test helper function which makes the EmptyCall
 // RPC on the given ClientConn and verifies that the RPC fails with the given
 // status code and error.
+//
+// Similar to makeTestRPCAndExpectItToReachBackend, retries until expected
+// outcome is reached or the provided context has expired.
 func makeTestRPCAndVerifyError(ctx context.Context, t *testing.T, cc *grpc.ClientConn, wantCode codes.Code, wantErr error) {
 	t.Helper()
 
-	client := testgrpc.NewTestServiceClient(cc)
-	_, err := client.EmptyCall(ctx, &testpb.Empty{})
-	if err == nil {
-		t.Fatal("TestService/EmptyCall() succeeded when expected to fail")
-	}
-	if code := status.Code(err); code != wantCode {
-		t.Fatalf("TestService/EmptyCall() returned code: %v, want: %v", code, wantCode)
-	}
-	if wantErr != nil && !strings.Contains(err.Error(), wantErr.Error()) {
-		t.Fatalf("TestService/EmptyCall() returned err: %v, want: %v", err, wantErr)
+	for {
+		if err := ctx.Err(); err != nil {
+			t.Fatalf("Timeout when waiting for RPCs to fail with given error: %v", err)
+		}
+		sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+		client := testgrpc.NewTestServiceClient(cc)
+		_, err := client.EmptyCall(sCtx, &testpb.Empty{})
+
+		// If the RPC fails with the expected code and expected error message (if
+		// one was provided), we return. Else we retry after blocking for a little
+		// while to ensure that we don't keep blasting away with RPCs.
+		if code := status.Code(err); code == wantCode {
+			if wantErr == nil || strings.Contains(err.Error(), wantErr.Error()) {
+				sCancel()
+				return
+			}
+		}
+		<-sCtx.Done()
 	}
 }
 
