@@ -424,6 +424,11 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntry(t *testing.T) {
 				<-throttler.throttleCh
 			case !test.throttled:
 				for {
+					// The backend to which the RPC is routed does not change after the
+					// cache entry expires because the control channel is not throttled.
+					// So, we need to keep retrying until the cache entry expires, at
+					// which point we expect an RLS request to be sent out and the RPC to
+					// get routed to the same testBackend.
 					makeTestRPCAndExpectItToReachBackend(ctx, t, cc, testBackendCh)
 					select {
 					case <-time.After(defaultTestShortTimeout):
