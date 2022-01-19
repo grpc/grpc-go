@@ -204,6 +204,25 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 				},
 			})
 		}
+
+		v3ListenerWithCDSConfigSourceSelf = testutils.MarshalAny(&v3listenerpb.Listener{
+			Name: v3LDSTarget,
+			ApiListener: &v3listenerpb.ApiListener{
+				ApiListener: testutils.MarshalAny(
+					&v3httppb.HttpConnectionManager{
+						RouteSpecifier: &v3httppb.HttpConnectionManager_Rds{
+							Rds: &v3httppb.Rds{
+								ConfigSource: &v3corepb.ConfigSource{
+									ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{},
+								},
+								RouteConfigName: v3RouteConfigName,
+							},
+						},
+						HttpFilters: []*v3httppb.HttpFilter{emptyRouterFilter},
+					}),
+			},
+		})
+
 		errMD = UpdateMetadata{
 			Status:  ServiceStatusNACKed,
 			Version: testVersion,
@@ -294,7 +313,22 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			wantErr:    true,
 		},
 		{
-			name: "rds.ConfigSource in apiListener is not ADS",
+			name:      "rds.ConfigSource in apiListener is Self",
+			resources: []*anypb.Any{v3ListenerWithCDSConfigSourceSelf},
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{
+					RouteConfigName: v3RouteConfigName,
+					HTTPFilters:     []HTTPFilter{routerFilter},
+					Raw:             v3ListenerWithCDSConfigSourceSelf,
+				}},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			name: "rds.ConfigSource in apiListener is not ADS or Self",
 			resources: []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{
 				Name: v3LDSTarget,
 				ApiListener: &v3listenerpb.ApiListener{
