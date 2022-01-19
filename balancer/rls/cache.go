@@ -27,9 +27,6 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 )
 
-// TODO(easwars): Remove this once all RLS code is merged.
-//lint:file-ignore U1000 Ignore all unused code, not all code is merged yet.
-
 // cacheKey represents the key used to uniquely identify an entry in the data
 // cache and in the pending requests map.
 type cacheKey struct {

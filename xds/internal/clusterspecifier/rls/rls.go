@@ -32,11 +32,9 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
 
-	// Blank import to init the RLS LB policy.
-	_ "google.golang.org/grpc/balancer/rls"
+	// Never remove this import as the RLS LB policy is registered in its init().
+	rlslb "google.golang.org/grpc/balancer/rls"
 )
-
-const rlsBalancerName = "rls_experimental"
 
 func init() {
 	if envconfig.XDSRLS {
@@ -91,7 +89,7 @@ func (rls) ParseClusterSpecifierConfig(cfg proto.Message) (clusterspecifier.Bala
 		return nil, fmt.Errorf("rls_csp: error marshaling load balancing config %v: %v", lbCfgJSON, err)
 	}
 
-	rlsBB := balancer.Get(rlsBalancerName)
+	rlsBB := balancer.Get(rlslb.Name)
 	if rlsBB == nil {
 		return nil, fmt.Errorf("RLS LB policy not registered")
 	}
@@ -100,5 +98,5 @@ func (rls) ParseClusterSpecifierConfig(cfg proto.Message) (clusterspecifier.Bala
 		return nil, fmt.Errorf("rls_csp: validation error from rls lb policy parsing %v", err)
 	}
 
-	return clusterspecifier.BalancerConfig{{rlsBalancerName: lbCfgJSON}}, nil
+	return clusterspecifier.BalancerConfig{{rlslb.Name: lbCfgJSON}}, nil
 }

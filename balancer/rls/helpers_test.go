@@ -45,9 +45,6 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
-// TODO(easwars): Remove this once all RLS code is merged.
-//lint:file-ignore U1000 Ignore all unused code, not all code is merged yet.
-
 const (
 	defaultTestTimeout      = 5 * time.Second
 	defaultTestShortTimeout = 100 * time.Millisecond
