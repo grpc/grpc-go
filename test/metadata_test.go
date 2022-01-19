@@ -41,11 +41,11 @@ func (s) TestInvalidMetadata(t *testing.T) {
 	}{
 		{
 			md:   map[string][]string{string(rune(0x19)): {"testVal"}},
-			want: status.Error(codes.Internal, "header key contains not 0-9a-z-_. characters"),
+			want: status.Error(codes.Internal, "header key \"\\x19\" contains not 0-9a-z-_. characters"),
 		},
 		{
 			md:   map[string][]string{"test": {string(rune(0x19))}},
-			want: status.Error(codes.Internal, "header val contains not printable ASCII characters"),
+			want: status.Error(codes.Internal, "header key \"test\" contains value non-printable ASCII characters"),
 		},
 		{
 			md:   map[string][]string{"test-bin": {string(rune(0x19))}},

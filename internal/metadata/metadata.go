@@ -22,7 +22,6 @@
 package metadata
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
