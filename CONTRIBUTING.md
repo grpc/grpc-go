@@ -54,7 +54,7 @@ How to get your contributions merged smoothly and quickly.
   recommend you **run tests locally** before creating your PR to catch breakages
   early on.
   - `VET_SKIP_PROTO=1 ./vet.sh` to catch vet errors
-  - `go test -cpu 1,4 -timeout 7m google.golang.org/grpc/...` to run the tests
-  - `go test -race -cpu 1,4 -timeout 7m google.golang.org/grpc/...` to run tests in race mode
+  - `go test -cpu 1,4 -timeout 7m ./...` to run the tests
+  - `go test -race -cpu 1,4 -timeout 7m ./...` to run tests in race mode
 
 - Exceptions to the rules can be made if there's a compelling reason for doing so.
