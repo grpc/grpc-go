@@ -38,6 +38,13 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
+const (
+	// Name is the name of the RLS LB policy.
+	Name = "rls_experimental"
+	// Default frequency for data cache purging.
+	periodicCachePurgeFreq = time.Minute
+)
+
 var (
 	logger = grpclog.Component("rls")
 
@@ -45,8 +52,8 @@ var (
 
 	// Default exponential backoff strategy for data cache entries.
 	defaultBackoffStrategy = backoff.Strategy(backoff.DefaultExponential)
-	// Default frequency for data cache purging.
-	periodicCachePurgeFreq = time.Minute
+	// Ticker used for periodic data cache purging.
+	dataCachePurgeTicker = func() *time.Ticker { return time.NewTicker(periodicCachePurgeFreq) }
 	// We want every cache entry to live in the cache for at least this
 	// duration. If we encounter a cache entry whose minimum expiration time is
 	// in the future, we abort the LRU pass, which may temporarily leave the
@@ -65,9 +72,6 @@ var (
 	resetBackoffHook     = func() {}
 )
 
-// Name is the name of the RLS LB policy.
-const Name = "rls_experimental"
-
 func init() {
 	balancer.Register(&rlsBB{})
 }
@@ -83,6 +87,7 @@ func (rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 		done:                     grpcsync.NewEvent(),
 		cc:                       cc,
 		bopts:                    opts,
+		purgeTicker:              dataCachePurgeTicker(),
 		lbCfg:                    &lbConfig{},
 		pendingMap:               make(map[cacheKey]*backoffState),
 		childPolicies:            make(map[string]*childPolicyWrapper),
@@ -100,10 +105,11 @@ func (rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 
 // rlsBalancer implements the RLS LB policy.
 type rlsBalancer struct {
-	done   *grpcsync.Event
-	cc     balancer.ClientConn
-	bopts  balancer.BuildOptions
-	logger *internalgrpclog.PrefixLogger
+	done        *grpcsync.Event
+	cc          balancer.ClientConn
+	bopts       balancer.BuildOptions
+	purgeTicker *time.Ticker
+	logger      *internalgrpclog.PrefixLogger
 
 	// If both cacheMu and stateMu need to be acquired, the former must be
 	// acquired first to prevent a deadlock. This order restriction is due to the
@@ -169,14 +175,11 @@ func (b *rlsBalancer) run() {
 // entries. An expired entry is one for which both the expiryTime and
 // backoffExpiryTime are in the past.
 func (b *rlsBalancer) purgeDataCache() {
-	ticker := time.NewTicker(periodicCachePurgeFreq)
-	defer ticker.Stop()
-
 	for {
 		select {
 		case <-b.done.Done():
 			return
-		case <-ticker.C:
+		case <-b.purgeTicker.C:
 			b.cacheMu.Lock()
 			updatePicker := b.dataCache.evictExpiredEntries()
 			b.cacheMu.Unlock()
@@ -376,6 +379,7 @@ func (b *rlsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 func (b *rlsBalancer) Close() {
 	b.done.Fire()
 
+	b.purgeTicker.Stop()
 	b.stateMu.Lock()
 	if b.ctrlCh != nil {
 		b.ctrlCh.close()
