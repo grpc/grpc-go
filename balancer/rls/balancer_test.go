@@ -586,9 +586,11 @@ func (s) TestConfigUpdate_DataCacheSizeDecrease(t *testing.T) {
 // entries from the data cache.
 func (s) TestDataCachePurging(t *testing.T) {
 	// Override the frequency of the data cache purger to a small one.
-	origPurgeFreq := periodicCachePurgeFreq
-	periodicCachePurgeFreq = defaultTestShortTimeout
-	defer func() { periodicCachePurgeFreq = origPurgeFreq }()
+	origDataCachePurgeTicker := dataCachePurgeTicker
+	ticker := time.NewTicker(defaultTestShortTimeout)
+	defer ticker.Stop()
+	dataCachePurgeTicker = func() *time.Ticker { return ticker }
+	defer func() { dataCachePurgeTicker = origDataCachePurgeTicker }()
 
 	// Override the data cache purge hook to get notified.
 	dataCachePurgeDone := make(chan struct{}, 1)
