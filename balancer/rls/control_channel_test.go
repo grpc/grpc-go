@@ -108,10 +108,9 @@ func (s) TestLookupFailure(t *testing.T) {
 // TestLookupDeadlineExceeded tests the case where the RLS server does not
 // respond within the configured rpc timeout.
 func (s) TestLookupDeadlineExceeded(t *testing.T) {
-	// A unary interceptor which blocks until the test is done.
+	// A unary interceptor which returns a status error with DeadlineExceeded.
 	interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		<-ctx.Done()
-		return nil, ctx.Err()
+		return nil, status.Error(codes.DeadlineExceeded, "deadline exceeded")
 	}
 
 	// Start an RLS server and set the throttler to never throttle.
