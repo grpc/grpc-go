@@ -53,7 +53,7 @@ func (s) TestServerReturningContextError(t *testing.T) {
 	defer cancel()
 	_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 	if s, ok := status.FromError(err); !ok || s.Code() != codes.DeadlineExceeded {
-		t.Fatalf("ss.Client.EmptyCall(ctx, _) = _, %v; want _, <status with Code()=DeadlineExceeded>", err)
+		t.Fatalf("ss.Client.EmptyCall() = %v; want <status with Code()=DeadlineExceeded>", err)
 	}
 
 	stream, err := ss.Client.FullDuplexCall(ctx)
@@ -62,7 +62,7 @@ func (s) TestServerReturningContextError(t *testing.T) {
 	}
 	_, err = stream.Recv()
 	if s, ok := status.FromError(err); !ok || s.Code() != codes.DeadlineExceeded {
-		t.Fatalf("ss.Client.FullDuplexCall(ctx, _).Recv() = _, %v; want _, <status with Code()=DeadlineExceeded>", err)
+		t.Fatalf("ss.Client.FullDuplexCall().Recv() = %v; want <status with Code()=DeadlineExceeded>", err)
 	}
 
 }
