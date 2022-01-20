@@ -94,11 +94,11 @@ func TestValidate(t *testing.T) {
 	}{
 		{
 			md:   map[string][]string{string(rune(0x19)): {"testVal"}},
-			want: errors.New("header key \"\\x19\" contains not 0-9a-z-_. characters"),
+			want: errors.New("header key \"\\x19\" contains illegal characters not in [0-9a-z-_.]"),
 		},
 		{
 			md:   map[string][]string{"test": {string(rune(0x19))}},
-			want: errors.New("header key \"test\" contains value non-printable ASCII characters"),
+			want: errors.New("header key \"test\" contains value with non-printable ASCII characters"),
 		},
 		{
 			md:   map[string][]string{"test-bin": {string(rune(0x19))}},

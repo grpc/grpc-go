@@ -92,7 +92,7 @@ func Validate(md metadata.MD) error {
 		for i := 0; i < len(k); i++ {
 			r := k[i]
 			if !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '.' && r != '-' && r != '_' {
-				return fmt.Errorf("header key %q contains not 0-9a-z-_. characters", k)
+				return fmt.Errorf("header key %q contains illegal characters not in [0-9a-z-_.]", k)
 			}
 		}
 		if strings.HasSuffix(k, "-bin") {
@@ -101,7 +101,7 @@ func Validate(md metadata.MD) error {
 		// check value
 		for _, val := range vals {
 			if hasNotPrintable(val) {
-				return fmt.Errorf("header key %q contains value non-printable ASCII characters", k)
+				return fmt.Errorf("header key %q contains value with non-printable ASCII characters", k)
 			}
 		}
 	}
