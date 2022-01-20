@@ -20,16 +20,13 @@
 package gracefulswitch
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/serviceconfig"
 )
 
 var errBalancerClosed = errors.New("gracefulSwitchBalancer is closed")
@@ -219,6 +216,7 @@ func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientCo
 	}
 	gsb.mu.Unlock()
 	balToUpdate.UpdateClientConnState(state)
+	return nil
 }
 
 func (gsb *gracefulSwitchBalancer) ResolverError(err error) {
