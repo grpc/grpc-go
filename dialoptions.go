@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc/stats/defaults"
 )
 
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
@@ -586,6 +587,7 @@ func defaultDialOptions() dialOptions {
 			WriteBufferSize: defaultWriteBufSize,
 			ReadBufferSize:  defaultReadBufSize,
 			UseProxy:        true,
+			StatsHandler:    defaults.GetDefaultClientStatsHandler(),
 		},
 	}
 }

@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package grpc.observability_config;
+
+import "google/protobuf/duration.proto";
+
+option go_package = "google.golang.org/grpc/observability/config";
+
+message ExporterConfig {
+    // For OC and OTEL, the observability plugin will try to register
+    // Stackdriver exporter by default. If users want to supply their own
+    // exporters, they can directly register via OC/OTEL API. Users can also
+    // turn off the default Stackdriver exporters via the following fields.
+    bool disable_default_tracing_exporter = 1;
+    bool disable_default_metrics_exporter = 2;
+    bool disable_default_logging_exporter = 3;
+
+    // By default, the project_id will be fetched from the deployment
+    // environment. This can be done via the Google Default Credentials or
+    // GCP_PROJECT environment variable.
+    string project_id = 4;
+
+    // The reporting interval for all observability data for default exporters.
+    google.protobuf.Duration reporting_interval = 5;
+}
+
+message TracingConfig {
+    // RateLimitingSampler is the default sampler. It enforces that only a
+    // certain calls can be traced in the given period.
+    message RateLimitingSampler {
+        // The default trace interval is 10s or 0.1 trace/second.
+        google.protobuf.Duration sample_interval = 1;
+    }
+
+    // ProbabilisticSampler picks calls via straightforward probability.
+    message ProbabilisticSampler {
+        // The default tracing rate is 0.1.
+        uint32 rate_nominator = 1;
+        uint32 rate_denominator = 2;
+    }
+
+    // AlwaysSampler traces every call.
+    message AlwaysSampler {}
+
+    // NeverSampler disables tracing.
+    message NeverSampler {}
+
+    oneof sampler {
+        RateLimitingSampler rate_limiting = 1;
+        ProbabilisticSampler probabilistic = 2;
+        AlwaysSampler always = 3;
+        NeverSampler never = 4;
+    }
+}
+
+message MetricsConfig {
+    // Custom Tag API, see go/grpc-custom-tags-api
+    // The custom tag API will be used by users as a mechanism to tag our
+    // first-party metrics with their own custom tags
+}
+
+message LoggingConfig {
+    // See go/grpc-observability-logging
+}
+
+message DeploymentConfig {
+
+    // AnthosServiceMeshConfig controls the observability behavior when the
+    // application is deployed to ASM.
+    message AnthosServiceMeshConfig {
+        bool enable_verbose_metadata_exchange = 1;
+    }
+
+    // TrafficDirectorConfig controls the observability behavior when the
+    // application is deployed to the Traffic Director.
+    message TrafficDirectorConfig {
+        bool disable_service_graph = 1;
+    }
+
+    AnthosServiceMeshConfig asm = 1;
+    TrafficDirectorConfig td = 2;
+}
+
+// Configuration for observability behaviors. By default, no configuration is
+// required for tracing/metrics/logging to function. This config captures the
+// most common knobs for gRPC users. It's always possible to override with
+// explicit config in code.
+message ObservabilityConfig {
+    ExporterConfig exporter = 1;
+
+    TracingConfig tracing = 2;
+
+    MetricsConfig metrics = 3;
+
+    LoggingConfig logging = 4;
+
+    // We want this configuration to be portable across different environments.
+    // Users should be able to config this file once and deploy it with any
+    // control plane we offer.
+    DeploymentConfig deployment = 5;
+}

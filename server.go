@@ -50,6 +50,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc/stats/defaults"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 )
@@ -587,6 +588,10 @@ func NewServer(opt ...ServerOption) *Server {
 	if channelz.IsOn() {
 		s.channelzID = channelz.RegisterServer(&channelzServer{s}, "")
 	}
+	if s.opts.statsHandler == nil {
+		s.opts.statsHandler = defaults.GetDefaultServerStatsHandler()
+	}
+
 	return s
 }
 

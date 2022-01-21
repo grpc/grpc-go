@@ -1,0 +1,113 @@
+syntax = "proto3";
+
+package grpc.observability.grpclogrecord;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+option go_package = "google.golang.org/grpc/observability/grpclogrecord";
+
+enum EventType {
+  GRPC_LOG_UNKNOWN = 0;
+  GRPC_CALL_START = 1;
+  GRPC_CALL_END = 2;
+  GRPC_CALL_REQUEST_HEADER = 3;
+  GRPC_CALL_RESPONSE_HEADER = 4;
+  GRPC_CALL_REQUEST_MESSAGE = 5;
+  GRPC_CALL_RESPONSE_MESSAGE = 6;
+  GRPC_CALL_TRAILER = 7;
+  GRPC_ERROR_UNAVAILABLE = 21;
+  GRPC_ERROR_UNAUTHENTICATED = 22;
+  GRPC_ERROR_RESOURCE_EXHAUSTED = 23;
+  GRPC_ERROR_INVALID_ARGUMENT = 24;
+  GRPC_ERROR_INTERNAL = 25;
+  GRPC_ERROR_UNKNOWN = 26;
+  GRPC_ERROR_DEADLINE_EXCEEDED = 27;
+  GRPC_ERROR_ABORTED = 28;
+  GRPC_CALL_HALF_CLOSE = 31;
+  GRPC_CALL_CANCEL = 32;
+  GRPC_CONNECTION_STATE_CHANGED = 41;
+}
+enum EventLogger {
+  LOGGER_UNKNOWN = 0;
+  LOGGER_CLIENT = 1;
+  LOGGER_SERVER = 2;
+}
+enum LogLevel {
+  LOG_LEVEL_UNKNOWN = 0;
+  LOG_LEVEL_TRACE = 1;
+  LOG_LEVEL_DEBUG = 2;
+  LOG_LEVEL_INFO = 3;
+  LOG_LEVEL_WARN = 4;
+  LOG_LEVEL_ERROR = 5;
+  LOG_LEVEL_FATAL = 6;
+}
+enum ConnectionState {
+  CONNECTION_STATE_UNKNOWN = 0;
+  CONNECTION_STATE_CONNECTING = 1;
+  CONNECTION_STATE_READY = 2;
+  CONNECTION_STATE_TRANSIENT_FAILURE = 3;
+  CONNECTION_STATE_IDLE = 4;
+  CONNECTION_STATE_SHUTDOWN = 5;
+}
+enum MethodType {
+  METHOD_TYPE_UNKNOWN = 0;
+  METHOD_TYPE_UNARY = 1;
+  METHOD_TYPE_SERVER_STREAMING = 2;
+  METHOD_TYPE_CLIENT_STREAMING = 3;
+  METHOD_TYPE_BIDI_STREAMING = 4;
+}
+message Metadata {
+  repeated MetadataEntry entry = 1;
+}
+message MetadataEntry {
+  string key = 1;
+  bytes value = 2;
+}
+message EnvironmentTags {
+  string gcp_project_id = 1;
+  string gcp_region = 2;
+  string gce_network_interface = 11;
+  string gce_instance_group = 12;
+  string gke_cluster = 21;
+  string gke_node = 22;
+  string gke_application = 23;
+  string gke_container = 24;
+  string gke_pod = 25;
+  string gke_namespace = 26;
+}
+message CustomTags {
+  string key = 1;
+  bytes value = 2;
+}
+message GrpcLogRecord {
+  google.protobuf.Timestamp timestamp = 1;
+  uint64 rpc_id = 2;
+  int32 channel_id = 3;
+  uint64 trace_id = 4;
+  uint64 span_id = 5;
+  string service_name = 6;
+  string method_name = 7;
+  EventLogger event_logger = 8;
+  EventType event_type = 9;
+  LogLevel log_level = 10;
+  EnvironmentTags environment_tags = 11;
+  CustomTags custom_tags = 12;
+  ConnectionState connection_state = 21;
+  int32 timeout = 22;
+  MethodType method_type = 23;
+  string authority = 24;
+  string client_public_ip = 25;
+  string client_private_ip = 26;
+  string server_public_ip = 27;
+  string server_private_ip = 28;
+  int32 payload_size = 31;
+  Metadata metadata = 32;
+  int32 sequence_number = 33;
+  bytes message = 34;
+  Metadata trailers = 35;
+  int32 status_code = 36;
+  string status_message = 37;
+  bytes status_details = 38;
+  google.protobuf.Duration duration = 39;
+}
