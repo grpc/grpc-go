@@ -22,8 +22,8 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
-// ReportLoad starts an load reporting stream to the given server. All load
-// report to the same server share the LRS stream.
+// ReportLoad starts a load reporting stream to the given server. All load
+// reports to the same server share the LRS stream.
 //
 // It returns a Store for the user to report loads, a function to cancel the
 // load reporting stream.

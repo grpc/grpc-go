@@ -132,9 +132,9 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		LBPolicy:    lbPolicy,
 	}
 
-	// Note that this is different from the gRFC (gRFC says to include the full
-	// ServerConfig{URL,creds,server feature} here). This information is not
-	// available here, because this function doesn't have access to the
+	// Note that this is different from the gRFC (gRFC A47 says to include the
+	// full ServerConfig{URL,creds,server feature} here). This information is
+	// not available here, because this function doesn't have access to the
 	// xdsclient bootstrap information now (can be added if necessary). The
 	// ServerConfig will be read and populate by the CDS balancer when
 	// processing this field.

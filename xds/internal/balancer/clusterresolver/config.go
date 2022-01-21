@@ -85,9 +85,6 @@ func (t *DiscoveryMechanismType) UnmarshalJSON(b []byte) error {
 type DiscoveryMechanism struct {
 	// Cluster is the cluster name.
 	Cluster string `json:"cluster,omitempty"`
-
-	// LoadReportingServerName *string `json:"lrsLoadReportingServerName,omitempty"`
-
 	// LoadReportingServer is the LRS server to send load reports to. If not
 	// present, load reporting will be disabled.
 	LoadReportingServer *bootstrap.ServerConfig `json:"lrsLoadReportingServer,omitempty"`
@@ -112,8 +109,6 @@ func (dm DiscoveryMechanism) Equal(b DiscoveryMechanism) bool {
 	switch {
 	case dm.Cluster != b.Cluster:
 		return false
-	case dm.LoadReportingServer.String() != b.LoadReportingServer.String():
-		return false
 	case !equalUint32P(dm.MaxConcurrentRequests, b.MaxConcurrentRequests):
 		return false
 	case dm.Type != b.Type:
@@ -123,7 +118,14 @@ func (dm DiscoveryMechanism) Equal(b DiscoveryMechanism) bool {
 	case dm.DNSHostname != b.DNSHostname:
 		return false
 	}
-	return true
+
+	if dm.LoadReportingServer == nil && b.LoadReportingServer == nil {
+		return true
+	}
+	if (dm.LoadReportingServer != nil) != (b.LoadReportingServer != nil) {
+		return false
+	}
+	return dm.LoadReportingServer.String() == b.LoadReportingServer.String()
 }
 
 func equalUint32P(a, b *uint32) bool {

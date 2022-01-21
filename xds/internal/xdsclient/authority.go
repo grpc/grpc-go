@@ -76,6 +76,9 @@ func (c *clientImpl) findAuthority(n *xdsresource.Name) (_ *authority, unref fun
 // newAuthority creates a new authority for the config. But before that, it
 // checks the cache to see if an authority for this config already exists.
 //
+// The caller must take a reference of the returned authority before using, and
+// unref afterwards.
+//
 // caller must hold c.authorityMu
 func (c *clientImpl) newAuthority(config *bootstrap.ServerConfig) (_ *authority, retErr error) {
 	// First check if there's already an authority for this config. If found, it

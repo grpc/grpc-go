@@ -96,9 +96,6 @@ type ServerConfig struct {
 // content. It doesn't cover NodeProto because NodeProto isn't used by
 // federation.
 func (sc *ServerConfig) String() string {
-	if sc == nil {
-		return ""
-	}
 	var ver string
 	switch sc.TransportAPI {
 	case version.TransportV3:
@@ -109,7 +106,7 @@ func (sc *ServerConfig) String() string {
 	return strings.Join([]string{sc.ServerURI, sc.CredsType, ver}, "-")
 }
 
-// MarshalJSON marshal the ServerConfig to json.
+// MarshalJSON marshals the ServerConfig to json.
 func (sc ServerConfig) MarshalJSON() ([]byte, error) {
 	server := xdsServer{
 		ServerURI:    sc.ServerURI,
