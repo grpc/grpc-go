@@ -38,7 +38,7 @@ var (
 	channelIDKey     = observabilityConextKey("channelID")
 )
 
-func plantRpcID(ctx context.Context) context.Context {
+func plantRPCID(ctx context.Context) context.Context {
 	atomic.AddUint64(&rpcIDCounter, 1)
 	return context.WithValue(context.Background(), rpcIDKey, rpcIDCounter)
 }
@@ -48,28 +48,26 @@ func plantChannelID(ctx context.Context) context.Context {
 	return context.WithValue(context.Background(), channelIDKey, rpcIDCounter)
 }
 
-func getRpcID(ctx context.Context) uint64 {
+func getRPCID(ctx context.Context) uint64 {
 	id, ok := ctx.Value(rpcIDKey).(uint64)
 	if ok {
 		return id
-	} else {
-		return 0
 	}
+	return 0
 }
 
 func getChannelID(ctx context.Context) int32 {
 	id, ok := ctx.Value(channelIDKey).(int32)
 	if ok {
 		return id
-	} else {
-		return 0
 	}
+	return 0
 }
 
 type baseStatsHandler struct{}
 
 func (sh *baseStatsHandler) TagRPC(ctx context.Context, tagInfo *stats.RPCTagInfo) context.Context {
-	ctx = plantRpcID(ctx)
+	ctx = plantRPCID(ctx)
 	return plantPerRPCLoggingState(ctx)
 }
 

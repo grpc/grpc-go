@@ -45,7 +45,7 @@ func newLogRecord(ctx context.Context, t grpclogrecord.EventType) *grpclogrecord
 	return &grpclogrecord.GrpcLogRecord{
 		EventType: t,
 		Timestamp: timestamppb.Now(),
-		RpcId:     getRpcID(ctx),
+		RpcId:     getRPCID(ctx),
 		ChannelId: getChannelID(ctx),
 	}
 }
@@ -60,9 +60,8 @@ func getPerRPCLoggingState(ctx context.Context) *perRPCLoggingState {
 	p, ok := ctx.Value(perRPCLoggingStateKey).(*perRPCLoggingState)
 	if ok {
 		return p
-	} else {
-		return nil
 	}
+	return nil
 }
 
 // loggingHandleRPC is the main logic for generating RPC events. Currently, it

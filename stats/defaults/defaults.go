@@ -26,7 +26,7 @@ import (
 var (
 	defaultClientStatsHandler stats.Handler
 	defaultServerStatsHandler stats.Handler
-	logger                    = grpclog.Component("observability")
+	logger                    = grpclog.Component("default-statshandler")
 )
 
 func SetDefaultClientStatsHandler(handler stats.Handler) {
@@ -34,7 +34,9 @@ func SetDefaultClientStatsHandler(handler stats.Handler) {
 }
 
 func GetDefaultClientStatsHandler() stats.Handler {
-	logger.Infof("default client StatsHandler injected")
+	if defaultClientStatsHandler != nil {
+		logger.Infof("default client StatsHandler injected")
+	}
 	return defaultClientStatsHandler
 }
 
@@ -43,6 +45,8 @@ func SetDefaultServerStatsHandler(handler stats.Handler) {
 }
 
 func GetDefaultServerStatsHandler() stats.Handler {
-	logger.Infof("default server StatsHandler injected")
+	if defaultServerStatsHandler != nil {
+		logger.Infof("default server StatsHandler injected")
+	}
 	return defaultServerStatsHandler
 }

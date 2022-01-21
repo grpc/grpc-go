@@ -30,16 +30,16 @@ import (
 )
 
 const (
-	EnvKeyObservabilityConfig = "GRPC_OBSERVABILITY_CONFIG"
+	envKeyObservabilityConfig = "GRPC_OBSERVABILITY_CONFIG"
 )
 
 // gcpDefaultCredentials is the JSON loading struct used to get project id.
 type gcpDefaultCredentials struct {
-	QuotaProjectId string `json:"quota_project_id"`
+	QuotaProjectID string `json:"quota_project_id"`
 }
 
-// fetchDefaultProjectId fetches the default GCP project id from environment.
-func fetchDefaultProjectId() string {
+// fetchDefaultProjectID fetches the default GCP project id from environment.
+func fetchDefaultProjectID() string {
 	// Step 1: Check ENV var
 	if s := os.Getenv("GCLOUD_PROJECT_ID"); s != "" {
 		return s
@@ -56,8 +56,8 @@ func fetchDefaultProjectId() string {
 			var d gcpDefaultCredentials
 			if err := json.Unmarshal(credentials.JSON, &d); err != nil {
 				logger.Infof("failed to parse default credentials JSON")
-			} else if d.QuotaProjectId != "" {
-				return d.QuotaProjectId
+			} else if d.QuotaProjectID != "" {
+				return d.QuotaProjectID
 			}
 		}
 	} else {
@@ -73,7 +73,7 @@ func fetchDefaultProjectId() string {
 func parseObservabilityConfig() *configpb.ObservabilityConfig {
 	// Parse the config from ENV var
 	var config configpb.ObservabilityConfig
-	content := os.Getenv(EnvKeyObservabilityConfig)
+	content := os.Getenv(envKeyObservabilityConfig)
 	if content != "" {
 		if err := protojson.Unmarshal([]byte(content), &config); err != nil {
 			logger.Warningf("failed to load observability config from env GRPC_OBSERVABILITY_CONFIG: %s", err)
@@ -82,13 +82,13 @@ func parseObservabilityConfig() *configpb.ObservabilityConfig {
 	// Fill in GCP project id if not present
 	if config.Exporter == nil {
 		config.Exporter = &configpb.ExporterConfig{
-			ProjectId: fetchDefaultProjectId(),
+			ProjectId: fetchDefaultProjectID(),
 		}
 	} else {
 		// If any default exporter is required, fill the default project id
 		if !config.Exporter.DisableDefaultLoggingExporter || !config.Exporter.DisableDefaultTracingExporter || !config.Exporter.DisableDefaultMetricsExporter {
 			if config.Exporter.ProjectId == "" {
-				config.Exporter.ProjectId = fetchDefaultProjectId()
+				config.Exporter.ProjectId = fetchDefaultProjectID()
 			}
 		}
 	}

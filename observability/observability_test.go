@@ -209,7 +209,7 @@ func (te *test) enablePluginWithFakeExporters() {
 	if err != nil {
 		te.t.Fatalf("failed to convert config to JSON: %v", err)
 	}
-	os.Setenv(EnvKeyObservabilityConfig, string(configJSON))
+	os.Setenv(envKeyObservabilityConfig, string(configJSON))
 	Start()
 	registerLoggingExporter(te.fle)
 }
