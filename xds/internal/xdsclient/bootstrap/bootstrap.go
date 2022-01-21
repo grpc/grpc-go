@@ -144,6 +144,18 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// unmarshalJSONServerConfigSlice unmarshals JSON to a slice.
+func unmarshalJSONServerConfigSlice(data []byte) ([]*ServerConfig, error) {
+	var servers []*ServerConfig
+	if err := json.Unmarshal(data, &servers); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON to []*ServerConfig: %v", err)
+	}
+	if len(servers) < 1 {
+		return nil, fmt.Errorf("no management server found in JSON")
+	}
+	return servers, nil
+}
+
 // Authority contains configuration for an Authority for an xDS control plane
 // server. See the Authorities field in the Config struct for how it's used.
 type Authority struct {
@@ -176,12 +188,9 @@ func (a *Authority) UnmarshalJSON(data []byte) error {
 	for k, v := range jsonData {
 		switch k {
 		case "xds_servers":
-			var servers []*ServerConfig
-			if err := json.Unmarshal(v, &servers); err != nil {
+			servers, err := unmarshalJSONServerConfigSlice(v)
+			if err != nil {
 				return fmt.Errorf("xds: json.Unmarshal(data) for field %q failed during bootstrap: %v", k, err)
-			}
-			if len(servers) < 1 {
-				return fmt.Errorf("xds: bootstrap file parsing failed during bootstrap: an authority doesn't contain any management server to connect to")
 			}
 			a.XDSServer = servers[0]
 		case "client_listener_resource_name_template":
@@ -336,12 +345,9 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 		case "xds_servers":
-			var servers []*ServerConfig
-			if err := json.Unmarshal(v, &servers); err != nil {
-				return nil, fmt.Errorf("xds: json.Unmarshal(data) for field xds_servers failed during bootstrap: %v", err)
-			}
-			if len(servers) < 1 {
-				return nil, fmt.Errorf("xds: bootstrap file parsing failed during bootstrap: file doesn't contain any management server to connect to")
+			servers, err := unmarshalJSONServerConfigSlice(v)
+			if err != nil {
+				return nil, fmt.Errorf("xds: json.Unmarshal(data) for field %q failed during bootstrap: %v", k, err)
 			}
 			config.XDSServer = servers[0]
 		case "certificate_providers":
