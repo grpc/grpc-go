@@ -29,10 +29,14 @@ var (
 	logger                    = grpclog.Component("default-statshandler")
 )
 
+// SetDefaultClientStatsHandler sets the default StatsHandler for all clients
+// that created after this call.
 func SetDefaultClientStatsHandler(handler stats.Handler) {
 	defaultClientStatsHandler = handler
 }
 
+// GetDefaultClientStatsHandler gets the pointer of the default client
+// StatsHandler. Should only be used internally.
 func GetDefaultClientStatsHandler() stats.Handler {
 	if defaultClientStatsHandler != nil {
 		logger.Infof("default client StatsHandler injected")
@@ -40,10 +44,14 @@ func GetDefaultClientStatsHandler() stats.Handler {
 	return defaultClientStatsHandler
 }
 
+// SetDefaultServerStatsHandler sets the default StatsHandler for all servers
+// that created after this call.
 func SetDefaultServerStatsHandler(handler stats.Handler) {
 	defaultServerStatsHandler = handler
 }
 
+// GetDefaultServerStatsHandler gets the pointer of the default server
+// StatsHandler. Should only be used internally.
 func GetDefaultServerStatsHandler() stats.Handler {
 	if defaultServerStatsHandler != nil {
 		logger.Infof("default server StatsHandler injected")
