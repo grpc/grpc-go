@@ -1,0 +1,138 @@
+// Copyright 2022 The gRPC Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Observability Config is used by gRPC Observability plugin to control provided
+// observability features. It contains parameters to enable/disable certain
+// features, or fine tune the verbosity.
+//
+// Note that gRPC may use this config in JSON form, not in protobuf form. This
+// proto definition is intended to help document the schema but might not
+// actually be used directly by gRPC.
+
+syntax = "proto3";
+
+package grpc.observability.config.v1alpha;
+
+import "google/protobuf/duration.proto";
+
+option java_package = "io.grpc.observability.config";
+option java_multiple_files = true;
+option java_outer_classname = "ObservabilityConfigProto";
+option go_package = "google.golang.org/grpc/observability/internal/config";
+
+message Sampler {
+    // RateLimitingSampler enforces the average data collection intervals
+    // between calls.
+    message RateLimitingSampler {
+        // The default sample interval is 10s.
+        google.protobuf.Duration sample_interval = 1;
+    }
+
+    // ProbabilisticSampler picks calls via straightforward probability.
+    message ProbabilisticSampler {
+        // The default tracing rate is 0.1.
+        uint32 rate_numerator = 1;
+        uint32 rate_denominator = 2;
+    }
+
+    // AlwaysSampler picks every call.
+    message AlwaysSampler {}
+
+    // NeverSampler disables sampling.
+    message NeverSampler {}
+
+    oneof sampler {
+        RateLimitingSampler rate_limiting = 1;
+        ProbabilisticSampler probabilistic = 2;
+        AlwaysSampler always = 3;
+        NeverSampler never = 4;
+    }
+}
+
+// Configuration for observability behaviors. By default, no configuration is
+// required for tracing/metrics/logging to function. This config captures the
+// most common knobs for gRPC users. It's always possible to override with
+// explicit config in code.
+message ObservabilityConfig {
+
+    message ExporterConfig {
+        // Following options turn off the default exporters, this allows
+        // applications to use custom exporters without duplicated uploads.
+        bool disable_default_tracing_exporter = 1;
+        bool disable_default_metrics_exporter = 2;
+        bool disable_default_logging_exporter = 3;
+
+        // The project identifier.
+        string project_id = 4;
+
+        // The reporting interval for all observability data for default exporters.
+        google.protobuf.Duration reporting_interval = 5;
+    }
+
+    message TracingConfig {
+        // Defines the sampling algorithm and behavior. The default sampler is
+        // RateLimitingSampler with 10s interval.
+        Sampler sampler = 1;
+    }
+
+    message MetricsConfig {
+    }
+
+    message LoggingConfig {
+        message LogFilter {
+            // A string which can select a group of method names. Only "*" wildcard
+            // is accepted.
+            // Examples:
+            // - "Foo/Bar" selects only the method "Bar" from service "Foo"
+            // - "Foo/*" selects all methods from service "Foo"
+            // - "*/*" selects all methods from all services.
+            string pattern = 1;
+            // Number of bytes of each header to log. If the size of the header is
+            // greater than the defined limit, content pass the limit will be
+            // truncated. The default value is 0.
+            int32 header_bytes = 2;
+            // Number of bytes of each message to log. If the size of the message is
+            // greater than the defined limit, content pass the limit will be
+            // truncated. The default value is 0.
+            int32 message_bytes = 3;
+            // Attachs a sampler to this group of methods. The default sampler is
+            // AlwaysSampler.
+            Sampler sampler = 4;
+        }
+
+        // A list of method config. The order matters here - the first pattern which
+        // matches the current method will apply the associated config options in
+        // the LogFilter. Any other LogFilter that also matches that comes later
+        // will be ignored. So a LogFilter of "*/*" should appear last in this list.
+        repeated LogFilter log_filters = 1;
+    }
+
+    message DeploymentConfig {
+    }
+
+    // Controls the exporter behavior
+    ExporterConfig exporter_config = 1;
+
+    // Controls the tracing behavior
+    TracingConfig tracing_config = 2;
+
+    // Controls the metrics behavior
+    MetricsConfig metrics_config = 3;
+
+    // Controls the logging behavior
+    LoggingConfig logging_config = 4;
+
+    // Controls the enhanced behavior for specific deployment environment
+    DeploymentConfig deployment_config = 5;
+}

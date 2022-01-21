@@ -1,0 +1,67 @@
+/*
+ *
+ * Copyright 2022 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+// Package observability implements the tracing, metrics, and logging data
+// collection, and provides controlling knobs via a config file.
+//
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+package observability
+
+import (
+	"context"
+
+	"google.golang.org/grpc/binarylog"
+	"google.golang.org/grpc/grpclog"
+)
+
+var logger = grpclog.Component("observability")
+
+// Start is the opt-in API for gRPC Observability plugin. This function should
+// be invoked before creating any gRPC clients or servers, otherwise, they won't
+// be instrumented. At high-level, this API does the following:
+//
+//   - it loads observability config from environment;
+//   - it registers default exporters if not disabled by the config;
+//   - it sets up binary logging sink against the logging exporter.
+//
+// Note: currently, the binarylog module only supports one sink, so using the
+// "observability" module will conflict with existing binarylog usage.
+func Start(ctx context.Context) {
+	config := parseObservabilityConfig(ctx)
+	// If the default logging exporter is not disabled, register one.
+	if config.ExporterConfig.ProjectId != "" && !config.ExporterConfig.DisableDefaultLoggingExporter {
+		createDefaultLoggingExporter(ctx, config.ExporterConfig.ProjectId)
+	}
+
+	// Logging is controlled by the config at methods level. Users might bring
+	// their in-house exporter. If logging is disabled, binary logging also
+	// won't start. The overhead should be minimum.
+	startLogging(config)
+}
+
+// End is the clean-up API for gRPC Observability plugin. It is expected to be
+// invoked in the main function of the application. The suggested usage is
+// "defer observability.End()". This function also flushes data to upstream, and
+// cleanup resources.
+func End() {
+	closeLoggingExporter()
+	binarylog.SetSink(nil)
+}
