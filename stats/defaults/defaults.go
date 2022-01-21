@@ -16,7 +16,10 @@
  *
  */
 
-package defaults
+// Package defaults is the API to set global default StatsHandler, which will be
+// applied to clients and servers created after. This package is for monitoring
+// purpose only. All fields are read-only. All APIs are experimental.
+package defaults // import "google.golang.org/grpc/stats/defaults"
 
 import (
 	"google.golang.org/grpc/grpclog"
