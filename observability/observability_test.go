@@ -25,6 +25,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -114,9 +115,12 @@ type fakeLoggingExporter struct {
 	t        *testing.T
 	observed []*grpclogrecord.GrpcLogRecord
 	isClosed bool
+	mu       sync.Mutex
 }
 
 func (fle *fakeLoggingExporter) EmitGrpcLogRecord(l *grpclogrecord.GrpcLogRecord) {
+	fle.mu.Lock()
+	defer fle.mu.Unlock()
 	fle.observed = append(fle.observed, l)
 	eventJSON, _ := protojson.Marshal(l)
 	fle.t.Logf("fakeLoggingExporter Emit: %s", eventJSON)
@@ -149,6 +153,10 @@ func (te *test) tearDown() {
 	}
 	te.srv.Stop()
 	End()
+
+	if !te.fle.isClosed {
+		te.t.Fatalf("fakeLoggingExporter not closed!")
+	}
 }
 
 // newTest returns a new test using the provided testing.T and

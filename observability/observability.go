@@ -40,12 +40,12 @@ var (
 
 func plantRPCID(ctx context.Context) context.Context {
 	atomic.AddUint64(&rpcIDCounter, 1)
-	return context.WithValue(context.Background(), rpcIDKey, rpcIDCounter)
+	return context.WithValue(context.Background(), rpcIDKey, atomic.LoadUint64(&rpcIDCounter))
 }
 
 func plantChannelID(ctx context.Context) context.Context {
-	atomic.AddUint64(&rpcIDCounter, 1)
-	return context.WithValue(context.Background(), channelIDKey, rpcIDCounter)
+	atomic.AddInt32(&channelIDCounter, 1)
+	return context.WithValue(context.Background(), channelIDKey, atomic.LoadInt32(&channelIDCounter))
 }
 
 func getRPCID(ctx context.Context) uint64 {
