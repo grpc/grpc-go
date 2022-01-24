@@ -57,8 +57,6 @@ func Test(t *testing.T) {
 // switchTo for type (but now burden of parent), every time a config comes
 // switchTo(name)...sometimes you might want to switch on same type with a different config
 
-
-
 // setup - graceful switch with a mock client conn inside it, return both
 
 // cdsbalancer, balancergroup, rlsBalancer for examples
@@ -95,37 +93,32 @@ type gracefulSwitchBalancer struct {
 
 // Close()
 
-
 // Causes balancerCurrent and balancerPending to cycle in and out of permutations
 
 // Will communicate (ping) balancerCurrent/balancerPending and also ClientConn
 
-
-
 func setup(t *testing.T) (*testutils.TestClientConn, *gracefulSwitchBalancer) {
 	tcc := testutils.NewTestClientConn(t)
 	return tcc, &gracefulSwitchBalancer{
-		cc: tcc,
-		bOpts: balancer.BuildOptions{},
+		cc:              tcc,
+		bOpts:           balancer.BuildOptions{},
 		scToSubBalancer: make(map[balancer.SubConn]balancer.Balancer),
-		closed: grpcsync.NewEvent(),
+		closed:          grpcsync.NewEvent(),
 	}
 }
-
-
 
 // Basic test of first Update constructing something for current
 func (s) TestFirstUpdate(t *testing.T) {
 	tests := []struct {
-		name string
-		childType string
-		ccs balancer.ClientConnState
-		wantSwitchToErr error
+		name              string
+		childType         string
+		ccs               balancer.ClientConnState
+		wantSwitchToErr   error
 		wantClientConnErr error
-		wantCCS balancer.ClientConnState
+		wantCCS           balancer.ClientConnState
 	}{
 		{
-			name: "successful-first-update",
+			name:      "successful-first-update",
 			childType: balancerName1,
 			ccs: balancer.ClientConnState{
 				// ResolverState: /*Any interesting logic here?*/,
@@ -141,8 +134,8 @@ func (s) TestFirstUpdate(t *testing.T) {
 		// Balancer has already been closed - maybe cover this in another test?
 		// Wrong type inside the config
 		{
-			name: "wrong-lb-config-type",
-			childType: "non-existent-balancer",
+			name:            "wrong-lb-config-type",
+			childType:       "non-existent-balancer",
 			wantSwitchToErr: balancer.ErrBadResolverState,
 		},
 	}
@@ -177,11 +170,9 @@ func (s) TestFirstUpdate(t *testing.T) {
 		})
 	}
 
-
 }
 
 // GET THIS TO COMPILE AND WORK :D
-
 
 // Test that tests Update with 1 + Update with 1 = UpdateClientConnState twice
 
@@ -190,7 +181,6 @@ func (s) TestFirstUpdate(t *testing.T) {
 // update updates current
 
 // then afterwqrd, update updates pending
-
 
 // UpdateState() causes it to forward to ClientConn...so mock balancer needs way
 // of pinging UpdateState() and NewSubConn()...flow goes mock balancer (->) ccw ->
@@ -237,8 +227,6 @@ func (s) TestTwoUpdatesSameBalancer(t *testing.T) {
 			t.Fatal("picker should be nil")
 		}
 	}
-
-
 
 	// An explicit call to switchTo, even if the same type, should cause the
 	// balancer to build a new balancer for pending.
@@ -322,9 +310,6 @@ func (s) TestTwoUpdatesSameBalancer(t *testing.T) {
 // Before starting this VVV
 // VVV Same thing as ^^^ except use two different lb config types
 // ASSERT Pending was deleted (for test below ASSERT CURRENT IS ALSO THE CORRECT TYPE, only get to setup no extra for test below)
-
-
-
 
 // Test that tests Update with 1 + Update with 2 = two balancers
 
@@ -450,7 +435,6 @@ func (s) TestTwoUpdatesSameBalancer(t *testing.T) {
 	}
 }*/
 
-
 // Test that tests Update with 1 + Update with 2 = two balancers
 
 // Current isn't ready, Pending sending any Update should cause it to switch from current to pending ) i.e. UpdateState() call
@@ -458,7 +442,6 @@ func (s) TestTwoUpdatesSameBalancer(t *testing.T) {
 // This is same as previous, except you don't update current with READY connectivity state...see if you want to pull out into common functionality
 // Is this really a thing? I remember this idea, but where did this come from?
 // func (s) TestPending
-
 
 // Test that tests Update with 1 + Update with 2 = two balancers
 
@@ -488,7 +471,6 @@ func (s) TestCurrentLeavingReady(t *testing.T) {
 	gsb.balancerCurrent.(*mockBalancer1).updateState(balancer.State{
 		ConnectivityState: connectivity.Idle,
 	})
-
 
 	// Sends CACHED state and picker (i.e. CONNECTING STATE + a picker you define yourself?)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -525,7 +507,6 @@ func (s) TestCurrentLeavingReady(t *testing.T) {
 
 }
 
-
 // Afterward...permutations of API calls
 
 // Including stuff to do with NewSubconns and different types of Subconns - Add/Remove Subconns
@@ -534,14 +515,11 @@ func (s) TestCurrentLeavingReady(t *testing.T) {
 
 // What is flow of how balancers create Subconns?
 
-
 // Test that tests Close(), downstream effects of closing SubConns, and also guarding everything else
 func (s) TestBalancerClose(t *testing.T) {
 	// Setup gsb balancer with current, pending, and also different types of SubConns
 	tcc, gsb := setup(t)
-	ccs := balancer.ClientConnState{
-
-	}
+	ccs := balancer.ClientConnState{}
 
 	// Close() the gsb balancer
 
@@ -553,17 +531,13 @@ func (s) TestBalancerClose(t *testing.T) {
 	// should be a logical no-op
 }
 
-
 func (s) TestResolverError(t *testing.T) {
 	// Setup to a point where graceful switch with two child balancers
 	// Call ResolverError on graceful switch balancer
 	// Make sure the error is propagated to the child balancers
 }
 
-
 // Is there a way to test race conditions (i.e. concurrently call UpdateState() and UpdateClientConnState())?
-
-
 
 // TEST CASE: (Menghan's comment specifically) - Current, Pending...new pending that replaces this pending
 
@@ -573,19 +547,7 @@ func (s) TestResolverError(t *testing.T) {
 
 // Also ASSERT that the ClientConn received closeSubConn calls
 
-
-
-
-
-
-
-
 // Works normally in current system
-
-
-
-
-
 
 // Mock balancer.Balancer here (the current or pending balancer)
 
@@ -606,7 +568,7 @@ func (bb1) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Ba
 		scStateCh:     testutils.NewChannel(),
 		resolverErrCh: testutils.NewChannel(),
 		closeCh:       testutils.NewChannel(),
-		cc: cc,
+		cc:            cc,
 	}
 }
 
@@ -634,13 +596,13 @@ type mockBalancer1 struct {
 	// resolverErrCh is a channel used to signal a resolver error.
 	resolverErrCh *testutils.Channel
 	// closeCh is a channel used to signal the closing of this balancer.
-	closeCh    *testutils.Channel
+	closeCh *testutils.Channel
 	// Hold onto Client Conn wrapper to communicate with it
 	cc balancer.ClientConn
 }
 
 type subConnWithState struct {
-	sc balancer.SubConn
+	sc    balancer.SubConn
 	state balancer.SubConnState
 }
 
@@ -715,7 +677,6 @@ func (mb1 *mockBalancer1) waitForClose(ctx context.Context) error {
 	return nil
 }
 
-
 // Needs some way of calling Client Conn UpdateState() upward and also what specific picker
 // the picker came from (i.e. mockBalancer1 or mockBalancer2)
 
@@ -724,8 +685,6 @@ func (mb1 *mockBalancer1) waitForClose(ctx context.Context) error {
 func (mb1 *mockBalancer1) updateState(state balancer.State) {
 	mb1.cc.UpdateState(state)
 }
-
-
 
 // it's determined by config type, so need a second balancer here
 type bb2 struct{}
@@ -736,7 +695,7 @@ func (bb2) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Ba
 		scStateCh:     testutils.NewChannel(),
 		resolverErrCh: testutils.NewChannel(),
 		closeCh:       testutils.NewChannel(),
-		cc: cc,
+		cc:            cc,
 	}
 }
 
@@ -760,11 +719,10 @@ type mockBalancer2 struct {
 	// resolverErrCh is a channel used to signal a resolver error.
 	resolverErrCh *testutils.Channel
 	// closeCh is a channel used to signal the closing of this balancer.
-	closeCh    *testutils.Channel
+	closeCh *testutils.Channel
 	// Hold onto Client Conn wrapper to communicate with it
 	cc balancer.ClientConn
 }
-
 
 func (mb2 *mockBalancer2) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	// Need to verify this call...use a channel?...all of these will need verification
@@ -837,7 +795,6 @@ func (mb2 *mockBalancer2) waitForClose(ctx context.Context) error {
 	return nil
 }
 
-
 // Needs some way of calling Client Conn UpdateState() upward and also what specific picker
 // the picker came from (i.e. mockBalancer1 or mockBalancer2)
 
@@ -847,11 +804,21 @@ func (mb2 *mockBalancer2) updateState(state balancer.State) {
 	mb2.cc.UpdateState(state)
 }
 
-
-
 // Order of what to do:
 
 // 1. Fix Menghan's PR comments wrt implementation, get three tests to continue to pass
 // 2. Add the tests that are give mes and get them to run, maybe factor the code out into reusable segments - setup() function
 // 3. Add Subconn tests/Close tests
 // 4. Think of any more tests you need to add that are special cases?
+
+// Menghan's pass order of how to tackle it:
+// 1. Simple, no op comments
+
+// Any dependencies for the three big pieces of functionality below?
+// CCW checking if from pending or current (how to read balancers without race condition, will this induce deadlock if it reads current or pending and also updates within mutex?)
+// check for current and pending balancer - helper function, and also error message (balancer name + pointer)
+
+// What is default initialization of pending LB State (Easwar gave a suggestion I agreed with here)...also this needs to not swap if no pending (look more into this)
+// Easwar: A lot of nits in SwitchTo (pending LB as well) (orthogonal to Menghan's comments) merge this
+
+// Race condition (seems most complicated - probably do this at the end as well)
