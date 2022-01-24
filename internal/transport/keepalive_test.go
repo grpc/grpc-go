@@ -518,6 +518,40 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 	}
 }
 
+// TestKeepaliveServerIgnoreAbusiveClientWithRPC verifies that the
+// server does not close a client transport when it sends too many
+// keepalive pings based on the configured EnforcementPolicy.
+func (s) TestKeepaliveServerIgnoreAbusiveClientWithRPC(t *testing.T) {
+	serverConfig := &ServerConfig{
+		KeepalivePolicy: keepalive.EnforcementPolicy{
+			MinTime:            2 * time.Second,
+			DisableEnforcement: true,
+		},
+	}
+	clientOptions := ConnectOptions{
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:    50 * time.Millisecond,
+			Timeout: 1 * time.Second,
+		},
+	}
+	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, clientOptions)
+	defer func() {
+		client.Close(fmt.Errorf("closed manually by test"))
+		server.stop()
+		cancel()
+	}()
+
+	// Give keepalive some time.
+	time.Sleep(4 * time.Second)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Make sure the client transport is healthy.
+	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
+		t.Fatalf("client.NewStream() failed: %v", err)
+	}
+}
+
 // TestKeepaliveServerEnforcementWithObeyingClientNoRPC verifies that the
 // server does not close a client transport (with no active streams) which
 // sends keepalive pings in accordance to the configured keepalive

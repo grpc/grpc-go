@@ -90,7 +90,7 @@ type http2Server struct {
 	// The time instance last ping was received.
 	lastPingAt time.Time
 	// Number of times the client has violated keepalive ping policy so far.
-	pingStrikes uint8
+	pingStrikes uint
 	// Flag to signify that number of ping strikes should be reset to 0.
 	// This is set whenever data or header frames are sent.
 	// 1 means yes.
@@ -234,6 +234,12 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	kep := config.KeepalivePolicy
 	if kep.MinTime == 0 {
 		kep.MinTime = defaultKeepalivePolicyMinTime
+	}
+	if kep.MaxPingStrikes == 0 {
+		kep.MaxPingStrikes = defaultMaxPingStrikes
+	}
+	if kep.KeepaliveTime == 0 {
+		kep.KeepaliveTime = defaultPingTimeout
 	}
 
 	done := make(chan struct{})
@@ -832,8 +838,8 @@ func (t *http2Server) handleSettings(f *http2.SettingsFrame) {
 }
 
 const (
-	maxPingStrikes     = 2
-	defaultPingTimeout = 2 * time.Hour
+	defaultMaxPingStrikes = 2
+	defaultPingTimeout    = 2 * time.Hour
 )
 
 func (t *http2Server) handlePing(f *http2.PingFrame) {
@@ -879,7 +885,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 		}
 	}
 
-	if t.pingStrikes > maxPingStrikes {
+	if !t.kep.DisableEnforcement && t.pingStrikes > t.kep.MaxPingStrikes {
 		// Send goaway and close the connection.
 		if logger.V(logLevel) {
 			logger.Errorf("transport: Got too many pings from the client, closing the connection.")

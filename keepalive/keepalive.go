@@ -82,4 +82,16 @@ type EnforcementPolicy struct {
 	// streams(RPCs). If false, and client sends ping when there are no active
 	// streams, server will send GOAWAY and close the connection.
 	PermitWithoutStream bool // false by default.
+
+	// MaxPingStrikes is the maximum number of pings that will be allowed to
+	// be exceeded before the server sends a GOAWAY and closes the connection.
+	MaxPingStrikes uint
+	// KeepaliveTime is the length of the period when a keepalive should have been sent.
+	KeepaliveTime time.Duration
+
+	// DisableEnforcement disables the enforcement of the keepalive policy.
+	// As described in https://github.com/grpc/grpc/blob/master/doc/keepalive.md,
+	// "There should ideally be no such restriction on the keepalive ping and we
+	// plan to deprecate it in the future."
+	DisableEnforcement bool // false by default
 }
