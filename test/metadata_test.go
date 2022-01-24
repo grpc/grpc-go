@@ -20,6 +20,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"reflect"
 	"testing"
@@ -63,28 +64,20 @@ func (s) TestInvalidMetadata(t *testing.T) {
 			return &testpb.Empty{}, nil
 		},
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			for {
-				_, err := stream.Recv()
-				if err == io.EOF {
-					return nil
-				}
-				if err != nil {
-					return err
-				}
-				test := tests[testNum]
-				testNum = testNum + 1
-				if err := stream.SetHeader(test.md); !reflect.DeepEqual(test.want, err) {
-					t.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
-				}
-				if err := stream.SendHeader(test.md); !reflect.DeepEqual(test.want, err) {
-					t.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
-				}
-				stream.SetTrailer(test.md)
-				err = stream.Send(&testpb.StreamingOutputCallResponse{})
-				if err != nil {
-					return err
-				}
+			_, err := stream.Recv()
+			if err != nil {
+				return err
 			}
+			test := tests[testNum]
+			testNum = testNum + 1
+			if err := stream.SetHeader(test.md); !reflect.DeepEqual(test.want, err) {
+				return fmt.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
+			}
+			if err := stream.SendHeader(test.md); !reflect.DeepEqual(test.want, err) {
+				return fmt.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
+			}
+			stream.SetTrailer(test.md)
+			return nil
 		},
 	}
 	if err := ss.Start(nil); err != nil {
@@ -98,23 +91,23 @@ func (s) TestInvalidMetadata(t *testing.T) {
 
 		ctx = metadata.NewOutgoingContext(ctx, test.md)
 		if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); !reflect.DeepEqual(test.want, err) {
-			t.Fatalf("call ss.Client.EmptyCall() validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
+			t.Errorf("call ss.Client.EmptyCall() validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
 		}
 	}
 
+	// call the stream server's api to drive the server-side unit testing
 	for range tests {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		stream, err := ss.Client.FullDuplexCall(ctx, grpc.WaitForReady(true))
 		defer cancel()
 		if err != nil {
-			t.Fatalf("call ss.Client.FullDuplexCall(context.Background()) will success but got err :%v", err)
+			t.Errorf("call ss.Client.FullDuplexCall(context.Background()) will success but got err :%v", err)
 		}
 		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
-			t.Fatalf("call ss.Client stream Send(nil) will success but got err :%v", err)
+			t.Errorf("call ss.Client stream Send(nil) will success but got err :%v", err)
 		}
-		if _, err := stream.Recv(); err != nil {
-			t.Fatalf("stream.Recv() = _, %v", err)
+		if _, err := stream.Recv(); err != io.EOF {
+			t.Errorf("stream.Recv() = _, %v", err)
 		}
-		stream.CloseSend()
 	}
 }
