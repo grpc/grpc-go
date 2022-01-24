@@ -43,6 +43,7 @@ func newGracefulSwitchBalancer(cc balancer.ClientConn, opts balancer.BuildOption
 			ConnectivityState: connectivity.Connecting,
 			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
 		},
+		swapClosedCh: make(chan balancer.Balancer, 1),
 	}
 }
 
@@ -56,6 +57,9 @@ type gracefulSwitchBalancer struct {
 	scToSubBalancer  map[balancer.SubConn]balancer.Balancer
 	pendingState     balancer.State
 	currentLbIsReady bool
+
+	swapMu sync.Mutex
+	swapClosedCh chan balancer.Balancer
 
 	closed *grpcsync.Event
 }
@@ -118,16 +122,25 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 // The caller must hold gsb.mu.
 func (gsb *gracefulSwitchBalancer) swap() {
 	gsb.cc.UpdateState(gsb.pendingState)
-	gsb.balancerCurrent.Close()
-	for sc, bal := range gsb.scToSubBalancer {
-		if bal == gsb.balancerCurrent {
-			gsb.cc.RemoveSubConn(sc)
-			delete(gsb.scToSubBalancer, sc)
+	go func() {
+		gsb.swapMu.Lock()
+		defer gsb.swapMu.Unlock()
+		select {
+		case <-gsb.swapClosedCh:
+		default:
 		}
-	}
+		gsb.swapClosedCh <- gsb.balancerCurrent
+		gsb.balancerCurrent.Close()
+		for sc, bal := range gsb.scToSubBalancer {
+			if bal == gsb.balancerCurrent {
+				gsb.cc.RemoveSubConn(sc) // Or does this happen implicitly?
+				delete(gsb.scToSubBalancer, sc)
+			}
+		}
 
-	gsb.balancerCurrent = gsb.balancerPending
-	gsb.balancerPending = nil
+		gsb.balancerCurrent = gsb.balancerPending
+		gsb.balancerPending = nil
+	}()
 }
 
 // Helper function that checks if the balancer passed in is current or pending.
@@ -291,8 +304,28 @@ func (gsb *gracefulSwitchBalancer) UpdateSubConnState(sc balancer.SubConn, state
 	if state.ConnectivityState == connectivity.Shutdown {
 		delete(gsb.scToSubBalancer, sc)
 	}
+	select {
+	case <-gsb.swapClosedCh:
+	default:
+	}
 	gsb.mu.Unlock()
-	bal.UpdateSubConnState(sc, state)
+	// After giving up the mutex, the current balancer may be Closed() due to a
+	// swap() call. Thus, add a check here to see if the balancer is still
+	// present in this graceful switch balancer to make sure this balancer does
+	// not update a closed balancer. We are guaranteed that there can only be
+	// one balancer closed within this UpdateSubConnState() call, as multiple
+	// balancers closed would require another call to UpdateClientConnState()
+	// which we are guaranteed won't be called concurrently.
+	gsb.swapMu.Lock()
+	select {
+	case balClosed := <-gsb.swapClosedCh:
+		if balClosed != bal {
+			bal.UpdateSubConnState(sc, state)
+		}
+	default:
+		bal.UpdateSubConnState(sc, state)
+	}
+	gsb.swapMu.Unlock()
 }
 
 func (gsb *gracefulSwitchBalancer) Close() {
