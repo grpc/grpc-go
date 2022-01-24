@@ -44,22 +44,22 @@ func (s) TestInvalidMetadata(t *testing.T) {
 		{
 			md:   map[string][]string{string(rune(0x19)): {"testVal"}},
 			want: status.Error(codes.Internal, "header key \"\\x19\" contains illegal characters not in [0-9a-z-_.]"),
-			recv: status.Error(codes.Internal, " invalid header field name \"\x19\""),
+			recv: status.Error(codes.Internal, "invalid header field name \"\\x19\""),
 		},
 		{
 			md:   map[string][]string{"test": {string(rune(0x19))}},
 			want: status.Error(codes.Internal, "header key \"test\" contains value with non-printable ASCII characters"),
-			recv: status.Error(codes.Internal, " invalid header field value \"\x19\""),
+			recv: status.Error(codes.Internal, "invalid header field value \"\\x19\""),
 		},
 		{
 			md:   map[string][]string{"test-bin": {string(rune(0x19))}},
 			want: nil,
-			recv: nil,
+			recv: io.EOF,
 		},
 		{
 			md:   map[string][]string{"test": {"value"}},
 			want: nil,
-			recv: nil,
+			recv: io.EOF,
 		},
 	}
 
@@ -111,8 +111,8 @@ func (s) TestInvalidMetadata(t *testing.T) {
 		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 			t.Errorf("call ss.Client stream Send(nil) will success but got err :%v", err)
 		}
-		if _, err := stream.Recv(); !reflect.DeepEqual(test.recv, err) && err != io.EOF {
-			t.Errorf("stream.Recv() = _, %v", err)
+		if _, err := stream.Recv(); !reflect.DeepEqual(test.recv, err) {
+			t.Errorf("stream.Recv() = _, get err :%v, want err :%v", err, test.recv)
 		}
 	}
 }
