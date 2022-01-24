@@ -1481,8 +1481,7 @@ func (ss *serverStream) SetTrailer(md metadata.MD) {
 		return
 	}
 	if err := imetadata.Validate(md); err != nil {
-		logger.Errorf("stream: failed to set trailer, err: %v", err)
-		return
+		logger.Errorf("stream: failed to validate md when setting trailer, err: %v", err)
 	}
 	ss.s.SetTrailer(md)
 }
