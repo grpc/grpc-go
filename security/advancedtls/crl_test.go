@@ -337,7 +337,7 @@ func makeChain(t *testing.T, name string) []*x509.Certificate {
 	return certChain
 }
 
-func loadCRL(t *testing.T, path string) *pkix.CertificateList {
+func loadCRL(t *testing.T, path string) *certificateListExt {
 	b, err := ioutil.ReadFile(path)
 	if err != nil {
 		t.Fatalf("readFile(%v) failed err = %v", path, err)
@@ -346,7 +346,15 @@ func loadCRL(t *testing.T, path string) *pkix.CertificateList {
 	if err != nil {
 		t.Fatalf("ParseCrl(%v) failed err = %v", path, err)
 	}
-	return crl
+	crlExt, err := parseCRLExtensions(crl)
+	if err != nil {
+		t.Fatalf("parseCRLExtensions(%v) failed err = %v", path, err)
+	}
+	crlExt.RawIssuer, err = extractCRLIssuer(b)
+	if err != nil {
+		t.Fatalf("extractCRLIssuer(%v) failed err= %v", path, err)
+	}
+	return crlExt
 }
 
 func TestCachedCRL(t *testing.T) {
@@ -450,11 +458,11 @@ func TestGetIssuerCRLCache(t *testing.T) {
 func TestVerifyCrl(t *testing.T) {
 	tampered := loadCRL(t, testdata.Path("crl/1.crl"))
 	// Change the signature so it won't verify
-	tampered.SignatureValue.Bytes[0]++
+	tampered.CertList.SignatureValue.Bytes[0]++
 
 	verifyTests := []struct {
 		desc    string
-		crl     *pkix.CertificateList
+		crl     *certificateListExt
 		certs   []*x509.Certificate
 		cert    *x509.Certificate
 		errWant string
@@ -498,11 +506,7 @@ func TestVerifyCrl(t *testing.T) {
 
 	for _, tt := range verifyTests {
 		t.Run(tt.desc, func(t *testing.T) {
-			crlExt, err := parseCRLExtensions(tt.crl)
-			if err != nil {
-				t.Fatalf("parseCRLExtensions(%v) failed, err = %v", tt.crl.TBSCertList.Issuer, err)
-			}
-			err = verifyCRL(crlExt, tt.cert.RawIssuer, tt.certs)
+			err := verifyCRL(tt.crl, tt.cert.RawIssuer, tt.certs)
 			switch {
 			case tt.errWant == "" && err != nil:
 				t.Errorf("Valid CRL did not verify err = %v", err)
@@ -714,5 +718,16 @@ func TestVerifyConnection(t *testing.T) {
 				conn.Close()
 			}
 		})
+	}
+}
+
+func TestIssuerNonPrintableString(t *testing.T) {
+	rawIssuer, err := hex.DecodeString("300c310a300806022a030c023a29")
+	if err != nil {
+		t.Fatalf("failed to decode issuer: %s", err)
+	}
+	_, err = fetchCRL("", rawIssuer, RevocationConfig{RootDir: testdata.Path("crl")})
+	if err != nil {
+		t.Fatalf("fetchCRL failed: %s", err)
 	}
 }
