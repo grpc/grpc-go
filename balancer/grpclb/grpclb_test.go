@@ -1404,7 +1404,7 @@ func (s) TestGRPCLBWithTargetNameFieldInConfig(t *testing.T) {
 	// Push the resolver update with target_field changed.
 	// Push a resolver update with grpclb configuration containing the
 	// target_name field. Our fake remote balancer has been updated above to expect the newServerName in the initial request.
-	lbCfg := fmt.Sprintf(`{"loadBalancingConfig": [{"grpclb": {"targetName": "%s"}}]}`, newServerName)
+	lbCfg := fmt.Sprintf(`{"loadBalancingConfig": [{"grpclb": {"serviceName": "%s"}}]}`, newServerName)
 	rs = grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(lbCfg)},
 		&grpclbstate.State{BalancerAddresses: []resolver.Address{{
 			Addr:       tss.lbAddr,

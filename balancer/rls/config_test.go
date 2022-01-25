@@ -82,7 +82,7 @@ func (s) TestParseConfig(t *testing.T) {
 					{"unknown-policy": {"unknown-field": "unknown-value"}},
 					{"grpclb": {"childPolicy": [{"pickfirst": {}}]}}
 				],
-				"childPolicyConfigTargetFieldName": "service_name"
+				"childPolicyConfigTargetFieldName": "serviceName"
 			}`),
 			wantCfg: &lbConfig{
 				lookupService:          ":///target",
@@ -92,10 +92,10 @@ func (s) TestParseConfig(t *testing.T) {
 				cacheSizeBytes:         maxCacheSize,
 				defaultTarget:          "passthrough:///default",
 				childPolicyName:        "grpclb",
-				childPolicyTargetField: "service_name",
+				childPolicyTargetField: "serviceName",
 				childPolicyConfig: map[string]json.RawMessage{
-					"childPolicy":  json.RawMessage(`[{"pickfirst": {}}]`),
-					"service_name": json.RawMessage(childPolicyTargetFieldVal),
+					"childPolicy": json.RawMessage(`[{"pickfirst": {}}]`),
+					"serviceName": json.RawMessage(childPolicyTargetFieldVal),
 				},
 			},
 		},
@@ -115,7 +115,7 @@ func (s) TestParseConfig(t *testing.T) {
 					"defaultTarget": "passthrough:///default"
 				},
 				"childPolicy": [{"grpclb": {"childPolicy": [{"pickfirst": {}}]}}],
-				"childPolicyConfigTargetFieldName": "service_name"
+				"childPolicyConfigTargetFieldName": "serviceName"
 			}`),
 			wantCfg: &lbConfig{
 				lookupService:          "target",
@@ -125,10 +125,10 @@ func (s) TestParseConfig(t *testing.T) {
 				cacheSizeBytes:         1000,
 				defaultTarget:          "passthrough:///default",
 				childPolicyName:        "grpclb",
-				childPolicyTargetField: "service_name",
+				childPolicyTargetField: "serviceName",
 				childPolicyConfig: map[string]json.RawMessage{
-					"childPolicy":  json.RawMessage(`[{"pickfirst": {}}]`),
-					"service_name": json.RawMessage(childPolicyTargetFieldVal),
+					"childPolicy": json.RawMessage(`[{"pickfirst": {}}]`),
+					"serviceName": json.RawMessage(childPolicyTargetFieldVal),
 				},
 			},
 		},
@@ -273,7 +273,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 					"staleAge" : "25s",
 					"defaultTarget": "passthrough:///default"
 				},
-				"childPolicyConfigTargetFieldName": "service_name"
+				"childPolicyConfigTargetFieldName": "serviceName"
 			}`),
 			wantErr: "rls: cache_size_bytes must be set to a non-zero value",
 		},
@@ -292,7 +292,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 					"cacheSizeBytes": 1000,
 					"defaultTarget": "passthrough:///default"
 				},
-				"childPolicyConfigTargetFieldName": "service_name"
+				"childPolicyConfigTargetFieldName": "serviceName"
 			}`),
 			wantErr: "rls: invalid childPolicy config: no supported policies found",
 		},
@@ -315,7 +315,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 					{"cds_experimental": {"Cluster": "my-fav-cluster"}},
 					{"unknown-policy": {"unknown-field": "unknown-value"}}
 				],
-				"childPolicyConfigTargetFieldName": "service_name"
+				"childPolicyConfigTargetFieldName": "serviceName"
 			}`),
 			wantErr: "rls: invalid childPolicy config: no supported policies found",
 		},
@@ -340,7 +340,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 						"unknown-policy": {"unknown-field": "unknown-value"}
 					}
 				],
-				"childPolicyConfigTargetFieldName": "service_name"
+				"childPolicyConfigTargetFieldName": "serviceName"
 			}`),
 			wantErr: "does not contain exactly 1 policy/config pair",
 		},
@@ -387,7 +387,7 @@ func (s) TestParseConfigErrors(t *testing.T) {
 					{"unknown-policy": {"unknown-field": "unknown-value"}},
 					{"grpclb": {"childPolicy": "not-an-array"}}
 				],
-				"childPolicyConfigTargetFieldName": "service_name"
+				"childPolicyConfigTargetFieldName": "serviceName"
 			}`),
 			wantErr: "rls: childPolicy config validation failed",
 		},
