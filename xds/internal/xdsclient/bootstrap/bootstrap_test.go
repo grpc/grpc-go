@@ -862,7 +862,8 @@ func TestNewConfigWithFederation(t *testing.T) {
 			}],
 			"client_default_listener_resource_name_template": "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
 			"authorities": {
-				"xds.td.com": { }
+				"xds.td.com": { },
+				"#.com": { }
 			}
 		}`,
 		// It's OK for an authority to not have servers. The top-level server
@@ -955,6 +956,9 @@ func TestNewConfigWithFederation(t *testing.T) {
 				Authorities: map[string]*Authority{
 					"xds.td.com": {
 						ClientListenerResourceNameTemplate: "xdstp://xds.td.com/envoy.config.listener.v3.Listener/%s",
+					},
+					"#.com": {
+						ClientListenerResourceNameTemplate: "xdstp://%23.com/envoy.config.listener.v3.Listener/%s",
 					},
 				},
 			},

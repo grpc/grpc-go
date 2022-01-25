@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/url"
 	"strings"
 
 	"github.com/golang/protobuf/jsonpb"
@@ -401,7 +402,7 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 	// - if set, it must start with "xdstp://<authority_name>/"
 	// - if not set, it defaults to "xdstp://<authority_name>/envoy.config.listener.v3.Listener/%s"
 	for name, authority := range config.Authorities {
-		prefix := fmt.Sprintf("xdstp://%s", name)
+		prefix := fmt.Sprintf("xdstp://%s", url.PathEscape(name))
 		if authority.ClientListenerResourceNameTemplate == "" {
 			authority.ClientListenerResourceNameTemplate = prefix + "/envoy.config.listener.v3.Listener/%s"
 			continue
