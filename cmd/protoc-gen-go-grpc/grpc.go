@@ -41,12 +41,10 @@ type serviceGenerateHelperInterface interface {
 	generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string)
 }
 
-type serviceGenerateHelper struct {
-	serviceGenerateHelperInterface
-}
+type serviceGenerateHelper struct {}
 
 func (serviceGenerateHelper) formatServiceName(service *protogen.Service) string {
-	return fmt.Sprintf("%s", service.Desc.FullName())
+	return service.Desc.FullName()
 }
 
 func (serviceGenerateHelper) generateNewClientDefinitions(g *protogen.GeneratedFile, service *protogen.Service, clientName string) {
@@ -81,7 +79,7 @@ func (serviceGenerateHelper) generateUnimplementedServerType(gen *protogen.Plugi
 func (serviceGenerateHelper) generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string) {
 }
 
-var helper serviceGenerateHelperInterface = new(serviceGenerateHelper)
+var helper serviceGenerateHelperInterface = serviceGenerateHelper{}
 
 // generateFile generates a _grpc.pb.go file containing gRPC service definitions.
 func generateFile(gen *protogen.Plugin, file *protogen.File) *protogen.GeneratedFile {
