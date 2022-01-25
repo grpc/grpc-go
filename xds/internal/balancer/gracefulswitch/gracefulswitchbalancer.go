@@ -59,7 +59,7 @@ type gracefulSwitchBalancer struct {
 	currentLbIsReady bool
 
 	swapMu sync.Mutex
-	swapClosedCh chan balancer.Balancer
+	balRecentlyClosed balancer.Balancer
 
 	closed *grpcsync.Event
 }
@@ -75,6 +75,8 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 	// updateState() call).
 	gsb.mu.Lock()
 	defer gsb.mu.Unlock()
+
+	gsb.balRecentlyClosed = nil
 
 	if !gsb.balancerCurrentOrPending(bal) {
 		return
@@ -125,11 +127,7 @@ func (gsb *gracefulSwitchBalancer) swap() {
 	go func() {
 		gsb.swapMu.Lock()
 		defer gsb.swapMu.Unlock()
-		select {
-		case <-gsb.swapClosedCh:
-		default:
-		}
-		gsb.swapClosedCh <- gsb.balancerCurrent
+		gsb.balRecentlyClosed = gsb.balancerCurrent
 		gsb.balancerCurrent.Close()
 		for sc, bal := range gsb.scToSubBalancer {
 			if bal == gsb.balancerCurrent {
@@ -304,10 +302,6 @@ func (gsb *gracefulSwitchBalancer) UpdateSubConnState(sc balancer.SubConn, state
 	if state.ConnectivityState == connectivity.Shutdown {
 		delete(gsb.scToSubBalancer, sc)
 	}
-	select {
-	case <-gsb.swapClosedCh:
-	default:
-	}
 	gsb.mu.Unlock()
 	// After giving up the mutex, the current balancer may be Closed() due to a
 	// swap() call. Thus, add a check here to see if the balancer is still
@@ -317,14 +311,10 @@ func (gsb *gracefulSwitchBalancer) UpdateSubConnState(sc balancer.SubConn, state
 	// balancers closed would require another call to UpdateClientConnState()
 	// which we are guaranteed won't be called concurrently.
 	gsb.swapMu.Lock()
-	select {
-	case balClosed := <-gsb.swapClosedCh:
-		if balClosed != bal {
-			bal.UpdateSubConnState(sc, state)
-		}
-	default:
+	if bal != gsb.balRecentlyClosed {
 		bal.UpdateSubConnState(sc, state)
 	}
+	gsb.balRecentlyClosed = nil
 	gsb.swapMu.Unlock()
 }
 
