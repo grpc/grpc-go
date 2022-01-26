@@ -1536,7 +1536,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantUpdate: map[string]ClusterUpdateErrTuple{
 				v3ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v3ClusterName,
-					EDSServiceName: v3Service, EnableLRS: true,
+					EDSServiceName: v3Service, LRSServerConfig: ClusterLRSServerSelf,
 					Raw: v3ClusterAnyWithEDSConfigSourceSelf,
 				}},
 			},
