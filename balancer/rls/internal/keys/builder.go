@@ -139,7 +139,7 @@ func (bm BuilderMap) RLSKey(md metadata.MD, host, path string) KeyMap {
 		kvMap[b.hostKey] = host
 	}
 	if b.serviceKey != "" {
-		kvMap[b.serviceKey] = service[1 : len(service)-1]
+		kvMap[b.serviceKey] = strings.Trim(service, "/")
 	}
 	if b.methodKey != "" {
 		kvMap[b.methodKey] = method
