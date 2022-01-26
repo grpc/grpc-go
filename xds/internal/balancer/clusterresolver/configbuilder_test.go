@@ -125,11 +125,11 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 	gotConfig, _, err := buildPriorityConfigJSON([]priorityConfig{
 		{
 			mechanism: DiscoveryMechanism{
-				Cluster:                 testClusterName,
-				LoadReportingServerName: newString(testLRSServer),
-				MaxConcurrentRequests:   newUint32(testMaxRequests),
-				Type:                    DiscoveryMechanismTypeEDS,
-				EDSServiceName:          testEDSServiceName,
+				Cluster:               testClusterName,
+				LoadReportingServer:   testLRSServerConfig,
+				MaxConcurrentRequests: newUint32(testMaxRequests),
+				Type:                  DiscoveryMechanismTypeEDS,
+				EDSServiceName:        testEDSServiceName,
 			},
 			edsResp: xdsresource.EndpointsUpdate{
 				Drops: []xdsresource.OverloadDropConfig{
@@ -175,11 +175,11 @@ func TestBuildPriorityConfig(t *testing.T) {
 	gotConfig, gotAddrs, _ := buildPriorityConfig([]priorityConfig{
 		{
 			mechanism: DiscoveryMechanism{
-				Cluster:                 testClusterName,
-				LoadReportingServerName: newString(testLRSServer),
-				MaxConcurrentRequests:   newUint32(testMaxRequests),
-				Type:                    DiscoveryMechanismTypeEDS,
-				EDSServiceName:          testEDSServiceName,
+				Cluster:               testClusterName,
+				LoadReportingServer:   testLRSServerConfig,
+				MaxConcurrentRequests: newUint32(testMaxRequests),
+				Type:                  DiscoveryMechanismTypeEDS,
+				EDSServiceName:        testEDSServiceName,
 			},
 			edsResp: xdsresource.EndpointsUpdate{
 				Drops: []xdsresource.OverloadDropConfig{
@@ -212,10 +212,10 @@ func TestBuildPriorityConfig(t *testing.T) {
 				Config: &internalserviceconfig.BalancerConfig{
 					Name: clusterimpl.Name,
 					Config: &clusterimpl.LBConfig{
-						Cluster:                 testClusterName,
-						EDSServiceName:          testEDSServiceName,
-						LoadReportingServerName: newString(testLRSServer),
-						MaxConcurrentRequests:   newUint32(testMaxRequests),
+						Cluster:               testClusterName,
+						EDSServiceName:        testEDSServiceName,
+						LoadReportingServer:   testLRSServerConfig,
+						MaxConcurrentRequests: newUint32(testMaxRequests),
 						DropCategories: []clusterimpl.DropConfig{
 							{
 								Category:           testDropCategory,
@@ -245,10 +245,10 @@ func TestBuildPriorityConfig(t *testing.T) {
 				Config: &internalserviceconfig.BalancerConfig{
 					Name: clusterimpl.Name,
 					Config: &clusterimpl.LBConfig{
-						Cluster:                 testClusterName,
-						EDSServiceName:          testEDSServiceName,
-						LoadReportingServerName: newString(testLRSServer),
-						MaxConcurrentRequests:   newUint32(testMaxRequests),
+						Cluster:               testClusterName,
+						EDSServiceName:        testEDSServiceName,
+						LoadReportingServer:   testLRSServerConfig,
+						MaxConcurrentRequests: newUint32(testMaxRequests),
 						DropCategories: []clusterimpl.DropConfig{
 							{
 								Category:           testDropCategory,
@@ -369,11 +369,11 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 			},
 		},
 		DiscoveryMechanism{
-			Cluster:                 testClusterName,
-			MaxConcurrentRequests:   newUint32(testMaxRequests),
-			LoadReportingServerName: newString(testLRSServer),
-			Type:                    DiscoveryMechanismTypeEDS,
-			EDSServiceName:          testEDSServiceName,
+			Cluster:               testClusterName,
+			MaxConcurrentRequests: newUint32(testMaxRequests),
+			LoadReportingServer:   testLRSServerConfig,
+			Type:                  DiscoveryMechanismTypeEDS,
+			EDSServiceName:        testEDSServiceName,
 		},
 		nil,
 	)
@@ -384,10 +384,10 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 	}
 	wantConfigs := map[string]*clusterimpl.LBConfig{
 		"priority-2-0": {
-			Cluster:                 testClusterName,
-			EDSServiceName:          testEDSServiceName,
-			LoadReportingServerName: newString(testLRSServer),
-			MaxConcurrentRequests:   newUint32(testMaxRequests),
+			Cluster:               testClusterName,
+			EDSServiceName:        testEDSServiceName,
+			LoadReportingServer:   testLRSServerConfig,
+			MaxConcurrentRequests: newUint32(testMaxRequests),
 			DropCategories: []clusterimpl.DropConfig{
 				{
 					Category:           testDropCategory,
@@ -411,10 +411,10 @@ func TestBuildClusterImplConfigForEDS(t *testing.T) {
 			},
 		},
 		"priority-2-1": {
-			Cluster:                 testClusterName,
-			EDSServiceName:          testEDSServiceName,
-			LoadReportingServerName: newString(testLRSServer),
-			MaxConcurrentRequests:   newUint32(testMaxRequests),
+			Cluster:               testClusterName,
+			EDSServiceName:        testEDSServiceName,
+			LoadReportingServer:   testLRSServerConfig,
+			MaxConcurrentRequests: newUint32(testMaxRequests),
 			DropCategories: []clusterimpl.DropConfig{
 				{
 					Category:           testDropCategory,

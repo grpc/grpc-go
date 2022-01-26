@@ -107,19 +107,26 @@ func (sc *ServerConfig) String() string {
 	return strings.Join([]string{sc.ServerURI, sc.CredsType, ver}, "-")
 }
 
-// UnmarshalJSON takes the json data (a list of servers) and unmarshals the
-// first one in the list.
+// MarshalJSON marshals the ServerConfig to json.
+func (sc ServerConfig) MarshalJSON() ([]byte, error) {
+	server := xdsServer{
+		ServerURI:    sc.ServerURI,
+		ChannelCreds: []channelCreds{{Type: sc.CredsType, Config: nil}},
+	}
+	if sc.TransportAPI == version.TransportV3 {
+		server.ServerFeatures = []string{serverFeaturesV3}
+	}
+	return json.Marshal(server)
+}
+
+// UnmarshalJSON takes the json data (a server) and unmarshals it to the struct.
 func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
-	var servers []*xdsServer
-	if err := json.Unmarshal(data, &servers); err != nil {
-		return fmt.Errorf("xds: json.Unmarshal(data) for field xds_servers failed during bootstrap: %v", err)
+	var server xdsServer
+	if err := json.Unmarshal(data, &server); err != nil {
+		return fmt.Errorf("xds: json.Unmarshal(data) for field ServerConfig failed during bootstrap: %v", err)
 	}
-	if len(servers) < 1 {
-		return fmt.Errorf("xds: bootstrap file parsing failed during bootstrap: file doesn't contain any management server to connect to")
-	}
-	xs := servers[0]
-	sc.ServerURI = xs.ServerURI
-	for _, cc := range xs.ChannelCreds {
+	sc.ServerURI = server.ServerURI
+	for _, cc := range server.ChannelCreds {
 		// We stop at the first credential type that we support.
 		sc.CredsType = cc.Type
 		if cc.Type == credsGoogleDefault {
@@ -130,12 +137,24 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 			break
 		}
 	}
-	for _, f := range xs.ServerFeatures {
+	for _, f := range server.ServerFeatures {
 		if f == serverFeaturesV3 {
 			sc.TransportAPI = version.TransportV3
 		}
 	}
 	return nil
+}
+
+// unmarshalJSONServerConfigSlice unmarshals JSON to a slice.
+func unmarshalJSONServerConfigSlice(data []byte) ([]*ServerConfig, error) {
+	var servers []*ServerConfig
+	if err := json.Unmarshal(data, &servers); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON to []*ServerConfig: %v", err)
+	}
+	if len(servers) < 1 {
+		return nil, fmt.Errorf("no management server found in JSON")
+	}
+	return servers, nil
 }
 
 // Authority contains configuration for an Authority for an xDS control plane
@@ -170,9 +189,11 @@ func (a *Authority) UnmarshalJSON(data []byte) error {
 	for k, v := range jsonData {
 		switch k {
 		case "xds_servers":
-			if err := json.Unmarshal(v, &a.XDSServer); err != nil {
-				return fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
+			servers, err := unmarshalJSONServerConfigSlice(v)
+			if err != nil {
+				return fmt.Errorf("xds: json.Unmarshal(data) for field %q failed during bootstrap: %v", k, err)
 			}
+			a.XDSServer = servers[0]
 		case "client_listener_resource_name_template":
 			if err := json.Unmarshal(v, &a.ClientListenerResourceNameTemplate); err != nil {
 				return fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
@@ -243,7 +264,7 @@ type Config struct {
 
 type channelCreds struct {
 	Type   string          `json:"type"`
-	Config json.RawMessage `json:"config"`
+	Config json.RawMessage `json:"config,omitempty"`
 }
 
 type xdsServer struct {
@@ -325,9 +346,11 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 		case "xds_servers":
-			if err := json.Unmarshal(v, &config.XDSServer); err != nil {
-				return nil, fmt.Errorf("xds: json.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
+			servers, err := unmarshalJSONServerConfigSlice(v)
+			if err != nil {
+				return nil, fmt.Errorf("xds: json.Unmarshal(data) for field %q failed during bootstrap: %v", k, err)
 			}
+			config.XDSServer = servers[0]
 		case "certificate_providers":
 			var providerInstances map[string]json.RawMessage
 			if err := json.Unmarshal(v, &providerInstances); err != nil {

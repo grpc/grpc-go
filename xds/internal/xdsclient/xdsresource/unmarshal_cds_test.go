@@ -46,7 +46,7 @@ const (
 	serviceName = "service"
 )
 
-var emptyUpdate = ClusterUpdate{ClusterName: clusterName, EnableLRS: false}
+var emptyUpdate = ClusterUpdate{ClusterName: clusterName, LRSServerConfig: ClusterLRSOff}
 
 func (s) TestValidateCluster_Failure(t *testing.T) {
 	tests := []struct {
@@ -263,7 +263,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName: clusterName, EnableLRS: false, ClusterType: ClusterTypeAggregate,
+				ClusterName: clusterName, LRSServerConfig: ClusterLRSOff, ClusterType: ClusterTypeAggregate,
 				PrioritizedClusterNames: []string{"a", "b", "c"},
 			},
 		},
@@ -298,7 +298,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, EnableLRS: false},
+			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSOff},
 		},
 		{
 			name: "happiest-case",
@@ -320,7 +320,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, EnableLRS: true},
+			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf},
 		},
 		{
 			name: "happiest-case-with-circuitbreakers",
@@ -354,7 +354,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, EnableLRS: true, MaxRequests: func() *uint32 { i := uint32(512); return &i }()},
+			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf, MaxRequests: func() *uint32 { i := uint32(512); return &i }()},
 		},
 		{
 			name: "happiest-case-with-ring-hash-lb-policy-with-default-config",
@@ -377,7 +377,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName, EnableLRS: true,
+				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf,
 				LBPolicy: &ClusterLBPolicyRingHash{MinimumRingSize: defaultRingHashMinSize, MaximumRingSize: defaultRingHashMaxSize},
 			},
 		},
@@ -408,7 +408,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName: clusterName, EDSServiceName: serviceName, EnableLRS: true,
+				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf,
 				LBPolicy: &ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
 			},
 		},
@@ -468,9 +468,9 @@ func (s) TestValidateClusterWithSecurityConfig_EnvVarOff(t *testing.T) {
 		},
 	}
 	wantUpdate := ClusterUpdate{
-		ClusterName:    clusterName,
-		EDSServiceName: serviceName,
-		EnableLRS:      false,
+		ClusterName:     clusterName,
+		EDSServiceName:  serviceName,
+		LRSServerConfig: ClusterLRSOff,
 	}
 	gotUpdate, err := validateClusterAndConstructClusterUpdate(cluster)
 	if err != nil {
@@ -1082,9 +1082,9 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName:    clusterName,
-				EDSServiceName: serviceName,
-				EnableLRS:      false,
+				ClusterName:     clusterName,
+				EDSServiceName:  serviceName,
+				LRSServerConfig: ClusterLRSOff,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName: rootPluginInstance,
 					RootCertName:     rootCertName,
@@ -1124,9 +1124,9 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName:    clusterName,
-				EDSServiceName: serviceName,
-				EnableLRS:      false,
+				ClusterName:     clusterName,
+				EDSServiceName:  serviceName,
+				LRSServerConfig: ClusterLRSOff,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName: rootPluginInstance,
 					RootCertName:     rootCertName,
@@ -1168,9 +1168,9 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName:    clusterName,
-				EDSServiceName: serviceName,
-				EnableLRS:      false,
+				ClusterName:     clusterName,
+				EDSServiceName:  serviceName,
+				LRSServerConfig: ClusterLRSOff,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
@@ -1216,9 +1216,9 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName:    clusterName,
-				EDSServiceName: serviceName,
-				EnableLRS:      false,
+				ClusterName:     clusterName,
+				EDSServiceName:  serviceName,
+				LRSServerConfig: ClusterLRSOff,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
@@ -1276,9 +1276,9 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName:    clusterName,
-				EDSServiceName: serviceName,
-				EnableLRS:      false,
+				ClusterName:     clusterName,
+				EDSServiceName:  serviceName,
+				LRSServerConfig: ClusterLRSOff,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
@@ -1343,9 +1343,9 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 				},
 			},
 			wantUpdate: ClusterUpdate{
-				ClusterName:    clusterName,
-				EDSServiceName: serviceName,
-				EnableLRS:      false,
+				ClusterName:     clusterName,
+				EDSServiceName:  serviceName,
+				LRSServerConfig: ClusterLRSOff,
 				SecurityCfg: &SecurityConfig{
 					RootInstanceName:     rootPluginInstance,
 					RootCertName:         rootCertName,
@@ -1489,7 +1489,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantUpdate: map[string]ClusterUpdateErrTuple{
 				v2ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v2ClusterName,
-					EDSServiceName: v2Service, EnableLRS: true,
+					EDSServiceName: v2Service, LRSServerConfig: ClusterLRSServerSelf,
 					Raw: v2ClusterAny,
 				}},
 			},
@@ -1504,7 +1504,7 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantUpdate: map[string]ClusterUpdateErrTuple{
 				v3ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v3ClusterName,
-					EDSServiceName: v3Service, EnableLRS: true,
+					EDSServiceName: v3Service, LRSServerConfig: ClusterLRSServerSelf,
 					Raw: v3ClusterAny,
 				}},
 			},
@@ -1519,12 +1519,12 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantUpdate: map[string]ClusterUpdateErrTuple{
 				v2ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v2ClusterName,
-					EDSServiceName: v2Service, EnableLRS: true,
+					EDSServiceName: v2Service, LRSServerConfig: ClusterLRSServerSelf,
 					Raw: v2ClusterAny,
 				}},
 				v3ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v3ClusterName,
-					EDSServiceName: v3Service, EnableLRS: true,
+					EDSServiceName: v3Service, LRSServerConfig: ClusterLRSServerSelf,
 					Raw: v3ClusterAny,
 				}},
 			},
@@ -1548,12 +1548,12 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantUpdate: map[string]ClusterUpdateErrTuple{
 				v2ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v2ClusterName,
-					EDSServiceName: v2Service, EnableLRS: true,
+					EDSServiceName: v2Service, LRSServerConfig: ClusterLRSServerSelf,
 					Raw: v2ClusterAny,
 				}},
 				v3ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v3ClusterName,
-					EDSServiceName: v3Service, EnableLRS: true,
+					EDSServiceName: v3Service, LRSServerConfig: ClusterLRSServerSelf,
 					Raw: v3ClusterAny,
 				}},
 				"bad": {Err: cmpopts.AnyError},

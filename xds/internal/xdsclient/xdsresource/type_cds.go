@@ -17,7 +17,9 @@
 
 package xdsresource
 
-import "google.golang.org/protobuf/types/known/anypb"
+import (
+	"google.golang.org/protobuf/types/known/anypb"
+)
 
 // ClusterType is the type of cluster from a received CDS response.
 type ClusterType int
@@ -33,6 +35,18 @@ const (
 	// prioritized list of clusters to use. It is used for failover between clusters
 	// with a different configuration.
 	ClusterTypeAggregate
+)
+
+// ClusterLRSServerConfigType is the type of LRS server config.
+type ClusterLRSServerConfigType int
+
+const (
+	// ClusterLRSOff indicates LRS is off (loads are not reported for this
+	// cluster).
+	ClusterLRSOff ClusterLRSServerConfigType = iota
+	// ClusterLRSServerSelf indicates loads should be reported to the same
+	// server (the authority) where the CDS resp is received from.
+	ClusterLRSServerSelf
 )
 
 // ClusterLBPolicyRingHash represents ring_hash lb policy, and also contains its
@@ -51,8 +65,10 @@ type ClusterUpdate struct {
 	// EDSServiceName is an optional name for EDS. If it's not set, the balancer
 	// should watch ClusterName for the EDS resources.
 	EDSServiceName string
-	// EnableLRS indicates whether or not load should be reported through LRS.
-	EnableLRS bool
+	// LRSServerConfig contains the server where the load reports should be sent
+	// to. This can be change to an interface, to support other types, e.g. a
+	// ServerConfig with ServerURI, creds.
+	LRSServerConfig ClusterLRSServerConfigType
 	// SecurityCfg contains security configuration sent by the control plane.
 	SecurityCfg *SecurityConfig
 	// MaxRequests for circuit breaking, if any (otherwise nil).

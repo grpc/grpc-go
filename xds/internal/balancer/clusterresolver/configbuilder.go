@@ -257,11 +257,11 @@ var rrBalancerConfig = &internalserviceconfig.BalancerConfig{Name: roundrobin.Na
 // addresses.
 func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priorityName string, mechanism DiscoveryMechanism, drops []clusterimpl.DropConfig, xdsLBPolicy *internalserviceconfig.BalancerConfig) (*clusterimpl.LBConfig, []resolver.Address, error) {
 	clusterImplCfg := &clusterimpl.LBConfig{
-		Cluster:                 mechanism.Cluster,
-		EDSServiceName:          mechanism.EDSServiceName,
-		LoadReportingServerName: mechanism.LoadReportingServerName,
-		MaxConcurrentRequests:   mechanism.MaxConcurrentRequests,
-		DropCategories:          drops,
+		Cluster:               mechanism.Cluster,
+		EDSServiceName:        mechanism.EDSServiceName,
+		LoadReportingServer:   mechanism.LoadReportingServer,
+		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
+		DropCategories:        drops,
 		// ChildPolicy is not set. Will be set based on xdsLBPolicy
 	}
 

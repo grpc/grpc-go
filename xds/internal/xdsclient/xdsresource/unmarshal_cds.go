@@ -127,10 +127,19 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 
 	ret := ClusterUpdate{
 		ClusterName: cluster.GetName(),
-		EnableLRS:   cluster.GetLrsServer().GetSelf() != nil,
 		SecurityCfg: sc,
 		MaxRequests: circuitBreakersFromCluster(cluster),
 		LBPolicy:    lbPolicy,
+	}
+
+	// Note that this is different from the gRFC (gRFC A47 says to include the
+	// full ServerConfig{URL,creds,server feature} here). This information is
+	// not available here, because this function doesn't have access to the
+	// xdsclient bootstrap information now (can be added if necessary). The
+	// ServerConfig will be read and populated by the CDS balancer when
+	// processing this field.
+	if cluster.GetLrsServer().GetSelf() != nil {
+		ret.LRSServerConfig = ClusterLRSServerSelf
 	}
 
 	// Validate and set cluster type from the response.
