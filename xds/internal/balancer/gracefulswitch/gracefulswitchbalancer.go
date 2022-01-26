@@ -43,7 +43,6 @@ func newGracefulSwitchBalancer(cc balancer.ClientConn, opts balancer.BuildOption
 			ConnectivityState: connectivity.Connecting,
 			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
 		},
-		swapClosedCh: make(chan balancer.Balancer, 1),
 	}
 }
 
@@ -58,7 +57,7 @@ type gracefulSwitchBalancer struct {
 	pendingState     balancer.State
 	currentLbIsReady bool
 
-	swapMu sync.Mutex
+	swapMu            sync.Mutex
 	balRecentlyClosed balancer.Balancer
 
 	closed *grpcsync.Event
@@ -93,29 +92,24 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 		if state.ConnectivityState != connectivity.Connecting || !gsb.currentLbIsReady {
 			gsb.swap()
 		}
-	} else { // Make a note that this copies Java behavior on swapping on exiting ready and also forwarding current updates to Client Conn even if there is pending lb present (me and Doug discussed this - if ignoring state + picker from current would cause undefined behavior/cause the system to behave incorrectly from the LB policies perspective)
-		// specific case that the current lb exits ready, and there is a pending
-		// lb, can forward it up to ClientConn. "Otherwise, the channel will
-		// keep using the old policy until...the old policy exits READY." - Java
+	} else {
 		gsb.currentLbIsReady = state.ConnectivityState == connectivity.Ready
+		// In the specific case that the current lb exits ready, and there is a
+		// pending lb, you can forward the pending LB's cached State up to
+		// ClientConn and swap the pending into the current. "Otherwise, the
+		// channel will keep using the old policy until...the old policy exits
+		// READY." - Java
 		if !gsb.currentLbIsReady && gsb.balancerPending != nil {
 			gsb.swap()
 		} else {
-			// Java forwards the current balancer's update to the Client Conn
-			// even if there is a pending balancer waiting to be gracefully
-			// switched to, whereas c-core ignores updates from the current
-			// balancer. I agree with the Java more, as the current LB is still
-			// being used by RPC's until the pending balancer gets gracefully
-			// switched to, and thus should use the most updated form of the
-			// current balancer (UpdateClientConnState seems to subscribe to
-			// this philosophy too - maybe make it consistent?)
+			// Even if there is a pending balancer waiting to be gracefully
+			// switched to, still forward current balancer updates to the Client
+			// Conn. Ignoring state + picker from the current would cause
+			// undefined behavior/cause the system to behave incorrectly from
+			// the current LB policies perspective. Also, the current LB is
+			// still being used by grpc to choose SubConns per RPC, and thus
+			// should use the most updated form of the current balancer.
 			gsb.cc.UpdateState(state)
-			// Make a note that this copies Java behavior on swapping on exiting
-			// ready and also forwarding current updates to Client Conn even if
-			// there is pending lb present (me and Doug discussed this - if
-			// ignoring state + picker from current would cause undefined
-			// behavior/cause the system to behave incorrectly from the LB
-			// policies perspective)
 		}
 	}
 }
@@ -363,4 +357,12 @@ func (ccw *clientConnWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 
 func (ccw *clientConnWrapper) ResolveNow(opts resolver.ResolveNowOptions) {
 	ccw.gsb.resolveNow(ccw.bal, opts)
+}
+
+func (ccw *clientConnWrapper) RemoveSubConn(sc balancer.SubConn) {
+	ccw.gsb.removeSubConn(ccw.bal, sc)
+}
+
+func (ccw *clientConnWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
+	ccw.gsb.updateAddresses(ccw.bal, sc, addrs)
 }
