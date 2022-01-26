@@ -136,7 +136,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	// full ServerConfig{URL,creds,server feature} here). This information is
 	// not available here, because this function doesn't have access to the
 	// xdsclient bootstrap information now (can be added if necessary). The
-	// ServerConfig will be read and populate by the CDS balancer when
+	// ServerConfig will be read and populated by the CDS balancer when
 	// processing this field.
 	if cluster.GetLrsServer().GetSelf() != nil {
 		ret.LRSServerConfig = ClusterLRSServerSelf
