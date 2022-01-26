@@ -720,3 +720,40 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 		})
 	}
 }
+
+func TestIsFullMethodNameValid(t *testing.T) {
+	tests := []struct {
+		desc       string
+		methodName string
+		want       bool
+	}{
+		{
+			desc:       "does not start with a slash",
+			methodName: "service/method",
+			want:       false,
+		},
+		{
+			desc:       "does not contain a method",
+			methodName: "/service",
+			want:       false,
+		},
+		{
+			desc:       "more than service and method",
+			methodName: "/service/method/something-else",
+			want:       false,
+		},
+		{
+			desc:       "valid",
+			methodName: "/service/method",
+			want:       true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			if got := isFullMethodNameValid(test.methodName); got != test.want {
+				t.Fatalf("isFullMethodNameValid(%q) = %v, want %v", test.methodName, got, test.want)
+			}
+		})
+	}
+}

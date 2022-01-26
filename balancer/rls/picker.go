@@ -20,6 +20,8 @@ package rls
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -65,8 +67,18 @@ type rlsPicker struct {
 	logger        *internalgrpclog.PrefixLogger
 }
 
+// isFullMethodNameValid return true if name is of the form `/service/method`.
+func isFullMethodNameValid(name string) bool {
+	// strings.Split("/service/method", "/") returns ["", "service", "method"].
+	return strings.HasPrefix(name, "/") && len(strings.Split(name, "/")) == 3
+}
+
 // Pick makes the routing decision for every outbound RPC.
 func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	if name := info.FullMethodName; !isFullMethodNameValid(name) {
+		return balancer.PickResult{}, fmt.Errorf("method name %q is not of the form '/service/method", name)
+	}
+
 	// Build the request's keys using the key builders from LB config.
 	md, _ := metadata.FromOutgoingContext(info.Ctx)
 	reqKeys := p.kbm.RLSKey(md, p.origEndpoint, info.FullMethodName)
