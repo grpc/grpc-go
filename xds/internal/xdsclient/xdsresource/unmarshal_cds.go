@@ -145,8 +145,8 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	// Validate and set cluster type from the response.
 	switch {
 	case cluster.GetType() == v3clusterpb.Cluster_EDS:
-		if cluster.GetEdsClusterConfig().GetEdsConfig().GetAds() == nil {
-			return ClusterUpdate{}, fmt.Errorf("unexpected edsConfig in response: %+v", cluster)
+		if configsource := cluster.GetEdsClusterConfig().GetEdsConfig(); configsource.GetAds() == nil && configsource.GetSelf() == nil {
+			return ClusterUpdate{}, fmt.Errorf("CDS's EDS config source is not ADS or Self: %+v", cluster)
 		}
 		ret.ClusterType = ClusterTypeEDS
 		ret.EDSServiceName = cluster.GetEdsClusterConfig().GetServiceName()

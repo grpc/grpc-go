@@ -1421,6 +1421,23 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 				},
 			},
 		})
+
+		v3ClusterAnyWithEDSConfigSourceSelf = testutils.MarshalAny(&v3clusterpb.Cluster{
+			Name:                 v3ClusterName,
+			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+			EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+				EdsConfig: &v3corepb.ConfigSource{
+					ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{},
+				},
+				ServiceName: v3Service,
+			},
+			LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			LrsServer: &v3corepb.ConfigSource{
+				ConfigSourceSpecifier: &v3corepb.ConfigSource_Self{
+					Self: &v3corepb.SelfConfigSource{},
+				},
+			},
+		})
 	)
 	const testVersion = "test-version-cds"
 
@@ -1506,6 +1523,21 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 					ClusterName:    v3ClusterName,
 					EDSServiceName: v3Service, LRSServerConfig: ClusterLRSServerSelf,
 					Raw: v3ClusterAny,
+				}},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			name:      "v3 cluster with EDS config source self",
+			resources: []*anypb.Any{v3ClusterAnyWithEDSConfigSourceSelf},
+			wantUpdate: map[string]ClusterUpdateErrTuple{
+				v3ClusterName: {Update: ClusterUpdate{
+					ClusterName:    v3ClusterName,
+					EDSServiceName: v3Service, EnableLRS: true,
+					Raw: v3ClusterAnyWithEDSConfigSourceSelf,
 				}},
 			},
 			wantMD: UpdateMetadata{
