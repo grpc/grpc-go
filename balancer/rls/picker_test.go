@@ -738,13 +738,13 @@ func TestIsFullMethodNameValid(t *testing.T) {
 			want:       false,
 		},
 		{
-			desc:       "more than service and method",
-			methodName: "/service/method/something-else",
-			want:       false,
-		},
-		{
 			desc:       "valid",
 			methodName: "/service/method",
+			want:       true,
+		},
+		{
+			desc:       "service path and method",
+			methodName: "/service/path/to/method",
 			want:       true,
 		},
 	}

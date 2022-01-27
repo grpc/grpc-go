@@ -69,14 +69,13 @@ type rlsPicker struct {
 
 // isFullMethodNameValid return true if name is of the form `/service/method`.
 func isFullMethodNameValid(name string) bool {
-	// strings.Split("/service/method", "/") returns ["", "service", "method"].
-	return strings.HasPrefix(name, "/") && len(strings.Split(name, "/")) == 3
+	return strings.HasPrefix(name, "/") && strings.Count(name, "/") >= 2
 }
 
 // Pick makes the routing decision for every outbound RPC.
 func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	if name := info.FullMethodName; !isFullMethodNameValid(name) {
-		return balancer.PickResult{}, fmt.Errorf("method name %q is not of the form '/service/method", name)
+		return balancer.PickResult{}, fmt.Errorf("rls: method name %q is not of the form '/service/method", name)
 	}
 
 	// Build the request's keys using the key builders from LB config.
