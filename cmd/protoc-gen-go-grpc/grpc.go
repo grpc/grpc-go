@@ -35,7 +35,7 @@ const (
 )
 
 type serviceGenerateHelperInterface interface {
-	formatServiceName(service *protogen.Service) string
+	formatFullMethodName(service *protogen.Service, method *protogen.Method) string
 	generateNewClientDefinitions(g *protogen.GeneratedFile, service *protogen.Service, clientName string)
 	generateUnimplementedServerType(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service)
 	generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string)
@@ -43,8 +43,8 @@ type serviceGenerateHelperInterface interface {
 
 type serviceGenerateHelper struct {}
 
-func (serviceGenerateHelper) formatServiceName(service *protogen.Service) string {
-	return service.Desc.FullName()
+func (serviceGenerateHelper) formatFullMethodName(service *protogen.Service, method *protogen.Method) string {
+	return fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name())
 }
 
 func (serviceGenerateHelper) generateNewClientDefinitions(g *protogen.GeneratedFile, service *protogen.Service, clientName string) {
@@ -304,8 +304,7 @@ func clientSignature(g *protogen.GeneratedFile, method *protogen.Method) string 
 
 func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, method *protogen.Method, index int) {
 	service := method.Parent
-	serviceName := helper.formatServiceName(service)
-	sname := fmt.Sprintf("/%s/%s", serviceName, method.Desc.Name())
+	sname := helper.formatFullMethodName(service, method)
 
 	if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 		g.P(deprecationComment)
@@ -409,8 +408,8 @@ func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 		g.P("if interceptor == nil { return srv.(", service.GoName, "Server).", method.GoName, "(ctx, in) }")
 		g.P("info := &", grpcPackage.Ident("UnaryServerInfo"), "{")
 		g.P("Server: srv,")
-		serviceName := helper.formatServiceName(service)
-		g.P("FullMethod: \"", fmt.Sprintf("/%s/%s", serviceName, method.Desc.Name()), "\",")
+		fullMethodName := helper.formatFullMethodName(service, method)
+		g.P("FullMethod: \"", fullMethodName, "\",")
 		g.P("}")
 		g.P("handler := func(ctx ", contextPackage.Ident("Context"), ", req interface{}) (interface{}, error) {")
 		g.P("return srv.(", service.GoName, "Server).", method.GoName, "(ctx, req.(*", method.Input.GoIdent, "))")
