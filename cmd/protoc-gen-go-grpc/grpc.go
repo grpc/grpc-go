@@ -41,7 +41,7 @@ type serviceGenerateHelperInterface interface {
 	generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string)
 }
 
-type serviceGenerateHelper struct {}
+type serviceGenerateHelper struct{}
 
 func (serviceGenerateHelper) formatFullMethodName(service *protogen.Service, method *protogen.Method) string {
 	return fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name())
