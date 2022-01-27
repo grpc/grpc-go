@@ -69,7 +69,7 @@ type rlsPicker struct {
 
 // isFullMethodNameValid return true if name is of the form `/service/method`.
 func isFullMethodNameValid(name string) bool {
-	return strings.HasPrefix(name, "/") && strings.Count(name, "/") >= 2
+	return strings.HasPrefix(name, "/") && strings.Count(name, "/") == 2
 }
 
 // Pick makes the routing decision for every outbound RPC.
