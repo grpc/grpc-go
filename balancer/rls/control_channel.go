@@ -59,7 +59,10 @@ type controlChannel struct {
 	logger *internalgrpclog.PrefixLogger
 }
 
-func newControlChannel(rlsServerName string, rpcTimeout time.Duration, bOpts balancer.BuildOptions, backToReadyCh chan struct{}) (*controlChannel, error) {
+// newControlChannel creates a controlChannel to rlsServerName and uses
+// serviceConfig, if non-empty, as the default service config for the underlying
+// gRPC channel.
+func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Duration, bOpts balancer.BuildOptions, backToReadyCh chan struct{}) (*controlChannel, error) {
 	ctrlCh := &controlChannel{
 		rpcTimeout:    rpcTimeout,
 		backToReadyCh: backToReadyCh,
@@ -67,7 +70,7 @@ func newControlChannel(rlsServerName string, rpcTimeout time.Duration, bOpts bal
 	}
 	ctrlCh.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-control-channel %p] ", ctrlCh))
 
-	dopts, err := ctrlCh.dialOpts(bOpts)
+	dopts, err := ctrlCh.dialOpts(bOpts, serviceConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +86,7 @@ func newControlChannel(rlsServerName string, rpcTimeout time.Duration, bOpts bal
 }
 
 // dialOpts constructs the dial options for the control plane channel.
-func (cc *controlChannel) dialOpts(bOpts balancer.BuildOptions) ([]grpc.DialOption, error) {
+func (cc *controlChannel) dialOpts(bOpts balancer.BuildOptions, serviceConfig string) ([]grpc.DialOption, error) {
 	// The control plane channel will use the same authority as the parent
 	// channel for server authorization. This ensures that the identity of the
 	// RLS server and the identity of the backends is the same, so if the RLS
@@ -114,7 +117,16 @@ func (cc *controlChannel) dialOpts(bOpts balancer.BuildOptions) ([]grpc.DialOpti
 		cc.logger.Warningf("no credentials available, using Insecure")
 		credsOpt = grpc.WithInsecure()
 	}
-	return append(dopts, credsOpt), nil
+	dopts = append(dopts, credsOpt)
+
+	// If the RLS LB policy's configuration specified a service config for the
+	// control channel, use that and disable service config fetching via the name
+	// resolver for the control channel.
+	if serviceConfig != "" {
+		dopts = append(dopts, grpc.WithDisableServiceConfig(), grpc.WithDefaultServiceConfig(serviceConfig))
+	}
+
+	return dopts, nil
 }
 
 func (cc *controlChannel) monitorConnectivityState() {
