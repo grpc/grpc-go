@@ -233,6 +233,7 @@ func (gsb *gracefulSwitchBalancer) SwitchTo(builder balancer.Builder) error {
 	// Clean up resources here that are from a previous pending lb.
 	for sc, sb := range gsb.scToSubBalancer {
 		if sb == gsb.balancerPending {
+			gsb.cc.RemoveSubConn(sc)
 			delete(gsb.scToSubBalancer, sc)
 		}
 	}
