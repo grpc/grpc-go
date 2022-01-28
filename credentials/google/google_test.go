@@ -145,3 +145,22 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 		}
 	}
 }
+
+func TestCredsBuilders(t *testing.T) {
+	b := &DefaultCredsBuilder{}
+	if _, err := b.Build(nil); err != nil {
+		t.Errorf("DefaultCredsBuilder Build error = %v, want nil", err)
+	}
+	if got, want := b.Name(), "google_default"; got != want {
+		t.Errorf("DefaultCredsBuilder Name = %v, want %v", got, want)
+	}
+
+	i := &InsecureCredsBuilder{}
+	if _, err := i.Build(nil); err != nil {
+		t.Errorf("InsecureCredsBuilder Build error = %v, want nil", err)
+	}
+
+	if got, want := i.Name(), "insecure"; got != want {
+		t.Errorf("InsecureCredsBuilder Name = %v, want %v", got, want)
+	}
+}

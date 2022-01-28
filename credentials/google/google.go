@@ -21,11 +21,13 @@ package google
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
@@ -142,4 +144,34 @@ func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
 	}
 
 	return newCreds, nil
+}
+
+// DefaultCredsBuilder encapsulates a Google Default credential that is built using a
+// JSON config.
+type DefaultCredsBuilder struct{}
+
+// BuildCredsBundle returns a default google credential bundle. Currently the JSON
+// config is unused.
+func (d *DefaultCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
+	return NewDefaultCredentials(), nil
+}
+
+// Name returns the name associated with GoogleDefaultCredsBuilder i.e. "google_default".
+func (d *DefaultCredsBuilder) Name() string {
+	return "google_default"
+}
+
+// InsecureCredsBuilder encapsulates a insecure credential that is built using a
+// JSON config.
+type InsecureCredsBuilder struct{}
+
+// BuildCredsBundle returns a default insecure credential bundle. Currently the JSON
+// config is unused.
+func (i *InsecureCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
+	return insecure.NewBundle(), nil
+}
+
+// Name returns the name associated with InsecureCredsBuilder i.e. "insecure".
+func (i *InsecureCredsBuilder) Name() string {
+	return "insecure"
 }
