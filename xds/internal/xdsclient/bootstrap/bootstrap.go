@@ -77,7 +77,7 @@ type Credentials interface {
 	Name() string
 }
 
-// Register registers the credential builder that can be used to communicate
+// RegisterCredentials registers the credential builder that can be used to communicate
 // with the xds management server.
 //
 // NOTE: this function must only be called during initialization time (i.e. in
