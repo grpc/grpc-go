@@ -39,7 +39,6 @@ var (
 // Builder interface encapsulates a credential provider
 // that can be used for communicating with the xDS Management server.
 type Builder interface {
-
 	// BuildCredsBundle() returns a credential bundle associated with the Builder.
 	BuildCredsBundle(config json.RawMessage) credentials.Bundle
 }
