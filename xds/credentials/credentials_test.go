@@ -46,10 +46,14 @@ func (s *SampleCredsBuilder) BuildCredsBundle(config json.RawMessage) credential
 	return insecure.NewBundle()
 }
 
+func (s *SampleCredsBuilder) Name() string {
+	return "new_creds_name"
+}
+
 func TestRegisterNew(t *testing.T) {
 	// Register a new credential builder.
 	s := &SampleCredsBuilder{}
-	Register("new_creds_name", s)
+	Register(s)
 
 	// Create a sample JSON config.
 	configMsg := "sample_config"

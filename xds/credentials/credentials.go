@@ -41,6 +41,8 @@ var (
 type Builder interface {
 	// BuildCredsBundle() returns a credential bundle associated with the Builder.
 	BuildCredsBundle(config json.RawMessage) credentials.Bundle
+	// Name() returns the credential name associated with this credential.
+	Name() string
 }
 
 // GoogleDefaultCredsBuilder encapsulates a Google Default credential to satisfy the Builder interface.
@@ -52,6 +54,11 @@ func (d *GoogleDefaultCredsBuilder) BuildCredsBundle(_ json.RawMessage) credenti
 	return google.NewDefaultCredentials()
 }
 
+// Name returns the name associated with GoogleDefaultCredsBuilder i.e. "google_default".
+func (d *GoogleDefaultCredsBuilder) Name() string {
+	return "google_default"
+}
+
 // InsecureCredsBuilder encapsulates a Insecure credential to satisfy the Builder interface.
 type InsecureCredsBuilder struct{}
 
@@ -61,9 +68,14 @@ func (i *InsecureCredsBuilder) BuildCredsBundle(_ json.RawMessage) credentials.B
 	return insecure.NewBundle()
 }
 
+// Name returns the name associated with InsecureCredsBuilder i.e. "insecure".
+func (i *InsecureCredsBuilder) Name() string {
+	return "insecure"
+}
+
 func init() {
-	Register("google_default", &GoogleDefaultCredsBuilder{})
-	Register("insecure", &InsecureCredsBuilder{})
+	Register(&GoogleDefaultCredsBuilder{})
+	Register(&InsecureCredsBuilder{})
 }
 
 // Register registers the credential builder that can be used to communicate
@@ -72,8 +84,8 @@ func init() {
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. If multiple credentials are
 // registered with the same name, the one registered last will take effect.
-func Register(name string, x Builder) {
-	registry[name] = x
+func Register(b Builder) {
+	registry[b.Name()] = b
 }
 
 // Get returns the credentials bundle associated with a given name.
