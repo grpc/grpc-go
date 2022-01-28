@@ -25,6 +25,7 @@ package credentials
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
@@ -40,7 +41,7 @@ var (
 // that can be used for communicating with the xDS Management server.
 type Builder interface {
 	// BuildCredsBundle() returns a credential bundle associated with the Builder.
-	BuildCredsBundle(config json.RawMessage) credentials.Bundle
+	BuildCredsBundle(config json.RawMessage) (credentials.Bundle, error)
 	// Name() returns the credential name associated with this credential.
 	Name() string
 }
@@ -50,8 +51,8 @@ type GoogleDefaultCredsBuilder struct{}
 
 // BuildCredsBundle returns a default google credential bundle. Currently the JSON
 // config is unused.
-func (d *GoogleDefaultCredsBuilder) BuildCredsBundle(_ json.RawMessage) credentials.Bundle {
-	return google.NewDefaultCredentials()
+func (d *GoogleDefaultCredsBuilder) BuildCredsBundle(_ json.RawMessage) (credentials.Bundle, error) {
+	return google.NewDefaultCredentials(), nil
 }
 
 // Name returns the name associated with GoogleDefaultCredsBuilder i.e. "google_default".
@@ -64,8 +65,8 @@ type InsecureCredsBuilder struct{}
 
 // BuildCredsBundle returns a default insecure credential bundle. Currently the JSON
 // config is unused.
-func (i *InsecureCredsBuilder) BuildCredsBundle(_ json.RawMessage) credentials.Bundle {
-	return insecure.NewBundle()
+func (i *InsecureCredsBuilder) BuildCredsBundle(_ json.RawMessage) (credentials.Bundle, error) {
+	return insecure.NewBundle(), nil
 }
 
 // Name returns the name associated with InsecureCredsBuilder i.e. "insecure".
@@ -89,11 +90,11 @@ func Register(b Builder) {
 }
 
 // Get returns the credentials bundle associated with a given name.
-// If no credentials are registered with the name, nil will be returned.
-func Get(name string, config json.RawMessage) credentials.Bundle {
+// If no credentials are registered with the name, an error will be returned.
+func Get(name string, config json.RawMessage) (credentials.Bundle, error) {
 	if c, ok := registry[name]; ok {
 		return c.BuildCredsBundle(config)
 	}
 
-	return nil
+	return nil, fmt.Errorf("credential %q not found", name)
 }

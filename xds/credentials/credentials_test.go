@@ -26,14 +26,14 @@ import (
 )
 
 func TestDefaultBundles(t *testing.T) {
-	bundle := Get("google_default", nil)
-	if bundle == nil {
-		t.Errorf(`Bundle("google") = nil, want non nil`)
+	_, err := Get("google_default", nil)
+	if err != nil {
+		t.Errorf(`Bundle("google_default") error = %v, want nil`, err)
 	}
 
-	bundle = Get("insecure", nil)
-	if bundle == nil {
-		t.Errorf(`Bundle("insecure") = nil, want non nil`)
+	_, err = Get("insecure", nil)
+	if err != nil {
+		t.Errorf(`Bundle("insecure") error = %v, want nil`, err)
 	}
 }
 
@@ -41,9 +41,9 @@ type SampleCredsBuilder struct {
 	gotConfig json.RawMessage
 }
 
-func (s *SampleCredsBuilder) BuildCredsBundle(config json.RawMessage) credentials.Bundle {
+func (s *SampleCredsBuilder) BuildCredsBundle(config json.RawMessage) (credentials.Bundle, error) {
 	s.gotConfig = config
-	return insecure.NewBundle()
+	return insecure.NewBundle(), nil
 }
 
 func (s *SampleCredsBuilder) Name() string {
@@ -62,9 +62,9 @@ func TestRegisterNew(t *testing.T) {
 		t.Fatalf("Failed to Marshal message: %v", err)
 	}
 
-	bundle := Get("new_creds_name", rawMessage)
-	if bundle == nil {
-		t.Errorf(`Get("new_creds_name") = nil, want non nil`)
+	_, err = Get("new_creds_name", rawMessage)
+	if err != nil {
+		t.Errorf(`Get("new_creds_name") error = %v, want nil`, err)
 	}
 
 	var got string
@@ -83,9 +83,9 @@ func TestRegisterNew(t *testing.T) {
 		t.Fatalf("Failed to Marshal message: %v", err)
 	}
 
-	bundle = Get("new_creds_name", rawMessage)
-	if bundle == nil {
-		t.Errorf(`Get("new_creds_name") = nil, want non nil`)
+	_, err = Get("new_creds_name", rawMessage)
+	if err != nil {
+		t.Errorf(`Get("new_creds_name") error = %v, want nil`, err)
 	}
 
 	if err := json.Unmarshal(s.gotConfig, &got); err != nil {
