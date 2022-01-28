@@ -23,6 +23,7 @@ package stubserver
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"time"
 
@@ -116,7 +117,7 @@ func (ss *StubServer) StartServer(sopts ...grpc.ServerOption) error {
 // StartClient creates a client connected to this service that the test may use.
 // The newly created client will be available in the Client field of StubServer.
 func (ss *StubServer) StartClient(dopts ...grpc.DialOption) error {
-	opts := append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
+	opts := append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}, dopts...)
 	if ss.R != nil {
 		ss.Target = ss.R.Scheme() + ":///" + ss.Address
 		opts = append(opts, grpc.WithResolvers(ss.R))

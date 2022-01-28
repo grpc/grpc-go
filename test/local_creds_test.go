@@ -21,6 +21,7 @@ package test
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"strings"
 	"testing"
@@ -218,7 +219,7 @@ func (s) TestLocalCredsClientFail(t *testing.T) {
 
 func (s) TestLocalCredsServerFail(t *testing.T) {
 	// Use insecure at client-side which should lead to server-side failure.
-	opts := []grpc.DialOption{grpc.WithInsecure()}
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	if err := testLocalCredsE2EFail(opts); status.Code(err) != codes.Unavailable {
 		t.Fatalf("testLocalCredsE2EFail() = %v; want %v", err, codes.Unavailable)
 	}

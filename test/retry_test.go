@@ -21,6 +21,7 @@ package test
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"net"
 	"reflect"
@@ -531,7 +532,7 @@ func (s) TestRetryStats(t *testing.T) {
 	}
 	server.start(t, lis)
 	handler := &retryStatsHandler{}
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure(), grpc.WithStatsHandler(handler),
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(handler),
 		grpc.WithDefaultServiceConfig((`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],

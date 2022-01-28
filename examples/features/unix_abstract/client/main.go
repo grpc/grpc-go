@@ -62,7 +62,7 @@ func makeRPCs(cc *grpc.ClientConn, n int) {
 func main() {
 	flag.Parse()
 	sockAddr := fmt.Sprintf("unix-abstract:%v", *addr)
-	cc, err := grpc.Dial(sockAddr, grpc.WithInsecure())
+	cc, err := grpc.Dial(sockAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("grpc.Dial(%q) failed: %v", sockAddr, err)
 	}

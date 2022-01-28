@@ -22,6 +22,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"io/ioutil"
 	"net"
@@ -324,7 +325,7 @@ func (s) TestSDKStaticPolicyEnd2End(t *testing.T) {
 			go s.Serve(lis)
 
 			// Establish a connection to the server.
-			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 			}
@@ -514,7 +515,7 @@ func (s) TestSDKFileWatcherEnd2End(t *testing.T) {
 			go s.Serve(lis)
 
 			// Establish a connection to the server.
-			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 			}
@@ -583,7 +584,7 @@ func (s) TestSDKFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	go s.Serve(lis)
 
 	// Establish a connection to the server.
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 	}
@@ -631,7 +632,7 @@ func (s) TestSDKFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	go s.Serve(lis)
 
 	// Establish a connection to the server.
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 	}
@@ -682,7 +683,7 @@ func (s) TestSDKFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	go s.Serve(lis)
 
 	// Establish a connection to the server.
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 	}

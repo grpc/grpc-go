@@ -21,6 +21,7 @@ package test
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"sync"
 	"testing"
@@ -146,7 +147,7 @@ func (s) TestGracefulStop(t *testing.T) {
 	// even though GracefulStop has closed the listener.
 	ctx, dialCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer dialCancel()
-	cc, err := grpc.DialContext(ctx, "", grpc.WithInsecure(), grpc.WithContextDialer(d))
+	cc, err := grpc.DialContext(ctx, "", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(d))
 	if err != nil {
 		t.Fatalf("grpc.DialContext(_, %q, _) = %v", lis.Addr().String(), err)
 	}

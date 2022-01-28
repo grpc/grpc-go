@@ -42,6 +42,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"os"
 	"runtime"
 	"runtime/pprof"
@@ -135,7 +136,7 @@ func main() {
 func buildConnections(ctx context.Context) []*grpc.ClientConn {
 	ccs := make([]*grpc.ClientConn, *numConn)
 	for i := range ccs {
-		ccs[i] = benchmark.NewClientConnWithContext(ctx, "localhost:"+*port, grpc.WithInsecure(), grpc.WithBlock())
+		ccs[i] = benchmark.NewClientConnWithContext(ctx, "localhost:"+*port, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock())
 	}
 	return ccs
 }

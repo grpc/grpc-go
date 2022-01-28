@@ -23,6 +23,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"math/rand"
 	"net"
 	"strconv"
@@ -293,7 +294,7 @@ func newConn(address string, useTLS, testCA bool, tlsServerName string) (*grpc.C
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	} else {
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	return grpc.Dial(address, opts...)
 }

@@ -23,6 +23,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"time"
 
@@ -65,7 +66,7 @@ func main() {
 	address := fmt.Sprintf("%s:///unused", r.Scheme())
 
 	options := []grpc.DialOption{
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithResolvers(r),
 		grpc.WithDefaultServiceConfig(serviceConfig),

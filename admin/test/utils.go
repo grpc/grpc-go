@@ -22,6 +22,7 @@ package test
 
 import (
 	"context"
+	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"testing"
 	"time"
@@ -78,7 +79,7 @@ func RunRegisterTests(t *testing.T, ec ExpectedStatusCodes) {
 		server.Serve(lis)
 	}()
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("cannot connect to server: %v", err)
 	}

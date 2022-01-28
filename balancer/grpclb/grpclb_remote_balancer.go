@@ -21,6 +21,7 @@ package grpclb
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"net"
 	"sync"
@@ -228,7 +229,7 @@ func (lb *lbBalancer) newRemoteBalancerCCWrapper() {
 	} else if bundle := lb.grpclbClientConnCreds; bundle != nil {
 		dopts = append(dopts, grpc.WithCredentialsBundle(bundle))
 	} else {
-		dopts = append(dopts, grpc.WithInsecure())
+		dopts = append(dopts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	if lb.opt.Dialer != nil {
 		dopts = append(dopts, grpc.WithContextDialer(lb.opt.Dialer))

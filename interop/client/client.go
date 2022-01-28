@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
+	"google.golang.org/grpc/credentials/insecure"
 	"io/ioutil"
 	"net"
 	"strconv"
@@ -176,7 +177,7 @@ func main() {
 	case credsComputeEngineCreds:
 		opts = append(opts, grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()))
 	case credsNone:
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	default:
 		logger.Fatal("Invalid creds")
 	}

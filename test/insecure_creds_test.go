@@ -124,7 +124,7 @@ func (s) TestInsecureCreds(t *testing.T) {
 			go s.Serve(lis)
 
 			addr := lis.Addr().String()
-			opts := []grpc.DialOption{grpc.WithInsecure()}
+			opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 			if test.clientInsecureCreds {
 				opts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 			}

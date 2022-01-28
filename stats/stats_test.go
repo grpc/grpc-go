@@ -21,6 +21,7 @@ package stats_test
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"net"
 	"reflect"
@@ -246,7 +247,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 		return te.cc
 	}
 	opts := []grpc.DialOption{
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithUserAgent("test/0.0.1"),
 	}

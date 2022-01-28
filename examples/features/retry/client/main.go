@@ -22,6 +22,7 @@ package main
 import (
 	"context"
 	"flag"
+	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"time"
 
@@ -48,7 +49,7 @@ var (
 
 // use grpc.WithDefaultServiceConfig() to set service config
 func retryDial() (*grpc.ClientConn, error) {
-	return grpc.Dial(*addr, grpc.WithInsecure(), grpc.WithDefaultServiceConfig(retryPolicy))
+	return grpc.Dial(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(retryPolicy))
 }
 
 func main() {

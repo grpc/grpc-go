@@ -26,6 +26,7 @@ package main
 import (
 	"context"
 	"flag"
+	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"strconv"
 	"sync"
@@ -131,7 +132,7 @@ func main() {
 	flag.Parse()
 	serverAddr := net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
 	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure())
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	conn, err := grpc.Dial(serverAddr, opts...)
 	if err != nil {
 		logger.Fatalf("Fail to dial: %v", err)

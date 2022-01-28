@@ -21,6 +21,7 @@ package binarylog_test
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"net"
 	"sort"
@@ -310,7 +311,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 	if te.cc != nil {
 		return te.cc
 	}
-	opts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()}
 
 	var err error
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)

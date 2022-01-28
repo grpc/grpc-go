@@ -21,6 +21,7 @@ package rls
 import (
 	"context"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"time"
 
 	"google.golang.org/grpc"
@@ -112,7 +113,7 @@ func (cc *controlChannel) dialOpts(bOpts balancer.BuildOptions) ([]grpc.DialOpti
 		credsOpt = grpc.WithCredentialsBundle(bundle)
 	default:
 		cc.logger.Warningf("no credentials available, using Insecure")
-		credsOpt = grpc.WithInsecure()
+		credsOpt = grpc.WithTransportCredentials(insecure.NewCredentials())
 	}
 	return append(dopts, credsOpt), nil
 }

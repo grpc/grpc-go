@@ -44,6 +44,7 @@ import (
 	"encoding/gob"
 	"flag"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"io/ioutil"
 	"log"
@@ -305,7 +306,7 @@ func makeClient(bf stats.Features) (testgrpc.BenchmarkServiceClient, func()) {
 		)
 	}
 	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(bf.MaxConcurrentCalls+1)))
-	opts = append(opts, grpc.WithInsecure())
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 	var lis net.Listener
 	if bf.UseBufConn {

@@ -23,6 +23,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	"log"
 	"net"
@@ -94,7 +95,7 @@ func (s *server) Close() {
 
 func newEchoServer() *server {
 	target := fmt.Sprintf("localhost:%v", *port)
-	cc, err := grpc.Dial(target, grpc.WithInsecure())
+	cc, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

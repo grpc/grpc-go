@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"flag"
+	"google.golang.org/grpc/credentials/insecure"
 	"math"
 	"runtime"
 	"sync"
@@ -133,7 +134,7 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	} else {
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	// Use byteBufCodec if it is required.
