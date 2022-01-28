@@ -28,6 +28,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
@@ -867,43 +868,70 @@ func (p *neverErrPicker) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 	return balancer.PickResult{}, nil
 }
 
-// Need a test case for that race condition...make sure it won't update a closed
-// balancer in UpdateSubConnState() - for this one, the balancer needs to call
-// back on an UpdateSubConnState call back (inline, so within same mutex) into
-// update state which causes itself to get closed/cleared.
-func (s) TestUpdateSubConnStateCallback(t *testing.T) {
-	// Setup to point where balancer has current and pending
-	/*tcc, gsb := setup(t)
-	builder := balancer.Get(balancerName1)
-	if builder == nil {
-		t.Fatalf("balancer.Get(%v) returned nil", balancerName1)
-	}
+// TestUpdateSubConnStateRace tests the race condition when the GracefulSwitchBalancer
+// receives a SubConnUpdate concurrently with an UpdateState() call, which can cause
+// the balancer to forward the update to to be closed and cleared. The balancer API
+// guarantees to never call any method the balancer after a Close() call, and the test
+// verifies that doesn't happen within the Graceful Switch Load Balancer.
+func (s) TestUpdateSubConnStateRace(t *testing.T) {
+	tcc, gsb := setup(t)
+	builder := balancer.Get(verifyBalName)
 	gsb.SwitchTo(builder)
-	currBal := gsb.balancerCurrent.(*mockBalancer1)
-	currBal.updateState(balancer.State{
+
+	builder = balancer.Get(balancerName1)
+	gsb.SwitchTo(builder)
+	currBal := gsb.balancerCurrent.(*verifyBalancer)
+	currBal.t = t
+	pendBal := gsb.balancerPending.(*mockBalancer1)
+	sc, err := currBal.newSubConn([]resolver.Address{}, balancer.NewSubConnOptions{})
+	if err != nil {
+		t.Fatalf("error constructing newSubConn in gsb: %v", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for an NewSubConn call on the ClientConn")
+	case <-tcc.NewSubConnCh:
+	}
+	// Spawn a goroutine that constantly calls UpdateSubConn for the current
+	// balancer, which will get deleted in this testing goroutine.
+	finished := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-finished:
+				return
+			default:
+			}
+			gsb.UpdateSubConnState(sc, balancer.SubConnState{
+				ConnectivityState: connectivity.Ready,
+			})
+		}
+	}()
+	time.Sleep(time.Millisecond)
+	// This UpdateState call causes current to be closed/cleared.
+	pendBal.updateState(balancer.State{
 		ConnectivityState: connectivity.Ready,
 	})
-	// Since never updated current with READY state, any update
-	// from pending LB will cause the current to be deleted.
-	builder = balancer.Get(balancerName2)
-	if builder == nil {
-		t.Fatalf("balancer.Get(%v) returned nil", balancerName2)
-	}
-	gsb.SwitchTo(builder)*/
-
-	// Only way to induce it is if current LB leaves READY. (has to delete current inline)
-
-	// in between reading,
-	// interspliced swap() call (updates can come in at any time)
-	// and writing updatesubconnstate() to it
+	// From this, either one of two things happen. Either the
+	// GracefulSwitchBalancer doesn't Close() the current balancer before it
+	// forwards the SubConn update to the child, and the call gets forwarded
+	// down to the current balancer, or it can Close() the current balancer in
+	// between reading the balancer pointer and writing to it, and in that case
+	// the old current balancer should not be updated, as the balancer has
+	// already been closed and the balancer API guarantees it.
+	close(finished)
 }
 
 const balancerName1 = "mock_balancer_1"
 const balancerName2 = "mock_balancer_2"
+const verifyBalName = "verifyNoSubConnUpdateAfterCloseBalancer"
 
 func init() {
 	balancer.Register(bb1{})
 	balancer.Register(bb2{})
+	balancer.Register(vbb{})
 }
 
 type bb1 struct{}
@@ -1121,7 +1149,7 @@ func (mb2 *mockBalancer2) updateState(state balancer.State) {
 }
 
 func (mb2 *mockBalancer2) newSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	return mb2.cc.NewSubConn(addrs, opts) // Mock sub conn
+	return mb2.cc.NewSubConn(addrs, opts)
 }
 
 func (mb2 *mockBalancer2) updateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
@@ -1130,4 +1158,47 @@ func (mb2 *mockBalancer2) updateAddresses(sc balancer.SubConn, addrs []resolver.
 
 func (mb2 *mockBalancer2) removeSubConn(sc balancer.SubConn) {
 	mb2.cc.RemoveSubConn(sc)
+}
+
+type vbb struct{}
+
+func (vbb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &verifyBalancer{
+		closed: grpcsync.NewEvent(),
+		cc:     cc,
+	}
+}
+
+func (vbb) Name() string {
+	return verifyBalName
+}
+
+// verifyBalancer is a balancer that verifies that after a Close() call, an
+// updateSubConnState() call never happens.
+type verifyBalancer struct {
+	closed *grpcsync.Event
+	// Hold onto the ClientConn wrapper to communicate with it.
+	cc balancer.ClientConn
+	// To fail the test if UpdateSubConnState gets called after Close().
+	t *testing.T
+}
+
+func (vb *verifyBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
+	return nil
+}
+
+func (vb *verifyBalancer) ResolverError(err error) {}
+
+func (vb *verifyBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	if vb.closed.HasFired() {
+		vb.t.Fatal("UpdateSubConnState was called after Close(), which breaks the balancer API")
+	}
+}
+
+func (vb *verifyBalancer) Close() {
+	vb.closed.Fire()
+}
+
+func (vb *verifyBalancer) newSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	return vb.cc.NewSubConn(addrs, opts)
 }

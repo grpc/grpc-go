@@ -75,7 +75,9 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 	gsb.mu.Lock()
 	defer gsb.mu.Unlock()
 
+	gsb.swapMu.Lock()
 	gsb.balRecentlyClosed = nil
+	gsb.swapMu.Unlock()
 
 	if !gsb.balancerCurrentOrPending(bal) {
 		return
@@ -118,6 +120,7 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 // The caller must hold gsb.mu.
 func (gsb *gracefulSwitchBalancer) swap() {
 	gsb.cc.UpdateState(gsb.pendingState)
+	finished := make(chan struct{})
 	go func() {
 		gsb.swapMu.Lock()
 		defer gsb.swapMu.Unlock()
@@ -132,7 +135,9 @@ func (gsb *gracefulSwitchBalancer) swap() {
 
 		gsb.balancerCurrent = gsb.balancerPending
 		gsb.balancerPending = nil
+		finished <- struct{}{}
 	}()
+	<-finished
 }
 
 // Helper function that checks if the balancer passed in is current or pending.
