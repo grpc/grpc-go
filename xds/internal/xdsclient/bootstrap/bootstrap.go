@@ -125,7 +125,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 	for _, cc := range server.ChannelCreds {
 		// We stop at the first credential type that we support.
 		sc.CredsType = cc.Type
-		if bundle := credentials.Bundle(cc.Type, cc.Config); bundle != nil {
+		if bundle := credentials.Get(cc.Type, cc.Config); bundle != nil {
 			sc.Creds = grpc.WithCredentialsBundle(bundle)
 			break
 		}

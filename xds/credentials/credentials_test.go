@@ -26,12 +26,12 @@ import (
 )
 
 func TestDefaultBundles(t *testing.T) {
-	bundle := Bundle("google_default", nil)
+	bundle := Get("google_default", nil)
 	if bundle == nil {
 		t.Errorf(`Bundle("google") = nil, want non nil`)
 	}
 
-	bundle = Bundle("insecure", nil)
+	bundle = Get("insecure", nil)
 	if bundle == nil {
 		t.Errorf(`Bundle("insecure") = nil, want non nil`)
 	}
@@ -58,18 +58,18 @@ func TestRegisterNew(t *testing.T) {
 		t.Fatalf("Failed to Marshal message: %v", err)
 	}
 
-	bundle := Bundle("new_creds_name", rawMessage)
+	bundle := Get("new_creds_name", rawMessage)
 	if bundle == nil {
-		t.Errorf(`Bundle("new_creds_name") = nil, want non nil`)
+		t.Errorf(`Get("new_creds_name") = nil, want non nil`)
 	}
 
 	var got string
 	if err := json.Unmarshal(s.gotConfig, &got); err != nil {
-		t.Errorf("Bundle gotConfig Unmarshal error = %v", err)
+		t.Errorf("Get gotConfig Unmarshal error = %v", err)
 	}
 
 	if want := "sample_config"; got != want {
-		t.Errorf("Bundle config = %v, want %v", got, want)
+		t.Errorf("Get config = %v, want %v", got, want)
 	}
 
 	// Create another sample JSON config.
@@ -79,16 +79,16 @@ func TestRegisterNew(t *testing.T) {
 		t.Fatalf("Failed to Marshal message: %v", err)
 	}
 
-	bundle = Bundle("new_creds_name", rawMessage)
+	bundle = Get("new_creds_name", rawMessage)
 	if bundle == nil {
-		t.Errorf(`Bundle("new_creds_name") = nil, want non nil`)
+		t.Errorf(`Get("new_creds_name") = nil, want non nil`)
 	}
 
 	if err := json.Unmarshal(s.gotConfig, &got); err != nil {
-		t.Errorf("Bundle gotConfig Unmarshal error = %v", err)
+		t.Errorf("Get gotConfig Unmarshal error = %v", err)
 	}
 
 	if want := "sample_another_config"; got != want {
-		t.Errorf("Bundle config = %v, want %v", got, want)
+		t.Errorf("Get config = %v, want %v", got, want)
 	}
 }

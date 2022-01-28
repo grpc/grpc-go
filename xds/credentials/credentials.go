@@ -76,9 +76,9 @@ func Register(name string, x Builder) {
 	registry[name] = x
 }
 
-// Bundle returns the credentials bundle associated with a given name.
+// Get returns the credentials bundle associated with a given name.
 // If no credentials are registered with the name, nil will be returned.
-func Bundle(name string, config json.RawMessage) credentials.Bundle {
+func Get(name string, config json.RawMessage) credentials.Bundle {
 	if c, ok := registry[name]; ok {
 		return c.BuildCredsBundle(config)
 	}
