@@ -123,6 +123,7 @@ func (cc *controlChannel) dialOpts(bOpts balancer.BuildOptions, serviceConfig st
 	// control channel, use that and disable service config fetching via the name
 	// resolver for the control channel.
 	if serviceConfig != "" {
+		cc.logger.Infof("Disabling service config from the name resolver and instead using: %s", serviceConfig)
 		dopts = append(dopts, grpc.WithDisableServiceConfig(), grpc.WithDefaultServiceConfig(serviceConfig))
 	}
 
