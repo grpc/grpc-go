@@ -22,13 +22,13 @@ package main
 import (
 	"context"
 	"flag"
-	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"net"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/channelz/service"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 

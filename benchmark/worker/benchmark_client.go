@@ -21,7 +21,6 @@ package main
 import (
 	"context"
 	"flag"
-	"google.golang.org/grpc/credentials/insecure"
 	"math"
 	"runtime"
 	"sync"
@@ -32,6 +31,7 @@ import (
 	"google.golang.org/grpc/benchmark/stats"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"

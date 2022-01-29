@@ -22,7 +22,6 @@ package test
 
 import (
 	"context"
-	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"testing"
 	"time"
@@ -34,6 +33,7 @@ import (
 	"google.golang.org/grpc/admin"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/status"
 )

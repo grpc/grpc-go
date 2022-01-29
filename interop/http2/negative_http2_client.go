@@ -26,7 +26,6 @@ package main
 import (
 	"context"
 	"flag"
-	"google.golang.org/grpc/credentials/insecure"
 	"net"
 	"strconv"
 	"sync"
@@ -34,6 +33,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 	"google.golang.org/grpc/status"

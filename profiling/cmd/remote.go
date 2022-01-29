@@ -22,11 +22,11 @@ import (
 	"context"
 	"encoding/gob"
 	"fmt"
-	"google.golang.org/grpc/credentials/insecure"
 	"os"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	ppb "google.golang.org/grpc/profiling/proto"
 )
 

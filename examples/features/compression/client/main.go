@@ -23,11 +23,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"google.golang.org/grpc/credentials/insecure"
 	"log"
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding/gzip" // Install the gzip compressor
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
