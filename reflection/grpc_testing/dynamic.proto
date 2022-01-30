@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package grpc.testing;
+
+message DynamicRes {}
+
+message DynamicReq {}
+
+service DynamicService {
+  rpc DynamicMessage1(DynamicReq) returns (DynamicRes);
+}

@@ -21,6 +21,10 @@ package reflection
 import (
 	"context"
 	"fmt"
+	"github.com/jhump/protoreflect/desc/protoparse"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/dynamicpb"
 	"net"
 	"reflect"
 	"sort"
@@ -44,12 +48,14 @@ var (
 	fdProto2     *dpb.FileDescriptorProto
 	fdProto2Ext  *dpb.FileDescriptorProto
 	fdProto2Ext2 *dpb.FileDescriptorProto
+	fdDynamic    *dpb.FileDescriptorProto
 	// fileDescriptor marshalled.
 	fdTestByte       []byte
 	fdTestv3Byte     []byte
 	fdProto2Byte     []byte
 	fdProto2ExtByte  []byte
 	fdProto2Ext2Byte []byte
+	fdDynamicByte    []byte
 )
 
 const defaultTestTimeout = 10 * time.Second
@@ -78,65 +84,43 @@ func loadFileDesc(filename string) (*dpb.FileDescriptorProto, []byte) {
 	return fd, b
 }
 
+func loadFileDescDynamic(filename string) (*dpb.FileDescriptorProto, []byte) {
+	p := &protoparse.Parser{}
+	fds, err := p.ParseFiles(filename)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse file: %s %v", filename, err))
+	}
+
+	m := fds[0].AsFileDescriptorProto()
+
+	b, err := proto.Marshal(m)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal file: %s %v", filename, err))
+	}
+
+	return m, b
+}
+
 func init() {
 	fdTest, fdTestByte = loadFileDesc("reflection/grpc_testing/test.proto")
 	fdTestv3, fdTestv3Byte = loadFileDesc("testv3.proto")
 	fdProto2, fdProto2Byte = loadFileDesc("reflection/grpc_testing/proto2.proto")
 	fdProto2Ext, fdProto2ExtByte = loadFileDesc("reflection/grpc_testing/proto2_ext.proto")
 	fdProto2Ext2, fdProto2Ext2Byte = loadFileDesc("reflection/grpc_testing/proto2_ext2.proto")
-}
-
-func (x) TestFileDescForType(t *testing.T) {
-	for _, test := range []struct {
-		st     reflect.Type
-		wantFd *dpb.FileDescriptorProto
-	}{
-		{reflect.TypeOf(pb.SearchResponse_Result{}), fdTest},
-		{reflect.TypeOf(pb.ToBeExtended{}), fdProto2},
-	} {
-		fd, err := s.fileDescForType(test.st)
-		if err != nil || !proto.Equal(fd, test.wantFd) {
-			t.Errorf("fileDescForType(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.wantFd)
-		}
-	}
-}
-
-func (x) TestTypeForName(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		want reflect.Type
-	}{
-		{"grpc.testing.SearchResponse", reflect.TypeOf(pb.SearchResponse{})},
-	} {
-		r, err := typeForName(test.name)
-		if err != nil || r != test.want {
-			t.Errorf("typeForName(%q) = %q, %v, want %q, <nil>", test.name, r, err, test.want)
-		}
-	}
-}
-
-func (x) TestTypeForNameNotFound(t *testing.T) {
-	for _, test := range []string{
-		"grpc.testing.not_exiting",
-	} {
-		_, err := typeForName(test)
-		if err == nil {
-			t.Errorf("typeForName(%q) = _, %v, want _, <non-nil>", test, err)
-		}
-	}
+	fdDynamic, fdDynamicByte = loadFileDescDynamic("grpc_testing/dynamic.proto")
 }
 
 func (x) TestFileDescContainingExtension(t *testing.T) {
 	for _, test := range []struct {
-		st     reflect.Type
+		st     string
 		extNum int32
 		want   *dpb.FileDescriptorProto
 	}{
-		{reflect.TypeOf(pb.ToBeExtended{}), 13, fdProto2Ext},
-		{reflect.TypeOf(pb.ToBeExtended{}), 17, fdProto2Ext},
-		{reflect.TypeOf(pb.ToBeExtended{}), 19, fdProto2Ext},
-		{reflect.TypeOf(pb.ToBeExtended{}), 23, fdProto2Ext2},
-		{reflect.TypeOf(pb.ToBeExtended{}), 29, fdProto2Ext2},
+		{"grpc.testing.ToBeExtended", 13, fdProto2Ext},
+		{"grpc.testing.ToBeExtended", 17, fdProto2Ext},
+		{"grpc.testing.ToBeExtended", 19, fdProto2Ext},
+		{"grpc.testing.ToBeExtended", 23, fdProto2Ext2},
+		{"grpc.testing.ToBeExtended", 29, fdProto2Ext2},
 	} {
 		fd, err := fileDescContainingExtension(test.st, test.extNum)
 		if err != nil || !proto.Equal(fd, test.want) {
@@ -152,14 +136,14 @@ func (s intArray) Len() int           { return len(s) }
 func (s intArray) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 func (s intArray) Less(i, j int) bool { return s[i] < s[j] }
 
-func (x) TestAllExtensionNumbersForType(t *testing.T) {
+func (x) TestAllExtensionNumbersForTypeName(t *testing.T) {
 	for _, test := range []struct {
-		st   reflect.Type
+		st   string
 		want []int32
 	}{
-		{reflect.TypeOf(pb.ToBeExtended{}), []int32{13, 17, 19, 23, 29}},
+		{"grpc.testing.ToBeExtended", []int32{13, 17, 19, 23, 29}},
 	} {
-		r, err := s.allExtensionNumbersForType(test.st)
+		r, err := s.allExtensionNumbersForTypeName(test.st)
 		sort.Sort(intArray(r))
 		if err != nil || !reflect.DeepEqual(r, test.want) {
 			t.Errorf("allExtensionNumbersForType(%q) = %v, %v, want %v, <nil>", test.st, r, err, test.want)
@@ -200,6 +184,9 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 	s := grpc.NewServer()
 	pb.RegisterSearchServiceServer(s, &server{})
 	pbv3.RegisterSearchServiceV3Server(s, &serverV3{})
+
+	registerDynamicProto(s, fdDynamic)
+
 	// Register reflection service on s.
 	Register(s)
 	go s.Serve(lis)
@@ -275,6 +262,7 @@ func testFileByFilename(t *testing.T, stream rpb.ServerReflection_ServerReflecti
 		{"reflection/grpc_testing/test.proto", fdTestByte},
 		{"reflection/grpc_testing/proto2.proto", fdProto2Byte},
 		{"reflection/grpc_testing/proto2_ext.proto", fdProto2ExtByte},
+		{"grpc_testing/dynamic.proto", fdDynamicByte},
 	} {
 		if err := stream.Send(&rpb.ServerReflectionRequest{
 			MessageRequest: &rpb.ServerReflectionRequest_FileByFilename{
@@ -348,6 +336,10 @@ func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerRe
 		{"grpc.testingv3.SearchResponseV3.Result.Value.str", fdTestv3Byte},
 		{"grpc.testingv3.SearchResponseV3.State", fdTestv3Byte},
 		{"grpc.testingv3.SearchResponseV3.State.FRESH", fdTestv3Byte},
+		// Test dynamic symbols
+		{"grpc.testing.DynamicService", fdDynamicByte},
+		{"grpc.testing.DynamicReq", fdDynamicByte},
+		{"grpc.testing.DynamicRes", fdDynamicByte},
 	} {
 		if err := stream.Send(&rpb.ServerReflectionRequest{
 			MessageRequest: &rpb.ServerReflectionRequest_FileContainingSymbol{
@@ -478,6 +470,7 @@ func testAllExtensionNumbersOfType(t *testing.T, stream rpb.ServerReflection_Ser
 		want     []int32
 	}{
 		{"grpc.testing.ToBeExtended", []int32{13, 17, 19, 23, 29}},
+		{"grpc.testing.DynamicReq", nil},
 	} {
 		if err := stream.Send(&rpb.ServerReflectionRequest{
 			MessageRequest: &rpb.ServerReflectionRequest_AllExtensionNumbersOfType{
@@ -550,6 +543,7 @@ func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflection
 			"grpc.testingv3.SearchServiceV3",
 			"grpc.testing.SearchService",
 			"grpc.reflection.v1alpha.ServerReflection",
+			"grpc.testing.DynamicService",
 		}
 		// Compare service names in response with want.
 		if len(services) != len(want) {
@@ -568,5 +562,45 @@ func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflection
 		}
 	default:
 		t.Errorf("ListServices = %v, want type <ServerReflectionResponse_ListServicesResponse>", r.MessageResponse)
+	}
+}
+
+func registerDynamicProto(srv *grpc.Server, fd *dpb.FileDescriptorProto) {
+	df, err := protodesc.NewFile(fd, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	err = protoregistry.GlobalFiles.RegisterFile(df)
+	if err != nil {
+		panic(err)
+	}
+
+	for i := 0; i < df.Messages().Len(); i++ {
+		m := df.Messages().Get(i)
+		if err := protoregistry.GlobalTypes.RegisterMessage(dynamicpb.NewMessageType(m)); err != nil {
+			panic(err)
+		}
+	}
+
+	type emptyInterface interface{}
+
+	for i := 0; i < df.Services().Len(); i++ {
+		s := df.Services().Get(i)
+
+		sd := &grpc.ServiceDesc{
+			ServiceName: string(s.FullName()),
+			HandlerType: (*emptyInterface)(nil),
+			Metadata:    fd.GetName(),
+		}
+
+		for j := 0; j < s.Methods().Len(); j++ {
+			m := s.Methods().Get(j)
+			sd.Methods = append(sd.Methods, grpc.MethodDesc{
+				MethodName: string(m.Name()),
+			})
+		}
+
+		srv.RegisterService(sd, struct{}{})
 	}
 }
