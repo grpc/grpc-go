@@ -84,7 +84,7 @@ func (i *insecureCredsBuilder) Name() string {
 // JSON config.
 type googleDefaultCredsBuilder struct{}
 
-// BuildCredsBundle returns a default google credential bundle. Currently the JSON
+// Build returns a default google credential bundle. Currently the JSON
 // config is unused.
 func (d *googleDefaultCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
 	return google.NewDefaultCredentials(), nil
