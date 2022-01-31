@@ -30,12 +30,12 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -1018,73 +1018,13 @@ func TestServerConfigMarshalAndUnmarshal(t *testing.T) {
 }
 
 func TestDefaultBundles(t *testing.T) {
-	_, err := GetCredentials("google_default", nil)
+	_, err := bootstrap.GetCredentials("google_default", nil)
 	if err != nil {
-		t.Errorf(`Bundle("google_default") error = %v, want nil`, err)
+		t.Errorf(`Bootstrap.GetCredentials("google_default") error = %v, want nil`, err)
 	}
 
-	_, err = GetCredentials("insecure", nil)
+	_, err = bootstrap.GetCredentials("insecure", nil)
 	if err != nil {
-		t.Errorf(`Bundle("insecure") error = %v, want nil`, err)
-	}
-}
-
-type SampleCredsBuilder struct {
-	gotConfig json.RawMessage
-}
-
-func (s *SampleCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, error) {
-	s.gotConfig = config
-	return insecure.NewBundle(), nil
-}
-
-func (s *SampleCredsBuilder) Name() string {
-	return "new_creds_name"
-}
-
-func TestRegisterNew(t *testing.T) {
-	// Register a new credential builder.
-	s := &SampleCredsBuilder{}
-	RegisterCredentials(s)
-
-	// Create a sample JSON config.
-	configMsg := "sample_config"
-	rawMessage, err := json.Marshal(configMsg)
-	if err != nil {
-		t.Fatalf("Failed to Marshal message: %v", err)
-	}
-
-	_, err = GetCredentials("new_creds_name", rawMessage)
-	if err != nil {
-		t.Errorf(`GetCredentials("new_creds_name") error = %v, want nil`, err)
-	}
-
-	var got string
-	if err := json.Unmarshal(s.gotConfig, &got); err != nil {
-		t.Errorf("GetCredentials gotConfig Unmarshal error = %v", err)
-	}
-
-	if want := "sample_config"; got != want {
-		t.Errorf("GetCredentials config = %v, want %v", got, want)
-	}
-
-	// Create another sample JSON config.
-	configMsg = "sample_another_config"
-	rawMessage, err = json.Marshal(configMsg)
-	if err != nil {
-		t.Fatalf("Failed to Marshal message: %v", err)
-	}
-
-	_, err = GetCredentials("new_creds_name", rawMessage)
-	if err != nil {
-		t.Errorf(`GetCredentials("new_creds_name") error = %v, want nil`, err)
-	}
-
-	if err := json.Unmarshal(s.gotConfig, &got); err != nil {
-		t.Errorf("GetCredentials gotConfig Unmarshal error = %v", err)
-	}
-
-	if want := "sample_another_config"; got != want {
-		t.Errorf("GetCredentials config = %v, want %v", got, want)
+		t.Errorf(`Bootstrap.GetCredentials("insecure") error = %v, want nil`, err)
 	}
 }

@@ -27,11 +27,15 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/xds/bootstrap"
 )
+
+func init() {
+	bootstrap.RegisterCredentials(&DefaultCredsBuilder{})
+}
 
 const tokenRequestTimeout = 30 * time.Second
 
@@ -159,19 +163,4 @@ func (d *DefaultCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, erro
 // Name returns the name associated with GoogleDefaultCredsBuilder i.e. "google_default".
 func (d *DefaultCredsBuilder) Name() string {
 	return "google_default"
-}
-
-// InsecureCredsBuilder encapsulates a insecure credential that is built using a
-// JSON config.
-type InsecureCredsBuilder struct{}
-
-// BuildCredsBundle returns a default insecure credential bundle. Currently the JSON
-// config is unused.
-func (i *InsecureCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
-	return insecure.NewBundle(), nil
-}
-
-// Name returns the name associated with InsecureCredsBuilder i.e. "insecure".
-func (i *InsecureCredsBuilder) Name() string {
-	return "insecure"
 }

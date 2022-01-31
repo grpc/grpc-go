@@ -22,6 +22,7 @@ package insecure
 
 import (
 	"context"
+	"encoding/json"
 	"net"
 
 	"google.golang.org/grpc/credentials"
@@ -95,4 +96,19 @@ func (insecureBundle) PerRPCCredentials() credentials.PerRPCCredentials {
 // TransportCredentials returns the underlying insecure transport credential.
 func (insecureBundle) TransportCredentials() credentials.TransportCredentials {
 	return NewCredentials()
+}
+
+// CredsBuilder encapsulates a insecure credential that is built using a
+// JSON config.
+type CredsBuilder struct{}
+
+// BuildCredsBundle returns a default insecure credential bundle. Currently the JSON
+// config is unused.
+func (i *CredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
+	return NewBundle(), nil
+}
+
+// Name returns the name associated with CredsBuilder i.e. "insecure".
+func (i *CredsBuilder) Name() string {
+	return "insecure"
 }

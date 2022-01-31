@@ -154,13 +154,4 @@ func TestCredsBuilders(t *testing.T) {
 	if got, want := b.Name(), "google_default"; got != want {
 		t.Errorf("DefaultCredsBuilder Name = %v, want %v", got, want)
 	}
-
-	i := &InsecureCredsBuilder{}
-	if _, err := i.Build(nil); err != nil {
-		t.Errorf("InsecureCredsBuilder Build error = %v, want nil", err)
-	}
-
-	if got, want := i.Name(), "insecure"; got != want {
-		t.Errorf("InsecureCredsBuilder Name = %v, want %v", got, want)
-	}
 }

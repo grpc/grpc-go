@@ -31,16 +31,18 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+
+	_ "google.golang.org/grpc/credentials/google"          // For supporting google creds by default.
+	_ "google.golang.org/grpc/credentials/google/insecure" // For support insecure creds by default.
 )
 
 const (
@@ -54,48 +56,11 @@ const (
 )
 
 var (
-	// registry is a map from credential type name to Credential builder.
-	registry = make(map[string]Credentials)
-
 	// For overriding in unit tests.
 	bootstrapFileReadFunc = ioutil.ReadFile
 
 	gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 )
-
-func init() {
-	RegisterCredentials(&google.DefaultCredsBuilder{})
-	RegisterCredentials(&google.InsecureCredsBuilder{})
-}
-
-// Credentials interface encapsulates a credential provider
-// that can be used for communicating with the xDS Management server.
-type Credentials interface {
-	// Build() returns a credential bundle associated with the Builder.
-	Build(config json.RawMessage) (credentials.Bundle, error)
-	// Name() returns the credential name associated with this credential.
-	Name() string
-}
-
-// RegisterCredentials registers the credential builder that can be used to communicate
-// with the xds management server.
-//
-// NOTE: this function must only be called during initialization time (i.e. in
-// an init() function), and is not thread-safe. If multiple credentials are
-// registered with the same name, the one registered last will take effect.
-func RegisterCredentials(c Credentials) {
-	registry[c.Name()] = c
-}
-
-// GetCredentials returns the credentials bundle associated with a given name.
-// If no credentials are registered with the name, an error will be returned.
-func GetCredentials(name string, config json.RawMessage) (credentials.Bundle, error) {
-	if c, ok := registry[name]; ok {
-		return c.Build(config)
-	}
-
-	return nil, fmt.Errorf("credential %q not found", name)
-}
 
 // ServerConfig contains the configuration to connect to a server, including
 // URI, creds, and transport API version (e.g. v2 or v3).
@@ -165,7 +130,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 	for _, cc := range server.ChannelCreds {
 		// We stop at the first credential type that we support.
 		sc.CredsType = cc.Type
-		if bundle, err := GetCredentials(cc.Type, cc.Config); err == nil {
+		if bundle, err := bootstrap.GetCredentials(cc.Type, cc.Config); err == nil {
 			sc.Creds = grpc.WithCredentialsBundle(bundle)
 			break
 		} else {
