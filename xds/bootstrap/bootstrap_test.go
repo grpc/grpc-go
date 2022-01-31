@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type SampleCredsBuilder struct {
@@ -31,7 +30,7 @@ type SampleCredsBuilder struct {
 
 func (s *SampleCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, error) {
 	s.gotConfig = config
-	return insecure.NewBundle(), nil
+	return nil, nil
 }
 
 func (s *SampleCredsBuilder) Name() string {

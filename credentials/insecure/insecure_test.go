@@ -20,7 +20,7 @@ package insecure
 import "testing"
 
 func TestCredsBuilders(t *testing.T) {
-	i := &CredsBuilder{}
+	i := &credsBuilder{}
 	if _, err := i.Build(nil); err != nil {
 		t.Errorf("CredsBuilder Build error = %v, want nil", err)
 	}

@@ -41,8 +41,8 @@ import (
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 
-	_ "google.golang.org/grpc/credentials/google"          // For supporting google creds by default.
-	_ "google.golang.org/grpc/credentials/google/insecure" // For support insecure creds by default.
+	_ "google.golang.org/grpc/credentials/google"   // For supporting google creds by default.
+	_ "google.golang.org/grpc/credentials/insecure" // For support insecure creds by default.
 )
 
 const (
@@ -55,12 +55,10 @@ const (
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 )
 
-var (
-	// For overriding in unit tests.
-	bootstrapFileReadFunc = ioutil.ReadFile
+var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 
-	gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
-)
+// For overriding in unit tests.
+var bootstrapFileReadFunc = ioutil.ReadFile
 
 // ServerConfig contains the configuration to connect to a server, including
 // URI, creds, and transport API version (e.g. v2 or v3).
@@ -134,7 +132,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 			sc.Creds = grpc.WithCredentialsBundle(bundle)
 			break
 		} else {
-			logger.Warningf("Failed to get credentials bundle for %q, error: %v", cc.Type, err)
+			logger.Infof("Failed to get credentials bundle for %q, error: %v", cc.Type, err)
 		}
 	}
 	for _, f := range server.ServerFeatures {

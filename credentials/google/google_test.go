@@ -147,7 +147,7 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 }
 
 func TestCredsBuilders(t *testing.T) {
-	b := &DefaultCredsBuilder{}
+	b := &defaultCredsBuilder{}
 	if _, err := b.Build(nil); err != nil {
 		t.Errorf("DefaultCredsBuilder Build error = %v, want nil", err)
 	}

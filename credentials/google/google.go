@@ -34,7 +34,7 @@ import (
 )
 
 func init() {
-	bootstrap.RegisterCredentials(&DefaultCredsBuilder{})
+	bootstrap.RegisterCredentials(&defaultCredsBuilder{})
 }
 
 const tokenRequestTimeout = 30 * time.Second
@@ -150,17 +150,17 @@ func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
 	return newCreds, nil
 }
 
-// DefaultCredsBuilder encapsulates a Google Default credential that is built using a
+// defaultCredsBuilder encapsulates a Google Default credential that is built using a
 // JSON config.
-type DefaultCredsBuilder struct{}
+type defaultCredsBuilder struct{}
 
 // BuildCredsBundle returns a default google credential bundle. Currently the JSON
 // config is unused.
-func (d *DefaultCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
+func (d *defaultCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
 	return NewDefaultCredentials(), nil
 }
 
 // Name returns the name associated with GoogleDefaultCredsBuilder i.e. "google_default".
-func (d *DefaultCredsBuilder) Name() string {
+func (d *defaultCredsBuilder) Name() string {
 	return "google_default"
 }

@@ -26,7 +26,12 @@ import (
 	"net"
 
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/xds/bootstrap"
 )
+
+func init() {
+	bootstrap.RegisterCredentials(&credsBuilder{})
+}
 
 // NewCredentials returns a credentials which disables transport security.
 //
@@ -98,17 +103,17 @@ func (insecureBundle) TransportCredentials() credentials.TransportCredentials {
 	return NewCredentials()
 }
 
-// CredsBuilder encapsulates a insecure credential that is built using a
+// credsBuilder encapsulates a insecure credential that is built using a
 // JSON config.
-type CredsBuilder struct{}
+type credsBuilder struct{}
 
 // BuildCredsBundle returns a default insecure credential bundle. Currently the JSON
 // config is unused.
-func (i *CredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
+func (i *credsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
 	return NewBundle(), nil
 }
 
 // Name returns the name associated with CredsBuilder i.e. "insecure".
-func (i *CredsBuilder) Name() string {
+func (i *credsBuilder) Name() string {
 	return "insecure"
 }

@@ -33,9 +33,9 @@ var registry = make(map[string]Credentials)
 // Credentials interface encapsulates a credential provider
 // that can be used for communicating with the xDS Management server.
 type Credentials interface {
-	// Build() returns a credential bundle associated with the Builder.
+	// Build returns a credential bundle associated with the Builder.
 	Build(config json.RawMessage) (credentials.Bundle, error)
-	// Name() returns the credential name associated with this credential.
+	// Name returns the credential name associated with this credential.
 	Name() string
 }
 
