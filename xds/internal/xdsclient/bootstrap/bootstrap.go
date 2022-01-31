@@ -163,11 +163,13 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 	for _, cc := range server.ChannelCreds {
 		// We stop at the first credential type that we support.
 		sc.CredsType = cc.Type
-		if bundle, err := bootstrap.GetCredentials(cc.Type, cc.Config); err == nil {
-			sc.Creds = grpc.WithCredentialsBundle(bundle)
-			break
-		} else {
-			logger.Infof("Failed to get credentials bundle for %q, error: %v", cc.Type, err)
+		if c := bootstrap.GetCredentials(cc.Type); c != nil {
+			if bundle, err := c.Build(cc.Config); err == nil {
+				sc.Creds = grpc.WithCredentialsBundle(bundle)
+				break
+			} else {
+				logger.Warningf("Failed to build credentials bundle for %q, error: %v", cc.Type, err)
+			}
 		}
 	}
 	for _, f := range server.ServerFeatures {

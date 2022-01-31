@@ -49,18 +49,22 @@ func TestRegisterNew(t *testing.T) {
 		t.Fatalf("Failed to Marshal message: %v", err)
 	}
 
-	_, err = GetCredentials("new_creds_name", rawMessage)
-	if err != nil {
-		t.Errorf(`GetCredentials("new_creds_name") error = %v, want nil`, err)
+	c := GetCredentials("new_creds_name")
+	if c == nil {
+		t.Errorf(`GetCredentials("new_creds_name") credential = nil`)
+	}
+
+	if _, err := c.Build(rawMessage); err != nil {
+		t.Errorf("Build(%v) error = %v, want nil", rawMessage, err)
 	}
 
 	var got string
 	if err := json.Unmarshal(s.gotConfig, &got); err != nil {
-		t.Errorf("GetCredentials gotConfig Unmarshal error = %v", err)
+		t.Errorf("Build gotConfig Unmarshal error = %v", err)
 	}
 
 	if want := "sample_config"; got != want {
-		t.Errorf("GetCredentials config = %v, want %v", got, want)
+		t.Errorf("Build config = %v, want %v", got, want)
 	}
 
 	// Create another sample JSON config.
@@ -70,16 +74,16 @@ func TestRegisterNew(t *testing.T) {
 		t.Fatalf("Failed to Marshal message: %v", err)
 	}
 
-	_, err = GetCredentials("new_creds_name", rawMessage)
+	_, err = c.Build(rawMessage)
 	if err != nil {
-		t.Errorf(`GetCredentials("new_creds_name") error = %v, want nil`, err)
+		t.Errorf("Build(%v) error = %v, want nil", rawMessage, err)
 	}
 
 	if err := json.Unmarshal(s.gotConfig, &got); err != nil {
-		t.Errorf("GetCredentials gotConfig Unmarshal error = %v", err)
+		t.Errorf("Build gotConfig Unmarshal error = %v", err)
 	}
 
 	if want := "sample_another_config"; got != want {
-		t.Errorf("GetCredentials config = %v, want %v", got, want)
+		t.Errorf("Build config = %v, want %v", got, want)
 	}
 }

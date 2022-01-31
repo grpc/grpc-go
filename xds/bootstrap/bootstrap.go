@@ -27,7 +27,6 @@ package bootstrap
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"google.golang.org/grpc/credentials"
 )
@@ -55,11 +54,11 @@ func RegisterCredentials(c Credentials) {
 }
 
 // GetCredentials returns the credentials bundle associated with a given name.
-// If no credentials are registered with the name, an error will be returned.
-func GetCredentials(name string, config json.RawMessage) (credentials.Bundle, error) {
+// If no credentials are registered with the name, nil will be returned.
+func GetCredentials(name string) Credentials {
 	if c, ok := registry[name]; ok {
-		return c.Build(config)
+		return c
 	}
 
-	return nil, fmt.Errorf("credential %q not found", name)
+	return nil
 }
