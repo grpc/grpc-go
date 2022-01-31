@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"time"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -74,9 +75,21 @@ func unmarshalClusterResource(r *anypb.Any, f UpdateValidatorFunc, logger *grpcl
 }
 
 const (
-	defaultRingHashMinSize = 1024
-	defaultRingHashMaxSize = 8 * 1024 * 1024 // 8M
-	ringHashSizeUpperBound = 8 * 1024 * 1024 // 8M
+	defaultRingHashMinSize                = 1024
+	defaultRingHashMaxSize                = 8 * 1024 * 1024 // 8M
+	ringHashSizeUpperBound                = 8 * 1024 * 1024 // 8M
+	defaultInterval                       = 10 * time.Second
+	defaultBaseEjectionTime               = 30 * time.Second
+	defaultMaxEjectionTime                = 300 * time.Second
+	defaultMaxEjectionPercent             = 10
+	defaultSuccessRateStdevFactor         = 1900
+	defaultEnforcingSuccessRate           = 100
+	defaultSuccessRateMinimumHosts        = 5
+	defaultSuccessRateRequestVolume       = 100
+	defaultFailurePercentageThreshold     = 85
+	defaultEnforcingFailurePercentage     = 0
+	defaultFailurePercentageMinimumHosts  = 5
+	defaultFailurePercentageRequestVolume = 50
 )
 
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
@@ -125,11 +138,18 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		}
 	}
 
+	var od *OutlierDetection
+	var err error
+	if od, err = outlierConfigFromCluster(cluster); err != nil {
+		return ClusterUpdate{}, err
+	}
+
 	ret := ClusterUpdate{
-		ClusterName: cluster.GetName(),
-		SecurityCfg: sc,
-		MaxRequests: circuitBreakersFromCluster(cluster),
-		LBPolicy:    lbPolicy,
+		ClusterName:      cluster.GetName(),
+		SecurityCfg:      sc,
+		MaxRequests:      circuitBreakersFromCluster(cluster),
+		LBPolicy:         lbPolicy,
+		OutlierDetection: od,
 	}
 
 	// Note that this is different from the gRFC (gRFC A47 says to include the
@@ -462,4 +482,106 @@ func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) *uint32 {
 		return &maxRequests
 	}
 	return nil
+}
+
+// outlierConfigFromCluster extracts the relevant outlier detection configuration from
+// the received cluster resource. Returns nil if no OutlierDetection.
+func outlierConfigFromCluster(cluster *v3clusterpb.Cluster) (*OutlierDetection, error) {
+	// Corresponds to this line from A50: "If the outlier_detection field is not
+	// set in the Cluster message, a "no-op" outlier_detection config will be
+	// generated"
+	od := cluster.GetOutlierDetection()
+	if od == nil {
+		return nil, nil
+	}
+	// "The google.protobuf.Duration fields interval, base_ejection_time, and
+	// max_ejection_time must obey the restrictions in the
+	// google.protobuf.Duration documentation and they must have non-negative
+	// values." - A50
+	// TODO: I can find non negative examples for validation, but not "must obey the restrictions in the documentation"
+	var iVal, betVal, metVal = defaultInterval, defaultBaseEjectionTime, defaultMaxEjectionTime
+	if i := od.GetInterval(); i != nil {
+		iVal = i.AsDuration()
+		if iVal < 0 {
+			return nil, fmt.Errorf("outlier_detection.interval = %v; must be >= 0", iVal)
+		}
+	}
+
+	if bet := od.GetBaseEjectionTime(); bet != nil {
+		betVal = bet.AsDuration()
+		if betVal < 0 {
+			return nil, fmt.Errorf("outlier_detection.base_ejection_time = %v; must be >= 0", betVal)
+		}
+	}
+
+	if met := od.GetMaxEjectionTime(); met != nil {
+		metVal = met.AsDuration()
+		if metVal < 0 {
+			return nil, fmt.Errorf("outlier_detection.max_ejection_time = %v; must be >= 0", metVal)
+		}
+	}
+
+	var mepVal, esrVal, fptVal, efpVal, srsfVal, srmhVal, srrvVal, fpmhVal, fprvVal uint32 = defaultMaxEjectionPercent,
+		defaultEnforcingSuccessRate, defaultFailurePercentageThreshold, defaultEnforcingFailurePercentage, defaultSuccessRateStdevFactor,
+		defaultSuccessRateMinimumHosts, defaultSuccessRateRequestVolume, defaultFailurePercentageMinimumHosts,
+		defaultFailurePercentageRequestVolume
+	// "The fields max_ejection_percent, enforcing_success_rate,
+	// failure_percentage_threshold, and enforcing_failure_percentage must have
+	// values less than or equal to 100. If any of these requirements is
+	// violated, the Cluster resource should be NACKed." - A50
+	if mep := od.GetMaxEjectionPercent(); mep != nil {
+		mepVal = mep.GetValue()
+		if mepVal > 100 {
+			return nil, fmt.Errorf("outlier_detection.max_ejection_percent = %v; must be <= 100", mepVal)
+		}
+	}
+	if esr := od.GetEnforcingSuccessRate(); esr != nil {
+		esrVal = esr.GetValue()
+		if esrVal > 100 {
+			return nil, fmt.Errorf("outlier_detection.enforcing_success_rate = %v; must be <= 100", esrVal)
+		}
+	}
+	if fpt := od.GetFailurePercentageThreshold(); fpt != nil {
+		fptVal = fpt.GetValue()
+		if fptVal > 100 {
+			return nil, fmt.Errorf("outlier_detection.failure_percentage_threshold = %v; must be <= 100", fptVal)
+		}
+	}
+	if efp := od.GetEnforcingFailurePercentage(); efp != nil {
+		efpVal = efp.GetValue()
+		if efpVal > 100 {
+			return nil, fmt.Errorf("outlier_detection.enforcing_failure_percentage = %v; must be <= 100", efpVal)
+		}
+	}
+
+	if srsf := od.GetSuccessRateStdevFactor(); srsf != nil {
+		srsfVal = srsf.GetValue()
+	}
+	if srmh := od.GetSuccessRateMinimumHosts(); srmh != nil {
+		srmhVal = srmh.GetValue()
+	}
+	if srrv := od.GetSuccessRateRequestVolume(); srrv != nil {
+		srrvVal = srrv.GetValue()
+	}
+	if fpmh := od.GetFailurePercentageMinimumHosts(); fpmh != nil {
+		fpmhVal = fpmh.GetValue()
+	}
+	if fprv := od.GetFailurePercentageRequestVolume(); fprv != nil {
+		fprvVal = fprv.GetValue()
+	}
+
+	return &OutlierDetection{
+		Interval:                       iVal,
+		BaseEjectionTime:               betVal,
+		MaxEjectionTime:                metVal,
+		MaxEjectionPercent:             mepVal,
+		EnforcingSuccessRate:           esrVal,
+		FailurePercentageThreshold:     fptVal,
+		EnforcingFailurePercentage:     efpVal,
+		SuccessRateStdevFactor:         srsfVal,
+		SuccessRateMinimumHosts:        srmhVal,
+		SuccessRateRequestVolume:       srrvVal,
+		FailurePercentageMinimumHosts:  fpmhVal,
+		FailurePercentageRequestVolume: fprvVal,
+	}, nil
 }
