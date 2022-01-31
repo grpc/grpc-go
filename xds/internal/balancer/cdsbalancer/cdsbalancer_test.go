@@ -200,7 +200,7 @@ func cdsCCS(cluster string, xdsC xdsclient.XDSClient) balancer.ClientConnState {
 	jsonSC := fmt.Sprintf(cdsLBConfig, cluster)
 	return balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{
-			ServiceConfig: internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(jsonSC),
+			ServiceConfig: internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC),
 		}, xdsC),
 		BalancerConfig: &lbConfig{ClusterName: clusterName},
 	}
