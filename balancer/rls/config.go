@@ -160,7 +160,7 @@ func (rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, 
 	if sc := string(cfgJSON.RouteLookupChannelServiceConfig); sc != "" {
 		parsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(sc)
 		if parsed.Err != nil {
-			return nil, fmt.Errorf("rls: bad control channel service config %s: %v", sc, parsed.Err)
+			return nil, fmt.Errorf("rls: bad control channel service config %q: %v", sc, parsed.Err)
 		}
 		lbCfg.controlChannelServiceConfig = sc
 	}
