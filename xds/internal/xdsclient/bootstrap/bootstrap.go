@@ -31,6 +31,9 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
@@ -40,9 +43,6 @@ import (
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-
-	_ "google.golang.org/grpc/credentials/google"   // For supporting google creds by default.
-	_ "google.golang.org/grpc/credentials/insecure" // For support insecure creds by default.
 )
 
 const (
@@ -55,10 +55,45 @@ const (
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 )
 
+func init() {
+	bootstrap.RegisterCredentials(&insecureCredsBuilder{})
+	bootstrap.RegisterCredentials(&googleDefaultCredsBuilder{})
+}
+
 var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 
 // For overriding in unit tests.
 var bootstrapFileReadFunc = ioutil.ReadFile
+
+// insecureCredsBuilder encapsulates a insecure credential that is built using a
+// JSON config.
+type insecureCredsBuilder struct{}
+
+// Build returns a default insecure credential bundle. Currently the JSON
+// config is unused.
+func (i *insecureCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
+	return insecure.NewBundle(), nil
+}
+
+// Name returns the name associated with CredsBuilder i.e. "insecure".
+func (i *insecureCredsBuilder) Name() string {
+	return "insecure"
+}
+
+// googleDefaultCredsBuilder encapsulates a Google Default credential that is built using a
+// JSON config.
+type googleDefaultCredsBuilder struct{}
+
+// BuildCredsBundle returns a default google credential bundle. Currently the JSON
+// config is unused.
+func (d *googleDefaultCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
+	return google.NewDefaultCredentials(), nil
+}
+
+// Name returns the name associated with googleDefaultCredsBuilder i.e. "google_default".
+func (d *googleDefaultCredsBuilder) Name() string {
+	return "google_default"
+}
 
 // ServerConfig contains the configuration to connect to a server, including
 // URI, creds, and transport API version (e.g. v2 or v3).

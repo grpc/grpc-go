@@ -21,7 +21,6 @@ package google
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -30,12 +29,7 @@ import (
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/xds/bootstrap"
 )
-
-func init() {
-	bootstrap.RegisterCredentials(&defaultCredsBuilder{})
-}
 
 const tokenRequestTimeout = 30 * time.Second
 
@@ -148,19 +142,4 @@ func (c *creds) NewWithMode(mode string) (credentials.Bundle, error) {
 	}
 
 	return newCreds, nil
-}
-
-// defaultCredsBuilder encapsulates a Google Default credential that is built using a
-// JSON config.
-type defaultCredsBuilder struct{}
-
-// BuildCredsBundle returns a default google credential bundle. Currently the JSON
-// config is unused.
-func (d *defaultCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
-	return NewDefaultCredentials(), nil
-}
-
-// Name returns the name associated with GoogleDefaultCredsBuilder i.e. "google_default".
-func (d *defaultCredsBuilder) Name() string {
-	return "google_default"
 }

@@ -1028,3 +1028,22 @@ func TestDefaultBundles(t *testing.T) {
 		t.Errorf(`Bootstrap.GetCredentials("insecure") error = %v, want nil`, err)
 	}
 }
+
+func TestCredsBuilders(t *testing.T) {
+	b := &googleDefaultCredsBuilder{}
+	if _, err := b.Build(nil); err != nil {
+		t.Errorf("googleDefaultCredsBuilder Build error = %v, want nil", err)
+	}
+	if got, want := b.Name(), "google_default"; got != want {
+		t.Errorf("googleDefaultCredsBuilder Name = %v, want %v", got, want)
+	}
+
+	i := &insecureCredsBuilder{}
+	if _, err := i.Build(nil); err != nil {
+		t.Errorf("insecureCredsBuilder Build error = %v, want nil", err)
+	}
+
+	if got, want := i.Name(), "insecure"; got != want {
+		t.Errorf("insecureCredsBuilder Name = %v, want %v", got, want)
+	}
+}
