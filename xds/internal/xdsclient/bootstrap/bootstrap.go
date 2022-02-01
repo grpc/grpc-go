@@ -69,13 +69,9 @@ var bootstrapFileReadFunc = ioutil.ReadFile
 // JSON config.
 type insecureCredsBuilder struct{}
 
-// Build returns a default insecure credential bundle. Currently the JSON
-// config is unused.
 func (i *insecureCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
 	return insecure.NewBundle(), nil
 }
-
-// Name returns the name associated with CredsBuilder i.e. "insecure".
 func (i *insecureCredsBuilder) Name() string {
 	return "insecure"
 }
@@ -84,13 +80,10 @@ func (i *insecureCredsBuilder) Name() string {
 // JSON config.
 type googleDefaultCredsBuilder struct{}
 
-// Build returns a default google credential bundle. Currently the JSON
-// config is unused.
 func (d *googleDefaultCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
 	return google.NewDefaultCredentials(), nil
 }
 
-// Name returns the name associated with googleDefaultCredsBuilder i.e. "google_default".
 func (d *googleDefaultCredsBuilder) Name() string {
 	return "google_default"
 }
