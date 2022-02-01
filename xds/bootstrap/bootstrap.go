@@ -34,7 +34,7 @@ import (
 // registry is a map from credential type name to Credential builder.
 var registry = make(map[string]Credentials)
 
-// Credentials interface encapsulates a creds builder
+// Credentials interface encapsulates a credentials.Bundle builder
 // that can be used for communicating with the xDS Management server.
 type Credentials interface {
 	// Build returns a credential bundle associated with the Builder.
@@ -43,8 +43,8 @@ type Credentials interface {
 	Name() string
 }
 
-// RegisterCredentials registers the creds builder that can be used to communicate
-// with the xds management server.
+// RegisterCredentials registers Credentials used for connecting to the xds
+// management server.
 //
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. If multiple credentials are
@@ -53,7 +53,7 @@ func RegisterCredentials(c Credentials) {
 	registry[c.Name()] = c
 }
 
-// GetCredentials returns the creds associated with a given name.
+// GetCredentials returns the credentials associated with a given name.
 // If no credentials are registered with the name, nil will be returned.
 func GetCredentials(name string) Credentials {
 	if c, ok := registry[name]; ok {
