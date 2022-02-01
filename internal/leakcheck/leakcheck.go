@@ -43,7 +43,7 @@ var goroutinesToIgnore = []string{
 	"(*loggingT).flushDaemon",
 	"goroutine in C code",
 	// Ignore the http read/write goroutines. gce metadata.OnGCE() was leaking
-	// these, root cause unknown, ignore for now.
+	// these, root cause unknown, ignore.
 	//
 	// https://github.com/grpc/grpc-go/issues/5171
 	// https://github.com/grpc/grpc-go/issues/5173
