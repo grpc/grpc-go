@@ -165,7 +165,6 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		sc.CredsType = cc.Type
 		c := bootstrap.GetCredentials(cc.Type)
 		if c == nil {
-			logger.Warningf("Credential %q is not registered", cc.Type)
 			continue
 		}
 		bundle, err := c.Build(cc.Config)
