@@ -74,25 +74,29 @@ func (info) AuthType() string {
 // insecureBundle implements an insecure bundle.
 // An insecure bundle provides a thin wrapper around insecureTC to support
 // the credentials.Bundle interface.
-type insecureBundle struct{}
+type insecureBundle struct {
+	tc credentials.TransportCredentials
+}
 
 // NewBundle returns a bundle with disabled transport security and no per rpc credential.
 func NewBundle() credentials.Bundle {
-	return insecureBundle{}
+	return insecureBundle{
+		tc: NewCredentials(),
+	}
 }
 
 // NewWithMode returns a new insecure Bundle. The mode is ignored.
 func (insecureBundle) NewWithMode(_ string) (credentials.Bundle, error) {
-	return insecureBundle{}, nil
+	return NewBundle(), nil
 }
 
 // PerRPCCredentials returns an nil implementation as insecure
 // bundle does not support a per rpc credential.
-func (insecureBundle) PerRPCCredentials() credentials.PerRPCCredentials {
+func (i insecureBundle) PerRPCCredentials() credentials.PerRPCCredentials {
 	return nil
 }
 
 // TransportCredentials returns the underlying insecure transport credential.
-func (insecureBundle) TransportCredentials() credentials.TransportCredentials {
-	return NewCredentials()
+func (i insecureBundle) TransportCredentials() credentials.TransportCredentials {
+	return i.tc
 }

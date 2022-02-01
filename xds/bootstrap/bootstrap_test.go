@@ -24,24 +24,28 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-type SampleCredsBuilder struct {
+var s *sampleCredsBuilder
+
+func init() {
+	// Register a new credential builder.
+	s = &sampleCredsBuilder{}
+	RegisterCredentials(s)
+}
+
+type sampleCredsBuilder struct {
 	gotConfig json.RawMessage
 }
 
-func (s *SampleCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, error) {
+func (s *sampleCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, error) {
 	s.gotConfig = config
 	return nil, nil
 }
 
-func (s *SampleCredsBuilder) Name() string {
+func (s *sampleCredsBuilder) Name() string {
 	return "new_creds_name"
 }
 
 func TestRegisterNew(t *testing.T) {
-	// Register a new credential builder.
-	s := &SampleCredsBuilder{}
-	RegisterCredentials(s)
-
 	c := GetCredentials("new_creds_name")
 	if c == nil {
 		t.Fatalf(`GetCredentials("new_creds_name") credential = nil`)

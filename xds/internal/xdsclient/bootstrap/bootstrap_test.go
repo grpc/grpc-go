@@ -1020,30 +1020,30 @@ func TestServerConfigMarshalAndUnmarshal(t *testing.T) {
 func TestDefaultBundles(t *testing.T) {
 	c := bootstrap.GetCredentials("google_default")
 	if c == nil {
-		t.Errorf(`Bootstrap.GetCredentials("google_default") credential is nil, want non-nil`)
+		t.Errorf(`bootstrap.GetCredentials("google_default") credential is nil, want non-nil`)
 	}
 
 	c = bootstrap.GetCredentials("insecure")
 	if c == nil {
-		t.Errorf(`Bootstrap.GetCredentials("insecure") credential is nil, want non-nil`)
+		t.Errorf(`bootstrap.GetCredentials("insecure") credential is nil, want non-nil`)
 	}
 }
 
 func TestCredsBuilders(t *testing.T) {
 	b := &googleDefaultCredsBuilder{}
 	if _, err := b.Build(nil); err != nil {
-		t.Errorf("googleDefaultCredsBuilder Build error = %v, want nil", err)
+		t.Errorf("googleDefaultCredsBuilder.Build failed: %v", err)
 	}
 	if got, want := b.Name(), "google_default"; got != want {
-		t.Errorf("googleDefaultCredsBuilder Name = %v, want %v", got, want)
+		t.Errorf("googleDefaultCredsBuilder.Name = %v, want %v", got, want)
 	}
 
 	i := &insecureCredsBuilder{}
 	if _, err := i.Build(nil); err != nil {
-		t.Errorf("insecureCredsBuilder Build error = %v, want nil", err)
+		t.Errorf("insecureCredsBuilder.Build failed: %v", err)
 	}
 
 	if got, want := i.Name(), "insecure"; got != want {
-		t.Errorf("insecureCredsBuilder Name = %v, want %v", got, want)
+		t.Errorf("insecureCredsBuilder.Name = %v, want %v", got, want)
 	}
 }
