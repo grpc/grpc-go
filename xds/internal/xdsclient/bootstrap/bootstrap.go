@@ -69,7 +69,7 @@ var bootstrapFileReadFunc = ioutil.ReadFile
 // JSON config.
 type insecureCredsBuilder struct{}
 
-func (i *insecureCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
+func (i *insecureCredsBuilder) Build(json.RawMessage) (credentials.Bundle, error) {
 	return insecure.NewBundle(), nil
 }
 func (i *insecureCredsBuilder) Name() string {
@@ -80,7 +80,7 @@ func (i *insecureCredsBuilder) Name() string {
 // JSON config.
 type googleDefaultCredsBuilder struct{}
 
-func (d *googleDefaultCredsBuilder) Build(_ json.RawMessage) (credentials.Bundle, error) {
+func (d *googleDefaultCredsBuilder) Build(json.RawMessage) (credentials.Bundle, error) {
 	return google.NewDefaultCredentials(), nil
 }
 

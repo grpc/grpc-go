@@ -82,7 +82,7 @@ func NewBundle() credentials.Bundle {
 }
 
 // NewWithMode returns a new insecure Bundle. The mode is ignored.
-func (insecureBundle) NewWithMode(_ string) (credentials.Bundle, error) {
+func (insecureBundle) NewWithMode(string) (credentials.Bundle, error) {
 	return insecureBundle{}, nil
 }
 
