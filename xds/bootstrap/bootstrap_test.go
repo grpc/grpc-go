@@ -24,39 +24,42 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-var s *sampleCredsBuilder
+const testCredsBuilderName = "test_creds"
+
+var builder *testCredsBuilder
 
 func init() {
 	// Register a new credential builder.
-	s = &sampleCredsBuilder{}
-	RegisterCredentials(s)
+	builder = &testCredsBuilder{}
+	RegisterCredentials(builder)
 }
 
-type sampleCredsBuilder struct {
-	gotConfig json.RawMessage
+type testCredsBuilder struct {
+	config json.RawMessage
 }
 
-func (s *sampleCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, error) {
-	s.gotConfig = config
+func (t *testCredsBuilder) Build(config json.RawMessage) (credentials.Bundle, error) {
+	t.config = config
 	return nil, nil
 }
 
-func (s *sampleCredsBuilder) Name() string {
-	return "new_creds_name"
+func (t *testCredsBuilder) Name() string {
+	return testCredsBuilderName
 }
 
 func TestRegisterNew(t *testing.T) {
-	c := GetCredentials("new_creds_name")
+	c := GetCredentials(testCredsBuilderName)
 	if c == nil {
-		t.Fatalf(`GetCredentials("new_creds_name") credential = nil`)
+		t.Fatalf("GetCredentials(%q) credential = nil", testCredsBuilderName)
 	}
 
-	rawMessage := json.RawMessage("sample_config")
+	const sampleConfig = "sample_config"
+	rawMessage := json.RawMessage(sampleConfig)
 	if _, err := c.Build(rawMessage); err != nil {
 		t.Errorf("Build(%v) error = %v, want nil", rawMessage, err)
 	}
 
-	if got, want := string(s.gotConfig), "sample_config"; got != want {
+	if got, want := string(builder.config), sampleConfig; got != want {
 		t.Errorf("Build config = %v, want %v", got, want)
 	}
 }
