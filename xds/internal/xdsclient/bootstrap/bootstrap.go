@@ -170,6 +170,8 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 			} else {
 				logger.Warningf("Failed to build credentials bundle for %q, error: %v", cc.Type, err)
 			}
+		} else {
+			logger.Warningf("Credential %q is not registered", cc.Type)
 		}
 	}
 	for _, f := range server.ServerFeatures {
