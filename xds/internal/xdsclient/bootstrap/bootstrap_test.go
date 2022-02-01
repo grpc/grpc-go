@@ -1018,13 +1018,11 @@ func TestServerConfigMarshalAndUnmarshal(t *testing.T) {
 }
 
 func TestDefaultBundles(t *testing.T) {
-	c := bootstrap.GetCredentials("google_default")
-	if c == nil {
+	if c := bootstrap.GetCredentials("google_default"); c == nil {
 		t.Errorf(`bootstrap.GetCredentials("google_default") credential is nil, want non-nil`)
 	}
 
-	c = bootstrap.GetCredentials("insecure")
-	if c == nil {
+	if c := bootstrap.GetCredentials("insecure"); c == nil {
 		t.Errorf(`bootstrap.GetCredentials("insecure") credential is nil, want non-nil`)
 	}
 }
