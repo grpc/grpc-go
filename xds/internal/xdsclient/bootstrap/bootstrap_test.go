@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -1013,5 +1014,34 @@ func TestServerConfigMarshalAndUnmarshal(t *testing.T) {
 	}
 	if diff := cmp.Diff(cUnmarshal, c); diff != "" {
 		t.Fatalf("diff (-got +want): %v", diff)
+	}
+}
+
+func TestDefaultBundles(t *testing.T) {
+	if c := bootstrap.GetCredentials("google_default"); c == nil {
+		t.Errorf(`bootstrap.GetCredentials("google_default") credential is nil, want non-nil`)
+	}
+
+	if c := bootstrap.GetCredentials("insecure"); c == nil {
+		t.Errorf(`bootstrap.GetCredentials("insecure") credential is nil, want non-nil`)
+	}
+}
+
+func TestCredsBuilders(t *testing.T) {
+	b := &googleDefaultCredsBuilder{}
+	if _, err := b.Build(nil); err != nil {
+		t.Errorf("googleDefaultCredsBuilder.Build failed: %v", err)
+	}
+	if got, want := b.Name(), "google_default"; got != want {
+		t.Errorf("googleDefaultCredsBuilder.Name = %v, want %v", got, want)
+	}
+
+	i := &insecureCredsBuilder{}
+	if _, err := i.Build(nil); err != nil {
+		t.Errorf("insecureCredsBuilder.Build failed: %v", err)
+	}
+
+	if got, want := i.Name(), "insecure"; got != want {
+		t.Errorf("insecureCredsBuilder.Name = %v, want %v", got, want)
 	}
 }
