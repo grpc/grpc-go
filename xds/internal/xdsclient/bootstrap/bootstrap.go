@@ -162,7 +162,7 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		}
 		bundle, err := c.Build(cc.Config)
 		if err != nil {
-			return fmt.Errorf("failed to build credentials bundle from bootstrap for %q, error: %v", cc.Type, err)
+			return fmt.Errorf("failed to build credentials bundle from bootstrap for %q: %v", cc.Type, err)
 		}
 		sc.Creds = grpc.WithCredentialsBundle(bundle)
 		break
