@@ -26,11 +26,9 @@ import (
 
 const testCredsBuilderName = "test_creds"
 
-var builder *testCredsBuilder
+var builder = &testCredsBuilder{}
 
 func init() {
-	// Register a new credential builder.
-	builder = &testCredsBuilder{}
 	RegisterCredentials(builder)
 }
 
