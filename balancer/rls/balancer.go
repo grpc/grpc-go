@@ -254,7 +254,7 @@ func (b *rlsBalancer) handleControlChannelUpdate(newCfg *lbConfig) {
 
 	// Create a new control channel and close the existing one.
 	b.logger.Infof("Creating control channel to RLS server at: %v", newCfg.lookupService)
-	ctrlCh, err := newControlChannel(newCfg.lookupService, newCfg.lookupServiceTimeout, b.bopts, b.connectivityStateCh)
+	ctrlCh, err := newControlChannel(newCfg.lookupService, newCfg.controlChannelServiceConfig, newCfg.lookupServiceTimeout, b.bopts, b.connectivityStateCh)
 	if err != nil {
 		// This is very uncommon and usually represents a non-transient error.
 		// There is not much we can do here other than wait for another update

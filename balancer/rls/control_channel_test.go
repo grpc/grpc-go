@@ -51,7 +51,7 @@ func (s) TestControlChannelThrottled(t *testing.T) {
 	overrideAdaptiveThrottler(t, alwaysThrottlingThrottler())
 
 	// Create a control channel to the fake RLS server.
-	ctrlCh, err := newControlChannel(rlsServer.Address, defaultTestTimeout, balancer.BuildOptions{}, nil)
+	ctrlCh, err := newControlChannel(rlsServer.Address, "", defaultTestTimeout, balancer.BuildOptions{}, nil)
 	if err != nil {
 		t.Fatalf("Failed to create control channel to RLS server: %v", err)
 	}
@@ -79,7 +79,7 @@ func (s) TestLookupFailure(t *testing.T) {
 	})
 
 	// Create a control channel to the fake RLS server.
-	ctrlCh, err := newControlChannel(rlsServer.Address, defaultTestTimeout, balancer.BuildOptions{}, nil)
+	ctrlCh, err := newControlChannel(rlsServer.Address, "", defaultTestTimeout, balancer.BuildOptions{}, nil)
 	if err != nil {
 		t.Fatalf("Failed to create control channel to RLS server: %v", err)
 	}
@@ -118,7 +118,7 @@ func (s) TestLookupDeadlineExceeded(t *testing.T) {
 	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 	// Create a control channel with a small deadline.
-	ctrlCh, err := newControlChannel(rlsServer.Address, defaultTestShortTimeout, balancer.BuildOptions{}, nil)
+	ctrlCh, err := newControlChannel(rlsServer.Address, "", defaultTestShortTimeout, balancer.BuildOptions{}, nil)
 	if err != nil {
 		t.Fatalf("Failed to create control channel to RLS server: %v", err)
 	}
@@ -272,7 +272,7 @@ func testControlChannelCredsSuccess(t *testing.T, sopts []grpc.ServerOption, bop
 	})
 
 	// Create a control channel to the fake server.
-	ctrlCh, err := newControlChannel(rlsServer.Address, defaultTestTimeout, bopts, nil)
+	ctrlCh, err := newControlChannel(rlsServer.Address, "", defaultTestTimeout, bopts, nil)
 	if err != nil {
 		t.Fatalf("Failed to create control channel to RLS server: %v", err)
 	}
@@ -360,7 +360,7 @@ func testControlChannelCredsFailure(t *testing.T, sopts []grpc.ServerOption, bop
 	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 	// Create the control channel to the fake server.
-	ctrlCh, err := newControlChannel(rlsServer.Address, defaultTestTimeout, bopts, nil)
+	ctrlCh, err := newControlChannel(rlsServer.Address, "", defaultTestTimeout, bopts, nil)
 	if err != nil {
 		t.Fatalf("Failed to create control channel to RLS server: %v", err)
 	}
@@ -457,7 +457,7 @@ func (s) TestNewControlChannelUnsupportedCredsBundle(t *testing.T) {
 	rlsServer, _ := setupFakeRLSServer(t, nil)
 
 	// Create the control channel to the fake server.
-	ctrlCh, err := newControlChannel(rlsServer.Address, defaultTestTimeout, balancer.BuildOptions{CredsBundle: &unsupportedCredsBundle{}}, nil)
+	ctrlCh, err := newControlChannel(rlsServer.Address, "", defaultTestTimeout, balancer.BuildOptions{CredsBundle: &unsupportedCredsBundle{}}, nil)
 	if err == nil {
 		ctrlCh.close()
 		t.Fatal("newControlChannel succeeded when expected to fail")

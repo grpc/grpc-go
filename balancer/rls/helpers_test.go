@@ -197,7 +197,7 @@ func setupFakeRLSServer(t *testing.T, lis net.Listener, opts ...grpc.ServerOptio
 }
 
 // buildBasicRLSConfig constructs a basic service config for the RLS LB policy
-// which header matching rules. This expects the passed child policy name to
+// with header matching rules. This expects the passed child policy name to
 // have been registered by the caller.
 func buildBasicRLSConfig(childPolicyName, rlsServerAddress string) *e2e.RLSConfig {
 	return &e2e.RLSConfig{
@@ -215,6 +215,7 @@ func buildBasicRLSConfig(childPolicyName, rlsServerAddress string) *e2e.RLSConfi
 			LookupServiceTimeout: durationpb.New(defaultTestTimeout),
 			CacheSizeBytes:       1024,
 		},
+		RouteLookupChannelServiceConfig:  `{"loadBalancingConfig": [{"pick_first": {}}]}`,
 		ChildPolicy:                      &internalserviceconfig.BalancerConfig{Name: childPolicyName},
 		ChildPolicyConfigTargetFieldName: e2e.RLSChildPolicyTargetNameField,
 	}
@@ -235,6 +236,7 @@ func buildBasicRLSConfigWithChildPolicy(t *testing.T, childPolicyName, rlsServer
 			LookupServiceTimeout: durationpb.New(defaultTestTimeout),
 			CacheSizeBytes:       1024,
 		},
+		RouteLookupChannelServiceConfig:  `{"loadBalancingConfig": [{"pick_first": {}}]}`,
 		ChildPolicy:                      &internalserviceconfig.BalancerConfig{Name: childPolicyName},
 		ChildPolicyConfigTargetFieldName: e2e.RLSChildPolicyTargetNameField,
 	}
@@ -275,7 +277,7 @@ func startManualResolverWithConfig(t *testing.T, rlsConfig *e2e.RLSConfig) *manu
 		t.Fatal(err)
 	}
 
-	sc := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(scJSON)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON)
 	r := manual.NewBuilderWithScheme("rls-e2e")
 	r.InitialState(resolver.State{ServiceConfig: sc})
 	t.Cleanup(r.Close)

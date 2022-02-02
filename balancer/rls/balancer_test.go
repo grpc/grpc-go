@@ -21,6 +21,7 @@ package rls
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -100,7 +101,7 @@ func (s) TestConfigUpdate_ControlChannel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sc := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(scJSON)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON)
 	r.UpdateState(resolver.State{ServiceConfig: sc})
 
 	// Ensure a connection is established to the second RLS server.
@@ -177,6 +178,67 @@ func (s) TestConfigUpdate_ControlChannelWithCreds(t *testing.T) {
 	}
 }
 
+// TestConfigUpdate_ControlChannelServiceConfig tests the scenario where RLS LB
+// policy's configuration specifies the service config for the control channel
+// via the `routeLookupChannelServiceConfig` field. This test verifies that the
+// provided service config is applied for the control channel.
+func (s) TestConfigUpdate_ControlChannelServiceConfig(t *testing.T) {
+	// Start an RLS server and set the throttler to never throttle requests.
+	rlsServer, rlsReqCh := setupFakeRLSServer(t, nil)
+	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
+
+	// Register a balancer to be used for the control channel, and set up a
+	// callback to get notified when the balancer receives a clientConn updates.
+	ccUpdateCh := testutils.NewChannel()
+	bf := &e2e.BalancerFuncs{
+		UpdateClientConnState: func(cfg *e2e.RLSChildPolicyConfig) error {
+			if cfg.Backend != rlsServer.Address {
+				return fmt.Errorf("control channel LB policy received config with backend %q, want %q", cfg.Backend, rlsServer.Address)
+			}
+			ccUpdateCh.Replace(nil)
+			return nil
+		},
+	}
+	controlChannelPolicyName := "test-control-channel-" + t.Name()
+	e2e.RegisterRLSChildPolicy(controlChannelPolicyName, bf)
+	t.Logf("Registered child policy with name %q", controlChannelPolicyName)
+
+	// Build RLS service config and set the `routeLookupChannelServiceConfig`
+	// field to a service config which uses the above balancer.
+	rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
+	rlsConfig.RouteLookupChannelServiceConfig = fmt.Sprintf(`{"loadBalancingConfig" : [{%q: {"backend": %q} }]}`, controlChannelPolicyName, rlsServer.Address)
+
+	// Start a test backend, and set up the fake RLS server to return this as a
+	// target in the RLS response.
+	backendCh, backendAddress := startBackend(t)
+	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *e2e.RouteLookupResponse {
+		return &e2e.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{backendAddress}}}
+	})
+
+	// Register a manual resolver and push the RLS service config through it.
+	r := startManualResolverWithConfig(t, rlsConfig)
+
+	cc, err := grpc.Dial(r.Scheme()+":///rls.test.example.com", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+
+	// Make an RPC and ensure it gets routed to the test backend.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, backendCh)
+
+	// Make sure an RLS request is sent out.
+	verifyRLSRequest(t, rlsReqCh, true)
+
+	// Verify that the control channel is using the LB policy we injected via the
+	// routeLookupChannelServiceConfig field.
+	if _, err := ccUpdateCh.Receive(ctx); err != nil {
+		t.Fatalf("timeout when waiting for control channel LB policy to receive a clientConn update")
+	}
+}
+
 // TestConfigUpdate_DefaultTarget tests the scenario where a config update
 // changes the default target. Verifies that RPCs get routed to the new default
 // target after the config has been applied.
@@ -213,7 +275,7 @@ func (s) TestConfigUpdate_DefaultTarget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sc := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(scJSON)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON)
 	r.UpdateState(resolver.State{ServiceConfig: sc})
 	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, backendCh2)
 }
@@ -313,7 +375,7 @@ func (s) TestConfigUpdate_ChildPolicyConfigs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sc := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(scJSON)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON)
 	r.UpdateState(resolver.State{ServiceConfig: sc})
 
 	// Expect the child policy for the test backend to receive the update.
@@ -418,7 +480,7 @@ func (s) TestConfigUpdate_ChildPolicyChange(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sc := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(scJSON)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON)
 	r.UpdateState(resolver.State{ServiceConfig: sc})
 
 	// The above update should result in the first LB policy being shutdown and
@@ -568,7 +630,7 @@ func (s) TestConfigUpdate_DataCacheSizeDecrease(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	sc := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(scJSON)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON)
 	r.UpdateState(resolver.State{ServiceConfig: sc})
 
 	<-clientConnUpdateDone

@@ -29,6 +29,7 @@ import (
 	durationpb "github.com/golang/protobuf/ptypes/duration"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/pretty"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/resolver"
@@ -61,9 +62,10 @@ type lbConfig struct {
 	staleAge             time.Duration
 	defaultTarget        string
 
-	childPolicyName        string
-	childPolicyConfig      map[string]json.RawMessage
-	childPolicyTargetField string
+	childPolicyName             string
+	childPolicyConfig           map[string]json.RawMessage
+	childPolicyTargetField      string
+	controlChannelServiceConfig string
 }
 
 func (lbCfg *lbConfig) Equal(other *lbConfig) bool {
@@ -76,6 +78,7 @@ func (lbCfg *lbConfig) Equal(other *lbConfig) bool {
 		lbCfg.defaultTarget == other.defaultTarget &&
 		lbCfg.childPolicyName == other.childPolicyName &&
 		lbCfg.childPolicyTargetField == other.childPolicyTargetField &&
+		lbCfg.controlChannelServiceConfig == other.controlChannelServiceConfig &&
 		childPolicyConfigEqual(lbCfg.childPolicyConfig, other.childPolicyConfig)
 }
 
@@ -102,10 +105,14 @@ func childPolicyConfigEqual(a, b map[string]json.RawMessage) bool {
 // and makes it easier to unmarshal.
 type lbConfigJSON struct {
 	RouteLookupConfig                json.RawMessage
+	RouteLookupChannelServiceConfig  json.RawMessage
 	ChildPolicy                      []map[string]json.RawMessage
 	ChildPolicyConfigTargetFieldName string
 }
 
+// ParseConfig parses the JSON load balancer config provided into an
+// internal form or returns an error if the config is invalid.
+//
 // When parsing a config update, the following validations are performed:
 // - routeLookupConfig:
 //   - grpc_keybuilders field:
@@ -127,6 +134,8 @@ type lbConfigJSON struct {
 //   - ignore `valid_targets` field
 //   - `cache_size_bytes` field must have a value greater than 0, and if its
 //      value is greater than 5M, we cap it at 5M
+// - routeLookupChannelServiceConfig:
+//   - if specified, must parse as valid service config
 // - childPolicy:
 //   - must find a valid child policy with a valid config
 // - childPolicyConfigTargetFieldName:
@@ -146,6 +155,14 @@ func (rlsBB) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, 
 	lbCfg, err := parseRLSProto(rlsProto)
 	if err != nil {
 		return nil, err
+	}
+
+	if sc := string(cfgJSON.RouteLookupChannelServiceConfig); sc != "" {
+		parsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(sc)
+		if parsed.Err != nil {
+			return nil, fmt.Errorf("rls: bad control channel service config %q: %v", sc, parsed.Err)
+		}
+		lbCfg.controlChannelServiceConfig = sc
 	}
 
 	if cfgJSON.ChildPolicyConfigTargetFieldName == "" {

@@ -95,7 +95,7 @@ func (s) TestXDSResolverClusterSpecifierPlugin(t *testing.T) {
       }
     }}]}`
 
-	wantSCParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON)
+	wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
 		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
@@ -163,7 +163,7 @@ func (s) TestXDSResolverClusterSpecifierPluginConfigUpdate(t *testing.T) {
       }
     }}]}`
 
-	wantSCParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON)
+	wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
 		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
@@ -199,7 +199,7 @@ func (s) TestXDSResolverClusterSpecifierPluginConfigUpdate(t *testing.T) {
       }
     }}]}`
 
-	wantSCParsed = internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON)
+	wantSCParsed = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
 		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
@@ -250,7 +250,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
       }
     }}]}`
 
-	wantSCParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON)
+	wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
 		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
@@ -320,7 +320,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
       }
     }}]}`
 
-	wantSCParsed2 := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON2)
+	wantSCParsed2 := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON2)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed2.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
 		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
@@ -359,7 +359,7 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
       }
     }}]}`
 
-	wantSCParsed3 := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON3)
+	wantSCParsed3 := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON3)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed3.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
 		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))

@@ -37,6 +37,8 @@ import (
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
+
+	_ "google.golang.org/grpc/xds" // To install the xds resolvers and balancers.
 )
 
 var caFile = flag.String("ca_file", "", "The file containing the CA root cert file")

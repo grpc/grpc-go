@@ -41,6 +41,7 @@ func testEqual(a, b *lbConfig) bool {
 		a.staleAge == b.staleAge &&
 		a.cacheSizeBytes == b.cacheSizeBytes &&
 		a.defaultTarget == b.defaultTarget &&
+		a.controlChannelServiceConfig == b.controlChannelServiceConfig &&
 		a.childPolicyName == b.childPolicyName &&
 		a.childPolicyTargetField == b.childPolicyTargetField &&
 		childPolicyConfigEqual(a.childPolicyConfig, b.childPolicyConfig)
@@ -114,18 +115,20 @@ func (s) TestParseConfig(t *testing.T) {
 					"cacheSizeBytes": 1000,
 					"defaultTarget": "passthrough:///default"
 				},
+				"routeLookupChannelServiceConfig": {"loadBalancingConfig": [{"grpclb": {"childPolicy": [{"pickfirst": {}}]}}]},
 				"childPolicy": [{"grpclb": {"childPolicy": [{"pickfirst": {}}]}}],
 				"childPolicyConfigTargetFieldName": "serviceName"
 			}`),
 			wantCfg: &lbConfig{
-				lookupService:          "target",
-				lookupServiceTimeout:   100 * time.Second,
-				maxAge:                 60 * time.Second,
-				staleAge:               50 * time.Second,
-				cacheSizeBytes:         1000,
-				defaultTarget:          "passthrough:///default",
-				childPolicyName:        "grpclb",
-				childPolicyTargetField: "serviceName",
+				lookupService:               "target",
+				lookupServiceTimeout:        100 * time.Second,
+				maxAge:                      60 * time.Second,
+				staleAge:                    50 * time.Second,
+				cacheSizeBytes:              1000,
+				defaultTarget:               "passthrough:///default",
+				controlChannelServiceConfig: `{"loadBalancingConfig": [{"grpclb": {"childPolicy": [{"pickfirst": {}}]}}]}`,
+				childPolicyName:             "grpclb",
+				childPolicyTargetField:      "serviceName",
 				childPolicyConfig: map[string]json.RawMessage{
 					"childPolicy": json.RawMessage(`[{"pickfirst": {}}]`),
 					"serviceName": json.RawMessage(childPolicyTargetFieldVal),
@@ -276,6 +279,50 @@ func (s) TestParseConfigErrors(t *testing.T) {
 				"childPolicyConfigTargetFieldName": "serviceName"
 			}`),
 			wantErr: "rls: cache_size_bytes must be set to a non-zero value",
+		},
+		{
+			desc: "routeLookupChannelServiceConfig is not in service config format",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "target",
+					"lookupServiceTimeout" : "100s",
+					"maxAge": "60s",
+					"staleAge" : "50s",
+					"cacheSizeBytes": 1000,
+					"defaultTarget": "passthrough:///default"
+				},
+				"routeLookupChannelServiceConfig": "unknown",
+				"childPolicy": [{"grpclb": {"childPolicy": [{"pickfirst": {}}]}}],
+				"childPolicyConfigTargetFieldName": "serviceName"
+			}`),
+			wantErr: "cannot unmarshal string into Go value of type grpc.jsonSC",
+		},
+		{
+			desc: "routeLookupChannelServiceConfig contains unknown LB policy",
+			input: []byte(`{
+				"routeLookupConfig": {
+					"grpcKeybuilders": [{
+						"names": [{"service": "service", "method": "method"}],
+						"headers": [{"key": "k1", "names": ["v1"]}]
+					}],
+					"lookupService": "target",
+					"lookupServiceTimeout" : "100s",
+					"maxAge": "60s",
+					"staleAge" : "50s",
+					"cacheSizeBytes": 1000,
+					"defaultTarget": "passthrough:///default"
+				},
+				"routeLookupChannelServiceConfig": {
+					"loadBalancingConfig": [{"not_a_balancer1": {} }, {"not_a_balancer2": {}}]
+				},
+				"childPolicy": [{"grpclb": {"childPolicy": [{"pickfirst": {}}]}}],
+				"childPolicyConfigTargetFieldName": "serviceName"
+			}`),
+			wantErr: "invalid loadBalancingConfig: no supported policies found",
 		},
 		{
 			desc: "no child policy",

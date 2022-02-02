@@ -31,12 +31,14 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -49,17 +51,42 @@ const (
 	// server supports the v3 version of the xDS transport protocol.
 	serverFeaturesV3 = "xds_v3"
 
-	// Type name for Google default credentials.
-	credsGoogleDefault              = "google_default"
-	credsInsecure                   = "insecure"
 	gRPCUserAgentName               = "gRPC Go"
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 )
+
+func init() {
+	bootstrap.RegisterCredentials(&insecureCredsBuilder{})
+	bootstrap.RegisterCredentials(&googleDefaultCredsBuilder{})
+}
 
 var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 
 // For overriding in unit tests.
 var bootstrapFileReadFunc = ioutil.ReadFile
+
+// insecureCredsBuilder encapsulates a insecure credential that is built using a
+// JSON config.
+type insecureCredsBuilder struct{}
+
+func (i *insecureCredsBuilder) Build(json.RawMessage) (credentials.Bundle, error) {
+	return insecure.NewBundle(), nil
+}
+func (i *insecureCredsBuilder) Name() string {
+	return "insecure"
+}
+
+// googleDefaultCredsBuilder encapsulates a Google Default credential that is built using a
+// JSON config.
+type googleDefaultCredsBuilder struct{}
+
+func (d *googleDefaultCredsBuilder) Build(json.RawMessage) (credentials.Bundle, error) {
+	return google.NewDefaultCredentials(), nil
+}
+
+func (d *googleDefaultCredsBuilder) Name() string {
+	return "google_default"
+}
 
 // ServerConfig contains the configuration to connect to a server, including
 // URI, creds, and transport API version (e.g. v2 or v3).
@@ -129,13 +156,16 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 	for _, cc := range server.ChannelCreds {
 		// We stop at the first credential type that we support.
 		sc.CredsType = cc.Type
-		if cc.Type == credsGoogleDefault {
-			sc.Creds = grpc.WithCredentialsBundle(google.NewDefaultCredentials())
-			break
-		} else if cc.Type == credsInsecure {
-			sc.Creds = grpc.WithTransportCredentials(insecure.NewCredentials())
-			break
+		c := bootstrap.GetCredentials(cc.Type)
+		if c == nil {
+			continue
 		}
+		bundle, err := c.Build(cc.Config)
+		if err != nil {
+			return fmt.Errorf("failed to build credentials bundle from bootstrap for %q: %v", cc.Type, err)
+		}
+		sc.Creds = grpc.WithCredentialsBundle(bundle)
+		break
 	}
 	for _, f := range server.ServerFeatures {
 		if f == serverFeaturesV3 {
