@@ -193,7 +193,7 @@ func doSlowFallbackAfterStartup() {
 		errorLog.Fatalf("Expected RPC to take grpclb route type BACKEND. Got: %v", g)
 	}
 	runCmd(*blackholeLBAndBackendAddrsCmd)
-	fallbackDeadline := time.Now().Add(40 * time.Second)
+	fallbackDeadline := time.Now().Add(80 * time.Second)
 	waitForFallbackAndDoRPCs(client, fallbackDeadline)
 }
 
