@@ -220,12 +220,12 @@ func (s) TestTwoBalancersSameType(t *testing.T) {
 	deadline := time.Now().Add(defaultTestTimeout)
 	// Poll to see if pending was deleted (happens in forked goroutine).
 	for {
-		gsb.swapMu.Lock()
+		gsb.mu.Lock()
 		if gsb.balancerPending == nil {
-			gsb.swapMu.Unlock()
+			gsb.mu.Unlock()
 			break
 		}
-		gsb.swapMu.Unlock()
+		gsb.mu.Unlock()
 		if time.Now().After(deadline) {
 			t.Fatalf("balancerPending was not deleted as the pending LB reported a state other than READY, which should switch pending to current")
 		}
@@ -288,12 +288,12 @@ func (s) TestCurrentNotReadyPendingUpdate(t *testing.T) {
 	deadline := time.Now().Add(defaultTestTimeout)
 	// Poll to see if pending was deleted (happens in forked goroutine).
 	for {
-		gsb.swapMu.Lock()
+		gsb.mu.Lock()
 		if gsb.balancerPending == nil {
-			gsb.swapMu.Unlock()
+			gsb.mu.Unlock()
 			break
 		}
-		gsb.swapMu.Unlock()
+		gsb.mu.Unlock()
 		if time.Now().After(deadline) {
 			t.Fatalf("balancerPending was not deleted as the current was in a state other than READY, which should switch pending to current")
 		}
@@ -368,12 +368,12 @@ func (s) TestCurrentLeavingReady(t *testing.T) {
 	deadline := time.Now().Add(defaultTestTimeout)
 	// Poll to see if pending was deleted (happens in forked goroutine).
 	for {
-		gsb.swapMu.Lock()
+		gsb.mu.Lock()
 		if gsb.balancerPending == nil {
-			gsb.swapMu.Unlock()
+			gsb.mu.Unlock()
 			break
 		}
-		gsb.swapMu.Unlock()
+		gsb.mu.Unlock()
 		if time.Now().After(deadline) {
 			t.Fatalf("balancerPending was not deleted as the pending LB reported a state other than READY, which should switch pending to current")
 		}
