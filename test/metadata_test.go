@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
@@ -74,7 +73,7 @@ func (s) TestInvalidMetadata(t *testing.T) {
 				return err
 			}
 			test := tests[testNum]
-			testNum = testNum + 1
+			testNum ++
 			if err := stream.SetHeader(test.md); !reflect.DeepEqual(test.want, err) {
 				return fmt.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
 			}
@@ -103,10 +102,11 @@ func (s) TestInvalidMetadata(t *testing.T) {
 	// call the stream server's api to drive the server-side unit testing
 	for _, test := range tests {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		stream, err := ss.Client.FullDuplexCall(ctx, grpc.WaitForReady(true))
+		stream, err := ss.Client.FullDuplexCall(ctx)
 		defer cancel()
 		if err != nil {
 			t.Errorf("call ss.Client.FullDuplexCall(context.Background()) will success but got err :%v", err)
+			continue
 		}
 		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
 			t.Errorf("call ss.Client stream Send(nil) will success but got err :%v", err)
