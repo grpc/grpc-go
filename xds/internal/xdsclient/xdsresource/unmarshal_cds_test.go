@@ -1624,6 +1624,9 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 }
 
 func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
+	oldOutlierDetectionSupportEnv := envconfig.XDSOutlierDetection
+	envconfig.XDSOutlierDetection = true
+	defer func() { envconfig.XDSOutlierDetection = oldOutlierDetectionSupportEnv }()
 	odProto := func(od *v3clusterpb.OutlierDetection) *v3clusterpb.Cluster {
 		// Cluster parsing doesn't fail with respect to fields orthogonal to
 		// outlier detection.
@@ -1650,18 +1653,18 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 	}
 
 	odDefaultUpdate := &OutlierDetection{
-		Interval:                       defaultInterval,
-		BaseEjectionTime:               defaultBaseEjectionTime,
-		MaxEjectionTime:                defaultMaxEjectionTime,
-		MaxEjectionPercent:             defaultMaxEjectionPercent,
-		SuccessRateStdevFactor:         defaultSuccessRateStdevFactor,
-		EnforcingSuccessRate:           defaultEnforcingSuccessRate,
-		SuccessRateMinimumHosts:        defaultSuccessRateMinimumHosts,
-		SuccessRateRequestVolume:       defaultSuccessRateRequestVolume,
-		FailurePercentageThreshold:     defaultFailurePercentageThreshold,
-		EnforcingFailurePercentage:     defaultEnforcingFailurePercentage,
-		FailurePercentageMinimumHosts:  defaultFailurePercentageMinimumHosts,
-		FailurePercentageRequestVolume: defaultFailurePercentageRequestVolume,
+		Interval:                       10 * time.Second,
+		BaseEjectionTime:               30 * time.Second,
+		MaxEjectionTime:                300 * time.Second,
+		MaxEjectionPercent:             10,
+		SuccessRateStdevFactor:         1900,
+		EnforcingSuccessRate:           100,
+		SuccessRateMinimumHosts:        5,
+		SuccessRateRequestVolume:       100,
+		FailurePercentageThreshold:     85,
+		EnforcingFailurePercentage:     0,
+		FailurePercentageMinimumHosts:  5,
+		FailurePercentageRequestVolume: 50,
 	}
 
 	odProtoWithValidFields := &v3clusterpb.OutlierDetection{
@@ -1719,6 +1722,13 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "interval-overflows",
+			cluster: odProto(&v3clusterpb.OutlierDetection{
+				Interval: &durationpb.Duration{Seconds: 315576000001},
+			}),
+			wantErr: true,
+		},
+		{
 			name: "base-ejection-time-is-negative",
 			cluster: odProto(&v3clusterpb.OutlierDetection{
 				BaseEjectionTime: &durationpb.Duration{Seconds: -10},
@@ -1726,9 +1736,23 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "base-ejection-time-overflows",
+			cluster: odProto(&v3clusterpb.OutlierDetection{
+				BaseEjectionTime: &durationpb.Duration{Seconds: 315576000001},
+			}),
+			wantErr: true,
+		},
+		{
 			name: "max-ejection-time-is-negative",
 			cluster: odProto(&v3clusterpb.OutlierDetection{
 				MaxEjectionTime: &durationpb.Duration{Seconds: -10},
+			}),
+			wantErr: true,
+		},
+		{
+			name: "max-ejection-time-overflows",
+			cluster: odProto(&v3clusterpb.OutlierDetection{
+				MaxEjectionTime: &durationpb.Duration{Seconds: 315576000001},
 			}),
 			wantErr: true,
 		},

@@ -58,20 +58,19 @@ type ClusterLBPolicyRingHash struct {
 	MaximumRingSize uint64
 }
 
-// OutlierDetection is the OutlierDetection configuration for a cluster.
+// OutlierDetection is the outlier detection configuration for a cluster.
 type OutlierDetection struct {
 	// Interval is the time interval between ejection analysis sweeps. This can
 	// result in both new ejections as well as addresses being returned to
-	// service. Defaults to 10000ms or 10s.
+	// service. Defaults to 10s.
 	Interval time.Duration
 	// BaseEjectionTime is the base time that a host is ejected for. The real
 	// time is equal to the base time multiplied by the number of times the host
-	// has been ejected and is capped by MaxEjectionTime. Defaults to 30000ms or
-	// 30s.
+	// has been ejected and is capped by MaxEjectionTime. Defaults to 30s.
 	BaseEjectionTime time.Duration
 	// MaxEjectionTime is the maximum time that an address is ejected for. If
-	// not specified, the default value (300000ms or 300s) or the
-	// BaseEjectionTime value is applied, whatever is larger.
+	// not specified, the default value (300s) or the BaseEjectionTime value is
+	// applied, whichever is larger.
 	MaxEjectionTime time.Duration
 	// MaxEjectionPercent is the maximum % of an upstream cluster that can be
 	// ejected due to outlier detection. Defaults to 10% but will eject at least

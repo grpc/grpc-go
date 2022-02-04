@@ -75,21 +75,9 @@ func unmarshalClusterResource(r *anypb.Any, f UpdateValidatorFunc, logger *grpcl
 }
 
 const (
-	defaultRingHashMinSize                = 1024
-	defaultRingHashMaxSize                = 8 * 1024 * 1024 // 8M
-	ringHashSizeUpperBound                = 8 * 1024 * 1024 // 8M
-	defaultInterval                       = 10 * time.Second
-	defaultBaseEjectionTime               = 30 * time.Second
-	defaultMaxEjectionTime                = 300 * time.Second
-	defaultMaxEjectionPercent             = 10
-	defaultSuccessRateStdevFactor         = 1900
-	defaultEnforcingSuccessRate           = 100
-	defaultSuccessRateMinimumHosts        = 5
-	defaultSuccessRateRequestVolume       = 100
-	defaultFailurePercentageThreshold     = 85
-	defaultEnforcingFailurePercentage     = 0
-	defaultFailurePercentageMinimumHosts  = 5
-	defaultFailurePercentageRequestVolume = 50
+	defaultRingHashMinSize = 1024
+	defaultRingHashMaxSize = 8 * 1024 * 1024 // 8M
+	ringHashSizeUpperBound = 8 * 1024 * 1024 // 8M
 )
 
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
@@ -138,10 +126,14 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		}
 	}
 
+	// Process outlier detection received from the control plane iff the
+	// corresponding environment variable is set.
 	var od *OutlierDetection
-	var err error
-	if od, err = outlierConfigFromCluster(cluster); err != nil {
-		return ClusterUpdate{}, err
+	if envconfig.XDSOutlierDetection {
+		var err error
+		if od, err = outlierConfigFromCluster(cluster); err != nil {
+			return ClusterUpdate{}, err
+		}
 	}
 
 	ret := ClusterUpdate{
@@ -484,104 +476,125 @@ func circuitBreakersFromCluster(cluster *v3clusterpb.Cluster) *uint32 {
 	return nil
 }
 
-// outlierConfigFromCluster extracts the relevant outlier detection configuration from
-// the received cluster resource. Returns nil if no OutlierDetection.
+// outlierConfigFromCluster extracts the relevant outlier detection
+// configuration from the received cluster resource. Returns nil if no
+// OutlierDetection field set in the cluster resource.
 func outlierConfigFromCluster(cluster *v3clusterpb.Cluster) (*OutlierDetection, error) {
-	// Corresponds to this line from A50: "If the outlier_detection field is not
-	// set in the Cluster message, a "no-op" outlier_detection config will be
-	// generated"
 	od := cluster.GetOutlierDetection()
 	if od == nil {
 		return nil, nil
 	}
+	const (
+		defaultInterval                       = 10 * time.Second
+		defaultBaseEjectionTime               = 30 * time.Second
+		defaultMaxEjectionTime                = 300 * time.Second
+		defaultMaxEjectionPercent             = 10
+		defaultSuccessRateStdevFactor         = 1900
+		defaultEnforcingSuccessRate           = 100
+		defaultSuccessRateMinimumHosts        = 5
+		defaultSuccessRateRequestVolume       = 100
+		defaultFailurePercentageThreshold     = 85
+		defaultEnforcingFailurePercentage     = 0
+		defaultFailurePercentageMinimumHosts  = 5
+		defaultFailurePercentageRequestVolume = 50
+	)
 	// "The google.protobuf.Duration fields interval, base_ejection_time, and
 	// max_ejection_time must obey the restrictions in the
 	// google.protobuf.Duration documentation and they must have non-negative
 	// values." - A50
 	// TODO: I can find non negative examples for validation, but not "must obey the restrictions in the documentation"
-	var iVal, betVal, metVal = defaultInterval, defaultBaseEjectionTime, defaultMaxEjectionTime
+	var interval = defaultInterval
 	if i := od.GetInterval(); i != nil {
-		iVal = i.AsDuration()
-		if iVal < 0 {
-			return nil, fmt.Errorf("outlier_detection.interval = %v; must be >= 0", iVal)
+		if err := i.CheckValid(); err != nil {
+			return nil, fmt.Errorf("outlier_detection.interval is invalid with error %v", err)
+		}
+		if interval = i.AsDuration(); interval < 0 {
+			return nil, fmt.Errorf("outlier_detection.interval = %v; must be a valid duration and >= 0", interval)
 		}
 	}
 
+	var baseEjectionTime = defaultBaseEjectionTime
 	if bet := od.GetBaseEjectionTime(); bet != nil {
-		betVal = bet.AsDuration()
-		if betVal < 0 {
-			return nil, fmt.Errorf("outlier_detection.base_ejection_time = %v; must be >= 0", betVal)
+		if err := bet.CheckValid(); err != nil {
+			return nil, fmt.Errorf("outlier_detection.base_ejection_time is invalid with error %v", err)
+		}
+		if baseEjectionTime = bet.AsDuration(); baseEjectionTime < 0 {
+			return nil, fmt.Errorf("outlier_detection.base_ejection_time = %v; must be >= 0", baseEjectionTime)
 		}
 	}
 
+	var maxEjectionTime = defaultMaxEjectionTime
 	if met := od.GetMaxEjectionTime(); met != nil {
-		metVal = met.AsDuration()
-		if metVal < 0 {
-			return nil, fmt.Errorf("outlier_detection.max_ejection_time = %v; must be >= 0", metVal)
+		if err := met.CheckValid(); err != nil {
+			return nil, fmt.Errorf("outlier_detection.max_ejection_time is invalid with error %v", err)
+		}
+		if maxEjectionTime = met.AsDuration(); maxEjectionTime < 0 {
+			return nil, fmt.Errorf("outlier_detection.max_ejection_time = %v; must be >= 0", maxEjectionTime)
 		}
 	}
 
-	var mepVal, esrVal, fptVal, efpVal, srsfVal, srmhVal, srrvVal, fpmhVal, fprvVal uint32 = defaultMaxEjectionPercent,
-		defaultEnforcingSuccessRate, defaultFailurePercentageThreshold, defaultEnforcingFailurePercentage, defaultSuccessRateStdevFactor,
-		defaultSuccessRateMinimumHosts, defaultSuccessRateRequestVolume, defaultFailurePercentageMinimumHosts,
-		defaultFailurePercentageRequestVolume
 	// "The fields max_ejection_percent, enforcing_success_rate,
 	// failure_percentage_threshold, and enforcing_failure_percentage must have
 	// values less than or equal to 100. If any of these requirements is
 	// violated, the Cluster resource should be NACKed." - A50
+	var maxEjectionPercent uint32 = defaultMaxEjectionPercent
 	if mep := od.GetMaxEjectionPercent(); mep != nil {
-		mepVal = mep.GetValue()
-		if mepVal > 100 {
-			return nil, fmt.Errorf("outlier_detection.max_ejection_percent = %v; must be <= 100", mepVal)
+		if maxEjectionPercent = mep.GetValue(); maxEjectionPercent > 100 {
+			return nil, fmt.Errorf("outlier_detection.max_ejection_percent = %v; must be <= 100", maxEjectionPercent)
 		}
 	}
+	var enforcingSuccessRate uint32 = defaultEnforcingSuccessRate
 	if esr := od.GetEnforcingSuccessRate(); esr != nil {
-		esrVal = esr.GetValue()
-		if esrVal > 100 {
-			return nil, fmt.Errorf("outlier_detection.enforcing_success_rate = %v; must be <= 100", esrVal)
+		if enforcingSuccessRate = esr.GetValue(); enforcingSuccessRate > 100 {
+			return nil, fmt.Errorf("outlier_detection.enforcing_success_rate = %v; must be <= 100", enforcingSuccessRate)
 		}
 	}
+	var failurePercentageThreshold uint32 = defaultFailurePercentageThreshold
 	if fpt := od.GetFailurePercentageThreshold(); fpt != nil {
-		fptVal = fpt.GetValue()
-		if fptVal > 100 {
-			return nil, fmt.Errorf("outlier_detection.failure_percentage_threshold = %v; must be <= 100", fptVal)
+		if failurePercentageThreshold = fpt.GetValue(); failurePercentageThreshold > 100 {
+			return nil, fmt.Errorf("outlier_detection.failure_percentage_threshold = %v; must be <= 100", failurePercentageThreshold)
 		}
 	}
+	var enforcingFailurePercentage uint32 = defaultEnforcingFailurePercentage
 	if efp := od.GetEnforcingFailurePercentage(); efp != nil {
-		efpVal = efp.GetValue()
-		if efpVal > 100 {
-			return nil, fmt.Errorf("outlier_detection.enforcing_failure_percentage = %v; must be <= 100", efpVal)
+		if enforcingFailurePercentage = efp.GetValue(); enforcingFailurePercentage > 100 {
+			return nil, fmt.Errorf("outlier_detection.enforcing_failure_percentage = %v; must be <= 100", enforcingFailurePercentage)
 		}
 	}
 
+	var successRateStdevFactor uint32 = defaultSuccessRateStdevFactor
 	if srsf := od.GetSuccessRateStdevFactor(); srsf != nil {
-		srsfVal = srsf.GetValue()
+		successRateStdevFactor = srsf.GetValue()
 	}
+	var successRateMinimumHosts uint32 = defaultSuccessRateMinimumHosts
 	if srmh := od.GetSuccessRateMinimumHosts(); srmh != nil {
-		srmhVal = srmh.GetValue()
+		successRateMinimumHosts = srmh.GetValue()
 	}
+	var successRateRequestVolume uint32 = defaultSuccessRateRequestVolume
 	if srrv := od.GetSuccessRateRequestVolume(); srrv != nil {
-		srrvVal = srrv.GetValue()
+		successRateRequestVolume = srrv.GetValue()
 	}
+	var failurePercentageMinimumHosts uint32 = defaultFailurePercentageMinimumHosts
 	if fpmh := od.GetFailurePercentageMinimumHosts(); fpmh != nil {
-		fpmhVal = fpmh.GetValue()
+		failurePercentageMinimumHosts = fpmh.GetValue()
 	}
+	var failurePercentageRequestVolume uint32 = defaultFailurePercentageRequestVolume
 	if fprv := od.GetFailurePercentageRequestVolume(); fprv != nil {
-		fprvVal = fprv.GetValue()
+		failurePercentageRequestVolume = fprv.GetValue()
 	}
 
 	return &OutlierDetection{
-		Interval:                       iVal,
-		BaseEjectionTime:               betVal,
-		MaxEjectionTime:                metVal,
-		MaxEjectionPercent:             mepVal,
-		EnforcingSuccessRate:           esrVal,
-		FailurePercentageThreshold:     fptVal,
-		EnforcingFailurePercentage:     efpVal,
-		SuccessRateStdevFactor:         srsfVal,
-		SuccessRateMinimumHosts:        srmhVal,
-		SuccessRateRequestVolume:       srrvVal,
-		FailurePercentageMinimumHosts:  fpmhVal,
-		FailurePercentageRequestVolume: fprvVal,
+		Interval:                       interval,
+		BaseEjectionTime:               baseEjectionTime,
+		MaxEjectionTime:                maxEjectionTime,
+		MaxEjectionPercent:             maxEjectionPercent,
+		EnforcingSuccessRate:           enforcingSuccessRate,
+		FailurePercentageThreshold:     failurePercentageThreshold,
+		EnforcingFailurePercentage:     enforcingFailurePercentage,
+		SuccessRateStdevFactor:         successRateStdevFactor,
+		SuccessRateMinimumHosts:        successRateMinimumHosts,
+		SuccessRateRequestVolume:       successRateRequestVolume,
+		FailurePercentageMinimumHosts:  failurePercentageMinimumHosts,
+		FailurePercentageRequestVolume: failurePercentageRequestVolume,
 	}, nil
 }
