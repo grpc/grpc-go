@@ -1627,7 +1627,7 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 	oldOutlierDetectionSupportEnv := envconfig.XDSOutlierDetection
 	envconfig.XDSOutlierDetection = true
 	defer func() { envconfig.XDSOutlierDetection = oldOutlierDetectionSupportEnv }()
-	odProto := func(od *v3clusterpb.OutlierDetection) *v3clusterpb.Cluster {
+	odToClusterProto := func(od *v3clusterpb.OutlierDetection) *v3clusterpb.Cluster {
 		// Cluster parsing doesn't fail with respect to fields orthogonal to
 		// outlier detection.
 		return &v3clusterpb.Cluster{
@@ -1644,56 +1644,12 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 			OutlierDetection: od,
 		}
 	}
-	odUpdate := func(od *OutlierDetection) ClusterUpdate {
+	odToClusterUpdate := func(od *OutlierDetection) ClusterUpdate {
 		return ClusterUpdate{
 			ClusterName:      clusterName,
 			LRSServerConfig:  ClusterLRSOff,
 			OutlierDetection: od,
 		}
-	}
-
-	odDefaultUpdate := &OutlierDetection{
-		Interval:                       10 * time.Second,
-		BaseEjectionTime:               30 * time.Second,
-		MaxEjectionTime:                300 * time.Second,
-		MaxEjectionPercent:             10,
-		SuccessRateStdevFactor:         1900,
-		EnforcingSuccessRate:           100,
-		SuccessRateMinimumHosts:        5,
-		SuccessRateRequestVolume:       100,
-		FailurePercentageThreshold:     85,
-		EnforcingFailurePercentage:     0,
-		FailurePercentageMinimumHosts:  5,
-		FailurePercentageRequestVolume: 50,
-	}
-
-	odProtoWithValidFields := &v3clusterpb.OutlierDetection{
-		Interval:                       &durationpb.Duration{Seconds: 1},
-		BaseEjectionTime:               &durationpb.Duration{Seconds: 2},
-		MaxEjectionTime:                &durationpb.Duration{Seconds: 3},
-		MaxEjectionPercent:             &wrapperspb.UInt32Value{Value: 1},
-		SuccessRateStdevFactor:         &wrapperspb.UInt32Value{Value: 2},
-		EnforcingSuccessRate:           &wrapperspb.UInt32Value{Value: 3},
-		SuccessRateMinimumHosts:        &wrapperspb.UInt32Value{Value: 4},
-		SuccessRateRequestVolume:       &wrapperspb.UInt32Value{Value: 5},
-		FailurePercentageThreshold:     &wrapperspb.UInt32Value{Value: 6},
-		EnforcingFailurePercentage:     &wrapperspb.UInt32Value{Value: 7},
-		FailurePercentageMinimumHosts:  &wrapperspb.UInt32Value{Value: 8},
-		FailurePercentageRequestVolume: &wrapperspb.UInt32Value{Value: 9},
-	}
-	odUpdateWithValidFields := &OutlierDetection{
-		Interval:                       time.Second,
-		BaseEjectionTime:               time.Second * 2,
-		MaxEjectionTime:                time.Second * 3,
-		MaxEjectionPercent:             1,
-		SuccessRateStdevFactor:         2,
-		EnforcingSuccessRate:           3,
-		SuccessRateMinimumHosts:        4,
-		SuccessRateRequestVolume:       5,
-		FailurePercentageThreshold:     6,
-		EnforcingFailurePercentage:     7,
-		FailurePercentageMinimumHosts:  8,
-		FailurePercentageRequestVolume: 9,
 	}
 
 	tests := []struct {
@@ -1706,82 +1662,101 @@ func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
 			name: "successful-case-all-defaults",
 			// Outlier detection proto is present without any fields specified,
 			// so should trigger all default values in the update.
-			cluster:    odProto(&v3clusterpb.OutlierDetection{}),
-			wantUpdate: odUpdate(odDefaultUpdate),
-		},
-		{
-			name:       "successful-case-all-fields-configured-and-valid",
-			cluster:    odProto(odProtoWithValidFields),
-			wantUpdate: odUpdate(odUpdateWithValidFields),
-		},
-		{
-			name: "interval-is-negative",
-			cluster: odProto(&v3clusterpb.OutlierDetection{
-				Interval: &durationpb.Duration{Seconds: -10},
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{}),
+			wantUpdate: odToClusterUpdate(&OutlierDetection{
+				Interval:                       10 * time.Second,
+				BaseEjectionTime:               30 * time.Second,
+				MaxEjectionTime:                300 * time.Second,
+				MaxEjectionPercent:             10,
+				SuccessRateStdevFactor:         1900,
+				EnforcingSuccessRate:           100,
+				SuccessRateMinimumHosts:        5,
+				SuccessRateRequestVolume:       100,
+				FailurePercentageThreshold:     85,
+				EnforcingFailurePercentage:     0,
+				FailurePercentageMinimumHosts:  5,
+				FailurePercentageRequestVolume: 50,
 			}),
+		},
+		{
+			name: "successful-case-all-fields-configured-and-valid",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{
+				Interval:                       &durationpb.Duration{Seconds: 1},
+				BaseEjectionTime:               &durationpb.Duration{Seconds: 2},
+				MaxEjectionTime:                &durationpb.Duration{Seconds: 3},
+				MaxEjectionPercent:             &wrapperspb.UInt32Value{Value: 1},
+				SuccessRateStdevFactor:         &wrapperspb.UInt32Value{Value: 2},
+				EnforcingSuccessRate:           &wrapperspb.UInt32Value{Value: 3},
+				SuccessRateMinimumHosts:        &wrapperspb.UInt32Value{Value: 4},
+				SuccessRateRequestVolume:       &wrapperspb.UInt32Value{Value: 5},
+				FailurePercentageThreshold:     &wrapperspb.UInt32Value{Value: 6},
+				EnforcingFailurePercentage:     &wrapperspb.UInt32Value{Value: 7},
+				FailurePercentageMinimumHosts:  &wrapperspb.UInt32Value{Value: 8},
+				FailurePercentageRequestVolume: &wrapperspb.UInt32Value{Value: 9},
+			}),
+			wantUpdate: odToClusterUpdate(&OutlierDetection{
+				Interval:                       time.Second,
+				BaseEjectionTime:               time.Second * 2,
+				MaxEjectionTime:                time.Second * 3,
+				MaxEjectionPercent:             1,
+				SuccessRateStdevFactor:         2,
+				EnforcingSuccessRate:           3,
+				SuccessRateMinimumHosts:        4,
+				SuccessRateRequestVolume:       5,
+				FailurePercentageThreshold:     6,
+				EnforcingFailurePercentage:     7,
+				FailurePercentageMinimumHosts:  8,
+				FailurePercentageRequestVolume: 9,
+			}),
+		},
+		{
+			name:    "interval-is-negative",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{Interval: &durationpb.Duration{Seconds: -10}}),
 			wantErr: true,
 		},
 		{
-			name: "interval-overflows",
-			cluster: odProto(&v3clusterpb.OutlierDetection{
-				Interval: &durationpb.Duration{Seconds: 315576000001},
-			}),
+			name:    "interval-overflows",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{Interval: &durationpb.Duration{Seconds: 315576000001}}),
 			wantErr: true,
 		},
 		{
-			name: "base-ejection-time-is-negative",
-			cluster: odProto(&v3clusterpb.OutlierDetection{
-				BaseEjectionTime: &durationpb.Duration{Seconds: -10},
-			}),
+			name:    "base-ejection-time-is-negative",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{BaseEjectionTime: &durationpb.Duration{Seconds: -10}}),
 			wantErr: true,
 		},
 		{
-			name: "base-ejection-time-overflows",
-			cluster: odProto(&v3clusterpb.OutlierDetection{
-				BaseEjectionTime: &durationpb.Duration{Seconds: 315576000001},
-			}),
+			name:    "base-ejection-time-overflows",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{BaseEjectionTime: &durationpb.Duration{Seconds: 315576000001}}),
 			wantErr: true,
 		},
 		{
-			name: "max-ejection-time-is-negative",
-			cluster: odProto(&v3clusterpb.OutlierDetection{
-				MaxEjectionTime: &durationpb.Duration{Seconds: -10},
-			}),
+			name:    "max-ejection-time-is-negative",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{MaxEjectionTime: &durationpb.Duration{Seconds: -10}}),
 			wantErr: true,
 		},
 		{
-			name: "max-ejection-time-overflows",
-			cluster: odProto(&v3clusterpb.OutlierDetection{
-				MaxEjectionTime: &durationpb.Duration{Seconds: 315576000001},
-			}),
+			name:    "max-ejection-time-overflows",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{MaxEjectionTime: &durationpb.Duration{Seconds: 315576000001}}),
 			wantErr: true,
 		},
 		{
-			name: "max-ejection-percent-is-greater-than-100",
-			cluster: odProto(&v3clusterpb.OutlierDetection{
-				MaxEjectionPercent: &wrapperspb.UInt32Value{Value: 150},
-			}),
+			name:    "max-ejection-percent-is-greater-than-100",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{MaxEjectionPercent: &wrapperspb.UInt32Value{Value: 150}}),
 			wantErr: true,
 		},
 		{
-			name: "enforcing-success-rate-is-greater-than-100",
-			cluster: odProto(&v3clusterpb.OutlierDetection{
-				EnforcingSuccessRate: &wrapperspb.UInt32Value{Value: 150},
-			}),
+			name:    "enforcing-success-rate-is-greater-than-100",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{EnforcingSuccessRate: &wrapperspb.UInt32Value{Value: 150}}),
 			wantErr: true,
 		},
 		{
-			name: "failure-percentage-threshold-is-greater-than-100",
-			cluster: odProto(&v3clusterpb.OutlierDetection{
-				FailurePercentageThreshold: &wrapperspb.UInt32Value{Value: 150},
-			}),
+			name:    "failure-percentage-threshold-is-greater-than-100",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{FailurePercentageThreshold: &wrapperspb.UInt32Value{Value: 150}}),
 			wantErr: true,
 		},
 		{
-			name: "enforcing-failure-percentage-is-greater-than-100",
-			cluster: odProto(&v3clusterpb.OutlierDetection{
-				EnforcingFailurePercentage: &wrapperspb.UInt32Value{Value: 150},
-			}),
+			name:    "enforcing-failure-percentage-is-greater-than-100",
+			cluster: odToClusterProto(&v3clusterpb.OutlierDetection{EnforcingFailurePercentage: &wrapperspb.UInt32Value{Value: 150}}),
 			wantErr: true,
 		},
 		// A Outlier Detection proto not present should lead to a nil

@@ -502,8 +502,7 @@ func outlierConfigFromCluster(cluster *v3clusterpb.Cluster) (*OutlierDetection, 
 	// max_ejection_time must obey the restrictions in the
 	// google.protobuf.Duration documentation and they must have non-negative
 	// values." - A50
-	// TODO: I can find non negative examples for validation, but not "must obey the restrictions in the documentation"
-	var interval = defaultInterval
+	interval := defaultInterval
 	if i := od.GetInterval(); i != nil {
 		if err := i.CheckValid(); err != nil {
 			return nil, fmt.Errorf("outlier_detection.interval is invalid with error %v", err)
@@ -513,7 +512,7 @@ func outlierConfigFromCluster(cluster *v3clusterpb.Cluster) (*OutlierDetection, 
 		}
 	}
 
-	var baseEjectionTime = defaultBaseEjectionTime
+	baseEjectionTime := defaultBaseEjectionTime
 	if bet := od.GetBaseEjectionTime(); bet != nil {
 		if err := bet.CheckValid(); err != nil {
 			return nil, fmt.Errorf("outlier_detection.base_ejection_time is invalid with error %v", err)
@@ -523,7 +522,7 @@ func outlierConfigFromCluster(cluster *v3clusterpb.Cluster) (*OutlierDetection, 
 		}
 	}
 
-	var maxEjectionTime = defaultMaxEjectionTime
+	maxEjectionTime := defaultMaxEjectionTime
 	if met := od.GetMaxEjectionTime(); met != nil {
 		if err := met.CheckValid(); err != nil {
 			return nil, fmt.Errorf("outlier_detection.max_ejection_time is invalid with error %v", err)
@@ -537,48 +536,48 @@ func outlierConfigFromCluster(cluster *v3clusterpb.Cluster) (*OutlierDetection, 
 	// failure_percentage_threshold, and enforcing_failure_percentage must have
 	// values less than or equal to 100. If any of these requirements is
 	// violated, the Cluster resource should be NACKed." - A50
-	var maxEjectionPercent uint32 = defaultMaxEjectionPercent
+	maxEjectionPercent := uint32(defaultMaxEjectionPercent)
 	if mep := od.GetMaxEjectionPercent(); mep != nil {
 		if maxEjectionPercent = mep.GetValue(); maxEjectionPercent > 100 {
 			return nil, fmt.Errorf("outlier_detection.max_ejection_percent = %v; must be <= 100", maxEjectionPercent)
 		}
 	}
-	var enforcingSuccessRate uint32 = defaultEnforcingSuccessRate
+	enforcingSuccessRate := uint32(defaultEnforcingSuccessRate)
 	if esr := od.GetEnforcingSuccessRate(); esr != nil {
 		if enforcingSuccessRate = esr.GetValue(); enforcingSuccessRate > 100 {
 			return nil, fmt.Errorf("outlier_detection.enforcing_success_rate = %v; must be <= 100", enforcingSuccessRate)
 		}
 	}
-	var failurePercentageThreshold uint32 = defaultFailurePercentageThreshold
+	failurePercentageThreshold := uint32(defaultFailurePercentageThreshold)
 	if fpt := od.GetFailurePercentageThreshold(); fpt != nil {
 		if failurePercentageThreshold = fpt.GetValue(); failurePercentageThreshold > 100 {
 			return nil, fmt.Errorf("outlier_detection.failure_percentage_threshold = %v; must be <= 100", failurePercentageThreshold)
 		}
 	}
-	var enforcingFailurePercentage uint32 = defaultEnforcingFailurePercentage
+	enforcingFailurePercentage := uint32(defaultEnforcingFailurePercentage)
 	if efp := od.GetEnforcingFailurePercentage(); efp != nil {
 		if enforcingFailurePercentage = efp.GetValue(); enforcingFailurePercentage > 100 {
 			return nil, fmt.Errorf("outlier_detection.enforcing_failure_percentage = %v; must be <= 100", enforcingFailurePercentage)
 		}
 	}
 
-	var successRateStdevFactor uint32 = defaultSuccessRateStdevFactor
+	successRateStdevFactor := uint32(defaultSuccessRateStdevFactor)
 	if srsf := od.GetSuccessRateStdevFactor(); srsf != nil {
 		successRateStdevFactor = srsf.GetValue()
 	}
-	var successRateMinimumHosts uint32 = defaultSuccessRateMinimumHosts
+	successRateMinimumHosts := uint32(defaultSuccessRateMinimumHosts)
 	if srmh := od.GetSuccessRateMinimumHosts(); srmh != nil {
 		successRateMinimumHosts = srmh.GetValue()
 	}
-	var successRateRequestVolume uint32 = defaultSuccessRateRequestVolume
+	successRateRequestVolume := uint32(defaultSuccessRateRequestVolume)
 	if srrv := od.GetSuccessRateRequestVolume(); srrv != nil {
 		successRateRequestVolume = srrv.GetValue()
 	}
-	var failurePercentageMinimumHosts uint32 = defaultFailurePercentageMinimumHosts
+	failurePercentageMinimumHosts := uint32(defaultFailurePercentageMinimumHosts)
 	if fpmh := od.GetFailurePercentageMinimumHosts(); fpmh != nil {
 		failurePercentageMinimumHosts = fpmh.GetValue()
 	}
-	var failurePercentageRequestVolume uint32 = defaultFailurePercentageRequestVolume
+	failurePercentageRequestVolume := uint32(defaultFailurePercentageRequestVolume)
 	if fprv := od.GetFailurePercentageRequestVolume(); fprv != nil {
 		failurePercentageRequestVolume = fprv.GetValue()
 	}
