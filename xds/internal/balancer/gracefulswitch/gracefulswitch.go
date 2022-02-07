@@ -27,7 +27,6 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -38,7 +37,6 @@ func newGracefulSwitchBalancer(cc balancer.ClientConn, opts balancer.BuildOption
 		cc:              cc,
 		bOpts:           opts,
 		scToSubBalancer: make(map[balancer.SubConn]balancer.Balancer),
-		closed:          grpcsync.NewEvent(),
 	}
 }
 
@@ -54,12 +52,10 @@ type gracefulSwitchBalancer struct {
 	// the Client Conn in the scenario the pending balancer gets swapped to.
 	pendingState     balancer.State
 	currentLBIsReady bool
+	closed           bool // set to true when this balancer is closed
 
-	// currentMu protects operations on the current balancer.
-	currentMu sync.Mutex
-
-	// closed is fired when this balancer is closed.
-	closed *grpcsync.Event
+	// currentMu must be locked before mu.
+	currentMu sync.Mutex // protects operations on the balancerCurrent
 }
 
 func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state balancer.State) {
@@ -111,21 +107,19 @@ func (gsb *gracefulSwitchBalancer) updateState(bal balancer.Balancer, state bala
 func (gsb *gracefulSwitchBalancer) swap() {
 	gsb.cc.UpdateState(gsb.pendingState)
 	currBalToClose := gsb.balancerCurrent
+	gsb.balancerCurrent = gsb.balancerPending
+	gsb.balancerPending = nil
+	for sc, bal := range gsb.scToSubBalancer {
+		if bal == currBalToClose {
+			gsb.cc.RemoveSubConn(sc)
+			delete(gsb.scToSubBalancer, sc)
+		}
+	}
 	go func() {
 		gsb.currentMu.Lock()
 		defer gsb.currentMu.Unlock()
 		currBalToClose.Close()
-		gsb.mu.Lock()
-		defer gsb.mu.Unlock()
-		for sc, bal := range gsb.scToSubBalancer {
-			if bal == gsb.balancerCurrent {
-				gsb.cc.RemoveSubConn(sc)
-				delete(gsb.scToSubBalancer, sc)
-			}
-		}
 	}()
-	gsb.balancerCurrent = gsb.balancerPending
-	gsb.balancerPending = nil
 }
 
 // Helper function that checks if the balancer passed in is current or pending.
@@ -189,7 +183,7 @@ func (gsb *gracefulSwitchBalancer) updateAddresses(bal balancer.Balancer, sc bal
 // Graceful Switch Balancer implements.
 func (gsb *gracefulSwitchBalancer) SwitchTo(builder balancer.Builder) error {
 	gsb.mu.Lock()
-	if gsb.closed.HasFired() {
+	if gsb.closed {
 		gsb.mu.Unlock()
 		// logger?
 		return errBalancerClosed
@@ -236,10 +230,10 @@ func (gsb *gracefulSwitchBalancer) latestBalancer() balancer.Balancer {
 	return gsb.balancerCurrent
 }
 
-// UpdateClientConnState() simply forwards the update to one of it's children.
+// UpdateClientConnState simply forwards the update to one of it's children.
 func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	gsb.mu.Lock()
-	if gsb.closed.HasFired() {
+	if gsb.closed {
 		gsb.mu.Unlock()
 		// logger?
 		return errBalancerClosed
@@ -264,7 +258,7 @@ func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientCo
 
 func (gsb *gracefulSwitchBalancer) ResolverError(err error) {
 	gsb.mu.Lock()
-	if gsb.closed.HasFired() {
+	if gsb.closed {
 		gsb.mu.Unlock()
 		// Logger?
 		return
@@ -305,7 +299,7 @@ func (gsb *gracefulSwitchBalancer) UpdateSubConnState(sc balancer.SubConn, state
 	gsb.currentMu.Lock()
 	defer gsb.currentMu.Unlock()
 	gsb.mu.Lock()
-	if gsb.closed.HasFired() {
+	if gsb.closed {
 		gsb.mu.Unlock()
 		// Logger
 		return
@@ -329,7 +323,7 @@ func (gsb *gracefulSwitchBalancer) UpdateSubConnState(sc balancer.SubConn, state
 
 func (gsb *gracefulSwitchBalancer) Close() {
 	gsb.mu.Lock()
-	gsb.closed.Fire()
+	gsb.closed = true
 	for sc := range gsb.scToSubBalancer {
 		gsb.cc.RemoveSubConn(sc)
 		delete(gsb.scToSubBalancer, sc)
