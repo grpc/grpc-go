@@ -185,7 +185,6 @@ func (gsb *gracefulSwitchBalancer) SwitchTo(builder balancer.Builder) error {
 	gsb.mu.Lock()
 	if gsb.closed {
 		gsb.mu.Unlock()
-		// logger?
 		return errBalancerClosed
 	}
 	ccw := &clientConnWrapper{
@@ -235,7 +234,6 @@ func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientCo
 	gsb.mu.Lock()
 	if gsb.closed {
 		gsb.mu.Unlock()
-		// logger?
 		return errBalancerClosed
 	}
 	balToUpdate := gsb.latestBalancer()
@@ -260,7 +258,6 @@ func (gsb *gracefulSwitchBalancer) ResolverError(err error) {
 	gsb.mu.Lock()
 	if gsb.closed {
 		gsb.mu.Unlock()
-		// Logger?
 		return
 	}
 	// The update will be forwarded to the pending balancer only if there is a
@@ -301,7 +298,6 @@ func (gsb *gracefulSwitchBalancer) UpdateSubConnState(sc balancer.SubConn, state
 	gsb.mu.Lock()
 	if gsb.closed {
 		gsb.mu.Unlock()
-		// Logger
 		return
 	}
 	// This SubConn update will forward to the current balancer even if there is
@@ -342,6 +338,21 @@ func (gsb *gracefulSwitchBalancer) Close() {
 	}
 }
 
+func (gsb *gracefulSwitchBalancer) ExitIdle() {
+	gsb.mu.Lock()
+	defer gsb.mu.Unlock()
+	if gsb.balancerCurrent != nil {
+		if ei, ok := gsb.balancerCurrent.(balancer.ExitIdler); ok {
+			ei.ExitIdle()
+		}
+	}
+	if gsb.balancerPending != nil {
+		if ei, ok := gsb.balancerPending.(balancer.ExitIdler); ok {
+			ei.ExitIdle()
+		}
+	}
+}
+
 type clientConnWrapper struct {
 	gsb *gracefulSwitchBalancer
 
@@ -368,6 +379,6 @@ func (ccw *clientConnWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resol
 	ccw.gsb.updateAddresses(ccw.bal, sc, addrs)
 }
 
-func (clientConnWrapper) Target() string {
-	return ""
+func (ccw *clientConnWrapper) Target() string {
+	return ccw.gsb.bOpts.Target.URL.String()
 }
