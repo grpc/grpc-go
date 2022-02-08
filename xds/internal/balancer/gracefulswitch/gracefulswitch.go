@@ -22,21 +22,26 @@ package gracefulswitch
 import (
 	"errors"
 	"fmt"
+	"google.golang.org/grpc/balancer/base"
 	"sync"
 
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/resolver"
 )
 
-var errBalancerClosed = errors.New("gracefulSwitchBalancer is closed")
+var (
+	errBalancerClosed = errors.New("gracefulSwitchBalancer is closed")
+	defaultState = balancer.State{
+		ConnectivityState: connectivity.Connecting,
+		Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
+	}
+)
 
 func newGracefulSwitchBalancer(cc balancer.ClientConn, opts balancer.BuildOptions) *gracefulSwitchBalancer {
 	return &gracefulSwitchBalancer{
 		cc:              cc,
 		bOpts:           opts,
-		scToSubBalancer: make(map[balancer.SubConn]balancer.Balancer),
 	}
 }
 
@@ -45,13 +50,9 @@ type gracefulSwitchBalancer struct {
 	cc    balancer.ClientConn
 
 	mu              sync.Mutex
-	balancerCurrent balancer.Balancer
-	balancerPending balancer.Balancer
-	scToSubBalancer map[balancer.SubConn]balancer.Balancer
-	// pendingState is the state of the pending balancer, and is used to update
-	// the Client Conn in the scenario the pending balancer gets swapped to.
-	pendingState     balancer.State
-	currentLBIsReady bool
+	balancerCurrent *clientConnWrapper
+	balancerPending *clientConnWrapper
+
 	closed           bool // set to true when this balancer is closed
 
 	// currentMu must be locked before mu.
@@ -59,11 +60,9 @@ type gracefulSwitchBalancer struct {
 }
 
 func (gsb *gracefulSwitchBalancer) updateState(ccw *clientConnWrapper, state balancer.State) {
-	// Hold the mutex for this entire call to ensure it cannot occur
-	// concurrently with other updateState() calls. This causes updates to
-	// pendingState and calls to cc.UpdateState to happen atomically.
-	gsb.mu.Lock()
-	defer gsb.mu.Unlock()
+	if ccw.bal == nil {
+		return
+	}
 
 	if !gsb.balancerCurrentOrPending(ccw.bal) {
 		return
@@ -73,14 +72,13 @@ func (gsb *gracefulSwitchBalancer) updateState(ccw *clientConnWrapper, state bal
 	// Otherwise, gsb.balancerCurrent written to and will only hit if the pointers match
 	// up, any other permutation of check (i.e. ccw.bal is (nil || pointer) and doesn't
 	// equal the current, then you know the update is for pending.
-	if ccw.bal == gsb.balancerCurrent {
-		gsb.currentLBIsReady = state.ConnectivityState == connectivity.Ready
+	if ccw == gsb.balancerCurrent {
 		// In the case that the current balancer exits READY, and there is a pending
 		// balancer, you can forward the pending balancers cached State up to
 		// ClientConn and swap the pending into the current. This is because there
 		// is no reason to gracefully switch from and keep using the old policy as
 		// the ClientConn is not connected to any backends.
-		if !gsb.currentLBIsReady && gsb.balancerPending != nil {
+		if state.ConnectivityState != connectivity.Ready && gsb.balancerPending != nil {
 			gsb.swap()
 			return
 		}
@@ -93,15 +91,11 @@ func (gsb *gracefulSwitchBalancer) updateState(ccw *clientConnWrapper, state bal
 		gsb.cc.UpdateState(state)
 		return
 	}
-	// Cache the pending state and picker if you don't need to send it at
-	// this instant (i.e. the LB policy is connecting). This balancer can
-	// send it later on the current LB exiting READY.
-	gsb.pendingState = state
 	// If the current balancer is currently in a state other than READY, the
 	// new policy can be swapped into place immediately. This is because
 	// there is no reason to gracefully switch from and keep using the old
 	// policy as the ClientConn is not connected to any backends.
-	if state.ConnectivityState != connectivity.Connecting || !gsb.currentLBIsReady {
+	if state.ConnectivityState != connectivity.Connecting || gsb.balancerCurrent.recentUpdate.ConnectivityState != connectivity.Ready {
 		gsb.swap()
 	}
 }
@@ -109,15 +103,12 @@ func (gsb *gracefulSwitchBalancer) updateState(ccw *clientConnWrapper, state bal
 // swap swaps out the current lb with the pending LB and updates the ClientConn.
 // The caller must hold gsb.mu.
 func (gsb *gracefulSwitchBalancer) swap() {
-	gsb.cc.UpdateState(gsb.pendingState)
+	gsb.cc.UpdateState(gsb.balancerPending.recentUpdate)
 	currBalToClose := gsb.balancerCurrent
 	gsb.balancerCurrent = gsb.balancerPending
 	gsb.balancerPending = nil
-	for sc, bal := range gsb.scToSubBalancer {
-		if bal == currBalToClose {
-			gsb.cc.RemoveSubConn(sc)
-			delete(gsb.scToSubBalancer, sc)
-		}
+	for sc := range gsb.balancerCurrent.scs {
+		gsb.cc.RemoveSubConn(sc)
 	}
 	go func() {
 		gsb.currentMu.Lock()
@@ -129,20 +120,19 @@ func (gsb *gracefulSwitchBalancer) swap() {
 // Helper function that checks if the balancer passed in is current or pending.
 // The caller must hold gsb.mu.
 func (gsb *gracefulSwitchBalancer) balancerCurrentOrPending(bal balancer.Balancer) bool {
-	return bal == gsb.balancerCurrent || bal == gsb.balancerPending
+	return bal == nil || bal == gsb.balancerCurrent.bal || bal == gsb.balancerPending.bal
 }
 
 func (gsb *gracefulSwitchBalancer) newSubConn(ccw *clientConnWrapper, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	gsb.mu.Lock()
 	defer gsb.mu.Unlock()
 	if !gsb.balancerCurrentOrPending(ccw.bal) {
-		return nil, fmt.Errorf("%T at address %p that called NewSubConn is deleted", bal, bal)
+		return nil, fmt.Errorf("%T at address %p that called NewSubConn is deleted", ccw.bal, ccw.bal)
 	}
 	sc, err := gsb.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
 	}
-	gsb.scToSubBalancer[sc] = ccw.bal
 	return sc, nil
 }
 
@@ -169,7 +159,6 @@ func (gsb *gracefulSwitchBalancer) removeSubConn(ccw *clientConnWrapper, sc bala
 	if !gsb.balancerCurrentOrPending(ccw.bal) {
 		return
 	}
-	delete(gsb.scToSubBalancer, sc)
 	gsb.cc.RemoveSubConn(sc)
 }
 
@@ -193,6 +182,7 @@ func (gsb *gracefulSwitchBalancer) SwitchTo(builder balancer.Builder) error {
 	}
 	ccw := &clientConnWrapper{
 		gsb: gsb,
+		recentUpdate: defaultState,
 	}
 	gsb.mu.Unlock()
 	newBalancer := builder.Build(ccw, gsb.bOpts)
@@ -201,28 +191,22 @@ func (gsb *gracefulSwitchBalancer) SwitchTo(builder balancer.Builder) error {
 		return balancer.ErrBadResolverState
 	}
 	gsb.mu.Lock()
+	ccw.Balancer = newBalancer
 	ccw.bal = newBalancer
-	for sc := range ccw.scsB {
-		gsb.scToSubBalancer[sc] = ccw.bal
-	}
-	gsb.pendingState = balancer.State{
-		ConnectivityState: connectivity.Connecting,
-		Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable),
-	}
 	if gsb.balancerCurrent == nil {
-		gsb.balancerCurrent = newBalancer
+		gsb.balancerCurrent = ccw
 		gsb.mu.Unlock()
 		return nil
 	}
 	// Clean up resources here that are from a previous pending lb.
-	for sc, sb := range gsb.scToSubBalancer {
-		if sb == gsb.balancerPending {
-			gsb.cc.RemoveSubConn(sc)
-			delete(gsb.scToSubBalancer, sc)
-		}
+	for sc := range gsb.balancerPending.scs {
+		gsb.cc.RemoveSubConn(sc)
 	}
 	balToClose := gsb.balancerPending
-	gsb.balancerPending = newBalancer
+	gsb.balancerPending = ccw
+	if ccw.recentUpdate != defaultState {
+		gsb.updateState(ccw, ccw.recentUpdate)
+	}
 	gsb.mu.Unlock()
 	if balToClose != nil {
 		balToClose.Close()
@@ -314,13 +298,16 @@ func (gsb *gracefulSwitchBalancer) UpdateSubConnState(sc balancer.SubConn, state
 	// update, the picker from the current will not be updated with SubConns,
 	// leading to the possibility that the ClientConn constantly picks bad
 	// SubConns in the Graceful Switch period.
-	balToUpdate, ok := gsb.scToSubBalancer[sc]
-	if !ok {
+	var balToUpdate balancer.Balancer
+	if _, ok := gsb.balancerCurrent.scs[sc]; ok {
+		balToUpdate = gsb.balancerCurrent
+	}
+	if _, ok := gsb.balancerPending.scs[sc]; ok {
+		balToUpdate = gsb.balancerPending
+	}
+	if balToUpdate == nil {
 		gsb.mu.Unlock()
 		return
-	}
-	if state.ConnectivityState == connectivity.Shutdown {
-		delete(gsb.scToSubBalancer, sc)
 	}
 	gsb.mu.Unlock()
 	balToUpdate.UpdateSubConnState(sc, state)
@@ -329,9 +316,11 @@ func (gsb *gracefulSwitchBalancer) UpdateSubConnState(sc balancer.SubConn, state
 func (gsb *gracefulSwitchBalancer) Close() {
 	gsb.mu.Lock()
 	gsb.closed = true
-	for sc := range gsb.scToSubBalancer {
+	for sc := range gsb.balancerCurrent.scs {
 		gsb.cc.RemoveSubConn(sc)
-		delete(gsb.scToSubBalancer, sc)
+	}
+	for sc := range gsb.balancerPending.scs {
+		gsb.cc.RemoveSubConn(sc)
 	}
 	currentBalancerToUpdate := gsb.balancerCurrent
 	gsb.balancerCurrent = nil
@@ -351,12 +340,12 @@ func (gsb *gracefulSwitchBalancer) ExitIdle() {
 	gsb.mu.Lock()
 	defer gsb.mu.Unlock()
 	if gsb.balancerCurrent != nil {
-		if ei, ok := gsb.balancerCurrent.(balancer.ExitIdler); ok {
+		if ei, ok := gsb.balancerCurrent.Balancer.(balancer.ExitIdler); ok {
 			ei.ExitIdle()
 		}
 	}
 	if gsb.balancerPending != nil {
-		if ei, ok := gsb.balancerPending.(balancer.ExitIdler); ok {
+		if ei, ok := gsb.balancerPending.Balancer.(balancer.ExitIdler); ok {
 			ei.ExitIdle()
 		}
 	}
@@ -364,13 +353,20 @@ func (gsb *gracefulSwitchBalancer) ExitIdle() {
 
 type clientConnWrapper struct {
 	gsb *gracefulSwitchBalancer
-
+	balancer.Balancer // Forwards along updates, guaranteed to be set because of the constraint that grpc calls balancer API synchronously
 	bal balancer.Balancer
 
-	scsB map[balancer.SubConn]bool // subconns created during build
+	recentUpdate balancer.State
+	scs map[balancer.SubConn]bool // subconns created by this balancer
 }
 
 func (ccw *clientConnWrapper) UpdateState(state balancer.State) {
+	// Hold the mutex for this entire call to ensure it cannot occur
+	// concurrently with other updateState() calls. This causes updates to
+	// recentUpdate and calls to cc.UpdateState to happen atomically.
+	ccw.gsb.mu.Lock()
+	defer ccw.gsb.mu.Unlock()
+	ccw.recentUpdate = state
 	ccw.gsb.updateState(ccw, state)
 }
 
@@ -380,9 +376,7 @@ func (ccw *clientConnWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 		return nil, err
 	}
 	ccw.gsb.mu.Lock()
-	if ccw.bal == nil {
-		ccw.scsB[sc] = true
-	}
+	ccw.scs[sc] = true
 	ccw.gsb.mu.Unlock()
 	return ccw.gsb.newSubConn(ccw, addrs, opts)
 }
@@ -393,9 +387,7 @@ func (ccw *clientConnWrapper) ResolveNow(opts resolver.ResolveNowOptions) {
 
 func (ccw *clientConnWrapper) RemoveSubConn(sc balancer.SubConn) {
 	ccw.gsb.mu.Lock()
-	if ccw.bal == nil {
-		delete(ccw.scsB, sc)
-	}
+	delete(ccw.scs, sc)
 	ccw.gsb.mu.Unlock()
 	ccw.gsb.removeSubConn(ccw, sc)
 }
