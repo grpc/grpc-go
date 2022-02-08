@@ -215,6 +215,7 @@ func (gsb *gracefulSwitchBalancer) SwitchTo(builder balancer.Builder) error {
 	balToClose := gsb.balancerPending
 	gsb.balancerPending = newBalancer
 	gsb.mu.Unlock()
+	ccw.updateBuildStateIfPresent()
 	if balToClose != nil {
 		balToClose.Close()
 	}
@@ -357,9 +358,33 @@ type clientConnWrapper struct {
 	gsb *gracefulSwitchBalancer
 
 	bal balancer.Balancer
+
+	bStateMu sync.Mutex
+	bState   *balancer.State // is the state from a balancer being built
+}
+
+func (ccw *clientConnWrapper) updateBuildStateIfPresent() {
+	ccw.bStateMu.Lock()
+	defer ccw.bStateMu.Unlock()
+	if ccw.bState != nil {
+		ccw.gsb.updateState(ccw.bal, *ccw.bState)
+		ccw.bState = nil
+	}
 }
 
 func (ccw *clientConnWrapper) UpdateState(state balancer.State) {
+	ccw.bStateMu.Lock()
+	// The update came from a balancer currently being built, so
+	// cache the state and update later to avoid a deadlock.
+	if ccw.bal == nil {
+		ccw.bState = &state
+		ccw.bStateMu.Unlock()
+		return
+	}
+	// This is the most recent update from the balancer,
+	// so bState is now deprecated.
+	ccw.bState = nil
+	ccw.bStateMu.Unlock()
 	ccw.gsb.updateState(ccw.bal, state)
 }
 
