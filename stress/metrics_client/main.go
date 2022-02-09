@@ -26,6 +26,7 @@ import (
 	"io"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	metricspb "google.golang.org/grpc/stress/grpc_testing"
 )
@@ -74,7 +75,7 @@ func main() {
 		logger.Fatalf("Metrics server address is empty.")
 	}
 
-	conn, err := grpc.Dial(*metricsServerAddress, grpc.WithInsecure())
+	conn, err := grpc.Dial(*metricsServerAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logger.Fatalf("cannot connect to metrics server: %v", err)
 	}

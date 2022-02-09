@@ -63,6 +63,7 @@ import (
 	"google.golang.org/grpc/benchmark/flags"
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/keepalive"
@@ -305,7 +306,7 @@ func makeClient(bf stats.Features) (testgrpc.BenchmarkServiceClient, func()) {
 		)
 	}
 	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(bf.MaxConcurrentCalls+1)))
-	opts = append(opts, grpc.WithInsecure())
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
 	var lis net.Listener
 	if bf.UseBufConn {

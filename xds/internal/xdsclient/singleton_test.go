@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -37,7 +38,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 		return &bootstrap.Config{
 			XDSServer: &bootstrap.ServerConfig{
 				ServerURI: testXDSServer,
-				Creds:     grpc.WithInsecure(),
+				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 				NodeProto: xdstestutils.EmptyNodeProtoV2,
 			},
 		}, nil

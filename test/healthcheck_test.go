@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
 	_ "google.golang.org/grpc/health"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
@@ -154,7 +155,7 @@ type clientConfig struct {
 func setupClient(c *clientConfig) (cc *grpc.ClientConn, r *manual.Resolver, deferFunc func(), err error) {
 	r = manual.NewBuilderWithScheme("whatever")
 	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithInsecure(), grpc.WithResolvers(r), grpc.WithBalancerName(c.balancerName))
+	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r), grpc.WithBalancerName(c.balancerName))
 	if c.testHealthCheckFuncWrapper != nil {
 		opts = append(opts, internal.WithHealthCheckFunc.(func(internal.HealthChecker) grpc.DialOption)(c.testHealthCheckFuncWrapper))
 	}

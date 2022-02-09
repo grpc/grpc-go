@@ -87,7 +87,7 @@ func (s) TestNew(t *testing.T) {
 			name: "happy-case",
 			config: &bootstrap.ServerConfig{
 				ServerURI: testXDSServer,
-				Creds:     grpc.WithInsecure(),
+				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 				NodeProto: testutils.EmptyNodeProtoV2,
 			},
 		},
@@ -111,7 +111,7 @@ func (s) TestNew(t *testing.T) {
 func (s) TestNewWithGRPCDial(t *testing.T) {
 	config := &bootstrap.ServerConfig{
 		ServerURI: testXDSServer,
-		Creds:     grpc.WithInsecure(),
+		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 		NodeProto: testutils.EmptyNodeProtoV2,
 	}
 

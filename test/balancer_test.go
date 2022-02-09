@@ -393,7 +393,7 @@ func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
 	b := newTestBalancerKeepAddresses()
 	balancer.Register(b)
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r),
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r),
 		grpc.WithBalancerName(b.Name()))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
@@ -655,7 +655,7 @@ func (s) TestServersSwap(t *testing.T) {
 	// Initialize client
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: addr1}}})
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(r))
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
@@ -709,7 +709,7 @@ func (s) TestEmptyAddrs(t *testing.T) {
 
 	pfr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
-	pfcc, err := grpc.DialContext(ctx, pfr.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(pfr))
+	pfcc, err := grpc.DialContext(ctx, pfr.Scheme()+":///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(pfr))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
@@ -729,7 +729,7 @@ func (s) TestEmptyAddrs(t *testing.T) {
 
 	rrr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
 
-	rrcc, err := grpc.DialContext(ctx, rrr.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(rrr),
+	rrcc, err := grpc.DialContext(ctx, rrr.Scheme()+":///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(rrr),
 		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, roundrobin.Name)))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
@@ -785,7 +785,7 @@ func (s) TestWaitForReady(t *testing.T) {
 	// Initialize client
 	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(r))
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}

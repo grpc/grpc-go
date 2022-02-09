@@ -30,6 +30,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
@@ -205,7 +206,7 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 	go s.Serve(lis)
 
 	// Create client.
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("cannot connect to server: %v", err)
 	}
