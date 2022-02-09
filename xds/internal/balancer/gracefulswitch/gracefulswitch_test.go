@@ -924,14 +924,113 @@ func (s) TestUpdateSubConnStateRace(t *testing.T) {
 	close(finished)
 }
 
+// TestInlineCallbackInBuild tests the scenario where a balancer calls back into
+// the balancer.ClientConn API inline from it's build function.
+func (s) TestInlineCallbackInBuild(t *testing.T) {
+	tcc, gsb := setup(t)
+	builder := balancer.Get(buildCallbackBalName)
+	// This build call should cause all of the inline updates to forward to the
+	// ClientConn.
+	gsb.SwitchTo(builder)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for an UpdateState() call on the ClientConn")
+	case <-tcc.NewStateCh:
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for an NewSubConn() call on the ClientConn")
+	case <-tcc.NewSubConnCh:
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for an UpdateAddresses() call on the ClientConn")
+	case <-tcc.UpdateAddressesAddrsCh:
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for an RemoveSubConn() call on the ClientConn")
+	case <-tcc.RemoveSubConnCh:
+	}
+	oldCurrent := gsb.balancerCurrent.Balancer.(*buildCallbackBal)
+
+	// ClientConn. Since the callback reports a state READY, this new inline
+	// balancer should be swapped to the current.
+	builder = balancer.Get(buildCallbackBalName)
+	gsb.SwitchTo(builder)
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for an UpdateState() call on the ClientConn")
+	case <-tcc.NewStateCh:
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for an NewSubConn() call on the ClientConn")
+	case <-tcc.NewSubConnCh:
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for an UpdateAddresses() call on the ClientConn")
+	case <-tcc.UpdateAddressesAddrsCh:
+	}
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for an RemoveSubConn() call on the ClientConn")
+	case <-tcc.RemoveSubConnCh:
+	}
+
+	deadline := time.Now().Add(defaultTestTimeout)
+	// Poll to see if pending was deleted (happens in forked goroutine).
+	for {
+		gsb.mu.Lock()
+		if gsb.balancerPending == nil {
+			gsb.mu.Unlock()
+			break
+		}
+		gsb.mu.Unlock()
+		if time.Now().After(deadline) {
+			t.Fatalf("balancerPending was not deleted as the pending LB reported a READY state, which should switch pending to current")
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	// The old balancer should be deprecated and any calls from it should be a no-op.
+	oldCurrent.newSubConn([]resolver.Address{}, balancer.NewSubConnOptions{})
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	select {
+	case <-tcc.NewSubConnCh:
+		t.Fatal("Deprecated LB calling NewSubConn() should not forward up to the ClientConn")
+	case <-ctx.Done():
+	}
+}
+
 const balancerName1 = "mock_balancer_1"
 const balancerName2 = "mock_balancer_2"
 const verifyBalName = "verifyNoSubConnUpdateAfterCloseBalancer"
+const buildCallbackBalName = "callbackInBuildBalancer"
 
 func init() {
 	balancer.Register(bb1{})
 	balancer.Register(bb2{})
 	balancer.Register(vbb{})
+	balancer.Register(bcb{})
 }
 
 type bb1 struct{}
@@ -1203,4 +1302,53 @@ func (vb *verifyBalancer) newSubConn(addrs []resolver.Address, opts balancer.New
 	return vb.cc.NewSubConn(addrs, opts)
 }
 
-// Test cases for inline callbacks from Build
+type bcb struct{}
+
+func (bcb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	b := &buildCallbackBal{cc: cc}
+	b.updateState(balancer.State{
+		ConnectivityState: connectivity.Connecting,
+	})
+	sc, err := b.newSubConn([]resolver.Address{}, balancer.NewSubConnOptions{})
+	if err != nil {
+		return nil
+	}
+	b.updateAddresses(sc, []resolver.Address{})
+	b.removeSubConn(sc)
+	return b
+}
+
+func (bcb) Name() string {
+	return buildCallbackBalName
+}
+
+type buildCallbackBal struct {
+	// Hold onto the ClientConn wrapper to communicate with it.
+	cc balancer.ClientConn
+}
+
+func (bcb *buildCallbackBal) UpdateClientConnState(ccs balancer.ClientConnState) error {
+	return nil
+}
+
+func (bcb *buildCallbackBal) ResolverError(err error) {}
+
+func (bcb *buildCallbackBal) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {}
+
+func (bcb *buildCallbackBal) Close() {}
+
+func (bcb *buildCallbackBal) updateState(state balancer.State) {
+	bcb.cc.UpdateState(state)
+}
+
+func (bcb *buildCallbackBal) newSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	return bcb.cc.NewSubConn(addrs, opts)
+}
+
+func (bcb *buildCallbackBal) updateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
+	bcb.cc.UpdateAddresses(sc, addrs)
+}
+
+func (bcb *buildCallbackBal) removeSubConn(sc balancer.SubConn) {
+	bcb.cc.RemoveSubConn(sc)
+}
