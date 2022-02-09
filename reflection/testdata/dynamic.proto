@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+option go_package = "google.golang.org/grpc/reflection/testdata";
+
 package grpc.testing;
 
 message DynamicRes {}

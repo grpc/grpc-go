@@ -21,15 +21,17 @@ package reflection
 import (
 	"context"
 	"fmt"
-	"github.com/jhump/protoreflect/desc/protoparse"
-	"google.golang.org/protobuf/reflect/protodesc"
-	"google.golang.org/protobuf/reflect/protoregistry"
-	"google.golang.org/protobuf/types/dynamicpb"
 	"net"
 	"reflect"
 	"sort"
 	"testing"
 	"time"
+
+	"google.golang.org/grpc/reflection/testdata"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
 
 	"github.com/golang/protobuf/proto"
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
@@ -84,20 +86,11 @@ func loadFileDesc(filename string) (*dpb.FileDescriptorProto, []byte) {
 	return fd, b
 }
 
-func loadFileDescDynamic(filename string) (*dpb.FileDescriptorProto, []byte) {
-	p := &protoparse.Parser{}
-	fds, err := p.ParseFiles(filename)
-	if err != nil {
-		panic(fmt.Sprintf("failed to parse file: %s %v", filename, err))
+func loadFileDescDynamic(b []byte) (*dpb.FileDescriptorProto, []byte) {
+	m := new(descriptorpb.FileDescriptorProto)
+	if err := proto.Unmarshal(b, m); err != nil {
+		panic(fmt.Sprintf("failed to unmarshal dynamic proto raw descriptor"))
 	}
-
-	m := fds[0].AsFileDescriptorProto()
-
-	b, err := proto.Marshal(m)
-	if err != nil {
-		panic(fmt.Sprintf("failed to marshal file: %s %v", filename, err))
-	}
-
 	return m, b
 }
 
@@ -107,7 +100,7 @@ func init() {
 	fdProto2, fdProto2Byte = loadFileDesc("reflection/grpc_testing/proto2.proto")
 	fdProto2Ext, fdProto2ExtByte = loadFileDesc("reflection/grpc_testing/proto2_ext.proto")
 	fdProto2Ext2, fdProto2Ext2Byte = loadFileDesc("reflection/grpc_testing/proto2_ext2.proto")
-	fdDynamic, fdDynamicByte = loadFileDescDynamic("grpc_testing/dynamic.proto")
+	fdDynamic, fdDynamicByte = loadFileDescDynamic(testdata.File_dynamic_proto_rawDesc)
 }
 
 func (x) TestFileDescContainingExtension(t *testing.T) {
@@ -262,7 +255,7 @@ func testFileByFilename(t *testing.T, stream rpb.ServerReflection_ServerReflecti
 		{"reflection/grpc_testing/test.proto", fdTestByte},
 		{"reflection/grpc_testing/proto2.proto", fdProto2Byte},
 		{"reflection/grpc_testing/proto2_ext.proto", fdProto2ExtByte},
-		{"grpc_testing/dynamic.proto", fdDynamicByte},
+		{"dynamic.proto", fdDynamicByte},
 	} {
 		if err := stream.Send(&rpb.ServerReflectionRequest{
 			MessageRequest: &rpb.ServerReflectionRequest_FileByFilename{
