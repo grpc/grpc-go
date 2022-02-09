@@ -27,19 +27,17 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/reflection/testdata"
-	"google.golang.org/protobuf/reflect/protodesc"
-	"google.golang.org/protobuf/reflect/protoregistry"
-	"google.golang.org/protobuf/types/descriptorpb"
-	"google.golang.org/protobuf/types/dynamicpb"
-
 	"github.com/golang/protobuf/proto"
 	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpctest"
 	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
-	pbv3 "google.golang.org/grpc/reflection/grpc_testingv3"
+	pbv3 "google.golang.org/grpc/reflection/grpc_testing_not_regenerate"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/descriptorpb"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 var (
@@ -100,7 +98,7 @@ func init() {
 	fdProto2, fdProto2Byte = loadFileDesc("reflection/grpc_testing/proto2.proto")
 	fdProto2Ext, fdProto2ExtByte = loadFileDesc("reflection/grpc_testing/proto2_ext.proto")
 	fdProto2Ext2, fdProto2Ext2Byte = loadFileDesc("reflection/grpc_testing/proto2_ext2.proto")
-	fdDynamic, fdDynamicByte = loadFileDescDynamic(testdata.File_dynamic_proto_rawDesc)
+	fdDynamic, fdDynamicByte = loadFileDescDynamic(pbv3.FileDynamicProtoRawDesc)
 }
 
 func (x) TestFileDescContainingExtension(t *testing.T) {
