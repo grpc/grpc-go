@@ -50,8 +50,8 @@ type gracefulSwitchBalancer struct {
 	cc    balancer.ClientConn
 
 	mu              sync.Mutex
-	balancerCurrent *clientConnWrapper
-	balancerPending *clientConnWrapper
+	balancerCurrent *balancerWrapper
+	balancerPending *balancerWrapper
 
 	closed           bool // set to true when this balancer is closed
 
@@ -59,20 +59,22 @@ type gracefulSwitchBalancer struct {
 	currentMu sync.Mutex // protects operations on the balancerCurrent
 }
 
-func (gsb *gracefulSwitchBalancer) updateState(ccw *clientConnWrapper, state balancer.State) {
-	if ccw.bal == nil {
+// caller must hold gsb.mu
+func (gsb *gracefulSwitchBalancer) updateState(bw *balancerWrapper, state balancer.State) {
+	if bw.Balancer == nil {
 		return
 	}
 
-	if !gsb.balancerCurrentOrPending(ccw.bal) {
+	if !gsb.balancerCurrentOrPending(bw.Balancer) {
 		return
 	}
 
-	// Nil and nil in the case of an inline UpdateState call and no current balancer.
-	// Otherwise, gsb.balancerCurrent written to and will only hit if the pointers match
-	// up, any other permutation of check (i.e. ccw.bal is (nil || pointer) and doesn't
-	// equal the current, then you know the update is for pending.
-	if ccw == gsb.balancerCurrent {
+	// Nil and nil in the case of an inline UpdateState call and no current
+	// balancer. Otherwise, gsb.balancerCurrent written to and will only hit if
+	// the pointers match up, any other permutation of check (i.e. bw.Balancer
+	// is (nil || pointer) and doesn't equal the current, then you know the
+	// update is for pending.
+	if bw == gsb.balancerCurrent {
 		// In the case that the current balancer exits READY, and there is a pending
 		// balancer, you can forward the pending balancers cached State up to
 		// ClientConn and swap the pending into the current. This is because there
@@ -123,11 +125,11 @@ func (gsb *gracefulSwitchBalancer) balancerCurrentOrPending(bal balancer.Balance
 	return bal == nil || bal == gsb.balancerCurrent.bal || bal == gsb.balancerPending.bal
 }
 
-func (gsb *gracefulSwitchBalancer) newSubConn(ccw *clientConnWrapper, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+func (gsb *gracefulSwitchBalancer) newSubConn(bw *balancerWrapper, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	gsb.mu.Lock()
 	defer gsb.mu.Unlock()
-	if !gsb.balancerCurrentOrPending(ccw.bal) {
-		return nil, fmt.Errorf("%T at address %p that called NewSubConn is deleted", ccw.bal, ccw.bal)
+	if !gsb.balancerCurrentOrPending(bw.Balancer) {
+		return nil, fmt.Errorf("%T at address %p that called NewSubConn is deleted", bw.bal, bw.bal)
 	}
 	sc, err := gsb.cc.NewSubConn(addrs, opts)
 	if err != nil {
@@ -136,10 +138,10 @@ func (gsb *gracefulSwitchBalancer) newSubConn(ccw *clientConnWrapper, addrs []re
 	return sc, nil
 }
 
-func (gsb *gracefulSwitchBalancer) resolveNow(ccw *clientConnWrapper, opts resolver.ResolveNowOptions) {
+func (gsb *gracefulSwitchBalancer) resolveNow(bw *balancerWrapper, opts resolver.ResolveNowOptions) {
 	gsb.mu.Lock()
 	defer gsb.mu.Unlock()
-	if !gsb.balancerCurrentOrPending(ccw.bal) {
+	if !gsb.balancerCurrentOrPending(bw.Balancer) {
 		return
 	}
 
@@ -147,25 +149,25 @@ func (gsb *gracefulSwitchBalancer) resolveNow(ccw *clientConnWrapper, opts resol
 	// there is no reason to forward a ResolveNow call from the balancer being
 	// switched from, as the most recent update from the Resolver does not
 	// concern the balancer being switched from.
-	if ccw.bal == gsb.balancerCurrent && gsb.balancerPending != nil {
+	if bw.Balancer == gsb.balancerCurrent && gsb.balancerPending != nil {
 		return
 	}
 	gsb.cc.ResolveNow(opts)
 }
 
-func (gsb *gracefulSwitchBalancer) removeSubConn(ccw *clientConnWrapper, sc balancer.SubConn) {
+func (gsb *gracefulSwitchBalancer) removeSubConn(bw *balancerWrapper, sc balancer.SubConn) {
 	gsb.mu.Lock()
 	defer gsb.mu.Unlock()
-	if !gsb.balancerCurrentOrPending(ccw.bal) {
+	if !gsb.balancerCurrentOrPending(bw.Balancer) {
 		return
 	}
 	gsb.cc.RemoveSubConn(sc)
 }
 
-func (gsb *gracefulSwitchBalancer) updateAddresses(ccw *clientConnWrapper, sc balancer.SubConn, addrs []resolver.Address) {
+func (gsb *gracefulSwitchBalancer) updateAddresses(bw *balancerWrapper, sc balancer.SubConn, addrs []resolver.Address) {
 	gsb.mu.Lock()
 	defer gsb.mu.Unlock()
-	if !gsb.balancerCurrentOrPending(ccw.bal) {
+	if !gsb.balancerCurrentOrPending(bw.Balancer) {
 		return
 	}
 	gsb.cc.UpdateAddresses(sc, addrs)
@@ -180,21 +182,20 @@ func (gsb *gracefulSwitchBalancer) SwitchTo(builder balancer.Builder) error {
 		gsb.mu.Unlock()
 		return errBalancerClosed
 	}
-	ccw := &clientConnWrapper{
+	bw := &balancerWrapper{
 		gsb: gsb,
 		recentUpdate: defaultState,
 	}
 	gsb.mu.Unlock()
-	newBalancer := builder.Build(ccw, gsb.bOpts)
+	newBalancer := builder.Build(bw, gsb.bOpts)
 	if newBalancer == nil {
 		// Can this even ever happen?
 		return balancer.ErrBadResolverState
 	}
 	gsb.mu.Lock()
-	ccw.Balancer = newBalancer
-	ccw.bal = newBalancer
+	bw.Balancer = newBalancer
 	if gsb.balancerCurrent == nil {
-		gsb.balancerCurrent = ccw
+		gsb.balancerCurrent = bw
 		gsb.mu.Unlock()
 		return nil
 	}
@@ -203,9 +204,9 @@ func (gsb *gracefulSwitchBalancer) SwitchTo(builder balancer.Builder) error {
 		gsb.cc.RemoveSubConn(sc)
 	}
 	balToClose := gsb.balancerPending
-	gsb.balancerPending = ccw
-	if ccw.recentUpdate != defaultState {
-		gsb.updateState(ccw, ccw.recentUpdate)
+	gsb.balancerPending = bw
+	if bw.recentUpdate != defaultState {
+		gsb.updateState(bw, bw.recentUpdate)
 	}
 	gsb.mu.Unlock()
 	if balToClose != nil {
@@ -351,7 +352,7 @@ func (gsb *gracefulSwitchBalancer) ExitIdle() {
 	}
 }
 
-type clientConnWrapper struct {
+type balancerWrapper struct {
 	gsb *gracefulSwitchBalancer
 	balancer.Balancer // Forwards along updates, guaranteed to be set because of the constraint that grpc calls balancer API synchronously
 	bal balancer.Balancer
@@ -360,42 +361,42 @@ type clientConnWrapper struct {
 	scs map[balancer.SubConn]bool // subconns created by this balancer
 }
 
-func (ccw *clientConnWrapper) UpdateState(state balancer.State) {
+func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	// Hold the mutex for this entire call to ensure it cannot occur
 	// concurrently with other updateState() calls. This causes updates to
 	// recentUpdate and calls to cc.UpdateState to happen atomically.
-	ccw.gsb.mu.Lock()
-	defer ccw.gsb.mu.Unlock()
-	ccw.recentUpdate = state
-	ccw.gsb.updateState(ccw, state)
+	bw.gsb.mu.Lock()
+	defer bw.gsb.mu.Unlock()
+	bw.recentUpdate = state
+	bw.gsb.updateState(bw, state)
 }
 
-func (ccw *clientConnWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	sc, err := ccw.gsb.newSubConn(ccw, addrs, opts)
+func (bw *balancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
+	sc, err := bw.gsb.newSubConn(bw, addrs, opts)
 	if err != nil {
 		return nil, err
 	}
-	ccw.gsb.mu.Lock()
-	ccw.scs[sc] = true
-	ccw.gsb.mu.Unlock()
-	return ccw.gsb.newSubConn(ccw, addrs, opts)
+	bw.gsb.mu.Lock()
+	bw.scs[sc] = true
+	bw.gsb.mu.Unlock()
+	return bw.gsb.newSubConn(bw, addrs, opts)
 }
 
-func (ccw *clientConnWrapper) ResolveNow(opts resolver.ResolveNowOptions) {
-	ccw.gsb.resolveNow(ccw, opts)
+func (bw *balancerWrapper) ResolveNow(opts resolver.ResolveNowOptions) {
+	bw.gsb.resolveNow(bw, opts)
 }
 
-func (ccw *clientConnWrapper) RemoveSubConn(sc balancer.SubConn) {
-	ccw.gsb.mu.Lock()
-	delete(ccw.scs, sc)
-	ccw.gsb.mu.Unlock()
-	ccw.gsb.removeSubConn(ccw, sc)
+func (bw *balancerWrapper) RemoveSubConn(sc balancer.SubConn) {
+	bw.gsb.mu.Lock()
+	delete(bw.scs, sc)
+	bw.gsb.mu.Unlock()
+	bw.gsb.removeSubConn(bw, sc)
 }
 
-func (ccw *clientConnWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
-	ccw.gsb.updateAddresses(ccw, sc, addrs)
+func (bw *balancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
+	bw.gsb.updateAddresses(bw, sc, addrs)
 }
 
-func (ccw *clientConnWrapper) Target() string {
-	return ccw.gsb.bOpts.Target.URL.String()
+func (bw *balancerWrapper) Target() string {
+	return bw.gsb.bOpts.Target.URL.String()
 }
