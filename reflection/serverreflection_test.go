@@ -35,6 +35,7 @@ import (
 	pb "google.golang.org/grpc/reflection/grpc_testing"
 	pbv3 "google.golang.org/grpc/reflection/grpc_testing_not_regenerate"
 	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/dynamicpb"
@@ -49,6 +50,10 @@ var (
 	fdProto2Ext  *dpb.FileDescriptorProto
 	fdProto2Ext2 *dpb.FileDescriptorProto
 	fdDynamic    *dpb.FileDescriptorProto
+
+	// reflection descriptors.
+	fdDynamicFile protoreflect.FileDescriptor
+
 	// fileDescriptor marshalled.
 	fdTestByte       []byte
 	fdTestv3Byte     []byte
@@ -84,12 +89,30 @@ func loadFileDesc(filename string) (*dpb.FileDescriptorProto, []byte) {
 	return fd, b
 }
 
-func loadFileDescDynamic(b []byte) (*dpb.FileDescriptorProto, []byte) {
+func loadFileDescDynamic(b []byte) (*dpb.FileDescriptorProto, protoreflect.FileDescriptor, []byte) {
 	m := new(descriptorpb.FileDescriptorProto)
 	if err := proto.Unmarshal(b, m); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal dynamic proto raw descriptor"))
 	}
-	return m, b
+
+	fd, err := protodesc.NewFile(m, nil)
+	if err != nil {
+		panic(err)
+	}
+
+	err = protoregistry.GlobalFiles.RegisterFile(fd)
+	if err != nil {
+		panic(err)
+	}
+
+	for i := 0; i < fd.Messages().Len(); i++ {
+		m := fd.Messages().Get(i)
+		if err := protoregistry.GlobalTypes.RegisterMessage(dynamicpb.NewMessageType(m)); err != nil {
+			panic(err)
+		}
+	}
+
+	return m, fd, b
 }
 
 func init() {
@@ -98,7 +121,7 @@ func init() {
 	fdProto2, fdProto2Byte = loadFileDesc("reflection/grpc_testing/proto2.proto")
 	fdProto2Ext, fdProto2ExtByte = loadFileDesc("reflection/grpc_testing/proto2_ext.proto")
 	fdProto2Ext2, fdProto2Ext2Byte = loadFileDesc("reflection/grpc_testing/proto2_ext2.proto")
-	fdDynamic, fdDynamicByte = loadFileDescDynamic(pbv3.FileDynamicProtoRawDesc)
+	fdDynamic, fdDynamicFile, fdDynamicByte = loadFileDescDynamic(pbv3.FileDynamicProtoRawDesc)
 }
 
 func (x) TestFileDescContainingExtension(t *testing.T) {
@@ -176,7 +199,7 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 	pb.RegisterSearchServiceServer(s, &server{})
 	pbv3.RegisterSearchServiceV3Server(s, &serverV3{})
 
-	registerDynamicProto(s, fdDynamic)
+	registerDynamicProto(s, fdDynamic, fdDynamicFile)
 
 	// Register reflection service on s.
 	Register(s)
@@ -556,33 +579,16 @@ func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflection
 	}
 }
 
-func registerDynamicProto(srv *grpc.Server, fd *dpb.FileDescriptorProto) {
-	df, err := protodesc.NewFile(fd, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	err = protoregistry.GlobalFiles.RegisterFile(df)
-	if err != nil {
-		panic(err)
-	}
-
-	for i := 0; i < df.Messages().Len(); i++ {
-		m := df.Messages().Get(i)
-		if err := protoregistry.GlobalTypes.RegisterMessage(dynamicpb.NewMessageType(m)); err != nil {
-			panic(err)
-		}
-	}
-
+func registerDynamicProto(srv *grpc.Server, fdp *dpb.FileDescriptorProto, fd protoreflect.FileDescriptor) {
 	type emptyInterface interface{}
 
-	for i := 0; i < df.Services().Len(); i++ {
-		s := df.Services().Get(i)
+	for i := 0; i < fd.Services().Len(); i++ {
+		s := fd.Services().Get(i)
 
 		sd := &grpc.ServiceDesc{
 			ServiceName: string(s.FullName()),
 			HandlerType: (*emptyInterface)(nil),
-			Metadata:    fd.GetName(),
+			Metadata:    fdp.GetName(),
 		}
 
 		for j := 0; j < s.Methods().Len(); j++ {
