@@ -64,11 +64,6 @@ func (gsb *gracefulSwitchBalancer) updateState(bw *balancerWrapper, state balanc
 		return
 	}
 
-	// Nil and nil in the case of an inline UpdateState call and no current
-	// balancer. Otherwise, gsb.balancerCurrent written to and will only hit if
-	// the pointers match up, any other permutation of check (i.e. bw.Balancer
-	// is (nil || pointer) and doesn't equal the current, then you know the
-	// update is for pending.
 	if bw == gsb.balancerCurrent {
 		// In the case that the current balancer exits READY, and there is a pending
 		// balancer, you can forward the pending balancers cached State up to
@@ -123,13 +118,9 @@ func (gsb *gracefulSwitchBalancer) balancerCurrentOrPending(bw *balancerWrapper)
 // caller must hold gsb.mu.
 func (gsb *gracefulSwitchBalancer) newSubConn(bw *balancerWrapper, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	if !gsb.balancerCurrentOrPending(bw) {
-		return nil, fmt.Errorf("%T at address %p that called NewSubConn is deleted", bw.Balancer, bw.Balancer)
+		return nil, fmt.Errorf("%T at address %p that called NewSubConn is deleted", bw, bw)
 	}
-	sc, err := gsb.cc.NewSubConn(addrs, opts)
-	if err != nil {
-		return nil, err
-	}
-	return sc, nil
+	return gsb.cc.NewSubConn(addrs, opts)
 }
 
 func (gsb *gracefulSwitchBalancer) resolveNow(bw *balancerWrapper, opts resolver.ResolveNowOptions) {
@@ -182,19 +173,17 @@ func (gsb *gracefulSwitchBalancer) SwitchTo(builder balancer.Builder) error {
 			for sc := range gsb.balancerPending.subconns {
 				gsb.cc.RemoveSubConn(sc)
 			}
-		}
-		if gsb.balancerPending != nil {
 			balToClose = gsb.balancerPending
 		}
 		gsb.balancerPending = bw
 	}
 	gsb.mu.Unlock()
+	if balToClose != nil {
+		balToClose.Close()
+	}
 
 	newBalancer := builder.Build(bw, gsb.bOpts)
 	if newBalancer == nil {
-		if balToClose != nil {
-			balToClose.Close()
-		}
 		if gsb.balancerPending != nil {
 			gsb.balancerPending = nil
 		} else {
@@ -202,10 +191,13 @@ func (gsb *gracefulSwitchBalancer) SwitchTo(builder balancer.Builder) error {
 		}
 		return balancer.ErrBadResolverState
 	}
+
+	// This write doesn't need to take gsb.mu because this field never gets read
+	// or written to on any calls from the current or pending. Calls from grpc
+	// to this balancer are guaranteed to be called synchronously, so this
+	// bw.Balancer field will never be forwarded to until this SwitchTo()
+	// function returns.
 	bw.Balancer = newBalancer
-	if balToClose != nil {
-		balToClose.Close()
-	}
 	return nil
 }
 
@@ -240,8 +232,7 @@ func (gsb *gracefulSwitchBalancer) UpdateClientConnState(state balancer.ClientCo
 	// + pending balancers are both populated), this update will always be
 	// forwarded to the pending. Thus, there is a guarantee that this will not
 	// break the balancer API of the balancer by updating after closing.
-	balToUpdate.UpdateClientConnState(state)
-	return nil
+	return balToUpdate.UpdateClientConnState(state)
 }
 
 func (gsb *gracefulSwitchBalancer) ResolverError(err error) {
