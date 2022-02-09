@@ -322,7 +322,7 @@ func (s) TestGetTopChannels(t *testing.T) {
 		},
 		{},
 	}
-	czCleanup := channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer cleanupWrapper(czCleanup, t)
 	for _, c := range tcs {
 		id := channelz.RegisterChannel(c, 0, "")
@@ -371,7 +371,7 @@ func (s) TestGetServers(t *testing.T) {
 			lastCallStartedTimestamp: time.Now().UTC(),
 		},
 	}
-	czCleanup := channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer cleanupWrapper(czCleanup, t)
 	for _, s := range ss {
 		id := channelz.RegisterServer(s, "")
@@ -400,7 +400,7 @@ func (s) TestGetServers(t *testing.T) {
 }
 
 func (s) TestGetServerSockets(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer cleanupWrapper(czCleanup, t)
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	defer channelz.RemoveEntry(svrID)
@@ -441,7 +441,7 @@ func (s) TestGetServerSockets(t *testing.T) {
 // This test makes a GetServerSockets with a non-zero start ID, and expect only
 // sockets with ID >= the given start ID.
 func (s) TestGetServerSocketsNonZeroStartID(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer cleanupWrapper(czCleanup, t)
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	defer channelz.RemoveEntry(svrID)
@@ -473,7 +473,7 @@ func (s) TestGetServerSocketsNonZeroStartID(t *testing.T) {
 }
 
 func (s) TestGetChannel(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer cleanupWrapper(czCleanup, t)
 	refNames := []string{"top channel 1", "nested channel 1", "sub channel 2", "nested channel 3"}
 	ids := make([]int64, 4)
@@ -578,7 +578,7 @@ func (s) TestGetSubChannel(t *testing.T) {
 		subchanConnectivityChange = fmt.Sprintf("Subchannel Connectivity change to %v", connectivity.Ready)
 		subChanPickNewAddress     = fmt.Sprintf("Subchannel picks a new address %q to connect", "0.0.0.0")
 	)
-	czCleanup := channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer cleanupWrapper(czCleanup, t)
 	refNames := []string{"top channel 1", "sub channel 1", "socket 1", "socket 2"}
 	ids := make([]int64, 4)
@@ -652,7 +652,7 @@ func (s) TestGetSubChannel(t *testing.T) {
 }
 
 func (s) TestGetSocket(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer cleanupWrapper(czCleanup, t)
 	ss := []*dummySocket{
 		{
