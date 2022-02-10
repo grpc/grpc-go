@@ -41,6 +41,7 @@ import (
 	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 )
 
@@ -48,14 +49,17 @@ const (
 	defaultTestTimeout      = 1 * time.Second
 	defaultShortTestTimeout = 100 * time.Microsecond
 
-	testClusterName   = "test-cluster"
-	testServiceName   = "test-eds-service"
-	testLRSServerName = "test-lrs-name"
+	testClusterName = "test-cluster"
+	testServiceName = "test-eds-service"
 )
 
 var (
 	testBackendAddrs = []resolver.Address{
 		{Addr: "1.1.1.1:1"},
+	}
+	testLRSServerConfig = &bootstrap.ServerConfig{
+		ServerURI: "trafficdirector.googleapis.com:443",
+		CredsType: "google_default",
 	}
 
 	cmpOpts = cmp.Options{
@@ -103,9 +107,9 @@ func (s) TestDropByCategory(t *testing.T) {
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
-			Cluster:                 testClusterName,
-			EDSServiceName:          testServiceName,
-			LoadReportingServerName: newString(testLRSServerName),
+			Cluster:             testClusterName,
+			EDSServiceName:      testServiceName,
+			LoadReportingServer: testLRSServerConfig,
 			DropCategories: []DropConfig{{
 				Category:           dropReason,
 				RequestsPerMillion: million * dropNumerator / dropDenominator,
@@ -125,8 +129,8 @@ func (s) TestDropByCategory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
 	}
-	if got.Server != testLRSServerName {
-		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, testLRSServerName)
+	if got.Server != testLRSServerConfig {
+		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, testLRSServerConfig)
 	}
 
 	sc1 := <-cc.NewSubConnCh
@@ -191,9 +195,9 @@ func (s) TestDropByCategory(t *testing.T) {
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
-			Cluster:                 testClusterName,
-			EDSServiceName:          testServiceName,
-			LoadReportingServerName: newString(testLRSServerName),
+			Cluster:             testClusterName,
+			EDSServiceName:      testServiceName,
+			LoadReportingServer: testLRSServerConfig,
 			DropCategories: []DropConfig{{
 				Category:           dropReason2,
 				RequestsPerMillion: million * dropNumerator2 / dropDenominator2,
@@ -257,10 +261,10 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: testBackendAddrs}, xdsC),
 		BalancerConfig: &LBConfig{
-			Cluster:                 testClusterName,
-			EDSServiceName:          testServiceName,
-			LoadReportingServerName: newString(testLRSServerName),
-			MaxConcurrentRequests:   &maxRequest,
+			Cluster:               testClusterName,
+			EDSServiceName:        testServiceName,
+			LoadReportingServer:   testLRSServerConfig,
+			MaxConcurrentRequests: &maxRequest,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
 			},
@@ -276,8 +280,8 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
 	}
-	if got.Server != testLRSServerName {
-		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, testLRSServerName)
+	if got.Server != testLRSServerConfig {
+		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, testLRSServerConfig)
 	}
 
 	sc1 := <-cc.NewSubConnCh
@@ -605,9 +609,9 @@ func (s) TestLoadReporting(t *testing.T) {
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
 		BalancerConfig: &LBConfig{
-			Cluster:                 testClusterName,
-			EDSServiceName:          testServiceName,
-			LoadReportingServerName: newString(testLRSServerName),
+			Cluster:             testClusterName,
+			EDSServiceName:      testServiceName,
+			LoadReportingServer: testLRSServerConfig,
 			// Locality:                testLocality,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
@@ -624,8 +628,8 @@ func (s) TestLoadReporting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
 	}
-	if got.Server != testLRSServerName {
-		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, testLRSServerName)
+	if got.Server != testLRSServerConfig {
+		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, testLRSServerConfig)
 	}
 
 	sc1 := <-cc.NewSubConnCh
@@ -720,9 +724,9 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
 		BalancerConfig: &LBConfig{
-			Cluster:                 testClusterName,
-			EDSServiceName:          testServiceName,
-			LoadReportingServerName: newString(""),
+			Cluster:             testClusterName,
+			EDSServiceName:      testServiceName,
+			LoadReportingServer: testLRSServerConfig,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
 			},
@@ -738,17 +742,21 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err)
 	}
-	if got.Server != "" {
-		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, "")
+	if got.Server != testLRSServerConfig {
+		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got.Server, testLRSServerConfig)
 	}
 
+	testLRSServerConfig2 := &bootstrap.ServerConfig{
+		ServerURI: "trafficdirector-another.googleapis.com:443",
+		CredsType: "google_default",
+	}
 	// Update LRS server to a different name.
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
 		BalancerConfig: &LBConfig{
-			Cluster:                 testClusterName,
-			EDSServiceName:          testServiceName,
-			LoadReportingServerName: newString(testLRSServerName),
+			Cluster:             testClusterName,
+			EDSServiceName:      testServiceName,
+			LoadReportingServer: testLRSServerConfig2,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
 			},
@@ -763,17 +771,16 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 	if err2 != nil {
 		t.Fatalf("xdsClient.ReportLoad failed with error: %v", err2)
 	}
-	if got2.Server != testLRSServerName {
-		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got2.Server, testLRSServerName)
+	if got2.Server != testLRSServerConfig2 {
+		t.Fatalf("xdsClient.ReportLoad called with {%q}: want {%q}", got2.Server, testLRSServerConfig2)
 	}
 
 	// Update LRS server to nil, to disable LRS.
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{Addresses: addrs}, xdsC),
 		BalancerConfig: &LBConfig{
-			Cluster:                 testClusterName,
-			EDSServiceName:          testServiceName,
-			LoadReportingServerName: nil,
+			Cluster:        testClusterName,
+			EDSServiceName: testServiceName,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: roundrobin.Name,
 			},

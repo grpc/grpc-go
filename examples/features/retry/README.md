@@ -62,5 +62,5 @@ To use the above service config, pass it with `grpc.WithDefaultServiceConfig` to
 `grpc.Dial`.
 
 ```go
-conn, err := grpc.Dial(ctx,grpc.WithInsecure(), grpc.WithDefaultServiceConfig(retryPolicy))
+conn, err := grpc.Dial(ctx,grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultServiceConfig(retryPolicy))
 ```

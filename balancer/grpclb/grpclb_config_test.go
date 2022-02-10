@@ -46,13 +46,13 @@ func (s) TestParse(t *testing.T) {
 	"childPolicy": [
 		{"pick_first":{}}
 	],
-	"targetName": "foo-service"
+	"serviceName": "foo-service"
 }`,
 			want: &grpclbServiceConfig{
 				ChildPolicy: &[]map[string]json.RawMessage{
 					{"pick_first": json.RawMessage("{}")},
 				},
-				TargetName: "foo-service",
+				ServiceName: "foo-service",
 			},
 		},
 		{
@@ -63,14 +63,14 @@ func (s) TestParse(t *testing.T) {
 		{"round_robin":{}},
 		{"pick_first":{}}
 	],
-	"targetName": "foo-service"
+	"serviceName": "foo-service"
 }`,
 			want: &grpclbServiceConfig{
 				ChildPolicy: &[]map[string]json.RawMessage{
 					{"round_robin": json.RawMessage("{}")},
 					{"pick_first": json.RawMessage("{}")},
 				},
-				TargetName: "foo-service",
+				ServiceName: "foo-service",
 			},
 		},
 	}

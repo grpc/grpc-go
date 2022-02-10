@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
@@ -862,7 +863,8 @@ func TestNewConfigWithFederation(t *testing.T) {
 			}],
 			"client_default_listener_resource_name_template": "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
 			"authorities": {
-				"xds.td.com": { }
+				"xds.td.com": { },
+				"#.com": { }
 			}
 		}`,
 		// It's OK for an authority to not have servers. The top-level server
@@ -956,6 +958,9 @@ func TestNewConfigWithFederation(t *testing.T) {
 					"xds.td.com": {
 						ClientListenerResourceNameTemplate: "xdstp://xds.td.com/envoy.config.listener.v3.Listener/%s",
 					},
+					"#.com": {
+						ClientListenerResourceNameTemplate: "xdstp://%23.com/envoy.config.listener.v3.Listener/%s",
+					},
 				},
 			},
 		},
@@ -988,5 +993,55 @@ func TestNewConfigWithFederation(t *testing.T) {
 			testNewConfigWithFileNameEnv(t, test.name, test.wantErr, test.wantConfig)
 			testNewConfigWithFileContentEnv(t, test.name, test.wantErr, test.wantConfig)
 		})
+	}
+}
+
+func TestServerConfigMarshalAndUnmarshal(t *testing.T) {
+	c := ServerConfig{
+		ServerURI:    "test-server",
+		Creds:        nil,
+		CredsType:    "test-creds",
+		TransportAPI: version.TransportV3,
+	}
+
+	bs, err := json.Marshal(c)
+	if err != nil {
+		t.Fatalf("failed to marshal: %v", err)
+	}
+	var cUnmarshal ServerConfig
+	if err := json.Unmarshal(bs, &cUnmarshal); err != nil {
+		t.Fatalf("failed to unmarshal: %v", err)
+	}
+	if diff := cmp.Diff(cUnmarshal, c); diff != "" {
+		t.Fatalf("diff (-got +want): %v", diff)
+	}
+}
+
+func TestDefaultBundles(t *testing.T) {
+	if c := bootstrap.GetCredentials("google_default"); c == nil {
+		t.Errorf(`bootstrap.GetCredentials("google_default") credential is nil, want non-nil`)
+	}
+
+	if c := bootstrap.GetCredentials("insecure"); c == nil {
+		t.Errorf(`bootstrap.GetCredentials("insecure") credential is nil, want non-nil`)
+	}
+}
+
+func TestCredsBuilders(t *testing.T) {
+	b := &googleDefaultCredsBuilder{}
+	if _, err := b.Build(nil); err != nil {
+		t.Errorf("googleDefaultCredsBuilder.Build failed: %v", err)
+	}
+	if got, want := b.Name(), "google_default"; got != want {
+		t.Errorf("googleDefaultCredsBuilder.Name = %v, want %v", got, want)
+	}
+
+	i := &insecureCredsBuilder{}
+	if _, err := i.Build(nil); err != nil {
+		t.Errorf("insecureCredsBuilder.Build failed: %v", err)
+	}
+
+	if got, want := i.Name(), "insecure"; got != want {
+		t.Errorf("insecureCredsBuilder.Name = %v, want %v", got, want)
 	}
 }

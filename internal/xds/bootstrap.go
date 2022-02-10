@@ -55,6 +55,14 @@ type BootstrapOptions struct {
 	ServerListenerResourceNameTemplate string
 	// CertificateProviders is the certificate providers configuration.
 	CertificateProviders map[string]json.RawMessage
+	// Authorities is a list of non-default authorities.
+	//
+	// In the config, an authority contains {ServerURI, xds-version, creds,
+	// features, etc}. Note that this fields only has ServerURI (it's a
+	// map[authority-name]ServerURI). The other fields (version, creds,
+	// features) are assumed to be the same as the default authority (they can
+	// be added later if needed).
+	Authorities map[string]string
 }
 
 // SetupBootstrapFile creates a temporary file with bootstrap contents, based on
@@ -94,12 +102,8 @@ func BootstrapContents(opts BootstrapOptions) ([]byte, error) {
 	cfg := &bootstrapConfig{
 		XdsServers: []server{
 			{
-				ServerURI: opts.ServerURI,
-				ChannelCreds: []creds{
-					{
-						Type: "insecure",
-					},
-				},
+				ServerURI:    opts.ServerURI,
+				ChannelCreds: []creds{{Type: "insecure"}},
 			},
 		},
 		Node: node{
@@ -117,6 +121,16 @@ func BootstrapContents(opts BootstrapOptions) ([]byte, error) {
 		return nil, fmt.Errorf("unsupported xDS transport protocol version: %v", opts.Version)
 	}
 
+	auths := make(map[string]authority)
+	for n, auURI := range opts.Authorities {
+		auths[n] = authority{XdsServers: []server{{
+			ServerURI:      auURI,
+			ChannelCreds:   []creds{{Type: "insecure"}},
+			ServerFeatures: cfg.XdsServers[0].ServerFeatures,
+		}}}
+	}
+	cfg.Authorities = auths
+
 	bootstrapContents, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("failed to created bootstrap file: %v", err)
@@ -129,6 +143,11 @@ type bootstrapConfig struct {
 	Node                               node                       `json:"node,omitempty"`
 	CertificateProviders               map[string]json.RawMessage `json:"certificate_providers,omitempty"`
 	ServerListenerResourceNameTemplate string                     `json:"server_listener_resource_name_template,omitempty"`
+	Authorities                        map[string]authority       `json:"authorities,omitempty"`
+}
+
+type authority struct {
+	XdsServers []server `json:"xds_servers,omitempty"`
 }
 
 type server struct {

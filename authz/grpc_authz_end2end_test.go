@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/authz"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -266,33 +267,9 @@ var authzTests = map[string]struct {
 				"allow_rules":
 				[
 					{
-						"name": "allow_TestServiceCalls",
-						"source": {
-							"principals":
-							[
-								"foo"
-							]
-						},
-						"request": {
-							"paths":
-							[
-								"/grpc.testing.TestService/*"
-							]
-						}
-					}
-				]
-			}`,
-		wantStatus: status.New(codes.PermissionDenied, "unauthorized RPC request rejected"),
-	},
-	"DeniesRPCRequestWithEmptyPrincipalsOnUnauthenticatedConnection": {
-		authzPolicy: `{
-				"name": "authz",
-				"allow_rules":
-				[
-					{
 						"name": "allow_authenticated",
 						"source": {
-							"principals": []
+							"principals": ["*", ""]
 						}
 					}
 				]
@@ -348,7 +325,7 @@ func (s) TestStaticPolicyEnd2End(t *testing.T) {
 			go s.Serve(lis)
 
 			// Establish a connection to the server.
-			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 			}
@@ -386,7 +363,7 @@ func (s) TestStaticPolicyEnd2End(t *testing.T) {
 	}
 }
 
-func (s) TestAllowsRPCRequestWithEmptyPrincipalsOnTLSAuthenticatedConnection(t *testing.T) {
+func (s) TestAllowsRPCRequestWithPrincipalsFieldOnTLSAuthenticatedConnection(t *testing.T) {
 	authzPolicy := `{
 				"name": "authz",
 				"allow_rules":
@@ -394,7 +371,7 @@ func (s) TestAllowsRPCRequestWithEmptyPrincipalsOnTLSAuthenticatedConnection(t *
 					{
 						"name": "allow_authenticated",
 						"source": {
-							"principals": []
+							"principals": ["*", ""]
 						}
 					}
 				]
@@ -438,7 +415,7 @@ func (s) TestAllowsRPCRequestWithEmptyPrincipalsOnTLSAuthenticatedConnection(t *
 	}
 }
 
-func (s) TestAllowsRPCRequestWithEmptyPrincipalsOnMTLSAuthenticatedConnection(t *testing.T) {
+func (s) TestAllowsRPCRequestWithPrincipalsFieldOnMTLSAuthenticatedConnection(t *testing.T) {
 	authzPolicy := `{
 				"name": "authz",
 				"allow_rules":
@@ -446,7 +423,7 @@ func (s) TestAllowsRPCRequestWithEmptyPrincipalsOnMTLSAuthenticatedConnection(t 
 					{
 						"name": "allow_authenticated",
 						"source": {
-							"principals": []
+							"principals": ["*", ""]
 						}
 					}
 				]
@@ -538,7 +515,7 @@ func (s) TestFileWatcherEnd2End(t *testing.T) {
 			go s.Serve(lis)
 
 			// Establish a connection to the server.
-			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+			clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 			}
@@ -607,7 +584,7 @@ func (s) TestFileWatcher_ValidPolicyRefresh(t *testing.T) {
 	go s.Serve(lis)
 
 	// Establish a connection to the server.
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 	}
@@ -655,7 +632,7 @@ func (s) TestFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	go s.Serve(lis)
 
 	// Establish a connection to the server.
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 	}
@@ -706,7 +683,7 @@ func (s) TestFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	go s.Serve(lis)
 
 	// Establish a connection to the server.
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.Dial(%v) failed: %v", lis.Addr().String(), err)
 	}

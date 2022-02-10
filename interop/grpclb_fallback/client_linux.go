@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/credentials/google"
+	_ "google.golang.org/grpc/xds/googledirectpath"
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
@@ -98,7 +99,6 @@ func dialTCPUserTimeout(ctx context.Context, addr string) (net.Conn, error) {
 func createTestConn() *grpc.ClientConn {
 	opts := []grpc.DialOption{
 		grpc.WithContextDialer(dialTCPUserTimeout),
-		grpc.WithBlock(),
 	}
 	switch *customCredentialsType {
 	case "tls":
@@ -132,7 +132,7 @@ func waitForFallbackAndDoRPCs(client testgrpc.TestServiceClient, fallbackDeadlin
 	fallbackRetryCount := 0
 	fellBack := false
 	for time.Now().Before(fallbackDeadline) {
-		g := doRPCAndGetPath(client, 1*time.Second)
+		g := doRPCAndGetPath(client, 20*time.Second)
 		if g == testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
 			infoLog.Println("Made one successul RPC to a fallback. Now expect the same for the rest.")
 			fellBack = true
@@ -166,7 +166,7 @@ func doFastFallbackBeforeStartup() {
 
 func doSlowFallbackBeforeStartup() {
 	runCmd(*blackholeLBAndBackendAddrsCmd)
-	fallbackDeadline := time.Now().Add(20 * time.Second)
+	fallbackDeadline := time.Now().Add(60 * time.Second)
 	conn := createTestConn()
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -193,7 +193,7 @@ func doSlowFallbackAfterStartup() {
 		errorLog.Fatalf("Expected RPC to take grpclb route type BACKEND. Got: %v", g)
 	}
 	runCmd(*blackholeLBAndBackendAddrsCmd)
-	fallbackDeadline := time.Now().Add(40 * time.Second)
+	fallbackDeadline := time.Now().Add(80 * time.Second)
 	waitForFallbackAndDoRPCs(client, fallbackDeadline)
 }
 

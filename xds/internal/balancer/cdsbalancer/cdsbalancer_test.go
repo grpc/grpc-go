@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -47,6 +48,11 @@ const (
 	defaultTestTimeout      = 5 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond // For events expected to *not* happen.
 )
+
+var defaultTestAuthorityServerConfig = &bootstrap.ServerConfig{
+	ServerURI: "self_server",
+	CredsType: "self_creds",
+}
 
 type s struct {
 	grpctest.Tester
@@ -194,7 +200,7 @@ func cdsCCS(cluster string, xdsC xdsclient.XDSClient) balancer.ClientConnState {
 	jsonSC := fmt.Sprintf(cdsLBConfig, cluster)
 	return balancer.ClientConnState{
 		ResolverState: xdsclient.SetClient(resolver.State{
-			ServiceConfig: internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(jsonSC),
+			ServiceConfig: internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC),
 		}, xdsC),
 		BalancerConfig: &lbConfig{ClusterName: clusterName},
 	}
@@ -209,8 +215,7 @@ func edsCCS(service string, countMax *uint32, enableLRS bool, xdslbpolicy *inter
 		MaxConcurrentRequests: countMax,
 	}
 	if enableLRS {
-		discoveryMechanism.LoadReportingServerName = new(string)
-
+		discoveryMechanism.LoadReportingServer = defaultTestAuthorityServerConfig
 	}
 	lbCfg := &clusterresolver.LBConfig{
 		DiscoveryMechanisms: []clusterresolver.DiscoveryMechanism{discoveryMechanism},
@@ -354,6 +359,9 @@ func (s) TestUpdateClientConnStateWithSameState(t *testing.T) {
 // to the edsBalancer.
 func (s) TestHandleClusterUpdate(t *testing.T) {
 	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
+	xdsC.SetBootstrapConfig(&bootstrap.Config{
+		XDSServer: defaultTestAuthorityServerConfig,
+	})
 	defer func() {
 		cancel()
 		cdsB.Close()
@@ -367,7 +375,7 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 	}{
 		{
 			name:      "happy-case-with-lrs",
-			cdsUpdate: xdsresource.ClusterUpdate{ClusterName: serviceName, EnableLRS: true},
+			cdsUpdate: xdsresource.ClusterUpdate{ClusterName: serviceName, LRSServerConfig: xdsresource.ClusterLRSServerSelf},
 			wantCCS:   edsCCS(serviceName, nil, true, nil),
 		},
 		{

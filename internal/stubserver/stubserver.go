@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
@@ -80,6 +81,14 @@ func (ss *StubServer) FullDuplexCall(stream testpb.TestService_FullDuplexCallSer
 
 // Start starts the server and creates a client connected to it.
 func (ss *StubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption) error {
+	if err := ss.StartServer(sopts...); err != nil {
+		return err
+	}
+	return ss.StartClient(dopts...)
+}
+
+// StartServer only starts the server. It does not create a client to it.
+func (ss *StubServer) StartServer(sopts ...grpc.ServerOption) error {
 	if ss.Network == "" {
 		ss.Network = "tcp"
 	}
@@ -102,8 +111,13 @@ func (ss *StubServer) Start(sopts []grpc.ServerOption, dopts ...grpc.DialOption)
 	go s.Serve(lis)
 	ss.cleanups = append(ss.cleanups, s.Stop)
 	ss.S = s
+	return nil
+}
 
-	opts := append([]grpc.DialOption{grpc.WithInsecure()}, dopts...)
+// StartClient creates a client connected to this service that the test may use.
+// The newly created client will be available in the Client field of StubServer.
+func (ss *StubServer) StartClient(dopts ...grpc.DialOption) error {
+	opts := append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}, dopts...)
 	if ss.R != nil {
 		ss.Target = ss.R.Scheme() + ":///" + ss.Address
 		opts = append(opts, grpc.WithResolvers(ss.R))
