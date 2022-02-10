@@ -312,12 +312,10 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string, s
 		// Check if it's a type name that was not present in the
 		// transitive dependencies of the registered services.
 		desc, err := protoregistry.GlobalTypes.FindMessageByName(protoreflect.FullName(name))
-		if err != nil && err != protoregistry.NotFound {
-			panic(err)
+		if err != nil {
+			return nil, err
 		}
-		if desc != nil {
-			fd = protodesc.ToFileDescriptorProto(desc.Descriptor().ParentFile())
-		}
+		fd = protodesc.ToFileDescriptorProto(desc.Descriptor().ParentFile())
 	}
 
 	if fd == nil {

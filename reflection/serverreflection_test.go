@@ -50,10 +50,8 @@ var (
 	fdProto2Ext  *dpb.FileDescriptorProto
 	fdProto2Ext2 *dpb.FileDescriptorProto
 	fdDynamic    *dpb.FileDescriptorProto
-
 	// reflection descriptors.
 	fdDynamicFile protoreflect.FileDescriptor
-
 	// fileDescriptor marshalled.
 	fdTestByte       []byte
 	fdTestv3Byte     []byte
