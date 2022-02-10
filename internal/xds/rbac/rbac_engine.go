@@ -65,6 +65,16 @@ func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainEngine, error) {
 	return &ChainEngine{chainedEngines: engines}, nil
 }
 
+func (cre *ChainEngine) logRequestDetails(rpcData *rpcData) {
+	if logger.V(logLevel) {
+		logger.Infof("checking request: url path=%s", rpcData.fullMethod)
+		if len(rpcData.certs) > 0 {
+			cert := rpcData.certs[0]
+			logger.Infof("uri sans=%q, dns sans=%q, subject=%v", cert.URIs, cert.DNSNames, cert.Subject)
+		}
+	}
+}
+
 // IsAuthorized determines if an incoming RPC is authorized based on the chain of RBAC
 // engines and their associated actions.
 //
@@ -77,9 +87,6 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 		logger.Errorf("newRPCData: %v", err)
 		return status.Errorf(codes.Internal, "gRPC RBAC: %v", err)
 	}
-	if logger.V(logLevel) {
-		logger.Infof("checking request: %v", rpcData)
-	}
 	for _, engine := range cre.chainedEngines {
 		matchingPolicyName, ok := engine.findMatchingPolicy(rpcData)
 		if logger.V(logLevel) && ok {
@@ -88,8 +95,10 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 
 		switch {
 		case engine.action == v3rbacpb.RBAC_ALLOW && !ok:
+			cre.logRequestDetails(rpcData)
 			return status.Errorf(codes.PermissionDenied, "incoming RPC did not match an allow policy")
 		case engine.action == v3rbacpb.RBAC_DENY && ok:
+			cre.logRequestDetails(rpcData)
 			return status.Errorf(codes.PermissionDenied, "incoming RPC matched a deny policy %q", matchingPolicyName)
 		}
 		// Every policy in the engine list must be queried. Thus, iterate to the
