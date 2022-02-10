@@ -48,9 +48,9 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func setup(t *testing.T) (*testutils.TestClientConn, *gracefulSwitchBalancer) {
+func setup(t *testing.T) (*testutils.TestClientConn, *Balancer) {
 	tcc := testutils.NewTestClientConn(t)
-	return tcc, newGracefulSwitchBalancer(tcc, balancer.BuildOptions{})
+	return tcc, NewGracefulSwitchBalancer(tcc, balancer.BuildOptions{})
 }
 
 // TestSuccessfulFirstUpdate tests a basic scenario for the Graceful Switch Load
@@ -64,7 +64,7 @@ func (s) TestSuccessfulFirstUpdate(t *testing.T) {
 		t.Fatalf("balancer.Get(%v) returned nil", balancerName1)
 	}
 	if err := gsb.SwitchTo(builder); err != nil {
-		t.Fatalf("gracefulSwitchBalancer.SwitchTo failed with error: %v", err)
+		t.Fatalf("Balancer.SwitchTo failed with error: %v", err)
 	}
 	if gsb.balancerCurrent == nil {
 		t.Fatal("balancerCurrent was not built out when a correct SwitchTo() call should've triggered the balancer to build")
@@ -78,7 +78,7 @@ func (s) TestSuccessfulFirstUpdate(t *testing.T) {
 	// Updating ClientConnState should forward the update exactly as is to the
 	// current balancer.
 	if err := gsb.UpdateClientConnState(ccs); err != nil {
-		t.Fatalf("gracefulSwitchBalancer.UpdateClientConnState(%v) failed with error: %v", ccs, err)
+		t.Fatalf("Balancer.UpdateClientConnState(%v) failed with error: %v", ccs, err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer cancel()
