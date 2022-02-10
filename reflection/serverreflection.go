@@ -317,11 +317,6 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string, s
 		}
 		fd = protodesc.ToFileDescriptorProto(desc.Descriptor().ParentFile())
 	}
-
-	if fd == nil {
-		return nil, fmt.Errorf("unknown symbol: %v", name)
-	}
-
 	return fileDescWithDependencies(fd, sentFileDescriptors)
 }
 
