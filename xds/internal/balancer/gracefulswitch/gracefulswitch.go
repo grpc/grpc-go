@@ -57,8 +57,12 @@ type Balancer struct {
 	balancerPending *balancerWrapper
 	closed          bool // set to true when this balancer is closed
 
-	// currentMu must be locked before mu.
-	currentMu sync.Mutex // protects operations on the balancerCurrent
+	// currentMu must be locked before mu. This mutex guards against this
+	// sequence of events: UpdateSubConnState() called, finds the
+	// balancerCurrent, gives up lock, updateState comes in, causes Close() on
+	// balancerCurrent before the UpdateSubConnState is called on the
+	// balancerCurrent.
+	currentMu sync.Mutex
 }
 
 // caller must hold gsb.mu.
@@ -292,8 +296,8 @@ func (gsb *Balancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubC
 	if gsb.balancerPending != nil && gsb.balancerPending.subconns[sc] {
 		balToUpdate = gsb.balancerPending
 	}
-	// SubConn belonged to a stale LB policy that has not yet fully closed.
 	if balToUpdate == nil {
+		// SubConn belonged to a stale LB policy that has not yet fully closed.
 		gsb.mu.Unlock()
 		return
 	}
