@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/balancergroup"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/hierarchy"
 	"google.golang.org/grpc/internal/testutils"
@@ -516,7 +517,6 @@ func TestRoutingConfigUpdateDeleteAll(t *testing.T) {
 func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	const (
 		balancerName       = "stubBalancer-TestClusterManagerForwardsBalancerBuildOptions"
-		parent             = int64(1234)
 		userAgent          = "ua"
 		defaultTestTimeout = 1 * time.Second
 	)
@@ -526,7 +526,7 @@ func TestClusterManagerForwardsBalancerBuildOptions(t *testing.T) {
 	ccsCh := testutils.NewChannel()
 	bOpts := balancer.BuildOptions{
 		DialCreds:        insecure.NewCredentials(),
-		ChannelzParentID: parent,
+		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefChannel, 1234, nil),
 		CustomUserAgent:  userAgent,
 	}
 	stub.Register(balancerName, stub.BalancerFuncs{

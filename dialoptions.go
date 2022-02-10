@@ -26,6 +26,7 @@ import (
 
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -57,7 +58,7 @@ type dialOptions struct {
 	callOptions     []CallOption
 	// This is used by WithBalancerName dial option.
 	balancerBuilder             balancer.Builder
-	channelzParentID            int64
+	channelzParentID            *channelz.Identifier
 	disableServiceConfig        bool
 	disableRetry                bool
 	disableHealthCheck          bool
@@ -498,7 +499,7 @@ func WithAuthority(a string) DialOption {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func WithChannelzParentID(id int64) DialOption {
+func WithChannelzParentID(id *channelz.Identifier) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.channelzParentID = id
 	})
