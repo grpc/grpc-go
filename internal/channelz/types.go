@@ -696,7 +696,7 @@ const (
 	RefServer
 	// RefListenSocket indicates the referenced entity is a ListenSocket.
 	RefListenSocket
-	// RefNormalSocker indicates the referenced entity is a NormalSocket.
+	// RefNormalSocket indicates the referenced entity is a NormalSocket.
 	RefNormalSocket
 )
 
