@@ -733,40 +733,36 @@ func (l *listenSocket) Close() error {
 // this method returns.
 // Serve will return a non-nil error unless Stop or GracefulStop is called.
 func (s *Server) Serve(lis net.Listener) error {
-	var ls *listenSocket
-	if err := func() error { // Anonymous func to be able to defer the unlock.
-		s.mu.Lock()
-		defer s.mu.Unlock()
+	s.mu.Lock()
+	s.printf("serving")
+	s.serve = true
+	if s.lis == nil {
+		// Serve called after Stop or GracefulStop.
+		s.mu.Unlock()
+		lis.Close()
+		return ErrServerStopped
+	}
 
-		s.printf("serving")
-		s.serve = true
-		if s.lis == nil {
-			lis.Close()
-			return ErrServerStopped
+	s.serveWG.Add(1)
+	defer func() {
+		s.serveWG.Done()
+		if s.quit.HasFired() {
+			// Stop or GracefulStop called; block until done and return nil.
+			<-s.done.Done()
 		}
+	}()
 
-		s.serveWG.Add(1)
-		defer func() {
-			s.serveWG.Done()
-			if s.quit.HasFired() {
-				// Stop or GracefulStop called; block until done and return nil.
-				<-s.done.Done()
-			}
-		}()
+	ls := &listenSocket{Listener: lis}
+	s.lis[ls] = true
 
-		ls = &listenSocket{Listener: lis}
-		s.lis[ls] = true
-
-		var err error
-		ls.channelzID, err = channelz.RegisterListenSocket(ls, s.channelzID, lis.Addr().String())
-		if err != nil {
-			lis.Close()
-			return err
-		}
-		return nil
-	}(); err != nil {
+	var err error
+	ls.channelzID, err = channelz.RegisterListenSocket(ls, s.channelzID, lis.Addr().String())
+	if err != nil {
+		s.mu.Unlock()
+		lis.Close()
 		return err
 	}
+	s.mu.Unlock()
 
 	defer func() {
 		s.mu.Lock()
