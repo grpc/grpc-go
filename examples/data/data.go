@@ -20,6 +20,9 @@
 package data
 
 import (
+	"crypto/x509"
+	"fmt"
+	"io/ioutil"
 	"path/filepath"
 	"runtime"
 )
@@ -41,4 +44,22 @@ func Path(rel string) string {
 	}
 
 	return filepath.Join(basepath, rel)
+}
+
+// NewCertPool returns a x509.CertPool given the absolute paths of a list of
+// PEM certificates, or an error if any failure is encountered when loading
+// the said certificates.
+func NewCertPool(certPaths ...string) (*x509.CertPool, error) {
+	certPool := x509.NewCertPool()
+	for _, p := range certPaths {
+		caBytes, err := ioutil.ReadFile(p)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read cert %s: %v", p, err)
+		}
+		ok := certPool.AppendCertsFromPEM(caBytes)
+		if !ok {
+			return nil, fmt.Errorf("failed to parse %s", p)
+		}
+	}
+	return certPool, nil
 }
