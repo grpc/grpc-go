@@ -27,6 +27,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -2402,5 +2403,12 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				t.Fatalf("operateHeaders(%v); status = \ngot: %s\nwant: %s", test.metaHeaderFrame, got, want)
 			}
 		})
+	}
+}
+
+func TestConnectionError_Unwrap(t *testing.T) {
+	err := connectionErrorf(false, os.ErrNotExist, "unwrap me")
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Error("ConnectionError does not unwrap")
 	}
 }
