@@ -39,8 +39,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const logLevel = 2
-
 var logger = grpclog.Component("rbac")
 
 var getConnection = transport.GetConnection
@@ -66,7 +64,7 @@ func NewChainEngine(policies []*v3rbacpb.RBAC) (*ChainEngine, error) {
 }
 
 func (cre *ChainEngine) logRequestDetails(rpcData *rpcData) {
-	if logger.V(logLevel) {
+	if logger.V(2) {
 		logger.Infof("checking request: url path=%s", rpcData.fullMethod)
 		if len(rpcData.certs) > 0 {
 			cert := rpcData.certs[0]
@@ -89,7 +87,7 @@ func (cre *ChainEngine) IsAuthorized(ctx context.Context) error {
 	}
 	for _, engine := range cre.chainedEngines {
 		matchingPolicyName, ok := engine.findMatchingPolicy(rpcData)
-		if logger.V(logLevel) && ok {
+		if logger.V(2) && ok {
 			logger.Infof("incoming RPC matched to policy %v in engine with action %v", matchingPolicyName, engine.action)
 		}
 
