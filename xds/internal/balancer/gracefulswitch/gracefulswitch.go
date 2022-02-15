@@ -52,7 +52,16 @@ type Balancer struct {
 	bOpts balancer.BuildOptions
 	cc    balancer.ClientConn
 
-	mu              sync.Mutex // also guards all fields within balancerCurrent and balancerPending
+	// mu protects the following fields and all fields within balancerCurrent
+	// and balancerPending. mu does not need to be held when calling into the
+	// child balancers, as all calls into these children happen only as a direct
+	// result of a call into the gracefulSwitchBalancer, which are also
+	// guaranteed to be synchronous. There is one exception: an UpdateState call
+	// from a child balancer when current and pending are populated can lead to
+	// calling Close() on the current. To prevent that racing with an
+	// UpdateSubConnState from the channel, we hold currentMu during Close and
+	// UpdateSubConnState calls.
+	mu              sync.Mutex
 	balancerCurrent *balancerWrapper
 	balancerPending *balancerWrapper
 	closed          bool // set to true when this balancer is closed
@@ -63,40 +72,6 @@ type Balancer struct {
 	// balancerCurrent before the UpdateSubConnState is called on the
 	// balancerCurrent.
 	currentMu sync.Mutex
-}
-
-// caller must hold gsb.mu.
-func (gsb *Balancer) updateState(bw *balancerWrapper, state balancer.State) {
-	if !gsb.balancerCurrentOrPending(bw) {
-		return
-	}
-
-	if bw == gsb.balancerCurrent {
-		// In the case that the current balancer exits READY, and there is a pending
-		// balancer, you can forward the pending balancer's cached State up to
-		// ClientConn and swap the pending into the current. This is because there
-		// is no reason to gracefully switch from and keep using the old policy as
-		// the ClientConn is not connected to any backends.
-		if state.ConnectivityState != connectivity.Ready && gsb.balancerPending != nil {
-			gsb.swap()
-			return
-		}
-		// Even if there is a pending balancer waiting to be gracefully switched to,
-		// continue to forward current balancer updates to the Client Conn. Ignoring
-		// state + picker from the current would cause undefined behavior/cause the
-		// system to behave incorrectly from the current LB policies perspective.
-		// Also, the current LB is still being used by grpc to choose SubConns per
-		// RPC, and thus should use the most updated form of the current balancer.
-		gsb.cc.UpdateState(state)
-		return
-	}
-	// If the current balancer is currently in a state other than READY, the
-	// new policy can be swapped into place immediately. This is because
-	// there is no reason to gracefully switch from and keep using the old
-	// policy as the ClientConn is not connected to any backends.
-	if state.ConnectivityState != connectivity.Connecting || gsb.balancerCurrent.lastState.ConnectivityState != connectivity.Ready {
-		gsb.swap()
-	}
 }
 
 // swap swaps out the current lb with the pending LB and updates the ClientConn.
@@ -119,39 +94,6 @@ func (gsb *Balancer) balancerCurrentOrPending(bw *balancerWrapper) bool {
 	return bw == gsb.balancerCurrent || bw == gsb.balancerPending
 }
 
-// caller must hold gsb.mu.
-func (gsb *Balancer) newSubConn(bw *balancerWrapper, addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	if !gsb.balancerCurrentOrPending(bw) {
-		return nil, fmt.Errorf("%T at address %p that called NewSubConn is deleted", bw, bw)
-	}
-	return gsb.cc.NewSubConn(addrs, opts)
-}
-
-func (gsb *Balancer) resolveNow(bw *balancerWrapper, opts resolver.ResolveNowOptions) {
-	// Ignore ResolveNow requests from anything other than the most recent
-	// balancer, because older balancers were already removed from the config.
-	if bw == gsb.latestBalancer() {
-		gsb.cc.ResolveNow(opts)
-	}
-}
-
-// caller must hold gsb.mu.
-func (gsb *Balancer) removeSubConn(bw *balancerWrapper, sc balancer.SubConn) {
-	if !gsb.balancerCurrentOrPending(bw) {
-		return
-	}
-	gsb.cc.RemoveSubConn(sc)
-}
-
-func (gsb *Balancer) updateAddresses(bw *balancerWrapper, sc balancer.SubConn, addrs []resolver.Address) {
-	gsb.mu.Lock()
-	defer gsb.mu.Unlock()
-	if !gsb.balancerCurrentOrPending(bw) {
-		return
-	}
-	gsb.cc.UpdateAddresses(sc, addrs)
-}
-
 // SwitchTo gracefully switches to the new balancer. This function must be
 // called synchronously alongside the rest of the balancer.Balancer methods this
 // Graceful Switch Balancer implements.
@@ -166,17 +108,12 @@ func (gsb *Balancer) SwitchTo(builder balancer.Builder) error {
 		lastState: defaultState,
 		subconns:  make(map[balancer.SubConn]bool),
 	}
-	var balToClose balancer.Balancer
+	var balToClose *balancerWrapper
 	if gsb.balancerCurrent == nil {
 		gsb.balancerCurrent = bw
 	} else {
 		// Clean up resources here that are from a previous pending lb.
-		if gsb.balancerPending != nil {
-			for sc := range gsb.balancerPending.subconns {
-				gsb.cc.RemoveSubConn(sc)
-			}
-			balToClose = gsb.balancerPending
-		}
+		balToClose = gsb.balancerPending
 		gsb.balancerPending = bw
 	}
 	gsb.mu.Unlock()
@@ -220,63 +157,32 @@ func (gsb *Balancer) latestBalancer() *balancerWrapper {
 
 // UpdateClientConnState forwards the update to the latest balancer created.
 func (gsb *Balancer) UpdateClientConnState(state balancer.ClientConnState) error {
+	// The resolver data is only relevant to the most recent LB Policy.
 	balToUpdate := gsb.latestBalancer()
 	if balToUpdate == nil {
 		return errBalancerClosed
 	}
-
-	// Forwarding the update outside of holding gsb.mu prevents deadlock
-	// scenarios, as the update can induce an inline callback which requires
-	// gsb.mu. However, the current balancer can be closed at any time after
-	// giving up gsb.mu. The pending balancer cannot be closed, as we are
-	// guaranteed grpc will call the balancer API synchronously, and for the
-	// pending to also be closed would require another update from grpc. The
-	// current being closed is not a problem for this UpdateClientConnState()
-	// call, as in the scenario that the current balancer can be closed (current
-	// + pending balancers are both populated), this update will always be
-	// forwarded to the pending. Thus, there is a guarantee that this will not
-	// break the balancer API of the balancer by updating after closing.
+	// Perform this call without gsb.mu to prevent deadlocks if the child calls
+	// back into the channel. The latest balancer can never be closed during a
+	// call from the channel, even without gsb.mu held.
 	return balToUpdate.UpdateClientConnState(state)
 }
 
 // ResolverError forwards the error to the latest balancer created.
 func (gsb *Balancer) ResolverError(err error) {
-	// The update will be forwarded to the pending balancer only if there is a
-	// pending LB present, as that is the most recent LB Config prepared by the
-	// resolver, and thus is a separate concern from the current.
+	// The resolver data is only relevant to the most recent LB Policy.
 	balToUpdate := gsb.latestBalancer()
 	if balToUpdate == nil {
 		return
 	}
-	// Forwarding the update outside of holding gsb.mu prevents deadlock
-	// scenarios, as the update can induce an inline callback which requires
-	// gsb.mu. However, the current balancer can be closed at any time after
-	// giving up gsb.mu. The pending balancer cannot be closed, as we are
-	// guaranteed grpc will call the balancer API synchronously, and for the
-	// pending to also be closed would require another update from grpc. The
-	// current being closed is not a problem for this ResolverError() call, as
-	// in the scenario that the current balancer can be closed (current +
-	// pending balancers are both populated), this error will always be
-	// forwarded to the pending. Thus, there is a guarantee that this will not
-	// break the balancer API of the balancer by updating after closing.
+	// Perform this call without gsb.mu to prevent deadlocks if the child calls
+	// back into the channel. The latest balancer can never be closed during a
+	// call from the channel, even without gsb.mu held.
 	balToUpdate.ResolverError(err)
 }
 
 // UpdateSubConnState forwards the update to the appropriate child.
 func (gsb *Balancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-	// At any given time, the current balancer may be closed in the situation
-	// where there is a current balancer and a pending balancer. Thus, the
-	// swap() (close() + clearing of SubConns) operation is also guarded by this
-	// currentMu. Whether the current has been deleted or not will be checked
-	// from reading from the scToSubBalancer map, as that will be cleared in the
-	// atomic swap() operation. We are guaranteed that there can only be one
-	// balancer closed within this UpdateSubConnState() call, as multiple
-	// balancers closed would require another call to SwitchTo() which we are
-	// guaranteed won't be called concurrently. UpdateSubConnState() is
-	// different to UpdateClientConnState() and ResolverError(), as for those
-	// functions you don't update the current balancer in the situation where
-	// the current balancer could be closed (current + pending balancer
-	// populated).
 	gsb.currentMu.Lock()
 	defer gsb.currentMu.Unlock()
 	gsb.mu.Lock()
@@ -284,24 +190,21 @@ func (gsb *Balancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubC
 		gsb.mu.Unlock()
 		return
 	}
-	// This SubConn update will forward to the current balancer even if there is
-	// a pending present. This is because if this balancer does not forward the
-	// update, the picker from the current will not be updated with SubConns,
-	// leading to the possibility that the ClientConn constantly picks bad
-	// SubConns in the Graceful Switch period.
-	var balToUpdate balancer.Balancer
+
+	// Forward update to the appropriate child.  Even if there is a pending
+	// balancer, the current balancer should continue to get SubConn updates to
+	// maintain the proper state while the pending is still connecting.
+	var balToUpdate *balancerWrapper
 	if gsb.balancerCurrent != nil && gsb.balancerCurrent.subconns[sc] {
 		balToUpdate = gsb.balancerCurrent
-	}
-	if gsb.balancerPending != nil && gsb.balancerPending.subconns[sc] {
+	} else if gsb.balancerPending != nil && gsb.balancerPending.subconns[sc] {
 		balToUpdate = gsb.balancerPending
 	}
+	gsb.mu.Unlock()
 	if balToUpdate == nil {
 		// SubConn belonged to a stale LB policy that has not yet fully closed.
-		gsb.mu.Unlock()
 		return
 	}
-	gsb.mu.Unlock()
 	balToUpdate.UpdateSubConnState(sc, state)
 }
 
@@ -329,8 +232,9 @@ func (gsb *Balancer) ExitIdle() {
 	if balToUpdate == nil {
 		return
 	}
-	// There is no need to protect this read with a mutex, as the write to
-	// .Balancer will never happen concurrently.
+	// There is no need to protect this read with a mutex, as the write to the
+	// Balancer field happens in SwitchTo, which completes before this can be
+	// called.
 	if ei, ok := balToUpdate.Balancer.(balancer.ExitIdler); ok {
 		ei.ExitIdle()
 	}
@@ -344,7 +248,8 @@ type balancerWrapper struct {
 	subconns  map[balancer.SubConn]bool // subconns created by this balancer
 }
 
-// After this, test to make sure it works
+// bw must not be referenced via balancerCurrent or balancerPending in gsb
+// before Close is called.
 func (bw *balancerWrapper) Close() {
 	bw.gsb.mu.Lock()
 	for sc := range bw.subconns {
@@ -365,13 +270,48 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 	bw.gsb.mu.Lock()
 	defer bw.gsb.mu.Unlock()
 	bw.lastState = state
-	bw.gsb.updateState(bw, state)
+
+	if !bw.gsb.balancerCurrentOrPending(bw) {
+		return
+	}
+
+	if bw == bw.gsb.balancerCurrent {
+		// In the case that the current balancer exits READY, and there is a pending
+		// balancer, you can forward the pending balancer's cached State up to
+		// ClientConn and swap the pending into the current. This is because there
+		// is no reason to gracefully switch from and keep using the old policy as
+		// the ClientConn is not connected to any backends.
+		if state.ConnectivityState != connectivity.Ready && bw.gsb.balancerPending != nil {
+			bw.gsb.swap()
+			return
+		}
+		// Even if there is a pending balancer waiting to be gracefully switched to,
+		// continue to forward current balancer updates to the Client Conn. Ignoring
+		// state + picker from the current would cause undefined behavior/cause the
+		// system to behave incorrectly from the current LB policies perspective.
+		// Also, the current LB is still being used by grpc to choose SubConns per
+		// RPC, and thus should use the most updated form of the current balancer.
+		bw.gsb.cc.UpdateState(state)
+		return
+	}
+	// If the current balancer is currently in a state other than READY, the
+	// new policy can be swapped into place immediately. This is because
+	// there is no reason to gracefully switch from and keep using the old
+	// policy as the ClientConn is not connected to any backends.
+	if state.ConnectivityState != connectivity.Connecting || bw.gsb.balancerCurrent.lastState.ConnectivityState != connectivity.Ready {
+		bw.gsb.swap()
+	}
 }
 
 func (bw *balancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	bw.gsb.mu.Lock()
 	defer bw.gsb.mu.Unlock()
-	sc, err := bw.gsb.newSubConn(bw, addrs, opts)
+
+	if !bw.gsb.balancerCurrentOrPending(bw) {
+		return nil, fmt.Errorf("%T at address %p that called NewSubConn is deleted", bw, bw)
+	}
+
+	sc, err := bw.gsb.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -380,18 +320,31 @@ func (bw *balancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.Ne
 }
 
 func (bw *balancerWrapper) ResolveNow(opts resolver.ResolveNowOptions) {
-	bw.gsb.resolveNow(bw, opts)
+	// Ignore ResolveNow requests from anything other than the most recent
+	// balancer, because older balancers were already removed from the config.
+	if bw != bw.gsb.latestBalancer() {
+		return
+	}
+	bw.gsb.cc.ResolveNow(opts)
 }
 
 func (bw *balancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 	bw.gsb.mu.Lock()
 	defer bw.gsb.mu.Unlock()
 	delete(bw.subconns, sc)
-	bw.gsb.removeSubConn(bw, sc)
+	if !bw.gsb.balancerCurrentOrPending(bw) {
+		return
+	}
+	bw.gsb.cc.RemoveSubConn(sc)
 }
 
 func (bw *balancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
-	bw.gsb.updateAddresses(bw, sc, addrs)
+	bw.gsb.mu.Lock()
+	defer bw.gsb.mu.Unlock()
+	if !bw.gsb.balancerCurrentOrPending(bw) {
+		return
+	}
+	bw.gsb.cc.UpdateAddresses(sc, addrs)
 }
 
 func (bw *balancerWrapper) Target() string {
