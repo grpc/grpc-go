@@ -26,8 +26,17 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	icredentials "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/resolver"
 )
+
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
 
 type testCreds struct {
 	credentials.TransportCredentials
@@ -56,24 +65,31 @@ var (
 )
 
 func overrideNewCredsFuncs() func() {
-	oldNewTLS := newTLS
+	origNewTLS := newTLS
 	newTLS = func() credentials.TransportCredentials {
 		return testTLS
 	}
-	oldNewALTS := newALTS
+	origNewALTS := newALTS
 	newALTS = func() credentials.TransportCredentials {
 		return testALTS
 	}
+	origNewADC := newADC
+	newADC = func(context.Context) (credentials.PerRPCCredentials, error) {
+		// We do not use perRPC creds in this test. It is safe to return nil here.
+		return nil, nil
+	}
+
 	return func() {
-		newTLS = oldNewTLS
-		newALTS = oldNewALTS
+		newTLS = origNewTLS
+		newALTS = origNewALTS
+		newADC = origNewADC
 	}
 }
 
 // TestClientHandshakeBasedOnClusterName that by default (without switching
 // modes), ClientHandshake does either tls or alts base on the cluster name in
 // attributes.
-func TestClientHandshakeBasedOnClusterName(t *testing.T) {
+func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 	defer overrideNewCredsFuncs()()
 	for bundleTyp, tc := range map[string]credentials.Bundle{
 		"defaultCredsWithOptions": NewDefaultCredentialsWithOptions(DefaultCredentialsOptions{}),

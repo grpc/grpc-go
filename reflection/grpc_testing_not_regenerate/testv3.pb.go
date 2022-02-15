@@ -3,7 +3,7 @@
 // DO NOT EDIT!
 
 /*
-Package grpc_testingv3 is a generated protocol buffer package.
+Package grpc_testing_not_regenerate is a generated protocol buffer package.
 
 It is generated from these files:
 	testv3.proto
@@ -12,7 +12,7 @@ It has these top-level messages:
 	SearchResponseV3
 	SearchRequestV3
 */
-package grpc_testingv3
+package grpc_testing_not_regenerate
 
 import proto "github.com/golang/protobuf/proto"
 import fmt "fmt"

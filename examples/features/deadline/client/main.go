@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/status"
 )
@@ -72,7 +73,7 @@ func streamingCall(c pb.EchoClient, requestID int, message string, want codes.Co
 func main() {
 	flag.Parse()
 
-	conn, err := grpc.Dial(*addr, grpc.WithInsecure())
+	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

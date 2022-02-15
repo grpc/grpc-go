@@ -28,14 +28,40 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
-const defaultWatchExpiryTimeout = 15 * time.Second
+const (
+	defaultWatchExpiryTimeout         = 15 * time.Second
+	defaultIdleAuthorityDeleteTimeout = 5 * time.Minute
+)
 
-// This is the Client returned by New(). It contains one client implementation,
-// and maintains the refcount.
-var singletonClient = &clientRefCounted{}
+var (
+	// This is the Client returned by New(). It contains one client implementation,
+	// and maintains the refcount.
+	singletonClient = &clientRefCounted{}
+
+	// The following functions are no-ops in the actual code, but can be
+	// overridden in tests to give them visibility into certain events.
+	singletonClientImplCreateHook = func() {}
+	singletonClientImplCloseHook  = func() {}
+)
 
 // To override in tests.
 var bootstrapNewConfig = bootstrap.NewConfig
+
+// onceClosingClient is a thin wrapper around clientRefCounted. The Close()
+// method is overridden such that the underlying reference counted client's
+// Close() is called at most once, thereby making Close() idempotent.
+//
+// This is the type which is returned by New() and NewWithConfig(), making it
+// safe for these callers to call Close() any number of times.
+type onceClosingClient struct {
+	XDSClient
+
+	once sync.Once
+}
+
+func (o *onceClosingClient) Close() {
+	o.once.Do(o.XDSClient.Close)
+}
 
 // clientRefCounted is ref-counted, and to be shared by the xds resolver and
 // balancer implementations, across multiple ClientConns and Servers.
@@ -67,29 +93,8 @@ func New() (XDSClient, error) {
 	return c, nil
 }
 
-func newRefCounted() (*clientRefCounted, error) {
-	singletonClient.mu.Lock()
-	defer singletonClient.mu.Unlock()
-	// If the client implementation was created, increment ref count and return
-	// the client.
-	if singletonClient.clientImpl != nil {
-		singletonClient.refCount++
-		return singletonClient, nil
-	}
-
-	// Create the new client implementation.
-	config, err := bootstrapNewConfig()
-	if err != nil {
-		return nil, fmt.Errorf("xds: failed to read bootstrap file: %v", err)
-	}
-	c, err := newWithConfig(config, defaultWatchExpiryTimeout)
-	if err != nil {
-		return nil, err
-	}
-
-	singletonClient.clientImpl = c
-	singletonClient.refCount++
-	return singletonClient, nil
+func newRefCounted() (XDSClient, error) {
+	return newRefCountedWithConfig(nil)
 }
 
 // NewWithConfig returns a new xdsClient configured by the given config.
@@ -104,24 +109,39 @@ func newRefCounted() (*clientRefCounted, error) {
 // This function is internal only, for c2p resolver and testing to use. DO NOT
 // use this elsewhere. Use New() instead.
 func NewWithConfig(config *bootstrap.Config) (XDSClient, error) {
+	return newRefCountedWithConfig(config)
+}
+
+func newRefCountedWithConfig(config *bootstrap.Config) (XDSClient, error) {
 	singletonClient.mu.Lock()
 	defer singletonClient.mu.Unlock()
+
 	// If the client implementation was created, increment ref count and return
 	// the client.
 	if singletonClient.clientImpl != nil {
 		singletonClient.refCount++
-		return singletonClient, nil
+		return &onceClosingClient{XDSClient: singletonClient}, nil
+	}
+
+	// If the passed in config is nil, perform bootstrap to read config.
+	if config == nil {
+		var err error
+		config, err = bootstrapNewConfig()
+		if err != nil {
+			return nil, fmt.Errorf("xds: failed to read bootstrap file: %v", err)
+		}
 	}
 
 	// Create the new client implementation.
-	c, err := newWithConfig(config, defaultWatchExpiryTimeout)
+	c, err := newWithConfig(config, defaultWatchExpiryTimeout, defaultIdleAuthorityDeleteTimeout)
 	if err != nil {
 		return nil, err
 	}
 
 	singletonClient.clientImpl = c
 	singletonClient.refCount++
-	return singletonClient, nil
+	singletonClientImplCreateHook()
+	return &onceClosingClient{XDSClient: singletonClient}, nil
 }
 
 // Close closes the client. It does ref count of the xds client implementation,
@@ -136,6 +156,7 @@ func (c *clientRefCounted) Close() {
 		// Set clientImpl back to nil. So if New() is called after this, a new
 		// implementation will be created.
 		c.clientImpl = nil
+		singletonClientImplCloseHook()
 	}
 }
 
@@ -144,7 +165,7 @@ func (c *clientRefCounted) Close() {
 // Note that this function doesn't set the singleton, so that the testing states
 // don't leak.
 func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout time.Duration) (XDSClient, error) {
-	cl, err := newWithConfig(config, watchExpiryTimeout)
+	cl, err := newWithConfig(config, watchExpiryTimeout, defaultIdleAuthorityDeleteTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +203,7 @@ func NewClientWithBootstrapContents(contents []byte) (XDSClient, error) {
 		return nil, fmt.Errorf("xds: error with bootstrap config: %v", err)
 	}
 
-	cImpl, err := newWithConfig(bcfg, defaultWatchExpiryTimeout)
+	cImpl, err := newWithConfig(bcfg, defaultWatchExpiryTimeout, defaultIdleAuthorityDeleteTimeout)
 	if err != nil {
 		return nil, err
 	}

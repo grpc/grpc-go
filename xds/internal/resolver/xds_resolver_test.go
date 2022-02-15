@@ -101,7 +101,7 @@ func (t *testClientConn) ReportError(err error) {
 }
 
 func (t *testClientConn) ParseServiceConfig(jsonSC string) *serviceconfig.ParseResult {
-	return internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(jsonSC)
+	return internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 }
 
 func newTestClientConn() *testClientConn {
@@ -548,7 +548,7 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
 		}
 
-		wantSCParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(tt.wantJSON)
+		wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(tt.wantJSON)
 		if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
 			t.Errorf("ClientConn.UpdateState received different service config")
 			t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
@@ -730,7 +730,7 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
         }
       }
     }}]}`
-	wantSCParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON)
+	wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON)
 
 	gotState, err := tcc.stateCh.Receive(ctx)
 	if err != nil {
@@ -798,7 +798,7 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 	if err := rState.ServiceConfig.Err; err != nil {
 		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
 	}
-	wantSCParsed = internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)("{}")
+	wantSCParsed = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)("{}")
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
 		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
@@ -992,7 +992,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
         }
       }
     }}]}`
-	wantSCParsed := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON)
+	wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
 		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
@@ -1054,7 +1054,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
         }
       }
     }}]}`
-	wantSCParsed2 := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON2)
+	wantSCParsed2 := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON2)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed2.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
 		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
@@ -1089,7 +1089,7 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
         }
       }
     }}]}`
-	wantSCParsed3 := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)(wantJSON3)
+	wantSCParsed3 := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON3)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed3.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
 		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
@@ -1177,7 +1177,7 @@ func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 		t.Fatalf("Error waiting for UpdateState to be called: %v", err)
 	}
 	rState := gotState.(resolver.State)
-	wantParsedConfig := internal.ParseServiceConfigForTesting.(func(string) *serviceconfig.ParseResult)("{}")
+	wantParsedConfig := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)("{}")
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantParsedConfig.Config) {
 		t.Error("ClientConn.UpdateState got wrong service config")
 		t.Errorf("gotParsed: %s", cmp.Diff(nil, rState.ServiceConfig.Config))

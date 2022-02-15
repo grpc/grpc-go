@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc"
 	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
+	"google.golang.org/grpc/credentials/insecure"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -70,7 +71,7 @@ func newClient(target, binaryPath, bootstrap string, logger io.Writer, flags ...
 	)
 	cmd.Start()
 
-	cc, err := grpc.Dial(fmt.Sprintf("localhost:%d", clientStatsPort), grpc.WithInsecure(), grpc.WithDefaultCallOptions(grpc.WaitForReady(true)))
+	cc, err := grpc.Dial(fmt.Sprintf("localhost:%d", clientStatsPort), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDefaultCallOptions(grpc.WaitForReady(true)))
 	if err != nil {
 		return nil, err
 	}

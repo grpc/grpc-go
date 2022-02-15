@@ -656,7 +656,7 @@ func (s) TestDropRequest(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		var p peer.Peer
 		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if want := tss.bePorts[1]; p.Addr.(*net.TCPAddr).Port != want {
 			t.Errorf("got peer: %v, want peer port: %v", p.Addr, want)
@@ -667,7 +667,7 @@ func (s) TestDropRequest(t *testing.T) {
 		}
 
 		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Errorf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
+			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 		}
 		if want := tss.bePorts[1]; p.Addr.(*net.TCPAddr).Port != want {
 			t.Errorf("got peer: %v, want peer port: %v", p.Addr, want)
@@ -1404,7 +1404,7 @@ func (s) TestGRPCLBWithTargetNameFieldInConfig(t *testing.T) {
 	// Push the resolver update with target_field changed.
 	// Push a resolver update with grpclb configuration containing the
 	// target_name field. Our fake remote balancer has been updated above to expect the newServerName in the initial request.
-	lbCfg := fmt.Sprintf(`{"loadBalancingConfig": [{"grpclb": {"targetName": "%s"}}]}`, newServerName)
+	lbCfg := fmt.Sprintf(`{"loadBalancingConfig": [{"grpclb": {"serviceName": "%s"}}]}`, newServerName)
 	rs = grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(lbCfg)},
 		&grpclbstate.State{BalancerAddresses: []resolver.Address{{
 			Addr:       tss.lbAddr,

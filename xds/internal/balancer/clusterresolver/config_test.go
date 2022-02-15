@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/internal/balancer/stub"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 func TestDiscoveryMechanismTypeMarshalJSON(t *testing.T) {
@@ -102,7 +103,10 @@ const (
 	testJSONConfig1 = `{
   "discoveryMechanisms": [{
     "cluster": "test-cluster-name",
-    "lrsLoadReportingServerName": "test-lrs-server",
+    "lrsLoadReportingServer": {
+      "server_uri": "trafficdirector.googleapis.com:443",
+      "channel_creds": [ { "type": "google_default" } ]
+    },
     "maxConcurrentRequests": 314,
     "type": "EDS",
     "edsServiceName": "test-eds-service-name"
@@ -111,7 +115,10 @@ const (
 	testJSONConfig2 = `{
   "discoveryMechanisms": [{
     "cluster": "test-cluster-name",
-    "lrsLoadReportingServerName": "test-lrs-server",
+    "lrsLoadReportingServer": {
+      "server_uri": "trafficdirector.googleapis.com:443",
+      "channel_creds": [ { "type": "google_default" } ]
+    },
     "maxConcurrentRequests": 314,
     "type": "EDS",
     "edsServiceName": "test-eds-service-name"
@@ -122,7 +129,10 @@ const (
 	testJSONConfig3 = `{
   "discoveryMechanisms": [{
     "cluster": "test-cluster-name",
-    "lrsLoadReportingServerName": "test-lrs-server",
+    "lrsLoadReportingServer": {
+      "server_uri": "trafficdirector.googleapis.com:443",
+      "channel_creds": [ { "type": "google_default" } ]
+    },
     "maxConcurrentRequests": 314,
     "type": "EDS",
     "edsServiceName": "test-eds-service-name"
@@ -132,7 +142,10 @@ const (
 	testJSONConfig4 = `{
   "discoveryMechanisms": [{
     "cluster": "test-cluster-name",
-    "lrsLoadReportingServerName": "test-lrs-server",
+    "lrsLoadReportingServer": {
+      "server_uri": "trafficdirector.googleapis.com:443",
+      "channel_creds": [ { "type": "google_default" } ]
+    },
     "maxConcurrentRequests": 314,
     "type": "EDS",
     "edsServiceName": "test-eds-service-name"
@@ -142,7 +155,10 @@ const (
 	testJSONConfig5 = `{
   "discoveryMechanisms": [{
     "cluster": "test-cluster-name",
-    "lrsLoadReportingServerName": "test-lrs-server",
+    "lrsLoadReportingServer": {
+      "server_uri": "trafficdirector.googleapis.com:443",
+      "channel_creds": [ { "type": "google_default" } ]
+    },
     "maxConcurrentRequests": 314,
     "type": "EDS",
     "edsServiceName": "test-eds-service-name"
@@ -150,6 +166,11 @@ const (
   "xdsLbPolicy":[{"pick_first":{}}]
 }`
 )
+
+var testLRSServerConfig = &bootstrap.ServerConfig{
+	ServerURI: "trafficdirector.googleapis.com:443",
+	CredsType: "google_default",
+}
 
 func TestParseConfig(t *testing.T) {
 	tests := []struct {
@@ -170,11 +191,11 @@ func TestParseConfig(t *testing.T) {
 			want: &LBConfig{
 				DiscoveryMechanisms: []DiscoveryMechanism{
 					{
-						Cluster:                 testClusterName,
-						LoadReportingServerName: newString(testLRSServer),
-						MaxConcurrentRequests:   newUint32(testMaxRequests),
-						Type:                    DiscoveryMechanismTypeEDS,
-						EDSServiceName:          testEDSServcie,
+						Cluster:               testClusterName,
+						LoadReportingServer:   testLRSServerConfig,
+						MaxConcurrentRequests: newUint32(testMaxRequests),
+						Type:                  DiscoveryMechanismTypeEDS,
+						EDSServiceName:        testEDSServcie,
 					},
 				},
 				XDSLBPolicy: nil,
@@ -187,11 +208,11 @@ func TestParseConfig(t *testing.T) {
 			want: &LBConfig{
 				DiscoveryMechanisms: []DiscoveryMechanism{
 					{
-						Cluster:                 testClusterName,
-						LoadReportingServerName: newString(testLRSServer),
-						MaxConcurrentRequests:   newUint32(testMaxRequests),
-						Type:                    DiscoveryMechanismTypeEDS,
-						EDSServiceName:          testEDSServcie,
+						Cluster:               testClusterName,
+						LoadReportingServer:   testLRSServerConfig,
+						MaxConcurrentRequests: newUint32(testMaxRequests),
+						Type:                  DiscoveryMechanismTypeEDS,
+						EDSServiceName:        testEDSServcie,
 					},
 					{
 						Type: DiscoveryMechanismTypeLogicalDNS,
@@ -207,11 +228,11 @@ func TestParseConfig(t *testing.T) {
 			want: &LBConfig{
 				DiscoveryMechanisms: []DiscoveryMechanism{
 					{
-						Cluster:                 testClusterName,
-						LoadReportingServerName: newString(testLRSServer),
-						MaxConcurrentRequests:   newUint32(testMaxRequests),
-						Type:                    DiscoveryMechanismTypeEDS,
-						EDSServiceName:          testEDSServcie,
+						Cluster:               testClusterName,
+						LoadReportingServer:   testLRSServerConfig,
+						MaxConcurrentRequests: newUint32(testMaxRequests),
+						Type:                  DiscoveryMechanismTypeEDS,
+						EDSServiceName:        testEDSServcie,
 					},
 				},
 				XDSLBPolicy: &internalserviceconfig.BalancerConfig{
@@ -227,11 +248,11 @@ func TestParseConfig(t *testing.T) {
 			want: &LBConfig{
 				DiscoveryMechanisms: []DiscoveryMechanism{
 					{
-						Cluster:                 testClusterName,
-						LoadReportingServerName: newString(testLRSServer),
-						MaxConcurrentRequests:   newUint32(testMaxRequests),
-						Type:                    DiscoveryMechanismTypeEDS,
-						EDSServiceName:          testEDSServcie,
+						Cluster:               testClusterName,
+						LoadReportingServer:   testLRSServerConfig,
+						MaxConcurrentRequests: newUint32(testMaxRequests),
+						Type:                  DiscoveryMechanismTypeEDS,
+						EDSServiceName:        testEDSServcie,
 					},
 				},
 				XDSLBPolicy: &internalserviceconfig.BalancerConfig{

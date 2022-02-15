@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+option go_package = "google.golang.org/grpc/reflection/grpc_testing_not_regenerate";
+
+package grpc.testing;
+
+message DynamicRes {}
+
+message DynamicReq {}
+
+service DynamicService {
+  rpc DynamicMessage1(DynamicReq) returns (DynamicRes);
+}

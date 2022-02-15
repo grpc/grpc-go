@@ -32,5 +32,3 @@ type s struct {
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
-
-const testXDSServer = "xds-server"

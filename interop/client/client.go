@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
@@ -176,7 +177,7 @@ func main() {
 	case credsComputeEngineCreds:
 		opts = append(opts, grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()))
 	case credsNone:
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	default:
 		logger.Fatal("Invalid creds")
 	}

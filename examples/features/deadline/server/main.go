@@ -31,6 +31,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
 	pb "google.golang.org/grpc/examples/features/proto/echo"
@@ -94,7 +95,7 @@ func (s *server) Close() {
 
 func newEchoServer() *server {
 	target := fmt.Sprintf("localhost:%v", *port)
-	cc, err := grpc.Dial(target, grpc.WithInsecure())
+	cc, err := grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

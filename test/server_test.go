@@ -32,6 +32,41 @@ import (
 
 type ctxKey string
 
+// TestServerReturningContextError verifies that if a context error is returned
+// by the service handler, the status will have the correct status code, not
+// Unknown.
+func (s) TestServerReturningContextError(t *testing.T) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			return nil, context.DeadlineExceeded
+		},
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			return context.DeadlineExceeded
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.DeadlineExceeded {
+		t.Fatalf("ss.Client.EmptyCall() got error %v; want <status with Code()=DeadlineExceeded>", err)
+	}
+
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error starting the stream: %v", err)
+	}
+	_, err = stream.Recv()
+	if s, ok := status.FromError(err); !ok || s.Code() != codes.DeadlineExceeded {
+		t.Fatalf("ss.Client.FullDuplexCall().Recv() got error %v; want <status with Code()=DeadlineExceeded>", err)
+	}
+
+}
+
 func (s) TestChainUnaryServerInterceptor(t *testing.T) {
 	var (
 		firstIntKey  = ctxKey("firstIntKey")

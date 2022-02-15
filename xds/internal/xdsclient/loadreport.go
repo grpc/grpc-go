@@ -17,17 +17,27 @@
 
 package xdsclient
 
-import "google.golang.org/grpc/xds/internal/xdsclient/load"
+import (
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
+)
 
-// ReportLoad starts an load reporting stream to the given server. If the server
-// is not an empty string, and is different from the management server, a new
-// ClientConn will be created.
-//
-// The same options used for creating the Client will be used (including
-// NodeProto, and dial options if necessary).
+// ReportLoad starts a load reporting stream to the given server. All load
+// reports to the same server share the LRS stream.
 //
 // It returns a Store for the user to report loads, a function to cancel the
 // load reporting stream.
-func (c *clientImpl) ReportLoad(server string) (*load.Store, func()) {
-	return c.controller.ReportLoad(server)
+func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (*load.Store, func()) {
+	a, err := c.newAuthority(server)
+	if err != nil {
+		c.logger.Infof("xds: failed to connect to the control plane to do load reporting for authority %q: %v", server, err)
+		return nil, func() {}
+	}
+	// Hold the ref before starting load reporting.
+	a.ref()
+	store, cancelF := a.reportLoad()
+	return store, func() {
+		cancelF()
+		c.unrefAuthority(a)
+	}
 }

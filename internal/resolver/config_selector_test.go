@@ -112,7 +112,7 @@ func (s) TestSafeConfigSelector(t *testing.T) {
 
 	cs1Done := false // set when cs2 is first called
 	for dl := time.Now().Add(150 * time.Millisecond); !time.Now().After(dl); {
-		gotConfigChan := make(chan *RPCConfig)
+		gotConfigChan := make(chan *RPCConfig, 1)
 		go func() {
 			cfg, _ := scs.SelectConfig(testRPCInfo)
 			gotConfigChan <- cfg

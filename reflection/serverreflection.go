@@ -42,7 +42,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"reflect"
 	"sort"
 	"sync"
 
@@ -52,6 +51,10 @@ import (
 	"google.golang.org/grpc/codes"
 	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/reflect/protodesc"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/dynamicpb"
 )
 
 // GRPCServer is the interface provided by a gRPC server. It is implemented by
@@ -78,14 +81,6 @@ func Register(s GRPCServer) {
 	rpb.RegisterServerReflectionServer(s, &serverReflectionServer{
 		s: s,
 	})
-}
-
-// protoMessage is used for type assertion on proto messages.
-// Generated proto message implements function Descriptor(), but Descriptor()
-// is not part of interface proto.Message. This interface is needed to
-// call Descriptor().
-type protoMessage interface {
-	Descriptor() ([]byte, []int)
 }
 
 func (s *serverReflectionServer) getSymbols() (svcNames []string, symbolIndex map[string]*dpb.FileDescriptorProto) {
@@ -194,18 +189,6 @@ func fqn(prefix, name string) string {
 	return prefix + "." + name
 }
 
-// fileDescForType gets the file descriptor for the given type.
-// The given type should be a proto message.
-func (s *serverReflectionServer) fileDescForType(st reflect.Type) (*dpb.FileDescriptorProto, error) {
-	m, ok := reflect.Zero(reflect.PtrTo(st)).Interface().(protoMessage)
-	if !ok {
-		return nil, fmt.Errorf("failed to create message from type: %v", st)
-	}
-	enc, _ := m.Descriptor()
-
-	return decodeFileDesc(enc)
-}
-
 // decodeFileDesc does decompression and unmarshalling on the given
 // file descriptor byte slice.
 func decodeFileDesc(enc []byte) (*dpb.FileDescriptorProto, error) {
@@ -234,21 +217,12 @@ func decompress(b []byte) ([]byte, error) {
 	return out, nil
 }
 
-func typeForName(name string) (reflect.Type, error) {
-	pt := proto.MessageType(name)
-	if pt == nil {
-		return nil, fmt.Errorf("unknown type: %q", name)
+func fileDescContainingExtension(typeName string, ext int32) (*dpb.FileDescriptorProto, error) {
+	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(typeName))
+	if err != nil {
+		return nil, err
 	}
-	st := pt.Elem()
-
-	return st, nil
-}
-
-func fileDescContainingExtension(st reflect.Type, ext int32) (*dpb.FileDescriptorProto, error) {
-	m, ok := reflect.Zero(reflect.PtrTo(st)).Interface().(proto.Message)
-	if !ok {
-		return nil, fmt.Errorf("failed to create message from type: %v", st)
-	}
+	m := dynamicpb.NewMessage(desc.(protoreflect.MessageDescriptor))
 
 	var extDesc *proto.ExtensionDesc
 	for id, desc := range proto.RegisteredExtensions(m) {
@@ -263,20 +237,6 @@ func fileDescContainingExtension(st reflect.Type, ext int32) (*dpb.FileDescripto
 	}
 
 	return decodeFileDesc(proto.FileDescriptor(extDesc.Filename))
-}
-
-func (s *serverReflectionServer) allExtensionNumbersForType(st reflect.Type) ([]int32, error) {
-	m, ok := reflect.Zero(reflect.PtrTo(st)).Interface().(proto.Message)
-	if !ok {
-		return nil, fmt.Errorf("failed to create message from type: %v", st)
-	}
-
-	exts := proto.RegisteredExtensions(m)
-	out := make([]int32, 0, len(exts))
-	for id := range exts {
-		out = append(out, id)
-	}
-	return out, nil
 }
 
 // fileDescWithDependencies returns a slice of serialized fileDescriptors in
@@ -351,18 +311,12 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string, s
 	if fd == nil {
 		// Check if it's a type name that was not present in the
 		// transitive dependencies of the registered services.
-		if st, err := typeForName(name); err == nil {
-			fd, err = s.fileDescForType(st)
-			if err != nil {
-				return nil, err
-			}
+		desc, err := protoregistry.GlobalTypes.FindMessageByName(protoreflect.FullName(name))
+		if err != nil {
+			return nil, err
 		}
+		fd = protodesc.ToFileDescriptorProto(desc.Descriptor().ParentFile())
 	}
-
-	if fd == nil {
-		return nil, fmt.Errorf("unknown symbol: %v", name)
-	}
-
 	return fileDescWithDependencies(fd, sentFileDescriptors)
 }
 
@@ -370,11 +324,7 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string, s
 // given extension, finds all of its previously unsent transitive dependencies,
 // does marshalling on them, and returns the marshalled result.
 func (s *serverReflectionServer) fileDescEncodingContainingExtension(typeName string, extNum int32, sentFileDescriptors map[string]bool) ([][]byte, error) {
-	st, err := typeForName(typeName)
-	if err != nil {
-		return nil, err
-	}
-	fd, err := fileDescContainingExtension(st, extNum)
+	fd, err := fileDescContainingExtension(typeName, extNum)
 	if err != nil {
 		return nil, err
 	}
@@ -383,13 +333,16 @@ func (s *serverReflectionServer) fileDescEncodingContainingExtension(typeName st
 
 // allExtensionNumbersForTypeName returns all extension numbers for the given type.
 func (s *serverReflectionServer) allExtensionNumbersForTypeName(name string) ([]int32, error) {
-	st, err := typeForName(name)
+	desc, err := protoregistry.GlobalFiles.FindDescriptorByName(protoreflect.FullName(name))
 	if err != nil {
 		return nil, err
 	}
-	extNums, err := s.allExtensionNumbersForType(st)
-	if err != nil {
-		return nil, err
+	m := dynamicpb.NewMessage(desc.(protoreflect.MessageDescriptor))
+
+	exts := proto.RegisteredExtensions(m)
+	extNums := make([]int32, 0, len(exts))
+	for id := range exts {
+		extNums = append(extNums, id)
 	}
 	return extNums, nil
 }
