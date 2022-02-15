@@ -26,13 +26,13 @@ import (
 const (
 	// XDSBootstrapFileNameEnv is the env variable to set bootstrap file name.
 	// Do not use this and read from env directly. Its value is read and kept in
-	// variable BootstrapFileName.
+	// variable XDSBootstrapFileName.
 	//
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	XDSBootstrapFileNameEnv = "GRPC_XDS_BOOTSTRAP"
-	// XDSBootstrapFileContentEnv is the env variable to set bootstrapp file
+	// XDSBootstrapFileContentEnv is the env variable to set bootstrap file
 	// content. Do not use this and read from env directly. Its value is read
-	// and kept in variable BootstrapFileName.
+	// and kept in variable XDSBootstrapFileContent.
 	//
 	// When both bootstrap FileName and FileContent are set, FileName is used.
 	XDSBootstrapFileContentEnv = "GRPC_XDS_BOOTSTRAP_CONFIG"

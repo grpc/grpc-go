@@ -160,10 +160,10 @@ func (c *clientRefCounted) Close() {
 	}
 }
 
-// NewWithConfigForTesting is exported for testing only.
+// NewWithConfigForTesting returns an xdsClient for the specified bootstrap
+// config, separate from the global singleton.
 //
-// Note that this function doesn't set the singleton, so that the testing states
-// don't leak.
+// This should be used for testing purposes only.
 func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout time.Duration) (XDSClient, error) {
 	cl, err := newWithConfig(config, watchExpiryTimeout, defaultIdleAuthorityDeleteTimeout)
 	if err != nil {
@@ -172,10 +172,11 @@ func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout time.D
 	return &clientRefCounted{clientImpl: cl, refCount: 1}, nil
 }
 
-// NewClientWithBootstrapContents returns an xds client for this config,
-// separate from the global singleton.  This should be used for testing
-// purposes only.
-func NewClientWithBootstrapContents(contents []byte) (XDSClient, error) {
+// NewWithBootstrapContentsForTesting returns an xdsClient for this config,
+// separate from the global singleton.
+//
+// This should be used for testing purposes only.
+func NewWithBootstrapContentsForTesting(contents []byte) (XDSClient, error) {
 	// Normalize the contents
 	buf := bytes.Buffer{}
 	err := json.Indent(&buf, contents, "", "")
@@ -198,7 +199,7 @@ func NewClientWithBootstrapContents(contents []byte) (XDSClient, error) {
 		c.mu.Unlock()
 	}
 
-	bcfg, err := bootstrap.NewConfigFromContents(contents)
+	bcfg, err := bootstrap.NewConfigFromContentsForTesting(contents)
 	if err != nil {
 		return nil, fmt.Errorf("xds: error with bootstrap config: %v", err)
 	}
