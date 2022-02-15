@@ -65,19 +65,20 @@ var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 // For overriding in unit tests.
 var bootstrapFileReadFunc = ioutil.ReadFile
 
-// insecureCredsBuilder encapsulates a insecure credential that is built using a
-// JSON config.
+// insecureCredsBuilder implements the `Credentials` interface defined in
+// package `xds/bootstrap` and encapsulates an insecure credential.
 type insecureCredsBuilder struct{}
 
 func (i *insecureCredsBuilder) Build(json.RawMessage) (credentials.Bundle, error) {
 	return insecure.NewBundle(), nil
 }
+
 func (i *insecureCredsBuilder) Name() string {
 	return "insecure"
 }
 
-// googleDefaultCredsBuilder encapsulates a Google Default credential that is built using a
-// JSON config.
+// googleDefaultCredsBuilder implements the `Credentials` interface defined in
+// package `xds/boostrap` and encapsulates a Google Default credential.
 type googleDefaultCredsBuilder struct{}
 
 func (d *googleDefaultCredsBuilder) Build(json.RawMessage) (credentials.Bundle, error) {
@@ -328,11 +329,13 @@ func bootstrapConfigFromEnvVariable() ([]byte, error) {
 }
 
 // NewConfig returns a new instance of Config initialized by reading the
-// bootstrap file found at ${GRPC_XDS_BOOTSTRAP}.
+// bootstrap file found at ${GRPC_XDS_BOOTSTRAP} or bootstrap contents specified
+// at ${GRPC_XDS_BOOTSTRAP_CONFIG}. If both env vars are set, the former is
+// preferred.
 //
-// Currently, we support exactly one type of credential, which is
-// "google_default", where we use the host's default certs for transport
-// credentials and a Google oauth token for call credentials.
+// We support a credential registration mechanism and only credentials
+// registered through that mechanism will be accepted here. See package
+// `xds/bootstrap` for details.
 //
 // This function tries to process as much of the bootstrap file as possible (in
 // the presence of the errors) and may return a Config object with certain
@@ -346,13 +349,18 @@ func NewConfig() (*Config, error) {
 		return nil, fmt.Errorf("xds: Failed to read bootstrap config: %v", err)
 	}
 	logger.Debugf("Bootstrap content: %s", data)
-	return NewConfigFromContents(data)
+	return newConfigFromContents(data)
 }
 
-// NewConfigFromContents returns a new Config using the specified bootstrap
-// file contents instead of reading the environment variable.  This is only
-// suitable for testing purposes.
-func NewConfigFromContents(data []byte) (*Config, error) {
+// NewConfigFromContentsForTesting returns a new Config using the specified
+// bootstrap file contents instead of reading the environment variable.
+//
+// This is only suitable for testing purposes.
+func NewConfigFromContentsForTesting(data []byte) (*Config, error) {
+	return newConfigFromContents(data)
+}
+
+func newConfigFromContents(data []byte) (*Config, error) {
 	config := &Config{}
 
 	var jsonData map[string]json.RawMessage
@@ -483,7 +491,7 @@ func NewConfigFromContents(data []byte) (*Config, error) {
 // file are populated here.
 // 3. For each server config (both top level and in each authority), we set its
 // node field to the v3.Node, or a v2.Node with the same content, depending on
-// the server's transprot API version.
+// the server's transport API version.
 func (c *Config) updateNodeProto(node *v3corepb.Node) error {
 	v3 := node
 	if v3 == nil {
@@ -493,11 +501,11 @@ func (c *Config) updateNodeProto(node *v3corepb.Node) error {
 	v3.UserAgentVersionType = &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
 	v3.ClientFeatures = append(v3.ClientFeatures, clientFeatureNoOverprovisioning)
 
-	v2 := &v2corepb.Node{}
 	v3bytes, err := proto.Marshal(v3)
 	if err != nil {
 		return fmt.Errorf("xds: proto.Marshal(%v): %v", v3, err)
 	}
+	v2 := &v2corepb.Node{}
 	if err := proto.Unmarshal(v3bytes, v2); err != nil {
 		return fmt.Errorf("xds: proto.Unmarshal(%v): %v", v3bytes, err)
 	}
