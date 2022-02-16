@@ -117,9 +117,7 @@ func (gsb *Balancer) SwitchTo(builder balancer.Builder) error {
 		gsb.balancerPending = bw
 	}
 	gsb.mu.Unlock()
-	if balToClose != nil {
-		balToClose.Close()
-	}
+	balToClose.Close()
 
 	newBalancer := builder.Build(bw, gsb.bOpts)
 	if newBalancer == nil {
@@ -218,12 +216,8 @@ func (gsb *Balancer) Close() {
 	gsb.balancerPending = nil
 	gsb.mu.Unlock()
 
-	if currentBalancerToClose != nil {
-		currentBalancerToClose.Close()
-	}
-	if pendingBalancerToClose != nil {
-		pendingBalancerToClose.Close()
-	}
+	currentBalancerToClose.Close()
+	pendingBalancerToClose.Close()
 }
 
 // ExitIdle forwards the call to the latest balancer created.
@@ -248,19 +242,31 @@ type balancerWrapper struct {
 	subconns  map[balancer.SubConn]bool // subconns created by this balancer
 }
 
+func (bw *balancerWrapper) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	if state.ConnectivityState == connectivity.Shutdown {
+		bw.gsb.mu.Lock()
+		delete(bw.subconns, sc)
+		bw.gsb.mu.Unlock()
+	}
+	bw.Balancer.UpdateSubConnState(sc, state)
+}
+
 // bw must not be referenced via balancerCurrent or balancerPending in gsb
 // before Close is called.
 func (bw *balancerWrapper) Close() {
-	bw.gsb.mu.Lock()
-	for sc := range bw.subconns {
-		bw.gsb.cc.RemoveSubConn(sc)
+	if bw == nil {
+		return
 	}
-	bw.gsb.mu.Unlock()
 	// There is no need to protect this read with a mutex, as Close() is
 	// impossible to be called concurrently with the write in SwitchTo(). The
 	// callsites of Close() for this balancer in Graceful Switch Balancer will
 	// never be called until SwitchTo() returns.
 	bw.Balancer.Close()
+	bw.gsb.mu.Lock()
+	for sc := range bw.subconns {
+		bw.gsb.cc.RemoveSubConn(sc)
+	}
+	bw.gsb.mu.Unlock()
 }
 
 func (bw *balancerWrapper) UpdateState(state balancer.State) {
@@ -305,17 +311,19 @@ func (bw *balancerWrapper) UpdateState(state balancer.State) {
 
 func (bw *balancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	bw.gsb.mu.Lock()
-	defer bw.gsb.mu.Unlock()
-
 	if !bw.gsb.balancerCurrentOrPending(bw) {
+		bw.gsb.mu.Unlock()
 		return nil, fmt.Errorf("%T at address %p that called NewSubConn is deleted", bw, bw)
 	}
+	bw.gsb.mu.Unlock()
 
 	sc, err := bw.gsb.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
 	}
+	bw.gsb.mu.Lock()
 	bw.subconns[sc] = true
+	bw.gsb.mu.Unlock()
 	return sc, err
 }
 
@@ -330,20 +338,21 @@ func (bw *balancerWrapper) ResolveNow(opts resolver.ResolveNowOptions) {
 
 func (bw *balancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 	bw.gsb.mu.Lock()
-	defer bw.gsb.mu.Unlock()
-	delete(bw.subconns, sc)
 	if !bw.gsb.balancerCurrentOrPending(bw) {
+		bw.gsb.mu.Unlock()
 		return
 	}
+	bw.gsb.mu.Unlock()
 	bw.gsb.cc.RemoveSubConn(sc)
 }
 
 func (bw *balancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
 	bw.gsb.mu.Lock()
-	defer bw.gsb.mu.Unlock()
 	if !bw.gsb.balancerCurrentOrPending(bw) {
+		bw.gsb.mu.Unlock()
 		return
 	}
+	bw.gsb.mu.Unlock()
 	bw.gsb.cc.UpdateAddresses(sc, addrs)
 }
 
