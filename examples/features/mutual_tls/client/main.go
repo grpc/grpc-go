@@ -16,7 +16,7 @@
  *
  */
 
-// The client demonstrates how to supply an OAuth2 token for every RPC.
+// Binary client is an example client which connects to the server using mTLS.
 package main
 
 import (
@@ -48,23 +48,20 @@ func callUnaryEcho(client ecpb.EchoClient, message string) {
 func main() {
 	flag.Parse()
 
-	clientCredential, err := tls.LoadX509KeyPair(
-		data.Path("x509/client_cert.pem"),
-		data.Path("x509/client_key.pem"),
-	)
+	cert, err := tls.LoadX509KeyPair(data.Path("x509/client_cert.pem"), data.Path("x509/client_key.pem"))
 	if err != nil {
 		log.Fatalf("failed to load client cert: %v", err)
 	}
 
-	trustedServerCAs, err := data.NewCertPool(data.Path("x509/ca_cert.pem"))
+	ca, err := data.NewCertPool(data.Path("x509/ca_cert.pem"))
 	if err != nil {
 		log.Fatalf("failed to load CA cert: %v", err)
 	}
 
 	tlsConfig := &tls.Config{
 		ServerName:   "x.test.example.com",
-		Certificates: []tls.Certificate{clientCredential},
-		RootCAs:      trustedServerCAs,
+		Certificates: []tls.Certificate{cert},
+		RootCAs:      ca,
 	}
 
 	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
@@ -72,7 +69,6 @@ func main() {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
-	rgc := ecpb.NewEchoClient(conn)
 
-	callUnaryEcho(rgc, "hello world")
+	callUnaryEcho(ecpb.NewEchoClient(conn), "hello world")
 }

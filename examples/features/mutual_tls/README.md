@@ -1,6 +1,6 @@
 # Mutual TLS
 
-In mutual TLS, the client and the server authenticates each other. gRPC allows
+In mutual TLS, the client and the server authenticate each other. gRPC allows
 users to configure mutual TLS at the connection level.
 
 ## Try it

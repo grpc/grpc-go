@@ -23,7 +23,6 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"flag"
 	"fmt"
 	"log"
@@ -37,25 +36,32 @@ import (
 
 var port = flag.Int("port", 50051, "the port to serve on")
 
+type ecServer struct {
+	pb.UnimplementedEchoServer
+}
+
+func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+	return &pb.EchoResponse{Message: req.Message}, nil
+}
+
 func main() {
 	flag.Parse()
-	fmt.Printf("server starting on port %d...\n", *port)
+	log.Printf("server starting on port %d...\n", *port)
 
-	serverCert, err := tls.LoadX509KeyPair(data.Path("x509/server_cert.pem"), data.Path("x509/server_key.pem"))
+	cert, err := tls.LoadX509KeyPair(data.Path("x509/server_cert.pem"), data.Path("x509/server_key.pem"))
 	if err != nil {
 		log.Fatalf("failed to load key pair: %s", err)
 	}
 
-	trustedClientCAs := x509.NewCertPool()
-	trustedClientCAs, err = data.NewCertPool(data.Path("x509/client_ca_cert.pem"))
+	ca, err := data.NewCertPool(data.Path("x509/client_ca_cert.pem"))
 	if err != nil {
 		log.Fatalf("failed to load trusted client CAs: %s", err)
 	}
 
 	tlsConfig := &tls.Config{
 		ClientAuth:   tls.RequireAndVerifyClientCert,
-		Certificates: []tls.Certificate{serverCert},
-		ClientCAs:    trustedClientCAs,
+		Certificates: []tls.Certificate{cert},
+		ClientCAs:    ca,
 	}
 
 	s := grpc.NewServer(grpc.Creds(credentials.NewTLS(tlsConfig)))
@@ -67,12 +73,4 @@ func main() {
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
-}
-
-type ecServer struct {
-	pb.UnimplementedEchoServer
-}
-
-func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
-	return &pb.EchoResponse{Message: req.Message}, nil
 }

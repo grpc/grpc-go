@@ -54,11 +54,10 @@ func NewCertPool(certPaths ...string) (*x509.CertPool, error) {
 	for _, p := range certPaths {
 		caBytes, err := ioutil.ReadFile(p)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read cert %s: %v", p, err)
+			return nil, fmt.Errorf("failed to read cert %q: %v", p, err)
 		}
-		ok := certPool.AppendCertsFromPEM(caBytes)
-		if !ok {
-			return nil, fmt.Errorf("failed to parse %s", p)
+		if ok := certPool.AppendCertsFromPEM(caBytes); !ok {
+			return nil, fmt.Errorf("failed to parse %q", p)
 		}
 	}
 	return certPool, nil
