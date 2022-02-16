@@ -16,8 +16,7 @@
  *
  */
 
-// The server demonstrates how to consume and validate OAuth2 tokens provided by
-// clients for each RPC.
+// Binary server is an example server which authenticates clients using mTLS.
 package main
 
 import (
