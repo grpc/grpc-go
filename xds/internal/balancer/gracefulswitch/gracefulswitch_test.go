@@ -873,13 +873,6 @@ const balancerName2 = "mock_balancer_2"
 const verifyBalName = "verifyNoSubConnUpdateAfterCloseBalancer"
 const buildCallbackBalName = "callbackInBuildBalancer"
 
-func init() {
-	balancer.Register(mockBalancerBuilder1{})
-	balancer.Register(mockBalancerBuilder2{})
-	balancer.Register(verifyBalancerBuilder{})
-	balancer.Register(buildCallbackBalancerBuilder{})
-}
-
 type mockBalancerBuilder1 struct{}
 
 func (mockBalancerBuilder1) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
