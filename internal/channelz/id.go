@@ -31,30 +31,21 @@ type Identifier struct {
 
 // Type returns the entity type corresponding to id.
 func (id *Identifier) Type() RefChannelType {
-	if id == nil {
-		return RefUnknown
-	}
 	return id.typ
 }
 
 // Int returns the integer identifier corresponding to id.
 func (id *Identifier) Int() int64 {
-	if id == nil {
-		return 0
-	}
 	return id.id
 }
 
 // String returns a string representation of the entity corresponding to id.
-
+//
 // This includes some information about the parent as well. Examples:
 // Top-level channel: [Channel #channel-number]
 // Nested channel:    [Channel #parent-channel-number Channel #channel-number]
 // Sub channel:       [Channel #parent-channel SubChannel #subchannel-number]
 func (id *Identifier) String() string {
-	if id == nil {
-		return ""
-	}
 	return id.str
 }
 
