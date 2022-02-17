@@ -1314,9 +1314,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 
 	connectCtx, cancel := context.WithDeadline(ac.ctx, connectDeadline)
 	defer cancel()
-	if channelz.IsOn() {
-		copts.ChannelzParentID = ac.channelzID
-	}
+	copts.ChannelzParentID = ac.channelzID
 
 	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, addr, copts, func() { prefaceReceived.Fire() }, onGoAway, onClose)
 	if err != nil {

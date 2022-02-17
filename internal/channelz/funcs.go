@@ -191,18 +191,18 @@ func GetServer(id int64) *ServerMetric {
 //
 // Returns a unique channelz identifier assigned to this channel.
 //
-// If channelz is not turned ON, this function is a no-op.
+// If channelz is not turned ON, the channelz database is not mutated.
 func RegisterChannel(c Channel, pid *Identifier, ref string) *Identifier {
-	if !IsOn() {
-		return nil
-	}
-
 	id := idGen.genID()
 	parent := int64(0)
 	isTopChannel := true
 	if pid != nil {
 		isTopChannel = false
 		parent = pid.Int()
+	}
+
+	if !IsOn() {
+		return newIdentifer(RefChannel, id, pid)
 	}
 
 	cn := &channel{
@@ -224,16 +224,16 @@ func RegisterChannel(c Channel, pid *Identifier, ref string) *Identifier {
 //
 // Returns a unique channelz identifier assigned to this subChannel.
 //
-// If channelz is not turned ON, this function is a no-op.
+// If channelz is not turned ON, the channelz database is not mutated.
 func RegisterSubChannel(c Channel, pid *Identifier, ref string) (*Identifier, error) {
-	if !IsOn() {
-		return nil, nil
-	}
-
 	if pid == nil {
 		return nil, errors.New("a SubChannel's parent id cannot be nil")
 	}
 	id := idGen.genID()
+	if !IsOn() {
+		return newIdentifer(RefSubChannel, id, pid), nil
+	}
+
 	sc := &subChannel{
 		refName: ref,
 		c:       c,
@@ -249,13 +249,13 @@ func RegisterSubChannel(c Channel, pid *Identifier, ref string) (*Identifier, er
 // RegisterServer registers the given server s in channelz database. It returns
 // the unique channelz tracking id assigned to this server.
 //
-// If channelz is not turned ON, this function is a no-op.
+// If channelz is not turned ON, the channelz database is not mutated.
 func RegisterServer(s Server, ref string) *Identifier {
+	id := idGen.genID()
 	if !IsOn() {
-		return nil
+		return newIdentifer(RefServer, id, nil)
 	}
 
-	id := idGen.genID()
 	svr := &server{
 		refName:       ref,
 		s:             s,
@@ -272,16 +272,16 @@ func RegisterServer(s Server, ref string) *Identifier {
 // (identified by pid). It returns the unique channelz tracking id assigned to
 // this listen socket.
 //
-// If channelz is not turned ON, this function is a no-op.
+// If channelz is not turned ON, the channelz database is not mutated.
 func RegisterListenSocket(s Socket, pid *Identifier, ref string) (*Identifier, error) {
-	if !IsOn() {
-		return nil, nil
-	}
-
 	if pid == nil {
 		return nil, errors.New("a ListenSocket's parent id cannot be 0")
 	}
 	id := idGen.genID()
+	if !IsOn() {
+		return newIdentifer(RefListenSocket, id, pid), nil
+	}
+
 	ls := &listenSocket{refName: ref, s: s, id: id, pid: pid.Int()}
 	db.get().addListenSocket(id, ls, pid.Int())
 	return newIdentifer(RefListenSocket, id, pid), nil
@@ -292,16 +292,16 @@ func RegisterListenSocket(s Socket, pid *Identifier, ref string) (*Identifier, e
 // (identified by pid). It returns the unique channelz tracking id assigned to
 // this normal socket.
 //
-// If channelz is not turned ON, this function is a no-op.
+// If channelz is not turned ON, the channelz database is not mutated.
 func RegisterNormalSocket(s Socket, pid *Identifier, ref string) (*Identifier, error) {
-	if !IsOn() {
-		return nil, nil
-	}
-
 	if pid == nil {
 		return nil, errors.New("a NormalSocket's parent id cannot be 0")
 	}
 	id := idGen.genID()
+	if !IsOn() {
+		return newIdentifer(RefNormalSocket, id, pid), nil
+	}
+
 	ns := &normalSocket{refName: ref, s: s, id: id, pid: pid.Int()}
 	db.get().addNormalSocket(id, ns, pid.Int())
 	return newIdentifer(RefNormalSocket, id, pid), nil

@@ -40,6 +40,7 @@ import (
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
@@ -53,16 +54,6 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
-}
-
-type server struct {
-	lis        net.Listener
-	port       string
-	startedErr chan error // error (or nil) with server start value
-	mu         sync.Mutex
-	conns      map[ServerTransport]bool
-	h          *testStreamHandler
-	ready      chan struct{}
 }
 
 var (
@@ -298,6 +289,25 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *Stream) {
 	}
 }
 
+type server struct {
+	lis        net.Listener
+	port       string
+	startedErr chan error // error (or nil) with server start value
+	mu         sync.Mutex
+	conns      map[ServerTransport]bool
+	h          *testStreamHandler
+	ready      chan struct{}
+	channelzID *channelz.Identifier
+}
+
+func newTestServer() *server {
+	return &server{
+		startedErr: make(chan error, 1),
+		ready:      make(chan struct{}),
+		channelzID: channelz.NewIdentifierForTesting(channelz.RefServer, time.Now().Unix(), nil),
+	}
+}
+
 // start starts server. Other goroutines should block on s.readyChan for further operations.
 func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hType) {
 	var err error
@@ -421,9 +431,10 @@ func (s *server) addr() string {
 	return s.lis.Addr().String()
 }
 
-func setUpServerOnly(t *testing.T, port int, serverConfig *ServerConfig, ht hType) *server {
-	server := &server{startedErr: make(chan error, 1), ready: make(chan struct{})}
-	go server.start(t, port, serverConfig, ht)
+func setUpServerOnly(t *testing.T, port int, sc *ServerConfig, ht hType) *server {
+	server := newTestServer()
+	sc.ChannelzParentID = server.channelzID
+	go server.start(t, port, sc, ht)
 	server.wait(t, 2*time.Second)
 	return server
 }
@@ -432,9 +443,11 @@ func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, *http2
 	return setUpWithOptions(t, port, &ServerConfig{MaxStreams: maxStreams}, ht, ConnectOptions{})
 }
 
-func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
-	server := setUpServerOnly(t, port, serverConfig, ht)
+func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
+	server := setUpServerOnly(t, port, sc, ht)
 	addr := resolver.Address{Addr: "localhost:" + server.port}
+	copts.ChannelzParentID = channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil)
+
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func() {}, func(GoAwayReason) {}, func() {})
 	if connErr != nil {
@@ -1298,11 +1311,14 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	}()
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
-	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{}, func() {}, func(GoAwayReason) {}, func() {})
+
+	copts := ConnectOptions{ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil)}
+	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
 	defer ct.Close(fmt.Errorf("closed manually by test"))
+
 	str, err := ct.NewStream(connectCtx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Error while creating stream: %v", err)
@@ -2180,7 +2196,11 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 	defer cancel()
 	creds := &attrTransportCreds{}
 
-	tr, err := NewClientTransport(ctx, context.Background(), addr, ConnectOptions{TransportCredentials: creds}, func() {}, func(GoAwayReason) {}, func() {})
+	copts := ConnectOptions{
+		TransportCredentials: creds,
+		ChannelzParentID:     channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+	}
+	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
 	}
@@ -2217,7 +2237,11 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
 	}
 
-	tr, err := NewClientTransport(ctx, context.Background(), addr, ConnectOptions{Dialer: dialer}, func() {}, func(GoAwayReason) {}, func() {})
+	copts := ConnectOptions{
+		Dialer:           dialer,
+		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+	}
+	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
 	}
