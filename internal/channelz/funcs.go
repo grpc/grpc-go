@@ -337,11 +337,11 @@ func AddTraceEvent(l grpclog.DepthLoggerV2, id *Identifier, depth int, desc *Tra
 	for d := desc; d != nil; d = d.Parent {
 		switch d.Severity {
 		case CtUnknown, CtInfo:
-			l.InfoDepth(depth+1, d.Desc)
+			l.InfoDepth(depth+1, withParens(id)+d.Desc)
 		case CtWarning:
-			l.WarningDepth(depth+1, d.Desc)
+			l.WarningDepth(depth+1, withParens(id)+d.Desc)
 		case CtError:
-			l.ErrorDepth(depth+1, d.Desc)
+			l.ErrorDepth(depth+1, withParens(id)+d.Desc)
 		}
 	}
 	if getMaxTraceEntry() == 0 {
