@@ -194,7 +194,7 @@ func GetServer(id int64) *ServerMetric {
 // If channelz is not turned ON, the channelz database is not mutated.
 func RegisterChannel(c Channel, pid *Identifier, ref string) *Identifier {
 	id := idGen.genID()
-	parent := int64(0)
+	var parent int64
 	isTopChannel := true
 	if pid != nil {
 		isTopChannel = false

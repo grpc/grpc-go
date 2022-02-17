@@ -755,15 +755,6 @@ func (s *Server) Serve(lis net.Listener) error {
 	ls := &listenSocket{Listener: lis}
 	s.lis[ls] = true
 
-	var err error
-	ls.channelzID, err = channelz.RegisterListenSocket(ls, s.channelzID, lis.Addr().String())
-	if err != nil {
-		s.mu.Unlock()
-		lis.Close()
-		return err
-	}
-	s.mu.Unlock()
-
 	defer func() {
 		s.mu.Lock()
 		if s.lis != nil && s.lis[ls] {
@@ -772,6 +763,14 @@ func (s *Server) Serve(lis net.Listener) error {
 		}
 		s.mu.Unlock()
 	}()
+
+	var err error
+	ls.channelzID, err = channelz.RegisterListenSocket(ls, s.channelzID, lis.Addr().String())
+	if err != nil {
+		s.mu.Unlock()
+		return err
+	}
+	s.mu.Unlock()
 
 	var tempDelay time.Duration // how long to sleep on accept failure
 	for {
