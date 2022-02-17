@@ -49,8 +49,8 @@ func (id *Identifier) Int() int64 {
 
 // This includes some information about the parent as well. Examples:
 // Top-level channel: [Channel #channel-number]
-// Nested channel: 		[Channel #parent-channel-number Channel #channel-number]
-// Sub channel: 			[Channel #parent-channel SubChannel #subchannel-number]
+// Nested channel:    [Channel #parent-channel-number Channel #channel-number]
+// Sub channel:       [Channel #parent-channel SubChannel #subchannel-number]
 func (id *Identifier) String() string {
 	if id == nil {
 		return ""
