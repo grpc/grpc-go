@@ -52,9 +52,10 @@ import (
 )
 
 // ServiceInfoProvider is an interface used to retrieve metadata about the
-// services to expose. The reflection service is really only interested in
-// the service names, but the signature is this way so that *grpc.Server
-// implements it.
+// services to expose.
+//
+// The reflection service is only interested in the service names, but the
+// signature is this way so that *grpc.Server implements it.
 type ServiceInfoProvider interface {
 	GetServiceInfo() map[string]grpc.ServiceInfo
 }
@@ -87,9 +88,20 @@ type serverReflectionServer struct {
 }
 
 // ServerOptions represents the options used to construct a reflection server.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type ServerOptions struct {
 	// The source of advertised RPC services. If not specified, the reflection
 	// server will report an empty list when asked to list services.
+	//
+	// This value will typically be a *grpc.Server. But the set of advertised
+	// services can be customized by wrapping a *grpc.Server or using an
+	// alternate implementation that returns a custom set of service names.
+	// It is okay for a custom implementation to return zero values for the
+	// grpc.ServiceInfo values in the map.
 	Services ServiceInfoProvider
 	// Optional resolver used to load descriptors. If not specified,
 	// protoregistry.GlobalFiles will be used.
@@ -100,7 +112,13 @@ type ServerOptions struct {
 }
 
 // NewServer returns a reflection server implementation using the given options.
-// It returns an error if the given options are invalid.
+// This can be used to customize behavior of the reflection service. Most usages
+// should prefer to use Register instead.
+//
+// Experimental
+//
+// Notice: This function is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func NewServer(opts ServerOptions) rpb.ServerReflectionServer {
 	if opts.DescriptorResolver == nil {
 		opts.DescriptorResolver = protoregistry.GlobalFiles
@@ -113,23 +131,6 @@ func NewServer(opts ServerOptions) rpb.ServerReflectionServer {
 		descResolver: opts.DescriptorResolver,
 		extResolver:  opts.ExtensionResolver,
 	}
-}
-
-// ServiceInfoFromNames returns a ServiceInfoProvider backed by the given
-// slice of service names. This allows for creating a reflection server
-// with exactly the given advertised services.
-func ServiceInfoFromNames(serviceNames []string) ServiceInfoProvider {
-	return svcInfoFromNames(serviceNames)
-}
-
-type svcInfoFromNames []string
-
-func (s svcInfoFromNames) GetServiceInfo() map[string]grpc.ServiceInfo {
-	m := make(map[string]grpc.ServiceInfo, len(s))
-	for _, name := range s {
-		m[name] = grpc.ServiceInfo{}
-	}
-	return m
 }
 
 // Register registers the server reflection service on the given gRPC server.
@@ -156,14 +157,14 @@ func (s *serverReflectionServer) init() {
 // fileDescWithDependencies returns a slice of serialized fileDescriptors in
 // wire format ([]byte). The fileDescriptors will include fd and all the
 // transitive dependencies of fd with names not in sentFileDescriptors.
-func (s *serverReflectionServer) fileDescWithDependencies(fd protoreflect.FileDescriptor, sentFileDescriptors map[string]struct{}) ([][]byte, error) {
+func (s *serverReflectionServer) fileDescWithDependencies(fd protoreflect.FileDescriptor, sentFileDescriptors map[string]bool) ([][]byte, error) {
 	var r [][]byte
 	queue := []protoreflect.FileDescriptor{fd}
 	for len(queue) > 0 {
 		currentfd := queue[0]
 		queue = queue[1:]
-		if _, sent := sentFileDescriptors[currentfd.Path()]; len(r) == 0 || !sent {
-			sentFileDescriptors[currentfd.Path()] = struct{}{}
+		if sent := sentFileDescriptors[currentfd.Path()]; len(r) == 0 || !sent {
+			sentFileDescriptors[currentfd.Path()] = true
 			fdProto := protodesc.ToFileDescriptorProto(currentfd)
 			currentfdEncoded, err := proto.Marshal(fdProto)
 			if err != nil {
@@ -182,7 +183,7 @@ func (s *serverReflectionServer) fileDescWithDependencies(fd protoreflect.FileDe
 // given symbol, finds all of its previously unsent transitive dependencies,
 // does marshalling on them, and returns the marshalled result. The given symbol
 // can be a type, a service or a method.
-func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string, sentFileDescriptors map[string]struct{}) ([][]byte, error) {
+func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string, sentFileDescriptors map[string]bool) ([][]byte, error) {
 	d, err := s.descResolver.FindDescriptorByName(protoreflect.FullName(name))
 	if err != nil {
 		return nil, err
@@ -193,7 +194,7 @@ func (s *serverReflectionServer) fileDescEncodingContainingSymbol(name string, s
 // fileDescEncodingContainingExtension finds the file descriptor containing
 // given extension, finds all of its previously unsent transitive dependencies,
 // does marshalling on them, and returns the marshalled result.
-func (s *serverReflectionServer) fileDescEncodingContainingExtension(typeName string, extNum int32, sentFileDescriptors map[string]struct{}) ([][]byte, error) {
+func (s *serverReflectionServer) fileDescEncodingContainingExtension(typeName string, extNum int32, sentFileDescriptors map[string]bool) ([][]byte, error) {
 	xt, err := s.extResolver.FindExtensionByNumber(protoreflect.FullName(typeName), protoreflect.FieldNumber(extNum))
 	if err != nil {
 		return nil, err
@@ -224,7 +225,7 @@ func (s *serverReflectionServer) allExtensionNumbersForTypeName(name string) ([]
 func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflection_ServerReflectionInfoServer) error {
 	s.init()
 
-	sentFileDescriptors := make(map[string]struct{})
+	sentFileDescriptors := make(map[string]bool)
 	for {
 		in, err := stream.Recv()
 		if err == io.EOF {

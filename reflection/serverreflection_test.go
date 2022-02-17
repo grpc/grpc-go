@@ -131,7 +131,7 @@ func (x) TestFileDescContainingExtension(t *testing.T) {
 		{"grpc.testing.ToBeExtended", 23, fdProto2Ext2},
 		{"grpc.testing.ToBeExtended", 29, fdProto2Ext2},
 	} {
-		fd, err := s.fileDescEncodingContainingExtension(test.st, test.extNum, map[string]struct{}{})
+		fd, err := s.fileDescEncodingContainingExtension(test.st, test.extNum, map[string]bool{})
 		if err != nil {
 			t.Errorf("fileDescContainingExtension(%q) return error: %v", test.st, err)
 			continue
