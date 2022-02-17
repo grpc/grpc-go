@@ -37,7 +37,6 @@ To register server reflection on a gRPC server:
 package reflection // import "google.golang.org/grpc/reflection"
 
 import (
-	"errors"
 	"io"
 	"sort"
 	"sync"
@@ -52,12 +51,20 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
+// ServiceInfoProvider is an interface used to retrieve metadata about the
+// services to expose. The reflection service is really only interested in
+// the service names, but the signature is this way so that *grpc.Server
+// implements it.
+type ServiceInfoProvider interface {
+	GetServiceInfo() map[string]grpc.ServiceInfo
+}
+
 // GRPCServer is the interface provided by a gRPC server. It is implemented by
 // *grpc.Server, but could also be implemented by other concrete types. It acts
 // as a registry, for accumulating the services exposed by the server.
 type GRPCServer interface {
 	grpc.ServiceRegistrar
-	GetServiceInfo() map[string]grpc.ServiceInfo
+	ServiceInfoProvider
 }
 
 // ExtensionResolver is the interface used to query details about extensions.
@@ -71,7 +78,7 @@ var _ GRPCServer = (*grpc.Server)(nil)
 
 type serverReflectionServer struct {
 	rpb.UnimplementedServerReflectionServer
-	s            GRPCServer
+	s            ServiceInfoProvider
 	descResolver protodesc.Resolver
 	extResolver  ExtensionResolver
 
@@ -80,35 +87,21 @@ type serverReflectionServer struct {
 }
 
 // ServerOptions represents the options used to construct a reflection server.
-//
-// Either Server or ServiceNames must be populated, but not both. These control
-// what services are advertised by the server in the ListServices capability of
-// the reflection service. If neither is provided, the returned server can still
-// serve descriptors, but it will advertise no service names.
-//
-// The given DescriptorResolver will be used to resolve symbols and files by
-// name. If not present, protoregistry.GlobalFiles will be used. The given
-// ExtensionResolver will be used to resolve extensions. If not present,
-// protoregistry.GlobalTypes will be used.
 type ServerOptions struct {
-	// An RPC server, whose exposed services are made available via service
-	// reflection.
-	Server GRPCServer
-	// The list of service names. This should only be populated if Server is
-	// nil.
-	ServiceNames []string
-	// Optional resolver used to load descriptors.
+	// The source of advertised RPC services. If not specified, the reflection
+	// server will report an empty list when asked to list services.
+	Services ServiceInfoProvider
+	// Optional resolver used to load descriptors. If not specified,
+	// protoregistry.GlobalFiles will be used.
 	DescriptorResolver protodesc.Resolver
-	// Optional resolver used to query for known extensions.
+	// Optional resolver used to query for known extensions. If not specified,
+	// protoregistry.GlobalTypes will be used.
 	ExtensionResolver ExtensionResolver
 }
 
 // NewServer returns a reflection server implementation using the given options.
 // It returns an error if the given options are invalid.
-func NewServer(opts ServerOptions) (rpb.ServerReflectionServer, error) {
-	if opts.Server != nil && len(opts.ServiceNames) > 0 {
-		return nil, errors.New("options must specify either Server or ServiceNames, not both")
-	}
+func NewServer(opts ServerOptions) rpb.ServerReflectionServer {
 	if opts.DescriptorResolver == nil {
 		opts.DescriptorResolver = protoregistry.GlobalFiles
 	}
@@ -116,26 +109,39 @@ func NewServer(opts ServerOptions) (rpb.ServerReflectionServer, error) {
 		opts.ExtensionResolver = protoregistry.GlobalTypes
 	}
 	return &serverReflectionServer{
-		s:            opts.Server,
+		s:            opts.Services,
 		descResolver: opts.DescriptorResolver,
 		extResolver:  opts.ExtensionResolver,
-		serviceNames: opts.ServiceNames,
-	}, nil
+	}
+}
+
+// ServiceInfoFromNames returns a ServiceInfoProvider backed by the given
+// slice of service names. This allows for creating a reflection server
+// with exactly the given advertised services.
+func ServiceInfoFromNames(serviceNames []string) ServiceInfoProvider {
+	return svcInfoFromNames(serviceNames)
+}
+
+type svcInfoFromNames []string
+
+func (s svcInfoFromNames) GetServiceInfo() map[string]grpc.ServiceInfo {
+	m := make(map[string]grpc.ServiceInfo, len(s))
+	for _, name := range s {
+		m[name] = grpc.ServiceInfo{}
+	}
+	return m
 }
 
 // Register registers the server reflection service on the given gRPC server.
 func Register(s GRPCServer) {
-	svr, err := NewServer(ServerOptions{Server: s})
-	if err != nil {
-		panic(err) // should not be possible
-	}
+	svr := NewServer(ServerOptions{Services: s})
 	rpb.RegisterServerReflectionServer(s, svr)
 }
 
 func (s *serverReflectionServer) init() {
 	s.initServiceNames.Do(func() {
 		if s.s == nil {
-			// no need to init; service names were specified at construction
+			// no need to init; no service names advertised
 			return
 		}
 		serviceInfo := s.s.GetServiceInfo()

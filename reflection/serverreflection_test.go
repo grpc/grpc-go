@@ -42,7 +42,7 @@ import (
 )
 
 var (
-	s *serverReflectionServer
+	s = NewServer(ServerOptions{}).(*serverReflectionServer)
 	// fileDescriptor of each test proto file.
 	fdTest       *descriptorpb.FileDescriptorProto
 	fdTestv3     *descriptorpb.FileDescriptorProto
@@ -60,14 +60,6 @@ var (
 	fdProto2Ext2Byte []byte
 	fdDynamicByte    []byte
 )
-
-func init() {
-	svr, err := NewServer(ServerOptions{})
-	if err != nil {
-		panic(err)
-	}
-	s = svr.(*serverReflectionServer)
-}
 
 const defaultTestTimeout = 10 * time.Second
 
