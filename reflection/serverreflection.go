@@ -54,7 +54,14 @@ import (
 // services to expose.
 //
 // The reflection service is only interested in the service names, but the
-// signature is this way so that *grpc.Server implements it.
+// signature is this way so that *grpc.Server implements it. So it is okay
+// for a custom implementation to return zero values for the
+// grpc.ServiceInfo values in the map.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type ServiceInfoProvider interface {
 	GetServiceInfo() map[string]grpc.ServiceInfo
 }
@@ -69,6 +76,11 @@ type GRPCServer interface {
 
 // ExtensionResolver is the interface used to query details about extensions.
 // This interface is satisfied by protoregistry.GlobalTypes.
+//
+// Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type ExtensionResolver interface {
 	protoregistry.ExtensionTypeResolver
 	RangeExtensionsByMessage(message protoreflect.FullName, f func(protoreflect.ExtensionType) bool)
@@ -96,8 +108,6 @@ type ServerOptions struct {
 	// This value will typically be a *grpc.Server. But the set of advertised
 	// services can be customized by wrapping a *grpc.Server or using an
 	// alternate implementation that returns a custom set of service names.
-	// It is okay for a custom implementation to return zero values for the
-	// grpc.ServiceInfo values in the map.
 	Services ServiceInfoProvider
 	// Optional resolver used to load descriptors. If not specified,
 	// protoregistry.GlobalFiles will be used.
