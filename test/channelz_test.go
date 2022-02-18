@@ -1434,7 +1434,7 @@ func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 		if len(ncm.Trace.Events) == 0 {
 			return false, fmt.Errorf("there should be at least one trace event for nested channel not 0")
 		}
-		pattern := `Channel\(id:[0-9]+\) created`
+		pattern := `Channel created`
 		if ok, _ := regexp.MatchString(pattern, ncm.Trace.Events[0].Desc); !ok {
 			return false, fmt.Errorf("the first trace event should be %q, not %q", pattern, ncm.Trace.Events[0].Desc)
 		}
@@ -1464,7 +1464,7 @@ func (s) TestCZChannelTraceCreationDeletion(t *testing.T) {
 		if len(ncm.Trace.Events) == 0 {
 			return false, fmt.Errorf("there should be at least one trace event for nested channel not 0")
 		}
-		pattern := `Channel\(id:[0-9]+\) created`
+		pattern := `Channel created`
 		if ok, _ := regexp.MatchString(pattern, ncm.Trace.Events[0].Desc); !ok {
 			return false, fmt.Errorf("the first trace event should be %q, not %q", pattern, ncm.Trace.Events[0].Desc)
 		}
@@ -1514,7 +1514,7 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 		if len(scm.Trace.Events) == 0 {
 			return false, fmt.Errorf("there should be at least one trace event for subChannel not 0")
 		}
-		pattern := `Subchannel\(id:[0-9]+\) created`
+		pattern := `Subchannel created`
 		if ok, _ := regexp.MatchString(pattern, scm.Trace.Events[0].Desc); !ok {
 			return false, fmt.Errorf("the first trace event should be %q, not %q", pattern, scm.Trace.Events[0].Desc)
 		}
@@ -1558,7 +1558,7 @@ func (s) TestCZSubChannelTraceCreationDeletion(t *testing.T) {
 			return false, fmt.Errorf("there should be at least one trace event for subChannel not 0")
 		}
 
-		pattern := `Subchannel\(id:[0-9]+\) deleted`
+		pattern := `Subchannel deleted`
 		desc := scm.Trace.Events[len(scm.Trace.Events)-1].Desc
 		if ok, _ := regexp.MatchString(pattern, desc); !ok {
 			return false, fmt.Errorf("the last trace event should be %q, not %q", pattern, desc)

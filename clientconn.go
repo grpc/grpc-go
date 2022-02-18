@@ -162,7 +162,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	pid := cc.dopts.channelzParentID
 	cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, pid, target)
 	ted := &channelz.TraceEventDesc{
-		Desc:     fmt.Sprintf("Channel(id:%d) created", cc.channelzID.Int()),
+		Desc:     "Channel created",
 		Severity: channelz.CtInfo,
 	}
 	if cc.dopts.channelzParentID != nil {
@@ -772,7 +772,7 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 		return nil, err
 	}
 	channelz.AddTraceEvent(logger, ac.channelzID, 0, &channelz.TraceEventDesc{
-		Desc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelzID.Int()),
+		Desc:     "Subchannel created",
 		Severity: channelz.CtInfo,
 		Parent: &channelz.TraceEventDesc{
 			Desc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelzID.Int()),
@@ -1087,7 +1087,7 @@ func (cc *ClientConn) Close() error {
 		ac.tearDown(ErrClientConnClosing)
 	}
 	ted := &channelz.TraceEventDesc{
-		Desc:     fmt.Sprintf("Channel(id:%d) deleted", cc.channelzID.Int()),
+		Desc:     "Channel deleted",
 		Severity: channelz.CtInfo,
 	}
 	if cc.dopts.channelzParentID != nil {
@@ -1497,7 +1497,7 @@ func (ac *addrConn) tearDown(err error) {
 		ac.mu.Lock()
 	}
 	channelz.AddTraceEvent(logger, ac.channelzID, 0, &channelz.TraceEventDesc{
-		Desc:     fmt.Sprintf("Subchannel(id:%d) deleted", ac.channelzID.Int()),
+		Desc:     "Subchannel deleted",
 		Severity: channelz.CtInfo,
 		Parent: &channelz.TraceEventDesc{
 			Desc:     fmt.Sprintf("Subchannel(id:%d) deleted", ac.channelzID.Int()),

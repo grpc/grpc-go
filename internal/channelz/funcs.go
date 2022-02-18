@@ -334,16 +334,16 @@ type TraceEventDesc struct {
 //
 // If channelz is not turned ON, this will simply log the event descriptions.
 func AddTraceEvent(l grpclog.DepthLoggerV2, id *Identifier, depth int, desc *TraceEventDesc) {
-	for d := desc; d != nil; d = d.Parent {
-		switch d.Severity {
-		case CtUnknown, CtInfo:
-			l.InfoDepth(depth+1, withParens(id)+d.Desc)
-		case CtWarning:
-			l.WarningDepth(depth+1, withParens(id)+d.Desc)
-		case CtError:
-			l.ErrorDepth(depth+1, withParens(id)+d.Desc)
-		}
+	// Log only the trace description associated with the bottom most entity.
+	switch desc.Severity {
+	case CtUnknown, CtInfo:
+		l.InfoDepth(depth+1, withParens(id)+desc.Desc)
+	case CtWarning:
+		l.WarningDepth(depth+1, withParens(id)+desc.Desc)
+	case CtError:
+		l.ErrorDepth(depth+1, withParens(id)+desc.Desc)
 	}
+
 	if getMaxTraceEntry() == 0 {
 		return
 	}
