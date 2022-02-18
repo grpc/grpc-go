@@ -39,7 +39,6 @@ package reflection // import "google.golang.org/grpc/reflection"
 import (
 	"io"
 	"sort"
-	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -82,9 +81,6 @@ type serverReflectionServer struct {
 	s            ServiceInfoProvider
 	descResolver protodesc.Resolver
 	extResolver  ExtensionResolver
-
-	initServiceNames sync.Once
-	serviceNames     []string
 }
 
 // ServerOptions represents the options used to construct a reflection server.
@@ -137,21 +133,6 @@ func NewServer(opts ServerOptions) rpb.ServerReflectionServer {
 func Register(s GRPCServer) {
 	svr := NewServer(ServerOptions{Services: s})
 	rpb.RegisterServerReflectionServer(s, svr)
-}
-
-func (s *serverReflectionServer) init() {
-	s.initServiceNames.Do(func() {
-		if s.s == nil {
-			// no need to init; no service names advertised
-			return
-		}
-		serviceInfo := s.s.GetServiceInfo()
-		s.serviceNames = make([]string, 0, len(serviceInfo))
-		for svc := range serviceInfo {
-			s.serviceNames = append(s.serviceNames, svc)
-		}
-		sort.Strings(s.serviceNames)
-	})
 }
 
 // fileDescWithDependencies returns a slice of serialized fileDescriptors in
@@ -221,10 +202,21 @@ func (s *serverReflectionServer) allExtensionNumbersForTypeName(name string) ([]
 	return numbers, nil
 }
 
+// listServices returns the names of services this server exposes.
+func (s *serverReflectionServer) listServices() []*rpb.ServiceResponse {
+	serviceInfo := s.s.GetServiceInfo()
+	resp := make([]*rpb.ServiceResponse, 0, len(serviceInfo))
+	for svc := range serviceInfo {
+		resp = append(resp, &rpb.ServiceResponse{Name: svc})
+	}
+	sort.Slice(resp, func(i, j int) bool {
+		return resp[i].Name < resp[j].Name
+	})
+	return resp
+}
+
 // ServerReflectionInfo is the reflection service handler.
 func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflection_ServerReflectionInfoServer) error {
-	s.init()
-
 	sentFileDescriptors := make(map[string]bool)
 	for {
 		in, err := stream.Recv()
@@ -306,15 +298,9 @@ func (s *serverReflectionServer) ServerReflectionInfo(stream rpb.ServerReflectio
 				}
 			}
 		case *rpb.ServerReflectionRequest_ListServices:
-			serviceResponses := make([]*rpb.ServiceResponse, len(s.serviceNames))
-			for i, n := range s.serviceNames {
-				serviceResponses[i] = &rpb.ServiceResponse{
-					Name: n,
-				}
-			}
 			out.MessageResponse = &rpb.ServerReflectionResponse_ListServicesResponse{
 				ListServicesResponse: &rpb.ListServiceResponse{
-					Service: serviceResponses,
+					Service: s.listServices(),
 				},
 			}
 		default:
