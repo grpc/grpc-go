@@ -27,14 +27,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	dpb "github.com/golang/protobuf/protoc-gen-go/descriptor"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
 	pbv3 "google.golang.org/grpc/reflection/grpc_testing_not_regenerate"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -43,14 +42,14 @@ import (
 )
 
 var (
-	s = &serverReflectionServer{}
+	s = NewServer(ServerOptions{}).(*serverReflectionServer)
 	// fileDescriptor of each test proto file.
-	fdTest       *dpb.FileDescriptorProto
-	fdTestv3     *dpb.FileDescriptorProto
-	fdProto2     *dpb.FileDescriptorProto
-	fdProto2Ext  *dpb.FileDescriptorProto
-	fdProto2Ext2 *dpb.FileDescriptorProto
-	fdDynamic    *dpb.FileDescriptorProto
+	fdTest       *descriptorpb.FileDescriptorProto
+	fdTestv3     *descriptorpb.FileDescriptorProto
+	fdProto2     *descriptorpb.FileDescriptorProto
+	fdProto2Ext  *descriptorpb.FileDescriptorProto
+	fdProto2Ext2 *descriptorpb.FileDescriptorProto
+	fdDynamic    *descriptorpb.FileDescriptorProto
 	// reflection descriptors.
 	fdDynamicFile protoreflect.FileDescriptor
 	// fileDescriptor marshalled.
@@ -72,23 +71,20 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, x{})
 }
 
-func loadFileDesc(filename string) (*dpb.FileDescriptorProto, []byte) {
-	enc := proto.FileDescriptor(filename)
-	if enc == nil {
-		panic(fmt.Sprintf("failed to find fd for file: %v", filename))
-	}
-	fd, err := decodeFileDesc(enc)
+func loadFileDesc(filename string) (*descriptorpb.FileDescriptorProto, []byte) {
+	fd, err := protoregistry.GlobalFiles.FindFileByPath(filename)
 	if err != nil {
-		panic(fmt.Sprintf("failed to decode enc: %v", err))
+		panic(err)
 	}
-	b, err := proto.Marshal(fd)
+	fdProto := protodesc.ToFileDescriptorProto(fd)
+	b, err := proto.Marshal(fdProto)
 	if err != nil {
 		panic(fmt.Sprintf("failed to marshal fd: %v", err))
 	}
-	return fd, b
+	return fdProto, b
 }
 
-func loadFileDescDynamic(b []byte) (*dpb.FileDescriptorProto, protoreflect.FileDescriptor, []byte) {
+func loadFileDescDynamic(b []byte) (*descriptorpb.FileDescriptorProto, protoreflect.FileDescriptor, []byte) {
 	m := new(descriptorpb.FileDescriptorProto)
 	if err := proto.Unmarshal(b, m); err != nil {
 		panic(fmt.Sprintf("failed to unmarshal dynamic proto raw descriptor"))
@@ -127,7 +123,7 @@ func (x) TestFileDescContainingExtension(t *testing.T) {
 	for _, test := range []struct {
 		st     string
 		extNum int32
-		want   *dpb.FileDescriptorProto
+		want   *descriptorpb.FileDescriptorProto
 	}{
 		{"grpc.testing.ToBeExtended", 13, fdProto2Ext},
 		{"grpc.testing.ToBeExtended", 17, fdProto2Ext},
@@ -135,9 +131,18 @@ func (x) TestFileDescContainingExtension(t *testing.T) {
 		{"grpc.testing.ToBeExtended", 23, fdProto2Ext2},
 		{"grpc.testing.ToBeExtended", 29, fdProto2Ext2},
 	} {
-		fd, err := fileDescContainingExtension(test.st, test.extNum)
-		if err != nil || !proto.Equal(fd, test.want) {
-			t.Errorf("fileDescContainingExtension(%q) = %q, %v, want %q, <nil>", test.st, fd, err, test.want)
+		fd, err := s.fileDescEncodingContainingExtension(test.st, test.extNum, map[string]bool{})
+		if err != nil {
+			t.Errorf("fileDescContainingExtension(%q) return error: %v", test.st, err)
+			continue
+		}
+		var actualFd descriptorpb.FileDescriptorProto
+		if err := proto.Unmarshal(fd[0], &actualFd); err != nil {
+			t.Errorf("fileDescContainingExtension(%q) return invalid bytes: %v", test.st, err)
+			continue
+		}
+		if !proto.Equal(&actualFd, test.want) {
+			t.Errorf("fileDescContainingExtension(%q) returned %q, but wanted %q", test.st, &actualFd, test.want)
 		}
 	}
 }
@@ -348,7 +353,7 @@ func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerRe
 		{"grpc.testingv3.SearchResponseV3.Result.Value.val", fdTestv3Byte},
 		{"grpc.testingv3.SearchResponseV3.Result.Value.str", fdTestv3Byte},
 		{"grpc.testingv3.SearchResponseV3.State", fdTestv3Byte},
-		{"grpc.testingv3.SearchResponseV3.State.FRESH", fdTestv3Byte},
+		{"grpc.testingv3.SearchResponseV3.FRESH", fdTestv3Byte},
 		// Test dynamic symbols
 		{"grpc.testing.DynamicService", fdDynamicByte},
 		{"grpc.testing.DynamicReq", fdDynamicByte},
@@ -578,7 +583,7 @@ func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflection
 	}
 }
 
-func registerDynamicProto(srv *grpc.Server, fdp *dpb.FileDescriptorProto, fd protoreflect.FileDescriptor) {
+func registerDynamicProto(srv *grpc.Server, fdp *descriptorpb.FileDescriptorProto, fd protoreflect.FileDescriptor) {
 	type emptyInterface interface{}
 
 	for i := 0; i < fd.Services().Len(); i++ {
