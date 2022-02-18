@@ -326,6 +326,8 @@ func (bw *balancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.Ne
 	bw.gsb.mu.Lock()
 	if !bw.gsb.balancerCurrentOrPending(bw) { // balancer was closed during this call
 		bw.gsb.cc.RemoveSubConn(sc)
+		bw.gsb.mu.Unlock()
+		return nil, fmt.Errorf("%T at address %p that called NewSubConn is deleted", bw, bw)
 	}
 	bw.subconns[sc] = true
 	bw.gsb.mu.Unlock()
