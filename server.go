@@ -585,6 +585,7 @@ func NewServer(opt ...ServerOption) *Server {
 	}
 
 	s.channelzID = channelz.RegisterServer(&channelzServer{s}, "")
+	channelz.Info(logger, s.channelzID, "Server created")
 	return s
 }
 
@@ -723,6 +724,7 @@ func (l *listenSocket) ChannelzMetric() *channelz.SocketInternalMetric {
 func (l *listenSocket) Close() error {
 	err := l.Listener.Close()
 	channelz.RemoveEntry(l.channelzID)
+	channelz.Info(logger, l.channelzID, "ListenSocket deleted")
 	return err
 }
 
@@ -771,6 +773,7 @@ func (s *Server) Serve(lis net.Listener) error {
 		return err
 	}
 	s.mu.Unlock()
+	channelz.Info(logger, ls.channelzID, "ListenSocket created")
 
 	var tempDelay time.Duration // how long to sleep on accept failure
 	for {
