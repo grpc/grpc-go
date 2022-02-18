@@ -120,11 +120,13 @@ func (gsb *Balancer) SwitchTo(builder balancer.Builder) error {
 	if newBalancer == nil {
 		// This is illegal and should never happen; we clear the balancerWrapper
 		// we were constructing if it happens to avoid a potential panic.
+		gsb.mu.Lock()
 		if gsb.balancerPending != nil {
 			gsb.balancerPending = nil
 		} else {
 			gsb.balancerCurrent = nil
 		}
+		gsb.mu.Unlock()
 		return balancer.ErrBadResolverState
 	}
 
@@ -322,6 +324,9 @@ func (bw *balancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.Ne
 		return nil, err
 	}
 	bw.gsb.mu.Lock()
+	if !bw.gsb.balancerCurrentOrPending(bw) { // balancer was closed during this call
+		bw.gsb.cc.RemoveSubConn(sc)
+	}
 	bw.subconns[sc] = true
 	bw.gsb.mu.Unlock()
 	return sc, nil
