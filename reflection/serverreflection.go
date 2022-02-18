@@ -50,6 +50,22 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
+// GRPCServer is the interface provided by a gRPC server. It is implemented by
+// *grpc.Server, but could also be implemented by other concrete types. It acts
+// as a registry, for accumulating the services exposed by the server.
+type GRPCServer interface {
+	grpc.ServiceRegistrar
+	ServiceInfoProvider
+}
+
+var _ GRPCServer = (*grpc.Server)(nil)
+
+// Register registers the server reflection service on the given gRPC server.
+func Register(s GRPCServer) {
+	svr := NewServer(ServerOptions{Services: s})
+	rpb.RegisterServerReflectionServer(s, svr)
+}
+
 // ServiceInfoProvider is an interface used to retrieve metadata about the
 // services to expose.
 //
@@ -66,14 +82,6 @@ type ServiceInfoProvider interface {
 	GetServiceInfo() map[string]grpc.ServiceInfo
 }
 
-// GRPCServer is the interface provided by a gRPC server. It is implemented by
-// *grpc.Server, but could also be implemented by other concrete types. It acts
-// as a registry, for accumulating the services exposed by the server.
-type GRPCServer interface {
-	grpc.ServiceRegistrar
-	ServiceInfoProvider
-}
-
 // ExtensionResolver is the interface used to query details about extensions.
 // This interface is satisfied by protoregistry.GlobalTypes.
 //
@@ -84,15 +92,6 @@ type GRPCServer interface {
 type ExtensionResolver interface {
 	protoregistry.ExtensionTypeResolver
 	RangeExtensionsByMessage(message protoreflect.FullName, f func(protoreflect.ExtensionType) bool)
-}
-
-var _ GRPCServer = (*grpc.Server)(nil)
-
-type serverReflectionServer struct {
-	rpb.UnimplementedServerReflectionServer
-	s            ServiceInfoProvider
-	descResolver protodesc.Resolver
-	extResolver  ExtensionResolver
 }
 
 // ServerOptions represents the options used to construct a reflection server.
@@ -139,10 +138,11 @@ func NewServer(opts ServerOptions) rpb.ServerReflectionServer {
 	}
 }
 
-// Register registers the server reflection service on the given gRPC server.
-func Register(s GRPCServer) {
-	svr := NewServer(ServerOptions{Services: s})
-	rpb.RegisterServerReflectionServer(s, svr)
+type serverReflectionServer struct {
+	rpb.UnimplementedServerReflectionServer
+	s            ServiceInfoProvider
+	descResolver protodesc.Resolver
+	extResolver  ExtensionResolver
 }
 
 // fileDescWithDependencies returns a slice of serialized fileDescriptors in
