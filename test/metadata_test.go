@@ -73,7 +73,7 @@ func (s) TestInvalidMetadata(t *testing.T) {
 				return err
 			}
 			test := tests[testNum]
-			testNum ++
+			testNum++
 			if err := stream.SetHeader(test.md); !reflect.DeepEqual(test.want, err) {
 				return fmt.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
 			}
