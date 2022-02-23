@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -34,6 +35,7 @@ import (
 )
 
 func (s) TestInvalidMetadata(t *testing.T) {
+	grpctest.TLogger.ExpectErrorN("stream: failed to validate md when setting trailer", 2)
 
 	tests := []struct {
 		md   metadata.MD
