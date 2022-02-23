@@ -18,6 +18,10 @@ const (
 	// BalancerName is the name of consistent-hashring balancer.
 	BalancerName = "consistent-hashring"
 
+	// BalancerServiceConfig is a service config that sets the default balancer
+	// to the consistent-hashring balancer
+	BalancerServiceConfig = `{"loadBalancingPolicy":"consistent-hashring"}`
+
 	// CtxKey is the key for the grpc request's context.Context which points to
 	// the key to hash for the request. The value it points to must be []byte
 	CtxKey ctxKey = "requestKey"
