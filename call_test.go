@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/status"
 )
@@ -123,12 +124,16 @@ type server struct {
 	startedErr chan error // sent nil or an error after server starts
 	mu         sync.Mutex
 	conns      map[transport.ServerTransport]bool
+	channelzID *channelz.Identifier
 }
 
 type ctxKey string
 
 func newTestServer() *server {
-	return &server{startedErr: make(chan error, 1)}
+	return &server{
+		startedErr: make(chan error, 1),
+		channelzID: channelz.NewIdentifierForTesting(channelz.RefServer, time.Now().Unix(), nil),
+	}
 }
 
 // start starts server. Other goroutines should block on s.startedErr for further operations.
@@ -158,10 +163,12 @@ func (s *server) start(t *testing.T, port int, maxStreams uint32) {
 			return
 		}
 		config := &transport.ServerConfig{
-			MaxStreams: maxStreams,
+			MaxStreams:       maxStreams,
+			ChannelzParentID: s.channelzID,
 		}
 		st, err := transport.NewServerTransport(conn, config)
 		if err != nil {
+			t.Errorf("failed to create server transport: %v", err)
 			continue
 		}
 		s.mu.Lock()

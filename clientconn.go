@@ -159,23 +159,20 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		}
 	}()
 
-	if channelz.IsOn() {
-		if cc.dopts.channelzParentID != 0 {
-			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, cc.dopts.channelzParentID, target)
-			channelz.AddTraceEvent(logger, cc.channelzID, 0, &channelz.TraceEventDesc{
-				Desc:     "Channel Created",
-				Severity: channelz.CtInfo,
-				Parent: &channelz.TraceEventDesc{
-					Desc:     fmt.Sprintf("Nested Channel(id:%d) created", cc.channelzID),
-					Severity: channelz.CtInfo,
-				},
-			})
-		} else {
-			cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, 0, target)
-			channelz.Info(logger, cc.channelzID, "Channel Created")
-		}
-		cc.csMgr.channelzID = cc.channelzID
+	pid := cc.dopts.channelzParentID
+	cc.channelzID = channelz.RegisterChannel(&channelzChannel{cc}, pid, target)
+	ted := &channelz.TraceEventDesc{
+		Desc:     "Channel created",
+		Severity: channelz.CtInfo,
 	}
+	if cc.dopts.channelzParentID != nil {
+		ted.Parent = &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", cc.channelzID.Int()),
+			Severity: channelz.CtInfo,
+		}
+	}
+	channelz.AddTraceEvent(logger, cc.channelzID, 1, ted)
+	cc.csMgr.channelzID = cc.channelzID
 
 	if cc.dopts.copts.TransportCredentials == nil && cc.dopts.copts.CredsBundle == nil {
 		return nil, errNoTransportSecurity
@@ -398,7 +395,7 @@ type connectivityStateManager struct {
 	mu         sync.Mutex
 	state      connectivity.State
 	notifyChan chan struct{}
-	channelzID int64
+	channelzID *channelz.Identifier
 }
 
 // updateState updates the connectivity.State of ClientConn.
@@ -490,7 +487,7 @@ type ClientConn struct {
 
 	firstResolveEvent *grpcsync.Event
 
-	channelzID int64 // channelz unique identification number
+	channelzID *channelz.Identifier
 	czData     *channelzData
 
 	lceMu               sync.Mutex // protects lastConnectionError
@@ -768,17 +765,21 @@ func (cc *ClientConn) newAddrConn(addrs []resolver.Address, opts balancer.NewSub
 		cc.mu.Unlock()
 		return nil, ErrClientConnClosing
 	}
-	if channelz.IsOn() {
-		ac.channelzID = channelz.RegisterSubChannel(ac, cc.channelzID, "")
-		channelz.AddTraceEvent(logger, ac.channelzID, 0, &channelz.TraceEventDesc{
-			Desc:     "Subchannel Created",
-			Severity: channelz.CtInfo,
-			Parent: &channelz.TraceEventDesc{
-				Desc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelzID),
-				Severity: channelz.CtInfo,
-			},
-		})
+
+	var err error
+	ac.channelzID, err = channelz.RegisterSubChannel(ac, cc.channelzID, "")
+	if err != nil {
+		return nil, err
 	}
+	channelz.AddTraceEvent(logger, ac.channelzID, 0, &channelz.TraceEventDesc{
+		Desc:     "Subchannel created",
+		Severity: channelz.CtInfo,
+		Parent: &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Subchannel(id:%d) created", ac.channelzID.Int()),
+			Severity: channelz.CtInfo,
+		},
+	})
+
 	cc.conns[ac] = struct{}{}
 	cc.mu.Unlock()
 	return ac, nil
@@ -1085,22 +1086,22 @@ func (cc *ClientConn) Close() error {
 	for ac := range conns {
 		ac.tearDown(ErrClientConnClosing)
 	}
-	if channelz.IsOn() {
-		ted := &channelz.TraceEventDesc{
-			Desc:     "Channel Deleted",
+	ted := &channelz.TraceEventDesc{
+		Desc:     "Channel deleted",
+		Severity: channelz.CtInfo,
+	}
+	if cc.dopts.channelzParentID != nil {
+		ted.Parent = &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Nested channel(id:%d) deleted", cc.channelzID.Int()),
 			Severity: channelz.CtInfo,
 		}
-		if cc.dopts.channelzParentID != 0 {
-			ted.Parent = &channelz.TraceEventDesc{
-				Desc:     fmt.Sprintf("Nested channel(id:%d) deleted", cc.channelzID),
-				Severity: channelz.CtInfo,
-			}
-		}
-		channelz.AddTraceEvent(logger, cc.channelzID, 0, ted)
-		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
-		// the entity being deleted, and thus prevent it from being deleted right away.
-		channelz.RemoveEntry(cc.channelzID)
 	}
+	channelz.AddTraceEvent(logger, cc.channelzID, 0, ted)
+	// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add
+	// trace reference to the entity being deleted, and thus prevent it from being
+	// deleted right away.
+	channelz.RemoveEntry(cc.channelzID)
+
 	return nil
 }
 
@@ -1130,7 +1131,7 @@ type addrConn struct {
 	backoffIdx   int // Needs to be stateful for resetConnectBackoff.
 	resetBackoff chan struct{}
 
-	channelzID int64 // channelz unique identification number.
+	channelzID *channelz.Identifier
 	czData     *channelzData
 }
 
@@ -1312,14 +1313,12 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 
 	connectCtx, cancel := context.WithDeadline(ac.ctx, connectDeadline)
 	defer cancel()
-	if channelz.IsOn() {
-		copts.ChannelzParentID = ac.channelzID
-	}
+	copts.ChannelzParentID = ac.channelzID
 
 	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, addr, copts, func() { prefaceReceived.Fire() }, onGoAway, onClose)
 	if err != nil {
 		// newTr is either nil, or closed.
-		channelz.Warningf(logger, ac.channelzID, "grpc: addrConn.createTransport failed to connect to %v. Err: %v", addr, err)
+		channelz.Warningf(logger, ac.channelzID, "grpc: addrConn.createTransport failed to connect to %s. Err: %v", addr, err)
 		return err
 	}
 
@@ -1332,7 +1331,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		newTr.Close(transport.ErrConnClosing)
 		if connectCtx.Err() == context.DeadlineExceeded {
 			err := errors.New("failed to receive server preface within timeout")
-			channelz.Warningf(logger, ac.channelzID, "grpc: addrConn.createTransport failed to connect to %v: %v", addr, err)
+			channelz.Warningf(logger, ac.channelzID, "grpc: addrConn.createTransport failed to connect to %s: %v", addr, err)
 			return err
 		}
 		return nil
@@ -1497,19 +1496,18 @@ func (ac *addrConn) tearDown(err error) {
 		curTr.GracefulClose()
 		ac.mu.Lock()
 	}
-	if channelz.IsOn() {
-		channelz.AddTraceEvent(logger, ac.channelzID, 0, &channelz.TraceEventDesc{
-			Desc:     "Subchannel Deleted",
+	channelz.AddTraceEvent(logger, ac.channelzID, 0, &channelz.TraceEventDesc{
+		Desc:     "Subchannel deleted",
+		Severity: channelz.CtInfo,
+		Parent: &channelz.TraceEventDesc{
+			Desc:     fmt.Sprintf("Subchannel(id:%d) deleted", ac.channelzID.Int()),
 			Severity: channelz.CtInfo,
-			Parent: &channelz.TraceEventDesc{
-				Desc:     fmt.Sprintf("Subchanel(id:%d) deleted", ac.channelzID),
-				Severity: channelz.CtInfo,
-			},
-		})
-		// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add trace reference to
-		// the entity being deleted, and thus prevent it from being deleted right away.
-		channelz.RemoveEntry(ac.channelzID)
-	}
+		},
+	})
+	// TraceEvent needs to be called before RemoveEntry, as TraceEvent may add
+	// trace reference to the entity being deleted, and thus prevent it from
+	// being deleted right away.
+	channelz.RemoveEntry(ac.channelzID)
 	ac.mu.Unlock()
 }
 

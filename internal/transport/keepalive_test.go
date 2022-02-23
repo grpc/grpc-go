@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/keepalive"
 )
@@ -252,11 +253,15 @@ func (s) TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 // logic is running even without any active streams.
 func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
-	client, cancel := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
-		Time:                1 * time.Second,
-		Timeout:             1 * time.Second,
-		PermitWithoutStream: true,
-	}}, connCh)
+	copts := ConnectOptions{
+		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:                1 * time.Second,
+			Timeout:             1 * time.Second,
+			PermitWithoutStream: true,
+		},
+	}
+	client, cancel := setUpWithNoPingServer(t, copts, connCh)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 
@@ -284,10 +289,14 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 // active streams, and therefore the transport stays open.
 func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
-	client, cancel := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
-		Time:    1 * time.Second,
-		Timeout: 1 * time.Second,
-	}}, connCh)
+	copts := ConnectOptions{
+		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:    1 * time.Second,
+			Timeout: 1 * time.Second,
+		},
+	}
+	client, cancel := setUpWithNoPingServer(t, copts, connCh)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 
@@ -313,10 +322,14 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 // transport even when there is an active stream.
 func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	connCh := make(chan net.Conn, 1)
-	client, cancel := setUpWithNoPingServer(t, ConnectOptions{KeepaliveParams: keepalive.ClientParameters{
-		Time:    1 * time.Second,
-		Timeout: 1 * time.Second,
-	}}, connCh)
+	copts := ConnectOptions{
+		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+		KeepaliveParams: keepalive.ClientParameters{
+			Time:    1 * time.Second,
+			Timeout: 1 * time.Second,
+		},
+	}
+	client, cancel := setUpWithNoPingServer(t, copts, connCh)
 	defer cancel()
 	defer client.Close(fmt.Errorf("closed manually by test"))
 

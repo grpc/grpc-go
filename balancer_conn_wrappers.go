@@ -184,6 +184,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	}
 	ac, err := ccb.cc.newAddrConn(addrs, opts)
 	if err != nil {
+		channelz.Warningf(logger, ccb.cc.channelzID, "acBalancerWrapper: NewSubConn: failed to newAddrConn: %v", err)
 		return nil, err
 	}
 	acbw := &acBalancerWrapper{ac: ac}

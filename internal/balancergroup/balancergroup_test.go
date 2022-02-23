@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
@@ -474,17 +475,15 @@ func (s) TestBalancerGroup_CloseStopsBalancerInCache(t *testing.T) {
 // to the balancergroup at creation time is passed to child policies.
 func (s) TestBalancerGroupBuildOptions(t *testing.T) {
 	const (
-		balancerName       = "stubBalancer-TestBalancerGroupBuildOptions"
-		parent             = int64(1234)
-		userAgent          = "ua"
-		defaultTestTimeout = 1 * time.Second
+		balancerName = "stubBalancer-TestBalancerGroupBuildOptions"
+		userAgent    = "ua"
 	)
 
 	// Setup the stub balancer such that we can read the build options passed to
 	// it in the UpdateClientConnState method.
 	bOpts := balancer.BuildOptions{
 		DialCreds:        insecure.NewCredentials(),
-		ChannelzParentID: parent,
+		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefChannel, 1234, nil),
 		CustomUserAgent:  userAgent,
 	}
 	stub.Register(balancerName, stub.BalancerFuncs{

@@ -22,18 +22,21 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func init() {
@@ -60,14 +63,6 @@ type protoToSocketOptFunc func([]*channelzpb.SocketOption) *channelz.SocketOptio
 // data from unmarshaled proto message.
 // It is only defined under linux environment on x86 architecture.
 var protoToSocketOpt protoToSocketOptFunc
-
-// emptyTime is used for detecting unset value of time.Time type.
-// For go1.7 and earlier, ptypes.Timestamp will fill in the loc field of time.Time
-// with &utcLoc. However zero value of a time.Time type value loc field is nil.
-// This behavior will make reflect.DeepEqual fail upon unset time.Time field,
-// and cause false positive fatal error.
-// TODO: Go1.7 is no longer supported - does this need a change?
-var emptyTime time.Time
 
 const defaultTestTimeout = 10 * time.Second
 
@@ -149,7 +144,7 @@ func (d *dummySocket) ChannelzMetric() *channelz.SocketInternalMetric {
 	}
 }
 
-func channelProtoToStruct(c *channelzpb.Channel) *dummyChannel {
+func channelProtoToStruct(c *channelzpb.Channel) (*dummyChannel, error) {
 	dc := &dummyChannel{}
 	pdata := c.GetData()
 	switch pdata.GetState().GetState() {
@@ -170,29 +165,29 @@ func channelProtoToStruct(c *channelzpb.Channel) *dummyChannel {
 	dc.callsStarted = pdata.CallsStarted
 	dc.callsSucceeded = pdata.CallsSucceeded
 	dc.callsFailed = pdata.CallsFailed
-	if t, err := ptypes.Timestamp(pdata.GetLastCallStartedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			dc.lastCallStartedTimestamp = t
-		}
+	ts, err := ptypes.Timestamp(pdata.GetLastCallStartedTimestamp())
+	if err != nil {
+		return nil, err
 	}
-	return dc
+	dc.lastCallStartedTimestamp = ts
+	return dc, nil
 }
 
-func serverProtoToStruct(s *channelzpb.Server) *dummyServer {
+func serverProtoToStruct(s *channelzpb.Server) (*dummyServer, error) {
 	ds := &dummyServer{}
 	pdata := s.GetData()
 	ds.callsStarted = pdata.CallsStarted
 	ds.callsSucceeded = pdata.CallsSucceeded
 	ds.callsFailed = pdata.CallsFailed
-	if t, err := ptypes.Timestamp(pdata.GetLastCallStartedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastCallStartedTimestamp = t
-		}
+	ts, err := ptypes.Timestamp(pdata.GetLastCallStartedTimestamp())
+	if err != nil {
+		return nil, err
 	}
-	return ds
+	ds.lastCallStartedTimestamp = ts
+	return ds, nil
 }
 
-func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
+func socketProtoToStruct(s *channelzpb.Socket) (*dummySocket, error) {
 	ds := &dummySocket{}
 	pdata := s.GetData()
 	ds.streamsStarted = pdata.GetStreamsStarted()
@@ -201,26 +196,26 @@ func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
 	ds.messagesSent = pdata.GetMessagesSent()
 	ds.messagesReceived = pdata.GetMessagesReceived()
 	ds.keepAlivesSent = pdata.GetKeepAlivesSent()
-	if t, err := ptypes.Timestamp(pdata.GetLastLocalStreamCreatedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastLocalStreamCreatedTimestamp = t
-		}
+	ts, err := ptypes.Timestamp(pdata.GetLastLocalStreamCreatedTimestamp())
+	if err != nil {
+		return nil, err
 	}
-	if t, err := ptypes.Timestamp(pdata.GetLastRemoteStreamCreatedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastRemoteStreamCreatedTimestamp = t
-		}
+	ds.lastLocalStreamCreatedTimestamp = ts
+	ts, err = ptypes.Timestamp(pdata.GetLastRemoteStreamCreatedTimestamp())
+	if err != nil {
+		return nil, err
 	}
-	if t, err := ptypes.Timestamp(pdata.GetLastMessageSentTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastMessageSentTimestamp = t
-		}
+	ds.lastRemoteStreamCreatedTimestamp = ts
+	ts, err = ptypes.Timestamp(pdata.GetLastMessageSentTimestamp())
+	if err != nil {
+		return nil, err
 	}
-	if t, err := ptypes.Timestamp(pdata.GetLastMessageReceivedTimestamp()); err == nil {
-		if !t.Equal(emptyTime) {
-			ds.lastMessageReceivedTimestamp = t
-		}
+	ds.lastMessageSentTimestamp = ts
+	ts, err = ptypes.Timestamp(pdata.GetLastMessageReceivedTimestamp())
+	if err != nil {
+		return nil, err
 	}
+	ds.lastMessageReceivedTimestamp = ts
 	if v := pdata.GetLocalFlowControlWindow(); v != nil {
 		ds.localFlowControlWindow = v.Value
 	}
@@ -240,7 +235,7 @@ func socketProtoToStruct(s *channelzpb.Socket) *dummySocket {
 		ds.remoteAddr = protoToAddr(remote)
 	}
 	ds.remoteName = s.GetRemoteName()
-	return ds
+	return ds, nil
 }
 
 func protoToSecurity(protoSecurity *channelzpb.Security) credentials.ChannelzSecurityValue {
@@ -325,7 +320,7 @@ func (s) TestGetTopChannels(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer cleanupWrapper(czCleanup, t)
 	for _, c := range tcs {
-		id := channelz.RegisterChannel(c, 0, "")
+		id := channelz.RegisterChannel(c, nil, "")
 		defer channelz.RemoveEntry(id)
 	}
 	s := newCZServer()
@@ -336,12 +331,16 @@ func (s) TestGetTopChannels(t *testing.T) {
 		t.Fatalf("resp.GetEnd() want true, got %v", resp.GetEnd())
 	}
 	for i, c := range resp.GetChannel() {
-		if !reflect.DeepEqual(channelProtoToStruct(c), tcs[i]) {
-			t.Fatalf("dummyChannel: %d, want: %#v, got: %#v", i, tcs[i], channelProtoToStruct(c))
+		channel, err := channelProtoToStruct(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(tcs[i], channel, protocmp.Transform(), cmp.AllowUnexported(dummyChannel{})); diff != "" {
+			t.Fatalf("unexpected channel, diff (-want +got):\n%s", diff)
 		}
 	}
 	for i := 0; i < 50; i++ {
-		id := channelz.RegisterChannel(tcs[0], 0, "")
+		id := channelz.RegisterChannel(tcs[0], nil, "")
 		defer channelz.RemoveEntry(id)
 	}
 	resp, _ = s.GetTopChannels(ctx, &channelzpb.GetTopChannelsRequest{StartChannelId: 0})
@@ -385,8 +384,12 @@ func (s) TestGetServers(t *testing.T) {
 		t.Fatalf("resp.GetEnd() want true, got %v", resp.GetEnd())
 	}
 	for i, s := range resp.GetServer() {
-		if !reflect.DeepEqual(serverProtoToStruct(s), ss[i]) {
-			t.Fatalf("dummyServer: %d, want: %#v, got: %#v", i, ss[i], serverProtoToStruct(s))
+		server, err := serverProtoToStruct(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(ss[i], server, protocmp.Transform(), cmp.AllowUnexported(dummyServer{})); diff != "" {
+			t.Fatalf("unexpected server, diff (-want +got):\n%s", diff)
 		}
 	}
 	for i := 0; i < 50; i++ {
@@ -405,34 +408,34 @@ func (s) TestGetServerSockets(t *testing.T) {
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	defer channelz.RemoveEntry(svrID)
 	refNames := []string{"listen socket 1", "normal socket 1", "normal socket 2"}
-	ids := make([]int64, 3)
-	ids[0] = channelz.RegisterListenSocket(&dummySocket{}, svrID, refNames[0])
-	ids[1] = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[1])
-	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[2])
+	ids := make([]*channelz.Identifier, 3)
+	ids[0], _ = channelz.RegisterListenSocket(&dummySocket{}, svrID, refNames[0])
+	ids[1], _ = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[1])
+	ids[2], _ = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[2])
 	for _, id := range ids {
 		defer channelz.RemoveEntry(id)
 	}
 	svr := newCZServer()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	resp, _ := svr.GetServerSockets(ctx, &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: 0})
+	resp, _ := svr.GetServerSockets(ctx, &channelzpb.GetServerSocketsRequest{ServerId: svrID.Int(), StartSocketId: 0})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want: true, got: %v", resp.GetEnd())
 	}
 	// GetServerSockets only return normal sockets.
 	want := map[int64]string{
-		ids[1]: refNames[1],
-		ids[2]: refNames[2],
+		ids[1].Int(): refNames[1],
+		ids[2].Int(): refNames[2],
 	}
-	if !reflect.DeepEqual(convertSocketRefSliceToMap(resp.GetSocketRef()), want) {
+	if !cmp.Equal(convertSocketRefSliceToMap(resp.GetSocketRef()), want) {
 		t.Fatalf("GetServerSockets want: %#v, got: %#v", want, resp.GetSocketRef())
 	}
 
 	for i := 0; i < 50; i++ {
-		id := channelz.RegisterNormalSocket(&dummySocket{}, svrID, "")
+		id, _ := channelz.RegisterNormalSocket(&dummySocket{}, svrID, "")
 		defer channelz.RemoveEntry(id)
 	}
-	resp, _ = svr.GetServerSockets(ctx, &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: 0})
+	resp, _ = svr.GetServerSockets(ctx, &channelzpb.GetServerSocketsRequest{ServerId: svrID.Int(), StartSocketId: 0})
 	if resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want false, got %v", resp.GetEnd())
 	}
@@ -446,10 +449,10 @@ func (s) TestGetServerSocketsNonZeroStartID(t *testing.T) {
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	defer channelz.RemoveEntry(svrID)
 	refNames := []string{"listen socket 1", "normal socket 1", "normal socket 2"}
-	ids := make([]int64, 3)
-	ids[0] = channelz.RegisterListenSocket(&dummySocket{}, svrID, refNames[0])
-	ids[1] = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[1])
-	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[2])
+	ids := make([]*channelz.Identifier, 3)
+	ids[0], _ = channelz.RegisterListenSocket(&dummySocket{}, svrID, refNames[0])
+	ids[1], _ = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[1])
+	ids[2], _ = channelz.RegisterNormalSocket(&dummySocket{}, svrID, refNames[2])
 	for _, id := range ids {
 		defer channelz.RemoveEntry(id)
 	}
@@ -458,16 +461,16 @@ func (s) TestGetServerSocketsNonZeroStartID(t *testing.T) {
 	defer cancel()
 	// Make GetServerSockets with startID = ids[1]+1, so socket-1 won't be
 	// included in the response.
-	resp, _ := svr.GetServerSockets(ctx, &channelzpb.GetServerSocketsRequest{ServerId: svrID, StartSocketId: ids[1] + 1})
+	resp, _ := svr.GetServerSockets(ctx, &channelzpb.GetServerSocketsRequest{ServerId: svrID.Int(), StartSocketId: ids[1].Int() + 1})
 	if !resp.GetEnd() {
 		t.Fatalf("resp.GetEnd() want: true, got: %v", resp.GetEnd())
 	}
 	// GetServerSockets only return normal socket-2, socket-1 should be
 	// filtered by start ID.
 	want := map[int64]string{
-		ids[2]: refNames[2],
+		ids[2].Int(): refNames[2],
 	}
-	if !reflect.DeepEqual(convertSocketRefSliceToMap(resp.GetSocketRef()), want) {
+	if !cmp.Equal(convertSocketRefSliceToMap(resp.GetSocketRef()), want) {
 		t.Fatalf("GetServerSockets want: %#v, got: %#v", want, resp.GetSocketRef())
 	}
 }
@@ -475,38 +478,45 @@ func (s) TestGetServerSocketsNonZeroStartID(t *testing.T) {
 func (s) TestGetChannel(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer cleanupWrapper(czCleanup, t)
+
 	refNames := []string{"top channel 1", "nested channel 1", "sub channel 2", "nested channel 3"}
-	ids := make([]int64, 4)
-	ids[0] = channelz.RegisterChannel(&dummyChannel{}, 0, refNames[0])
+	ids := make([]*channelz.Identifier, 4)
+	ids[0] = channelz.RegisterChannel(&dummyChannel{}, nil, refNames[0])
 	channelz.AddTraceEvent(logger, ids[0], 0, &channelz.TraceEventDesc{
 		Desc:     "Channel Created",
 		Severity: channelz.CtInfo,
 	})
+
 	ids[1] = channelz.RegisterChannel(&dummyChannel{}, ids[0], refNames[1])
 	channelz.AddTraceEvent(logger, ids[1], 0, &channelz.TraceEventDesc{
 		Desc:     "Channel Created",
 		Severity: channelz.CtInfo,
 		Parent: &channelz.TraceEventDesc{
-			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", ids[1]),
+			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", ids[1].Int()),
 			Severity: channelz.CtInfo,
 		},
 	})
 
-	ids[2] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[2])
+	var err error
+	ids[2], err = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[2])
+	if err != nil {
+		t.Fatalf("channelz.RegisterSubChannel() failed: %v", err)
+	}
 	channelz.AddTraceEvent(logger, ids[2], 0, &channelz.TraceEventDesc{
 		Desc:     "SubChannel Created",
 		Severity: channelz.CtInfo,
 		Parent: &channelz.TraceEventDesc{
-			Desc:     fmt.Sprintf("SubChannel(id:%d) created", ids[2]),
+			Desc:     fmt.Sprintf("SubChannel(id:%d) created", ids[2].Int()),
 			Severity: channelz.CtInfo,
 		},
 	})
+
 	ids[3] = channelz.RegisterChannel(&dummyChannel{}, ids[1], refNames[3])
 	channelz.AddTraceEvent(logger, ids[3], 0, &channelz.TraceEventDesc{
 		Desc:     "Channel Created",
 		Severity: channelz.CtInfo,
 		Parent: &channelz.TraceEventDesc{
-			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", ids[3]),
+			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", ids[3].Int()),
 			Severity: channelz.CtInfo,
 		},
 	})
@@ -518,21 +528,23 @@ func (s) TestGetChannel(t *testing.T) {
 		Desc:     "Resolver returns an empty address list",
 		Severity: channelz.CtWarning,
 	})
+
 	for _, id := range ids {
 		defer channelz.RemoveEntry(id)
 	}
+
 	svr := newCZServer()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	resp, _ := svr.GetChannel(ctx, &channelzpb.GetChannelRequest{ChannelId: ids[0]})
+	resp, _ := svr.GetChannel(ctx, &channelzpb.GetChannelRequest{ChannelId: ids[0].Int()})
 	metrics := resp.GetChannel()
 	subChans := metrics.GetSubchannelRef()
-	if len(subChans) != 1 || subChans[0].GetName() != refNames[2] || subChans[0].GetSubchannelId() != ids[2] {
-		t.Fatalf("metrics.GetSubChannelRef() want %#v, got %#v", []*channelzpb.SubchannelRef{{SubchannelId: ids[2], Name: refNames[2]}}, subChans)
+	if len(subChans) != 1 || subChans[0].GetName() != refNames[2] || subChans[0].GetSubchannelId() != ids[2].Int() {
+		t.Fatalf("metrics.GetSubChannelRef() want %#v, got %#v", []*channelzpb.SubchannelRef{{SubchannelId: ids[2].Int(), Name: refNames[2]}}, subChans)
 	}
 	nestedChans := metrics.GetChannelRef()
-	if len(nestedChans) != 1 || nestedChans[0].GetName() != refNames[1] || nestedChans[0].GetChannelId() != ids[1] {
-		t.Fatalf("metrics.GetChannelRef() want %#v, got %#v", []*channelzpb.ChannelRef{{ChannelId: ids[1], Name: refNames[1]}}, nestedChans)
+	if len(nestedChans) != 1 || nestedChans[0].GetName() != refNames[1] || nestedChans[0].GetChannelId() != ids[1].Int() {
+		t.Fatalf("metrics.GetChannelRef() want %#v, got %#v", []*channelzpb.ChannelRef{{ChannelId: ids[1].Int(), Name: refNames[1]}}, nestedChans)
 	}
 	trace := metrics.GetData().GetTrace()
 	want := []struct {
@@ -542,14 +554,14 @@ func (s) TestGetChannel(t *testing.T) {
 		childRef string
 	}{
 		{desc: "Channel Created", severity: channelzpb.ChannelTraceEvent_CT_INFO},
-		{desc: fmt.Sprintf("Nested Channel(id:%d) created", ids[1]), severity: channelzpb.ChannelTraceEvent_CT_INFO, childID: ids[1], childRef: refNames[1]},
-		{desc: fmt.Sprintf("SubChannel(id:%d) created", ids[2]), severity: channelzpb.ChannelTraceEvent_CT_INFO, childID: ids[2], childRef: refNames[2]},
+		{desc: fmt.Sprintf("Nested Channel(id:%d) created", ids[1].Int()), severity: channelzpb.ChannelTraceEvent_CT_INFO, childID: ids[1].Int(), childRef: refNames[1]},
+		{desc: fmt.Sprintf("SubChannel(id:%d) created", ids[2].Int()), severity: channelzpb.ChannelTraceEvent_CT_INFO, childID: ids[2].Int(), childRef: refNames[2]},
 		{desc: fmt.Sprintf("Channel Connectivity change to %v", connectivity.Ready), severity: channelzpb.ChannelTraceEvent_CT_INFO},
 		{desc: "Resolver returns an empty address list", severity: channelzpb.ChannelTraceEvent_CT_WARNING},
 	}
 
 	for i, e := range trace.Events {
-		if e.GetDescription() != want[i].desc {
+		if !strings.Contains(e.GetDescription(), want[i].desc) {
 			t.Fatalf("trace: GetDescription want %#v, got %#v", want[i].desc, e.GetDescription())
 		}
 		if e.GetSeverity() != want[i].severity {
@@ -564,11 +576,11 @@ func (s) TestGetChannel(t *testing.T) {
 			}
 		}
 	}
-	resp, _ = svr.GetChannel(ctx, &channelzpb.GetChannelRequest{ChannelId: ids[1]})
+	resp, _ = svr.GetChannel(ctx, &channelzpb.GetChannelRequest{ChannelId: ids[1].Int()})
 	metrics = resp.GetChannel()
 	nestedChans = metrics.GetChannelRef()
-	if len(nestedChans) != 1 || nestedChans[0].GetName() != refNames[3] || nestedChans[0].GetChannelId() != ids[3] {
-		t.Fatalf("metrics.GetChannelRef() want %#v, got %#v", []*channelzpb.ChannelRef{{ChannelId: ids[3], Name: refNames[3]}}, nestedChans)
+	if len(nestedChans) != 1 || nestedChans[0].GetName() != refNames[3] || nestedChans[0].GetChannelId() != ids[3].Int() {
+		t.Fatalf("metrics.GetChannelRef() want %#v, got %#v", []*channelzpb.ChannelRef{{ChannelId: ids[3].Int(), Name: refNames[3]}}, nestedChans)
 	}
 }
 
@@ -581,23 +593,27 @@ func (s) TestGetSubChannel(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer cleanupWrapper(czCleanup, t)
 	refNames := []string{"top channel 1", "sub channel 1", "socket 1", "socket 2"}
-	ids := make([]int64, 4)
-	ids[0] = channelz.RegisterChannel(&dummyChannel{}, 0, refNames[0])
+	ids := make([]*channelz.Identifier, 4)
+	ids[0] = channelz.RegisterChannel(&dummyChannel{}, nil, refNames[0])
 	channelz.AddTraceEvent(logger, ids[0], 0, &channelz.TraceEventDesc{
 		Desc:     "Channel Created",
 		Severity: channelz.CtInfo,
 	})
-	ids[1] = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[1])
+	var err error
+	ids[1], err = channelz.RegisterSubChannel(&dummyChannel{}, ids[0], refNames[1])
+	if err != nil {
+		t.Fatalf("channelz.RegisterSubChannel() failed: %v", err)
+	}
 	channelz.AddTraceEvent(logger, ids[1], 0, &channelz.TraceEventDesc{
 		Desc:     subchanCreated,
 		Severity: channelz.CtInfo,
 		Parent: &channelz.TraceEventDesc{
-			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", ids[0]),
+			Desc:     fmt.Sprintf("Nested Channel(id:%d) created", ids[0].Int()),
 			Severity: channelz.CtInfo,
 		},
 	})
-	ids[2] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[2])
-	ids[3] = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[3])
+	ids[2], _ = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[2])
+	ids[3], _ = channelz.RegisterNormalSocket(&dummySocket{}, ids[1], refNames[3])
 	channelz.AddTraceEvent(logger, ids[1], 0, &channelz.TraceEventDesc{
 		Desc:     subchanConnectivityChange,
 		Severity: channelz.CtInfo,
@@ -612,13 +628,13 @@ func (s) TestGetSubChannel(t *testing.T) {
 	svr := newCZServer()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	resp, _ := svr.GetSubchannel(ctx, &channelzpb.GetSubchannelRequest{SubchannelId: ids[1]})
+	resp, _ := svr.GetSubchannel(ctx, &channelzpb.GetSubchannelRequest{SubchannelId: ids[1].Int()})
 	metrics := resp.GetSubchannel()
 	want := map[int64]string{
-		ids[2]: refNames[2],
-		ids[3]: refNames[3],
+		ids[2].Int(): refNames[2],
+		ids[3].Int(): refNames[3],
 	}
-	if !reflect.DeepEqual(convertSocketRefSliceToMap(metrics.GetSocketRef()), want) {
+	if !cmp.Equal(convertSocketRefSliceToMap(metrics.GetSocketRef()), want) {
 		t.Fatalf("metrics.GetSocketRef() want %#v: got: %#v", want, metrics.GetSocketRef())
 	}
 
@@ -726,20 +742,27 @@ func (s) TestGetSocket(t *testing.T) {
 		},
 	}
 	svr := newCZServer()
-	ids := make([]int64, len(ss))
+	ids := make([]*channelz.Identifier, len(ss))
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	defer channelz.RemoveEntry(svrID)
 	for i, s := range ss {
-		ids[i] = channelz.RegisterNormalSocket(s, svrID, strconv.Itoa(i))
+		ids[i], _ = channelz.RegisterNormalSocket(s, svrID, strconv.Itoa(i))
 		defer channelz.RemoveEntry(ids[i])
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	for i, s := range ss {
-		resp, _ := svr.GetSocket(ctx, &channelzpb.GetSocketRequest{SocketId: ids[i]})
-		metrics := resp.GetSocket()
-		if !reflect.DeepEqual(metrics.GetRef(), &channelzpb.SocketRef{SocketId: ids[i], Name: strconv.Itoa(i)}) || !reflect.DeepEqual(socketProtoToStruct(metrics), s) {
-			t.Fatalf("resp.GetSocket() want: metrics.GetRef() = %#v and %#v, got: metrics.GetRef() = %#v and %#v", &channelzpb.SocketRef{SocketId: ids[i], Name: strconv.Itoa(i)}, s, metrics.GetRef(), socketProtoToStruct(metrics))
+		resp, _ := svr.GetSocket(ctx, &channelzpb.GetSocketRequest{SocketId: ids[i].Int()})
+		got, want := resp.GetSocket().GetRef(), &channelzpb.SocketRef{SocketId: ids[i].Int(), Name: strconv.Itoa(i)}
+		if !cmp.Equal(got, want, cmpopts.IgnoreUnexported(channelzpb.SocketRef{})) {
+			t.Fatalf("resp.GetSocket() returned metrics.GetRef() = %#v, want %#v", got, want)
+		}
+		socket, err := socketProtoToStruct(resp.GetSocket())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(s, socket, protocmp.Transform(), cmp.AllowUnexported(dummySocket{})); diff != "" {
+			t.Fatalf("unexpected socket, diff (-want +got):\n%s", diff)
 		}
 	}
 }
