@@ -27,7 +27,7 @@ import (
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/proto/grpc_lookup_v1"
+	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -65,7 +65,7 @@ func (rls) ParseClusterSpecifierConfig(cfg proto.Message) (clusterspecifier.Bala
 	if !ok {
 		return nil, fmt.Errorf("rls_csp: error parsing config %v: unknown type %T", cfg, cfg)
 	}
-	rlcs := new(grpc_lookup_v1.RouteLookupClusterSpecifier)
+	rlcs := new(rlspb.RouteLookupClusterSpecifier)
 
 	if err := ptypes.UnmarshalAny(any, rlcs); err != nil {
 		return nil, fmt.Errorf("rls_csp: error parsing config %v: %v", cfg, err)
