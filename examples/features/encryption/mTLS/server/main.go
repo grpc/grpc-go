@@ -22,8 +22,10 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net"
 
@@ -52,9 +54,14 @@ func main() {
 		log.Fatalf("failed to load key pair: %s", err)
 	}
 
-	ca, err := data.NewCertPool(data.Path("x509/client_ca_cert.pem"))
+	ca := x509.NewCertPool()
+	caFilePath := data.Path("x509/client_ca_cert.pem")
+	caBytes, err := ioutil.ReadFile(caFilePath)
 	if err != nil {
-		log.Fatalf("failed to load trusted client CAs: %s", err)
+		log.Fatalf("failed to read ca cert %q: %v", caFilePath, err)
+	}
+	if ok := ca.AppendCertsFromPEM(caBytes); !ok {
+		log.Fatalf("failed to parse %q", caFilePath)
 	}
 
 	tlsConfig := &tls.Config{
