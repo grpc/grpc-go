@@ -165,11 +165,10 @@ func channelProtoToStruct(c *channelzpb.Channel) (*dummyChannel, error) {
 	dc.callsStarted = pdata.CallsStarted
 	dc.callsSucceeded = pdata.CallsSucceeded
 	dc.callsFailed = pdata.CallsFailed
-	ts, err := ptypes.Timestamp(pdata.GetLastCallStartedTimestamp())
-	if err != nil {
+	if err := pdata.GetLastCallStartedTimestamp().CheckValid(); err != nil {
 		return nil, err
 	}
-	dc.lastCallStartedTimestamp = ts
+	dc.lastCallStartedTimestamp = pdata.GetLastCallStartedTimestamp().AsTime()
 	return dc, nil
 }
 
@@ -179,11 +178,10 @@ func serverProtoToStruct(s *channelzpb.Server) (*dummyServer, error) {
 	ds.callsStarted = pdata.CallsStarted
 	ds.callsSucceeded = pdata.CallsSucceeded
 	ds.callsFailed = pdata.CallsFailed
-	ts, err := ptypes.Timestamp(pdata.GetLastCallStartedTimestamp())
-	if err != nil {
+	if err := pdata.GetLastCallStartedTimestamp().CheckValid(); err != nil {
 		return nil, err
 	}
-	ds.lastCallStartedTimestamp = ts
+	ds.lastCallStartedTimestamp = pdata.GetLastCallStartedTimestamp().AsTime()
 	return ds, nil
 }
 
@@ -196,26 +194,22 @@ func socketProtoToStruct(s *channelzpb.Socket) (*dummySocket, error) {
 	ds.messagesSent = pdata.GetMessagesSent()
 	ds.messagesReceived = pdata.GetMessagesReceived()
 	ds.keepAlivesSent = pdata.GetKeepAlivesSent()
-	ts, err := ptypes.Timestamp(pdata.GetLastLocalStreamCreatedTimestamp())
-	if err != nil {
+	if err := pdata.GetLastLocalStreamCreatedTimestamp().CheckValid(); err != nil {
 		return nil, err
 	}
-	ds.lastLocalStreamCreatedTimestamp = ts
-	ts, err = ptypes.Timestamp(pdata.GetLastRemoteStreamCreatedTimestamp())
-	if err != nil {
+	ds.lastLocalStreamCreatedTimestamp = pdata.GetLastLocalStreamCreatedTimestamp().AsTime()
+	if err := pdata.GetLastRemoteStreamCreatedTimestamp().CheckValid(); err != nil {
 		return nil, err
 	}
-	ds.lastRemoteStreamCreatedTimestamp = ts
-	ts, err = ptypes.Timestamp(pdata.GetLastMessageSentTimestamp())
-	if err != nil {
+	ds.lastRemoteStreamCreatedTimestamp = pdata.GetLastRemoteStreamCreatedTimestamp().AsTime()
+	if err := pdata.GetLastMessageSentTimestamp().CheckValid(); err != nil {
 		return nil, err
 	}
-	ds.lastMessageSentTimestamp = ts
-	ts, err = ptypes.Timestamp(pdata.GetLastMessageReceivedTimestamp())
-	if err != nil {
+	ds.lastMessageSentTimestamp = pdata.GetLastMessageSentTimestamp().AsTime()
+	if err := pdata.GetLastMessageReceivedTimestamp().CheckValid(); err != nil {
 		return nil, err
 	}
-	ds.lastMessageReceivedTimestamp = ts
+	ds.lastMessageReceivedTimestamp = pdata.GetLastMessageReceivedTimestamp().AsTime()
 	if v := pdata.GetLocalFlowControlWindow(); v != nil {
 		ds.localFlowControlWindow = v.Value
 	}
