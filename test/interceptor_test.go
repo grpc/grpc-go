@@ -150,6 +150,10 @@ func (s) TestChainUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
 	}
 }
 
+// TestChainOnBaseUnaryClientInterceptor_ContextValuePropagation verifies that
+// unary interceptors specified as a base interceptor or as a chain interceptor
+// receive context values specified in the original call as well as the ones
+// specified by interceptors in the chain.
 func (s) TestChainOnBaseUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
 	errCh := testutils.NewChannel()
 	baseInt := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
@@ -199,7 +203,7 @@ func (s) TestChainOnBaseUnaryClientInterceptor_ContextValuePropagation(t *testin
 }
 
 // TestChainStreamClientInterceptor_ContextValuePropagation verifies that a
-// chain of stream interceptors recieve context values specified in the original
+// chain of stream interceptors receive context values specified in the original
 // call as well as the ones specified by the prior interceptors in the chain.
 func (s) TestChainStreamClientInterceptor_ContextValuePropagation(t *testing.T) {
 	errCh := testutils.NewChannel()
