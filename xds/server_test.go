@@ -711,7 +711,18 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 	fs, clientCh, cleanup := setupOverrides()
 	defer cleanup()
 
-	server := NewGRPCServer()
+	// Create a server option to get notified about serving mode changes. We don't
+	// do anything other than throwing a log entry here. But this is required,
+	// since the server code emits a log entry at the default level (which is
+	// ERROR) if no callback is registered for serving mode changes. Our
+	// testLogger fails the test if there is any log entry at ERROR level. It does
+	// provide an ExpectError()  method, but that takes a string and it would be
+	// painful to construct the exact error message expected here. Instead this
+	// works just fine.
+	modeChangeOpt := ServingModeCallback(func(addr net.Addr, args ServingModeChangeArgs) {
+		t.Logf("Serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
+	})
+	server := NewGRPCServer(modeChangeOpt)
 	defer server.Stop()
 
 	lis, err := testutils.LocalTCPListener()

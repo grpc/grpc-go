@@ -60,8 +60,6 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 	updateCh := make(chan connectivity.ServingMode, 1)
 
 	// Create a server option to get notified about serving mode changes.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
 		t.Logf("serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
 		updateCh <- args.Mode
@@ -82,6 +80,8 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener},
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		case lis2.Addr().String():
 			updateCh2 <- args.Mode
 		default:
-			t.Logf("serving mode callback invoked for unknown listener address: %q", addr.String())
+			t.Errorf("serving mode callback invoked for unknown listener address: %q", addr.String())
 		}
 	})
 
@@ -240,7 +240,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh1:
 		if mode != connectivity.ServingModeServing {
-			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
+			t.Fatalf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
 		}
 	}
 	select {
@@ -248,7 +248,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh2:
 		if mode != connectivity.ServingModeServing {
-			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
+			t.Fatalf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
 		}
 	}
 
@@ -274,7 +274,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener1},
 	}); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	// Wait for lis2 to move to "not-serving" mode.
@@ -283,7 +283,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh2:
 		if mode != connectivity.ServingModeNotServing {
-			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeNotServing)
+			t.Fatalf("listener received new mode %v, want %v", mode, connectivity.ServingModeNotServing)
 		}
 	}
 
@@ -298,7 +298,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{},
 	}); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	// Wait for lis1 to move to "not-serving" mode. lis2 was already removed
@@ -309,7 +309,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh1:
 		if mode != connectivity.ServingModeNotServing {
-			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeNotServing)
+			t.Fatalf("listener received new mode %v, want %v", mode, connectivity.ServingModeNotServing)
 		}
 	}
 
@@ -330,7 +330,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{listener1, listener2},
 	}); err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 
 	// Wait for both listeners to move to "serving" mode.
@@ -339,7 +339,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh1:
 		if mode != connectivity.ServingModeServing {
-			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
+			t.Fatalf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
 		}
 	}
 	select {
@@ -347,7 +347,7 @@ func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
 		t.Fatalf("timed out waiting for a mode change update: %v", err)
 	case mode := <-updateCh2:
 		if mode != connectivity.ServingModeServing {
-			t.Errorf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
+			t.Fatalf("listener received new mode %v, want %v", mode, connectivity.ServingModeServing)
 		}
 	}
 
