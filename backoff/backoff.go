@@ -27,6 +27,7 @@ package backoff
 import "time"
 
 // Config defines the configuration options for backoff.
+
 type Config struct {
 	// BaseDelay is the amount of time to backoff after the first failure.
 	BaseDelay time.Duration
