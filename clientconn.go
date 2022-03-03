@@ -707,10 +707,6 @@ func (cc *ClientConn) switchBalancer(name string) {
 	}
 
 	channelz.Infof(logger, cc.channelzID, "ClientConn switching balancer to %q", name)
-	if cc.dopts.balancerBuilder != nil {
-		channelz.Info(logger, cc.channelzID, "ignoring balancer switching: Balancer DialOption used instead")
-		return
-	}
 	if cc.balancerWrapper != nil {
 		// Don't hold cc.mu while closing the balancers. The balancers may call
 		// methods that require cc.mu (e.g. cc.NewSubConn()). Holding the mutex
@@ -970,6 +966,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 	return t, done, nil
 }
 
+// Caller must hold cc.mu.
 func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSelector iresolver.ConfigSelector, addrs []resolver.Address) {
 	if sc == nil {
 		// should never reach here.
@@ -992,35 +989,43 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSel
 		cc.retryThrottler.Store((*retryThrottler)(nil))
 	}
 
-	if cc.dopts.balancerBuilder == nil {
-		// Only look at balancer types and switch balancer if balancer dial
-		// option is not set.
-		var newBalancerName string
-		if cc.sc != nil && cc.sc.lbConfig != nil {
-			newBalancerName = cc.sc.lbConfig.name
-		} else {
-			var isGRPCLB bool
-			for _, a := range addrs {
-				if a.Type == resolver.GRPCLB {
-					isGRPCLB = true
-					break
-				}
-			}
-			if isGRPCLB {
-				newBalancerName = grpclbName
-			} else if cc.sc != nil && cc.sc.LB != nil {
-				newBalancerName = *cc.sc.LB
-			} else {
-				newBalancerName = PickFirstBalancerName
-			}
+	// If the balancer builder dialOption is set, we use that all the time
+	// instead of determining the new balancer name from the service config.
+	if cc.dopts.balancerBuilder != nil {
+		if cc.balancerWrapper != nil {
+			return
 		}
-		cc.switchBalancer(newBalancerName)
-	} else if cc.balancerWrapper == nil {
-		// Balancer dial option was set, and this is the first time handling
-		// resolved addresses. Build a balancer with dopts.balancerBuilder.
+		// First time building the balancer specified through the dialOption.
 		cc.curBalancerName = cc.dopts.balancerBuilder.Name()
 		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, cc.balancerBuildOpts)
+		return
 	}
+
+	name := determineNewBalancerName(sc, addrs)
+	cc.switchBalancer(name)
+}
+
+// determineNewBalancerName returns the name of the new LB policy based on the
+// newly received service config and addresses from the name resolver.
+//
+// The following order of preference is used:
+// 1. If lbConfig field of service config is set, get balancer name from there
+// 2. If any of the addresses is of type resolver.GRPCLB, use "grpclb"
+// 3. If the deprecated LB field of service config is set, use that
+// 4. Use the default LB policy, which is "pick_first"
+func determineNewBalancerName(sc *ServiceConfig, addrs []resolver.Address) string {
+	if sc != nil && sc.lbConfig != nil {
+		return sc.lbConfig.name
+	}
+	for _, a := range addrs {
+		if a.Type == resolver.GRPCLB {
+			return grpclbName
+		}
+	}
+	if sc != nil && sc.LB != nil {
+		return *sc.LB
+	}
+	return PickFirstBalancerName
 }
 
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOptions) {
