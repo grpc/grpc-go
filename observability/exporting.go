@@ -25,6 +25,7 @@ import (
 
 	gcplogging "cloud.google.com/go/logging"
 	grpclogrecordpb "google.golang.org/grpc/observability/internal/logging"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 // genericLoggingExporter is the interface of logging exporter for gRPC
@@ -74,7 +75,25 @@ var logLevelToSeverity = map[grpclogrecordpb.GrpcLogRecord_LogLevel]gcplogging.S
 	grpclogrecordpb.GrpcLogRecord_LOG_LEVEL_CRITICAL: 600,
 }
 
+var protoToJSONOptions = &protojson.MarshalOptions{
+	UseProtoNames:  false,
+	UseEnumNumbers: false,
+}
+
 func (cle *cloudLoggingExporter) EmitGrpcLogRecord(l *grpclogrecordpb.GrpcLogRecord) {
+	// Converts the log record content to a more readable format via protojson.
+	// This is technically a hack, will be removed once we removed our
+	// dependencies to Cloud Logging SDK.
+	jsonBytes, err := protoToJSONOptions.Marshal(l)
+	if err != nil {
+		logger.Errorf("unable to marshal log record: %v", l)
+	}
+	var payload map[string]interface{}
+	err = json.Unmarshal(jsonBytes, &payload)
+	if err != nil {
+		logger.Errorf("unable to unmarshal bytes to JSON: %v", jsonBytes)
+	}
+	// Converts severity from log level
 	var severity, ok = logLevelToSeverity[l.LogLevel]
 	if !ok {
 		logger.Errorf("invalid log level: %v", l.LogLevel)
@@ -83,7 +102,7 @@ func (cle *cloudLoggingExporter) EmitGrpcLogRecord(l *grpclogrecordpb.GrpcLogRec
 	entry := gcplogging.Entry{
 		Timestamp: l.Timestamp.AsTime(),
 		Severity:  severity,
-		Payload:   l,
+		Payload:   payload,
 	}
 	cle.logger.Log(entry)
 	if logger.V(2) {
