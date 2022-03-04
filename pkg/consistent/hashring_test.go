@@ -190,7 +190,8 @@ const (
 // (added, removed, or none)
 func perturb(require *require.Assertions, ring *Hashring, spread uint8,
 	numTestKeys int) (before map[string][]Member,
-	perturbation perturbationKind, affectedMember member) {
+	perturbation perturbationKind, affectedMember member,
+) {
 	before = make(map[string][]Member)
 	for i := 0; i < numTestKeys; i++ {
 		found, err := ring.FindN([]byte(strconv.Itoa(i)), spread)
@@ -225,7 +226,8 @@ func perturb(require *require.Assertions, ring *Hashring, spread uint8,
 // asserts that the keys were remapped correctly.
 func verify(require *require.Assertions, ring *Hashring,
 	before map[string][]Member, perturbation perturbationKind,
-	affectedMember member, spread uint8, numTestKeys int) {
+	affectedMember member, spread uint8, numTestKeys int,
+) {
 	for i := 0; i < numTestKeys; i++ {
 		key := strconv.Itoa(i)
 		found, err := ring.FindN([]byte(key), spread)
