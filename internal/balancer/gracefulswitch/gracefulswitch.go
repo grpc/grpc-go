@@ -237,7 +237,6 @@ func (gsb *Balancer) Close() {
 // SubConns update this set before being forwarded to the parent ClientConn.
 // State updates from the wrapped balancer can result in invocation of the
 // graceful switch logic.
-
 type balancerWrapper struct {
 	balancer.Balancer
 	gsb *Balancer
@@ -258,8 +257,10 @@ func (bw *balancerWrapper) UpdateSubConnState(sc balancer.SubConn, state balance
 	bw.Balancer.UpdateSubConnState(sc, state)
 }
 
+// Close closes the underlying LB policy and removes the subconns it created. bw
+// must not be referenced via balancerCurrent or balancerPending in gsb when
+// called. gsb.mu must not be held.  Does not panic with a nil receiver.
 func (bw *balancerWrapper) Close() {
-	// bw must not be referenced via balancerCurrent or balancerPending in gsb
 	// before Close is called.
 	if bw == nil {
 		return
