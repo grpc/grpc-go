@@ -66,10 +66,7 @@ func fetchDefaultProjectID(ctx context.Context) string {
 	return ""
 }
 
-// parseObservabilityConfig parses and processes the config for observability,
-// currently, we only support loading config from static ENV var. But we might
-// support dynamic configuration with control plane in future.
-func parseObservabilityConfig(ctx context.Context) *configpb.ObservabilityConfig {
+func parseObservabilityConfig() *configpb.ObservabilityConfig {
 	// Parse the config from ENV var
 	var config configpb.ObservabilityConfig
 	content := os.Getenv(envKeyObservabilityConfig)
@@ -77,19 +74,36 @@ func parseObservabilityConfig(ctx context.Context) *configpb.ObservabilityConfig
 		if err := protojson.Unmarshal([]byte(content), &config); err != nil {
 			logger.Warningf("failed to load observability config from env GRPC_OBSERVABILITY_CONFIG: %s", err)
 		}
+		configJSON, _ := protojson.Marshal(&config)
+		logger.Infof("Parsed ObservabilityConfig: %v", string(configJSON))
+		return &config
 	}
-	// Fill in GCP project id if not present
+	// If the ENV var doesn't exist, do nothing
+	return nil
+}
+
+func maybeUpdateProjectIDInObservabilityConfig(ctx context.Context, config *configpb.ObservabilityConfig) {
+	if config == nil {
+		return
+	}
+	if config.ExporterConfig != nil && config.ExporterConfig.ProjectId != "" {
+		// User already specified project ID, do nothing
+		return
+	}
+	// Try to fetch the GCP project id
+	projectID := fetchDefaultProjectID(ctx)
+	if projectID == "" {
+		// No GCP project id found in well-known sources
+		return
+	}
 	if config.ExporterConfig == nil {
 		config.ExporterConfig = &configpb.ObservabilityConfig_ExporterConfig{
-			ProjectId: fetchDefaultProjectID(ctx),
+			ProjectId: projectID,
 		}
 	} else {
-		// If any default exporter is required, fill the default project id
 		if config.ExporterConfig.ProjectId == "" {
-			config.ExporterConfig.ProjectId = fetchDefaultProjectID(ctx)
+			config.ExporterConfig.ProjectId = projectID
 		}
 	}
-	configJSON, _ := protojson.Marshal(&config)
-	logger.Infof("Using ObservabilityConfig: %v", string(configJSON))
-	return &config
+	logger.Infof("Discovered GCP project ID: %v", projectID)
 }

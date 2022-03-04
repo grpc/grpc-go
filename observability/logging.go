@@ -48,7 +48,10 @@ func translateMetadata(m *binlogpb.Metadata) *grpclogrecordpb.GrpcLogRecord_Meta
 type cloudLoggingSink struct {
 	callIDToUUID map[uint64]string
 	lock         sync.RWMutex
+	exporter     genericLoggingExporter
 }
+
+var defaultCloudLoggingSink *cloudLoggingSink
 
 func (cls *cloudLoggingSink) getUUID(callID uint64) string {
 	var (
@@ -73,9 +76,17 @@ func (cls *cloudLoggingSink) removeEntry(callID uint64) {
 	delete(cls.callIDToUUID, callID)
 }
 
+func (cls *cloudLoggingSink) SetExporter(exporter genericLoggingExporter) {
+	cls.exporter = exporter
+}
+
 // Write translates a Binary Logging log entry to a GrpcLogEntry used by the gRPC
 // Observability project and emits it.
 func (cls *cloudLoggingSink) Write(binlogEntry *binlogpb.GrpcLogEntry) error {
+	if cls.exporter == nil {
+		return nil
+	}
+
 	var (
 		grpcLogRecord grpclogrecordpb.GrpcLogRecord
 		callEnded     bool
@@ -168,7 +179,8 @@ func (cls *cloudLoggingSink) Write(binlogEntry *binlogpb.GrpcLogEntry) error {
 	}
 	// CloudLogging client doesn't return error on entry write. Entry writes
 	// don't mean the data will be uploaded immediately.
-	return emit(&grpcLogRecord)
+	cls.exporter.EmitGrpcLogRecord(&grpcLogRecord)
+	return nil
 }
 
 // Close closes the cloudLoggingSink, which is a noop due to no state is
@@ -199,8 +211,12 @@ func compileBinaryLogControlString(config *configpb.ObservabilityConfig) string 
 }
 
 func startLogging(config *configpb.ObservabilityConfig) {
+	if config == nil {
+		return
+	}
 	var binlogConfig = compileBinaryLogControlString(config)
 	iblog.SetLogger(iblog.NewLoggerFromConfigString(binlogConfig))
-	binarylog.SetSink(newCloudLoggingSink())
+	defaultCloudLoggingSink = newCloudLoggingSink()
+	binarylog.SetSink(defaultCloudLoggingSink)
 	logger.Infof("Start logging with config [%v] and sink [%p]", binlogConfig, &iblog.DefaultSink)
 }

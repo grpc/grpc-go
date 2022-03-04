@@ -48,18 +48,17 @@ type cloudLoggingExporter struct {
 	logger    *gcplogging.Logger
 }
 
-func newCloudLoggingExporter(ctx context.Context, projectID string) *cloudLoggingExporter {
+func newCloudLoggingExporter(ctx context.Context, projectID string) (*cloudLoggingExporter, error) {
 	c, err := gcplogging.NewClient(ctx, fmt.Sprintf("projects/%v", projectID))
 	if err != nil {
-		logger.Errorf("failed to create cloudLoggingExporter: %v", err)
-		return nil
+		return nil, fmt.Errorf("failed to create cloudLoggingExporter: %v", err)
 	}
 	logger.Infof("successfully created cloudLoggingExporter")
 	return &cloudLoggingExporter{
 		projectID: projectID,
 		client:    c,
 		logger:    c.Logger("grpc"),
-	}
+	}, nil
 }
 
 // mapLogLevelToSeverity maps the gRPC defined log level to Cloud Logging's
@@ -126,8 +125,10 @@ func (cle *cloudLoggingExporter) Close() error {
 	return nil
 }
 
-func createDefaultLoggingExporter(ctx context.Context, projectID string) {
-	loggingExporter = newCloudLoggingExporter(ctx, projectID)
+func createDefaultLoggingExporter(ctx context.Context, projectID string) error {
+	var err error
+	loggingExporter, err = newCloudLoggingExporter(ctx, projectID)
+	return err
 }
 
 func closeLoggingExporter() {
@@ -137,13 +138,4 @@ func closeLoggingExporter() {
 		}
 		loggingExporter = nil
 	}
-}
-
-// emit is the wrapper for producing a log entry, hiding all the abstraction details.
-func emit(l *grpclogrecordpb.GrpcLogRecord) error {
-	if loggingExporter == nil {
-		return fmt.Errorf("default logging exporter is nil")
-	}
-	loggingExporter.EmitGrpcLogRecord(l)
-	return nil
 }

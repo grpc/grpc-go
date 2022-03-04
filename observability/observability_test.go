@@ -214,9 +214,12 @@ func (te *test) enablePluginWithFakeExporters() {
 		te.t.Fatalf("failed to convert config to JSON: %v", err)
 	}
 	os.Setenv(envKeyObservabilityConfig, string(configJSON))
+	// Explicitly re-parse the ObservabilityConfig
+	internalInit()
 	Start(context.Background())
 	// Injects the fake exporter for testing purposes
 	loggingExporter = te.fle
+	defaultCloudLoggingSink.SetExporter(te.fle)
 }
 
 func checkEventCommon(t *testing.T, seen *grpclogrecordpb.GrpcLogRecord) {

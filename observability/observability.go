@@ -30,13 +30,32 @@ import (
 
 	"google.golang.org/grpc/binarylog"
 	"google.golang.org/grpc/grpclog"
+	configpb "google.golang.org/grpc/observability/internal/config"
 )
 
-var logger = grpclog.Component("observability")
+var (
+	logger = grpclog.Component("observability")
+	config *configpb.ObservabilityConfig
+)
+
+func init() {
+	internalInit()
+}
+
+// internalInit exists to allow unit tests to re-parse ENV var.
+func internalInit() {
+	config = parseObservabilityConfig()
+
+	// Logging is controlled by the config at methods level. Users might bring
+	// their in-house exporter. If logging is disabled, binary logging also
+	// won't start. The overhead should be minimum.
+	startLogging(config)
+}
 
 // Start is the opt-in API for gRPC Observability plugin. This function should
-// be invoked before creating any gRPC clients or servers, otherwise, they won't
-// be instrumented. At high-level, this API does the following:
+// be invoked in the main function, and before creating any gRPC clients or
+// servers, otherwise, they might not be instrumented. At high-level, this
+// module does the following:
 //
 //   - it loads observability config from environment;
 //   - it registers default exporters if not disabled by the config;
@@ -44,17 +63,19 @@ var logger = grpclog.Component("observability")
 //
 // Note: currently, the binarylog module only supports one sink, so using the
 // "observability" module will conflict with existing binarylog usage.
-func Start(ctx context.Context) {
-	config := parseObservabilityConfig(ctx)
-	// If the default logging exporter is not disabled, register one.
-	if config.ExporterConfig.ProjectId != "" && !config.ExporterConfig.DisableDefaultLoggingExporter {
-		createDefaultLoggingExporter(ctx, config.ExporterConfig.ProjectId)
-	}
+// Note: handle the error
+func Start(ctx context.Context) error {
+	// If no project ID is found, that's ok
+	maybeUpdateProjectIDInObservabilityConfig(ctx, config)
 
-	// Logging is controlled by the config at methods level. Users might bring
-	// their in-house exporter. If logging is disabled, binary logging also
-	// won't start. The overhead should be minimum.
-	startLogging(config)
+	// If the default logging exporter is not disabled, register one.
+	if config != nil && config.ExporterConfig.ProjectId != "" && !config.ExporterConfig.DisableDefaultLoggingExporter {
+		if err := createDefaultLoggingExporter(ctx, config.ExporterConfig.ProjectId); err != nil {
+			return err
+		}
+		defaultCloudLoggingSink.SetExporter(loggingExporter)
+	}
+	return nil
 }
 
 // End is the clean-up API for gRPC Observability plugin. It is expected to be
