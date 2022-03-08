@@ -461,15 +461,15 @@ var _ ClientConnInterface = (*ClientConn)(nil)
 // handshakes. It also handles errors on established connections by
 // re-resolving the name and reconnecting.
 type ClientConn struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx    context.Context    // Initialized using the background context at dial time.
+	cancel context.CancelFunc // Cancelled on close.
 
 	// The following are initialized at dial time, and are read-only after that.
 	target            string                // User's dial target.
 	parsedTarget      resolver.Target       // See parseTargetAndFindResolver().
 	authority         string                // See determineAuthority().
 	dopts             dialOptions           // Default and user specified dial options.
-	balancerBuildOpts balancer.BuildOptions // Options passed to balancer at build time.
+	balancerBuildOpts balancer.BuildOptions // Balancer build options, sourced from user provided options to dial.
 	channelzID        *channelz.Identifier  // Channelz identifier for the channel.
 
 	// The following are initialized at dial time, and maybe mutated later on.
@@ -486,14 +486,15 @@ type ClientConn struct {
 	// good update. This will be used to determine if a balancer is configured on
 	// the channel instead of checking for `cc.balancerWrapper != nil`.
 
-	// mu protects most of the state associated with the channel.
+	// mu protects the following fields.
+	// TODO: split mu so the same mutex isn't used for everything.
 	mu              sync.RWMutex
 	resolverWrapper *ccResolverWrapper         // Initialized at dial time.
-	sc              *ServiceConfig             // Service config received from the resolver.
-	conns           map[*addrConn]struct{}     // Set to nil, on close.
+	sc              *ServiceConfig             // Latest service config received from the resolver.
+	conns           map[*addrConn]struct{}     // Set to nil on close.
 	mkp             keepalive.ClientParameters // May be updated upon receipt of a GoAway.
 	curBalancerName string                     // Current LB policy name.
-	balancerWrapper *ccBalancerWrapper         // Updated from service config.
+	balancerWrapper *ccBalancerWrapper         // TODO: Use gracefulswitch balancer to be able to initialize this once and never rewrite.
 	retryThrottler  atomic.Value               // Updated from service config.
 
 	lceMu               sync.Mutex // protects lastConnectionError
