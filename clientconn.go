@@ -464,31 +464,37 @@ type ClientConn struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	target       string
-	parsedTarget resolver.Target
-	authority    string
-	dopts        dialOptions
-	csMgr        *connectivityStateManager
+	// The following are initialized at dial time, and are read-only after that.
+	target            string                // User's dial target.
+	parsedTarget      resolver.Target       // See parseTargetAndFindResolver().
+	authority         string                // See determineAuthority().
+	dopts             dialOptions           // Default and user specified dial options.
+	balancerBuildOpts balancer.BuildOptions // Options passed to balancer at build time.
+	channelzID        *channelz.Identifier  // Channelz identifier for the channel.
 
-	balancerBuildOpts balancer.BuildOptions
-	blockingpicker    *pickerWrapper
-
+	// The following are initialized at dial time, and maybe mutated later on.
+	// They provide their own synchronization.
+	csMgr              *connectivityStateManager
+	blockingpicker     *pickerWrapper
 	safeConfigSelector iresolver.SafeConfigSelector
+	czData             *channelzData
 
-	mu              sync.RWMutex
-	resolverWrapper *ccResolverWrapper
-	sc              *ServiceConfig
-	conns           map[*addrConn]struct{}
-	// Keepalive parameter can be updated if a GoAway is received.
-	mkp             keepalive.ClientParameters
-	curBalancerName string
-	balancerWrapper *ccBalancerWrapper
-	retryThrottler  atomic.Value
-
+	// firstResolveEvent is used to track whether the name resolver sent us at
+	// least one update. RPCs block on this event.
 	firstResolveEvent *grpcsync.Event
+	// TODO: Add a goodResolveEvent to track whether the name resolver sent us a
+	// good update. This will be used to determine if a balancer is configured on
+	// the channel instead of checking for `cc.balancerWrapper != nil`.
 
-	channelzID *channelz.Identifier
-	czData     *channelzData
+	// mu protects most of the state associated with the channel.
+	mu              sync.RWMutex
+	resolverWrapper *ccResolverWrapper         // Initialized at dial time.
+	sc              *ServiceConfig             // Service config received from the resolver.
+	conns           map[*addrConn]struct{}     // Set to nil, on close.
+	mkp             keepalive.ClientParameters // May be updated upon receipt of a GoAway.
+	curBalancerName string                     // Current LB policy name.
+	balancerWrapper *ccBalancerWrapper         // Updated from service config.
+	retryThrottler  atomic.Value               // Updated from service config.
 
 	lceMu               sync.Mutex // protects lastConnectionError
 	lastConnectionError error
