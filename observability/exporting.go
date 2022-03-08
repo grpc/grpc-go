@@ -28,19 +28,19 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
-// genericLoggingExporter is the interface of logging exporter for gRPC
+// loggingExporter is the interface of logging exporter for gRPC
 // Observability. Ideally, we should use what OTEL provides, but their Golang
 // implementation is in "frozen" state. So, this plugin provides a minimum
 // interface to satisfy testing purposes.
-type genericLoggingExporter interface {
+type loggingExporter interface {
 	// EmitGrpcLogRecord writes a gRPC LogRecord to cache without blocking.
 	EmitGrpcLogRecord(*grpclogrecordpb.GrpcLogRecord)
 	// Close flushes all pending data and closes the exporter.
 	Close() error
 }
 
-// loggingExporter is the global logging exporter, may be nil.
-var loggingExporter genericLoggingExporter
+// globalLoggingExporter is the global logging exporter, may be nil.
+var globalLoggingExporter loggingExporter
 
 type cloudLoggingExporter struct {
 	projectID string
@@ -106,7 +106,7 @@ func (cle *cloudLoggingExporter) EmitGrpcLogRecord(l *grpclogrecordpb.GrpcLogRec
 	cle.logger.Log(entry)
 	if logger.V(2) {
 		eventJSON, _ := json.Marshal(&entry)
-		logger.Infof("uploading event to CloudLogging: %s", eventJSON)
+		logger.Infof("Uploading event to CloudLogging: %s", eventJSON)
 	}
 }
 
@@ -121,21 +121,21 @@ func (cle *cloudLoggingExporter) Close() error {
 			return err
 		}
 	}
-	logger.Infof("closed CloudLogging exporter")
+	logger.Infof("Closed CloudLogging exporter")
 	return nil
 }
 
 func createDefaultLoggingExporter(ctx context.Context, projectID string) error {
 	var err error
-	loggingExporter, err = newCloudLoggingExporter(ctx, projectID)
+	globalLoggingExporter, err = newCloudLoggingExporter(ctx, projectID)
 	return err
 }
 
 func closeLoggingExporter() {
-	if loggingExporter != nil {
-		if err := loggingExporter.Close(); err != nil {
-			logger.Infof("failed to close logging exporter: %v", err)
+	if globalLoggingExporter != nil {
+		if err := globalLoggingExporter.Close(); err != nil {
+			logger.Infof("Failed to close logging exporter: %v", err)
 		}
-		loggingExporter = nil
+		globalLoggingExporter = nil
 	}
 }

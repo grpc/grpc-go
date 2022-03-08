@@ -30,7 +30,7 @@ import (
 )
 
 const (
-	envKeyObservabilityConfig = "GRPC_OBSERVABILITY_CONFIG"
+	envKeyObservabilityConfig = "GRPC_CONFIG_OBSERVABILITY"
 )
 
 // gcpDefaultCredentials is the JSON loading struct used to get project id.
@@ -41,41 +41,41 @@ type gcpDefaultCredentials struct {
 // fetchDefaultProjectID fetches the default GCP project id from environment.
 func fetchDefaultProjectID(ctx context.Context) string {
 	// Step 1: Check ENV var
-	if s := os.Getenv("GCLOUD_PROJECT_ID"); s != "" {
+	if s := os.Getenv("GOOGLE_CLOUD_PROJECT"); s != "" {
 		return s
 	}
 	// Step 2: Check default credential
-	if credentials, err := google.FindDefaultCredentials(ctx, gcplogging.WriteScope); err == nil {
-		logger.Infof("found Google Default Credential")
-		// Step 2.1: Check if the ProjectID is in the plain view
-		if credentials.ProjectID != "" {
-			return credentials.ProjectID
-		} else if len(credentials.JSON) > 0 {
+	credentials, err := google.FindDefaultCredentials(ctx, gcplogging.WriteScope)
+	if err != nil {
+		logger.Info("Failed to locate Google Default Credential: %v", err)
+		return ""
+	}
+	logger.Infof("Found Google Default Credential")
+	// Step 2.1: Check if the ProjectID is in the plain view
+	if credentials.ProjectID == "" {
+		if len(credentials.JSON) > 0 {
 			// Step 2.2: Check if the JSON form of the credentials has it
 			var d gcpDefaultCredentials
 			if err := json.Unmarshal(credentials.JSON, &d); err != nil {
-				logger.Infof("failed to parse default credentials JSON")
+				logger.Infof("Failed to parse default credentials JSON")
+				return ""
 			} else if d.QuotaProjectID != "" {
 				return d.QuotaProjectID
 			}
 		}
-	} else {
-		logger.Info("failed to locate Google Default Credential: %v", err)
 	}
-	// No default project ID found
-	return ""
+	return credentials.ProjectID
 }
 
 func parseObservabilityConfig() *configpb.ObservabilityConfig {
 	// Parse the config from ENV var
-	var config configpb.ObservabilityConfig
-	content := os.Getenv(envKeyObservabilityConfig)
-	if content != "" {
+	if content := os.Getenv(envKeyObservabilityConfig); content != "" {
+		var config configpb.ObservabilityConfig
 		if err := protojson.Unmarshal([]byte(content), &config); err != nil {
-			logger.Warningf("failed to load observability config from env GRPC_OBSERVABILITY_CONFIG: %s", err)
+			logger.Warningf("Error parsing observability config from env GRPC_CONFIG_OBSERVABILITY: %v", err)
+			return nil
 		}
-		configJSON, _ := protojson.Marshal(&config)
-		logger.Infof("Parsed ObservabilityConfig: %v", string(configJSON))
+		logger.Infof("Parsed ObservabilityConfig: %+v", &config)
 		return &config
 	}
 	// If the ENV var doesn't exist, do nothing
@@ -86,7 +86,7 @@ func maybeUpdateProjectIDInObservabilityConfig(ctx context.Context, config *conf
 	if config == nil {
 		return
 	}
-	if config.ExporterConfig != nil && config.ExporterConfig.ProjectId != "" {
+	if config.GetExporterConfig() != nil && config.GetExporterConfig().GetProjectId() != "" {
 		// User already specified project ID, do nothing
 		return
 	}
@@ -96,14 +96,12 @@ func maybeUpdateProjectIDInObservabilityConfig(ctx context.Context, config *conf
 		// No GCP project id found in well-known sources
 		return
 	}
-	if config.ExporterConfig == nil {
+	if config.GetExporterConfig() == nil {
 		config.ExporterConfig = &configpb.ObservabilityConfig_ExporterConfig{
 			ProjectId: projectID,
 		}
-	} else {
-		if config.ExporterConfig.ProjectId == "" {
-			config.ExporterConfig.ProjectId = projectID
-		}
+	} else if config.GetExporterConfig().GetProjectId() != "" {
+		config.GetExporterConfig().ProjectId = projectID
 	}
 	logger.Infof("Discovered GCP project ID: %v", projectID)
 }

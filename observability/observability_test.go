@@ -215,10 +215,10 @@ func (te *test) enablePluginWithFakeExporters() {
 	}
 	os.Setenv(envKeyObservabilityConfig, string(configJSON))
 	// Explicitly re-parse the ObservabilityConfig
-	internalInit()
+	initLogging()
 	Start(context.Background())
 	// Injects the fake exporter for testing purposes
-	loggingExporter = te.fle
+	globalLoggingExporter = te.fle
 	defaultCloudLoggingSink.SetExporter(te.fle)
 }
 

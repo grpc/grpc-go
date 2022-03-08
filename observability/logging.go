@@ -46,56 +46,45 @@ func translateMetadata(m *binlogpb.Metadata) *grpclogrecordpb.GrpcLogRecord_Meta
 }
 
 type cloudLoggingSink struct {
-	callIDToUUID map[uint64]string
-	lock         sync.RWMutex
-	exporter     genericLoggingExporter
+	callIDToUUID sync.Map
+	exporter     loggingExporter
 }
 
 var defaultCloudLoggingSink *cloudLoggingSink
 
-func (cls *cloudLoggingSink) getUUID(callID uint64) string {
-	var (
-		u  string
-		ok bool
-	)
-	cls.lock.RLocker().Lock()
-	u, ok = cls.callIDToUUID[callID]
-	cls.lock.RLocker().Unlock()
+func (c *cloudLoggingSink) getUUID(callID uint64) string {
+	u, ok := c.callIDToUUID.Load(callID)
 	if !ok {
-		cls.lock.Lock()
-		u = uuid.NewString()
-		cls.callIDToUUID[callID] = u
-		cls.lock.Unlock()
+		value := uuid.NewString()
+		c.callIDToUUID.Store(callID, value)
+		return value
 	}
-	return u
+	return u.(string)
 }
 
-func (cls *cloudLoggingSink) removeEntry(callID uint64) {
-	cls.lock.Lock()
-	defer cls.lock.Unlock()
-	delete(cls.callIDToUUID, callID)
+func (c *cloudLoggingSink) removeEntry(callID uint64) {
+	c.callIDToUUID.Delete(callID)
 }
 
-func (cls *cloudLoggingSink) SetExporter(exporter genericLoggingExporter) {
-	cls.exporter = exporter
+func (c *cloudLoggingSink) SetExporter(exporter loggingExporter) {
+	c.exporter = exporter
 }
 
 // Write translates a Binary Logging log entry to a GrpcLogEntry used by the gRPC
 // Observability project and emits it.
-func (cls *cloudLoggingSink) Write(binlogEntry *binlogpb.GrpcLogEntry) error {
-	if cls.exporter == nil {
+func (c *cloudLoggingSink) Write(binlogEntry *binlogpb.GrpcLogEntry) error {
+	if c.exporter == nil {
 		return nil
 	}
 
-	var (
-		grpcLogRecord grpclogrecordpb.GrpcLogRecord
-		callEnded     bool
-	)
-	grpcLogRecord.Timestamp = binlogEntry.GetTimestamp()
-	grpcLogRecord.RpcId = cls.getUUID(binlogEntry.GetCallId())
-	grpcLogRecord.SequenceId = binlogEntry.GetSequenceIdWithinCall()
-	// Making DEBUG the default LogLevel
-	grpcLogRecord.LogLevel = grpclogrecordpb.GrpcLogRecord_LOG_LEVEL_DEBUG
+	grpcLogRecord := &grpclogrecordpb.GrpcLogRecord{
+		Timestamp:  binlogEntry.GetTimestamp(),
+		RpcId:      c.getUUID(binlogEntry.GetCallId()),
+		SequenceId: binlogEntry.GetSequenceIdWithinCall(),
+		// Making DEBUG the default LogLevel
+		LogLevel: grpclogrecordpb.GrpcLogRecord_LOG_LEVEL_DEBUG,
+	}
+	callEnded := false
 	switch binlogEntry.Type {
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_UNKNOWN:
 		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_UNKNOWN
@@ -175,24 +164,23 @@ func (cls *cloudLoggingSink) Write(binlogEntry *binlogpb.GrpcLogEntry) error {
 		grpcLogRecord.EventLogger = grpclogrecordpb.GrpcLogRecord_LOGGER_UNKNOWN
 	}
 	if callEnded {
-		cls.removeEntry(binlogEntry.CallId)
+		c.removeEntry(binlogEntry.CallId)
 	}
 	// CloudLogging client doesn't return error on entry write. Entry writes
 	// don't mean the data will be uploaded immediately.
-	cls.exporter.EmitGrpcLogRecord(&grpcLogRecord)
+	c.exporter.EmitGrpcLogRecord(grpcLogRecord)
 	return nil
 }
 
-// Close closes the cloudLoggingSink, which is a noop due to no state is
-// maintained by this object.
-func (*cloudLoggingSink) Close() error {
+// Close closes the cloudLoggingSink. This call cleans exporter field, so
+// following writes will be noop.
+func (c *cloudLoggingSink) Close() error {
+	c.exporter = nil
 	return nil
 }
 
 func newCloudLoggingSink() *cloudLoggingSink {
-	return &cloudLoggingSink{
-		callIDToUUID: make(map[uint64]string),
-	}
+	return &cloudLoggingSink{}
 }
 
 func compileBinaryLogControlString(config *configpb.ObservabilityConfig) string {
@@ -200,23 +188,28 @@ func compileBinaryLogControlString(config *configpb.ObservabilityConfig) string 
 		return ""
 	}
 
-	var entries []string
+	entries := make([]string, 0, len(config.LoggingConfig.LogFilters)+1)
 	for _, logFilter := range config.LoggingConfig.LogFilters {
 		// With undefined HeaderBytes or MessageBytes, the intended behavior is
 		// logging zero payload. This detail is different than binary logging.
 		entries = append(entries, fmt.Sprintf("%v{h:%v;m:%v}", logFilter.Pattern, logFilter.HeaderBytes, logFilter.MessageBytes))
 	}
+	// If user specify a "*" pattern, binarylog will log every single call and
+	// content. This means the exporting RPC's events will be captured. Even if
+	// we batch up the uploads in the exporting RPC, the message content of that
+	// RPC will be logged. Without this exclusion, we may end up with an ever
+	// expanding message field in log entries, and crash the process with OOM.
 	entries = append(entries, "-google.logging.v2.LoggingServiceV2/WriteLogEntries")
 	return strings.Join(entries, ",")
 }
 
-func startLogging(config *configpb.ObservabilityConfig) {
+func prepareLogging(config *configpb.ObservabilityConfig) {
 	if config == nil {
 		return
 	}
-	var binlogConfig = compileBinaryLogControlString(config)
+	binlogConfig := compileBinaryLogControlString(config)
 	iblog.SetLogger(iblog.NewLoggerFromConfigString(binlogConfig))
 	defaultCloudLoggingSink = newCloudLoggingSink()
 	binarylog.SetSink(defaultCloudLoggingSink)
-	logger.Infof("Start logging with config [%v] and sink [%p]", binlogConfig, &iblog.DefaultSink)
+	logger.Infof("Start logging with config [%v]", binlogConfig)
 }

@@ -21,14 +21,13 @@
 //
 // Experimental
 //
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// Notice: This package is EXPERIMENTAL and may be changed or removed in a
 // later release.
 package observability
 
 import (
 	"context"
 
-	"google.golang.org/grpc/binarylog"
 	"google.golang.org/grpc/grpclog"
 	configpb "google.golang.org/grpc/observability/internal/config"
 )
@@ -39,17 +38,17 @@ var (
 )
 
 func init() {
-	internalInit()
+	initLogging()
 }
 
-// internalInit exists to allow unit tests to re-parse ENV var.
-func internalInit() {
+// initLogging exists to allow unit tests to re-parse ENV var.
+func initLogging() {
 	config = parseObservabilityConfig()
 
 	// Logging is controlled by the config at methods level. Users might bring
 	// their in-house exporter. If logging is disabled, binary logging also
 	// won't start. The overhead should be minimum.
-	startLogging(config)
+	prepareLogging(config)
 }
 
 // Start is the opt-in API for gRPC Observability plugin. This function should
@@ -65,16 +64,26 @@ func internalInit() {
 // "observability" module will conflict with existing binarylog usage.
 // Note: handle the error
 func Start(ctx context.Context) error {
-	// If no project ID is found, that's ok
+	// Set the project ID if it isn't configured manually.
 	maybeUpdateProjectIDInObservabilityConfig(ctx, config)
 
 	// If the default logging exporter is not disabled, register one.
-	if config != nil && config.ExporterConfig.ProjectId != "" && !config.ExporterConfig.DisableDefaultLoggingExporter {
-		if err := createDefaultLoggingExporter(ctx, config.ExporterConfig.ProjectId); err != nil {
-			return err
-		}
-		defaultCloudLoggingSink.SetExporter(loggingExporter)
+	if config == nil {
+		return nil
 	}
+	if config.GetExporterConfig() == nil {
+		return nil
+	}
+	if config.GetExporterConfig().GetProjectId() == "" {
+		return nil
+	}
+	if config.GetExporterConfig().GetDisableDefaultLoggingExporter() {
+		return nil
+	}
+	if err := createDefaultLoggingExporter(ctx, config.ExporterConfig.ProjectId); err != nil {
+		return err
+	}
+	defaultCloudLoggingSink.SetExporter(globalLoggingExporter)
 	return nil
 }
 
@@ -84,5 +93,4 @@ func Start(ctx context.Context) error {
 // cleanup resources.
 func End() {
 	closeLoggingExporter()
-	binarylog.SetSink(nil)
 }
