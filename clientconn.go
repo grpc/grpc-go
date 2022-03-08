@@ -469,15 +469,16 @@ type ClientConn struct {
 	parsedTarget      resolver.Target       // See parseTargetAndFindResolver().
 	authority         string                // See determineAuthority().
 	dopts             dialOptions           // Default and user specified dial options.
-	balancerBuildOpts balancer.BuildOptions // Balancer build options, sourced from user provided options to dial.
+	balancerBuildOpts balancer.BuildOptions // TODO: delete once we move to the gracefulswitch balancer.
 	channelzID        *channelz.Identifier  // Channelz identifier for the channel.
 
-	// The following are initialized at dial time, and maybe mutated later on.
-	// They provide their own synchronization.
+	// The following provide their own synchronization, and therefore don't
+	// require cc.mu to be held to access them.
 	csMgr              *connectivityStateManager
 	blockingpicker     *pickerWrapper
 	safeConfigSelector iresolver.SafeConfigSelector
 	czData             *channelzData
+	retryThrottler     atomic.Value // Updated from service config.
 
 	// firstResolveEvent is used to track whether the name resolver sent us at
 	// least one update. RPCs block on this event.
@@ -489,13 +490,12 @@ type ClientConn struct {
 	// mu protects the following fields.
 	// TODO: split mu so the same mutex isn't used for everything.
 	mu              sync.RWMutex
-	resolverWrapper *ccResolverWrapper         // Initialized at dial time.
+	resolverWrapper *ccResolverWrapper         // Initialized in Dial; cleared in Close.
 	sc              *ServiceConfig             // Latest service config received from the resolver.
 	conns           map[*addrConn]struct{}     // Set to nil on close.
 	mkp             keepalive.ClientParameters // May be updated upon receipt of a GoAway.
-	curBalancerName string                     // Current LB policy name.
+	curBalancerName string                     // TODO: delete as part of https://github.com/grpc/grpc-go/issues/5229.
 	balancerWrapper *ccBalancerWrapper         // TODO: Use gracefulswitch balancer to be able to initialize this once and never rewrite.
-	retryThrottler  atomic.Value               // Updated from service config.
 
 	lceMu               sync.Mutex // protects lastConnectionError
 	lastConnectionError error
