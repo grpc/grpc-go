@@ -20,7 +20,6 @@ package observability
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 
 	gcplogging "cloud.google.com/go/logging"
@@ -31,39 +30,27 @@ import (
 
 const (
 	envKeyObservabilityConfig = "GRPC_CONFIG_OBSERVABILITY"
+	envProjectID              = "GOOGLE_CLOUD_PROJECT"
 )
-
-// gcpDefaultCredentials is the JSON loading struct used to get project id.
-type gcpDefaultCredentials struct {
-	QuotaProjectID string `json:"quota_project_id"`
-}
 
 // fetchDefaultProjectID fetches the default GCP project id from environment.
 func fetchDefaultProjectID(ctx context.Context) string {
 	// Step 1: Check ENV var
-	if s := os.Getenv("GOOGLE_CLOUD_PROJECT"); s != "" {
+	if s := os.Getenv(envProjectID); s != "" {
+		logger.Infof("Found project ID from env GOOGLE_CLOUD_PROJECT: %v", s)
 		return s
 	}
 	// Step 2: Check default credential
 	credentials, err := google.FindDefaultCredentials(ctx, gcplogging.WriteScope)
 	if err != nil {
-		logger.Info("Failed to locate Google Default Credential: %v", err)
+		logger.Infof("Failed to locate Google Default Credential: %v", err)
 		return ""
 	}
-	logger.Infof("Found Google Default Credential")
-	// Step 2.1: Check if the ProjectID is in the plain view
 	if credentials.ProjectID == "" {
-		if len(credentials.JSON) > 0 {
-			// Step 2.2: Check if the JSON form of the credentials has it
-			var d gcpDefaultCredentials
-			if err := json.Unmarshal(credentials.JSON, &d); err != nil {
-				logger.Infof("Failed to parse default credentials JSON")
-				return ""
-			} else if d.QuotaProjectID != "" {
-				return d.QuotaProjectID
-			}
-		}
+		logger.Infof("Failed to find project ID in default credential: %v", err)
+		return ""
 	}
+	logger.Infof("Found project ID from Google Default Credential: %v", credentials.ProjectID)
 	return credentials.ProjectID
 }
 
@@ -86,7 +73,7 @@ func maybeUpdateProjectIDInObservabilityConfig(ctx context.Context, config *conf
 	if config == nil {
 		return
 	}
-	if config.GetExporterConfig() != nil && config.GetExporterConfig().GetProjectId() != "" {
+	if config.GetExporterConfig().GetProjectId() != "" {
 		// User already specified project ID, do nothing
 		return
 	}
@@ -101,7 +88,6 @@ func maybeUpdateProjectIDInObservabilityConfig(ctx context.Context, config *conf
 			ProjectId: projectID,
 		}
 	} else if config.GetExporterConfig().GetProjectId() != "" {
-		config.GetExporterConfig().ProjectId = projectID
+		config.ExporterConfig.ProjectId = projectID
 	}
-	logger.Infof("Discovered GCP project ID: %v", projectID)
 }

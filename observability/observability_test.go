@@ -215,7 +215,6 @@ func (te *test) enablePluginWithFakeExporters() {
 	}
 	os.Setenv(envKeyObservabilityConfig, string(configJSON))
 	// Explicitly re-parse the ObservabilityConfig
-	initLogging()
 	Start(context.Background())
 	// Injects the fake exporter for testing purposes
 	globalLoggingExporter = te.fle

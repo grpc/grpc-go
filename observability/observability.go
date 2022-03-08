@@ -29,26 +29,12 @@ import (
 	"context"
 
 	"google.golang.org/grpc/grpclog"
-	configpb "google.golang.org/grpc/observability/internal/config"
 )
 
-var (
-	logger = grpclog.Component("observability")
-	config *configpb.ObservabilityConfig
-)
+var logger = grpclog.Component("observability")
 
 func init() {
-	initLogging()
-}
-
-// initLogging exists to allow unit tests to re-parse ENV var.
-func initLogging() {
-	config = parseObservabilityConfig()
-
-	// Logging is controlled by the config at methods level. Users might bring
-	// their in-house exporter. If logging is disabled, binary logging also
-	// won't start. The overhead should be minimum.
-	prepareLogging(config)
+	prepareLogging()
 }
 
 // Start is the opt-in API for gRPC Observability plugin. This function should
@@ -64,20 +50,17 @@ func initLogging() {
 // "observability" module will conflict with existing binarylog usage.
 // Note: handle the error
 func Start(ctx context.Context) error {
+	config := parseObservabilityConfig()
 	// Set the project ID if it isn't configured manually.
 	maybeUpdateProjectIDInObservabilityConfig(ctx, config)
 
+	// Logging is controlled by the config at methods level. Users might bring
+	// their in-house exporter. If logging is disabled, binary logging also
+	// won't start. The overhead should be minimum.
+	startLogging(config)
+
 	// If the default logging exporter is not disabled, register one.
-	if config == nil {
-		return nil
-	}
-	if config.GetExporterConfig() == nil {
-		return nil
-	}
-	if config.GetExporterConfig().GetProjectId() == "" {
-		return nil
-	}
-	if config.GetExporterConfig().GetDisableDefaultLoggingExporter() {
+	if config.GetExporterConfig().GetProjectId() == "" || config.GetExporterConfig().GetDisableDefaultLoggingExporter() {
 		return nil
 	}
 	if err := createDefaultLoggingExporter(ctx, config.ExporterConfig.ProjectId); err != nil {

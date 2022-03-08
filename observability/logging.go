@@ -48,6 +48,7 @@ func translateMetadata(m *binlogpb.Metadata) *grpclogrecordpb.GrpcLogRecord_Meta
 type cloudLoggingSink struct {
 	callIDToUUID sync.Map
 	exporter     loggingExporter
+	lock         sync.RWMutex
 }
 
 var defaultCloudLoggingSink *cloudLoggingSink
@@ -67,15 +68,21 @@ func (c *cloudLoggingSink) removeEntry(callID uint64) {
 }
 
 func (c *cloudLoggingSink) SetExporter(exporter loggingExporter) {
+	c.lock.Lock()
 	c.exporter = exporter
+	c.lock.Unlock()
 }
 
 // Write translates a Binary Logging log entry to a GrpcLogEntry used by the gRPC
 // Observability project and emits it.
 func (c *cloudLoggingSink) Write(binlogEntry *binlogpb.GrpcLogEntry) error {
-	if c.exporter == nil {
+	c.lock.RLock()
+	exporter := c.exporter
+	if exporter == nil {
+		c.lock.RUnlock()
 		return nil
 	}
+	c.lock.RUnlock()
 
 	grpcLogRecord := &grpclogrecordpb.GrpcLogRecord{
 		Timestamp:  binlogEntry.GetTimestamp(),
@@ -85,7 +92,7 @@ func (c *cloudLoggingSink) Write(binlogEntry *binlogpb.GrpcLogEntry) error {
 		LogLevel: grpclogrecordpb.GrpcLogRecord_LOG_LEVEL_DEBUG,
 	}
 	callEnded := false
-	switch binlogEntry.Type {
+	switch binlogEntry.GetType() {
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_UNKNOWN:
 		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_UNKNOWN
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CLIENT_HEADER:
@@ -120,7 +127,7 @@ func (c *cloudLoggingSink) Write(binlogEntry *binlogpb.GrpcLogEntry) error {
 		grpcLogRecord.PayloadTruncated = binlogEntry.GetPayloadTruncated()
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_SERVER_HEADER:
 		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_RESPONSE_HEADER
-		if binlogEntry.Peer != nil {
+		if binlogEntry.GetPeer() != nil {
 			grpcLogRecord.PeerAddress = &grpclogrecordpb.GrpcLogRecord_Address{
 				Type:    grpclogrecordpb.GrpcLogRecord_Address_Type(binlogEntry.Peer.Type),
 				Address: binlogEntry.Peer.Address,
@@ -128,26 +135,26 @@ func (c *cloudLoggingSink) Write(binlogEntry *binlogpb.GrpcLogEntry) error {
 			}
 		}
 		grpcLogRecord.Metadata = translateMetadata(binlogEntry.GetServerHeader().Metadata)
-		grpcLogRecord.PayloadTruncated = binlogEntry.PayloadTruncated
+		grpcLogRecord.PayloadTruncated = binlogEntry.GetPayloadTruncated()
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CLIENT_MESSAGE:
 		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_REQUEST_MESSAGE
-		grpcLogRecord.Message = binlogEntry.GetMessage().Data
+		grpcLogRecord.Message = binlogEntry.GetMessage().GetData()
 		grpcLogRecord.PayloadSize = binlogEntry.GetMessage().GetLength()
-		grpcLogRecord.PayloadTruncated = binlogEntry.PayloadTruncated
+		grpcLogRecord.PayloadTruncated = binlogEntry.GetPayloadTruncated()
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_SERVER_MESSAGE:
 		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_RESPONSE_MESSAGE
-		grpcLogRecord.Message = binlogEntry.GetMessage().Data
+		grpcLogRecord.Message = binlogEntry.GetMessage().GetData()
 		grpcLogRecord.PayloadSize = binlogEntry.GetMessage().GetLength()
-		grpcLogRecord.PayloadTruncated = binlogEntry.PayloadTruncated
+		grpcLogRecord.PayloadTruncated = binlogEntry.GetPayloadTruncated()
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CLIENT_HALF_CLOSE:
 		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_HALF_CLOSE
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_SERVER_TRAILER:
 		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_TRAILER
 		grpcLogRecord.Metadata = translateMetadata(binlogEntry.GetTrailer().Metadata)
-		grpcLogRecord.StatusCode = binlogEntry.GetTrailer().StatusCode
-		grpcLogRecord.StatusMessage = binlogEntry.GetTrailer().StatusMessage
-		grpcLogRecord.StatusDetails = binlogEntry.GetTrailer().StatusDetails
-		grpcLogRecord.PayloadTruncated = binlogEntry.PayloadTruncated
+		grpcLogRecord.StatusCode = binlogEntry.GetTrailer().GetStatusCode()
+		grpcLogRecord.StatusMessage = binlogEntry.GetTrailer().GetStatusMessage()
+		grpcLogRecord.StatusDetails = binlogEntry.GetTrailer().GetStatusDetails()
+		grpcLogRecord.PayloadTruncated = binlogEntry.GetPayloadTruncated()
 		callEnded = true
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CANCEL:
 		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_CANCEL
@@ -168,13 +175,15 @@ func (c *cloudLoggingSink) Write(binlogEntry *binlogpb.GrpcLogEntry) error {
 	}
 	// CloudLogging client doesn't return error on entry write. Entry writes
 	// don't mean the data will be uploaded immediately.
-	c.exporter.EmitGrpcLogRecord(grpcLogRecord)
+	exporter.EmitGrpcLogRecord(grpcLogRecord)
 	return nil
 }
 
 // Close closes the cloudLoggingSink. This call cleans exporter field, so
 // following writes will be noop.
 func (c *cloudLoggingSink) Close() error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	c.exporter = nil
 	return nil
 }
@@ -203,13 +212,16 @@ func compileBinaryLogControlString(config *configpb.ObservabilityConfig) string 
 	return strings.Join(entries, ",")
 }
 
-func prepareLogging(config *configpb.ObservabilityConfig) {
+func prepareLogging() {
+	defaultCloudLoggingSink = newCloudLoggingSink()
+	binarylog.SetSink(defaultCloudLoggingSink)
+}
+
+func startLogging(config *configpb.ObservabilityConfig) {
 	if config == nil {
 		return
 	}
 	binlogConfig := compileBinaryLogControlString(config)
 	iblog.SetLogger(iblog.NewLoggerFromConfigString(binlogConfig))
-	defaultCloudLoggingSink = newCloudLoggingSink()
-	binarylog.SetSink(defaultCloudLoggingSink)
 	logger.Infof("Start logging with config [%v]", binlogConfig)
 }
