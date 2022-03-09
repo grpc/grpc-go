@@ -85,17 +85,17 @@ func (cle *cloudLoggingExporter) EmitGrpcLogRecord(l *grpclogrecordpb.GrpcLogRec
 	// dependencies to Cloud Logging SDK.
 	jsonBytes, err := protoToJSONOptions.Marshal(l)
 	if err != nil {
-		logger.Errorf("unable to marshal log record: %v", l)
+		logger.Errorf("Unable to marshal log record: %v", l)
 	}
 	var payload map[string]interface{}
 	err = json.Unmarshal(jsonBytes, &payload)
 	if err != nil {
-		logger.Errorf("unable to unmarshal bytes to JSON: %v", jsonBytes)
+		logger.Errorf("Unable to unmarshal bytes to JSON: %v", jsonBytes)
 	}
 	// Converts severity from log level
 	var severity, ok = logLevelToSeverity[l.LogLevel]
 	if !ok {
-		logger.Errorf("invalid log level: %v", l.LogLevel)
+		logger.Errorf("Invalid log level: %v", l.LogLevel)
 		severity = 0
 	}
 	entry := gcplogging.Entry{
