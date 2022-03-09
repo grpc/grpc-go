@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/transport"
@@ -69,7 +70,7 @@ func (s) TestDialWithTimeout(t *testing.T) {
 
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{lisAddr}})
-	client, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r), WithTimeout(5*time.Second))
+	client, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithTimeout(5*time.Second))
 	close(dialDone)
 	if err != nil {
 		t.Fatalf("Dial failed. Err: %v", err)
@@ -121,7 +122,7 @@ func (s) TestDialWithMultipleBackendsNotSendingServerPreface(t *testing.T) {
 
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{lis1Addr, lis2Addr}})
-	client, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
+	client, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Dial failed. Err: %v", err)
 	}
@@ -171,7 +172,7 @@ func (s) TestDialWaitsForServerSettings(t *testing.T) {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	client, err := DialContext(ctx, lis.Addr().String(), WithInsecure(), WithBlock())
+	client, err := DialContext(ctx, lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), WithBlock())
 	close(dialDone)
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
@@ -209,7 +210,7 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 	defer cancel()
 	client, err := DialContext(ctx,
 		lis.Addr().String(),
-		WithInsecure(),
+		WithTransportCredentials(insecure.NewCredentials()),
 		WithReturnConnectionError(),
 		withBackoff(noBackoff{}),
 		withMinConnectDeadline(func() time.Duration { return time.Second / 4 }))
@@ -286,7 +287,7 @@ func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 			break
 		}
 	}()
-	client, err := Dial(lis.Addr().String(), WithInsecure(), withMinConnectDeadline(func() time.Duration { return time.Millisecond * 500 }))
+	client, err := Dial(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), withMinConnectDeadline(func() time.Duration { return time.Millisecond * 500 }))
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
@@ -342,7 +343,7 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 			prevAt = meow
 		}
 	}()
-	cc, err := Dial(lis.Addr().String(), WithInsecure())
+	cc, err := Dial(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Error while dialing. Err: %v", err)
 	}
@@ -352,7 +353,10 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 }
 
 func (s) TestWithTimeout(t *testing.T) {
-	conn, err := Dial("passthrough:///Non-Existent.Server:80", WithTimeout(time.Millisecond), WithBlock(), WithInsecure())
+	conn, err := Dial("passthrough:///Non-Existent.Server:80",
+		WithTimeout(time.Millisecond),
+		WithBlock(),
+		WithTransportCredentials(insecure.NewCredentials()))
 	if err == nil {
 		conn.Close()
 	}
@@ -439,8 +443,8 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 		{Addr: lis2.Addr().String()},
 	}})
 	client, err := DialContext(ctx, "whatever:///this-gets-overwritten",
-		WithInsecure(),
-		WithBalancerName(stateRecordingBalancerName),
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
 		WithResolvers(rb),
 		withMinConnectDeadline(getMinConnectTimeout))
 	if err != nil {
@@ -466,7 +470,7 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 func (s) TestDialContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithInsecure()); err != context.Canceled {
+	if _, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithTransportCredentials(insecure.NewCredentials())); err != context.Canceled {
 		t.Fatalf("DialContext(%v, _) = _, %v, want _, %v", ctx, err, context.Canceled)
 	}
 }
@@ -484,7 +488,7 @@ func (s) TestDialContextFailFast(t *testing.T) {
 		return nil, failErr
 	}
 
-	_, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithInsecure(), WithDialer(dialer), FailOnNonTempDialError(true))
+	_, err := DialContext(ctx, "Non-Existent.Server:80", WithBlock(), WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), FailOnNonTempDialError(true))
 	if terr, ok := err.(transport.ConnectionError); !ok || terr.Origin() != failErr {
 		t.Fatalf("DialContext() = _, %v, want _, %v", err, failErr)
 	}
@@ -529,7 +533,7 @@ func (s) TestCredentialsMisuse(t *testing.T) {
 
 	// Use of perRPC creds requiring transport security over an insecure
 	// transport must fail.
-	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithPerRPCCredentials(securePerRPCCredentials{}), WithInsecure()); err != errTransportCredentialsMissing {
+	if _, err := Dial("passthrough:///Non-Existent.Server:80", WithPerRPCCredentials(securePerRPCCredentials{}), WithTransportCredentials(insecure.NewCredentials())); err != errTransportCredentialsMissing {
 		t.Fatalf("Dial(_, _) = _, %v, want _, %v", err, errTransportCredentialsMissing)
 	}
 
@@ -573,7 +577,7 @@ func (s) TestWithConnectParams(t *testing.T) {
 }
 
 func testBackoffConfigSet(t *testing.T, wantBackoff internalbackoff.Exponential, opts ...DialOption) {
-	opts = append(opts, WithInsecure())
+	opts = append(opts, WithTransportCredentials(insecure.NewCredentials()))
 	conn, err := Dial("passthrough:///foo:80", opts...)
 	if err != nil {
 		t.Fatalf("unexpected error dialing connection: %v", err)
@@ -597,7 +601,7 @@ func testBackoffConfigSet(t *testing.T, wantBackoff internalbackoff.Exponential,
 func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
 	// Default value specified for minConnectTimeout in the spec is 20 seconds.
 	mct := 1 * time.Minute
-	conn, err := Dial("passthrough:///foo:80", WithInsecure(), WithConnectParams(ConnectParams{MinConnectTimeout: mct}))
+	conn, err := Dial("passthrough:///foo:80", WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(ConnectParams{MinConnectTimeout: mct}))
 	if err != nil {
 		t.Fatalf("unexpected error dialing connection: %v", err)
 	}
@@ -611,7 +615,7 @@ func (s) TestConnectParamsWithMinConnectTimeout(t *testing.T) {
 func (s) TestResolverServiceConfigBeforeAddressNotPanic(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
+	cc, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -628,7 +632,7 @@ func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 	for i := 0; i < 10; i++ { // Run this multiple times to make sure it doesn't panic.
 		r := manual.NewBuilderWithScheme(fmt.Sprintf("whatever-%d", i))
 
-		cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
+		cc, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 		if err != nil {
 			t.Fatalf("failed to dial: %v", err)
 		}
@@ -641,7 +645,7 @@ func (s) TestResolverServiceConfigWhileClosingNotPanic(t *testing.T) {
 func (s) TestResolverEmptyUpdateNotPanic(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
+	cc, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -691,7 +695,7 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 	addr := lis.Addr().String()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cc, err := DialContext(ctx, addr, WithBlock(), WithInsecure(), WithKeepaliveParams(keepalive.ClientParameters{
+	cc, err := DialContext(ctx, addr, WithBlock(), WithTransportCredentials(insecure.NewCredentials()), WithKeepaliveParams(keepalive.ClientParameters{
 		Time:                10 * time.Second,
 		Timeout:             100 * time.Millisecond,
 		PermitWithoutStream: true,
@@ -720,7 +724,7 @@ func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
 func (s) TestDisableServiceConfigOption(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 	addr := r.Scheme() + ":///non.existent"
-	cc, err := Dial(addr, WithInsecure(), WithResolvers(r), WithDisableServiceConfig())
+	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDisableServiceConfig())
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
@@ -747,7 +751,7 @@ func (s) TestDisableServiceConfigOption(t *testing.T) {
 
 func (s) TestMethodConfigDefaultService(t *testing.T) {
 	addr := "nonexist:///non.existent"
-	cc, err := Dial(addr, WithInsecure(), WithDefaultServiceConfig(`{
+	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithDefaultServiceConfig(`{
   "methodConfig": [{
     "name": [
       {
@@ -770,7 +774,7 @@ func (s) TestMethodConfigDefaultService(t *testing.T) {
 
 func (s) TestGetClientConnTarget(t *testing.T) {
 	addr := "nonexist:///non.existent"
-	cc, err := Dial(addr, WithInsecure())
+	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
@@ -796,7 +800,7 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 		dials <- struct{}{}
 		return nil, errors.New("failed to fake dial")
 	}
-	cc, err := Dial("any", WithInsecure(), WithDialer(dialer), withBackoff(backoffForever{}))
+	cc, err := Dial("any", WithTransportCredentials(insecure.NewCredentials()), WithDialer(dialer), withBackoff(backoffForever{}))
 	if err != nil {
 		t.Fatalf("Dial() = _, %v; want _, nil", err)
 	}
@@ -825,7 +829,7 @@ func (s) TestResetConnectBackoff(t *testing.T) {
 
 func (s) TestBackoffCancel(t *testing.T) {
 	dialStrCh := make(chan string)
-	cc, err := Dial("any", WithInsecure(), WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
+	cc, err := Dial("any", WithTransportCredentials(insecure.NewCredentials()), WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
 		dialStrCh <- t
 		return nil, fmt.Errorf("test dialer, always error")
 	}))
@@ -956,10 +960,10 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 	rb.InitialState(resolver.State{Addresses: addrsList})
 
 	client, err := Dial("whatever:///this-gets-overwritten",
-		WithInsecure(),
+		WithTransportCredentials(insecure.NewCredentials()),
 		WithResolvers(rb),
 		withBackoff(noBackoff{}),
-		WithBalancerName(stateRecordingBalancerName),
+		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
 		withMinConnectDeadline(func() time.Duration { return time.Hour }))
 	if err != nil {
 		t.Fatal(err)
@@ -1044,14 +1048,14 @@ func verifyWaitForReadyEqualsTrue(cc *ClientConn) bool {
 }
 
 func testInvalidDefaultServiceConfig(t *testing.T) {
-	_, err := Dial("fake.com", WithInsecure(), WithDefaultServiceConfig(""))
+	_, err := Dial("fake.com", WithTransportCredentials(insecure.NewCredentials()), WithDefaultServiceConfig(""))
 	if !strings.Contains(err.Error(), invalidDefaultServiceConfigErrPrefix) {
 		t.Fatalf("Dial got err: %v, want err contains: %v", err, invalidDefaultServiceConfigErrPrefix)
 	}
 }
 
 func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r *manual.Resolver, addr string, js string) {
-	cc, err := Dial(addr, WithInsecure(), WithDisableServiceConfig(), WithResolvers(r), WithDefaultServiceConfig(js))
+	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithDisableServiceConfig(), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
@@ -1067,7 +1071,7 @@ func testDefaultServiceConfigWhenResolverServiceConfigDisabled(t *testing.T, r *
 }
 
 func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T, r *manual.Resolver, addr string, js string) {
-	cc, err := Dial(addr, WithInsecure(), WithResolvers(r), WithDefaultServiceConfig(js))
+	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}
@@ -1081,7 +1085,7 @@ func testDefaultServiceConfigWhenResolverDoesNotReturnServiceConfig(t *testing.T
 }
 
 func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T, r *manual.Resolver, addr string, js string) {
-	cc, err := Dial(addr, WithInsecure(), WithResolvers(r), WithDefaultServiceConfig(js))
+	cc, err := Dial(addr, WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r), WithDefaultServiceConfig(js))
 	if err != nil {
 		t.Fatalf("Dial(%s, _) = _, %v, want _, <nil>", addr, err)
 	}

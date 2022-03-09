@@ -20,12 +20,10 @@ package grpc
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"time"
 
 	"google.golang.org/grpc/backoff"
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/channelz"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -46,18 +44,16 @@ type dialOptions struct {
 	chainUnaryInts  []UnaryClientInterceptor
 	chainStreamInts []StreamClientInterceptor
 
-	cp              Compressor
-	dc              Decompressor
-	bs              internalbackoff.Strategy
-	block           bool
-	returnLastError bool
-	timeout         time.Duration
-	scChan          <-chan ServiceConfig
-	authority       string
-	copts           transport.ConnectOptions
-	callOptions     []CallOption
-	// This is used by WithBalancerName dial option.
-	balancerBuilder             balancer.Builder
+	cp                          Compressor
+	dc                          Decompressor
+	bs                          internalbackoff.Strategy
+	block                       bool
+	returnLastError             bool
+	timeout                     time.Duration
+	scChan                      <-chan ServiceConfig
+	authority                   string
+	copts                       transport.ConnectOptions
+	callOptions                 []CallOption
 	channelzParentID            *channelz.Identifier
 	disableServiceConfig        bool
 	disableRetry                bool
@@ -193,25 +189,6 @@ func WithCompressor(cp Compressor) DialOption {
 func WithDecompressor(dc Decompressor) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.dc = dc
-	})
-}
-
-// WithBalancerName sets the balancer that the ClientConn will be initialized
-// with. Balancer registered with balancerName will be used. This function
-// panics if no balancer was registered by balancerName.
-//
-// The balancer cannot be overridden by balancer option specified by service
-// config.
-//
-// Deprecated: use WithDefaultServiceConfig and WithDisableServiceConfig
-// instead.  Will be removed in a future 1.x release.
-func WithBalancerName(balancerName string) DialOption {
-	builder := balancer.Get(balancerName)
-	if builder == nil {
-		panic(fmt.Sprintf("grpc.WithBalancerName: no balancer is registered for name %v", balancerName))
-	}
-	return newFuncDialOption(func(o *dialOptions) {
-		o.balancerBuilder = builder
 	})
 }
 
