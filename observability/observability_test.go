@@ -194,18 +194,13 @@ func (te *test) clientConn() *grpc.ClientConn {
 func (te *test) enablePluginWithFakeExporters() {
 	// Disables default exporters
 	config := &configpb.ObservabilityConfig{
-		ExporterConfig: &configpb.ObservabilityConfig_ExporterConfig{
-			DisableDefaultTracingExporter: true,
-			DisableDefaultMetricsExporter: true,
-			DisableDefaultLoggingExporter: true,
-		},
-		LoggingConfig: &configpb.ObservabilityConfig_LoggingConfig{
-			LogFilters: []*configpb.ObservabilityConfig_LoggingConfig_LogFilter{
-				{
-					Pattern:      "*",
-					HeaderBytes:  infinitySizeBytes,
-					MessageBytes: infinitySizeBytes,
-				},
+		EnableCloudLogging:   true,
+		DestinationProjectId: "",
+		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
+			{
+				Pattern:      "*",
+				HeaderBytes:  infinitySizeBytes,
+				MessageBytes: infinitySizeBytes,
 			},
 		},
 	}

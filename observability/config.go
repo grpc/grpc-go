@@ -73,21 +73,10 @@ func maybeUpdateProjectIDInObservabilityConfig(ctx context.Context, config *conf
 	if config == nil {
 		return
 	}
-	if config.GetExporterConfig().GetProjectId() != "" {
+	if config.GetDestinationProjectId() != "" {
 		// User already specified project ID, do nothing
 		return
 	}
 	// Try to fetch the GCP project id
-	projectID := fetchDefaultProjectID(ctx)
-	if projectID == "" {
-		// No GCP project id found in well-known sources
-		return
-	}
-	if config.GetExporterConfig() == nil {
-		config.ExporterConfig = &configpb.ObservabilityConfig_ExporterConfig{
-			ProjectId: projectID,
-		}
-	} else if config.GetExporterConfig().GetProjectId() != "" {
-		config.ExporterConfig.ProjectId = projectID
-	}
+	config.DestinationProjectId = fetchDefaultProjectID(ctx)
 }

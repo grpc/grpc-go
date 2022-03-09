@@ -60,10 +60,10 @@ func Start(ctx context.Context) error {
 	startLogging(config)
 
 	// If the default logging exporter is not disabled, register one.
-	if config.GetExporterConfig().GetProjectId() == "" || config.GetExporterConfig().GetDisableDefaultLoggingExporter() {
+	if config.GetDestinationProjectId() == "" || config.GetEnableCloudLogging() {
 		return nil
 	}
-	if err := createDefaultLoggingExporter(ctx, config.ExporterConfig.ProjectId); err != nil {
+	if err := createDefaultLoggingExporter(ctx, config.DestinationProjectId); err != nil {
 		return err
 	}
 	defaultCloudLoggingSink.SetExporter(globalLoggingExporter)

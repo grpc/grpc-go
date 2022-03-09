@@ -193,12 +193,12 @@ func newCloudLoggingSink() *cloudLoggingSink {
 }
 
 func compileBinaryLogControlString(config *configpb.ObservabilityConfig) string {
-	if config.LoggingConfig == nil {
+	if len(config.LogFilters) == 0 {
 		return ""
 	}
 
-	entries := make([]string, 0, len(config.LoggingConfig.LogFilters)+1)
-	for _, logFilter := range config.LoggingConfig.LogFilters {
+	entries := make([]string, 0, len(config.LogFilters)+1)
+	for _, logFilter := range config.LogFilters {
 		// With undefined HeaderBytes or MessageBytes, the intended behavior is
 		// logging zero payload. This detail is different than binary logging.
 		entries = append(entries, fmt.Sprintf("%v{h:%v;m:%v}", logFilter.Pattern, logFilter.HeaderBytes, logFilter.MessageBytes))
