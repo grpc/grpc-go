@@ -53,11 +53,11 @@ func newCloudLoggingExporter(ctx context.Context, projectID string) (*cloudLoggi
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cloudLoggingExporter: %v", err)
 	}
-	logger.Infof("Successfully created cloudLoggingExporter")
+	defer logger.Infof("Successfully created cloudLoggingExporter")
 	return &cloudLoggingExporter{
 		projectID: projectID,
 		client:    c,
-		logger:    c.Logger("grpc"),
+		logger:    c.Logger("grpc", gcplogging.CommonLabels(getCustomTags())),
 	}, nil
 }
 
