@@ -483,19 +483,17 @@ type ClientConn struct {
 	// firstResolveEvent is used to track whether the name resolver sent us at
 	// least one update. RPCs block on this event.
 	firstResolveEvent *grpcsync.Event
-	// TODO: Add a goodResolveEvent to track whether the name resolver sent us a
-	// good update. This will be used to determine if a balancer is configured on
-	// the channel instead of checking for `cc.balancerWrapper != nil`.
 
 	// mu protects the following fields.
 	// TODO: split mu so the same mutex isn't used for everything.
-	mu              sync.RWMutex
-	resolverWrapper *ccResolverWrapper         // Initialized in Dial; cleared in Close.
-	sc              *ServiceConfig             // Latest service config received from the resolver.
-	conns           map[*addrConn]struct{}     // Set to nil on close.
-	mkp             keepalive.ClientParameters // May be updated upon receipt of a GoAway.
-	curBalancerName string                     // TODO: delete as part of https://github.com/grpc/grpc-go/issues/5229.
-	balancerWrapper *ccBalancerWrapper         // TODO: Use gracefulswitch balancer to be able to initialize this once and never rewrite.
+	mu                     sync.RWMutex
+	resolverWrapper        *ccResolverWrapper         // Initialized in Dial; cleared in Close.
+	sc                     *ServiceConfig             // Latest service config received from the resolver.
+	conns                  map[*addrConn]struct{}     // Set to nil on close.
+	mkp                    keepalive.ClientParameters // May be updated upon receipt of a GoAway.
+	curBalancerName        string                     // TODO: delete as part of https://github.com/grpc/grpc-go/issues/5229.
+	balancerWrapper        *ccBalancerWrapper         // TODO: Use gracefulswitch balancer to be able to initialize this once and never rewrite.
+	rcvdGoodResolverUpdate bool                       // Whether the resolver got back with a good update.
 
 	lceMu               sync.Mutex // protects lastConnectionError
 	lastConnectionError error
@@ -542,7 +540,7 @@ func (cc *ClientConn) GetState() connectivity.State {
 func (cc *ClientConn) Connect() {
 	cc.mu.Lock()
 	defer cc.mu.Unlock()
-	if cc.balancerWrapper != nil && cc.balancerWrapper.exitIdle() {
+	if cc.rcvdGoodResolverUpdate && cc.balancerWrapper.exitIdle() {
 		return
 	}
 	for ac := range cc.conns {
@@ -613,9 +611,9 @@ func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
 func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	defer cc.firstResolveEvent.Fire()
 	cc.mu.Lock()
-	// Check if the ClientConn is already closed. Some fields (e.g.
-	// balancerWrapper) are set to nil when closing the ClientConn, and could
-	// cause nil pointer panic if we don't have this check.
+	// Check if the ClientConn is already closed. Some fields (e.g. conns) are set
+	// to nil when closing the ClientConn, and could cause nil pointer panic if we
+	// don't have this check.
 	if cc.conns == nil {
 		cc.mu.Unlock()
 		return nil
@@ -627,7 +625,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 		// with the new addresses.
 		cc.maybeApplyDefaultServiceConfig(nil)
 
-		if cc.balancerWrapper != nil {
+		if cc.rcvdGoodResolverUpdate {
 			cc.balancerWrapper.resolverError(err)
 		}
 
@@ -657,7 +655,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 			cc.applyServiceConfigAndBalancer(sc, configSelector, s.Addresses)
 		} else {
 			ret = balancer.ErrBadResolverState
-			if cc.balancerWrapper == nil {
+			if !cc.rcvdGoodResolverUpdate {
 				var err error
 				if s.ServiceConfig.Err != nil {
 					err = status.Errorf(codes.Unavailable, "error parsing service config: %v", s.ServiceConfig.Err)
@@ -718,7 +716,7 @@ func (cc *ClientConn) switchBalancer(name string) {
 		channelz.Info(logger, cc.channelzID, "ignoring balancer switching: Balancer DialOption used instead")
 		return
 	}
-	if cc.balancerWrapper != nil {
+	if cc.rcvdGoodResolverUpdate {
 		// Don't hold cc.mu while closing the balancers. The balancers may call
 		// methods that require cc.mu (e.g. cc.NewSubConn()). Holding the mutex
 		// would cause a deadlock in that case.
@@ -1028,6 +1026,7 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSel
 		cc.curBalancerName = cc.dopts.balancerBuilder.Name()
 		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, cc.balancerBuildOpts)
 	}
+	cc.rcvdGoodResolverUpdate = true
 }
 
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOptions) {
