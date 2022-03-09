@@ -105,8 +105,7 @@ func (cle *cloudLoggingExporter) EmitGrpcLogRecord(l *grpclogrecordpb.GrpcLogRec
 	}
 	cle.logger.Log(entry)
 	if logger.V(2) {
-		eventJSON, _ := json.Marshal(&entry)
-		logger.Infof("Uploading event to CloudLogging: %s", eventJSON)
+		logger.Infof("Uploading event to CloudLogging: %+v", entry)
 	}
 }
 
