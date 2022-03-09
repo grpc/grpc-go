@@ -461,34 +461,41 @@ var _ ClientConnInterface = (*ClientConn)(nil)
 // handshakes. It also handles errors on established connections by
 // re-resolving the name and reconnecting.
 type ClientConn struct {
-	ctx    context.Context
-	cancel context.CancelFunc
+	ctx    context.Context    // Initialized using the background context at dial time.
+	cancel context.CancelFunc // Cancelled on close.
 
-	target       string
-	parsedTarget resolver.Target
-	authority    string
-	dopts        dialOptions
-	csMgr        *connectivityStateManager
+	// The following are initialized at dial time, and are read-only after that.
+	target            string                // User's dial target.
+	parsedTarget      resolver.Target       // See parseTargetAndFindResolver().
+	authority         string                // See determineAuthority().
+	dopts             dialOptions           // Default and user specified dial options.
+	balancerBuildOpts balancer.BuildOptions // TODO: delete once we move to the gracefulswitch balancer.
+	channelzID        *channelz.Identifier  // Channelz identifier for the channel.
 
-	balancerBuildOpts balancer.BuildOptions
-	blockingpicker    *pickerWrapper
-
+	// The following provide their own synchronization, and therefore don't
+	// require cc.mu to be held to access them.
+	csMgr              *connectivityStateManager
+	blockingpicker     *pickerWrapper
 	safeConfigSelector iresolver.SafeConfigSelector
+	czData             *channelzData
+	retryThrottler     atomic.Value // Updated from service config.
 
-	mu              sync.RWMutex
-	resolverWrapper *ccResolverWrapper
-	sc              *ServiceConfig
-	conns           map[*addrConn]struct{}
-	// Keepalive parameter can be updated if a GoAway is received.
-	mkp             keepalive.ClientParameters
-	curBalancerName string
-	balancerWrapper *ccBalancerWrapper
-	retryThrottler  atomic.Value
-
+	// firstResolveEvent is used to track whether the name resolver sent us at
+	// least one update. RPCs block on this event.
 	firstResolveEvent *grpcsync.Event
+	// TODO: Add a goodResolveEvent to track whether the name resolver sent us a
+	// good update. This will be used to determine if a balancer is configured on
+	// the channel instead of checking for `cc.balancerWrapper != nil`.
 
-	channelzID *channelz.Identifier
-	czData     *channelzData
+	// mu protects the following fields.
+	// TODO: split mu so the same mutex isn't used for everything.
+	mu              sync.RWMutex
+	resolverWrapper *ccResolverWrapper         // Initialized in Dial; cleared in Close.
+	sc              *ServiceConfig             // Latest service config received from the resolver.
+	conns           map[*addrConn]struct{}     // Set to nil on close.
+	mkp             keepalive.ClientParameters // May be updated upon receipt of a GoAway.
+	curBalancerName string                     // TODO: delete as part of https://github.com/grpc/grpc-go/issues/5229.
+	balancerWrapper *ccBalancerWrapper         // TODO: Use gracefulswitch balancer to be able to initialize this once and never rewrite.
 
 	lceMu               sync.Mutex // protects lastConnectionError
 	lastConnectionError error
