@@ -153,7 +153,7 @@ func (s) TestCredsBundleFromBalancer(t *testing.T) {
 	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: ""})
 	te.tapHandle = authHandle
 	te.customDialOptions = []grpc.DialOption{
-		grpc.WithBalancerName(testBalancerName),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, testBalancerName)),
 	}
 	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
@@ -188,7 +188,7 @@ func testPickExtraMetadata(t *testing.T, e env) {
 	)
 
 	te.customDialOptions = []grpc.DialOption{
-		grpc.WithBalancerName(testBalancerName),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, testBalancerName)),
 		grpc.WithUserAgent(testUserAgent),
 	}
 	te.startServer(&testServer{security: e.security})
@@ -236,7 +236,7 @@ func testDoneInfo(t *testing.T, e env) {
 	b := &testBalancer{}
 	balancer.Register(b)
 	te.customDialOptions = []grpc.DialOption{
-		grpc.WithBalancerName(testBalancerName),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, testBalancerName)),
 	}
 	te.userAgent = failAppUA
 	te.startServer(&testServer{security: e.security})
@@ -315,7 +315,7 @@ func testDoneLoads(t *testing.T) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	if err := ss.Start(nil, grpc.WithBalancerName(testBalancerName)); err != nil {
+	if err := ss.Start(nil, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, testBalancerName))); err != nil {
 		t.Fatalf("error starting testing server: %v", err)
 	}
 	defer ss.Stop()
@@ -393,8 +393,10 @@ func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
 	b := newTestBalancerKeepAddresses()
 	balancer.Register(b)
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r),
-		grpc.WithBalancerName(b.Name()))
+	cc, err := grpc.Dial(r.Scheme()+":///test.server",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, b.Name())))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}

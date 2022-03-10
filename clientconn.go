@@ -674,7 +674,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	}
 
 	var balCfg serviceconfig.LoadBalancingConfig
-	if cc.dopts.balancerBuilder == nil && cc.sc != nil && cc.sc.lbConfig != nil {
+	if cc.sc != nil && cc.sc.lbConfig != nil {
 		balCfg = cc.sc.lbConfig.cfg
 	}
 
@@ -714,10 +714,6 @@ func (cc *ClientConn) switchBalancer(name string) {
 	}
 
 	channelz.Infof(logger, cc.channelzID, "ClientConn switching balancer to %q", name)
-	if cc.dopts.balancerBuilder != nil {
-		channelz.Info(logger, cc.channelzID, "ignoring balancer switching: Balancer DialOption used instead")
-		return
-	}
 	if cc.balancerWrapper != nil {
 		// Don't hold cc.mu while closing the balancers. The balancers may call
 		// methods that require cc.mu (e.g. cc.NewSubConn()). Holding the mutex
@@ -999,35 +995,28 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSel
 		cc.retryThrottler.Store((*retryThrottler)(nil))
 	}
 
-	if cc.dopts.balancerBuilder == nil {
-		// Only look at balancer types and switch balancer if balancer dial
-		// option is not set.
-		var newBalancerName string
-		if cc.sc != nil && cc.sc.lbConfig != nil {
-			newBalancerName = cc.sc.lbConfig.name
-		} else {
-			var isGRPCLB bool
-			for _, a := range addrs {
-				if a.Type == resolver.GRPCLB {
-					isGRPCLB = true
-					break
-				}
-			}
-			if isGRPCLB {
-				newBalancerName = grpclbName
-			} else if cc.sc != nil && cc.sc.LB != nil {
-				newBalancerName = *cc.sc.LB
-			} else {
-				newBalancerName = PickFirstBalancerName
+	// Only look at balancer types and switch balancer if balancer dial
+	// option is not set.
+	var newBalancerName string
+	if cc.sc != nil && cc.sc.lbConfig != nil {
+		newBalancerName = cc.sc.lbConfig.name
+	} else {
+		var isGRPCLB bool
+		for _, a := range addrs {
+			if a.Type == resolver.GRPCLB {
+				isGRPCLB = true
+				break
 			}
 		}
-		cc.switchBalancer(newBalancerName)
-	} else if cc.balancerWrapper == nil {
-		// Balancer dial option was set, and this is the first time handling
-		// resolved addresses. Build a balancer with dopts.balancerBuilder.
-		cc.curBalancerName = cc.dopts.balancerBuilder.Name()
-		cc.balancerWrapper = newCCBalancerWrapper(cc, cc.dopts.balancerBuilder, cc.balancerBuildOpts)
+		if isGRPCLB {
+			newBalancerName = grpclbName
+		} else if cc.sc != nil && cc.sc.LB != nil {
+			newBalancerName = *cc.sc.LB
+		} else {
+			newBalancerName = PickFirstBalancerName
+		}
 	}
+	cc.switchBalancer(newBalancerName)
 }
 
 func (cc *ClientConn) resolveNow(o resolver.ResolveNowOptions) {

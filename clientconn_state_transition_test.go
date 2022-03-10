@@ -20,6 +20,7 @@ package grpc
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"testing"
@@ -28,6 +29,7 @@ import (
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -141,9 +143,6 @@ client enters TRANSIENT FAILURE.`,
 }
 
 func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, server func(net.Listener) net.Conn) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
 	pl := testutils.NewPipeListener()
 	defer pl.Close()
 
@@ -156,10 +155,9 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 		connMu.Unlock()
 	}()
 
-	client, err := DialContext(ctx,
-		"",
-		WithInsecure(),
-		WithBalancerName(stateRecordingBalancerName),
+	client, err := Dial("",
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
 		WithDialer(pl.Dialer()),
 		withBackoff(noBackoff{}),
 		withMinConnectDeadline(func() time.Duration { return time.Millisecond * 100 }))
@@ -170,12 +168,9 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 	go stayConnected(client)
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
-
-	timeout := time.After(5 * time.Second)
-
 	for i := 0; i < len(want); i++ {
 		select {
-		case <-timeout:
+		case <-time.After(defaultTestTimeout):
 			t.Fatalf("timed out waiting for state %d (%v) in flow %v", i, want[i], want)
 		case seen := <-stateNotifications:
 			if seen != want[i] {
@@ -196,16 +191,6 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 
 // When a READY connection is closed, the client enters IDLE then CONNECTING.
 func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
-	want := []connectivity.State{
-		connectivity.Connecting,
-		connectivity.Ready,
-		connectivity.Idle,
-		connectivity.Connecting,
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -237,7 +222,9 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 		conn.Close()
 	}()
 
-	client, err := DialContext(ctx, lis.Addr().String(), WithInsecure(), WithBalancerName(stateRecordingBalancerName))
+	client, err := Dial(lis.Addr().String(),
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,11 +233,15 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 
-	timeout := time.After(5 * time.Second)
-
+	want := []connectivity.State{
+		connectivity.Connecting,
+		connectivity.Ready,
+		connectivity.Idle,
+		connectivity.Connecting,
+	}
 	for i := 0; i < len(want); i++ {
 		select {
-		case <-timeout:
+		case <-time.After(defaultTestTimeout):
 			t.Fatalf("timed out waiting for state %d (%v) in flow %v", i, want[i], want)
 		case seen := <-stateNotifications:
 			if seen == connectivity.Ready {
@@ -266,14 +257,6 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 // When the first connection is closed, the client stays in CONNECTING until it
 // tries the second address (which succeeds, and then it enters READY).
 func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) {
-	want := []connectivity.State{
-		connectivity.Connecting,
-		connectivity.Ready,
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
 	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -324,19 +307,25 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
-	client, err := DialContext(ctx, "whatever:///this-gets-overwritten", WithInsecure(), WithBalancerName(stateRecordingBalancerName), WithResolvers(rb))
+	client, err := Dial("whatever:///this-gets-overwritten",
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
+		WithResolvers(rb))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer client.Close()
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
-
-	timeout := time.After(5 * time.Second)
-
+	want := []connectivity.State{
+		connectivity.Connecting,
+		connectivity.Ready,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for i := 0; i < len(want); i++ {
 		select {
-		case <-timeout:
+		case <-ctx.Done():
 			t.Fatalf("timed out waiting for state %d (%v) in flow %v", i, want[i], want)
 		case seen := <-stateNotifications:
 			if seen != want[i] {
@@ -345,12 +334,12 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 		}
 	}
 	select {
-	case <-timeout:
+	case <-ctx.Done():
 		t.Fatal("saw the correct state transitions, but timed out waiting for client to finish interactions with server 1")
 	case <-server1Done:
 	}
 	select {
-	case <-timeout:
+	case <-ctx.Done():
 		t.Fatal("saw the correct state transitions, but timed out waiting for client to finish interactions with server 2")
 	case <-server2Done:
 	}
@@ -359,16 +348,6 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 // When there are multiple addresses, and we enter READY on one of them, a
 // later closure should cause the client to enter CONNECTING
 func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
-	want := []connectivity.State{
-		connectivity.Connecting,
-		connectivity.Ready,
-		connectivity.Idle,
-		connectivity.Connecting,
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-
 	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -414,7 +393,10 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
-	client, err := DialContext(ctx, "whatever:///this-gets-overwritten", WithInsecure(), WithBalancerName(stateRecordingBalancerName), WithResolvers(rb))
+	client, err := Dial("whatever:///this-gets-overwritten",
+		WithTransportCredentials(insecure.NewCredentials()),
+		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
+		WithResolvers(rb))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -422,12 +404,17 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 	go stayConnected(client)
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
-
-	timeout := time.After(2 * time.Second)
-
+	want := []connectivity.State{
+		connectivity.Connecting,
+		connectivity.Ready,
+		connectivity.Idle,
+		connectivity.Connecting,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	for i := 0; i < len(want); i++ {
 		select {
-		case <-timeout:
+		case <-ctx.Done():
 			t.Fatalf("timed out waiting for state %d (%v) in flow %v", i, want[i], want)
 		case seen := <-stateNotifications:
 			if seen == connectivity.Ready {
@@ -439,7 +426,7 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 		}
 	}
 	select {
-	case <-timeout:
+	case <-ctx.Done():
 		t.Fatal("saw the correct state transitions, but timed out waiting for client to finish interactions with server 1")
 	case <-server1Done:
 	}
