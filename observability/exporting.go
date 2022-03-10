@@ -80,7 +80,7 @@ var logLevelToSeverity = map[grpclogrecordpb.GrpcLogRecord_LogLevel]gcplogging.S
 }
 
 var protoToJSONOptions = &protojson.MarshalOptions{
-	UseProtoNames:  false,
+	UseProtoNames:  true,
 	UseEnumNumbers: false,
 }
 
