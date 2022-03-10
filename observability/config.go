@@ -73,10 +73,8 @@ func maybeUpdateProjectIDInObservabilityConfig(ctx context.Context, config *conf
 	if config == nil {
 		return
 	}
-	if config.GetDestinationProjectId() != "" {
-		// User already specified project ID, do nothing
-		return
+	if config.GetDestinationProjectId() == "" {
+		// Try to fetch the GCP project id
+		config.DestinationProjectId = fetchDefaultProjectID(ctx)
 	}
-	// Try to fetch the GCP project id
-	config.DestinationProjectId = fetchDefaultProjectID(ctx)
 }

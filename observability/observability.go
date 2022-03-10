@@ -64,8 +64,8 @@ func Start(ctx context.Context) error {
 	// won't start. The overhead should be minimum.
 	startLogging(config)
 
-	// If the default logging exporter is not disabled, register one.
-	if config.GetDestinationProjectId() == "" || config.GetEnableCloudLogging() {
+	// If the cloud logging exporter is not disabled, register one.
+	if config.GetDestinationProjectId() == "" || !config.GetEnableCloudLogging() {
 		return nil
 	}
 	if err := createDefaultLoggingExporter(ctx, config.DestinationProjectId); err != nil {
