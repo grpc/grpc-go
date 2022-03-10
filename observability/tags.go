@@ -19,20 +19,22 @@
 package observability
 
 import (
-	"os"
 	"strings"
 )
 
-const envPrefixCustomTags = "GRPC_OBSERVABILITY_"
+const (
+	envPrefixCustomTags = "GRPC_OBSERVABILITY_"
+	envPrefixLen        = len(envPrefixCustomTags)
+)
 
-func getCustomTags() map[string]string {
+func getCustomTags(envs []string) map[string]string {
 	m := make(map[string]string)
-	for _, e := range os.Environ() {
+	for _, e := range envs {
 		if !strings.HasPrefix(e, envPrefixCustomTags) {
 			continue
 		}
-		if i := strings.Index(e, "="); i >= 0 {
-			m[e[:i]] = e[i+1:]
+		if i := strings.Index(e, "="); i > envPrefixLen {
+			m[e[envPrefixLen:i]] = e[i+1:]
 		}
 	}
 	return m

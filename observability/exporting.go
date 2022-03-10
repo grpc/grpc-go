@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	gcplogging "cloud.google.com/go/logging"
 	grpclogrecordpb "google.golang.org/grpc/observability/internal/logging"
@@ -54,10 +55,14 @@ func newCloudLoggingExporter(ctx context.Context, projectID string) (*cloudLoggi
 		return nil, fmt.Errorf("failed to create cloudLoggingExporter: %v", err)
 	}
 	defer logger.Infof("Successfully created cloudLoggingExporter")
+	customTags := getCustomTags(os.Environ())
+	if len(customTags) != 0 {
+		logger.Infof("Adding custom tags: %+v", customTags)
+	}
 	return &cloudLoggingExporter{
 		projectID: projectID,
 		client:    c,
-		logger:    c.Logger("grpc", gcplogging.CommonLabels(getCustomTags())),
+		logger:    c.Logger("grpc", gcplogging.CommonLabels(customTags)),
 	}, nil
 }
 
