@@ -110,7 +110,7 @@ func (c *cloudLoggingSink) Write(binlogEntry *binlogpb.GrpcLogEntry) error {
 					grpcLogRecord.ServiceName = tokens[0]
 					grpcLogRecord.MethodName = tokens[1]
 				} else {
-					logger.Errorf("malformed method name: %v", methodName)
+					logger.Errorf("Malformed method name: %v", methodName)
 				}
 			}
 			grpcLogRecord.Timeout = binlogEntry.GetClientHeader().Timeout
