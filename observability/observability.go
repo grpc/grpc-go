@@ -27,6 +27,7 @@ package observability
 
 import (
 	"context"
+	"fmt"
 
 	"google.golang.org/grpc/grpclog"
 )
@@ -51,6 +52,10 @@ func init() {
 // Note: handle the error
 func Start(ctx context.Context) error {
 	config := parseObservabilityConfig()
+	if config == nil {
+		return fmt.Errorf("no ObservabilityConfig found, it can be set via env %s", envProjectID)
+	}
+
 	// Set the project ID if it isn't configured manually.
 	maybeUpdateProjectIDInObservabilityConfig(ctx, config)
 
