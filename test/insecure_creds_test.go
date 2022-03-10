@@ -23,7 +23,6 @@ import (
 	"net"
 	"strings"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -35,8 +34,6 @@ import (
 
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
-
-const defaultTestTimeout = 5 * time.Second
 
 // testLegacyPerRPCCredentials is a PerRPCCredentials that has yet incorporated security level.
 type testLegacyPerRPCCredentials struct{}
