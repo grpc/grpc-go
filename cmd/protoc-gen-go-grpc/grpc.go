@@ -36,9 +36,11 @@ const (
 
 type serviceGenerateHelperInterface interface {
 	formatFullMethodName(service *protogen.Service, method *protogen.Method) string
+	generateNewClientConnInterface(g *protogen.GeneratedFile, clientName string)
 	generateNewClientDefinitions(g *protogen.GeneratedFile, service *protogen.Service, clientName string)
 	generateUnimplementedServerType(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service)
-	generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string)
+	generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string) []string
+	formatHandlerFuncName(service *protogen.Service, hname string) string
 }
 
 type serviceGenerateHelper struct{}
@@ -47,7 +49,15 @@ func (serviceGenerateHelper) formatFullMethodName(service *protogen.Service, met
 	return fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name())
 }
 
+func (serviceGenerateHelper) generateNewClientConnInterface(g *protogen.GeneratedFile, clientName string) {
+	g.P("type ", unexport(clientName), " struct {")
+	g.P("cc ", grpcPackage.Ident("ClientConnInterface"))
+	g.P("}")
+	g.P()
+}
+
 func (serviceGenerateHelper) generateNewClientDefinitions(g *protogen.GeneratedFile, service *protogen.Service, clientName string) {
+	g.P("return &", unexport(clientName), "{cc}")
 }
 
 func (serviceGenerateHelper) generateUnimplementedServerType(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
@@ -76,7 +86,21 @@ func (serviceGenerateHelper) generateUnimplementedServerType(gen *protogen.Plugi
 	g.P()
 }
 
-func (serviceGenerateHelper) generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string) {
+func (serviceGenerateHelper) generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string) []string {
+	// Server handler implementations.
+	handlerNames := make([]string, 0, len(service.Methods))
+	for _, method := range service.Methods {
+		hname := genServerMethod(gen, file, g, method, func(hname string) string {
+			return hname
+		})
+		handlerNames = append(handlerNames, hname)
+	}
+	genServiceDesc(file, g, serviceDescVar, serverType, service, handlerNames)
+	return handlerNames
+}
+
+func (serviceGenerateHelper) formatHandlerFuncName(service *protogen.Service, hname string) string {
+	return hname
 }
 
 var helper serviceGenerateHelperInterface = serviceGenerateHelper{}
@@ -158,10 +182,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	g.P()
 
 	// Client structure.
-	g.P("type ", unexport(clientName), " struct {")
-	g.P("cc ", grpcPackage.Ident("ClientConnInterface"))
-	g.P("}")
-	g.P()
+	helper.generateNewClientConnInterface(g, clientName)
 
 	// NewClient factory.
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
@@ -239,52 +260,6 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	g.P()
 
 	helper.generateServerFunctions(gen, file, g, service, serverType, serviceDescVar)
-
-	// Server handler implementations.
-	handlerNames := make([]string, 0, len(service.Methods))
-	for _, method := range service.Methods {
-		hname := genServerMethod(gen, file, g, method)
-		handlerNames = append(handlerNames, hname)
-	}
-
-	// Service descriptor.
-	g.P("// ", serviceDescVar, " is the ", grpcPackage.Ident("ServiceDesc"), " for ", service.GoName, " service.")
-	g.P("// It's only intended for direct use with ", grpcPackage.Ident("RegisterService"), ",")
-	g.P("// and not to be introspected or modified (even as a copy)")
-	g.P("var ", serviceDescVar, " = ", grpcPackage.Ident("ServiceDesc"), " {")
-	g.P("ServiceName: ", strconv.Quote(string(service.Desc.FullName())), ",")
-	g.P("HandlerType: (*", serverType, ")(nil),")
-	g.P("Methods: []", grpcPackage.Ident("MethodDesc"), "{")
-	for i, method := range service.Methods {
-		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
-			continue
-		}
-		g.P("{")
-		g.P("MethodName: ", strconv.Quote(string(method.Desc.Name())), ",")
-		g.P("Handler: ", handlerNames[i], ",")
-		g.P("},")
-	}
-	g.P("},")
-	g.P("Streams: []", grpcPackage.Ident("StreamDesc"), "{")
-	for i, method := range service.Methods {
-		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
-			continue
-		}
-		g.P("{")
-		g.P("StreamName: ", strconv.Quote(string(method.Desc.Name())), ",")
-		g.P("Handler: ", handlerNames[i], ",")
-		if method.Desc.IsStreamingServer() {
-			g.P("ServerStreams: true,")
-		}
-		if method.Desc.IsStreamingClient() {
-			g.P("ClientStreams: true,")
-		}
-		g.P("},")
-	}
-	g.P("},")
-	g.P("Metadata: \"", file.Desc.Path(), "\",")
-	g.P("}")
-	g.P()
 }
 
 func clientSignature(g *protogen.GeneratedFile, method *protogen.Method) string {
@@ -397,12 +372,53 @@ func serverSignature(g *protogen.GeneratedFile, method *protogen.Method) string 
 	return method.GoName + "(" + strings.Join(reqArgs, ", ") + ") " + ret
 }
 
-func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, method *protogen.Method) string {
+func genServiceDesc(file *protogen.File, g *protogen.GeneratedFile, serviceDescVar string, serverType string, service *protogen.Service, handlerNames []string) {
+	// Service descriptor.
+	g.P("// ", serviceDescVar, " is the ", grpcPackage.Ident("ServiceDesc"), " for ", service.GoName, " service.")
+	g.P("// It's only intended for direct use with ", grpcPackage.Ident("RegisterService"), ",")
+	g.P("// and not to be introspected or modified (even as a copy)")
+	g.P("var ", serviceDescVar, " = ", grpcPackage.Ident("ServiceDesc"), " {")
+	g.P("ServiceName: ", strconv.Quote(string(service.Desc.FullName())), ",")
+	g.P("HandlerType: (*", serverType, ")(nil),")
+	g.P("Methods: []", grpcPackage.Ident("MethodDesc"), "{")
+	for i, method := range service.Methods {
+		if method.Desc.IsStreamingClient() || method.Desc.IsStreamingServer() {
+			continue
+		}
+		g.P("{")
+		g.P("MethodName: ", strconv.Quote(string(method.Desc.Name())), ",")
+		g.P("Handler: ", handlerNames[i], ",")
+		g.P("},")
+	}
+	g.P("},")
+	g.P("Streams: []", grpcPackage.Ident("StreamDesc"), "{")
+	for i, method := range service.Methods {
+		if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
+			continue
+		}
+		g.P("{")
+		g.P("StreamName: ", strconv.Quote(string(method.Desc.Name())), ",")
+		g.P("Handler: ", handlerNames[i], ",")
+		if method.Desc.IsStreamingServer() {
+			g.P("ServerStreams: true,")
+		}
+		if method.Desc.IsStreamingClient() {
+			g.P("ClientStreams: true,")
+		}
+		g.P("},")
+	}
+	g.P("},")
+	g.P("Metadata: \"", file.Desc.Path(), "\",")
+	g.P("}")
+	g.P()
+}
+
+func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, method *protogen.Method, hnameFuncNameFormatter func(string) string) string {
 	service := method.Parent
 	hname := fmt.Sprintf("_%s_%s_Handler", service.GoName, method.GoName)
 
 	if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
-		g.P("func ", hname, "(srv interface{}, ctx ", contextPackage.Ident("Context"), ", dec func(interface{}) error, interceptor ", grpcPackage.Ident("UnaryServerInterceptor"), ") (interface{}, error) {")
+		g.P("func ", hnameFuncNameFormatter(hname), "(srv interface{}, ctx ", contextPackage.Ident("Context"), ", dec func(interface{}) error, interceptor ", grpcPackage.Ident("UnaryServerInterceptor"), ") (interface{}, error) {")
 		g.P("in := new(", method.Input.GoIdent, ")")
 		g.P("if err := dec(in); err != nil { return nil, err }")
 		g.P("if interceptor == nil { return srv.(", service.GoName, "Server).", method.GoName, "(ctx, in) }")
@@ -420,7 +436,7 @@ func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 		return hname
 	}
 	streamType := unexport(service.GoName) + method.GoName + "Server"
-	g.P("func ", hname, "(srv interface{}, stream ", grpcPackage.Ident("ServerStream"), ") error {")
+	g.P("func ", hnameFuncNameFormatter(hname), "(srv interface{}, stream ", grpcPackage.Ident("ServerStream"), ") error {")
 	if !method.Desc.IsStreamingClient() {
 		g.P("m := new(", method.Input.GoIdent, ")")
 		g.P("if err := stream.RecvMsg(m); err != nil { return err }")
