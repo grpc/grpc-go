@@ -188,17 +188,17 @@ func (t *Controller) sendExisting(stream grpc.ClientStream) bool {
 // recv receives xDS responses on the provided ADS stream and branches out to
 // message specific handlers.
 func (t *Controller) recv(stream grpc.ClientStream) bool {
-	success := false
+	msgReceived := false
 	for {
 		resp, err := t.vClient.RecvResponse(stream)
 		if err != nil {
 			t.updateHandler.NewConnectionError(err)
 			t.logger.Warningf("ADS stream is closed with error: %v", err)
-			return success
+			return msgReceived
 		}
+		msgReceived = true
 
 		rType, version, nonce, err := t.handleResponse(resp)
-
 		if e, ok := err.(xdsresourceversion.ErrResourceTypeUnsupported); ok {
 			t.logger.Warningf("%s", e.ErrStr)
 			continue
@@ -221,7 +221,6 @@ func (t *Controller) recv(stream grpc.ClientStream) bool {
 			stream:  stream,
 		})
 		t.logger.Infof("Sending ACK for response type: %v, version: %v, nonce: %v", rType, version, nonce)
-		success = true
 	}
 }
 
