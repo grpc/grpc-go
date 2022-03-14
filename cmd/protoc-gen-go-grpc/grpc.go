@@ -190,7 +190,6 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	}
 	g.P("func New", clientName, " (cc ", grpcPackage.Ident("ClientConnInterface"), ") ", clientName, " {")
 	helper.generateNewClientDefinitions(g, service, clientName)
-	g.P("return &", unexport(clientName), "{cc}")
 	g.P("}")
 	g.P()
 
