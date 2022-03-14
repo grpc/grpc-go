@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -911,8 +912,62 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			},
 		},
 		{
+			name:      "v2 routeConfig resource wrapped",
+			resources: []*anypb.Any{testutils.MarshalAny(&v2xdspb.Resource{Resource: v2RouteConfig})},
+			wantUpdate: map[string]RouteConfigUpdateErrTuple{
+				v2RouteConfigName: {Update: RouteConfigUpdate{
+					VirtualHosts: []*VirtualHost{
+						{
+							Domains: []string{uninterestingDomain},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+								ActionType:       RouteActionRoute}},
+						},
+						{
+							Domains: []string{ldsTarget},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}},
+								ActionType:       RouteActionRoute}},
+						},
+					},
+					Raw: v2RouteConfig,
+				}},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
 			name:      "v3 routeConfig resource",
 			resources: []*anypb.Any{v3RouteConfig},
+			wantUpdate: map[string]RouteConfigUpdateErrTuple{
+				v3RouteConfigName: {Update: RouteConfigUpdate{
+					VirtualHosts: []*VirtualHost{
+						{
+							Domains: []string{uninterestingDomain},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+								ActionType:       RouteActionRoute}},
+						},
+						{
+							Domains: []string{ldsTarget},
+							Routes: []*Route{{Prefix: newStringP(""),
+								WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}},
+								ActionType:       RouteActionRoute}},
+						},
+					},
+					Raw: v3RouteConfig,
+				}},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			name:      "v3 routeConfig resource wrapped",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3discoverypb.Resource{Resource: v3RouteConfig})},
 			wantUpdate: map[string]RouteConfigUpdateErrTuple{
 				v3RouteConfigName: {Update: RouteConfigUpdate{
 					VirtualHosts: []*VirtualHost{
