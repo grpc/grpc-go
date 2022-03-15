@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"testing"
@@ -46,6 +47,10 @@ type fakeProgram struct {
 
 func (fake fakeProgram) Eval(vars interface{}) (ref.Val, *cel.EvalDetails, error) {
 	return fake.out, nil, fake.err
+}
+
+func (fake fakeProgram) ContextEval(ctx context.Context, vars interface{}) (ref.Val, *cel.EvalDetails, error) {
+	return fake.Eval(vars)
 }
 
 type valMock struct {
