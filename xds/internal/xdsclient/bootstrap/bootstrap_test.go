@@ -200,14 +200,14 @@ var (
 		BuildVersion:         gRPCVersion,
 		UserAgentName:        gRPCUserAgentName,
 		UserAgentVersionType: &v2corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-		ClientFeatures:       []string{clientFeatureNoOverprovisioning},
+		ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
 	}
 	v3NodeProto = &v3corepb.Node{
 		Id:                   "ENVOY_NODE_ID",
 		Metadata:             metadata,
 		UserAgentName:        gRPCUserAgentName,
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-		ClientFeatures:       []string{clientFeatureNoOverprovisioning},
+		ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
 	}
 	nilCredsConfigV2 = &Config{
 		XDSServer: &ServerConfig{
@@ -401,7 +401,7 @@ func TestNewConfigV2ProtoSuccess(t *testing.T) {
 						BuildVersion:         gRPCVersion,
 						UserAgentName:        gRPCUserAgentName,
 						UserAgentVersionType: &v2corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
-						ClientFeatures:       []string{clientFeatureNoOverprovisioning},
+						ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
 					},
 				},
 				ClientDefaultListenerResourceNameTemplate: "%s",
