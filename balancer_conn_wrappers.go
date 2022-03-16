@@ -131,11 +131,17 @@ func (ccb *ccBalancerWrapper) watcher() {
 }
 
 func (ccb *ccBalancerWrapper) close() {
+	if ccb == nil {
+		return
+	}
 	ccb.closed.Fire()
 	<-ccb.done.Done()
 }
 
 func (ccb *ccBalancerWrapper) exitIdle() bool {
+	if ccb == nil {
+		return true
+	}
 	if !ccb.hasExitIdle {
 		return false
 	}
@@ -168,6 +174,9 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 }
 
 func (ccb *ccBalancerWrapper) resolverError(err error) {
+	if ccb == nil {
+		return
+	}
 	ccb.balancerMu.Lock()
 	defer ccb.balancerMu.Unlock()
 	ccb.balancer.ResolverError(err)
