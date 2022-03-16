@@ -94,6 +94,9 @@ func (sbc *subBalancerWrapper) updateBalancerStateWithCachedPicker() {
 }
 
 func (sbc *subBalancerWrapper) startBalancer() {
+	if sbc.balancer == nil {
+		sbc.balancer = gracefulswitch.NewBalancer(sbc, sbc.buildOpts)
+	}
 	sbc.group.logger.Infof("Creating child policy of type %v", sbc.builder.Name())
 	sbc.balancer.SwitchTo(sbc.builder)
 	if sbc.ccState != nil {
@@ -275,9 +278,6 @@ func (bg *BalancerGroup) Start() {
 	}
 
 	for _, config := range bg.idToBalancerConfig {
-		if config.balancer == nil {
-			config.balancer = gracefulswitch.NewBalancer(config, bg.buildOpts)
-		}
 		config.startBalancer()
 	}
 	bg.outgoingStarted = true
@@ -318,7 +318,6 @@ func (bg *BalancerGroup) Add(id string, builder balancer.Builder) {
 			builder:    builder,
 			buildOpts:  bg.buildOpts,
 		}
-		sbc.balancer = gracefulswitch.NewBalancer(sbc, bg.buildOpts)
 		if bg.outgoingStarted {
 			// Only start the balancer if bg is started. Otherwise, we only keep the
 			// static data.
