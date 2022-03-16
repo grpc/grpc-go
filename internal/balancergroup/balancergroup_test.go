@@ -534,3 +534,118 @@ func (s) TestBalancerExitIdleOne(t *testing.T) {
 	case <-exitIdleCh:
 	}
 }
+
+// TestBalancerGracefulSwitch tests the graceful switch functionality for a
+// child of the balancer group. At first, the child is configured as a round
+// robin load balancer, and thus should behave accordingly. The test then
+// gracefully switches this child to a custom type which only creates a SubConn
+// for the second passed in address and also only picks that created SubConn.
+// The new aggregated picker should reflect this change for the child.
+func (s) TestBalancerGracefulSwitch(t *testing.T) {
+	cc := testutils.NewTestClientConn(t)
+	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
+	gator.Start()
+	bg := New(cc, balancer.BuildOptions{}, gator, nil)
+	gator.Add(testBalancerIDs[0], 1)
+	bg.Add(testBalancerIDs[0], rrBuilder)
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
+
+	bg.Start()
+
+	m1 := make(map[resolver.Address]balancer.SubConn)
+	for i := 0; i < 2; i++ {
+		addrs := <-cc.NewSubConnAddrsCh
+		sc := <-cc.NewSubConnCh
+		m1[addrs[0]] = sc
+		bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+		bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	}
+
+	// Should behave like a normal rr picker
+	p1 := <-cc.NewPickerCh
+	want := []balancer.SubConn{
+		m1[testBackendAddrs[0]], m1[testBackendAddrs[1]],
+	}
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+
+	// The balancer type for testBalancersIDs[0] is currently Round Robin. Now,
+	// change it to a balancer that has separate behavior logically (creating
+	// SubConn for second address in address list and always picking that
+	// SubConn), and see if the aggregated picker reflects that change.
+	bg.UpdateBuilder(testBalancerIDs[0], secondAddressBalancerBuilder{})
+	if err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}}); err != nil {
+		t.Fatalf("error updating ClientConn state: %v", err)
+	}
+
+	addrs := <-cc.NewSubConnAddrsCh
+	if addrs[0].Addr != testBackendAddrs[3].Addr {
+		t.Fatalf("newSubConn called with wrong address, want: %v, got : %v", testBackendAddrs[3].Addr, addrs[0].Addr)
+	}
+	sc := <-cc.NewSubConnCh
+
+	// Pending being ready should forward the new picker (wrapped in a weighted
+	// aggregator) to the ClientConn which should only return SubConn
+	// corresponding to address 3.
+	p2 := <-cc.NewPickerCh
+	want = []balancer.SubConn{
+		sc,
+	}
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p2)); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+}
+
+type secondAddressBalancerBuilder struct{}
+
+func (secondAddressBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &secondAddressBalancer{
+		cc: cc,
+	}
+}
+
+func (secondAddressBalancerBuilder) Name() string {
+	return "secondAddressBalancer"
+}
+
+type secondAddressBalancer struct {
+	cc balancer.ClientConn
+	p  balancer.Picker
+}
+
+func (mb *secondAddressBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
+	// Hardcode this balancer to only deal with the second address to verify
+	// that it's this balancer type in the balancer group.
+	sc, err := mb.cc.NewSubConn(ccs.ResolverState.Addresses[1:2], balancer.NewSubConnOptions{})
+	if err != nil {
+		return err
+	}
+
+	mb.p = &secondAddressBalancerPicker{
+		sc: sc,
+	}
+
+	// READY will move this balancer into current, causing it to Update Client
+	// Conn with new Picker for this specific type of balancer, not round robin.
+	mb.cc.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Ready,
+		Picker:            mb.p,
+	})
+	return nil
+}
+
+func (mb *secondAddressBalancer) ResolverError(err error) {}
+
+func (mb *secondAddressBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+}
+
+func (mb *secondAddressBalancer) Close() {}
+
+type secondAddressBalancerPicker struct {
+	sc balancer.SubConn
+}
+
+func (p *secondAddressBalancerPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
+	return balancer.PickResult{SubConn: p.sc}, nil
+}
