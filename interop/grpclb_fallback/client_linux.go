@@ -45,7 +45,7 @@ var (
 	customCredentialsType   = flag.String("custom_credentials_type", "", "Client creds to use")
 	serverURI               = flag.String("server_uri", "dns:///staging-grpc-directpath-fallback-test.googleapis.com:443", "The server host name")
 	induceFallbackCmd       = flag.String("induce_fallback_cmd", "", "Command to induce fallback e.g. by making certain addresses unroutable")
-	fallbackDeadlineSeconds = flag.String("fallback_deadline_seconds", 1, "How long to wait for fallback to happen after induce_fallback_cmd")
+	fallbackDeadlineSeconds = flag.Int("fallback_deadline_seconds", 1, "How long to wait for fallback to happen after induce_fallback_cmd")
 	testCase                = flag.String("test_case", "",
 		`Configure different test cases. Valid options are:
         fallback_before_startup : LB/backend connections fail before RPC's have been made;
@@ -155,7 +155,7 @@ func waitForFallbackAndDoRPCs(client testgrpc.TestServiceClient, fallbackDeadlin
 
 func doFallbackBeforeStartup() {
 	runCmd(*induceFallbackCmd)
-	fallbackDeadline := time.Now().Add(*fallbackDeadlineSeconds * time.Second)
+	fallbackDeadline := time.Now().Add(time.Duration(*fallbackDeadlineSeconds) * time.Second)
 	conn := createTestConn()
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
@@ -170,7 +170,7 @@ func doFallbackAfterStartup() {
 		errorLog.Fatalf("Expected RPC to take grpclb route type BACKEND. Got: %v", g)
 	}
 	runCmd(*induceFallbackCmd)
-	fallbackDeadline := time.Now().Add(*fallbackDeadlineSeconds * time.Second)
+	fallbackDeadline := time.Now().Add(time.Duration(*fallbackDeadlineSeconds) * time.Second)
 	waitForFallbackAndDoRPCs(client, fallbackDeadline)
 }
 
