@@ -27,6 +27,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -55,7 +56,7 @@ func (s) TestResolverErrorInBuild(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{ServiceConfig: &serviceconfig.ParseResult{Err: errors.New("resolver build err")}})
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
+	cc, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
 	}
@@ -74,7 +75,7 @@ func (s) TestResolverErrorInBuild(t *testing.T) {
 func (s) TestServiceConfigErrorRPC(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := Dial(r.Scheme()+":///test.server", WithInsecure(), WithResolvers(r))
+	cc, err := Dial(r.Scheme()+":///test.server", WithTransportCredentials(insecure.NewCredentials()), WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Dial(_, _) = _, %v; want _, nil", err)
 	}

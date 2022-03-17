@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"google.golang.org/grpc/resolver"
 )
@@ -83,7 +84,7 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.target, func(t *testing.T) {
-			cc, err := Dial(test.target, WithInsecure())
+			cc, err := Dial(test.target, WithTransportCredentials(insecure.NewCredentials()))
 			if err != nil {
 				t.Fatalf("Dial(%q) failed: %v", test.target, err)
 			}
@@ -106,7 +107,7 @@ func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 
 	for _, target := range targets {
 		t.Run(target, func(t *testing.T) {
-			if cc, err := Dial(target, WithInsecure()); err == nil {
+			if cc, err := Dial(target, WithTransportCredentials(insecure.NewCredentials())); err == nil {
 				defer cc.Close()
 				t.Fatalf("Dial(%q) succeeded cc.parsedTarget = %+v, expected to fail", target, cc.parsedTarget)
 			}
@@ -178,7 +179,7 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 				return nil, errors.New("dialer error")
 			}
 
-			cc, err := Dial(test.target, WithInsecure(), WithContextDialer(dialer))
+			cc, err := Dial(test.target, WithTransportCredentials(insecure.NewCredentials()), WithContextDialer(dialer))
 			if err != nil {
 				t.Fatalf("Dial(%q) failed: %v", test.target, err)
 			}
