@@ -378,7 +378,9 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		isGRPC     = false
 		mdata      = make(map[string][]string)
 		httpMethod string
-		// headerError is set if an error is encountered while parsing the headers
+		// parserError is set if an error is encountered while parsing the headers
+		parserError error
+		// headerError is set for malformed headers
 		headerError bool
 
 		timeoutSet bool
@@ -405,7 +407,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			timeoutSet = true
 			var err error
 			if timeout, err = decodeTimeout(hf.Value); err != nil {
-				headerError = true
+				parserError = err
 			}
 		// "Transports must consider requests containing the Connection header
 		// as malformed." - A41
@@ -420,7 +422,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			}
 			v, err := decodeMetadataHeader(hf.Name, hf.Value)
 			if err != nil {
-				headerError = true
+				parserError = err
 				logger.Warningf("Failed to decode metadata header (%q, %q): %v", hf.Name, hf.Value, err)
 				break
 			}
@@ -452,6 +454,22 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			streamID: streamID,
 			rst:      true,
 			rstCode:  http2.ErrCodeProtocol,
+			onWrite:  func() {},
+		})
+		return false
+	}
+
+	if parserError != nil {
+		if err := t.WriteStatus(
+			s,
+			status.Newf(codes.Internal, "transport: http2Server.operateHeaders failed parse headers: %v", parserError),
+		); err != nil && logger.V(logLevel) {
+			logger.Infof("transport: http2Server.operateHeaders failed to write status %v", err)
+		}
+		t.controlBuf.put(&cleanupStream{
+			streamID: streamID,
+			rst:      true,
+			rstCode:  http2.ErrCodeInternal,
 			onWrite:  func() {},
 		})
 		return false

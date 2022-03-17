@@ -1688,13 +1688,14 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 // TestHeadersCausingStreamError tests headers that should cause a stream protocol
 // error, which would end up with a RST_STREAM being sent to the client and also
 // the server closing the stream.
-func (s) TestHeadersCausingStreamError(t *testing.T) {
+func (s) TestHeadersCausingResetStream(t *testing.T) {
 	tests := []struct {
 		name    string
 		headers []struct {
 			name   string
 			values []string
 		}
+		err http2.ErrCode
 	}{
 		// If the client sends an HTTP/2 request with a :method header with a
 		// value other than POST, as specified in the gRPC over HTTP/2
@@ -1710,6 +1711,7 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 				{name: ":authority", values: []string{"localhost"}},
 				{name: "content-type", values: []string{"application/grpc"}},
 			},
+			err: http2.ErrCodeProtocol,
 		},
 		// "Transports must consider requests containing the Connection header
 		// as malformed" - A41 Malformed requests map to a stream error of type
@@ -1726,6 +1728,7 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 				{name: "content-type", values: []string{"application/grpc"}},
 				{name: "connection", values: []string{"not-supported"}},
 			},
+			err: http2.ErrCodeProtocol,
 		},
 		// multiple :authority or multiple Host headers would make the eventual
 		// :authority ambiguous as per A41. Since these headers won't have a
@@ -1746,6 +1749,22 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 				{name: ":authority", values: []string{"localhost", "localhost2"}},
 				{name: "host", values: []string{"localhost"}},
 			},
+			err: http2.ErrCodeProtocol,
+		},
+		{
+			name: "Timeout Parse Error",
+			headers: []struct {
+				name   string
+				values []string
+			}{
+				{name: ":method", values: []string{"POST"}},
+				{name: ":path", values: []string{"foo"}},
+				{name: ":authority", values: []string{"localhost"}},
+				{name: "content-type", values: []string{"application/grpc"}},
+				{name: "host", values: []string{"localhost"}},
+				{name: "grpc-timeout", values: []string{"1"}},
+			},
+			err: http2.ErrCodeInternal,
 		},
 	}
 	for _, test := range tests {
@@ -1784,7 +1803,7 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 					case *http2.SettingsFrame:
 						// Do nothing. A settings frame is expected from server preface.
 					case *http2.RSTStreamFrame:
-						if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeProtocol {
+						if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != test.err {
 							// Client only created a single stream, so RST Stream should be for that single stream.
 							result.Send(fmt.Errorf("RST stream received with streamID: %d and code %v, want streamID: 1 and code: http.ErrCodeFlowControl", frame.Header().StreamID, http2.ErrCode(frame.ErrCode)))
 						}
