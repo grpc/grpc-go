@@ -25,6 +25,7 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	anypb "github.com/golang/protobuf/ptypes/any"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
@@ -194,6 +195,42 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 		{
 			name:      "v3 endpoints",
 			resources: []*anypb.Any{v3EndpointsAny},
+			wantUpdate: map[string]EndpointsUpdateErrTuple{
+				"test": {Update: EndpointsUpdate{
+					Drops: nil,
+					Localities: []Locality{
+						{
+							Endpoints: []Endpoint{{
+								Address:      "addr1:314",
+								HealthStatus: EndpointHealthStatusUnhealthy,
+								Weight:       271,
+							}},
+							ID:       internal.LocalityID{SubZone: "locality-1"},
+							Priority: 1,
+							Weight:   1,
+						},
+						{
+							Endpoints: []Endpoint{{
+								Address:      "addr2:159",
+								HealthStatus: EndpointHealthStatusDraining,
+								Weight:       828,
+							}},
+							ID:       internal.LocalityID{SubZone: "locality-2"},
+							Priority: 0,
+							Weight:   1,
+						},
+					},
+					Raw: v3EndpointsAny,
+				}},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			name:      "v3 endpoints wrapped",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3discoverypb.Resource{Resource: v3EndpointsAny})},
 			wantUpdate: map[string]EndpointsUpdateErrTuple{
 				"test": {Update: EndpointsUpdate{
 					Drops: nil,

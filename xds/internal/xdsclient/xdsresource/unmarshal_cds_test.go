@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/envconfig"
@@ -1518,8 +1519,38 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			},
 		},
 		{
+			name:      "v2 cluster wrapped",
+			resources: []*anypb.Any{testutils.MarshalAny(&v2xdspb.Resource{Resource: v2ClusterAny})},
+			wantUpdate: map[string]ClusterUpdateErrTuple{
+				v2ClusterName: {Update: ClusterUpdate{
+					ClusterName:    v2ClusterName,
+					EDSServiceName: v2Service, LRSServerConfig: ClusterLRSServerSelf,
+					Raw: v2ClusterAny,
+				}},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
 			name:      "v3 cluster",
 			resources: []*anypb.Any{v3ClusterAny},
+			wantUpdate: map[string]ClusterUpdateErrTuple{
+				v3ClusterName: {Update: ClusterUpdate{
+					ClusterName:    v3ClusterName,
+					EDSServiceName: v3Service, LRSServerConfig: ClusterLRSServerSelf,
+					Raw: v3ClusterAny,
+				}},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			name:      "v3 cluster wrapped",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3discoverypb.Resource{Resource: v3ClusterAny})},
 			wantUpdate: map[string]ClusterUpdateErrTuple{
 				v3ClusterName: {Update: ClusterUpdate{
 					ClusterName:    v3ClusterName,
