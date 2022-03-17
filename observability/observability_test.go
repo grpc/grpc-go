@@ -61,13 +61,16 @@ func init() {
 }
 
 var (
+	smallTimeout              = 100 * time.Millisecond
 	defaultTestTimeout        = 10 * time.Second
 	testHeaderMetadata        = metadata.MD{"header": []string{"HeADer"}}
 	testTrailerMetadata       = metadata.MD{"trailer": []string{"TrAileR"}}
 	testOkPayload             = []byte{72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100}
 	testErrorPayload          = []byte{77, 97, 114, 116, 104, 97}
+	testCancelPayload         = []byte{65, 65, 65}
 	testErrorMessage          = "test case injected error"
 	infinitySizeBytes   int32 = 1024 * 1024 * 1024
+	infinityDuration          = 3600 * time.Second
 )
 
 type testServer struct {
