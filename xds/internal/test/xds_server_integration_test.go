@@ -80,8 +80,20 @@ func setupGRPCServer(t *testing.T, bootstrapContents []byte) (net.Listener, func
 		t.Fatal(err)
 	}
 
+	// Create a server option to get notified about serving mode changes. We don't
+	// do anything other than throwing a log entry here. But this is required,
+	// since the server code emits a log entry at the default level (which is
+	// ERROR) if no callback is registered for serving mode changes. Our
+	// testLogger fails the test if there is any log entry at ERROR level. It does
+	// provide an ExpectError()  method, but that takes a string and it would be
+	// painful to construct the exact error message expected here. Instead this
+	// works just fine.
+	modeChangeOpt := xds.ServingModeCallback(func(addr net.Addr, args xds.ServingModeChangeArgs) {
+		t.Logf("Serving mode for listener %q changed to %q, err: %v", addr.String(), args.Mode, args.Err)
+	})
+
 	// Initialize an xDS-enabled gRPC server and register the stubServer on it.
-	server := xds.NewGRPCServer(grpc.Creds(creds), xds.BootstrapContentsForTesting(bootstrapContents))
+	server := xds.NewGRPCServer(grpc.Creds(creds), modeChangeOpt, xds.BootstrapContentsForTesting(bootstrapContents))
 	testpb.RegisterTestServiceServer(server, &testService{})
 
 	// Create a local listener and pass it to Serve().
