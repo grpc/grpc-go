@@ -43,13 +43,13 @@ func (s) TestGetCustomTags(t *testing.T) {
 	}
 }
 
-// TestGetCustomTagsInvalid tests the sunny day path of the custom tags parsing
+// TestGetCustomTagsInvalid tests the invalid cases of tags parsing
 func (s) TestGetCustomTagsInvalid(t *testing.T) {
 	var (
 		input = []string{
 			"GRPC_OBSERVABILITY_APP_NAME=app1",
 			"GRPC_OBSERVABILITY=foo",
-			"GRPC_OBSERVABILITY_=foo",
+			"GRPC_OBSERVABILITY_=foo", // Users should not set "" as key name
 			"GRPC_STUFF=foo",
 			"STUFF_GRPC_OBSERVABILITY_=foo",
 		}
