@@ -381,8 +381,9 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		// headerError is set if an error is encountered while parsing the headers
 		headerError bool
 
-		timeoutSet bool
-		timeout    time.Duration
+		timeoutSet  bool
+		timeout     time.Duration
+		contentType string
 	)
 
 	for _, hf := range frame.Fields {
@@ -390,6 +391,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		case "content-type":
 			contentSubtype, validContentType := grpcutil.ContentSubtype(hf.Value)
 			if !validContentType {
+				contentType = hf.Value
 				break
 			}
 			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
@@ -447,7 +449,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return false
 	}
 
-	if !isGRPC || headerError {
+	if headerError {
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
 			rst:      true,
@@ -456,7 +458,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		})
 		return false
 	}
-
 	// "If :authority is missing, Host must be renamed to :authority." - A41
 	if len(mdata[":authority"]) == 0 {
 		// No-op if host isn't present, no eventual :authority header is a valid
@@ -592,6 +593,29 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		wq:       s.wq,
 	})
 	handle(s)
+	if !isGRPC {
+		// write the initial headers
+		t.controlBuf.put(&headerFrame{
+			streamID: streamID,
+			hf: []hpack.HeaderField{
+				{Name: ":status", Value: "200"},
+				{Name: "content-type", Value: "text/plain; charset=utf-8"},
+				{Name: "grpc-status", Value: strconv.Itoa(int(codes.Unknown))},
+				{Name: "grpc-message", Value: fmt.Sprintf("unsupported content-type %q", contentType)},
+			},
+			endStream: false,
+			onWrite:   t.setResetPingStrikes,
+		})
+		t.controlBuf.put(&dataFrame{
+			streamID:    streamID,
+			endStream:   false,
+			h:           []byte(""),
+			d:           []byte(""),
+			onEachWrite: t.setResetPingStrikes,
+		})
+		t.finishStream(s, true, http2.ErrCodeCancel, &headerFrame{}, true)
+	}
+
 	return false
 }
 
