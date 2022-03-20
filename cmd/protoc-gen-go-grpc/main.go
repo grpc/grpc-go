@@ -40,7 +40,10 @@ import (
 
 const version = "1.2.0"
 
-var requireUnimplemented *bool
+var (
+	requireUnimplemented *bool
+	standaloneDir        *bool
+)
 
 func main() {
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -52,6 +55,7 @@ func main() {
 
 	var flags flag.FlagSet
 	requireUnimplemented = flags.Bool("require_unimplemented_servers", true, "set to false to match legacy behavior")
+	standaloneDir = flags.Bool("standalone", false, "generate code that work outside of generated messages")
 
 	protogen.Options{
 		ParamFunc: flags.Set,
