@@ -47,7 +47,7 @@ func init() {
 //   - it registers default exporters if not disabled by the config;
 //   - it sets up binary logging sink against the logging exporter.
 //
-// Note: this method should only be invoked once, it's not thread-safe.
+// Note: this method should only be invoked once.
 // Note: currently, the binarylog module only supports one sink, so using the
 // "observability" module will conflict with existing binarylog usage.
 // Note: handle the error
@@ -61,15 +61,7 @@ func Start(ctx context.Context) error {
 	maybeUpdateProjectIDInObservabilityConfig(ctx, config)
 
 	// Logging is controlled by the config at methods level.
-	startLogging(config)
-
-	if config.GetDestinationProjectId() == "" || !config.GetEnableCloudLogging() {
-		return nil
-	}
-	if err := createDefaultLoggingExporter(ctx, config.DestinationProjectId); err != nil {
-		return err
-	}
-	return nil
+	return defaultLogger.Start(ctx, config)
 }
 
 // End is the clean-up API for gRPC Observability plugin. It is expected to be
@@ -77,7 +69,7 @@ func Start(ctx context.Context) error {
 // "defer observability.End()". This function also flushes data to upstream, and
 // cleanup resources.
 //
-// Note: this method should only be invoked once, it's not thread-safe.
+// Note: this method should only be invoked once.
 func End() {
-	closeLoggingExporter()
+	defaultLogger.Close()
 }

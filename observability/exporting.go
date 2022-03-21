@@ -39,9 +39,6 @@ type loggingExporter interface {
 	Close() error
 }
 
-// globalLoggingExporter is the global logging exporter, may be nil.
-var globalLoggingExporter loggingExporter
-
 type cloudLoggingExporter struct {
 	projectID string
 	client    *gcplogging.Client
@@ -85,26 +82,20 @@ var protoToJSONOptions = &protojson.MarshalOptions{
 
 func (cle *cloudLoggingExporter) EmitGrpcLogRecord(l *grpclogrecordpb.GrpcLogRecord) {
 	// Converts the log record content to a more readable format via protojson.
-	// This is technically a hack, will be removed once we removed our
-	// dependencies to Cloud Logging SDK.
 	jsonBytes, err := protoToJSONOptions.Marshal(l)
 	if err != nil {
-		logger.Errorf("Unable to marshal log record: %v", l)
+		logger.Infof("Unable to marshal log record: %v", l)
+		return
 	}
 	var payload map[string]interface{}
 	err = json.Unmarshal(jsonBytes, &payload)
 	if err != nil {
-		logger.Errorf("Unable to unmarshal bytes to JSON: %v", jsonBytes)
-	}
-	// Converts severity from log level
-	var severity, ok = logLevelToSeverity[l.LogLevel]
-	if !ok {
-		logger.Errorf("Invalid log level: %v", l.LogLevel)
-		severity = 0
+		logger.Infof("Unable to unmarshal bytes to JSON: %v", jsonBytes)
+		return
 	}
 	entry := gcplogging.Entry{
 		Timestamp: l.Timestamp.AsTime(),
-		Severity:  severity,
+		Severity:  logLevelToSeverity[l.LogLevel],
 		Payload:   payload,
 	}
 	cle.logger.Log(entry)
@@ -128,19 +119,4 @@ func (cle *cloudLoggingExporter) Close() error {
 	}
 	logger.Infof("Closed CloudLogging exporter")
 	return nil
-}
-
-func createDefaultLoggingExporter(ctx context.Context, projectID string) error {
-	var err error
-	globalLoggingExporter, err = newCloudLoggingExporter(ctx, projectID)
-	return err
-}
-
-func closeLoggingExporter() {
-	if globalLoggingExporter != nil {
-		if err := globalLoggingExporter.Close(); err != nil {
-			logger.Infof("Failed to close logging exporter: %v", err)
-		}
-		globalLoggingExporter = nil
-	}
 }

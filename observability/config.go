@@ -59,7 +59,7 @@ func parseObservabilityConfig() *configpb.ObservabilityConfig {
 	if content := os.Getenv(envObservabilityConfig); content != "" {
 		var config configpb.ObservabilityConfig
 		if err := protojson.Unmarshal([]byte(content), &config); err != nil {
-			logger.Warningf("Error parsing observability config from env %v: %v", envObservabilityConfig, err)
+			logger.Infof("Error parsing observability config from env %v: %v", envObservabilityConfig, err)
 			return nil
 		}
 		logger.Infof("Parsed ObservabilityConfig: %+v", &config)

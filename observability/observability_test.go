@@ -23,13 +23,13 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	iblog "google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -61,16 +61,13 @@ func init() {
 }
 
 var (
-	smallTimeout              = 100 * time.Millisecond
 	defaultTestTimeout        = 10 * time.Second
 	testHeaderMetadata        = metadata.MD{"header": []string{"HeADer"}}
 	testTrailerMetadata       = metadata.MD{"trailer": []string{"TrAileR"}}
 	testOkPayload             = []byte{72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100}
 	testErrorPayload          = []byte{77, 97, 114, 116, 104, 97}
-	testCancelPayload         = []byte{65, 65, 65}
 	testErrorMessage          = "test case injected error"
 	infinitySizeBytes   int32 = 1024 * 1024 * 1024
-	infinityDuration          = 3600 * time.Second
 )
 
 type testServer struct {
@@ -207,23 +204,18 @@ func (te *test) enablePluginWithFakeExporters() {
 			},
 		},
 	}
-	configJSON, err := protojson.Marshal(config)
-	if err != nil {
-		te.t.Fatalf("failed to convert config to JSON: %v", err)
-	}
-	os.Setenv(envObservabilityConfig, string(configJSON))
-	// Explicitly re-parse the ObservabilityConfig
-	Start(context.Background())
 	// Injects the fake exporter for testing purposes
-	globalLoggingExporter = te.fle
+	defaultLogger = newObservabilityBinaryLogger(nil)
+	iblog.SetLogger(defaultLogger)
+	defaultLogger.start(config, te.fle)
 }
 
 func (te *test) enablePluginWithEmptyConfig() {
-	os.Setenv(envObservabilityConfig, "{}")
-	// Explicitly re-parse the ObservabilityConfig
-	Start(context.Background())
+	config := &configpb.ObservabilityConfig{}
 	// Injects the fake exporter for testing purposes
-	globalLoggingExporter = te.fle
+	defaultLogger = newObservabilityBinaryLogger(nil)
+	iblog.SetLogger(defaultLogger)
+	defaultLogger.start(config, te.fle)
 }
 
 func checkEventCommon(t *testing.T, seen *grpclogrecordpb.GrpcLogRecord) {

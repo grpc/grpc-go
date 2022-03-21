@@ -19,8 +19,10 @@
 package observability
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 
 	"github.com/google/uuid"
 	binlogpb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
@@ -53,10 +55,17 @@ func setPeerIfPresent(binlogEntry *binlogpb.GrpcLogEntry, grpcLogRecord *grpclog
 	}
 }
 
+var loggerTypeToEventLogger = map[binlogpb.GrpcLogEntry_Logger]grpclogrecordpb.GrpcLogRecord_EventLogger{
+	binlogpb.GrpcLogEntry_LOGGER_UNKNOWN: grpclogrecordpb.GrpcLogRecord_LOGGER_UNKNOWN,
+	binlogpb.GrpcLogEntry_LOGGER_CLIENT:  grpclogrecordpb.GrpcLogRecord_LOGGER_CLIENT,
+	binlogpb.GrpcLogEntry_LOGGER_SERVER:  grpclogrecordpb.GrpcLogRecord_LOGGER_SERVER,
+}
+
 type observabilityBinaryMethodLogger struct {
 	rpcID, serviceName, methodName string
 	originalMethodLogger           iblog.MethodLogger
 	wrappedMethodLogger            iblog.MethodLogger
+	exporter                       loggingExporter
 }
 
 func (ml *observabilityBinaryMethodLogger) Log(c iblog.LogEntryConfig) {
@@ -75,27 +84,19 @@ func (ml *observabilityBinaryMethodLogger) Log(c iblog.LogEntryConfig) {
 		Build(iblog.LogEntryConfig) *binlogpb.GrpcLogEntry
 	})
 	if !ok {
-		logger.Errorf("Failed to locate the Build method in wrapped method logger")
+		logger.Error("Failed to locate the Build method in wrapped method logger")
 		return
 	}
 	binlogEntry = o.Build(c)
 
 	// Translate to GrpcLogRecord
 	grpcLogRecord := &grpclogrecordpb.GrpcLogRecord{
-		Timestamp:  binlogEntry.GetTimestamp(),
-		RpcId:      ml.rpcID,
-		SequenceId: binlogEntry.GetSequenceIdWithinCall(),
+		Timestamp:   binlogEntry.GetTimestamp(),
+		RpcId:       ml.rpcID,
+		SequenceId:  binlogEntry.GetSequenceIdWithinCall(),
+		EventLogger: loggerTypeToEventLogger[binlogEntry.Logger],
 		// Making DEBUG the default LogLevel
 		LogLevel: grpclogrecordpb.GrpcLogRecord_LOG_LEVEL_DEBUG,
-	}
-
-	switch binlogEntry.Logger {
-	case binlogpb.GrpcLogEntry_LOGGER_CLIENT:
-		grpcLogRecord.EventLogger = grpclogrecordpb.GrpcLogRecord_LOGGER_CLIENT
-	case binlogpb.GrpcLogEntry_LOGGER_SERVER:
-		grpcLogRecord.EventLogger = grpclogrecordpb.GrpcLogRecord_LOGGER_SERVER
-	default:
-		grpcLogRecord.EventLogger = grpclogrecordpb.GrpcLogRecord_LOGGER_UNKNOWN
 	}
 
 	switch binlogEntry.GetType() {
@@ -113,7 +114,7 @@ func (ml *observabilityBinaryMethodLogger) Log(c iblog.LogEntryConfig) {
 					ml.serviceName = tokens[1]
 					ml.methodName = tokens[2]
 				} else {
-					logger.Warningf("Malformed method name: %v", methodName)
+					logger.Infof("Malformed method name: %v", methodName)
 				}
 			}
 			grpcLogRecord.Timeout = binlogEntry.GetClientHeader().Timeout
@@ -150,14 +151,12 @@ func (ml *observabilityBinaryMethodLogger) Log(c iblog.LogEntryConfig) {
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CANCEL:
 		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_CANCEL
 	default:
-		logger.Warningf("unknown event type: %v", binlogEntry.Type)
+		logger.Infof("Unknown event type: %v", binlogEntry.Type)
 		return
 	}
 	grpcLogRecord.ServiceName = ml.serviceName
 	grpcLogRecord.MethodName = ml.methodName
-	// CloudLogging client doesn't return error on entry write. Entry writes
-	// don't mean the data will be uploaded immediately.
-	globalLoggingExporter.EmitGrpcLogRecord(grpcLogRecord)
+	ml.exporter.EmitGrpcLogRecord(grpcLogRecord)
 }
 
 type observabilityBinaryLogger struct {
@@ -165,28 +164,87 @@ type observabilityBinaryLogger struct {
 	// by this plugin. Users are allowed to subscribe to a completely different
 	// set of methods.
 	originalLogger iblog.Logger
-	// wrappedLogger is needed to reuse the control string parsing, logger
+	// wrappedLogger is a Logger needed to reuse the control string parsing, logger
 	// config managing logic
-	wrappedLogger iblog.Logger
+	wrappedLogger atomic.Value
+	// exporter is a loggingExporter and the handle for uploading collected data to backends
+	exporter atomic.Value
 }
 
 func (l *observabilityBinaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
 	var ol, ml iblog.MethodLogger
+
 	if l.originalLogger != nil {
 		ol = l.originalLogger.GetMethodLogger(methodName)
 	}
-	if l.wrappedLogger == nil {
+
+	wlPtr := l.wrappedLogger.Load()
+	if wlPtr == nil {
 		return ol
 	}
-	ml = l.wrappedLogger.GetMethodLogger(methodName)
+	ml = wlPtr.(iblog.Logger).GetMethodLogger(methodName)
 	if ml == nil {
 		return ol
 	}
+
+	ePtr := l.exporter.Load()
+	// If no exporter is specified, there is no point creating a method
+	// logger. We don't have any chance to inject exporter after its
+	// creation.
+	if ePtr == nil {
+		return ol
+	}
+
 	return &observabilityBinaryMethodLogger{
 		originalMethodLogger: ol,
 		wrappedMethodLogger:  ml,
 		rpcID:                uuid.NewString(),
+		exporter:             ePtr.(loggingExporter),
 	}
+}
+
+func (l *observabilityBinaryLogger) Close() {
+	if l == nil {
+		return
+	}
+	exporter := l.exporter.Load()
+	if exporter != nil {
+		if err := exporter.(loggingExporter).Close(); err != nil {
+			logger.Infof("Failed to close logging exporter: %v", err)
+		}
+	}
+}
+
+// start is the core logic for setting up the custom binary logging logger, and
+// it's also useful for testing.
+func (l *observabilityBinaryLogger) start(config *configpb.ObservabilityConfig, exporter loggingExporter) error {
+	binlogConfig := iblog.NewLoggerFromConfigString(compileBinaryLogControlString(config))
+	if binlogConfig != nil {
+		defaultLogger.wrappedLogger.Store(binlogConfig)
+	}
+	if exporter != nil {
+		defaultLogger.exporter.Store(exporter)
+	}
+	logger.Infof("Start logging with config [%v]", binlogConfig)
+	return nil
+}
+
+func (l *observabilityBinaryLogger) Start(ctx context.Context, config *configpb.ObservabilityConfig) error {
+	if config == nil {
+		return nil
+	}
+	if !config.GetEnableCloudLogging() {
+		return nil
+	}
+	if config.GetDestinationProjectId() == "" {
+		return fmt.Errorf("failed to enable CloudLogging: empty destination_project_id")
+	}
+	exporter, err := newCloudLoggingExporter(ctx, config.DestinationProjectId)
+	if err != nil {
+		return fmt.Errorf("unable to create CloudLogging exporter: %v", err)
+	}
+	l.start(config, exporter)
+	return nil
 }
 
 func newObservabilityBinaryLogger(iblogger iblog.Logger) *observabilityBinaryLogger {
@@ -220,13 +278,4 @@ var defaultLogger *observabilityBinaryLogger
 func prepareLogging() {
 	defaultLogger = newObservabilityBinaryLogger(iblog.GetLogger())
 	iblog.SetLogger(defaultLogger)
-}
-
-func startLogging(config *configpb.ObservabilityConfig) {
-	if config == nil {
-		return
-	}
-	binlogConfig := compileBinaryLogControlString(config)
-	defaultLogger.wrappedLogger = iblog.NewLoggerFromConfigString(binlogConfig)
-	logger.Infof("Start logging with config [%v]", binlogConfig)
 }
