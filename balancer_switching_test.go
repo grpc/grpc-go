@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/status"
 )
 
 var _ balancer.Builder = &magicalLB{}
@@ -77,6 +78,13 @@ func startServers(t *testing.T, numServers int, maxStreams uint32) ([]*server, f
 			servers[i].stop()
 		}
 	}
+}
+
+func errorDesc(err error) string {
+	if s, ok := status.FromError(err); ok {
+		return s.Message()
+	}
+	return err.Error()
 }
 
 func checkPickFirst(cc *ClientConn, servers []*server) error {
