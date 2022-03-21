@@ -25,13 +25,14 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	_ "google.golang.org/grpc/balancer/rls"
 	"google.golang.org/grpc/internal/grpctest"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/internal/testutils"
-	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	_ "google.golang.org/grpc/balancer/rls"                      // Register the RLS LB policy.
+	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // Register the CDS LB policy.
 )
 
 func init() {
