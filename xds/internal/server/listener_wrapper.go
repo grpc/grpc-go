@@ -438,7 +438,12 @@ func (l *listenerWrapper) switchMode(fcs *xdsresource.FilterChainManager, newMod
 	defer l.mu.Unlock()
 
 	l.filterChains = fcs
-	if l.mode == newMode {
+	if l.mode == newMode && l.mode == connectivity.ServingModeServing {
+		// Redundant updates are suppressed only when we are SERVING and the new
+		// mode is also SERVING. In the other case (where we are NOT_SERVING and the
+		// new mode is also NOT_SERVING), the update is not suppressed as:
+		//   1. the error may have change
+		//   2. it provides a timestamp of the last backoff attempt
 		return
 	}
 	l.mode = newMode
