@@ -25,6 +25,7 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/cache"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/resolver"
@@ -67,7 +68,7 @@ type subBalancerWrapper struct {
 	ccState *balancer.ClientConnState
 	// The dynamic part of sub-balancer. Only used when balancer group is
 	// started. Gets cleared when sub-balancer is closed.
-	balancer balancer.Balancer
+	balancer *gracefulswitch.Balancer
 }
 
 // UpdateState overrides balancer.ClientConn, to keep state and picker.
@@ -93,11 +94,13 @@ func (sbc *subBalancerWrapper) updateBalancerStateWithCachedPicker() {
 }
 
 func (sbc *subBalancerWrapper) startBalancer() {
-	b := sbc.builder.Build(sbc, sbc.buildOpts)
-	sbc.group.logger.Infof("Created child policy %p of type %v", b, sbc.builder.Name())
-	sbc.balancer = b
+	if sbc.balancer == nil {
+		sbc.balancer = gracefulswitch.NewBalancer(sbc, sbc.buildOpts)
+	}
+	sbc.group.logger.Infof("Creating child policy of type %v", sbc.builder.Name())
+	sbc.balancer.SwitchTo(sbc.builder)
 	if sbc.ccState != nil {
-		b.UpdateClientConnState(*sbc.ccState)
+		sbc.balancer.UpdateClientConnState(*sbc.ccState)
 	}
 }
 
@@ -108,11 +111,8 @@ func (sbc *subBalancerWrapper) exitIdle() (complete bool) {
 	if b == nil {
 		return true
 	}
-	if ei, ok := b.(balancer.ExitIdler); ok {
-		ei.ExitIdle()
-		return true
-	}
-	return false
+	b.ExitIdle()
+	return true
 }
 
 func (sbc *subBalancerWrapper) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
@@ -374,7 +374,6 @@ func (bg *BalancerGroup) cleanupSubConns(config *subBalancerWrapper) {
 	// sub-balancers.
 	for sc, b := range bg.scToSubBalancer {
 		if b == config {
-			bg.cc.RemoveSubConn(sc)
 			delete(bg.scToSubBalancer, sc)
 		}
 	}
