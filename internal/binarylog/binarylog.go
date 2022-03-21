@@ -31,7 +31,7 @@ import (
 // Logger is the global binary logger. It can be used to get binary logger for
 // each method.
 type Logger interface {
-	getMethodLogger(methodName string) *MethodLogger
+	GetMethodLogger(methodName string) MethodLogger
 }
 
 // binLogger is the global binary logger for the binary. One of this should be
@@ -49,17 +49,24 @@ func SetLogger(l Logger) {
 	binLogger = l
 }
 
+// GetLogger gets the binarg logger.
+//
+// Only call this at init time.
+func GetLogger() Logger {
+	return binLogger
+}
+
 // GetMethodLogger returns the methodLogger for the given methodName.
 //
 // methodName should be in the format of "/service/method".
 //
 // Each methodLogger returned by this method is a new instance. This is to
 // generate sequence id within the call.
-func GetMethodLogger(methodName string) *MethodLogger {
+func GetMethodLogger(methodName string) MethodLogger {
 	if binLogger == nil {
 		return nil
 	}
-	return binLogger.getMethodLogger(methodName)
+	return binLogger.GetMethodLogger(methodName)
 }
 
 func init() {
@@ -148,7 +155,7 @@ func (l *logger) setBlacklist(method string) error {
 //
 // Each methodLogger returned by this method is a new instance. This is to
 // generate sequence id within the call.
-func (l *logger) getMethodLogger(methodName string) *MethodLogger {
+func (l *logger) GetMethodLogger(methodName string) MethodLogger {
 	s, m, err := grpcutil.ParseMethod(methodName)
 	if err != nil {
 		grpclogLogger.Infof("binarylogging: failed to parse %q: %v", methodName, err)
