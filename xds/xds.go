@@ -38,6 +38,7 @@ import (
 
 	_ "google.golang.org/grpc/credentials/tls/certprovider/pemfile"         // Register the file watcher certificate provider plugin.
 	_ "google.golang.org/grpc/xds/internal/balancer"                        // Register the balancers.
+	_ "google.golang.org/grpc/xds/internal/clusterspecifier/rls"            // Register the RLS cluster specifier plugin.
 	_ "google.golang.org/grpc/xds/internal/httpfilter/fault"                // Register the fault injection filter.
 	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"                 // Register the RBAC filter.
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"               // Register the router filter.
