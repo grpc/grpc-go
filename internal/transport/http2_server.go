@@ -36,6 +36,7 @@ import (
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	"google.golang.org/grpc/internal/grpcutil"
+	"google.golang.org/grpc/internal/syscall"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -230,6 +231,11 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	}
 	if kp.Timeout == 0 {
 		kp.Timeout = defaultServerKeepaliveTimeout
+	}
+	if kp.Time != infinity {
+		if err = syscall.SetTCPUserTimeout(conn, kp.Timeout); err != nil {
+			return nil, connectionErrorf(false, err, "transport: failed to set TCP_USER_TIMEOUT: %v", err)
+		}
 	}
 	kep := config.KeepalivePolicy
 	if kep.MinTime == 0 {
