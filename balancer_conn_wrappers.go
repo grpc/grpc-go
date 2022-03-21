@@ -167,6 +167,15 @@ func (ccb *ccBalancerWrapper) handleSubConnStateChange(sc balancer.SubConn, s co
 	})
 }
 
+// updateClientConnState forwards the clientConn update to the wrapped balancer
+// synchronously.
+//
+// Other calls from the channel like exitIdle() and handleSubConnStateChange()
+// are handled asynchronously by pushing the update onto a channel, which is
+// picked up by the watcher() goroutine and forwarded to the wrapped balancer.
+// That approach cannot be taken here because the corresponding API on the
+// balancer returns an error which needs to be sent back to the channel to be
+// forward to the resolver.
 func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) error {
 	ccb.balancerMu.Lock()
 	defer ccb.balancerMu.Unlock()
