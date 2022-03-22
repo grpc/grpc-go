@@ -68,7 +68,6 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
@@ -1574,7 +1573,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -1615,7 +1614,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 
-	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: parseCfg(r, `{
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -1662,7 +1661,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -1705,7 +1704,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	// Case2:Client API set failfast to be false, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -1751,7 +1750,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -1798,7 +1797,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -1869,7 +1868,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	cc1 := te1.clientConn(grpc.WithResolvers(r))
 
 	addrs := []resolver.Address{{Addr: te1.srvAddr}}
-	sc := parseCfg(r, `{
+	sc := parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -2108,7 +2107,7 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: te.srvAddr}},
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
 	    "methodConfig": [
 	        {
 	            "name": [
@@ -7186,7 +7185,7 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 		time.Sleep(time.Second)
 		r.UpdateState(resolver.State{
 			Addresses: []resolver.Address{{Addr: te.srvAddr}},
-			ServiceConfig: parseCfg(r, `{
+			ServiceConfig: parseServiceConfig(t, r, `{
 		    "methodConfig": [
 		        {
 		            "name": [
@@ -7499,14 +7498,6 @@ func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string
 	if _, err := stream.Recv(); err == nil || status.Code(err) != errCode {
 		t.Fatalf("stream.Recv() = _, %v, want error code: %v", err, errCode)
 	}
-}
-
-func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
-	g := r.CC.ParseServiceConfig(s)
-	if g.Err != nil {
-		panic(fmt.Sprintf("Error parsing config %q: %v", s, g.Err))
-	}
-	return g
 }
 
 func (s) TestClientCancellationPropagatesUnary(t *testing.T) {
