@@ -653,13 +653,11 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 		} else {
 			ret = balancer.ErrBadResolverState
 			if cc.sc == nil {
-				if cc.dopts.defaultServiceConfig != nil {
-					cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, &defaultConfigSelector{cc.dopts.defaultServiceConfig}, s.Addresses)
-				} else {
-					cc.applyFailingLB(s.ServiceConfig)
-					cc.mu.Unlock()
-					return ret
-				}
+				// Apply the failing LB only if we haven't received valid service config
+				// from the name resolver in the past.
+				cc.applyFailingLB(s.ServiceConfig)
+				cc.mu.Unlock()
+				return ret
 			}
 		}
 	}
