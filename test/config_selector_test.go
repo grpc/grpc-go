@@ -211,5 +211,4 @@ func (s) TestConfigSelector(t *testing.T) {
 			}
 		})
 	}
-
 }
