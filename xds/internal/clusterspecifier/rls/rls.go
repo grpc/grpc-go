@@ -40,6 +40,24 @@ func init() {
 	}
 }
 
+// RegisterForTesting registers the RLS Cluster Specifier Plugin for testing
+// purposes, regardless of the XDSRLS environment variable. This is needed
+// because there is no way to set the XDSRLS environment variable to true in a
+// test before init() in this package is run.
+func RegisterForTesting() {
+	clusterspecifier.Register(rls{})
+}
+
+// UnregisterForTesting unregisters the RLS Cluster Specifier Plugin for testing
+// purposes. This is needed because there is no way to unregister the RLS
+// Cluster Specifier Plugin after registering it solely for testing purposes
+// using rls.RegisterForTesting().
+func UnregisterForTesting() {
+	for _, typeURL := range rls.TypeURLs(rls{}) {
+		clusterspecifier.UnregisterForTesting(typeURL)
+	}
+}
+
 type rls struct{}
 
 func (rls) TypeURLs() []string {

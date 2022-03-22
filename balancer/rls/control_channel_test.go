@@ -32,7 +32,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/rls/internal/test/e2e"
+	"google.golang.org/grpc/balancer/rls/test"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
@@ -47,7 +47,7 @@ import (
 // indicates that the control channel needs to be throttled.
 func (s) TestControlChannelThrottled(t *testing.T) {
 	// Start an RLS server and set the throttler to always throttle requests.
-	rlsServer, rlsReqCh := setupFakeRLSServer(t, nil)
+	rlsServer, rlsReqCh := test.SetupFakeRLSServer(t, nil)
 	overrideAdaptiveThrottler(t, alwaysThrottlingThrottler())
 
 	// Create a control channel to the fake RLS server.
@@ -70,12 +70,12 @@ func (s) TestControlChannelThrottled(t *testing.T) {
 // TestLookupFailure tests the case where the RLS server responds with an error.
 func (s) TestLookupFailure(t *testing.T) {
 	// Start an RLS server and set the throttler to never throttle requests.
-	rlsServer, _ := setupFakeRLSServer(t, nil)
+	rlsServer, _ := test.SetupFakeRLSServer(t, nil)
 	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 	// Setup the RLS server to respond with errors.
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *e2e.RouteLookupResponse {
-		return &e2e.RouteLookupResponse{Err: errors.New("rls failure")}
+	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *test.RouteLookupResponse {
+		return &test.RouteLookupResponse{Err: errors.New("rls failure")}
 	})
 
 	// Create a control channel to the fake RLS server.
@@ -114,7 +114,7 @@ func (s) TestLookupDeadlineExceeded(t *testing.T) {
 	}
 
 	// Start an RLS server and set the throttler to never throttle.
-	rlsServer, _ := setupFakeRLSServer(t, nil, grpc.UnaryInterceptor(interceptor))
+	rlsServer, _ := test.SetupFakeRLSServer(t, nil, grpc.UnaryInterceptor(interceptor))
 	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 	// Create a control channel with a small deadline.
@@ -246,7 +246,7 @@ var (
 		Reason:          rlspb.RouteLookupRequest_REASON_MISS,
 		StaleHeaderData: staleHeaderData,
 	}
-	lookupResponse = &e2e.RouteLookupResponse{
+	lookupResponse = &test.RouteLookupResponse{
 		Resp: &rlspb.RouteLookupResponse{
 			Targets:    wantTargets,
 			HeaderData: wantHeaderData,
@@ -256,11 +256,11 @@ var (
 
 func testControlChannelCredsSuccess(t *testing.T, sopts []grpc.ServerOption, bopts balancer.BuildOptions) {
 	// Start an RLS server and set the throttler to never throttle requests.
-	rlsServer, _ := setupFakeRLSServer(t, nil, sopts...)
+	rlsServer, _ := test.SetupFakeRLSServer(t, nil, sopts...)
 	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 	// Setup the RLS server to respond with a valid response.
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *e2e.RouteLookupResponse {
+	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *test.RouteLookupResponse {
 		return lookupResponse
 	})
 
@@ -356,7 +356,7 @@ func testControlChannelCredsFailure(t *testing.T, sopts []grpc.ServerOption, bop
 	// Start an RLS server and set the throttler to never throttle requests. The
 	// creds failures happen before the RPC handler on the server is invoked.
 	// So, there is need to setup the request and responses on the fake server.
-	rlsServer, _ := setupFakeRLSServer(t, nil, sopts...)
+	rlsServer, _ := test.SetupFakeRLSServer(t, nil, sopts...)
 	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 	// Create the control channel to the fake server.
@@ -454,7 +454,7 @@ func (*unsupportedCredsBundle) NewWithMode(mode string) (credentials.Bundle, err
 // TestNewControlChannelUnsupportedCredsBundle tests the case where the control
 // channel is configured with a bundle which does not support the mode we use.
 func (s) TestNewControlChannelUnsupportedCredsBundle(t *testing.T) {
-	rlsServer, _ := setupFakeRLSServer(t, nil)
+	rlsServer, _ := test.SetupFakeRLSServer(t, nil)
 
 	// Create the control channel to the fake server.
 	ctrlCh, err := newControlChannel(rlsServer.Address, "", defaultTestTimeout, balancer.BuildOptions{CredsBundle: &unsupportedCredsBundle{}}, nil)

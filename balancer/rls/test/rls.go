@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2022 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,8 @@
  *
  */
 
-package e2e
+// Package test contains utilities for RouteLookupService tests.
+package test
 
 import (
 	"context"
@@ -32,11 +33,84 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// ConnWrapper wraps a net.Conn and pushes on a channel when closed.
+type ConnWrapper struct {
+	net.Conn
+	CloseCh *testutils.Channel
+}
+
+// Close closes the connection and sends a value on the close channel.
+func (cw *ConnWrapper) Close() error {
+	err := cw.Conn.Close()
+	cw.CloseCh.Replace(nil)
+	return err
+}
+
+// ListenerWrapper wraps a net.Listener and the returned net.Conn.
+//
+// It pushes on a channel whenever it accepts a new connection.
+type ListenerWrapper struct {
+	net.Listener
+	NewConnCh *testutils.Channel
+}
+
+// Accept wraps the Listener Accept and sends the accepted connection on a
+// channel.
+func (l *ListenerWrapper) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	closeCh := testutils.NewChannel()
+	conn := &ConnWrapper{Conn: c, CloseCh: closeCh}
+	l.NewConnCh.Send(conn)
+	return conn, nil
+}
+
+// NewListenerWrapper returns a ListenerWrapper.
+func NewListenerWrapper(t *testing.T, lis net.Listener) *ListenerWrapper {
+	if lis == nil {
+		var err error
+		lis, err = testutils.LocalTCPListener()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return &ListenerWrapper{
+		Listener:  lis,
+		NewConnCh: testutils.NewChannel(),
+	}
+}
+
 // RouteLookupResponse wraps an RLS response and the associated error to be sent
 // to a client when the RouteLookup RPC is invoked.
 type RouteLookupResponse struct {
 	Resp *rlspb.RouteLookupResponse
 	Err  error
+}
+
+// SetupFakeRLSServer starts and returns a fake RouteLookupService server
+// listening on the given listener or on a random local port. Also returns a
+// channel for tests to get notified whenever the RouteLookup RPC is invoked on
+// the fake server.
+//
+// This function sets up the fake server to respond with an empty response for
+// the RouteLookup RPCs. Tests can override this by calling the
+// SetResponseCallback() method on the returned fake server.
+func SetupFakeRLSServer(t *testing.T, lis net.Listener, opts ...grpc.ServerOption) (*FakeRouteLookupServer, chan struct{}) {
+	s, cancel := StartFakeRouteLookupServer(t, lis, opts...)
+	t.Logf("Started fake RLS server at %q", s.Address)
+
+	ch := make(chan struct{}, 1)
+	s.SetRequestCallback(func(request *rlspb.RouteLookupRequest) {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	})
+	t.Cleanup(cancel)
+	return s, ch
 }
 
 // FakeRouteLookupServer is a fake implementation of the RouteLookupService.
@@ -86,8 +160,8 @@ func (s *FakeRouteLookupServer) RouteLookup(ctx context.Context, req *rlspb.Rout
 	if s.respCb == nil {
 		return &rlspb.RouteLookupResponse{}, nil
 	}
-	resp := s.respCb(ctx, req)
-	return resp.Resp, resp.Err
+	resp := s.respCb(ctx, req) // func(context.Context, *rlspb.RouteLookupRequest) *RouteLookupResponse - write your own function that sends correct CDS response backward
+	return resp.Resp, resp.Err // Set this target to correspond to correct cluster for RLS to proceed as normal
 }
 
 // SetResponseCallback sets a callback to be invoked on every RLS request. If

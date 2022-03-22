@@ -28,12 +28,19 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
+	_ "google.golang.org/grpc/balancer/rls"
+	"google.golang.org/grpc/balancer/rls/test"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
+	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
+	_ "google.golang.org/grpc/xds/internal/clusterspecifier/rls"
+	rlscsp "google.golang.org/grpc/xds/internal/clusterspecifier/rls"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
@@ -55,7 +62,7 @@ func clientSetup(t *testing.T, tss testpb.TestServiceServer) (uint32, func()) {
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+		t.Fatalf("test.LocalTCPListener() failed: %v", err)
 	}
 
 	go func() {
@@ -244,5 +251,88 @@ func (s) TestClientSideRetry(t *testing.T) {
 				break
 			}
 		})
+	}
+}
+
+// TestRLSinxDS tests an xDS configured system with a RLS Balancer present.
+// This test sets up the RLS Balancer using the RLS Cluster Specifier Plugin,
+// spins up a test service and has a fake RLS Server correctly respond with a target
+// corresponding to this test service. This test asserts an RPC proceeds as normal
+// with the RLS Balancer as part of system.
+func (s) TestRLSinxDS(t *testing.T) {
+	oldRLS := envconfig.XDSRLS
+	envconfig.XDSRLS = true
+	defer func() {
+		envconfig.XDSRLS = oldRLS
+	}()
+	rlscsp.RegisterForTesting()
+	defer rlscsp.UnregisterForTesting()
+
+	// Set up all components and configuration necessary - management server,
+	// xDS resolver, fake RLS Server, and xDS configuration which specifies a
+	// RLS Balancer that communicates to this set up fake RLS Server.
+	managementServer, nodeID, _, resolver, cleanup1 := setupManagementServer(t)
+	defer cleanup1()
+	port, cleanup2 := clientSetup(t, &testService{})
+	defer cleanup2()
+
+	lis := test.NewListenerWrapper(t, nil)
+	rlsServer, rlsRequestCh := test.SetupFakeRLSServer(t, lis)
+	rlsProto := &rlspb.RouteLookupConfig{
+		GrpcKeybuilders:      []*rlspb.GrpcKeyBuilder{{Names: []*rlspb.GrpcKeyBuilder_Name{{Service: "grpc.testing.TestService"}}}},
+		LookupService:        rlsServer.Address,
+		LookupServiceTimeout: durationpb.New(defaultTestTimeout),
+		CacheSizeBytes:       1024,
+	}
+
+	const serviceName = "my-service-client-side-xds"
+	resources := e2e.DefaultClientResourcesWithRLSCSP(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	}, rlsProto)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure the fake RLS Server to set the RLS Balancers child CDS
+	// Cluster's name as the target for the RPC to use.
+	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *test.RouteLookupResponse {
+		return &test.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{"cluster-" + serviceName}}}
+	})
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testpb.NewTestServiceClient(cc)
+	// Successfully sending the RPC will require the RLS Load Balancer to
+	// communicate with the fake RLS Server for information about the target.
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+
+	// These RLS Verifications makes sure the RLS Load Balancer is actually part
+	// of the xDS Configured system that correctly sends out RPC.
+
+	// Verify connection is established to RLS Server.
+	_, err = lis.NewConnCh.Receive(ctx)
+	if err != nil {
+		t.Fatal("Timeout when waiting for RLS LB policy to create control channel")
+	}
+
+	// Verify an rls request is sent out to fake RLS Server.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timeout when waiting for an RLS request to be sent out")
+	case <-rlsRequestCh:
 	}
 }

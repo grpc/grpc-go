@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/balancer/rls/internal/test/e2e"
+	"google.golang.org/grpc/balancer/rls/test"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
@@ -36,7 +36,7 @@ import (
 // and no pending request either, and the ensuing RLS request is throttled.
 func (s) TestPick_DataCacheMiss_NoPendingEntry_ThrottledWithDefaultTarget(t *testing.T) {
 	// Start an RLS server and set the throttler to always throttle requests.
-	rlsServer, rlsReqCh := setupFakeRLSServer(t, nil)
+	rlsServer, rlsReqCh := test.SetupFakeRLSServer(t, nil)
 	overrideAdaptiveThrottler(t, alwaysThrottlingThrottler())
 
 	// Build RLS service config with a default target.
@@ -68,7 +68,7 @@ func (s) TestPick_DataCacheMiss_NoPendingEntry_ThrottledWithDefaultTarget(t *tes
 // expected to fail with an RLS throttled error.
 func (s) TestPick_DataCacheMiss_NoPendingEntry_ThrottledWithoutDefaultTarget(t *testing.T) {
 	// Start an RLS server and set the throttler to always throttle requests.
-	rlsServer, rlsReqCh := setupFakeRLSServer(t, nil)
+	rlsServer, rlsReqCh := test.SetupFakeRLSServer(t, nil)
 	overrideAdaptiveThrottler(t, alwaysThrottlingThrottler())
 
 	// Build an RLS config without a default target.
@@ -99,7 +99,7 @@ func (s) TestPick_DataCacheMiss_NoPendingEntry_ThrottledWithoutDefaultTarget(t *
 // deadline exceeded error.
 func (s) TestPick_DataCacheMiss_NoPendingEntry_NotThrottled(t *testing.T) {
 	// Start an RLS server and set the throttler to never throttle requests.
-	rlsServer, rlsReqCh := setupFakeRLSServer(t, nil)
+	rlsServer, rlsReqCh := test.SetupFakeRLSServer(t, nil)
 	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 	// Build an RLS config without a default target.
@@ -143,8 +143,8 @@ func (s) TestPick_DataCacheMiss_PendingEntryExists(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tst := range tests {
+		t.Run(tst.name, func(t *testing.T) {
 			// A unary interceptor which blocks the RouteLookup RPC on the fake
 			// RLS server until the test is done. The first RPC by the client
 			// will cause the LB policy to send out an RLS request. This will
@@ -158,12 +158,12 @@ func (s) TestPick_DataCacheMiss_PendingEntryExists(t *testing.T) {
 			}
 
 			// Start an RLS server and set the throttler to never throttle.
-			rlsServer, _ := setupFakeRLSServer(t, nil, grpc.UnaryInterceptor(interceptor))
+			rlsServer, _ := test.SetupFakeRLSServer(t, nil, grpc.UnaryInterceptor(interceptor))
 			overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 			// Build RLS service config with an optional default target.
 			rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
-			if test.withDefaultTarget {
+			if tst.withDefaultTarget {
 				_, defBackendAddress := startBackend(t)
 				rlsConfig.RouteLookupConfig.DefaultTarget = defBackendAddress
 			}
@@ -203,7 +203,7 @@ func (s) TestPick_DataCacheMiss_PendingEntryExists(t *testing.T) {
 // delegated to the child policy.
 func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry(t *testing.T) {
 	// Start an RLS server and set the throttler to never throttle requests.
-	rlsServer, rlsReqCh := setupFakeRLSServer(t, nil)
+	rlsServer, rlsReqCh := test.SetupFakeRLSServer(t, nil)
 	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 	// Build the RLS config without a default target.
@@ -212,8 +212,8 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry(t *testing.T) {
 	// Start a test backend, and setup the fake RLS server to return this as a
 	// target in the RLS response.
 	testBackendCh, testBackendAddress := startBackend(t)
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *e2e.RouteLookupResponse {
-		return &e2e.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
+	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *test.RouteLookupResponse {
+		return &test.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 	})
 
 	// Register a manual resolver and push the RLS service config through it.
@@ -261,12 +261,12 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_StaleEntry(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tst := range tests {
+		t.Run(tst.name, func(t *testing.T) {
 			// Start an RLS server and setup the throttler appropriately.
-			rlsServer, rlsReqCh := setupFakeRLSServer(t, nil)
+			rlsServer, rlsReqCh := test.SetupFakeRLSServer(t, nil)
 			var throttler *fakeThrottler
-			if test.throttled {
+			if tst.throttled {
 				throttler = oneTimeAllowingThrottler()
 				overrideAdaptiveThrottler(t, throttler)
 			} else {
@@ -283,8 +283,8 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_StaleEntry(t *testing.T) {
 			// Start a test backend, and setup the fake RLS server to return
 			// this as a target in the RLS response.
 			testBackendCh, testBackendAddress := startBackend(t)
-			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *e2e.RouteLookupResponse {
-				return &e2e.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
+			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *test.RouteLookupResponse {
+				return &test.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 			})
 
 			// Register a manual resolver and push the RLS service config
@@ -317,7 +317,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_StaleEntry(t *testing.T) {
 				// Make another RPC and expect it to find the target in the data cache.
 				makeTestRPCAndExpectItToReachBackend(ctx, t, cc, testBackendCh)
 
-				if !test.throttled {
+				if !tst.throttled {
 					select {
 					case <-time.After(defaultTestShortTimeout):
 						// Go back and retry the RPC.
@@ -361,12 +361,12 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntry(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tst := range tests {
+		t.Run(tst.name, func(t *testing.T) {
 			// Start an RLS server and setup the throttler appropriately.
-			rlsServer, rlsReqCh := setupFakeRLSServer(t, nil)
+			rlsServer, rlsReqCh := test.SetupFakeRLSServer(t, nil)
 			var throttler *fakeThrottler
-			if test.throttled {
+			if tst.throttled {
 				throttler = oneTimeAllowingThrottler()
 				overrideAdaptiveThrottler(t, throttler)
 			} else {
@@ -381,7 +381,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntry(t *testing.T) {
 
 			// Start a default backend if needed.
 			var defBackendCh chan struct{}
-			if test.withDefaultTarget {
+			if tst.withDefaultTarget {
 				var defBackendAddress string
 				defBackendCh, defBackendAddress = startBackend(t)
 				rlsConfig.RouteLookupConfig.DefaultTarget = defBackendAddress
@@ -390,8 +390,8 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntry(t *testing.T) {
 			// Start a test backend, and setup the fake RLS server to return
 			// this as a target in the RLS response.
 			testBackendCh, testBackendAddress := startBackend(t)
-			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *e2e.RouteLookupResponse {
-				return &e2e.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
+			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *test.RouteLookupResponse {
+				return &test.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 			})
 
 			// Register a manual resolver and push the RLS service config
@@ -416,13 +416,13 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntry(t *testing.T) {
 			// Keep retrying the RPC until the cache entry expires. Expected behavior
 			// is dependent on the scenario being tested.
 			switch {
-			case test.throttled && test.withDefaultTarget:
+			case tst.throttled && tst.withDefaultTarget:
 				makeTestRPCAndExpectItToReachBackend(ctx, t, cc, defBackendCh)
 				<-throttler.throttleCh
-			case test.throttled && !test.withDefaultTarget:
+			case tst.throttled && !tst.withDefaultTarget:
 				makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, errRLSThrottled)
 				<-throttler.throttleCh
-			case !test.throttled:
+			case !tst.throttled:
 				for {
 					// The backend to which the RPC is routed does not change after the
 					// cache entry expires because the control channel is not throttled.
@@ -459,10 +459,10 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntryInBackoff(t *testing.T
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tst := range tests {
+		t.Run(tst.name, func(t *testing.T) {
 			// Start an RLS server and set the throttler to never throttle requests.
-			rlsServer, rlsReqCh := setupFakeRLSServer(t, nil)
+			rlsServer, rlsReqCh := test.SetupFakeRLSServer(t, nil)
 			overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 			// Override the backoff strategy to return a large backoff which
@@ -479,7 +479,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntryInBackoff(t *testing.T
 
 			// Start a default backend if needed.
 			var defBackendCh chan struct{}
-			if test.withDefaultTarget {
+			if tst.withDefaultTarget {
 				var defBackendAddress string
 				defBackendCh, defBackendAddress = startBackend(t)
 				rlsConfig.RouteLookupConfig.DefaultTarget = defBackendAddress
@@ -488,8 +488,8 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntryInBackoff(t *testing.T
 			// Start a test backend, and set up the fake RLS server to return this as
 			// a target in the RLS response.
 			testBackendCh, testBackendAddress := startBackend(t)
-			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *e2e.RouteLookupResponse {
-				return &e2e.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
+			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *test.RouteLookupResponse {
+				return &test.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 			})
 
 			// Register a manual resolver and push the RLS service config through it.
@@ -513,15 +513,15 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntryInBackoff(t *testing.T
 			// Set up the fake RLS server to return errors. This will push the cache
 			// entry into backoff.
 			var rlsLastErr = errors.New("last RLS request failed")
-			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *e2e.RouteLookupResponse {
-				return &e2e.RouteLookupResponse{Err: rlsLastErr}
+			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *test.RouteLookupResponse {
+				return &test.RouteLookupResponse{Err: rlsLastErr}
 			})
 
 			// Since the RLS server is now configured to return errors, this will push
 			// the cache entry into backoff. The pick will be delegated to the default
 			// backend if one exits, and will fail with the error returned by the RLS
 			// server otherwise.
-			if test.withDefaultTarget {
+			if tst.withDefaultTarget {
 				makeTestRPCAndExpectItToReachBackend(ctx, t, cc, defBackendCh)
 			} else {
 				makeTestRPCAndVerifyError(ctx, t, cc, codes.Unknown, rlsLastErr)
@@ -547,8 +547,8 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_StaleEntry(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tst := range tests {
+		t.Run(tst.name, func(t *testing.T) {
 			// A unary interceptor which does nothing on the first RPC, but
 			// blocks on subsequent RPCs on the fake RLS server until the test
 			// is done. Since we configure the LB policy with a really low value
@@ -567,12 +567,12 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_StaleEntry(t *testing.T) {
 			}
 
 			// Start an RLS server and set the throttler to never throttle.
-			rlsServer, _ := setupFakeRLSServer(t, nil, grpc.UnaryInterceptor(interceptor))
+			rlsServer, _ := test.SetupFakeRLSServer(t, nil, grpc.UnaryInterceptor(interceptor))
 			overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 			// Build RLS service config with an optional default target.
 			rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
-			if test.withDefaultTarget {
+			if tst.withDefaultTarget {
 				_, defBackendAddress := startBackend(t)
 				rlsConfig.RouteLookupConfig.DefaultTarget = defBackendAddress
 			}
@@ -584,8 +584,8 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_StaleEntry(t *testing.T) {
 			// Start a test backend, and setup the fake RLS server to return
 			// this as a target in the RLS response.
 			testBackendCh, testBackendAddress := startBackend(t)
-			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *e2e.RouteLookupResponse {
-				return &e2e.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
+			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *test.RouteLookupResponse {
+				return &test.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 			})
 
 			// Register a manual resolver and push the RLS service config
@@ -641,8 +641,8 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
+	for _, tst := range tests {
+		t.Run(tst.name, func(t *testing.T) {
 			// A unary interceptor which does nothing on the first RPC, but
 			// blocks on subsequent RPCs on the fake RLS server until the test
 			// is done. And since we configure the LB policy with a really low
@@ -662,12 +662,12 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 			}
 
 			// Start an RLS server and set the throttler to never throttle.
-			rlsServer, _ := setupFakeRLSServer(t, nil, grpc.UnaryInterceptor(interceptor))
+			rlsServer, _ := test.SetupFakeRLSServer(t, nil, grpc.UnaryInterceptor(interceptor))
 			overrideAdaptiveThrottler(t, neverThrottlingThrottler())
 
 			// Build RLS service config with an optional default target.
 			rlsConfig := buildBasicRLSConfigWithChildPolicy(t, t.Name(), rlsServer.Address)
-			if test.withDefaultTarget {
+			if tst.withDefaultTarget {
 				_, defBackendAddress := startBackend(t)
 				rlsConfig.RouteLookupConfig.DefaultTarget = defBackendAddress
 			}
@@ -677,8 +677,8 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 			// Start a test backend, and setup the fake RLS server to return
 			// this as a target in the RLS response.
 			testBackendCh, testBackendAddress := startBackend(t)
-			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *e2e.RouteLookupResponse {
-				return &e2e.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
+			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *test.RouteLookupResponse {
+				return &test.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
 			})
 
 			// Register a manual resolver and push the RLS service config
