@@ -147,6 +147,20 @@ func processClusterSpecifierPlugins(csps []*v3routepb.ClusterSpecifierPlugin) (m
 	for _, csp := range csps {
 		cs := clusterspecifier.Get(csp.GetExtension().GetTypedConfig().GetTypeUrl())
 		if cs == nil {
+			if csp.GetIsOptional() {
+				// "If a plugin is not supported but has is_optional set, then
+				// we will ignore any routes that point to that plugin"
+				cspCfgs[csp.GetExtension().GetName()] = nil
+				// Note, this conflates a not supported plugin with is optional
+				// set with a ClusterSpecifierPlugin that returns a nil
+				// BalancerConfig. However, due to this returned config being
+				// used as configuration for a child LB policy of the Cluster
+				// Manager LB Policy, also ignoring that route seems to make
+				// sense. The Cluster Specifier Plugin should also not return
+				// nil as the config in the first place.
+				continue
+			}
+
 			// "If no plugin is registered for it, the resource will be NACKed."
 			// - RLS in xDS design
 			return nil, fmt.Errorf("cluster specifier %q of type %q was not found", csp.GetExtension().GetName(), csp.GetExtension().GetTypedConfig().GetTypeUrl())
@@ -367,10 +381,17 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 					// resource will be NACKed." - RLS in xDS design
 					return nil, nil, fmt.Errorf("route %+v, action %+v, specifies a cluster specifier plugin %+v that is not in Route Configuration", r, a, a.ClusterSpecifierPlugin)
 				}
+				if csps[a.ClusterSpecifierPlugin] == nil {
+					// "If a plugin is not supported but has is_optional set,
+					// then we will ignore any routes that point to that plugin"
+					logger.Warningf("route %+v references optional cluster specifier plugin %v, the route will be ignored", r, a.ClusterSpecifierPlugin)
+					continue
+				}
 				cspNames[a.ClusterSpecifierPlugin] = true
 				route.ClusterSpecifierPlugin = a.ClusterSpecifierPlugin
 			default:
-				return nil, nil, fmt.Errorf("route %+v, has an unknown ClusterSpecifier: %+v", r, a)
+				logger.Warningf("route %+v references unknown ClusterSpecifier %+v, the route will be ignored", r, a)
+				continue
 			}
 
 			msd := action.GetMaxStreamDuration()
