@@ -17,11 +17,13 @@
 package balancergroup
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedtarget/weightedaggregator"
@@ -32,6 +34,11 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
+)
+
+const (
+	defaultTestTimeout      = 5 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
 var (
@@ -533,4 +540,139 @@ func (s) TestBalancerExitIdleOne(t *testing.T) {
 		t.Fatal("Timeout when waiting for ExitIdle to be invoked on child policy")
 	case <-exitIdleCh:
 	}
+}
+
+// TestBalancerGracefulSwitch tests the graceful switch functionality for a
+// child of the balancer group. At first, the child is configured as a round
+// robin load balancer, and thus should behave accordingly. The test then
+// gracefully switches this child to a custom type which only creates a SubConn
+// for the second passed in address and also only picks that created SubConn.
+// The new aggregated picker should reflect this change for the child.
+func (s) TestBalancerGracefulSwitch(t *testing.T) {
+	cc := testutils.NewTestClientConn(t)
+	gator := weightedaggregator.New(cc, nil, testutils.NewTestWRR)
+	gator.Start()
+	bg := New(cc, balancer.BuildOptions{}, gator, nil)
+	gator.Add(testBalancerIDs[0], 1)
+	bg.Add(testBalancerIDs[0], rrBuilder)
+	bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[0:2]}})
+
+	bg.Start()
+
+	m1 := make(map[resolver.Address]balancer.SubConn)
+	scs := make(map[balancer.SubConn]bool)
+	for i := 0; i < 2; i++ {
+		addrs := <-cc.NewSubConnAddrsCh
+		sc := <-cc.NewSubConnCh
+		m1[addrs[0]] = sc
+		scs[sc] = true
+		bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+		bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	}
+
+	p1 := <-cc.NewPickerCh
+	want := []balancer.SubConn{
+		m1[testBackendAddrs[0]], m1[testBackendAddrs[1]],
+	}
+	if err := testutils.IsRoundRobin(want, subConnFromPicker(p1)); err != nil {
+		t.Fatalf("want %v, got %v", want, err)
+	}
+
+	// The balancer type for testBalancersIDs[0] is currently Round Robin. Now,
+	// change it to a balancer that has separate behavior logically (creating
+	// SubConn for second address in address list and always picking that
+	// SubConn), and see if the downstream behavior reflects that change.
+	bg.UpdateBuilder(testBalancerIDs[0], wrappedPickFirstBalancerBuilder{})
+	if err := bg.UpdateClientConnState(testBalancerIDs[0], balancer.ClientConnState{ResolverState: resolver.State{Addresses: testBackendAddrs[2:4]}}); err != nil {
+		t.Fatalf("error updating ClientConn state: %v", err)
+	}
+
+	addrs := <-cc.NewSubConnAddrsCh
+	if addrs[0].Addr != testBackendAddrs[3].Addr {
+		// Verifies forwarded to new created balancer, as the wrapped pick first
+		// balancer will delete first address.
+		t.Fatalf("newSubConn called with wrong address, want: %v, got : %v", testBackendAddrs[3].Addr, addrs[0].Addr)
+	}
+	sc := <-cc.NewSubConnCh
+
+	// Update the pick first balancers SubConn as CONNECTING. This will cause
+	// the pick first balancer to UpdateState() with CONNECTING, which shouldn't send
+	// a Picker update back, as the Graceful Switch process is not complete.
+	bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	select {
+	case <-cc.NewPickerCh:
+		t.Fatalf("No new picker should have been sent due to the Graceful Switch process not completing")
+	case <-ctx.Done():
+	}
+
+	// Update the pick first balancers SubConn as READY. This will cause
+	// the pick first balancer to UpdateState() with READY, which should send a
+	// Picker update back, as the Graceful Switch process is complete. This
+	// Picker should always pick the pick first's created SubConn which
+	// corresponds to address 3.
+	bg.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	p2 := <-cc.NewPickerCh
+	pr, err := p2.Pick(balancer.PickInfo{})
+	if err != nil {
+		t.Fatalf("error picking: %v", err)
+	}
+	if pr.SubConn != sc {
+		t.Fatalf("picker.Pick(), want %v, got %v", sc, pr.SubConn)
+	}
+
+	// The Graceful Switch process completing for the child should cause the
+	// SubConns for the balancer being gracefully switched from to get deleted.
+	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	for i := 0; i < 2; i++ {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("error waiting for RemoveSubConn()")
+		case sc := <-cc.RemoveSubConnCh:
+			// The SubConn removed should have been one of the two created
+			// SubConns, and both should be deleted.
+			if ok := scs[sc]; ok {
+				delete(scs, sc)
+				continue
+			} else {
+				t.Fatalf("RemoveSubConn called for wrong SubConn %v, want in %v", sc, scs)
+			}
+		}
+	}
+}
+
+type wrappedPickFirstBalancerBuilder struct{}
+
+func (wrappedPickFirstBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	builder := balancer.Get(grpc.PickFirstBalancerName)
+	wpfb := &wrappedPickFirstBalancer{
+		ClientConn: cc,
+	}
+	pf := builder.Build(wpfb, opts)
+	wpfb.Balancer = pf
+	return wpfb
+}
+
+func (wrappedPickFirstBalancerBuilder) Name() string {
+	return "wrappedPickFirstBalancer"
+}
+
+type wrappedPickFirstBalancer struct {
+	balancer.Balancer
+	balancer.ClientConn
+}
+
+func (wb *wrappedPickFirstBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+	s.ResolverState.Addresses = s.ResolverState.Addresses[1:]
+	return wb.Balancer.UpdateClientConnState(s)
+}
+
+func (wb *wrappedPickFirstBalancer) UpdateState(state balancer.State) {
+	// Eat it if IDLE - allows it to switch over only on a READY SubConn.
+	if state.ConnectivityState == connectivity.Idle {
+		return
+	}
+	wb.ClientConn.UpdateState(state)
 }
