@@ -160,11 +160,6 @@ func (sbc *subBalancerWrapper) resolverError(err error) {
 	b.ResolverError(err)
 }
 
-func (sbc *subBalancerWrapper) stopBalancer() {
-	sbc.balancer.Close()
-	sbc.balancer = nil
-}
-
 func (sbc *subBalancerWrapper) gracefulSwitch(builder balancer.Builder) {
 	sbc.builder = builder
 	b := sbc.balancer
@@ -177,6 +172,11 @@ func (sbc *subBalancerWrapper) gracefulSwitch(builder balancer.Builder) {
 		sbc.group.logger.Infof("Switching child policy %v to type %v", sbc.id, sbc.builder.Name())
 		b.SwitchTo(sbc.builder)
 	}
+}
+
+func (sbc *subBalancerWrapper) stopBalancer() {
+	sbc.balancer.Close()
+	sbc.balancer = nil
 }
 
 // BalancerGroup takes a list of balancers, and make them into one balancer.
