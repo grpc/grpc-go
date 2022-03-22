@@ -165,10 +165,18 @@ func (sbc *subBalancerWrapper) stopBalancer() {
 	sbc.balancer = nil
 }
 
-func (sbc *subBalancerWrapper) gracefulSwitch() {
+func (sbc *subBalancerWrapper) gracefulSwitch(builder balancer.Builder) {
+	sbc.builder = builder
 	b := sbc.balancer
-	sbc.group.logger.Infof("Switching child policy %v to type %v", sbc.id, sbc.builder.Name())
-	b.SwitchTo(sbc.builder)
+	// Even if you get an add and it persists builder but doesn't start
+	// balancer, this would leave graceful switch being nil, in which we are
+	// correctly overwriting with the recent builder here as well to use later.
+	// The graceful switch balancer's presence is an invariant of whether the
+	// balancer group is closed or not (if closed, nil, if started, present).
+	if sbc.balancer != nil {
+		sbc.group.logger.Infof("Switching child policy %v to type %v", sbc.id, sbc.builder.Name())
+		b.SwitchTo(sbc.builder)
+	}
 }
 
 // BalancerGroup takes a list of balancers, and make them into one balancer.
@@ -351,15 +359,7 @@ func (bg *BalancerGroup) UpdateBuilder(id string, builder balancer.Builder) {
 		// simply ignore it if not present, don't error
 		return
 	}
-	sbc.builder = builder
-	// Even if you get an add and it persists builder but doesn't start
-	// balancer, this would leave graceful switch being nil, in which we are
-	// correctly overwriting with the recent builder here as well to use later.
-	// The graceful switch balancer's presence is an invariant of whether the
-	// balancer group is closed or not (if closed, nil, if started, present).
-	if sbc.balancer != nil {
-		sbc.gracefulSwitch()
-	}
+	sbc.gracefulSwitch(builder)
 	bg.outgoingMu.Unlock()
 }
 
