@@ -20,6 +20,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -64,15 +65,15 @@ func (s) TestClientConnClose_WithPendingRPC(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	doneCh := make(chan struct{})
+	doneErrCh := make(chan error, 1)
 	go func() {
-		defer close(doneCh)
 		// This RPC would block until the ClientConn is closed, because the
 		// resolver has not provided its first update yet.
 		_, err := client.EmptyCall(ctx, &testpb.Empty{})
 		if status.Code(err) != codes.Canceled || !strings.Contains(err.Error(), "client connection is closing") {
-			t.Fatalf("EmptyCall() = %v, want %s", err, codes.Canceled)
+			doneErrCh <- fmt.Errorf("EmptyCall() = %v, want %s", err, codes.Canceled)
 		}
+		doneErrCh <- nil
 	}()
 
 	// Make sure that there is one pending RPC on the ClientConn before attempting
@@ -94,5 +95,7 @@ func (s) TestClientConnClose_WithPendingRPC(t *testing.T) {
 		time.Sleep(defaultTestShortTimeout)
 	}
 	cc.Close()
-	<-doneCh
+	if err := <-doneErrCh; err != nil {
+		t.Fatal(err)
+	}
 }
