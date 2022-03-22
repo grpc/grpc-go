@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 	testgrpc "google.golang.org/grpc/test/grpc_testing"
@@ -46,17 +45,6 @@ func (s) TestClientConnClose_WithPendingRPC(t *testing.T) {
 	defer czCleanupWrapper(czCleanup, t)
 
 	r := manual.NewBuilderWithScheme("whatever")
-
-	// Spin up a backend exposing the TestService.
-	backend := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
-	}
-	if err := backend.StartServer(); err != nil {
-		t.Fatalf("Failed to start backend: %v", err)
-	}
-	t.Logf("Started TestService backend at: %q", backend.Address)
-	defer backend.Stop()
-
 	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("grpc.Dial() failed: %v", err)
