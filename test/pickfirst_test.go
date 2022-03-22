@@ -20,6 +20,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -87,16 +88,14 @@ func setupPickFirst(t *testing.T, backendCount int, opts ...grpc.DialOption) (*g
 
 // checkPickFirst makes a bunch of RPCs on the given ClientConn and verifies if
 // the RPCs are routed to a peer matching wantAddr.
-func checkPickFirst(ctx context.Context, t *testing.T, cc *grpc.ClientConn, wantAddr string) {
-	t.Helper()
-
+func checkPickFirst(ctx context.Context, cc *grpc.ClientConn, wantAddr string) error {
 	client := testgrpc.NewTestServiceClient(cc)
 	peer := &peer.Peer{}
 	// Make sure the RPC reaches the expected backend once.
 	for {
 		time.Sleep(time.Millisecond)
 		if ctx.Err() != nil {
-			t.Fatalf("timeout waiting for RPC to be routed to %q", wantAddr)
+			return fmt.Errorf("timeout waiting for RPC to be routed to %q", wantAddr)
 		}
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
 			// Some tests remove backends and check if pick_first is happening across
@@ -113,12 +112,13 @@ func checkPickFirst(ctx context.Context, t *testing.T, cc *grpc.ClientConn, want
 	// Make sure subsequent RPCs are all routed to the same backend.
 	for i := 0; i < 10; i++ {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
-			t.Errorf("EmptyCall() = %v, want <nil>", err)
+			return fmt.Errorf("EmptyCall() = %v, want <nil>", err)
 		}
 		if gotAddr := peer.Addr.String(); gotAddr != wantAddr {
-			t.Errorf("rpc sent to peer %q, want peer %q", gotAddr, wantAddr)
+			return fmt.Errorf("rpc sent to peer %q, want peer %q", gotAddr, wantAddr)
 		}
 	}
+	return nil
 }
 
 // backendsToAddrs is a helper routine to convert from a set of backends to
@@ -141,7 +141,9 @@ func (s) TestPickFirst_OneBackend(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	checkPickFirst(ctx, t, cc, addrs[0].Addr)
+	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // TestPickFirst_MultipleBackends tests the scenario with multiple backends and
@@ -154,7 +156,9 @@ func (s) TestPickFirst_MultipleBackends(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	checkPickFirst(ctx, t, cc, addrs[0].Addr)
+	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // TestPickFirst_OneServerDown tests the scenario where we have multiple
@@ -168,12 +172,16 @@ func (s) TestPickFirst_OneServerDown(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	checkPickFirst(ctx, t, cc, addrs[0].Addr)
+	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+		t.Fatal(err)
+	}
 
 	// Stop the backend which is currently being used. RPCs should get routed to
 	// the next backend in the list.
 	backends[0].Stop()
-	checkPickFirst(ctx, t, cc, addrs[1].Addr)
+	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // TestPickFirst_AllServersDown tests the scenario where we have multiple
@@ -187,7 +195,9 @@ func (s) TestPickFirst_AllServersDown(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	checkPickFirst(ctx, t, cc, addrs[0].Addr)
+	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+		t.Fatal(err)
+	}
 
 	for _, b := range backends {
 		b.Stop()
@@ -216,25 +226,35 @@ func (s) TestPickFirst_AddressesRemoved(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	checkPickFirst(ctx, t, cc, addrs[0].Addr)
+	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+		t.Fatal(err)
+	}
 
 	// Remove the first backend from the list of addresses originally pushed.
 	// RPCs should get routed to the first backend in the new list.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[1], addrs[2]}})
-	checkPickFirst(ctx, t, cc, addrs[1].Addr)
+	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
+		t.Fatal(err)
+	}
 
 	// Append the backend that we just removed to the end of the list.
 	// Nothing should change.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[1], addrs[2], addrs[0]}})
-	checkPickFirst(ctx, t, cc, addrs[1].Addr)
+	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
+		t.Fatal(err)
+	}
 
 	// Remove the first backend from the existing list of addresses.
 	// RPCs should get routed to the first backend in the new list.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[2], addrs[0]}})
-	checkPickFirst(ctx, t, cc, addrs[2].Addr)
+	if err := checkPickFirst(ctx, cc, addrs[2].Addr); err != nil {
+		t.Fatal(err)
+	}
 
 	// Remove the first backend from the existing list of addresses.
 	// RPCs should get routed to the first backend in the new list.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0]}})
-	checkPickFirst(ctx, t, cc, addrs[0].Addr)
+	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+		t.Fatal(err)
+	}
 }
