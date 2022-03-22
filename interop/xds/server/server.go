@@ -38,6 +38,7 @@ import (
 
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -125,7 +126,7 @@ func main() {
 		server := grpc.NewServer()
 		testgrpc.RegisterTestServiceServer(server, testService)
 		healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
-		healthpb.RegisterHealthServer(server, healthServer)
+		healthgrpc.RegisterHealthServer(server, healthServer)
 		testgrpc.RegisterXdsUpdateHealthServiceServer(server, updateHealthService)
 		reflection.Register(server)
 		cleanup, err := admin.Register(server)
@@ -172,7 +173,7 @@ func main() {
 	// it and start serving.
 	maintenanceServer := grpc.NewServer()
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
-	healthpb.RegisterHealthServer(maintenanceServer, healthServer)
+	healthgrpc.RegisterHealthServer(maintenanceServer, healthServer)
 	testgrpc.RegisterXdsUpdateHealthServiceServer(maintenanceServer, updateHealthService)
 	reflection.Register(maintenanceServer)
 	cleanup, err := admin.Register(maintenanceServer)

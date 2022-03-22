@@ -31,6 +31,7 @@ import (
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 var (
@@ -62,7 +63,7 @@ func main() {
 
 	s := grpc.NewServer()
 	healthcheck := health.NewServer()
-	healthpb.RegisterHealthServer(s, healthcheck)
+	healthgrpc.RegisterHealthServer(s, healthcheck)
 	pb.RegisterEchoServer(s, &echoServer{})
 
 	go func() {
