@@ -191,9 +191,15 @@ func (te *test) clientConn() *grpc.ClientConn {
 	return te.cc
 }
 
-func (te *test) enablePluginWithFakeExporters() {
-	// Disables default exporters
-	config := &configpb.ObservabilityConfig{
+func (te *test) enablePluginWithConfig(config *configpb.ObservabilityConfig) {
+	// Injects the fake exporter for testing purposes
+	defaultLogger = newObservabilityBinaryLogger(nil)
+	iblog.SetLogger(defaultLogger)
+	defaultLogger.start(config, te.fle)
+}
+
+func (te *test) enablePluginWithCaptureAll() {
+	te.enablePluginWithConfig(&configpb.ObservabilityConfig{
 		EnableCloudLogging:   true,
 		DestinationProjectId: "",
 		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
@@ -203,19 +209,7 @@ func (te *test) enablePluginWithFakeExporters() {
 				MessageBytes: infinitySizeBytes,
 			},
 		},
-	}
-	// Injects the fake exporter for testing purposes
-	defaultLogger = newObservabilityBinaryLogger(nil)
-	iblog.SetLogger(defaultLogger)
-	defaultLogger.start(config, te.fle)
-}
-
-func (te *test) enablePluginWithEmptyConfig() {
-	config := &configpb.ObservabilityConfig{}
-	// Injects the fake exporter for testing purposes
-	defaultLogger = newObservabilityBinaryLogger(nil)
-	iblog.SetLogger(defaultLogger)
-	defaultLogger.start(config, te.fle)
+	})
 }
 
 func checkEventCommon(t *testing.T, seen *grpclogrecordpb.GrpcLogRecord) {
@@ -335,7 +329,7 @@ func checkEventTrailer(t *testing.T, seen *grpclogrecordpb.GrpcLogRecord, want *
 func (s) TestLoggingForOkCall(t *testing.T) {
 	te := newTest(t)
 	defer te.tearDown()
-	te.enablePluginWithFakeExporters()
+	te.enablePluginWithCaptureAll()
 	te.startServer(&testServer{})
 	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
@@ -405,7 +399,7 @@ func (s) TestLoggingForOkCall(t *testing.T) {
 func (s) TestLoggingForErrorCall(t *testing.T) {
 	te := newTest(t)
 	defer te.tearDown()
-	te.enablePluginWithFakeExporters()
+	te.enablePluginWithCaptureAll()
 	te.startServer(&testServer{})
 	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
@@ -469,7 +463,7 @@ func (s) TestLoggingForErrorCall(t *testing.T) {
 func (s) TestNoConfig(t *testing.T) {
 	te := newTest(t)
 	defer te.tearDown()
-	te.enablePluginWithEmptyConfig()
+	te.enablePluginWithConfig(&configpb.ObservabilityConfig{})
 	te.startServer(&testServer{})
 	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
@@ -497,4 +491,70 @@ func (s) TestNoConfig(t *testing.T) {
 	if len(te.fle.serverEvents) != 0 {
 		t.Fatalf("expects 0 server events, got %d", len(te.fle.serverEvents))
 	}
+}
+
+func (s) TestOverrideConfig(t *testing.T) {
+	te := newTest(t)
+	defer te.tearDown()
+	// Setting 3 filters, expected to use the second filter. The second filter
+	// allows message payload logging, and others disabling the message payload
+	// logging. We should observe this behavior latter.
+	te.enablePluginWithConfig(&configpb.ObservabilityConfig{
+		EnableCloudLogging: true,
+		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
+			&configpb.ObservabilityConfig_LogFilter{
+				Pattern:      "wont/match",
+				MessageBytes: 0,
+			},
+			&configpb.ObservabilityConfig_LogFilter{
+				Pattern:      "*",
+				MessageBytes: 4096,
+			},
+			&configpb.ObservabilityConfig_LogFilter{
+				Pattern:      "grpc.testing.TestService/*",
+				MessageBytes: 0,
+			},
+		},
+	})
+	te.startServer(&testServer{})
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
+
+	var (
+		resp *testpb.SimpleResponse
+		req  *testpb.SimpleRequest
+		err  error
+	)
+	req = &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}
+	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	resp, err = tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testHeaderMetadata), req)
+	if err != nil {
+		t.Fatalf("unary call failed: %v", err)
+	}
+	t.Logf("unary call passed: %v", resp)
+
+	// Wait for the gRPC transport to gracefully close to ensure no lost event.
+	te.cc.Close()
+	te.srv.GracefulStop()
+	// Check size of events
+	if len(te.fle.clientEvents) != 5 {
+		t.Fatalf("expects 5 client events, got %d", len(te.fle.clientEvents))
+	}
+	if len(te.fle.serverEvents) != 5 {
+		t.Fatalf("expects 5 server events, got %d", len(te.fle.serverEvents))
+	}
+	// Check Client message payloads
+	checkEventRequestMessage(te.t, te.fle.clientEvents[1], &grpclogrecordpb.GrpcLogRecord{
+		EventLogger: grpclogrecordpb.GrpcLogRecord_LOGGER_CLIENT,
+	}, testOkPayload)
+	checkEventResponseMessage(te.t, te.fle.clientEvents[3], &grpclogrecordpb.GrpcLogRecord{
+		EventLogger: grpclogrecordpb.GrpcLogRecord_LOGGER_CLIENT,
+	}, testOkPayload)
+	// Check Server message payloads
+	checkEventRequestMessage(te.t, te.fle.serverEvents[1], &grpclogrecordpb.GrpcLogRecord{
+		EventLogger: grpclogrecordpb.GrpcLogRecord_LOGGER_SERVER,
+	}, testOkPayload)
+	checkEventResponseMessage(te.t, te.fle.serverEvents[3], &grpclogrecordpb.GrpcLogRecord{
+		EventLogger: grpclogrecordpb.GrpcLogRecord_LOGGER_SERVER,
+	}, testOkPayload)
 }
