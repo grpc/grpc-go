@@ -502,15 +502,15 @@ func (s) TestOverrideConfig(t *testing.T) {
 	te.enablePluginWithConfig(&configpb.ObservabilityConfig{
 		EnableCloudLogging: true,
 		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
-			&configpb.ObservabilityConfig_LogFilter{
+			{
 				Pattern:      "wont/match",
 				MessageBytes: 0,
 			},
-			&configpb.ObservabilityConfig_LogFilter{
+			{
 				Pattern:      "*",
 				MessageBytes: 4096,
 			},
-			&configpb.ObservabilityConfig_LogFilter{
+			{
 				Pattern:      "grpc.testing.TestService/*",
 				MessageBytes: 0,
 			},
