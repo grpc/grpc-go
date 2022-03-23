@@ -62,7 +62,7 @@ type methodLogger struct {
 }
 
 // NewMethodLogger creates methodLogger based on input config
-func NewMethodLogger(h, m uint64) *methodLogger {
+func NewMethodLogger(h, m uint64) MethodLogger {
 	return &methodLogger{
 		headerMaxLen:  h,
 		messageMaxLen: m,

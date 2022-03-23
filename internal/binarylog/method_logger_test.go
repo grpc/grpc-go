@@ -34,7 +34,7 @@ import (
 
 func (s) TestLog(t *testing.T) {
 	idGen.reset()
-	ml := NewMethodLogger(10, 10)
+	ml := NewMethodLogger(10, 10).(*methodLogger)
 	// Set sink to testing buffer.
 	buf := bytes.NewBuffer(nil)
 	ml.sink = newWriterSink(buf)
@@ -350,7 +350,7 @@ func (s) TestLog(t *testing.T) {
 
 func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 	testCases := []struct {
-		ml   *methodLogger
+		ml   MethodLogger
 		mpPb *pb.Metadata
 	}{
 		{
@@ -408,7 +408,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		truncated := tc.ml.truncateMetadata(tc.mpPb)
+		truncated := tc.ml.(*methodLogger).truncateMetadata(tc.mpPb)
 		if truncated {
 			t.Errorf("test case %v, returned truncated, want not truncated", i)
 		}
@@ -417,7 +417,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 
 func (s) TestTruncateMetadataTruncated(t *testing.T) {
 	testCases := []struct {
-		ml   *methodLogger
+		ml   MethodLogger
 		mpPb *pb.Metadata
 
 		entryLen int
@@ -465,7 +465,7 @@ func (s) TestTruncateMetadataTruncated(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		truncated := tc.ml.truncateMetadata(tc.mpPb)
+		truncated := tc.ml.(*methodLogger).truncateMetadata(tc.mpPb)
 		if !truncated {
 			t.Errorf("test case %v, returned not truncated, want truncated", i)
 			continue
@@ -478,7 +478,7 @@ func (s) TestTruncateMetadataTruncated(t *testing.T) {
 
 func (s) TestTruncateMessageNotTruncated(t *testing.T) {
 	testCases := []struct {
-		ml    *methodLogger
+		ml    MethodLogger
 		msgPb *pb.Message
 	}{
 		{
@@ -502,7 +502,7 @@ func (s) TestTruncateMessageNotTruncated(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		truncated := tc.ml.truncateMessage(tc.msgPb)
+		truncated := tc.ml.(*methodLogger).truncateMessage(tc.msgPb)
 		if truncated {
 			t.Errorf("test case %v, returned truncated, want not truncated", i)
 		}
@@ -511,7 +511,7 @@ func (s) TestTruncateMessageNotTruncated(t *testing.T) {
 
 func (s) TestTruncateMessageTruncated(t *testing.T) {
 	testCases := []struct {
-		ml    *methodLogger
+		ml    MethodLogger
 		msgPb *pb.Message
 
 		oldLength uint32
@@ -527,13 +527,13 @@ func (s) TestTruncateMessageTruncated(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		truncated := tc.ml.truncateMessage(tc.msgPb)
+		truncated := tc.ml.(*methodLogger).truncateMessage(tc.msgPb)
 		if !truncated {
 			t.Errorf("test case %v, returned not truncated, want truncated", i)
 			continue
 		}
-		if len(tc.msgPb.Data) != int(tc.ml.messageMaxLen) {
-			t.Errorf("test case %v, message length: %v, want: %v", i, len(tc.msgPb.Data), tc.ml.messageMaxLen)
+		if len(tc.msgPb.Data) != int(tc.ml.(*methodLogger).messageMaxLen) {
+			t.Errorf("test case %v, message length: %v, want: %v", i, len(tc.msgPb.Data), tc.ml.(*methodLogger).messageMaxLen)
 		}
 		if tc.msgPb.Length != tc.oldLength {
 			t.Errorf("test case %v, message.Length field: %v, want: %v", i, tc.msgPb.Length, tc.oldLength)
