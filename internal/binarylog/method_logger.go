@@ -61,7 +61,8 @@ type methodLogger struct {
 	sink Sink // TODO(blog): make this plugable.
 }
 
-func newMethodLogger(h, m uint64) *methodLogger {
+// NewMethodLogger creates methodLogger based on input config
+func NewMethodLogger(h, m uint64) *methodLogger {
 	return &methodLogger{
 		headerMaxLen:  h,
 		messageMaxLen: m,

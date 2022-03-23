@@ -27,6 +27,7 @@ import (
 	"github.com/google/uuid"
 	binlogpb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
 	iblog "google.golang.org/grpc/internal/binarylog"
+	"google.golang.org/grpc/internal/grpcutil"
 	configpb "google.golang.org/grpc/observability/internal/config"
 	grpclogrecordpb "google.golang.org/grpc/observability/internal/logging"
 )
@@ -164,11 +165,47 @@ type observabilityBinaryLogger struct {
 	// by this plugin. Users are allowed to subscribe to a completely different
 	// set of methods.
 	originalLogger iblog.Logger
-	// wrappedLogger is a Logger needed to reuse the control string parsing, logger
-	// config managing logic
-	wrappedLogger atomic.Value
 	// exporter is a loggingExporter and the handle for uploading collected data to backends
 	exporter atomic.Value
+	// filters is []*configpb.ObservabilityConfig_LogFilter used to set config on methods
+	filters atomic.Value
+}
+
+func matchLogFilter(serviceMethod string, filters []*configpb.ObservabilityConfig_LogFilter) *configpb.ObservabilityConfig_LogFilter {
+	// Validate the filters one by one, pick the first match.
+	for _, filter := range filters {
+		if filter.Pattern == "*" {
+			// Match a "*"
+			return filter
+		}
+		if strings.HasPrefix(filter.Pattern, "-") {
+			// Exclude "-..."
+			logger.Warningf("invalid log filter pattern: %v", filter.Pattern)
+			return nil
+		}
+		filterService, filterMethod, _, err := iblog.ParseMethodConfigAndSuffix(filter.Pattern)
+		if err != nil {
+			logger.Warningf("invalid log filter pattern: %v", err)
+			return nil
+		}
+		if filterMethod == "*" {
+			// Handle "p.s/*" case
+			s, _, err := grpcutil.ParseMethod(serviceMethod)
+			if err != nil {
+				logger.Warningf("invalid service method: %v", err)
+				return nil
+			}
+			if s == filterService {
+				return filter
+			}
+			return nil
+		}
+		if serviceMethod == filter.Pattern {
+			// Exact match of "p.s/m"
+			return filter
+		}
+	}
+	return nil
 }
 
 func (l *observabilityBinaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
@@ -178,15 +215,6 @@ func (l *observabilityBinaryLogger) GetMethodLogger(methodName string) iblog.Met
 		ol = l.originalLogger.GetMethodLogger(methodName)
 	}
 
-	wlPtr := l.wrappedLogger.Load()
-	if wlPtr == nil {
-		return ol
-	}
-	ml = wlPtr.(iblog.Logger).GetMethodLogger(methodName)
-	if ml == nil {
-		return ol
-	}
-
 	ePtr := l.exporter.Load()
 	// If no exporter is specified, there is no point creating a method
 	// logger. We don't have any chance to inject exporter after its
@@ -194,12 +222,35 @@ func (l *observabilityBinaryLogger) GetMethodLogger(methodName string) iblog.Met
 	if ePtr == nil {
 		return ol
 	}
+	exporter := ePtr.(loggingExporter)
 
+	filtersPtr := l.filters.Load()
+	if filtersPtr == nil {
+		// No filters set
+		return ol
+	}
+	filters := filtersPtr.([]*configpb.ObservabilityConfig_LogFilter)
+	if len(filters) == 0 {
+		// No filters in the list
+		return ol
+	}
+
+	// If user specify a "*" pattern, binarylog will log every single call and
+	// content. This means the exporting RPC's events will be captured. Even if
+	// we batch up the uploads in the exporting RPC, the message content of that
+	// RPC will be logged. Without this exclusion, we may end up with an ever
+	// expanding message field in log entries, and crash the process with OOM.
+	if methodName == "google.logging.v2.LoggingServiceV2/WriteLogEntries" {
+		return ol
+	}
+
+	filter := matchLogFilter(methodName, filters)
+	ml = iblog.NewMethodLogger(uint64(filter.HeaderBytes), uint64(filter.MessageBytes))
 	return &observabilityBinaryMethodLogger{
 		originalMethodLogger: ol,
 		wrappedMethodLogger:  ml,
 		rpcID:                uuid.NewString(),
-		exporter:             ePtr.(loggingExporter),
+		exporter:             exporter,
 	}
 }
 
@@ -218,14 +269,11 @@ func (l *observabilityBinaryLogger) Close() {
 // start is the core logic for setting up the custom binary logging logger, and
 // it's also useful for testing.
 func (l *observabilityBinaryLogger) start(config *configpb.ObservabilityConfig, exporter loggingExporter) error {
-	binlogConfig := iblog.NewLoggerFromConfigString(compileBinaryLogControlString(config))
-	if binlogConfig != nil {
-		defaultLogger.wrappedLogger.Store(binlogConfig)
-	}
+	l.filters.Store(config.GetLogFilters())
 	if exporter != nil {
 		defaultLogger.exporter.Store(exporter)
 	}
-	logger.Infof("Start logging with config [%v]", binlogConfig)
+	logger.Info("Start gRPC Observability logger")
 	return nil
 }
 
@@ -251,26 +299,6 @@ func newObservabilityBinaryLogger(iblogger iblog.Logger) *observabilityBinaryLog
 	return &observabilityBinaryLogger{
 		originalLogger: iblogger,
 	}
-}
-
-func compileBinaryLogControlString(config *configpb.ObservabilityConfig) string {
-	if len(config.LogFilters) == 0 {
-		return ""
-	}
-
-	entries := make([]string, 0, len(config.LogFilters)+1)
-	for _, logFilter := range config.LogFilters {
-		// With undefined HeaderBytes or MessageBytes, the intended behavior is
-		// logging zero payload. This detail is different than binary logging.
-		entries = append(entries, fmt.Sprintf("%v{h:%v;m:%v}", logFilter.Pattern, logFilter.HeaderBytes, logFilter.MessageBytes))
-	}
-	// If user specify a "*" pattern, binarylog will log every single call and
-	// content. This means the exporting RPC's events will be captured. Even if
-	// we batch up the uploads in the exporting RPC, the message content of that
-	// RPC will be logged. Without this exclusion, we may end up with an ever
-	// expanding message field in log entries, and crash the process with OOM.
-	entries = append(entries, "-google.logging.v2.LoggingServiceV2/WriteLogEntries")
-	return strings.Join(entries, ",")
 }
 
 var defaultLogger *observabilityBinaryLogger

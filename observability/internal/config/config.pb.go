@@ -128,12 +128,21 @@ type ObservabilityConfig_LogFilter struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	// A string which can select a group of method names. Only "*" wildcard
-	// is accepted.
+	// Pattern is a string which can select a group of method names. By
+	// default, the pattern is an empty string, matching no methods.
+	//
+	// Only "*" Wildcard is accepted for pattern. A pattern is in the form
+	// of <service>/<method> or just a character "*" .
+	//
+	// If the pattern is "*", it specifies the defaults for all the
+	// services; If the pattern is <service>/*, it specifies the defaults
+	// for all methods in the specified service <service>; If the pattern is
+	// */<method>, this is not supported.
+	//
 	// Examples:
-	// - "Foo/Bar" selects only the method "Bar" from service "Foo"
-	// - "Foo/*" selects all methods from service "Foo"
-	// - "*/*" selects all methods from all services.
+	//  - "Foo/Bar" selects only the method "Bar" from service "Foo"
+	//  - "Foo/*" selects all methods from service "Foo"
+	//  - "*" selects all methods from all services.
 	Pattern string `protobuf:"bytes,1,opt,name=pattern,proto3" json:"pattern,omitempty"`
 	// Number of bytes of each header to log. If the size of the header is
 	// greater than the defined limit, content pass the limit will be

@@ -162,16 +162,16 @@ func (l *logger) GetMethodLogger(methodName string) MethodLogger {
 		return nil
 	}
 	if ml, ok := l.methods[s+"/"+m]; ok {
-		return newMethodLogger(ml.hdr, ml.msg)
+		return NewMethodLogger(ml.hdr, ml.msg)
 	}
 	if _, ok := l.blacklist[s+"/"+m]; ok {
 		return nil
 	}
 	if ml, ok := l.services[s]; ok {
-		return newMethodLogger(ml.hdr, ml.msg)
+		return NewMethodLogger(ml.hdr, ml.msg)
 	}
 	if l.all == nil {
 		return nil
 	}
-	return newMethodLogger(l.all.hdr, l.all.msg)
+	return NewMethodLogger(l.all.hdr, l.all.msg)
 }
