@@ -134,8 +134,8 @@ func (s) TestParseMethodConfigAndSuffix(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		t.Logf("testing parseMethodConfigAndSuffix(%q)", tc.in)
-		s, m, suffix, err := parseMethodConfigAndSuffix(tc.in)
+		t.Logf("testing ParseMethodConfigAndSuffix(%q)", tc.in)
+		s, m, suffix, err := ParseMethodConfigAndSuffix(tc.in)
 		if err != nil {
 			t.Errorf("returned error %v, want nil", err)
 			continue
@@ -158,7 +158,7 @@ func (s) TestParseMethodConfigAndSuffixInvalid(t *testing.T) {
 		"*/m{}",
 	}
 	for _, tc := range testCases {
-		s, m, suffix, err := parseMethodConfigAndSuffix(tc)
+		s, m, suffix, err := ParseMethodConfigAndSuffix(tc)
 		if err == nil {
 			t.Errorf("Parsing %q got nil error with %q, %q, %q, want non-nil error", tc, s, m, suffix)
 		}
