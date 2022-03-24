@@ -52,7 +52,10 @@ func init() {
 // "observability" module will conflict with existing binarylog usage.
 // Note: handle the error
 func Start(ctx context.Context) error {
-	config := parseObservabilityConfig()
+	config, err := parseObservabilityConfig()
+	if err != nil {
+		return err
+	}
 	if config == nil {
 		return fmt.Errorf("no ObservabilityConfig found, it can be set via env %s", envObservabilityConfig)
 	}

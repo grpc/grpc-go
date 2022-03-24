@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -195,7 +196,9 @@ func (te *test) enablePluginWithConfig(config *configpb.ObservabilityConfig) {
 	// Injects the fake exporter for testing purposes
 	defaultLogger = newObservabilityBinaryLogger(nil)
 	iblog.SetLogger(defaultLogger)
-	defaultLogger.start(config, te.fle)
+	if err := defaultLogger.start(config, te.fle); err != nil {
+		te.t.Fatalf("Failed to start plugin: %v", err)
+	}
 }
 
 func (te *test) enablePluginWithCaptureAll() {
@@ -460,7 +463,7 @@ func (s) TestLoggingForErrorCall(t *testing.T) {
 	})
 }
 
-func (s) TestNoConfig(t *testing.T) {
+func (s) TestEmptyConfig(t *testing.T) {
 	te := newTest(t)
 	defer te.tearDown()
 	te.enablePluginWithConfig(&configpb.ObservabilityConfig{})
@@ -600,5 +603,36 @@ func (s) TestNoMatch(t *testing.T) {
 	}
 	if len(te.fle.serverEvents) != 0 {
 		t.Fatalf("expects 0 server events, got %d", len(te.fle.serverEvents))
+	}
+}
+
+func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
+	config := &configpb.ObservabilityConfig{
+		EnableCloudLogging: true,
+		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
+			{
+				Pattern: ":-)",
+			},
+			{
+				Pattern: "*",
+			},
+		},
+	}
+	configJSON, err := protojson.Marshal(config)
+	if err != nil {
+		t.Fatalf("failed to convert config to JSON: %v", err)
+	}
+	os.Setenv(envObservabilityConfig, string(configJSON))
+	// If there is at least one invalid pattern, which should not be silently tolerated.
+	if err := Start(context.Background()); err == nil {
+		t.Fatalf("Invalid patterns not triggering error")
+	}
+}
+
+func (s) TestNoEnvSet(t *testing.T) {
+	os.Setenv(envObservabilityConfig, "")
+	// If there is no observability config set at all, the Start should return an error.
+	if err := Start(context.Background()); err == nil {
+		t.Fatalf("Invalid patterns not triggering error")
 	}
 }

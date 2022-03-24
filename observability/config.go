@@ -20,7 +20,9 @@ package observability
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"regexp"
 
 	gcplogging "cloud.google.com/go/logging"
 	"golang.org/x/oauth2/google"
@@ -29,9 +31,12 @@ import (
 )
 
 const (
-	envObservabilityConfig = "GRPC_CONFIG_OBSERVABILITY"
-	envProjectID           = "GOOGLE_CLOUD_PROJECT"
+	envObservabilityConfig    = "GRPC_CONFIG_OBSERVABILITY"
+	envProjectID              = "GOOGLE_CLOUD_PROJECT"
+	logFilterPatternRegexpStr = `^([\w./]+)/((?:\w+)|[*])$`
 )
+
+var logFilterPatternRegexp = regexp.MustCompile(logFilterPatternRegexpStr)
 
 // fetchDefaultProjectID fetches the default GCP project id from environment.
 func fetchDefaultProjectID(ctx context.Context) string {
@@ -54,19 +59,34 @@ func fetchDefaultProjectID(ctx context.Context) string {
 	return credentials.ProjectID
 }
 
-func parseObservabilityConfig() *configpb.ObservabilityConfig {
+func validateFilters(config *configpb.ObservabilityConfig) error {
+	for _, filter := range config.GetLogFilters() {
+		if filter.Pattern == "*" {
+			continue
+		}
+		match := logFilterPatternRegexp.FindStringSubmatch(filter.Pattern)
+		if match == nil {
+			return fmt.Errorf("invalid log filter pattern: %v", filter.Pattern)
+		}
+	}
+	return nil
+}
+
+func parseObservabilityConfig() (*configpb.ObservabilityConfig, error) {
 	// Parse the config from ENV var
 	if content := os.Getenv(envObservabilityConfig); content != "" {
 		var config configpb.ObservabilityConfig
 		if err := protojson.Unmarshal([]byte(content), &config); err != nil {
-			logger.Infof("Error parsing observability config from env %v: %v", envObservabilityConfig, err)
-			return nil
+			return nil, fmt.Errorf("error parsing observability config from env %v: %v", envObservabilityConfig, err)
+		}
+		if err := validateFilters(&config); err != nil {
+			return nil, fmt.Errorf("error parsing observability config: %v", err)
 		}
 		logger.Infof("Parsed ObservabilityConfig: %+v", &config)
-		return &config
+		return &config, nil
 	}
 	// If the ENV var doesn't exist, do nothing
-	return nil
+	return nil, nil
 }
 
 func maybeUpdateProjectIDInObservabilityConfig(ctx context.Context, config *configpb.ObservabilityConfig) {

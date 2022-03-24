@@ -138,8 +138,7 @@ var (
 	headerMessageConfigRegexp = regexp.MustCompile(headerMessageConfigRegexpStr)
 )
 
-// parseMethodConfigAndSuffix turns "service/method{h;m}" into "service",
-// "method", "{h;m}".
+// Turn "service/method{h;m}" into "service", "method", "{h;m}".
 func parseMethodConfigAndSuffix(c string) (service, method, suffix string, _ error) {
 	// Regexp result:
 	//

@@ -90,7 +90,7 @@ func (s) TestNewLoggerFromConfigStringInvalid(t *testing.T) {
 	}
 }
 
-func (s) TestparseMethodConfigAndSuffix(t *testing.T) {
+func (s) TestParseMethodConfigAndSuffix(t *testing.T) {
 	testCases := []struct {
 		in, service, method, suffix string
 	}{
@@ -152,7 +152,7 @@ func (s) TestparseMethodConfigAndSuffix(t *testing.T) {
 	}
 }
 
-func (s) TestparseMethodConfigAndSuffixInvalid(t *testing.T) {
+func (s) TestParseMethodConfigAndSuffixInvalid(t *testing.T) {
 	testCases := []string{
 		"*/m",
 		"*/m{}",

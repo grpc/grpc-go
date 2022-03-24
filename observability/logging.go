@@ -173,42 +173,23 @@ type observabilityBinaryLogger struct {
 }
 
 func matchLogFilter(serviceMethod string, filters []*configpb.ObservabilityConfig_LogFilter) *configpb.ObservabilityConfig_LogFilter {
-	// Validate the filters one by one, pick the first match.
+	// Try matching the filters one by one, pick the first match. The
+	// correctness of the log filter pattern is ensured by config.go.
 	for _, filter := range filters {
 		if filter.Pattern == "*" {
 			// Match a "*"
 			return filter
 		}
-		if strings.HasPrefix(filter.Pattern, "-") {
-			// Exclude "-..."
-			logger.Warningf("Invalid log filter pattern: %v: pattern can't start with \"-\"", filter.Pattern)
-			return nil
-		}
-
 		tokens := strings.SplitN(filter.Pattern, "/", 2)
-		if len(tokens) != 2 {
-			// No / in the pattern
-			logger.Warningf("Invalid log filter pattern: %v: pattern doesn't contain a \"/\"", filter.Pattern)
-			return nil
-		}
 		filterService := tokens[0]
 		filterMethod := tokens[1]
-		if strings.Contains(filterService, "*") && len(filterService) != 1 {
-			// Exclude "Fo*o/..."
-			logger.Warningf("Invalid log filter pattern: %v: incorrect use of \"*\"", filter.Pattern)
-			return nil
-		}
-		if strings.Contains(filterMethod, "*") && len(filterMethod) != 1 {
-			// Exclude ".../Ba*r"
-			logger.Warningf("Invalid log filter pattern: %v: incorrect use of \"*\"", filter.Pattern)
-			return nil
-		}
-
 		if filterMethod == "*" {
 			// Handle "p.s/*" case
 			s, _, err := grpcutil.ParseMethod(serviceMethod)
 			if err != nil {
-				logger.Warningf("Invalid service method: %v", err)
+				// This service method string is provided by upstream code, if
+				// it's malformed, we are in bigger trouble.
+				logger.Errorf("Invalid service method: %v", err)
 				return nil
 			}
 			if s == filterService {
