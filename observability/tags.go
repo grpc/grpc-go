@@ -33,8 +33,13 @@ func getCustomTags(envs []string) map[string]string {
 		if !strings.HasPrefix(e, envPrefixCustomTags) {
 			continue
 		}
-		if i := strings.Index(e, "="); i > envPrefixLen {
-			m[e[envPrefixLen:i]] = e[i+1:]
+		tokens := strings.SplitN(e, "=", 2)
+		if len(tokens) == 2 {
+			if len(tokens[0]) == envPrefixLen {
+				// Empty key is not allowed
+				continue
+			}
+			m[tokens[0][envPrefixLen:]] = tokens[1]
 		}
 	}
 	return m
