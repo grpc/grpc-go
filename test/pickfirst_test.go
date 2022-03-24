@@ -128,9 +128,9 @@ func checkPickFirst(ctx context.Context, cc *grpc.ClientConn, wantAddr string) e
 	return nil
 }
 
-// backendsToAddrs is a helper routine to convert from a set of backends to
+// stubBackendsToResolverAddrs converts from a set of stub server backends to
 // resolver addresses. Useful when pushing addresses to the manual resolver.
-func backendsToAddrs(backends []*stubserver.StubServer) []resolver.Address {
+func stubBackendsToResolverAddrs(backends []*stubserver.StubServer) []resolver.Address {
 	addrs := make([]resolver.Address, len(backends))
 	for i, backend := range backends {
 		addrs[i] = resolver.Address{Addr: backend.Address}
@@ -143,7 +143,7 @@ func backendsToAddrs(backends []*stubserver.StubServer) []resolver.Address {
 func (s) TestPickFirst_OneBackend(t *testing.T) {
 	cc, r, backends := setupPickFirst(t, 1)
 
-	addrs := backendsToAddrs(backends)
+	addrs := stubBackendsToResolverAddrs(backends)
 	r.UpdateState(resolver.State{Addresses: addrs})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -158,7 +158,7 @@ func (s) TestPickFirst_OneBackend(t *testing.T) {
 func (s) TestPickFirst_MultipleBackends(t *testing.T) {
 	cc, r, backends := setupPickFirst(t, 2)
 
-	addrs := backendsToAddrs(backends)
+	addrs := stubBackendsToResolverAddrs(backends)
 	r.UpdateState(resolver.State{Addresses: addrs})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -174,7 +174,7 @@ func (s) TestPickFirst_MultipleBackends(t *testing.T) {
 func (s) TestPickFirst_OneServerDown(t *testing.T) {
 	cc, r, backends := setupPickFirst(t, 2)
 
-	addrs := backendsToAddrs(backends)
+	addrs := stubBackendsToResolverAddrs(backends)
 	r.UpdateState(resolver.State{Addresses: addrs})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -197,7 +197,7 @@ func (s) TestPickFirst_OneServerDown(t *testing.T) {
 func (s) TestPickFirst_AllServersDown(t *testing.T) {
 	cc, r, backends := setupPickFirst(t, 2)
 
-	addrs := backendsToAddrs(backends)
+	addrs := stubBackendsToResolverAddrs(backends)
 	r.UpdateState(resolver.State{Addresses: addrs})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -228,7 +228,7 @@ func (s) TestPickFirst_AllServersDown(t *testing.T) {
 func (s) TestPickFirst_AddressesRemoved(t *testing.T) {
 	cc, r, backends := setupPickFirst(t, 3)
 
-	addrs := backendsToAddrs(backends)
+	addrs := stubBackendsToResolverAddrs(backends)
 	r.UpdateState(resolver.State{Addresses: addrs})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
