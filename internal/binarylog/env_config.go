@@ -67,7 +67,7 @@ func (l *logger) fillMethodLoggerWithConfigString(config string) error {
 
 	// "-service/method", blacklist, no * or {} allowed.
 	if config[0] == '-' {
-		s, m, suffix, err := ParseMethodConfigAndSuffix(config[1:])
+		s, m, suffix, err := parseMethodConfigAndSuffix(config[1:])
 		if err != nil {
 			return fmt.Errorf("invalid config: %q, %v", config, err)
 		}
@@ -95,7 +95,7 @@ func (l *logger) fillMethodLoggerWithConfigString(config string) error {
 		return nil
 	}
 
-	s, m, suffix, err := ParseMethodConfigAndSuffix(config)
+	s, m, suffix, err := parseMethodConfigAndSuffix(config)
 	if err != nil {
 		return fmt.Errorf("invalid config: %q, %v", config, err)
 	}
@@ -138,9 +138,9 @@ var (
 	headerMessageConfigRegexp = regexp.MustCompile(headerMessageConfigRegexpStr)
 )
 
-// ParseMethodConfigAndSuffix turns "service/method{h;m}" into "service",
+// parseMethodConfigAndSuffix turns "service/method{h;m}" into "service",
 // "method", "{h;m}".
-func ParseMethodConfigAndSuffix(c string) (service, method, suffix string, _ error) {
+func parseMethodConfigAndSuffix(c string) (service, method, suffix string, _ error) {
 	// Regexp result:
 	//
 	// in:  "p.s/m{h:123,m:123}",

@@ -558,3 +558,47 @@ func (s) TestOverrideConfig(t *testing.T) {
 		EventLogger: grpclogrecordpb.GrpcLogRecord_LOGGER_SERVER,
 	}, testOkPayload)
 }
+
+func (s) TestNoMatch(t *testing.T) {
+	te := newTest(t)
+	defer te.tearDown()
+	// Setting 3 filters, expected to use the second filter. The second filter
+	// allows message payload logging, and others disabling the message payload
+	// logging. We should observe this behavior latter.
+	te.enablePluginWithConfig(&configpb.ObservabilityConfig{
+		EnableCloudLogging: true,
+		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
+			{
+				Pattern:      "wont/match",
+				MessageBytes: 0,
+			},
+		},
+	})
+	te.startServer(&testServer{})
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
+
+	var (
+		resp *testpb.SimpleResponse
+		req  *testpb.SimpleRequest
+		err  error
+	)
+	req = &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}
+	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	resp, err = tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testHeaderMetadata), req)
+	if err != nil {
+		t.Fatalf("unary call failed: %v", err)
+	}
+	t.Logf("unary call passed: %v", resp)
+
+	// Wait for the gRPC transport to gracefully close to ensure no lost event.
+	te.cc.Close()
+	te.srv.GracefulStop()
+	// Check size of events
+	if len(te.fle.clientEvents) != 0 {
+		t.Fatalf("expects 0 client events, got %d", len(te.fle.clientEvents))
+	}
+	if len(te.fle.serverEvents) != 0 {
+		t.Fatalf("expects 0 server events, got %d", len(te.fle.serverEvents))
+	}
+}

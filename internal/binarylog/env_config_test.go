@@ -90,7 +90,7 @@ func (s) TestNewLoggerFromConfigStringInvalid(t *testing.T) {
 	}
 }
 
-func (s) TestParseMethodConfigAndSuffix(t *testing.T) {
+func (s) TestparseMethodConfigAndSuffix(t *testing.T) {
 	testCases := []struct {
 		in, service, method, suffix string
 	}{
@@ -134,8 +134,8 @@ func (s) TestParseMethodConfigAndSuffix(t *testing.T) {
 		},
 	}
 	for _, tc := range testCases {
-		t.Logf("testing ParseMethodConfigAndSuffix(%q)", tc.in)
-		s, m, suffix, err := ParseMethodConfigAndSuffix(tc.in)
+		t.Logf("testing parseMethodConfigAndSuffix(%q)", tc.in)
+		s, m, suffix, err := parseMethodConfigAndSuffix(tc.in)
 		if err != nil {
 			t.Errorf("returned error %v, want nil", err)
 			continue
@@ -152,13 +152,13 @@ func (s) TestParseMethodConfigAndSuffix(t *testing.T) {
 	}
 }
 
-func (s) TestParseMethodConfigAndSuffixInvalid(t *testing.T) {
+func (s) TestparseMethodConfigAndSuffixInvalid(t *testing.T) {
 	testCases := []string{
 		"*/m",
 		"*/m{}",
 	}
 	for _, tc := range testCases {
-		s, m, suffix, err := ParseMethodConfigAndSuffix(tc)
+		s, m, suffix, err := parseMethodConfigAndSuffix(tc)
 		if err == nil {
 			t.Errorf("Parsing %q got nil error with %q, %q, %q, want non-nil error", tc, s, m, suffix)
 		}

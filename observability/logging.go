@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strings"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/google/uuid"
 	binlogpb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
@@ -166,9 +167,9 @@ type observabilityBinaryLogger struct {
 	// set of methods.
 	originalLogger iblog.Logger
 	// exporter is a loggingExporter and the handle for uploading collected data to backends
-	exporter atomic.Value
+	exporter unsafe.Pointer // loggingExporter
 	// filters is []*configpb.ObservabilityConfig_LogFilter used to set config on methods
-	filters atomic.Value
+	filters unsafe.Pointer // []*configpb.ObservabilityConfig_LogFilter
 }
 
 func matchLogFilter(serviceMethod string, filters []*configpb.ObservabilityConfig_LogFilter) *configpb.ObservabilityConfig_LogFilter {
@@ -180,19 +181,34 @@ func matchLogFilter(serviceMethod string, filters []*configpb.ObservabilityConfi
 		}
 		if strings.HasPrefix(filter.Pattern, "-") {
 			// Exclude "-..."
-			logger.Warningf("invalid log filter pattern: %v", filter.Pattern)
+			logger.Warningf("Invalid log filter pattern: %v: pattern can't start with \"-\"", filter.Pattern)
 			return nil
 		}
-		filterService, filterMethod, _, err := iblog.ParseMethodConfigAndSuffix(filter.Pattern)
-		if err != nil {
-			logger.Warningf("invalid log filter pattern: %v", err)
+
+		tokens := strings.SplitN(filter.Pattern, "/", 2)
+		if len(tokens) != 2 {
+			// No / in the pattern
+			logger.Warningf("Invalid log filter pattern: %v: pattern doesn't contain a \"/\"", filter.Pattern)
 			return nil
 		}
+		filterService := tokens[0]
+		filterMethod := tokens[1]
+		if strings.Contains(filterService, "*") && len(filterService) != 1 {
+			// Exclude "Fo*o/..."
+			logger.Warningf("Invalid log filter pattern: %v: incorrect use of \"*\"", filter.Pattern)
+			return nil
+		}
+		if strings.Contains(filterMethod, "*") && len(filterMethod) != 1 {
+			// Exclude ".../Ba*r"
+			logger.Warningf("Invalid log filter pattern: %v: incorrect use of \"*\"", filter.Pattern)
+			return nil
+		}
+
 		if filterMethod == "*" {
 			// Handle "p.s/*" case
 			s, _, err := grpcutil.ParseMethod(serviceMethod)
 			if err != nil {
-				logger.Warningf("invalid service method: %v", err)
+				logger.Warningf("Invalid service method: %v", err)
 				return nil
 			}
 			if s == filterService {
@@ -215,25 +231,21 @@ func (l *observabilityBinaryLogger) GetMethodLogger(methodName string) iblog.Met
 		ol = l.originalLogger.GetMethodLogger(methodName)
 	}
 
-	ePtr := l.exporter.Load()
+	ePtr := atomic.LoadPointer(&l.exporter)
 	// If no exporter is specified, there is no point creating a method
 	// logger. We don't have any chance to inject exporter after its
 	// creation.
 	if ePtr == nil {
 		return ol
 	}
-	exporter := ePtr.(loggingExporter)
+	exporter := (*loggingExporter)(ePtr)
 
-	filtersPtr := l.filters.Load()
+	filtersPtr := atomic.LoadPointer(&l.filters)
 	if filtersPtr == nil {
 		// No filters set
 		return ol
 	}
-	filters := filtersPtr.([]*configpb.ObservabilityConfig_LogFilter)
-	if len(filters) == 0 {
-		// No filters in the list
-		return ol
-	}
+	filters := (*[]*configpb.ObservabilityConfig_LogFilter)(filtersPtr)
 
 	// If user specify a "*" pattern, binarylog will log every single call and
 	// content. This means the exporting RPC's events will be captured. Even if
@@ -244,13 +256,17 @@ func (l *observabilityBinaryLogger) GetMethodLogger(methodName string) iblog.Met
 		return ol
 	}
 
-	filter := matchLogFilter(methodName, filters)
+	filter := matchLogFilter(methodName, *filters)
+	if filter == nil {
+		// No matching filter found
+		return ol
+	}
 	ml = iblog.NewMethodLogger(uint64(filter.HeaderBytes), uint64(filter.MessageBytes))
 	return &observabilityBinaryMethodLogger{
 		originalMethodLogger: ol,
 		wrappedMethodLogger:  ml,
 		rpcID:                uuid.NewString(),
-		exporter:             exporter,
+		exporter:             *exporter,
 	}
 }
 
@@ -258,9 +274,10 @@ func (l *observabilityBinaryLogger) Close() {
 	if l == nil {
 		return
 	}
-	exporter := l.exporter.Load()
-	if exporter != nil {
-		if err := exporter.(loggingExporter).Close(); err != nil {
+	ePtr := atomic.LoadPointer(&l.exporter)
+	if ePtr != nil {
+		exporter := (*loggingExporter)(ePtr)
+		if err := (*exporter).Close(); err != nil {
 			logger.Infof("Failed to close logging exporter: %v", err)
 		}
 	}
@@ -269,9 +286,12 @@ func (l *observabilityBinaryLogger) Close() {
 // start is the core logic for setting up the custom binary logging logger, and
 // it's also useful for testing.
 func (l *observabilityBinaryLogger) start(config *configpb.ObservabilityConfig, exporter loggingExporter) error {
-	l.filters.Store(config.GetLogFilters())
+	filters := config.GetLogFilters()
+	if len(filters) > 0 {
+		atomic.StorePointer(&l.filters, unsafe.Pointer(&filters))
+	}
 	if exporter != nil {
-		defaultLogger.exporter.Store(exporter)
+		atomic.StorePointer(&l.exporter, unsafe.Pointer(&exporter))
 	}
 	logger.Info("Start gRPC Observability logger")
 	return nil
