@@ -557,8 +557,8 @@ func (s) TestBalancerSwitch_LoadBalancingConfigTrumps(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: append(addrs, grpclbAddr)})
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if err := checkForTraceEvent(sCtx, wantGRPCLBTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantPickFirstTraceDesc, err)
+	if err := checkForTraceEvent(sCtx, wantRoundRobinTraceDesc, now); err == nil {
+		t.Fatal("channel switched balancers when expected not to")
 	}
 	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
 		t.Fatal(err)
