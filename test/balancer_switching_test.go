@@ -149,7 +149,7 @@ func (s) TestBalancerSwitch_Basic(t *testing.T) {
 	defer cc.Close()
 
 	// Push a resolver update without an LB policy in the service config. The
-	// channel should pick the default LB policy, whcih is pick_first.
+	// channel should pick the default LB policy, which is pick_first.
 	r.UpdateState(resolver.State{Addresses: addrs})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
