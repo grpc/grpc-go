@@ -50,23 +50,37 @@ type pickfirstBalancer struct {
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
-	switch b.state {
-	case connectivity.TransientFailure, connectivity.Idle, connectivity.Connecting:
-		// Set a failing picker if we don't have a good picker.
-		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure,
-			Picker: &picker{err: fmt.Errorf("name resolver error: %v", err)},
-		})
-	}
 	if logger.V(2) {
 		logger.Infof("pickfirstBalancer: ResolverError called with error %v", err)
 	}
+	if b.sc == nil {
+		b.state = connectivity.TransientFailure
+	}
+
+	if b.state != connectivity.TransientFailure {
+		// The picker will not change since the balancer does not currently
+		// report an error.
+		return
+	}
+	b.cc.UpdateState(balancer.State{
+		ConnectivityState: connectivity.TransientFailure,
+		Picker:            &picker{err: fmt.Errorf("name resolver error: %v", err)},
+	})
 }
 
 func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) error {
 	if len(cs.ResolverState.Addresses) == 0 {
+		if b.sc != nil {
+			// If the resolver returned empty addresses after it gave us non-empty
+			// addresses, we need to close the existing subConn. Setting sc to nil
+			// here will cause us to return an error picker from ResolverError().
+			b.cc.RemoveSubConn(b.sc)
+			b.sc = nil
+		}
 		b.ResolverError(errors.New("produced zero addresses"))
 		return balancer.ErrBadResolverState
 	}
+
 	if b.sc == nil {
 		var err error
 		b.sc, err = b.cc.NewSubConn(cs.ResolverState.Addresses, balancer.NewSubConnOptions{})
