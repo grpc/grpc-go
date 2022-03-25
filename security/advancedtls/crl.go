@@ -251,7 +251,7 @@ func fetchIssuerCRL(rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg Revo
 }
 
 // checkCert checks a single certificate against the CRL defined in the certificate.
-// It will fetch and verify the CRL(s) defined by CRLDistributionPoints.
+// It will fetch and verify the CRL(s) defined in the root directory specified by cfg.
 // If we can't load any authoritative CRL files, the status is RevocationUndetermined.
 // c is the certificate to check.
 // crlVerifyCrt is the group of possible certificates to verify the crl.
