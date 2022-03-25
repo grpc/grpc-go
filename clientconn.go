@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
 	"math"
 	"net/url"
 	"reflect"
@@ -595,15 +596,15 @@ func init() {
 	emptyServiceConfig = cfg.Config.(*ServiceConfig)
 }
 
-func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {
+func (cc *ClientConn) maybeApplyDefaultServiceConfig(state *resolver.State) {
 	if cc.sc != nil {
-		cc.applyServiceConfigAndBalancer(cc.sc, nil, addrs)
+		cc.applyServiceConfigAndBalancer(cc.sc, nil, state)
 		return
 	}
 	if cc.dopts.defaultServiceConfig != nil {
-		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, &defaultConfigSelector{cc.dopts.defaultServiceConfig}, addrs)
+		cc.applyServiceConfigAndBalancer(cc.dopts.defaultServiceConfig, &defaultConfigSelector{cc.dopts.defaultServiceConfig}, state)
 	} else {
-		cc.applyServiceConfigAndBalancer(emptyServiceConfig, &defaultConfigSelector{emptyServiceConfig}, addrs)
+		cc.applyServiceConfigAndBalancer(emptyServiceConfig, &defaultConfigSelector{emptyServiceConfig}, state)
 	}
 }
 
@@ -634,9 +635,9 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	var ret error
 	if cc.dopts.disableServiceConfig {
 		channelz.Infof(logger, cc.channelzID, "ignoring service config from resolver (%v) and applying the default because service config is disabled", s.ServiceConfig)
-		cc.maybeApplyDefaultServiceConfig(s.Addresses)
+		cc.maybeApplyDefaultServiceConfig(&s)
 	} else if s.ServiceConfig == nil {
-		cc.maybeApplyDefaultServiceConfig(s.Addresses)
+		cc.maybeApplyDefaultServiceConfig(&s)
 		// TODO: do we need to apply a failing LB policy if there is no
 		// default, per the error handling design?
 	} else {
@@ -649,7 +650,7 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 			} else {
 				configSelector = &defaultConfigSelector{sc}
 			}
-			cc.applyServiceConfigAndBalancer(sc, configSelector, s.Addresses)
+			cc.applyServiceConfigAndBalancer(sc, configSelector, &s)
 		} else {
 			ret = balancer.ErrBadResolverState
 			if cc.sc == nil {
@@ -980,7 +981,7 @@ func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method st
 	return t, done, nil
 }
 
-func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSelector iresolver.ConfigSelector, addrs []resolver.Address) {
+func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSelector iresolver.ConfigSelector, state *resolver.State) {
 	if sc == nil {
 		// should never reach here.
 		return
@@ -1009,11 +1010,14 @@ func (cc *ClientConn) applyServiceConfigAndBalancer(sc *ServiceConfig, configSel
 		newBalancerName = cc.sc.lbConfig.name
 	} else {
 		var isGRPCLB bool
-		for _, a := range addrs {
+		for _, a := range state.Addresses {
 			if a.Type == resolver.GRPCLB {
 				isGRPCLB = true
 				break
 			}
+		}
+		if grpclbstate.Get(*state) != nil {
+			isGRPCLB = true
 		}
 		if isGRPCLB {
 			newBalancerName = grpclbName
