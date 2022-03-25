@@ -45,7 +45,7 @@ const (
 	// Default timeout for failed connections.
 	defaultTestShortTimeout = 10 * time.Millisecond
 	// Intervals that set to monitor the credential updates.
-	credRefreshingInterval = 200 * time.Millisecond
+	credRefreshingInterval = 100 * time.Millisecond
 	// Time we wait for the credential updates to be picked up.
 	sleepInterval = 400 * time.Millisecond
 )
