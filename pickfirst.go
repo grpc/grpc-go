@@ -70,10 +70,11 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 
 func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) error {
 	if len(cs.ResolverState.Addresses) == 0 {
+		// The resolver reported an empty address list. Treat it like an error by
+		// calling b.ResolverError.
 		if b.subConn != nil {
-			// If the resolver returned empty addresses after it gave us non-empty
-			// addresses, we need to close the existing subConn. Setting subConn to nil
-			// here will cause us to return an error picker from ResolverError().
+			// Remove the old subConn. All addresses were removed, so it is no longer
+			// valid.
 			b.cc.RemoveSubConn(b.subConn)
 			b.subConn = nil
 		}
@@ -81,29 +82,30 @@ func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) e
 		return balancer.ErrBadResolverState
 	}
 
-	if b.subConn == nil {
-		var err error
-		b.subConn, err = b.cc.NewSubConn(cs.ResolverState.Addresses, balancer.NewSubConnOptions{})
-		if err != nil {
-			if logger.V(2) {
-				logger.Errorf("pickfirstBalancer: failed to NewSubConn: %v", err)
-			}
-			b.state = connectivity.TransientFailure
-			b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure,
-				Picker: &picker{err: fmt.Errorf("error creating connection: %v", err)},
-			})
-			return balancer.ErrBadResolverState
-		}
-		b.state = connectivity.Idle
-		b.cc.UpdateState(balancer.State{
-			ConnectivityState: connectivity.Idle,
-			Picker:            &picker{result: balancer.PickResult{SubConn: b.subConn}},
-		})
-		b.subConn.Connect()
-	} else {
+	if b.subConn != nil {
 		b.cc.UpdateAddresses(b.subConn, cs.ResolverState.Addresses)
-		b.subConn.Connect()
+		return nil
 	}
+
+	subConn, err := b.cc.NewSubConn(cs.ResolverState.Addresses, balancer.NewSubConnOptions{})
+	if err != nil {
+		if logger.V(2) {
+			logger.Errorf("pickfirstBalancer: failed to NewSubConn: %v", err)
+		}
+		b.state = connectivity.TransientFailure
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.TransientFailure,
+			Picker:            &picker{err: fmt.Errorf("error creating connection: %v", err)},
+		})
+		return balancer.ErrBadResolverState
+	}
+	b.subConn = subConn
+	b.state = connectivity.Idle
+	b.cc.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Idle,
+		Picker:            &picker{result: balancer.PickResult{SubConn: b.subConn}},
+	})
+	b.subConn.Connect()
 	return nil
 }
 
