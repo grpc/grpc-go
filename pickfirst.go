@@ -44,16 +44,16 @@ func (*pickfirstBuilder) Name() string {
 }
 
 type pickfirstBalancer struct {
-	state connectivity.State
-	cc    balancer.ClientConn
-	sc    balancer.SubConn
+	state   connectivity.State
+	cc      balancer.ClientConn
+	subConn balancer.SubConn
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
 	if logger.V(2) {
 		logger.Infof("pickfirstBalancer: ResolverError called with error %v", err)
 	}
-	if b.sc == nil {
+	if b.subConn == nil {
 		b.state = connectivity.TransientFailure
 	}
 
@@ -70,20 +70,20 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 
 func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) error {
 	if len(cs.ResolverState.Addresses) == 0 {
-		if b.sc != nil {
+		if b.subConn != nil {
 			// If the resolver returned empty addresses after it gave us non-empty
-			// addresses, we need to close the existing subConn. Setting sc to nil
+			// addresses, we need to close the existing subConn. Setting subConn to nil
 			// here will cause us to return an error picker from ResolverError().
-			b.cc.RemoveSubConn(b.sc)
-			b.sc = nil
+			b.cc.RemoveSubConn(b.subConn)
+			b.subConn = nil
 		}
 		b.ResolverError(errors.New("produced zero addresses"))
 		return balancer.ErrBadResolverState
 	}
 
-	if b.sc == nil {
+	if b.subConn == nil {
 		var err error
-		b.sc, err = b.cc.NewSubConn(cs.ResolverState.Addresses, balancer.NewSubConnOptions{})
+		b.subConn, err = b.cc.NewSubConn(cs.ResolverState.Addresses, balancer.NewSubConnOptions{})
 		if err != nil {
 			if logger.V(2) {
 				logger.Errorf("pickfirstBalancer: failed to NewSubConn: %v", err)
@@ -95,38 +95,50 @@ func (b *pickfirstBalancer) UpdateClientConnState(cs balancer.ClientConnState) e
 			return balancer.ErrBadResolverState
 		}
 		b.state = connectivity.Idle
-		b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: &picker{result: balancer.PickResult{SubConn: b.sc}}})
-		b.sc.Connect()
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: connectivity.Idle,
+			Picker:            &picker{result: balancer.PickResult{SubConn: b.subConn}},
+		})
+		b.subConn.Connect()
 	} else {
-		b.cc.UpdateAddresses(b.sc, cs.ResolverState.Addresses)
-		b.sc.Connect()
+		b.cc.UpdateAddresses(b.subConn, cs.ResolverState.Addresses)
+		b.subConn.Connect()
 	}
 	return nil
 }
 
-func (b *pickfirstBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
+func (b *pickfirstBalancer) UpdateSubConnState(subConn balancer.SubConn, s balancer.SubConnState) {
 	if logger.V(2) {
-		logger.Infof("pickfirstBalancer: UpdateSubConnState: %p, %v", sc, s)
+		logger.Infof("pickfirstBalancer: UpdateSubConnState: %p, %v", subConn, s)
 	}
-	if b.sc != sc {
+	if b.subConn != subConn {
 		if logger.V(2) {
-			logger.Infof("pickfirstBalancer: ignored state change because sc is not recognized")
+			logger.Infof("pickfirstBalancer: ignored state change because subConn is not recognized")
 		}
 		return
 	}
 	b.state = s.ConnectivityState
 	if s.ConnectivityState == connectivity.Shutdown {
-		b.sc = nil
+		b.subConn = nil
 		return
 	}
 
 	switch s.ConnectivityState {
 	case connectivity.Ready:
-		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{result: balancer.PickResult{SubConn: sc}}})
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: s.ConnectivityState,
+			Picker:            &picker{result: balancer.PickResult{SubConn: subConn}},
+		})
 	case connectivity.Connecting:
-		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &picker{err: balancer.ErrNoSubConnAvailable}})
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: s.ConnectivityState,
+			Picker:            &picker{err: balancer.ErrNoSubConnAvailable},
+		})
 	case connectivity.Idle:
-		b.cc.UpdateState(balancer.State{ConnectivityState: s.ConnectivityState, Picker: &idlePicker{sc: sc}})
+		b.cc.UpdateState(balancer.State{
+			ConnectivityState: s.ConnectivityState,
+			Picker:            &idlePicker{subConn: subConn},
+		})
 	case connectivity.TransientFailure:
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: s.ConnectivityState,
@@ -139,8 +151,8 @@ func (b *pickfirstBalancer) Close() {
 }
 
 func (b *pickfirstBalancer) ExitIdle() {
-	if b.sc != nil && b.state == connectivity.Idle {
-		b.sc.Connect()
+	if b.subConn != nil && b.state == connectivity.Idle {
+		b.subConn.Connect()
 	}
 }
 
@@ -156,11 +168,11 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // idlePicker is used when the SubConn is IDLE and kicks the SubConn into
 // CONNECTING when Pick is called.
 type idlePicker struct {
-	sc balancer.SubConn
+	subConn balancer.SubConn
 }
 
 func (i *idlePicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	i.sc.Connect()
+	i.subConn.Connect()
 	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
 
