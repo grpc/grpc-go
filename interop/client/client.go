@@ -30,6 +30,7 @@ import (
 
 	"google.golang.org/grpc"
 	_ "google.golang.org/grpc/balancer/grpclb"
+	_ "google.golang.org/grpc/balancer/rls"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/credentials/google"
