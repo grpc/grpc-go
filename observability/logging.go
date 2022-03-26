@@ -63,14 +63,14 @@ var loggerTypeToEventLogger = map[binlogpb.GrpcLogEntry_Logger]grpclogrecordpb.G
 	binlogpb.GrpcLogEntry_LOGGER_SERVER:  grpclogrecordpb.GrpcLogRecord_LOGGER_SERVER,
 }
 
-type observabilityBinaryMethodLogger struct {
+type binaryMethodLogger struct {
 	rpcID, serviceName, methodName string
 	originalMethodLogger           iblog.MethodLogger
 	wrappedMethodLogger            iblog.MethodLogger
 	exporter                       loggingExporter
 }
 
-func (ml *observabilityBinaryMethodLogger) Log(c iblog.LogEntryConfig) {
+func (ml *binaryMethodLogger) Log(c iblog.LogEntryConfig) {
 	// Invoke the original MethodLogger to maintain backward compatibility
 	if ml.originalMethodLogger != nil {
 		ml.originalMethodLogger.Log(c)
@@ -161,7 +161,7 @@ func (ml *observabilityBinaryMethodLogger) Log(c iblog.LogEntryConfig) {
 	ml.exporter.EmitGrpcLogRecord(grpcLogRecord)
 }
 
-type observabilityBinaryLogger struct {
+type binaryLogger struct {
 	// originalLogger is needed to ensure binary logging users won't be impacted
 	// by this plugin. Users are allowed to subscribe to a completely different
 	// set of methods.
@@ -172,7 +172,34 @@ type observabilityBinaryLogger struct {
 	filters unsafe.Pointer // []*configpb.ObservabilityConfig_LogFilter
 }
 
+func (l *binaryLogger) loadExporter() loggingExporter {
+	ptrPtr := atomic.LoadPointer(&l.exporter)
+	if ptrPtr == nil {
+		return nil
+	}
+	exporterPtr := (*loggingExporter)(ptrPtr)
+	return *exporterPtr
+}
+
+func (l *binaryLogger) loadFilters() []*configpb.ObservabilityConfig_LogFilter {
+	ptrPtr := atomic.LoadPointer(&l.filters)
+	if ptrPtr == nil {
+		return nil
+	}
+	filterPtr := (*[]*configpb.ObservabilityConfig_LogFilter)(ptrPtr)
+	return *filterPtr
+}
+
 func matchLogFilter(serviceMethod string, filters []*configpb.ObservabilityConfig_LogFilter) *configpb.ObservabilityConfig_LogFilter {
+	// Split input serviceMethod
+	s, _, err := grpcutil.ParseMethod(serviceMethod)
+	if err != nil {
+		// This service method string is provided by upstream code, if
+		// it's malformed, we are in bigger trouble.
+		logger.Errorf("Invalid service method: %v", err)
+		return nil
+	}
+
 	// Try matching the filters one by one, pick the first match. The
 	// correctness of the log filter pattern is ensured by config.go.
 	for _, filter := range filters {
@@ -185,13 +212,6 @@ func matchLogFilter(serviceMethod string, filters []*configpb.ObservabilityConfi
 		filterMethod := tokens[1]
 		if filterMethod == "*" {
 			// Handle "p.s/*" case
-			s, _, err := grpcutil.ParseMethod(serviceMethod)
-			if err != nil {
-				// This service method string is provided by upstream code, if
-				// it's malformed, we are in bigger trouble.
-				logger.Errorf("Invalid service method: %v", err)
-				return nil
-			}
 			if s == filterService {
 				return filter
 			}
@@ -205,28 +225,20 @@ func matchLogFilter(serviceMethod string, filters []*configpb.ObservabilityConfi
 	return nil
 }
 
-func (l *observabilityBinaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
+func (l *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
 	var ol, ml iblog.MethodLogger
 
 	if l.originalLogger != nil {
 		ol = l.originalLogger.GetMethodLogger(methodName)
 	}
 
-	ePtr := atomic.LoadPointer(&l.exporter)
 	// If no exporter is specified, there is no point creating a method
 	// logger. We don't have any chance to inject exporter after its
 	// creation.
-	if ePtr == nil {
+	exporter := l.loadExporter()
+	if exporter == nil {
 		return ol
 	}
-	exporter := (*loggingExporter)(ePtr)
-
-	filtersPtr := atomic.LoadPointer(&l.filters)
-	if filtersPtr == nil {
-		// No filters set
-		return ol
-	}
-	filters := (*[]*configpb.ObservabilityConfig_LogFilter)(filtersPtr)
 
 	// If user specify a "*" pattern, binarylog will log every single call and
 	// content. This means the exporting RPC's events will be captured. Even if
@@ -237,21 +249,21 @@ func (l *observabilityBinaryLogger) GetMethodLogger(methodName string) iblog.Met
 		return ol
 	}
 
-	filter := matchLogFilter(methodName, *filters)
+	filter := matchLogFilter(methodName, l.loadFilters())
 	if filter == nil {
 		// No matching filter found
 		return ol
 	}
 	ml = iblog.NewMethodLogger(uint64(filter.HeaderBytes), uint64(filter.MessageBytes))
-	return &observabilityBinaryMethodLogger{
+	return &binaryMethodLogger{
 		originalMethodLogger: ol,
 		wrappedMethodLogger:  ml,
 		rpcID:                uuid.NewString(),
-		exporter:             *exporter,
+		exporter:             exporter,
 	}
 }
 
-func (l *observabilityBinaryLogger) Close() {
+func (l *binaryLogger) Close() {
 	if l == nil {
 		return
 	}
@@ -266,23 +278,26 @@ func (l *observabilityBinaryLogger) Close() {
 
 // start is the core logic for setting up the custom binary logging logger, and
 // it's also useful for testing.
-func (l *observabilityBinaryLogger) start(config *configpb.ObservabilityConfig, exporter loggingExporter) error {
+func (l *binaryLogger) start(config *configpb.ObservabilityConfig, exporter loggingExporter) error {
 	filters := config.GetLogFilters()
-	if len(filters) > 0 {
-		atomic.StorePointer(&l.filters, unsafe.Pointer(&filters))
+	if len(filters) == 0 || exporter == nil {
+		// Doing nothing is allowed
+		if exporter != nil {
+			// The exporter is owned by binaryLogger, so we should close it if
+			// we are not planning to use it.
+			exporter.Close()
+		}
+		logger.Info("Skipping gRPC Observability logger: no config")
+		return nil
 	}
-	if exporter != nil {
-		atomic.StorePointer(&l.exporter, unsafe.Pointer(&exporter))
-	}
+	atomic.StorePointer(&l.filters, unsafe.Pointer(&filters))
+	atomic.StorePointer(&l.exporter, unsafe.Pointer(&exporter))
 	logger.Info("Start gRPC Observability logger")
 	return nil
 }
 
-func (l *observabilityBinaryLogger) Start(ctx context.Context, config *configpb.ObservabilityConfig) error {
-	if config == nil {
-		return nil
-	}
-	if !config.GetEnableCloudLogging() {
+func (l *binaryLogger) Start(ctx context.Context, config *configpb.ObservabilityConfig) error {
+	if config == nil || !config.GetEnableCloudLogging() {
 		return nil
 	}
 	if config.GetDestinationProjectId() == "" {
@@ -296,15 +311,15 @@ func (l *observabilityBinaryLogger) Start(ctx context.Context, config *configpb.
 	return nil
 }
 
-func newObservabilityBinaryLogger(iblogger iblog.Logger) *observabilityBinaryLogger {
-	return &observabilityBinaryLogger{
+func newBinaryLogger(iblogger iblog.Logger) *binaryLogger {
+	return &binaryLogger{
 		originalLogger: iblogger,
 	}
 }
 
-var defaultLogger *observabilityBinaryLogger
+var defaultLogger *binaryLogger
 
 func prepareLogging() {
-	defaultLogger = newObservabilityBinaryLogger(iblog.GetLogger())
+	defaultLogger = newBinaryLogger(iblog.GetLogger())
 	iblog.SetLogger(defaultLogger)
 }

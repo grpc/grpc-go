@@ -89,12 +89,14 @@ func parseObservabilityConfig() (*configpb.ObservabilityConfig, error) {
 	return nil, nil
 }
 
-func maybeUpdateProjectIDInObservabilityConfig(ctx context.Context, config *configpb.ObservabilityConfig) {
-	if config == nil {
-		return
-	}
+func ensureProjectIDInObservabilityConfig(ctx context.Context, config *configpb.ObservabilityConfig) error {
 	if config.GetDestinationProjectId() == "" {
 		// Try to fetch the GCP project id
-		config.DestinationProjectId = fetchDefaultProjectID(ctx)
+		projectID := fetchDefaultProjectID(ctx)
+		if projectID == "" {
+			return fmt.Errorf("empty destination project ID")
+		}
+		config.DestinationProjectId = projectID
 	}
+	return nil
 }

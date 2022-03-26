@@ -194,7 +194,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 
 func (te *test) enablePluginWithConfig(config *configpb.ObservabilityConfig) {
 	// Injects the fake exporter for testing purposes
-	defaultLogger = newObservabilityBinaryLogger(nil)
+	defaultLogger = newBinaryLogger(nil)
 	iblog.SetLogger(defaultLogger)
 	if err := defaultLogger.start(config, te.fle); err != nil {
 		te.t.Fatalf("Failed to start plugin: %v", err)
@@ -204,7 +204,7 @@ func (te *test) enablePluginWithConfig(config *configpb.ObservabilityConfig) {
 func (te *test) enablePluginWithCaptureAll() {
 	te.enablePluginWithConfig(&configpb.ObservabilityConfig{
 		EnableCloudLogging:   true,
-		DestinationProjectId: "",
+		DestinationProjectId: "fake",
 		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
 			{
 				Pattern:      "*",
@@ -503,7 +503,8 @@ func (s) TestOverrideConfig(t *testing.T) {
 	// allows message payload logging, and others disabling the message payload
 	// logging. We should observe this behavior latter.
 	te.enablePluginWithConfig(&configpb.ObservabilityConfig{
-		EnableCloudLogging: true,
+		EnableCloudLogging:   true,
+		DestinationProjectId: "fake",
 		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
 			{
 				Pattern:      "wont/match",
@@ -569,7 +570,8 @@ func (s) TestNoMatch(t *testing.T) {
 	// allows message payload logging, and others disabling the message payload
 	// logging. We should observe this behavior latter.
 	te.enablePluginWithConfig(&configpb.ObservabilityConfig{
-		EnableCloudLogging: true,
+		EnableCloudLogging:   true,
+		DestinationProjectId: "fake",
 		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
 			{
 				Pattern:      "wont/match",
@@ -608,7 +610,8 @@ func (s) TestNoMatch(t *testing.T) {
 
 func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
 	config := &configpb.ObservabilityConfig{
-		EnableCloudLogging: true,
+		EnableCloudLogging:   true,
+		DestinationProjectId: "fake",
 		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
 			{
 				Pattern: ":-)",

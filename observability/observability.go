@@ -61,7 +61,9 @@ func Start(ctx context.Context) error {
 	}
 
 	// Set the project ID if it isn't configured manually.
-	maybeUpdateProjectIDInObservabilityConfig(ctx, config)
+	if err := ensureProjectIDInObservabilityConfig(ctx, config); err != nil {
+		return err
+	}
 
 	// Logging is controlled by the config at methods level.
 	return defaultLogger.Start(ctx, config)
