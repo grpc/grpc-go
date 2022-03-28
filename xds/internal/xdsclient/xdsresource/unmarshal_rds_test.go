@@ -111,6 +111,28 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 					}}})
 			return rs
 		}
+		goodRouteConfigWithUnsupportedClusterSpecifier = &v3routepb.RouteConfiguration{
+			Name: routeName,
+			VirtualHosts: []*v3routepb.VirtualHost{{
+				Domains: []string{ldsTarget},
+				Routes: []*v3routepb.Route{
+					{
+						Match: &v3routepb.RouteMatch{
+							PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"},
+							CaseSensitive: &wrapperspb.BoolValue{Value: false},
+						},
+						Action: &v3routepb.Route_Route{
+							Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName}},
+						}},
+					{
+						Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "|"}},
+						Action: &v3routepb.Route_Route{
+							Route: &v3routepb.RouteAction{ClusterSpecifier: &v3routepb.RouteAction_ClusterHeader{}},
+						}},
+				},
+			},
+			},
+		}
 
 		goodUpdateWithFilterConfigs = func(cfgs map[string]httpfilter.FilterConfig) RouteConfigUpdate {
 			return RouteConfigUpdate{
@@ -738,6 +760,16 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			rc: goodRouteConfigWithClusterSpecifierPluginsAndNormalRoute([]*v3routepb.ClusterSpecifierPlugin{
 				clusterSpecifierPlugin("cspA", configOfClusterSpecifierDoesntExist, true),
 			}, []string{"cspA"}),
+			wantUpdate: goodUpdateWithNormalRoute,
+			rlsEnabled: true,
+		},
+		// This tests a scenario where a route has an unsupported cluster
+		// specifier. Any routes with an unsupported cluster specifier should be
+		// ignored. The config has two routes, and only one of them should be
+		// present in the update.
+		{
+			name:       "unsupported-cluster-specifier-route-should-ignore",
+			rc:         goodRouteConfigWithUnsupportedClusterSpecifier,
 			wantUpdate: goodUpdateWithNormalRoute,
 			rlsEnabled: true,
 		},
