@@ -59,24 +59,18 @@ func (t *Controller) run(ctx context.Context) {
 	// report error (and log) when stats is transient failure.
 
 	retries := 0
+	first := true
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-
-		if retries != 0 {
+		if !first {
 			timer := time.NewTimer(t.backoff(retries))
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
-				if !timer.Stop() {
-					<-timer.C
-				}
+				timer.Stop()
 				return
 			}
 		}
+		first = false
 
 		retries++
 		stream, err := t.vClient.NewStream(ctx, t.cc)
@@ -370,22 +364,18 @@ func (t *Controller) processAckInfo(ack *ackAction, stream grpc.ClientStream) (t
 // It blocks until the context is cancelled.
 func (t *Controller) reportLoad(ctx context.Context, cc *grpc.ClientConn, opts controllerversion.LoadReportingOptions) {
 	retries := 0
+	first := true
 	for {
-		if ctx.Err() != nil {
-			return
-		}
-
-		if retries != 0 {
+		if !first {
 			timer := time.NewTimer(t.backoff(retries))
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
-				if !timer.Stop() {
-					<-timer.C
-				}
+				timer.Stop()
 				return
 			}
 		}
+		first = false
 
 		retries++
 		stream, err := t.vClient.NewLoadStatsStream(ctx, cc)
