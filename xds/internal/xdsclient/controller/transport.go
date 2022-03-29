@@ -59,10 +59,11 @@ func (t *Controller) run(ctx context.Context) {
 	// report error (and log) when stats is transient failure.
 
 	retries := 0
-	first := true
-	for {
-		if !first {
-			timer := time.NewTimer(t.backoff(retries))
+	lastStreamStartTime := time.Time{}
+	for ctx.Err() == nil {
+		dur := time.Until(lastStreamStartTime.Add(t.backoff(retries)))
+		if dur > 0 {
+			timer := time.NewTimer(dur)
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
@@ -70,9 +71,9 @@ func (t *Controller) run(ctx context.Context) {
 				return
 			}
 		}
-		first = false
 
 		retries++
+		lastStreamStartTime = time.Now()
 		stream, err := t.vClient.NewStream(ctx, t.cc)
 		if err != nil {
 			t.updateHandler.NewConnectionError(err)
@@ -364,10 +365,11 @@ func (t *Controller) processAckInfo(ack *ackAction, stream grpc.ClientStream) (t
 // It blocks until the context is cancelled.
 func (t *Controller) reportLoad(ctx context.Context, cc *grpc.ClientConn, opts controllerversion.LoadReportingOptions) {
 	retries := 0
-	first := true
-	for {
-		if !first {
-			timer := time.NewTimer(t.backoff(retries))
+	lastStreamStartTime := time.Time{}
+	for ctx.Err() == nil {
+		dur := time.Until(lastStreamStartTime.Add(t.backoff(retries)))
+		if dur > 0 {
+			timer := time.NewTimer(dur)
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
@@ -375,9 +377,9 @@ func (t *Controller) reportLoad(ctx context.Context, cc *grpc.ClientConn, opts c
 				return
 			}
 		}
-		first = false
 
 		retries++
+		lastStreamStartTime = time.Now()
 		stream, err := t.vClient.NewLoadStatsStream(ctx, cc)
 		if err != nil {
 			t.logger.Warningf("lrs: failed to create stream: %v", err)
