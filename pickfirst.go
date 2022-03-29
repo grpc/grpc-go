@@ -163,7 +163,7 @@ type picker struct {
 	err    error
 }
 
-func (p *picker) Pick(_ balancer.PickInfo) (balancer.PickResult, error) {
+func (p *picker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	return p.result, p.err
 }
 
@@ -173,7 +173,7 @@ type idlePicker struct {
 	subConn balancer.SubConn
 }
 
-func (i *idlePicker) Pick(_ balancer.PickInfo) (balancer.PickResult, error) {
+func (i *idlePicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	i.subConn.Connect()
 	return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
