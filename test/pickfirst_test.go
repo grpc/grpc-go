@@ -26,7 +26,9 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -43,6 +45,11 @@ const pickFirstServiceConfig = `{"loadBalancingConfig": [{"pick_first":{}}]}`
 // with service config specifying the use of the pick_first LB policy.
 func setupPickFirst(t *testing.T, backendCount int, opts ...grpc.DialOption) (*grpc.ClientConn, *manual.Resolver, []*stubserver.StubServer) {
 	t.Helper()
+
+	// Initialize channelz. Used to determine pending RPC count.
+	czCleanup := channelz.NewChannelzStorageForTesting()
+	t.Cleanup(func() { czCleanupWrapper(czCleanup, t) })
+
 	r := manual.NewBuilderWithScheme("whatever")
 
 	backends := make([]*stubserver.StubServer, backendCount)
@@ -256,5 +263,72 @@ func (s) TestPickFirst_AddressesRemoved(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0]}})
 	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestPickFirst_NewAddressWhileBlocking tests the case where pick_first is
+// configured on a channel, things are working as expected and then a resolver
+// updates removes all addresses. An RPC attempted at this point in time will be
+// blocked because there are no valid backends. This test verifies that when new
+// backends are added, the RPC is able to complete.
+func (s) TestPickFirst_NewAddressWhileBlocking(t *testing.T) {
+	cc, r, backends := setupPickFirst(t, 2)
+	addrs := backendsToAddrs(backends)
+	r.UpdateState(resolver.State{Addresses: addrs})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+		t.Fatal(err)
+	}
+
+	// Send a resolver update with no addresses. This should push the channel into
+	// TransientFailure.
+	r.UpdateState(resolver.State{})
+	for state := cc.GetState(); state != connectivity.TransientFailure; state = cc.GetState() {
+		if !cc.WaitForStateChange(ctx, state) {
+			t.Fatalf("timeout waiting for state change. got %v; want %v", state, connectivity.TransientFailure)
+		}
+	}
+
+	doneCh := make(chan struct{})
+	client := testpb.NewTestServiceClient(cc)
+	go func() {
+		// The channel is currently in TransientFailure and this RPC will block
+		// until the channel becomes Ready, which will only happen when we push a
+		// resolver update with a valid backend address.
+		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+			t.Errorf("EmptyCall() = %v, want <nil>", err)
+		}
+		close(doneCh)
+	}()
+
+	// Make sure that there is one pending RPC on the ClientConn before attempting
+	// to push new addresses through the name resolver. If we don't do this, the
+	// resolver update can happen before the above goroutine gets to make the RPC.
+	for {
+		if err := ctx.Err(); err != nil {
+			t.Fatal(err)
+		}
+		tcs, _ := channelz.GetTopChannels(0, 0)
+		if len(tcs) != 1 {
+			t.Fatalf("there should only be one top channel, not %d", len(tcs))
+		}
+		started := tcs[0].ChannelData.CallsStarted
+		completed := tcs[0].ChannelData.CallsSucceeded + tcs[0].ChannelData.CallsFailed
+		if (started - completed) == 1 {
+			break
+		}
+		time.Sleep(defaultTestShortTimeout)
+	}
+
+	// Send a resolver update with a valid backend to push the channel to Ready
+	// and unblock the above RPC.
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: backends[0].Address}}})
+
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for blocked RPC to complete")
+	case <-doneCh:
 	}
 }
