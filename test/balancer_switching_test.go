@@ -634,3 +634,97 @@ func (s) TestBalancerSwitch_OldBalancerCallsRemoveSubConnInClose(t *testing.T) {
 	case <-done:
 	}
 }
+
+// TestBalancerSwitch_Graceful tests the graceful switching of LB policies. It
+// starts off by configuring "round_robin" on the channel and ensures that RPCs
+// are successful. Then, it switches to a stub balancer which does not report a
+// picker until instructed by the test do to so. At this point, the test
+// verifies that RPCs are still successful using the old balancer. Then the test
+// asks the new balancer to report a healthy picker and the test verifies that
+// the RPCs get routed using the picker reported by the new balancer.
+func (s) TestBalancerSwitch_Graceful(t *testing.T) {
+	backends, cleanup := startBackendsForBalancerSwitch(t)
+	defer cleanup()
+	addrs := stubBackendsToResolverAddrs(backends)
+
+	r := manual.NewBuilderWithScheme("whatever")
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+
+	// Push a resolver update with the service config specifying "round_robin".
+	now := time.Now()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	r.UpdateState(resolver.State{
+		Addresses:     addrs,
+		ServiceConfig: parseServiceConfig(t, r, rrServiceConfig),
+	})
+	if err := checkForTraceEvent(ctx, wantRoundRobinTraceDesc, now); err != nil {
+		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantRoundRobinTraceDesc, err)
+	}
+	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+		t.Fatal(err)
+	}
+
+	// Register a stub balancer which uses a "pick_first" balancer underneath and
+	// signals on a channel when it receives ClientConn updates. But it does not
+	// forward the ccUpdate to the underlying "pick_first" balancer until the test
+	// asks it to do so. This allows us to test the graceful switch functionality.
+	// Until the test asks the stub balancer to forward the ccUpdate, RPCs should
+	// get routed to the old balancer. And once the test gives the go ahead, RPCs
+	// should get routed to the new balancer.
+	ccUpdateCh := make(chan struct{})
+	waitToProceed := make(chan struct{})
+	stub.Register(t.Name(), stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			pf := balancer.Get(grpc.PickFirstBalancerName)
+			bd.Data = pf.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			bal := bd.Data.(balancer.Balancer)
+			close(ccUpdateCh)
+			go func() {
+				<-waitToProceed
+				bal.UpdateClientConnState(ccs)
+			}()
+			return nil
+		},
+		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
+			bal := bd.Data.(balancer.Balancer)
+			bal.UpdateSubConnState(sc, state)
+		},
+	})
+
+	// Push a resolver update with the service config specifying our stub
+	// balancer. We should see a trace event for this balancer switch. But RPCs
+	// should still be routed to the old balancer since our stub balancer does not
+	// report a ready picker until we ask it to do so.
+	now = time.Now()
+	r.UpdateState(resolver.State{
+		Addresses:     addrs,
+		ServiceConfig: r.CC.ParseServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%v": {}}]}`, t.Name())),
+	})
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for a ClientConnState update on the new balancer")
+	case <-ccUpdateCh:
+	}
+	wantTraceDesc := fmt.Sprintf("Channel switches to new LB policy %q", t.Name())
+	if err := checkForTraceEvent(ctx, wantTraceDesc, now); err != nil {
+		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantTraceDesc, err)
+	}
+	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ask our stub balancer to forward the earlier received ccUpdate to the
+	// underlying "pick_first" balancer which will result in a healthy picker
+	// being reported to the channel. RPCs should start using the new balancer.
+	close(waitToProceed)
+	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+		t.Fatal(err)
+	}
+}
