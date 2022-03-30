@@ -123,12 +123,13 @@ func NewServer(params ServerParams) (*Server, error) {
 // Otherwise, it blocks until Stop() is called, at which point it returns the
 // error returned by the underlying grpc.Server's Serve() method.
 func (s *Server) Serve() error {
+	s.mu.Lock()
 	if s.grpcServer != nil {
+		s.mu.Unlock()
 		return errors.New("Serve() called multiple times")
 	}
 
 	server := grpc.NewServer(s.sOpts...)
-	s.mu.Lock()
 	s.grpcServer = server
 	s.mu.Unlock()
 
@@ -144,6 +145,7 @@ func (s *Server) Stop() {
 	s.mu.Lock()
 	if s.grpcServer != nil {
 		s.grpcServer.Stop()
+		s.grpcServer = nil
 	}
 	s.mu.Unlock()
 }
