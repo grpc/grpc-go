@@ -372,13 +372,13 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 					return nil, nil, fmt.Errorf("route %+v, action %+v, specifies a cluster specifier plugin %+v that is not in Route Configuration", r, a, a.ClusterSpecifierPlugin)
 				}
 				if csps[a.ClusterSpecifierPlugin] == nil {
-					logger.Warningf("route %+v references optional and unsupported cluster specifier plugin %v, the route will be ignored", r, a.ClusterSpecifierPlugin)
+					logger.Infof("route %+v references optional and unsupported cluster specifier plugin %v, the route will be ignored", r, a.ClusterSpecifierPlugin)
 					continue
 				}
 				cspNames[a.ClusterSpecifierPlugin] = true
 				route.ClusterSpecifierPlugin = a.ClusterSpecifierPlugin
 			default:
-				logger.Warningf("route %+v references unknown ClusterSpecifier %+v, the route will be ignored", r, a)
+				logger.Infof("route %+v references unknown ClusterSpecifier %+v, the route will be ignored", r, a)
 				continue
 			}
 
