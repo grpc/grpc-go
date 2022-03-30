@@ -273,7 +273,7 @@ func (s) TestPickFirst_AddressesRemoved(t *testing.T) {
 // backends are added, the RPC is able to complete.
 func (s) TestPickFirst_NewAddressWhileBlocking(t *testing.T) {
 	cc, r, backends := setupPickFirst(t, 2)
-	addrs := backendsToAddrs(backends)
+	addrs := stubBackendsToResolverAddrs(backends)
 	r.UpdateState(resolver.State{Addresses: addrs})
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

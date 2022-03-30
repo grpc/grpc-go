@@ -43,7 +43,8 @@ import (
 
 const rrServiceConfig = `{"loadBalancingConfig": [{"round_robin":{}}]}`
 
-func checkRoundRobin(ctx context.Context, client testgrpc.TestServiceClient, addrs []resolver.Address) error {
+func checkRoundRobin(ctx context.Context, cc *grpc.ClientConn, addrs []resolver.Address) error {
+	client := testgrpc.NewTestServiceClient(cc)
 	var peer peer.Peer
 	// Make sure connections to all backends are up.
 	backendCount := len(addrs)
