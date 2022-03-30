@@ -35,7 +35,10 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 )
 
-const stateRecordingBalancerName = "state_recoding_balancer"
+const (
+	stateRecordingBalancerName = "state_recoding_balancer"
+	defaultTestTimeout         = 10 * time.Second
+)
 
 var testBalancerBuilder = newStateRecordingBalancerBuilder()
 

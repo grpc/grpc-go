@@ -43,7 +43,8 @@ import (
 
 const rrServiceConfig = `{"loadBalancingConfig": [{"round_robin":{}}]}`
 
-func checkRoundRobin(ctx context.Context, client testgrpc.TestServiceClient, addrs []resolver.Address) error {
+func checkRoundRobin(ctx context.Context, cc *grpc.ClientConn, addrs []resolver.Address) error {
+	client := testgrpc.NewTestServiceClient(cc)
 	var peer peer.Peer
 	// Make sure connections to all backends are up.
 	backendCount := len(addrs)
@@ -126,7 +127,7 @@ func testRoundRobinBasic(ctx context.Context, t *testing.T, opts ...grpc.DialOpt
 	}
 
 	r.UpdateState(resolver.State{Addresses: addrs})
-	if err := checkRoundRobin(ctx, client, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
 		t.Fatal(err)
 	}
 	return cc, r, backends
@@ -244,8 +245,7 @@ func (s) TestRoundRobin_OneServerDown(t *testing.T) {
 	for i := 0; i < len(backends)-1; i++ {
 		addrs[i] = resolver.Address{Addr: backends[i].Address}
 	}
-	client := testpb.NewTestServiceClient(cc)
-	if err := checkRoundRobin(ctx, client, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
 		t.Fatalf("RPCs are not being round robined across remaining servers: %v", err)
 	}
 }

@@ -672,14 +672,14 @@ func (cc *ClientConn) updateResolverState(s resolver.State, err error) error {
 	cc.mu.Unlock()
 	if cbn != grpclbName {
 		// Filter any grpclb addresses since we don't have the grpclb balancer.
-		for i := 0; i < len(s.Addresses); {
-			if s.Addresses[i].Type == resolver.GRPCLB {
-				copy(s.Addresses[i:], s.Addresses[i+1:])
-				s.Addresses = s.Addresses[:len(s.Addresses)-1]
+		var addrs []resolver.Address
+		for _, addr := range s.Addresses {
+			if addr.Type == resolver.GRPCLB {
 				continue
 			}
-			i++
+			addrs = append(addrs, addr)
 		}
+		s.Addresses = addrs
 	}
 	uccsErr := bw.updateClientConnState(&balancer.ClientConnState{ResolverState: s, BalancerConfig: balCfg})
 	if ret == nil {

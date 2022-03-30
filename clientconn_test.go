@@ -40,8 +40,17 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/testdata"
 )
+
+func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
+	scpr := r.CC.ParseServiceConfig(s)
+	if scpr.Err != nil {
+		panic(fmt.Sprintf("Error parsing config %q: %v", s, scpr.Err))
+	}
+	return scpr
+}
 
 func (s) TestDialWithTimeout(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")

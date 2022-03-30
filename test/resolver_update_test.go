@@ -129,7 +129,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAsFirstUpdate(t *testing.T) {
 
 // The wrappingBalancer wraps a pick_first balancer and writes to a channel when
 // it receives a ClientConn update. This is different to a stub balancer which
-// only notifies of updates from grpc, but does not contain a real balanacer.
+// only notifies of updates from grpc, but does not contain a real balancer.
 //
 // The wrappingBalancer allows us to write tests with a real backend and make
 // real RPCs.
