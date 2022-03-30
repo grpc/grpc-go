@@ -151,16 +151,8 @@ func processClusterSpecifierPlugins(csps []*v3routepb.ClusterSpecifierPlugin) (m
 				// "If a plugin is not supported but has is_optional set, then
 				// we will ignore any routes that point to that plugin"
 				cspCfgs[csp.GetExtension().GetName()] = nil
-				// Note, this conflates a not supported plugin with is optional
-				// set with a ClusterSpecifierPlugin that returns a nil
-				// BalancerConfig. However, due to this returned config being
-				// used as configuration for a child LB policy of the Cluster
-				// Manager LB Policy, also ignoring that route seems to make
-				// sense. The Cluster Specifier Plugin should also not return
-				// nil as the config in the first place.
 				continue
 			}
-
 			// "If no plugin is registered for it, the resource will be NACKed."
 			// - RLS in xDS design
 			return nil, fmt.Errorf("cluster specifier %q of type %q was not found", csp.GetExtension().GetName(), csp.GetExtension().GetTypedConfig().GetTypeUrl())
@@ -368,8 +360,6 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 				if totalWeight == 0 {
 					return nil, nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
 				}
-			case *v3routepb.RouteAction_ClusterHeader:
-				continue
 			case *v3routepb.RouteAction_ClusterSpecifierPlugin:
 				if !envconfig.XDSRLS {
 					return nil, nil, fmt.Errorf("route %+v, has an unknown ClusterSpecifier: %+v", r, a)
@@ -382,9 +372,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 					return nil, nil, fmt.Errorf("route %+v, action %+v, specifies a cluster specifier plugin %+v that is not in Route Configuration", r, a, a.ClusterSpecifierPlugin)
 				}
 				if csps[a.ClusterSpecifierPlugin] == nil {
-					// "If a plugin is not supported but has is_optional set,
-					// then we will ignore any routes that point to that plugin"
-					logger.Warningf("route %+v references optional cluster specifier plugin %v, the route will be ignored", r, a.ClusterSpecifierPlugin)
+					logger.Warningf("route %+v references optional and unsupported cluster specifier plugin %v, the route will be ignored", r, a.ClusterSpecifierPlugin)
 					continue
 				}
 				cspNames[a.ClusterSpecifierPlugin] = true

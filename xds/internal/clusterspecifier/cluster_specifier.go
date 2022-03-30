@@ -37,7 +37,7 @@ type ClusterSpecifier interface {
 	// ParseClusterSpecifierConfig parses the provided configuration
 	// proto.Message from the top level RDS configuration. The resulting
 	// BalancerConfig will be used as configuration for a child LB Policy of the
-	// Cluster Manager LB Policy.
+	// Cluster Manager LB Policy. A nil BalancerConfig is invalid.
 	ParseClusterSpecifierConfig(proto.Message) (BalancerConfig, error)
 }
 
