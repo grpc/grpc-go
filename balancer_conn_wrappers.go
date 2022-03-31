@@ -48,10 +48,9 @@ import (
 type ccBalancerWrapper struct {
 	cc *ClientConn
 
-	// balancerMu protects access to the following fields. Any calls on the
-	// underlying balancer must be made with the mutex held. This ensures that we
-	// never call the underlying balancer methods concurrently.
-	balancerMu      sync.Mutex
+	// Since these fields are accessed only from handleXxx() methods which are
+	// synchronized by the watcher goroutine, we do not need a mutex to protect
+	// these fields.
 	balancer        *gracefulswitch.Balancer
 	curBalancerName string
 
@@ -175,9 +174,6 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 // and the selected LB policy is not "grpclb", these addresses will be filtered
 // out and ccs will be modified with the updated address list.
 func (ccb *ccBalancerWrapper) handleClientConnStateChange(ccs *balancer.ClientConnState) {
-	ccb.balancerMu.Lock()
-	defer ccb.balancerMu.Unlock()
-
 	if ccb.curBalancerName != grpclbName {
 		// Filter any grpclb addresses since we don't have the grpclb balancer.
 		var addrs []resolver.Address
@@ -215,8 +211,6 @@ func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connecti
 // handleSubConnStateChange handles a SubConnState update from the update
 // channel and invokes the appropriate method on the underlying balancer.
 func (ccb *ccBalancerWrapper) handleSubConnStateChange(update *scStateUpdate) {
-	ccb.balancerMu.Lock()
-	defer ccb.balancerMu.Unlock()
 	ccb.balancer.UpdateSubConnState(update.sc, balancer.SubConnState{ConnectivityState: update.state, ConnectionError: update.err})
 }
 
@@ -225,8 +219,6 @@ func (ccb *ccBalancerWrapper) exitIdle() {
 }
 
 func (ccb *ccBalancerWrapper) handleExitIdle() {
-	ccb.balancerMu.Lock()
-	defer ccb.balancerMu.Unlock()
 	if ccb.cc.GetState() != connectivity.Idle {
 		return
 	}
@@ -238,8 +230,6 @@ func (ccb *ccBalancerWrapper) resolverError(err error) {
 }
 
 func (ccb *ccBalancerWrapper) handleResolverError(err error) {
-	ccb.balancerMu.Lock()
-	defer ccb.balancerMu.Unlock()
 	ccb.balancer.ResolverError(err)
 }
 
@@ -262,9 +252,6 @@ func (ccb *ccBalancerWrapper) switchTo(name string) {
 // balancer.Builder corresponding to name. If no balancer.Builder is registered
 // for the given name, it uses the default LB policy which is "pick_first".
 func (ccb *ccBalancerWrapper) handleSwitchTo(name string) {
-	ccb.balancerMu.Lock()
-	defer ccb.balancerMu.Unlock()
-
 	// TODO: Ensure other languages using case-insensitive balancer registries.
 	if strings.EqualFold(ccb.curBalancerName, name) {
 		return
@@ -303,9 +290,7 @@ func (ccb *ccBalancerWrapper) close() {
 }
 
 func (ccb *ccBalancerWrapper) handleClose() {
-	ccb.balancerMu.Lock()
 	ccb.balancer.Close()
-	ccb.balancerMu.Unlock()
 	ccb.done.Fire()
 }
 
