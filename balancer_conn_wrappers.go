@@ -150,8 +150,16 @@ func (ccb *ccBalancerWrapper) watcher() {
 // back to grpc which propagates that to the resolver.
 func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) error {
 	ccb.updateCh.Put(watcherUpdate{typ: updateTypeClientConnState, update: ccs})
-	res := <-ccb.resultCh.Get()
-	ccb.resultCh.Load()
+
+	var res interface{}
+	select {
+	case res = <-ccb.resultCh.Get():
+		ccb.resultCh.Load()
+	case <-ccb.closed.Done():
+		// Return early if the balancer wrapper is closed while we are waiting for
+		// the underlying balancer to process a ClientConnState update.
+		return nil
+	}
 	// If the returned error is nil, attempting to type assert to error leads to
 	// panic. So, this needs to handled separately.
 	if res == nil {
