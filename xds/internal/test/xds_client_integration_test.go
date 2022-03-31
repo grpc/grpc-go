@@ -28,20 +28,27 @@ import (
 	"testing"
 
 	"google.golang.org/grpc"
-	_ "google.golang.org/grpc/balancer/rls"
-	"google.golang.org/grpc/balancer/rls/test"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
+	rlstest "google.golang.org/grpc/internal/testutils/rls"
 	"google.golang.org/grpc/status"
-	_ "google.golang.org/grpc/xds/internal/clusterspecifier/rls"
 	rlscsp "google.golang.org/grpc/xds/internal/clusterspecifier/rls"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/protobuf/types/known/durationpb"
 
+	// To register the RLS Load Balancing policy.
+	_ "google.golang.org/grpc/balancer/rls"
+	// To register the RLS Cluster Specifier Plugin.
+	_ "google.golang.org/grpc/xds/internal/clusterspecifier/rls"
+
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -62,7 +69,7 @@ func clientSetup(t *testing.T, tss testpb.TestServiceServer) (uint32, func()) {
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
-		t.Fatalf("test.LocalTCPListener() failed: %v", err)
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
 	}
 
 	go func() {
@@ -254,6 +261,48 @@ func (s) TestClientSideRetry(t *testing.T) {
 	}
 }
 
+// defaultClientResourcesWithRLSCSP returns a set of resources (LDS, RDS, CDS, EDS) for a
+// client to connect to a server with a RLS Load Balancer as a child of Cluster Manager.
+func defaultClientResourcesWithRLSCSP(params e2e.ResourceParams, rlsProto *rlspb.RouteLookupConfig) e2e.UpdateOptions {
+	routeConfigName := "route-" + params.DialTarget
+	clusterName := "cluster-" + params.DialTarget
+	endpointsName := "endpoints-" + params.DialTarget
+	return e2e.UpdateOptions{
+		NodeID:    params.NodeID,
+		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(params.DialTarget, routeConfigName)},
+		Routes:    []*v3routepb.RouteConfiguration{defaultRouteConfigWithRLSCSP(routeConfigName, params.DialTarget, rlsProto)},
+		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, endpointsName, params.SecLevel)},
+		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointsName, params.Host, []uint32{params.Port})},
+	}
+}
+
+// defaultRouteConfigWithRLSCSP returns a basic xds RouteConfig resource with an
+// RLS Cluster Specifier Plugin configured as the route.
+func defaultRouteConfigWithRLSCSP(routeName, ldsTarget string, rlsProto *rlspb.RouteLookupConfig) *v3routepb.RouteConfiguration {
+	return &v3routepb.RouteConfiguration{
+		Name: routeName,
+		ClusterSpecifierPlugins: []*v3routepb.ClusterSpecifierPlugin{
+			{
+				Extension: &v3corepb.TypedExtensionConfig{
+					Name: "rls-csp",
+					TypedConfig: testutils.MarshalAny(&rlspb.RouteLookupClusterSpecifier{
+						RouteLookupConfig: rlsProto,
+					}),
+				},
+			},
+		},
+		VirtualHosts: []*v3routepb.VirtualHost{{
+			Domains: []string{ldsTarget},
+			Routes: []*v3routepb.Route{{
+				Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+				Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+					ClusterSpecifier: &v3routepb.RouteAction_ClusterSpecifierPlugin{ClusterSpecifierPlugin: "rls-csp"},
+				}},
+			}},
+		}},
+	}
+}
+
 // TestRLSinxDS tests an xDS configured system with a RLS Balancer present.
 // This test sets up the RLS Balancer using the RLS Cluster Specifier Plugin,
 // spins up a test service and has a fake RLS Server correctly respond with a target
@@ -262,11 +311,11 @@ func (s) TestClientSideRetry(t *testing.T) {
 func (s) TestRLSinxDS(t *testing.T) {
 	oldRLS := envconfig.XDSRLS
 	envconfig.XDSRLS = true
+	rlscsp.RegisterForTesting()
 	defer func() {
 		envconfig.XDSRLS = oldRLS
+		rlscsp.UnregisterForTesting()
 	}()
-	rlscsp.RegisterForTesting()
-	defer rlscsp.UnregisterForTesting()
 
 	// Set up all components and configuration necessary - management server,
 	// xDS resolver, fake RLS Server, and xDS configuration which specifies a
@@ -276,8 +325,8 @@ func (s) TestRLSinxDS(t *testing.T) {
 	port, cleanup2 := clientSetup(t, &testService{})
 	defer cleanup2()
 
-	lis := test.NewListenerWrapper(t, nil)
-	rlsServer, rlsRequestCh := test.SetupFakeRLSServer(t, lis)
+	lis := testutils.NewListenerWrapper(t, nil)
+	rlsServer, rlsRequestCh := rlstest.SetupFakeRLSServer(t, lis)
 	rlsProto := &rlspb.RouteLookupConfig{
 		GrpcKeybuilders:      []*rlspb.GrpcKeyBuilder{{Names: []*rlspb.GrpcKeyBuilder_Name{{Service: "grpc.testing.TestService"}}}},
 		LookupService:        rlsServer.Address,
@@ -286,7 +335,7 @@ func (s) TestRLSinxDS(t *testing.T) {
 	}
 
 	const serviceName = "my-service-client-side-xds"
-	resources := e2e.DefaultClientResourcesWithRLSCSP(e2e.ResourceParams{
+	resources := defaultClientResourcesWithRLSCSP(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",
@@ -302,8 +351,8 @@ func (s) TestRLSinxDS(t *testing.T) {
 
 	// Configure the fake RLS Server to set the RLS Balancers child CDS
 	// Cluster's name as the target for the RPC to use.
-	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *test.RouteLookupResponse {
-		return &test.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{"cluster-" + serviceName}}}
+	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{"cluster-" + serviceName}}}
 	})
 
 	// Create a ClientConn and make a successful RPC.
@@ -324,8 +373,7 @@ func (s) TestRLSinxDS(t *testing.T) {
 	// of the xDS Configured system that correctly sends out RPC.
 
 	// Verify connection is established to RLS Server.
-	_, err = lis.NewConnCh.Receive(ctx)
-	if err != nil {
+	if _, err = lis.NewConnCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout when waiting for RLS LB policy to create control channel")
 	}
 

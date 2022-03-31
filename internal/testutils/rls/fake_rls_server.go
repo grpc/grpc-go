@@ -16,8 +16,8 @@
  *
  */
 
-// Package test contains utilities for RouteLookupService tests.
-package test
+// Package rls contains utilities for RouteLookupService tests.
+package rls
 
 import (
 	"context"
@@ -32,56 +32,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
 )
-
-// ConnWrapper wraps a net.Conn and pushes on a channel when closed.
-type ConnWrapper struct {
-	net.Conn
-	CloseCh *testutils.Channel
-}
-
-// Close closes the connection and sends a value on the close channel.
-func (cw *ConnWrapper) Close() error {
-	err := cw.Conn.Close()
-	cw.CloseCh.Replace(nil)
-	return err
-}
-
-// ListenerWrapper wraps a net.Listener and the returned net.Conn.
-//
-// It pushes on a channel whenever it accepts a new connection.
-type ListenerWrapper struct {
-	net.Listener
-	NewConnCh *testutils.Channel
-}
-
-// Accept wraps the Listener Accept and sends the accepted connection on a
-// channel.
-func (l *ListenerWrapper) Accept() (net.Conn, error) {
-	c, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	closeCh := testutils.NewChannel()
-	conn := &ConnWrapper{Conn: c, CloseCh: closeCh}
-	l.NewConnCh.Send(conn)
-	return conn, nil
-}
-
-// NewListenerWrapper returns a ListenerWrapper.
-func NewListenerWrapper(t *testing.T, lis net.Listener) *ListenerWrapper {
-	if lis == nil {
-		var err error
-		lis, err = testutils.LocalTCPListener()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return &ListenerWrapper{
-		Listener:  lis,
-		NewConnCh: testutils.NewChannel(),
-	}
-}
 
 // RouteLookupResponse wraps an RLS response and the associated error to be sent
 // to a client when the RouteLookup RPC is invoked.

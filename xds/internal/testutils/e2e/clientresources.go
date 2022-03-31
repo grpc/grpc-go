@@ -36,7 +36,6 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
-	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 )
 
 const (
@@ -93,21 +92,6 @@ func DefaultClientResources(params ResourceParams) UpdateOptions {
 		NodeID:    params.NodeID,
 		Listeners: []*v3listenerpb.Listener{DefaultClientListener(params.DialTarget, routeConfigName)},
 		Routes:    []*v3routepb.RouteConfiguration{DefaultRouteConfig(routeConfigName, params.DialTarget, clusterName)},
-		Clusters:  []*v3clusterpb.Cluster{DefaultCluster(clusterName, endpointsName, params.SecLevel)},
-		Endpoints: []*v3endpointpb.ClusterLoadAssignment{DefaultEndpoint(endpointsName, params.Host, []uint32{params.Port})},
-	}
-}
-
-// DefaultClientResourcesWithRLSCSP returns a set of resources (LDS, RDS, CDS, EDS) for a
-// client to connect to a server with a RLS Load Balancer as a child of Cluster Manager.
-func DefaultClientResourcesWithRLSCSP(params ResourceParams, rlsProto *rlspb.RouteLookupConfig) UpdateOptions {
-	routeConfigName := "route-" + params.DialTarget
-	clusterName := "cluster-" + params.DialTarget
-	endpointsName := "endpoints-" + params.DialTarget
-	return UpdateOptions{
-		NodeID:    params.NodeID,
-		Listeners: []*v3listenerpb.Listener{DefaultClientListener(params.DialTarget, routeConfigName)},
-		Routes:    []*v3routepb.RouteConfiguration{DefaultRouteConfigWithRLSCSP(routeConfigName, params.DialTarget, rlsProto) /*DefaultRouteConfig(routeConfigName, params.DialTarget, clusterName)*/},
 		Clusters:  []*v3clusterpb.Cluster{DefaultCluster(clusterName, endpointsName, params.SecLevel)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{DefaultEndpoint(endpointsName, params.Host, []uint32{params.Port})},
 	}
@@ -313,33 +297,6 @@ func DefaultRouteConfig(routeName, ldsTarget, clusterName string) *v3routepb.Rou
 				Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
 				Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
 					ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
-				}},
-			}},
-		}},
-	}
-}
-
-// DefaultRouteConfigWithRLSCSP returns a basic xds RouteConfig resource with an
-// RLS Cluster Specifier Plugin configured as the route.
-func DefaultRouteConfigWithRLSCSP(routeName, ldsTarget string, rlsProto *rlspb.RouteLookupConfig) *v3routepb.RouteConfiguration {
-	return &v3routepb.RouteConfiguration{
-		Name: routeName,
-		ClusterSpecifierPlugins: []*v3routepb.ClusterSpecifierPlugin{
-			{
-				Extension: &v3corepb.TypedExtensionConfig{
-					Name: "rls-csp",
-					TypedConfig: testutils.MarshalAny(&rlspb.RouteLookupClusterSpecifier{
-						RouteLookupConfig: rlsProto,
-					}),
-				},
-			},
-		},
-		VirtualHosts: []*v3routepb.VirtualHost{{
-			Domains: []string{ldsTarget},
-			Routes: []*v3routepb.Route{{
-				Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
-				Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-					ClusterSpecifier: &v3routepb.RouteAction_ClusterSpecifierPlugin{ClusterSpecifierPlugin: "rls-csp"},
 				}},
 			}},
 		}},
