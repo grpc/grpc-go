@@ -482,11 +482,11 @@ func (s) TestBalancerSwitch_grpclbAddressOverridesLoadBalancingPolicy(t *testing
 	// Switch to "round_robin" by removing the address of type "grpclb".
 	now = time.Now()
 	r.UpdateState(resolver.State{Addresses: addrs})
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
-		t.Fatal(err)
-	}
 	if err := checkForTraceEvent(ctx, wantRoundRobinTraceDesc, now); err != nil {
 		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantRoundRobinTraceDesc, err)
+	}
+	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+		t.Fatal(err)
 	}
 }
 
