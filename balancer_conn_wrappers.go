@@ -148,9 +148,6 @@ func (ccb *ccBalancerWrapper) watcher() {
 // and return. It needs to return the error returned by the underlying balancer
 // back to grpc which propagates that to the resolver.
 func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) error {
-	if ccb == nil {
-		return nil
-	}
 	ccb.updateCh.Put(watcherUpdate{typ: updateTypeClientConnState, update: ccs})
 	res := <-ccb.resultCh.Get()
 	ccb.resultCh.Load()
@@ -164,6 +161,10 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 
 // handleClientConnStateChange handles a ClientConnState update from the update
 // channel and invokes the appropriate method on the underlying balancer.
+//
+// If the addresses specified in the update contain addresses of type "grpclb"
+// and the selected LB policy is not "grpclb", these addresses will be filtered
+// out and ccs will be modified with the updated address list.
 func (ccb *ccBalancerWrapper) handleClientConnStateChange(ccs *balancer.ClientConnState) {
 	ccb.balancerMu.Lock()
 	defer ccb.balancerMu.Unlock()
@@ -206,34 +207,31 @@ func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connecti
 // channel and invokes the appropriate method on the underlying balancer.
 func (ccb *ccBalancerWrapper) handleSubConnStateChange(update *scStateUpdate) {
 	ccb.balancerMu.Lock()
+	defer ccb.balancerMu.Unlock()
 	ccb.balancer.UpdateSubConnState(update.sc, balancer.SubConnState{ConnectivityState: update.state, ConnectionError: update.err})
-	ccb.balancerMu.Unlock()
 }
 
 func (ccb *ccBalancerWrapper) exitIdle() {
-	if ccb == nil || ccb.cc.GetState() != connectivity.Idle {
-		return
-	}
 	ccb.updateCh.Put(watcherUpdate{typ: updateTypeExitIdle})
 }
 
 func (ccb *ccBalancerWrapper) handleExitIdle() {
 	ccb.balancerMu.Lock()
+	defer ccb.balancerMu.Unlock()
+	if ccb.cc.GetState() != connectivity.Idle {
+		return
+	}
 	ccb.balancer.ExitIdle()
-	ccb.balancerMu.Unlock()
 }
 
 func (ccb *ccBalancerWrapper) resolverError(err error) {
-	if ccb == nil {
-		return
-	}
 	ccb.updateCh.Put(watcherUpdate{typ: updateTypeResolverError, update: err})
 }
 
 func (ccb *ccBalancerWrapper) handleResolverError(err error) {
 	ccb.balancerMu.Lock()
+	defer ccb.balancerMu.Unlock()
 	ccb.balancer.ResolverError(err)
-	ccb.balancerMu.Unlock()
 }
 
 // switchTo is invoked by grpc to instruct the balancer wrapper to switch to the
@@ -247,9 +245,6 @@ func (ccb *ccBalancerWrapper) handleResolverError(err error) {
 // the ccBalancerWrapper keeps track of the current LB policy name, and skips
 // the graceful balancer switching process if the name does not change.
 func (ccb *ccBalancerWrapper) switchTo(name string) {
-	if ccb == nil {
-		return
-	}
 	ccb.updateCh.Put(watcherUpdate{typ: updateTypeSwitchTo, update: name})
 }
 
@@ -261,15 +256,18 @@ func (ccb *ccBalancerWrapper) handleSwitchTo(name string) {
 	ccb.balancerMu.Lock()
 	defer ccb.balancerMu.Unlock()
 
+	// TODO: Ensure other languages using case-insensitive balancer registries.
 	if strings.EqualFold(ccb.curBalancerName, name) {
 		return
 	}
 
-	channelz.Infof(logger, ccb.cc.channelzID, "ClientConn switching balancer to %q", name)
+	// TODO: Ensure that name is a registered LB policy when we get here.
+	// We currently only validate the `loadBalancingConfig` field. We need to do
+	// the same for the `loadBalancingPolicy` field and reject the service config
+	// if the specified policy is not registered.
 	builder := balancer.Get(name)
 	if builder == nil {
-		channelz.Warningf(logger, ccb.cc.channelzID, "Channel switches to new LB policy %q due to fallback from invalid balancer name", PickFirstBalancerName)
-		channelz.Infof(logger, ccb.cc.channelzID, "failed to get balancer builder for: %v, using pick_first instead", name)
+		channelz.Warningf(logger, ccb.cc.channelzID, "Channel switches to new LB policy %q, since the specified LB policy %q was not registered", PickFirstBalancerName, name)
 		builder = newPickfirstBuilder()
 	} else {
 		channelz.Infof(logger, ccb.cc.channelzID, "Channel switches to new LB policy %q", name)
@@ -288,17 +286,14 @@ func (ccb *ccBalancerWrapper) handleSwitchTo(name string) {
 // See comments in RemoveSubConn() for more details.
 func (ccb *ccBalancerWrapper) handleRemoveSubConn(acbw *acBalancerWrapper) {
 	ccb.mu.Lock()
+	defer ccb.mu.Unlock()
 	if ccb.subConns != nil {
 		delete(ccb.subConns, acbw)
 		ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 	}
-	ccb.mu.Unlock()
 }
 
 func (ccb *ccBalancerWrapper) close() {
-	if ccb == nil {
-		return
-	}
 	ccb.closed.Fire()
 	<-ccb.done.Done()
 }
@@ -309,19 +304,9 @@ func (ccb *ccBalancerWrapper) handleClose() {
 	ccb.balancerMu.Unlock()
 
 	ccb.mu.Lock()
-	scs := ccb.subConns
 	ccb.subConns = nil
 	ccb.mu.Unlock()
-
-	ccb.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: nil})
 	ccb.done.Fire()
-	// Fire done before removing the addr conns.  We can safely unblock
-	// ccb.close and allow the removeAddrConns to happen
-	// asynchronously.
-	for acbw := range scs {
-		ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
-	}
-	return
 }
 
 func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {

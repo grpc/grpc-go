@@ -692,10 +692,6 @@ func (cc *ClientConn) applyFailingLB(sc *serviceconfig.ParseResult) {
 
 func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State, err error) {
 	cc.mu.Lock()
-	if cc.conns == nil {
-		cc.mu.Unlock()
-		return
-	}
 	cc.balancerWrapper.updateSubConnState(sc, s, err)
 	cc.mu.Unlock()
 }
@@ -1017,7 +1013,6 @@ func (cc *ClientConn) Close() error {
 	rWrapper := cc.resolverWrapper
 	cc.resolverWrapper = nil
 	bWrapper := cc.balancerWrapper
-	cc.balancerWrapper = nil
 	cc.mu.Unlock()
 
 	cc.blockingpicker.close()
