@@ -54,9 +54,6 @@ type ccBalancerWrapper struct {
 	resultCh *buffer.Unbounded // Results of calls to UpdateClientConnState() are pushed here.
 	closed   *grpcsync.Event   // Indicates if close has been called.
 	done     *grpcsync.Event   // Indicates if close has completed its work.
-
-	mu       sync.Mutex
-	subConns map[*acBalancerWrapper]struct{}
 }
 
 // newCCBalancerWrapper creates a new balancer wrapper. The underlying balancer
@@ -68,7 +65,6 @@ func newCCBalancerWrapper(cc *ClientConn, bopts balancer.BuildOptions) *ccBalanc
 		resultCh: buffer.NewUnbounded(),
 		closed:   grpcsync.NewEvent(),
 		done:     grpcsync.NewEvent(),
-		subConns: make(map[*acBalancerWrapper]struct{}),
 	}
 	go ccb.watcher()
 	ccb.balancer = gracefulswitch.NewBalancer(ccb, bopts)
@@ -285,12 +281,7 @@ func (ccb *ccBalancerWrapper) handleSwitchTo(name string) {
 //
 // See comments in RemoveSubConn() for more details.
 func (ccb *ccBalancerWrapper) handleRemoveSubConn(acbw *acBalancerWrapper) {
-	ccb.mu.Lock()
-	defer ccb.mu.Unlock()
-	if ccb.subConns != nil {
-		delete(ccb.subConns, acbw)
-		ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
-	}
+	ccb.cc.removeAddrConn(acbw.getAddrConn(), errConnDrain)
 }
 
 func (ccb *ccBalancerWrapper) close() {
@@ -302,10 +293,6 @@ func (ccb *ccBalancerWrapper) handleClose() {
 	ccb.balancerMu.Lock()
 	ccb.balancer.Close()
 	ccb.balancerMu.Unlock()
-
-	ccb.mu.Lock()
-	ccb.subConns = nil
-	ccb.mu.Unlock()
 	ccb.done.Fire()
 }
 
@@ -313,9 +300,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	if len(addrs) <= 0 {
 		return nil, fmt.Errorf("grpc: cannot create SubConn with empty address list")
 	}
-	ccb.mu.Lock()
-	defer ccb.mu.Unlock()
-	if ccb.subConns == nil {
+	if ccb.done.HasFired() {
 		return nil, fmt.Errorf("grpc: ClientConn balancer wrapper was closed")
 	}
 	ac, err := ccb.cc.newAddrConn(addrs, opts)
@@ -327,7 +312,6 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	acbw.ac.mu.Lock()
 	ac.acbw = acbw
 	acbw.ac.mu.Unlock()
-	ccb.subConns[acbw] = struct{}{}
 	return acbw, nil
 }
 
@@ -354,9 +338,7 @@ func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resol
 }
 
 func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
-	ccb.mu.Lock()
-	defer ccb.mu.Unlock()
-	if ccb.subConns == nil {
+	if ccb.done.HasFired() {
 		return
 	}
 	// Update picker before updating state.  Even though the ordering here does
