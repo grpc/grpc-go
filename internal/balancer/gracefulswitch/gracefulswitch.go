@@ -179,9 +179,8 @@ func (gsb *Balancer) ResolverError(err error) {
 
 // ExitIdle forwards the call to the latest balancer created.
 //
-// If the latest balancer does not support ExitIdle, the subConns need to be
-// re-connected manually. This used to be done in the ClientConn earlier, but
-// is done here now since the ClientConn uses gsb by default.
+// If the latest balancer does not support ExitIdle, the subConns are
+// re-connected to manually.
 func (gsb *Balancer) ExitIdle() {
 	balToUpdate := gsb.latestBalancer()
 	if balToUpdate == nil {
