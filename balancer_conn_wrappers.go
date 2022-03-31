@@ -32,14 +32,19 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// ccBalancerWrapper is a wrapper on top of cc for balancers. It ensures that
-// method invocations on the underlying balancer happen synchronously and in the
-// same order in which they were received from grpc.
+// ccBalancerWrapper sits between the ClientConn and the Balancer.
+//
+// ccBalancerWrapper implements methods corresponding to the ones on the
+// balancer.Balancer interface. The ClientConn is free to call these methods
+// concurrently and the ccBalancerWrapper ensures that calls from the ClientConn
+// to the Balancer happen synchronously and in order.
+//
+// ccBalancerWrapper also implements the balancer.ClientConn interface and is
+// passed to the Balancer implementations. It invokes unexported methods on the
+// ClientConn to handle these calls from the Balancer.
 //
 // It uses the gracefulswitch.Balancer internally to ensure that balancer
 // switches happen in a graceful manner.
-//
-// It implements balancer.ClientConn interface.
 type ccBalancerWrapper struct {
 	cc *ClientConn
 
