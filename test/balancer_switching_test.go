@@ -269,9 +269,6 @@ func (s) TestBalancerSwitch_pickFirstToGRPCLB(t *testing.T) {
 	if err := checkForTraceEvent(ctx, wantGRPCLBTraceDesc, now); err != nil {
 		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantGRPCLBTraceDesc, err)
 	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
-		t.Fatal(err)
-	}
 
 	// Push a resolver update containing a non-existent grpclb server address.
 	// This should not lead to a balancer switch.
@@ -353,9 +350,6 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 	})
 	if err := checkForTraceEvent(ctx, wantGRPCLBTraceDesc, now); err != nil {
 		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantGRPCLBTraceDesc, err)
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
-		t.Fatal(err)
 	}
 
 	// Switch back to "round_robin".
@@ -464,9 +458,6 @@ func (s) TestBalancerSwitch_grpclbAddressOverridesLoadBalancingPolicy(t *testing
 	})
 	if err := checkForTraceEvent(ctx, wantGRPCLBTraceDesc, now); err != nil {
 		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantGRPCLBTraceDesc, err)
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
-		t.Fatal(err)
 	}
 
 	// Push a resolver update with a service config using the deprecated
