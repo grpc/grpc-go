@@ -45,7 +45,6 @@ const rrServiceConfig = `{"loadBalancingConfig": [{"round_robin":{}}]}`
 
 func checkRoundRobin(ctx context.Context, cc *grpc.ClientConn, addrs []resolver.Address) error {
 	client := testgrpc.NewTestServiceClient(cc)
-	var peer peer.Peer
 	// Make sure connections to all backends are up.
 	backendCount := len(addrs)
 	for i := 0; i < backendCount; i++ {
@@ -54,6 +53,7 @@ func checkRoundRobin(ctx context.Context, cc *grpc.ClientConn, addrs []resolver.
 			if ctx.Err() != nil {
 				return fmt.Errorf("timeout waiting for connection to %q to be up", addrs[i].Addr)
 			}
+			var peer peer.Peer
 			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
 				// Some tests remove backends and check if round robin is happening
 				// across the remaining backends. In such cases, RPCs can initially fail
@@ -69,10 +69,11 @@ func checkRoundRobin(ctx context.Context, cc *grpc.ClientConn, addrs []resolver.
 	}
 	// Make sure RPCs are sent to all backends.
 	for i := 0; i < 3*backendCount; i++ {
+		var peer peer.Peer
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
 			return fmt.Errorf("EmptyCall() = %v, want <nil>", err)
 		}
-		if gotPeer, wantPeer := addrs[i%backendCount].Addr, peer.Addr.String(); gotPeer != wantPeer {
+		if gotPeer, wantPeer := peer.Addr.String(), addrs[i%backendCount].Addr; gotPeer != wantPeer {
 			return fmt.Errorf("rpc sent to peer %q, want peer %q", gotPeer, wantPeer)
 		}
 	}

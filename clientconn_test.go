@@ -845,9 +845,13 @@ func (s) TestBackoffCancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
-	<-dialStrCh
-	cc.Close()
-	// Should not leak. May need -count 5000 to exercise.
+	defer cc.Close()
+
+	select {
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout when waiting for custom dialer to be invoked during Dial")
+	case <-dialStrCh:
+	}
 }
 
 // UpdateAddresses should cause the next reconnect to begin from the top of the

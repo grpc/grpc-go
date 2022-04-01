@@ -21,9 +21,7 @@ package test
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -43,21 +41,30 @@ const (
 	loadBalancedServicePort = 443
 	wantGRPCLBTraceDesc     = `Channel switches to new LB policy "grpclb"`
 	wantRoundRobinTraceDesc = `Channel switches to new LB policy "round_robin"`
-	wantPickFirstTraceDesc  = `Channel switches to new LB policy "pick_first"`
+
+	// This is the number of stub backends set up at the start of each test. The
+	// first backend is used for the "grpclb" policy and the rest are used for
+	// other LB policies to test balancer switching.
+	backendCount = 3
 )
 
-// setupBackendsAndFakeGRPCLB sets up the stub server backends and a fake grpclb
-// server for tests which exercise balancer switch scenarios involving grpclb.
+// setupBackendsAndFakeGRPCLB sets up backendCount number of stub server
+// backends and a fake grpclb server for tests which exercise balancer switch
+// scenarios involving grpclb.
+//
+// The fake grpclb server always returns the first of the configured stub
+// backends as backend addresses. So, the tests are free to use the other
+// backends with other LB policies to verify balancer switching scenarios.
+//
 // Returns a cleanup function to be invoked by the caller.
 func setupBackendsAndFakeGRPCLB(t *testing.T) ([]*stubserver.StubServer, *fakegrpclb.Server, func()) {
 	czCleanup := channelz.NewChannelzStorageForTesting()
 	backends, backendsCleanup := startBackendsForBalancerSwitch(t)
-	rawAddrs := stubBackendsToRawAddrs(backends)
 
 	lbServer, err := fakegrpclb.NewServer(fakegrpclb.ServerParams{
 		LoadBalancedServiceName: loadBalancedServiceName,
 		LoadBalancedServicePort: loadBalancedServicePort,
-		BackendAddresses:        rawAddrs,
+		BackendAddresses:        []string{backends[0].Address},
 	})
 	if err != nil {
 		t.Fatalf("failed to create fake grpclb server: %v", err)
@@ -81,7 +88,6 @@ func setupBackendsAndFakeGRPCLB(t *testing.T) ([]*stubserver.StubServer, *fakegr
 func startBackendsForBalancerSwitch(t *testing.T) ([]*stubserver.StubServer, func()) {
 	t.Helper()
 
-	const backendCount = 3
 	backends := make([]*stubserver.StubServer, backendCount)
 	for i := 0; i < backendCount; i++ {
 		backend := &stubserver.StubServer{
@@ -97,40 +103,6 @@ func startBackendsForBalancerSwitch(t *testing.T) ([]*stubserver.StubServer, fun
 		for _, b := range backends {
 			b.Stop()
 		}
-	}
-}
-
-// stubBackendsToRawAddrs converts from a set of stub server backends to raw
-// address strings. Useful when pushing addresses to the fake grpclb server.
-func stubBackendsToRawAddrs(backends []*stubserver.StubServer) []string {
-	addrs := make([]string, len(backends))
-	for i, backend := range backends {
-		addrs[i] = backend.Address
-	}
-	return addrs
-}
-
-// checkForTraceEvent looks for a trace event in the top level channel matching
-// the given description. Events before since are ignored. Returns nil error if
-// such an event is found.
-func checkForTraceEvent(ctx context.Context, wantDesc string, since time.Time) error {
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		tcs, _ := channelz.GetTopChannels(0, 0)
-		if len(tcs) != 1 {
-			return fmt.Errorf("channelz returned %d top channels, want 1", len(tcs))
-		}
-		for _, event := range tcs[0].Trace.Events {
-			if event.Timestamp.Before(since) {
-				continue
-			}
-			if strings.Contains(event.Desc, wantDesc) {
-				return nil
-			}
-		}
-		time.Sleep(defaultTestShortTimeout)
 	}
 }
 
@@ -193,41 +165,30 @@ func (s) TestBalancerSwitch_grpclbToPickFirst(t *testing.T) {
 
 	// Push a resolver update with no service config and a single address pointing
 	// to the grpclb server we created above. This will cause the channel to
-	// switch to the "grpclb" balancer, and will equally distribute RPCs across
-	// the backends as the fake grpclb server does not support load reporting from
-	// the clients.
-	now := time.Now()
+	// switch to the "grpclb" balancer, which returns a single backend address.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lbServer.Address(), Type: resolver.GRPCLB}}})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs[0:1]); err != nil {
 		t.Fatal(err)
-	}
-	if err := checkForTraceEvent(ctx, wantGRPCLBTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantGRPCLBTraceDesc, err)
 	}
 
 	// Push a resolver update containing a non-existent grpclb server address.
 	// This should not lead to a balancer switch.
-	now = time.Now()
 	const nonExistentServer = "non-existent-grpclb-server-address"
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: nonExistentServer, Type: resolver.GRPCLB}}})
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	wantDesc := fmt.Sprintf("Channel switches to new LB policy %q", nonExistentServer)
-	if err := checkForTraceEvent(sCtx, wantDesc, now); err == nil {
-		t.Fatal("channel switched balancers when expected not to")
+	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
+		t.Fatal(err)
 	}
 
 	// Push a resolver update containing no grpclb server address. This should
-	// lead to the channel using the default LB policy which is pick_first.
-	now = time.Now()
-	r.UpdateState(resolver.State{Addresses: addrs})
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	// lead to the channel using the default LB policy which is pick_first. The
+	// list of addresses pushed as part of this update is different from the one
+	// returned by the "grpclb" balancer. So, we should see RPCs going to the
+	// newly configured backends, as part of the balancer switch.
+	r.UpdateState(resolver.State{Addresses: addrs[1:]})
+	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
 		t.Fatal(err)
-	}
-	if err := checkForTraceEvent(ctx, wantPickFirstTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantPickFirstTraceDesc, err)
 	}
 }
 
@@ -248,50 +209,31 @@ func (s) TestBalancerSwitch_pickFirstToGRPCLB(t *testing.T) {
 
 	// Push a resolver update containing no grpclb server address. This should
 	// lead to the channel using the default LB policy which is pick_first.
-	now := time.Now()
-	r.UpdateState(resolver.State{Addresses: addrs})
+	r.UpdateState(resolver.State{Addresses: addrs[1:]})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkForTraceEvent(ctx, wantPickFirstTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantPickFirstTraceDesc, err)
-	}
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
 		t.Fatal(err)
 	}
 
 	// Push a resolver update with no service config and a single address pointing
 	// to the grpclb server we created above. This will cause the channel to
-	// switch to the "grpclb" balancer, and will equally distribute RPCs across
-	// the backends as the fake grpclb server does not support load reporting from
-	// the clients.
-	now = time.Now()
+	// switch to the "grpclb" balancer, which returns a single backend address.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lbServer.Address(), Type: resolver.GRPCLB}}})
-	if err := checkForTraceEvent(ctx, wantGRPCLBTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantGRPCLBTraceDesc, err)
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Push a resolver update containing a non-existent grpclb server address.
 	// This should not lead to a balancer switch.
-	now = time.Now()
-	const nonExistentServer = "non-existent-grpclb-server-address"
-	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: nonExistentServer, Type: resolver.GRPCLB}}})
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	wantDesc := fmt.Sprintf("Channel switches to new LB policy %q", nonExistentServer)
-	if err := checkForTraceEvent(sCtx, wantDesc, now); err == nil {
-		t.Fatal("channel switched balancers when expected not to")
+	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "nonExistentServer", Type: resolver.GRPCLB}}})
+	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
+		t.Fatal(err)
 	}
 
 	// Switch to "pick_first" again by sending no grpclb server addresses.
-	now = time.Now()
-	r.UpdateState(resolver.State{Addresses: addrs})
-	if err := checkForTraceEvent(ctx, wantPickFirstTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantPickFirstTraceDesc, err)
-	}
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	r.UpdateState(resolver.State{Addresses: addrs[1:]})
+	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -327,47 +269,27 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 	scpr := parseServiceConfig(t, r, `{"loadBalancingPolicy": "round_robin"}`)
 
 	// Push a resolver update with the service config specifying "round_robin".
-	now := time.Now()
-	r.UpdateState(resolver.State{
-		Addresses:     addrs,
-		ServiceConfig: scpr,
-	})
+	r.UpdateState(resolver.State{Addresses: addrs[1:], ServiceConfig: scpr})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkForTraceEvent(ctx, wantRoundRobinTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantRoundRobinTraceDesc, err)
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Push a resolver update with no service config and a single address pointing
 	// to the grpclb server we created above. This will cause the channel to
-	// switch to the "grpclb" balancer, and will equally distribute RPCs across
-	// the backends as the fake grpclb server does not support load reporting from
-	// the clients.
-	now = time.Now()
+	// switch to the "grpclb" balancer, which returns a single backend address.
 	r.UpdateState(resolver.State{
 		Addresses:     []resolver.Address{{Addr: lbServer.Address(), Type: resolver.GRPCLB}},
 		ServiceConfig: scpr,
 	})
-	if err := checkForTraceEvent(ctx, wantGRPCLBTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantGRPCLBTraceDesc, err)
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Switch back to "round_robin".
-	now = time.Now()
-	r.UpdateState(resolver.State{
-		Addresses:     addrs,
-		ServiceConfig: scpr,
-	})
-	if err := checkForTraceEvent(ctx, wantRoundRobinTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantRoundRobinTraceDesc, err)
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	r.UpdateState(resolver.State{Addresses: addrs[1:], ServiceConfig: scpr})
+	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -401,15 +323,11 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	// list fo pick_first.
 	grpclbAddr := []resolver.Address{{Addr: "non-existent-grpclb-server-address", Type: resolver.GRPCLB}}
 	addrs = append(grpclbAddr, addrs...)
-	now := time.Now()
 	r.UpdateState(resolver.State{Addresses: addrs})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
 		t.Fatal(err)
-	}
-	if err := checkForTraceEvent(ctx, wantPickFirstTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantPickFirstTraceDesc, err)
 	}
 
 	// Push a resolver update with the same addresses, but with a service config
@@ -443,29 +361,21 @@ func (s) TestBalancerSwitch_grpclbAddressOverridesLoadBalancingPolicy(t *testing
 
 	// Push a resolver update containing no grpclb server address. This should
 	// lead to the channel using the default LB policy which is pick_first.
-	now := time.Now()
-	r.UpdateState(resolver.State{Addresses: addrs})
+	r.UpdateState(resolver.State{Addresses: addrs[1:]})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkForTraceEvent(ctx, wantPickFirstTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantPickFirstTraceDesc, err)
-	}
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
 		t.Fatal(err)
 	}
 
 	// Push a resolver update with no service config. The addresses list contains
 	// the stub backend addresses and a single address pointing to the grpclb
 	// server we created above. This will cause the channel to switch to the
-	// "grpclb" balancer, and will equally distribute RPCs across the backends.
-	now = time.Now()
+	// "grpclb" balancer, which returns a single backend address.
 	r.UpdateState(resolver.State{
-		Addresses: append(addrs, resolver.Address{Addr: lbServer.Address(), Type: resolver.GRPCLB}),
+		Addresses: append(addrs[1:], resolver.Address{Addr: lbServer.Address(), Type: resolver.GRPCLB}),
 	})
-	if err := checkForTraceEvent(ctx, wantGRPCLBTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantGRPCLBTraceDesc, err)
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -474,28 +384,18 @@ func (s) TestBalancerSwitch_grpclbAddressOverridesLoadBalancingPolicy(t *testing
 	// contains an address of type "grpclb". This should be preferred and hence
 	// there should be no balancer switch.
 	scpr := parseServiceConfig(t, r, `{"loadBalancingPolicy": "round_robin"}`)
-	now = time.Now()
 	r.UpdateState(resolver.State{
-		Addresses:     append(addrs, resolver.Address{Addr: lbServer.Address(), Type: resolver.GRPCLB}),
+		Addresses:     append(addrs[1:], resolver.Address{Addr: lbServer.Address(), Type: resolver.GRPCLB}),
 		ServiceConfig: scpr,
 	})
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if err := checkForTraceEvent(sCtx, wantRoundRobinTraceDesc, now); err == nil {
-		t.Fatal("channel switched balancers when expected not to")
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Switch to "round_robin" by removing the address of type "grpclb".
-	now = time.Now()
-	r.UpdateState(resolver.State{Addresses: addrs})
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	r.UpdateState(resolver.State{Addresses: addrs[1:]})
+	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
 		t.Fatal(err)
-	}
-	if err := checkForTraceEvent(ctx, wantRoundRobinTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantRoundRobinTraceDesc, err)
 	}
 }
 
@@ -518,31 +418,21 @@ func (s) TestBalancerSwitch_LoadBalancingConfigTrumps(t *testing.T) {
 
 	// Push a resolver update with no service config and a single address pointing
 	// to the grpclb server we created above. This will cause the channel to
-	// switch to the "grpclb" balancer, and will equally distribute RPCs across
-	// the backends as the fake grpclb server does not support load reporting from
-	// the clients.
-	now := time.Now()
+	// switch to the "grpclb" balancer, which returns a single backend address.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lbServer.Address(), Type: resolver.GRPCLB}}})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
 		t.Fatal(err)
-	}
-	if err := checkForTraceEvent(ctx, wantGRPCLBTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantGRPCLBTraceDesc, err)
 	}
 
 	// Push a resolver update with the service config specifying "round_robin"
 	// through the recommended `loadBalancingConfig` field.
-	now = time.Now()
 	r.UpdateState(resolver.State{
-		Addresses:     addrs,
+		Addresses:     addrs[1:],
 		ServiceConfig: parseServiceConfig(t, r, rrServiceConfig),
 	})
-	if err := checkForTraceEvent(ctx, wantRoundRobinTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantRoundRobinTraceDesc, err)
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -553,14 +443,8 @@ func (s) TestBalancerSwitch_LoadBalancingConfigTrumps(t *testing.T) {
 	// switched. And because the `loadBalancingConfig` field trumps everything
 	// else, the address of type "grpclb" should be ignored.
 	grpclbAddr := resolver.Address{Addr: "non-existent-grpclb-server-address", Type: resolver.GRPCLB}
-	now = time.Now()
-	r.UpdateState(resolver.State{Addresses: append(addrs, grpclbAddr)})
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if err := checkForTraceEvent(sCtx, wantRoundRobinTraceDesc, now); err == nil {
-		t.Fatal("channel switched balancers when expected not to")
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	r.UpdateState(resolver.State{Addresses: append(addrs[1:], grpclbAddr)})
+	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -632,5 +516,90 @@ func (s) TestBalancerSwitch_OldBalancerCallsRemoveSubConnInClose(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatalf("timeout waiting for resolver.UpdateState to finish: %v", ctx.Err())
 	case <-done:
+	}
+}
+
+// TestBalancerSwitch_Graceful tests the graceful switching of LB policies. It
+// starts off by configuring "round_robin" on the channel and ensures that RPCs
+// are successful. Then, it switches to a stub balancer which does not report a
+// picker until instructed by the test do to so. At this point, the test
+// verifies that RPCs are still successful using the old balancer. Then the test
+// asks the new balancer to report a healthy picker and the test verifies that
+// the RPCs get routed using the picker reported by the new balancer.
+func (s) TestBalancerSwitch_Graceful(t *testing.T) {
+	backends, cleanup := startBackendsForBalancerSwitch(t)
+	defer cleanup()
+	addrs := stubBackendsToResolverAddrs(backends)
+
+	r := manual.NewBuilderWithScheme("whatever")
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+
+	// Push a resolver update with the service config specifying "round_robin".
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	r.UpdateState(resolver.State{
+		Addresses:     addrs[1:],
+		ServiceConfig: parseServiceConfig(t, r, rrServiceConfig),
+	})
+	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
+		t.Fatal(err)
+	}
+
+	// Register a stub balancer which uses a "pick_first" balancer underneath and
+	// signals on a channel when it receives ClientConn updates. But it does not
+	// forward the ccUpdate to the underlying "pick_first" balancer until the test
+	// asks it to do so. This allows us to test the graceful switch functionality.
+	// Until the test asks the stub balancer to forward the ccUpdate, RPCs should
+	// get routed to the old balancer. And once the test gives the go ahead, RPCs
+	// should get routed to the new balancer.
+	ccUpdateCh := make(chan struct{})
+	waitToProceed := make(chan struct{})
+	stub.Register(t.Name(), stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			pf := balancer.Get(grpc.PickFirstBalancerName)
+			bd.Data = pf.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			bal := bd.Data.(balancer.Balancer)
+			close(ccUpdateCh)
+			go func() {
+				<-waitToProceed
+				bal.UpdateClientConnState(ccs)
+			}()
+			return nil
+		},
+		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
+			bal := bd.Data.(balancer.Balancer)
+			bal.UpdateSubConnState(sc, state)
+		},
+	})
+
+	// Push a resolver update with the service config specifying our stub
+	// balancer. We should see a trace event for this balancer switch. But RPCs
+	// should still be routed to the old balancer since our stub balancer does not
+	// report a ready picker until we ask it to do so.
+	r.UpdateState(resolver.State{
+		Addresses:     addrs[:1],
+		ServiceConfig: r.CC.ParseServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%v": {}}]}`, t.Name())),
+	})
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for a ClientConnState update on the new balancer")
+	case <-ccUpdateCh:
+	}
+	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
+		t.Fatal(err)
+	}
+
+	// Ask our stub balancer to forward the earlier received ccUpdate to the
+	// underlying "pick_first" balancer which will result in a healthy picker
+	// being reported to the channel. RPCs should start using the new balancer.
+	close(waitToProceed)
+	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+		t.Fatal(err)
 	}
 }

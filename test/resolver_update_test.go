@@ -32,6 +32,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
@@ -127,54 +128,6 @@ func (s) TestResolverUpdate_InvalidServiceConfigAsFirstUpdate(t *testing.T) {
 	}
 }
 
-// The wrappingBalancer wraps a pick_first balancer and writes to a channel when
-// it receives a ClientConn update. This is different to a stub balancer which
-// only notifies of updates from grpc, but does not contain a real balancer.
-//
-// The wrappingBalancer allows us to write tests with a real backend and make
-// real RPCs.
-type wrappingBalancerBuilder struct {
-	name     string
-	updateCh *testutils.Channel
-}
-
-func (bb wrappingBalancerBuilder) Name() string { return bb.name }
-
-func (bb wrappingBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	pf := balancer.Get(grpc.PickFirstBalancerName)
-	b := &wrappingBalancer{
-		Balancer: pf.Build(cc, opts),
-		updateCh: bb.updateCh,
-	}
-	return b
-}
-
-func (bb wrappingBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	cfg := &wrappingBalancerConfig{}
-	if err := json.Unmarshal(c, cfg); err != nil {
-		return nil, err
-	}
-	return cfg, nil
-}
-
-type wrappingBalancer struct {
-	balancer.Balancer
-	updateCh *testutils.Channel
-}
-
-func (b *wrappingBalancer) UpdateClientConnState(c balancer.ClientConnState) error {
-	if _, ok := c.BalancerConfig.(*wrappingBalancerConfig); !ok {
-		return fmt.Errorf("received balancer config of unsupported type %T", c.BalancerConfig)
-	}
-	b.updateCh.Send(c)
-	return b.Balancer.UpdateClientConnState(c)
-}
-
-type wrappingBalancerConfig struct {
-	serviceconfig.LoadBalancingConfig
-	Config string `json:"config,omitempty"`
-}
-
 func verifyClientConnStateUpdate(got, want balancer.ClientConnState) error {
 	if got, want := got.ResolverState.Addresses, want.ResolverState.Addresses; !cmp.Equal(got, want) {
 		return fmt.Errorf("update got unexpected addresses: %v, want %v", got, want)
@@ -193,11 +146,38 @@ func verifyClientConnStateUpdate(got, want balancer.ClientConnState) error {
 // having sent a good update. This should result in the ClientConn discarding
 // the new invalid service config, and continuing to use the old good config.
 func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
-	// Register a wrapper balancer to get notified of ClientConn updates.
-	ccsCh := testutils.NewChannel()
-	balancer.Register(wrappingBalancerBuilder{
-		name:     t.Name(),
-		updateCh: ccsCh,
+	type wrappingBalancerConfig struct {
+		serviceconfig.LoadBalancingConfig
+		Config string `json:"config,omitempty"`
+	}
+
+	// Register a stub balancer which uses a "pick_first" balancer underneath and
+	// signals on a channel when it receives ClientConn updates.
+	ccUpdateCh := testutils.NewChannel()
+	stub.Register(t.Name(), stub.BalancerFuncs{
+		Init: func(bd *stub.BalancerData) {
+			pf := balancer.Get(grpc.PickFirstBalancerName)
+			bd.Data = pf.Build(bd.ClientConn, bd.BuildOptions)
+		},
+		ParseConfig: func(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+			cfg := &wrappingBalancerConfig{}
+			if err := json.Unmarshal(lbCfg, cfg); err != nil {
+				return nil, err
+			}
+			return cfg, nil
+		},
+		UpdateClientConnState: func(bd *stub.BalancerData, ccs balancer.ClientConnState) error {
+			if _, ok := ccs.BalancerConfig.(*wrappingBalancerConfig); !ok {
+				return fmt.Errorf("received balancer config of unsupported type %T", ccs.BalancerConfig)
+			}
+			bal := bd.Data.(balancer.Balancer)
+			ccUpdateCh.Send(ccs)
+			return bal.UpdateClientConnState(ccs)
+		},
+		UpdateSubConnState: func(bd *stub.BalancerData, sc balancer.SubConn, state balancer.SubConnState) {
+			bal := bd.Data.(balancer.Balancer)
+			bal.UpdateSubConnState(sc, state)
+		},
 	})
 
 	// Start a backend exposing the test service.
@@ -242,7 +222,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 		},
 		BalancerConfig: &wrappingBalancerConfig{Config: lbCfg},
 	}
-	ccs, err := ccsCh.Receive(ctx)
+	ccs, err := ccUpdateCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timeout when waiting for ClientConnState update from grpc")
 	}
@@ -263,7 +243,7 @@ func (s) TestResolverUpdate_InvalidServiceConfigAfterGoodUpdate(t *testing.T) {
 	badSC := r.CC.ParseServiceConfig("bad json service config")
 	wantCCS.ResolverState.ServiceConfig = badSC
 	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: badSC})
-	ccs, err = ccsCh.Receive(ctx)
+	ccs, err = ccUpdateCh.Receive(ctx)
 	if err != nil {
 		t.Fatalf("Timeout when waiting for ClientConnState update from grpc")
 	}
