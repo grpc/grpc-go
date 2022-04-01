@@ -102,7 +102,7 @@ type testController struct {
 func overrideNewController(t *testing.T) *testutils.Channel {
 	origNewController := newController
 	ch := testutils.NewChannel()
-	newController = func(config *bootstrap.ServerConfig, pubsub *pubsub.Pubsub, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger) (controllerInterface, error) {
+	newController = func(config *bootstrap.ServerConfig, pubsub *pubsub.Pubsub, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger, _ func(int) time.Duration) (controllerInterface, error) {
 		ret := newTestController(config)
 		ch.Send(ret)
 		return ret, nil
