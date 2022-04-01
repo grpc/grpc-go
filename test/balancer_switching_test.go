@@ -21,9 +21,7 @@ package test
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -105,30 +103,6 @@ func startBackendsForBalancerSwitch(t *testing.T) ([]*stubserver.StubServer, fun
 		for _, b := range backends {
 			b.Stop()
 		}
-	}
-}
-
-// checkForTraceEvent looks for a trace event in the top level channel matching
-// the given description. Events before since are ignored. Returns nil error if
-// such an event is found.
-func checkForTraceEvent(ctx context.Context, wantDesc string, since time.Time) error {
-	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		tcs, _ := channelz.GetTopChannels(0, 0)
-		if len(tcs) != 1 {
-			return fmt.Errorf("channelz returned %d top channels, want 1", len(tcs))
-		}
-		for _, event := range tcs[0].Trace.Events {
-			if event.Timestamp.Before(since) {
-				continue
-			}
-			if strings.Contains(event.Desc, wantDesc) {
-				return nil
-			}
-		}
-		time.Sleep(defaultTestShortTimeout)
 	}
 }
 
@@ -565,17 +539,13 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 	defer cc.Close()
 
 	// Push a resolver update with the service config specifying "round_robin".
-	now := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	r.UpdateState(resolver.State{
-		Addresses:     addrs,
+		Addresses:     addrs[1:],
 		ServiceConfig: parseServiceConfig(t, r, rrServiceConfig),
 	})
-	if err := checkForTraceEvent(ctx, wantRoundRobinTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantRoundRobinTraceDesc, err)
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -612,9 +582,8 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 	// balancer. We should see a trace event for this balancer switch. But RPCs
 	// should still be routed to the old balancer since our stub balancer does not
 	// report a ready picker until we ask it to do so.
-	now = time.Now()
 	r.UpdateState(resolver.State{
-		Addresses:     addrs,
+		Addresses:     addrs[:1],
 		ServiceConfig: r.CC.ParseServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%v": {}}]}`, t.Name())),
 	})
 	select {
@@ -622,11 +591,7 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 		t.Fatal("Timeout when waiting for a ClientConnState update on the new balancer")
 	case <-ccUpdateCh:
 	}
-	wantTraceDesc := fmt.Sprintf("Channel switches to new LB policy %q", t.Name())
-	if err := checkForTraceEvent(ctx, wantTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantTraceDesc, err)
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 
