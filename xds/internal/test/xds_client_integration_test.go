@@ -40,7 +40,7 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/protobuf/types/known/durationpb"
 
-	_ "google.golang.org/grpc/balancer/rls" // Rregister the RLS Load Balancing policy.
+	_ "google.golang.org/grpc/balancer/rls"                      // Register the RLS Load Balancing policy.
 	_ "google.golang.org/grpc/xds/internal/clusterspecifier/rls" // Register the RLS Cluster Specifier Plugin.
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
