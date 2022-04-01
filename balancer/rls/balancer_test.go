@@ -819,7 +819,11 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	ctxOutgoing := metadata.AppendToOutgoingContext(ctx, "n1", "v1")
 	makeTestRPCAndExpectItToReachBackend(ctxOutgoing, t, cc, backendCh)
 
-	<-resetBackoffDone
+	select {
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for resetBackoffDone")
+	case <-resetBackoffDone:
+	}
 
 	// The fact that the above RPC succeeded indicates that the control channel
 	// has moved back to READY. The connectivity state monitoring code should have
