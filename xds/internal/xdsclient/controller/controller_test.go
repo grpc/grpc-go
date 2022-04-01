@@ -95,7 +95,7 @@ func (s) TestNew(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c, err := New(test.config, noopUpdateHandler, nil, nil) // Only testing the config, other inputs are left as nil.
+			c, err := New(test.config, noopUpdateHandler, nil, nil, nil) // Only testing the config, other inputs are left as nil.
 			defer func() {
 				if c != nil {
 					c.Close()
@@ -123,7 +123,7 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 
 	// Set the dialer and make sure it is called.
 	SetGRPCDial(customDialer)
-	c, err := New(config, noopUpdateHandler, nil, nil)
+	c, err := New(config, noopUpdateHandler, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("New(%+v) = %v, want no error", config, err)
 	}
@@ -138,7 +138,7 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 
 	// Reset the dialer and make sure it is not called.
 	SetGRPCDial(grpc.Dial)
-	c, err = New(config, noopUpdateHandler, nil, nil)
+	c, err = New(config, noopUpdateHandler, nil, nil, nil)
 	defer func() {
 		if c != nil {
 			c.Close()
