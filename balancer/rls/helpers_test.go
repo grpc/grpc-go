@@ -60,9 +60,6 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// Move Listener Wrapper, newListenerWrapper, and setupFakeRLSServer to rls_fakeserver.go
-// 1. Delete what was present here that I moved to prevent code duplication - then fix balancer test
-
 // fakeBackoffStrategy is a fake implementation of the backoff.Strategy
 // interface, for tests to inject the backoff duration.
 type fakeBackoffStrategy struct {

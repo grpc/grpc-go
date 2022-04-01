@@ -16,7 +16,7 @@
  *
  */
 
-// Package rls contains utilities for RouteLookupService tests.
+// Package rls contains utilities for RouteLookupService e2e tests.
 package rls
 
 import (
@@ -110,8 +110,8 @@ func (s *FakeRouteLookupServer) RouteLookup(ctx context.Context, req *rlspb.Rout
 	if s.respCb == nil {
 		return &rlspb.RouteLookupResponse{}, nil
 	}
-	resp := s.respCb(ctx, req) // func(context.Context, *rlspb.RouteLookupRequest) *RouteLookupResponse - write your own function that sends correct CDS response backward
-	return resp.Resp, resp.Err // Set this target to correspond to correct cluster for RLS to proceed as normal
+	resp := s.respCb(ctx, req)
+	return resp.Resp, resp.Err
 }
 
 // SetResponseCallback sets a callback to be invoked on every RLS request. If
