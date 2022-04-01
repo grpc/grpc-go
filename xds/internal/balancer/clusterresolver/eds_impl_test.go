@@ -62,7 +62,7 @@ func setupTestEDS(t *testing.T, initChild *internalserviceconfig.BalancerConfig)
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
 	cc := testutils.NewTestClientConn(t)
 	builder := balancer.Get(Name)
-	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
+	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSService}})
 	if edsb == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}

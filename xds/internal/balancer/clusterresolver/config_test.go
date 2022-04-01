@@ -195,7 +195,7 @@ func TestParseConfig(t *testing.T) {
 						LoadReportingServer:   testLRSServerConfig,
 						MaxConcurrentRequests: newUint32(testMaxRequests),
 						Type:                  DiscoveryMechanismTypeEDS,
-						EDSServiceName:        testEDSServcie,
+						EDSServiceName:        testEDSService,
 					},
 				},
 				XDSLBPolicy: nil,
@@ -212,7 +212,7 @@ func TestParseConfig(t *testing.T) {
 						LoadReportingServer:   testLRSServerConfig,
 						MaxConcurrentRequests: newUint32(testMaxRequests),
 						Type:                  DiscoveryMechanismTypeEDS,
-						EDSServiceName:        testEDSServcie,
+						EDSServiceName:        testEDSService,
 					},
 					{
 						Type: DiscoveryMechanismTypeLogicalDNS,
@@ -232,7 +232,7 @@ func TestParseConfig(t *testing.T) {
 						LoadReportingServer:   testLRSServerConfig,
 						MaxConcurrentRequests: newUint32(testMaxRequests),
 						Type:                  DiscoveryMechanismTypeEDS,
-						EDSServiceName:        testEDSServcie,
+						EDSServiceName:        testEDSService,
 					},
 				},
 				XDSLBPolicy: &internalserviceconfig.BalancerConfig{
@@ -252,7 +252,7 @@ func TestParseConfig(t *testing.T) {
 						LoadReportingServer:   testLRSServerConfig,
 						MaxConcurrentRequests: newUint32(testMaxRequests),
 						Type:                  DiscoveryMechanismTypeEDS,
-						EDSServiceName:        testEDSServcie,
+						EDSServiceName:        testEDSService,
 					},
 				},
 				XDSLBPolicy: &internalserviceconfig.BalancerConfig{
