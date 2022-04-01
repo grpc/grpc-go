@@ -252,7 +252,8 @@ func (ccb *ccBalancerWrapper) switchTo(name string) {
 // balancer.Builder corresponding to name. If no balancer.Builder is registered
 // for the given name, it uses the default LB policy which is "pick_first".
 func (ccb *ccBalancerWrapper) handleSwitchTo(name string) {
-	// TODO: Ensure other languages using case-insensitive balancer registries.
+	// TODO: Other languages use case-insensitive balancer registries. We should
+	// switch as well. See: https://github.com/grpc/grpc-go/issues/5288.
 	if strings.EqualFold(ccb.curBalancerName, name) {
 		return
 	}
@@ -298,9 +299,6 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 	if len(addrs) <= 0 {
 		return nil, fmt.Errorf("grpc: cannot create SubConn with empty address list")
 	}
-	if ccb.done.HasFired() {
-		return nil, fmt.Errorf("grpc: ClientConn balancer wrapper was closed")
-	}
 	ac, err := ccb.cc.newAddrConn(addrs, opts)
 	if err != nil {
 		channelz.Warningf(logger, ccb.cc.channelzID, "acBalancerWrapper: NewSubConn: failed to newAddrConn: %v", err)
@@ -336,9 +334,6 @@ func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resol
 }
 
 func (ccb *ccBalancerWrapper) UpdateState(s balancer.State) {
-	if ccb.done.HasFired() {
-		return
-	}
 	// Update picker before updating state.  Even though the ordering here does
 	// not matter, it can lead to multiple calls of Pick in the common start-up
 	// case where we wait for ready and then perform an RPC.  If the picker is

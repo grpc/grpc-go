@@ -535,8 +535,6 @@ func (cc *ClientConn) GetState() connectivity.State {
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 // release.
 func (cc *ClientConn) Connect() {
-	cc.mu.Lock()
-	defer cc.mu.Unlock()
 	cc.balancerWrapper.exitIdle()
 }
 
@@ -691,9 +689,7 @@ func (cc *ClientConn) applyFailingLB(sc *serviceconfig.ParseResult) {
 }
 
 func (cc *ClientConn) handleSubConnStateChange(sc balancer.SubConn, s connectivity.State, err error) {
-	cc.mu.Lock()
 	cc.balancerWrapper.updateSubConnState(sc, s, err)
-	cc.mu.Unlock()
 }
 
 // newAddrConn creates an addrConn for addrs and adds it to cc.conns.
@@ -1015,8 +1011,9 @@ func (cc *ClientConn) Close() error {
 	bWrapper := cc.balancerWrapper
 	cc.mu.Unlock()
 
+	// The order of closing matters here since the balancer wrapper assumes the
+	// picker is closed before it is closed.
 	cc.blockingpicker.close()
-
 	if bWrapper != nil {
 		bWrapper.close()
 	}
