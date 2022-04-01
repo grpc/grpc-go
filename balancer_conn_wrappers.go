@@ -75,30 +75,32 @@ func newCCBalancerWrapper(cc *ClientConn, bopts balancer.BuildOptions) *ccBalanc
 	return ccb
 }
 
-// updateType indicates the type of update pushed to the watcher goroutine.
-type updateType int
+// The following xxxUpdate structs wrap the arguments received as part of the
+// corresponding update. The watcher goroutine uses the 'type' of the update to
+// invoke the appropriate handler routine to handle the update.
 
-const (
-	updateTypeClientConnState updateType = iota // clientConn state change from grpc
-	updateTypeSubConnState                      // subConn state change from grpc
-	updateTypeExitIdle                          // exitIdle from grpc
-	updateTypeResolverError                     // resolver error from grpc
-	updateTypeSwitchTo                          // balancer switch update from grpc
-	updateTypeSubConn                           // removeSubConn from the balancer
-)
-
-// watcherUpdate wraps the actual update to be passed to the watcher goroutine
-// with a type indicating the kind of update being wrapped.
-type watcherUpdate struct {
-	typ    updateType
-	update interface{}
+type ccStateUpdate struct {
+	ccs *balancer.ClientConnState
 }
 
-// scStateUpdate contains the subConn and the new state it changed to.
 type scStateUpdate struct {
 	sc    balancer.SubConn
 	state connectivity.State
 	err   error
+}
+
+type exitIdleUpdate struct{}
+
+type resolverErrorUpdate struct {
+	err error
+}
+
+type switchToUpdate struct {
+	name string
+}
+
+type subConnUpdate struct {
+	sc balancer.SubConn
 }
 
 // watcher is a long-running goroutine which reads updates from a channel and
@@ -113,20 +115,19 @@ func (ccb *ccBalancerWrapper) watcher() {
 			if ccb.closed.HasFired() {
 				break
 			}
-			update := u.(watcherUpdate)
-			switch update.typ {
-			case updateTypeClientConnState:
-				ccb.handleClientConnStateChange(update.update.(*balancer.ClientConnState))
-			case updateTypeSubConnState:
-				ccb.handleSubConnStateChange(update.update.(*scStateUpdate))
-			case updateTypeExitIdle:
+			switch update := u.(type) {
+			case *ccStateUpdate:
+				ccb.handleClientConnStateChange(update.ccs)
+			case *scStateUpdate:
+				ccb.handleSubConnStateChange(update)
+			case *exitIdleUpdate:
 				ccb.handleExitIdle()
-			case updateTypeResolverError:
-				ccb.handleResolverError(update.update.(error))
-			case updateTypeSwitchTo:
-				ccb.handleSwitchTo(update.update.(string))
-			case updateTypeSubConn:
-				ccb.handleRemoveSubConn(update.update.(*acBalancerWrapper))
+			case *resolverErrorUpdate:
+				ccb.handleResolverError(update.err)
+			case *switchToUpdate:
+				ccb.handleSwitchTo(update.name)
+			case *subConnUpdate:
+				ccb.handleRemoveSubConn(update.sc.(*acBalancerWrapper))
 			default:
 				logger.Errorf("ccBalancerWrapper.watcher: unknown update %+v, type %T", update, update)
 			}
@@ -148,7 +149,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 // and return. It needs to return the error returned by the underlying balancer
 // back to grpc which propagates that to the resolver.
 func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnState) error {
-	ccb.updateCh.Put(watcherUpdate{typ: updateTypeClientConnState, update: ccs})
+	ccb.updateCh.Put(&ccStateUpdate{ccs: ccs})
 
 	var res interface{}
 	select {
@@ -201,11 +202,11 @@ func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connecti
 	if sc == nil {
 		return
 	}
-	ccb.updateCh.Put(watcherUpdate{typ: updateTypeSubConnState, update: &scStateUpdate{
+	ccb.updateCh.Put(&scStateUpdate{
 		sc:    sc,
 		state: s,
 		err:   err,
-	}})
+	})
 }
 
 // handleSubConnStateChange handles a SubConnState update from the update
@@ -215,7 +216,7 @@ func (ccb *ccBalancerWrapper) handleSubConnStateChange(update *scStateUpdate) {
 }
 
 func (ccb *ccBalancerWrapper) exitIdle() {
-	ccb.updateCh.Put(watcherUpdate{typ: updateTypeExitIdle})
+	ccb.updateCh.Put(&exitIdleUpdate{})
 }
 
 func (ccb *ccBalancerWrapper) handleExitIdle() {
@@ -226,7 +227,7 @@ func (ccb *ccBalancerWrapper) handleExitIdle() {
 }
 
 func (ccb *ccBalancerWrapper) resolverError(err error) {
-	ccb.updateCh.Put(watcherUpdate{typ: updateTypeResolverError, update: err})
+	ccb.updateCh.Put(&resolverErrorUpdate{err: err})
 }
 
 func (ccb *ccBalancerWrapper) handleResolverError(err error) {
@@ -244,7 +245,7 @@ func (ccb *ccBalancerWrapper) handleResolverError(err error) {
 // the ccBalancerWrapper keeps track of the current LB policy name, and skips
 // the graceful balancer switching process if the name does not change.
 func (ccb *ccBalancerWrapper) switchTo(name string) {
-	ccb.updateCh.Put(watcherUpdate{typ: updateTypeSwitchTo, update: name})
+	ccb.updateCh.Put(&switchToUpdate{name: name})
 }
 
 // handleSwitchTo handles a balancer switch update from the update channel. It
@@ -322,7 +323,7 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 	// asynchronously is probably not required anymore since the switchTo() method
 	// handles the balancer switch by pushing the update onto the channel.
 	// TODO(easwars): Handle this inline.
-	ccb.updateCh.Put(watcherUpdate{typ: updateTypeSubConn, update: sc})
+	ccb.updateCh.Put(&subConnUpdate{sc: sc})
 }
 
 func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
