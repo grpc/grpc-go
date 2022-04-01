@@ -43,9 +43,10 @@ const (
 	loadBalancedServicePort = 443
 	wantGRPCLBTraceDesc     = `Channel switches to new LB policy "grpclb"`
 	wantRoundRobinTraceDesc = `Channel switches to new LB policy "round_robin"`
-	wantPickFirstTraceDesc  = `Channel switches to new LB policy "pick_first"`
 
-	// This is the number of stub backends set up at the start of each test.
+	// This is the number of stub backends set up at the start of each test. The
+	// first backend is used for the "grpclb" policy and the rest are used for
+	// other LB policies to test balancer switching.
 	backendCount = 3
 )
 
@@ -443,31 +444,21 @@ func (s) TestBalancerSwitch_LoadBalancingConfigTrumps(t *testing.T) {
 
 	// Push a resolver update with no service config and a single address pointing
 	// to the grpclb server we created above. This will cause the channel to
-	// switch to the "grpclb" balancer, and will equally distribute RPCs across
-	// the backends as the fake grpclb server does not support load reporting from
-	// the clients.
-	now := time.Now()
+	// switch to the "grpclb" balancer, which returns a single backend address.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lbServer.Address(), Type: resolver.GRPCLB}}})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
 		t.Fatal(err)
-	}
-	if err := checkForTraceEvent(ctx, wantGRPCLBTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantGRPCLBTraceDesc, err)
 	}
 
 	// Push a resolver update with the service config specifying "round_robin"
 	// through the recommended `loadBalancingConfig` field.
-	now = time.Now()
 	r.UpdateState(resolver.State{
-		Addresses:     addrs,
+		Addresses:     addrs[1:],
 		ServiceConfig: parseServiceConfig(t, r, rrServiceConfig),
 	})
-	if err := checkForTraceEvent(ctx, wantRoundRobinTraceDesc, now); err != nil {
-		t.Fatalf("timeout when waiting for a trace event: %s, err: %v", wantRoundRobinTraceDesc, err)
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -478,14 +469,8 @@ func (s) TestBalancerSwitch_LoadBalancingConfigTrumps(t *testing.T) {
 	// switched. And because the `loadBalancingConfig` field trumps everything
 	// else, the address of type "grpclb" should be ignored.
 	grpclbAddr := resolver.Address{Addr: "non-existent-grpclb-server-address", Type: resolver.GRPCLB}
-	now = time.Now()
-	r.UpdateState(resolver.State{Addresses: append(addrs, grpclbAddr)})
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if err := checkForTraceEvent(sCtx, wantRoundRobinTraceDesc, now); err == nil {
-		t.Fatal("channel switched balancers when expected not to")
-	}
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	r.UpdateState(resolver.State{Addresses: append(addrs[1:], grpclbAddr)})
+	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 }
