@@ -34,7 +34,7 @@ import (
 
 func (s) TestLog(t *testing.T) {
 	idGen.reset()
-	ml := NewMethodLogger(10, 10).(*methodLogger)
+	ml := newMethodLogger(10, 10)
 	// Set sink to testing buffer.
 	buf := bytes.NewBuffer(nil)
 	ml.sink = newWriterSink(buf)
@@ -350,11 +350,11 @@ func (s) TestLog(t *testing.T) {
 
 func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 	testCases := []struct {
-		ml   MethodLogger
+		ml   *methodLogger
 		mpPb *pb.Metadata
 	}{
 		{
-			ml: NewMethodLogger(maxUInt, maxUInt),
+			ml: newMethodLogger(maxUInt, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
@@ -362,7 +362,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 			},
 		},
 		{
-			ml: NewMethodLogger(2, maxUInt),
+			ml: newMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
@@ -370,7 +370,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 			},
 		},
 		{
-			ml: NewMethodLogger(1, maxUInt),
+			ml: newMethodLogger(1, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: nil},
@@ -378,7 +378,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 			},
 		},
 		{
-			ml: NewMethodLogger(2, maxUInt),
+			ml: newMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1, 1}},
@@ -386,7 +386,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 			},
 		},
 		{
-			ml: NewMethodLogger(2, maxUInt),
+			ml: newMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
@@ -397,7 +397,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 		// "grpc-trace-bin" is kept in log but not counted towards the size
 		// limit.
 		{
-			ml: NewMethodLogger(1, maxUInt),
+			ml: newMethodLogger(1, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
@@ -408,7 +408,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		truncated := tc.ml.(*methodLogger).truncateMetadata(tc.mpPb)
+		truncated := tc.ml.truncateMetadata(tc.mpPb)
 		if truncated {
 			t.Errorf("test case %v, returned truncated, want not truncated", i)
 		}
@@ -417,13 +417,13 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 
 func (s) TestTruncateMetadataTruncated(t *testing.T) {
 	testCases := []struct {
-		ml   MethodLogger
+		ml   *methodLogger
 		mpPb *pb.Metadata
 
 		entryLen int
 	}{
 		{
-			ml: NewMethodLogger(2, maxUInt),
+			ml: newMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1, 1, 1}},
@@ -432,7 +432,7 @@ func (s) TestTruncateMetadataTruncated(t *testing.T) {
 			entryLen: 0,
 		},
 		{
-			ml: NewMethodLogger(2, maxUInt),
+			ml: newMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
@@ -443,7 +443,7 @@ func (s) TestTruncateMetadataTruncated(t *testing.T) {
 			entryLen: 2,
 		},
 		{
-			ml: NewMethodLogger(2, maxUInt),
+			ml: newMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1, 1}},
@@ -453,7 +453,7 @@ func (s) TestTruncateMetadataTruncated(t *testing.T) {
 			entryLen: 1,
 		},
 		{
-			ml: NewMethodLogger(2, maxUInt),
+			ml: newMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
@@ -465,7 +465,7 @@ func (s) TestTruncateMetadataTruncated(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		truncated := tc.ml.(*methodLogger).truncateMetadata(tc.mpPb)
+		truncated := tc.ml.truncateMetadata(tc.mpPb)
 		if !truncated {
 			t.Errorf("test case %v, returned not truncated, want truncated", i)
 			continue
@@ -478,23 +478,23 @@ func (s) TestTruncateMetadataTruncated(t *testing.T) {
 
 func (s) TestTruncateMessageNotTruncated(t *testing.T) {
 	testCases := []struct {
-		ml    MethodLogger
+		ml    *methodLogger
 		msgPb *pb.Message
 	}{
 		{
-			ml: NewMethodLogger(maxUInt, maxUInt),
+			ml: newMethodLogger(maxUInt, maxUInt),
 			msgPb: &pb.Message{
 				Data: []byte{1},
 			},
 		},
 		{
-			ml: NewMethodLogger(maxUInt, 3),
+			ml: newMethodLogger(maxUInt, 3),
 			msgPb: &pb.Message{
 				Data: []byte{1, 1},
 			},
 		},
 		{
-			ml: NewMethodLogger(maxUInt, 2),
+			ml: newMethodLogger(maxUInt, 2),
 			msgPb: &pb.Message{
 				Data: []byte{1, 1},
 			},
@@ -502,7 +502,7 @@ func (s) TestTruncateMessageNotTruncated(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		truncated := tc.ml.(*methodLogger).truncateMessage(tc.msgPb)
+		truncated := tc.ml.truncateMessage(tc.msgPb)
 		if truncated {
 			t.Errorf("test case %v, returned truncated, want not truncated", i)
 		}
@@ -511,13 +511,13 @@ func (s) TestTruncateMessageNotTruncated(t *testing.T) {
 
 func (s) TestTruncateMessageTruncated(t *testing.T) {
 	testCases := []struct {
-		ml    MethodLogger
+		ml    *methodLogger
 		msgPb *pb.Message
 
 		oldLength uint32
 	}{
 		{
-			ml: NewMethodLogger(maxUInt, 2),
+			ml: newMethodLogger(maxUInt, 2),
 			msgPb: &pb.Message{
 				Length: 3,
 				Data:   []byte{1, 1, 1},
@@ -527,13 +527,13 @@ func (s) TestTruncateMessageTruncated(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
-		truncated := tc.ml.(*methodLogger).truncateMessage(tc.msgPb)
+		truncated := tc.ml.truncateMessage(tc.msgPb)
 		if !truncated {
 			t.Errorf("test case %v, returned not truncated, want truncated", i)
 			continue
 		}
-		if len(tc.msgPb.Data) != int(tc.ml.(*methodLogger).messageMaxLen) {
-			t.Errorf("test case %v, message length: %v, want: %v", i, len(tc.msgPb.Data), tc.ml.(*methodLogger).messageMaxLen)
+		if len(tc.msgPb.Data) != int(tc.ml.messageMaxLen) {
+			t.Errorf("test case %v, message length: %v, want: %v", i, len(tc.msgPb.Data), tc.ml.messageMaxLen)
 		}
 		if tc.msgPb.Length != tc.oldLength {
 			t.Errorf("test case %v, message.Length field: %v, want: %v", i, tc.msgPb.Length, tc.oldLength)

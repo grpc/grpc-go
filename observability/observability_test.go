@@ -499,9 +499,10 @@ func (s) TestEmptyConfig(t *testing.T) {
 func (s) TestOverrideConfig(t *testing.T) {
 	te := newTest(t)
 	defer te.tearDown()
-	// Setting 3 filters, expected to use the second filter. The second filter
-	// allows message payload logging, and others disabling the message payload
-	// logging. We should observe this behavior latter.
+	// Setting 3 filters, expected to use the third filter, because it's the
+	// most specific one. The third filter allows message payload logging, and
+	// others disabling the message payload logging. We should observe this
+	// behavior latter.
 	te.enablePluginWithConfig(&configpb.ObservabilityConfig{
 		EnableCloudLogging:   true,
 		DestinationProjectId: "fake",
@@ -512,11 +513,11 @@ func (s) TestOverrideConfig(t *testing.T) {
 			},
 			{
 				Pattern:      "*",
-				MessageBytes: 4096,
+				MessageBytes: 0,
 			},
 			{
 				Pattern:      "grpc.testing.TestService/*",
-				MessageBytes: 0,
+				MessageBytes: 4096,
 			},
 		},
 	})

@@ -75,17 +75,30 @@ func init() {
 	binLogger = NewLoggerFromConfigString(configStr)
 }
 
-type methodLoggerConfig struct {
+// MethodLoggerConfig contains the setting for logging behavior of a method
+// logger. Currently, it contains the max length of header and message.
+type MethodLoggerConfig struct {
 	// Max length of header and message.
-	hdr, msg uint64
+	Header, Message uint64
+}
+
+// LoggerConfig contains the config for loggers to create method loggers.
+type LoggerConfig struct {
+	All      *MethodLoggerConfig
+	Services map[string]*MethodLoggerConfig
+	Methods  map[string]*MethodLoggerConfig
+
+	Blacklist map[string]struct{}
 }
 
 type logger struct {
-	all      *methodLoggerConfig
-	services map[string]*methodLoggerConfig
-	methods  map[string]*methodLoggerConfig
+	config LoggerConfig
+}
 
-	blacklist map[string]struct{}
+// NewLoggerFromConfig builds a logger with the given LoggerConfig.
+func NewLoggerFromConfig(config *LoggerConfig) Logger {
+	// Copies the LoggerConfig, so it's immutable pass this point.
+	return &logger{config: *config}
 }
 
 // newEmptyLogger creates an empty logger. The map fields need to be filled in
@@ -95,57 +108,57 @@ func newEmptyLogger() *logger {
 }
 
 // Set method logger for "*".
-func (l *logger) setDefaultMethodLogger(ml *methodLoggerConfig) error {
-	if l.all != nil {
+func (l *logger) setDefaultMethodLogger(ml *MethodLoggerConfig) error {
+	if l.config.All != nil {
 		return fmt.Errorf("conflicting global rules found")
 	}
-	l.all = ml
+	l.config.All = ml
 	return nil
 }
 
 // Set method logger for "service/*".
 //
 // New methodLogger with same service overrides the old one.
-func (l *logger) setServiceMethodLogger(service string, ml *methodLoggerConfig) error {
-	if _, ok := l.services[service]; ok {
+func (l *logger) setServiceMethodLogger(service string, ml *MethodLoggerConfig) error {
+	if _, ok := l.config.Services[service]; ok {
 		return fmt.Errorf("conflicting service rules for service %v found", service)
 	}
-	if l.services == nil {
-		l.services = make(map[string]*methodLoggerConfig)
+	if l.config.Services == nil {
+		l.config.Services = make(map[string]*MethodLoggerConfig)
 	}
-	l.services[service] = ml
+	l.config.Services[service] = ml
 	return nil
 }
 
 // Set method logger for "service/method".
 //
 // New methodLogger with same method overrides the old one.
-func (l *logger) setMethodMethodLogger(method string, ml *methodLoggerConfig) error {
-	if _, ok := l.blacklist[method]; ok {
+func (l *logger) setMethodMethodLogger(method string, ml *MethodLoggerConfig) error {
+	if _, ok := l.config.Blacklist[method]; ok {
 		return fmt.Errorf("conflicting blacklist rules for method %v found", method)
 	}
-	if _, ok := l.methods[method]; ok {
+	if _, ok := l.config.Methods[method]; ok {
 		return fmt.Errorf("conflicting method rules for method %v found", method)
 	}
-	if l.methods == nil {
-		l.methods = make(map[string]*methodLoggerConfig)
+	if l.config.Methods == nil {
+		l.config.Methods = make(map[string]*MethodLoggerConfig)
 	}
-	l.methods[method] = ml
+	l.config.Methods[method] = ml
 	return nil
 }
 
 // Set blacklist method for "-service/method".
 func (l *logger) setBlacklist(method string) error {
-	if _, ok := l.blacklist[method]; ok {
+	if _, ok := l.config.Blacklist[method]; ok {
 		return fmt.Errorf("conflicting blacklist rules for method %v found", method)
 	}
-	if _, ok := l.methods[method]; ok {
+	if _, ok := l.config.Methods[method]; ok {
 		return fmt.Errorf("conflicting method rules for method %v found", method)
 	}
-	if l.blacklist == nil {
-		l.blacklist = make(map[string]struct{})
+	if l.config.Blacklist == nil {
+		l.config.Blacklist = make(map[string]struct{})
 	}
-	l.blacklist[method] = struct{}{}
+	l.config.Blacklist[method] = struct{}{}
 	return nil
 }
 
@@ -161,17 +174,17 @@ func (l *logger) GetMethodLogger(methodName string) MethodLogger {
 		grpclogLogger.Infof("binarylogging: failed to parse %q: %v", methodName, err)
 		return nil
 	}
-	if ml, ok := l.methods[s+"/"+m]; ok {
-		return NewMethodLogger(ml.hdr, ml.msg)
+	if ml, ok := l.config.Methods[s+"/"+m]; ok {
+		return newMethodLogger(ml.Header, ml.Message)
 	}
-	if _, ok := l.blacklist[s+"/"+m]; ok {
+	if _, ok := l.config.Blacklist[s+"/"+m]; ok {
 		return nil
 	}
-	if ml, ok := l.services[s]; ok {
-		return NewMethodLogger(ml.hdr, ml.msg)
+	if ml, ok := l.config.Services[s]; ok {
+		return newMethodLogger(ml.Header, ml.Message)
 	}
-	if l.all == nil {
+	if l.config.All == nil {
 		return nil
 	}
-	return NewMethodLogger(l.all.hdr, l.all.msg)
+	return newMethodLogger(l.config.All.Header, l.config.All.Message)
 }

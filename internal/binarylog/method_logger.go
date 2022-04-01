@@ -61,11 +61,10 @@ type methodLogger struct {
 	sink Sink // TODO(blog): make this plugable.
 }
 
-// NewMethodLogger creates methodLogger based on input config
-func NewMethodLogger(headerMaxLen, messageMaxLen uint64) MethodLogger {
+func newMethodLogger(h, m uint64) *methodLogger {
 	return &methodLogger{
-		headerMaxLen:  headerMaxLen,
-		messageMaxLen: messageMaxLen,
+		headerMaxLen:  h,
+		messageMaxLen: m,
 
 		callID:          idGen.next(),
 		idWithinCallGen: &callIDGenerator{},
