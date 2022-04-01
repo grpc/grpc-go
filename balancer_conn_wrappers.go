@@ -100,7 +100,7 @@ type switchToUpdate struct {
 }
 
 type subConnUpdate struct {
-	sc balancer.SubConn
+	acbw *acBalancerWrapper
 }
 
 // watcher is a long-running goroutine which reads updates from a channel and
@@ -127,7 +127,7 @@ func (ccb *ccBalancerWrapper) watcher() {
 			case *switchToUpdate:
 				ccb.handleSwitchTo(update.name)
 			case *subConnUpdate:
-				ccb.handleRemoveSubConn(update.sc.(*acBalancerWrapper))
+				ccb.handleRemoveSubConn(update.acbw)
 			default:
 				logger.Errorf("ccBalancerWrapper.watcher: unknown update %+v, type %T", update, update)
 			}
@@ -323,7 +323,11 @@ func (ccb *ccBalancerWrapper) RemoveSubConn(sc balancer.SubConn) {
 	// asynchronously is probably not required anymore since the switchTo() method
 	// handles the balancer switch by pushing the update onto the channel.
 	// TODO(easwars): Handle this inline.
-	ccb.updateCh.Put(&subConnUpdate{sc: sc})
+	acbw, ok := sc.(*acBalancerWrapper)
+	if !ok {
+		return
+	}
+	ccb.updateCh.Put(&subConnUpdate{acbw: acbw})
 }
 
 func (ccb *ccBalancerWrapper) UpdateAddresses(sc balancer.SubConn, addrs []resolver.Address) {
