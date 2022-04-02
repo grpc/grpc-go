@@ -248,6 +248,16 @@ func (l *binaryLogger) Close() {
 	}
 }
 
+func validateExistingMethodLoggerConfig(existing *iblog.MethodLoggerConfig, filter *configpb.ObservabilityConfig_LogFilter) bool {
+	// In future, we could add more validations. Currently, we only check if the
+	// new filter configs are different than the existing one, if so, we log a
+	// warning.
+	if existing != nil && (existing.Header != uint64(filter.HeaderBytes) || existing.Message != uint64(filter.MessageBytes)) {
+		logger.Warningf("Ignored log_filter config: %+v", filter)
+	}
+	return existing == nil
+}
+
 func createBinaryLoggerConfig(filters []*configpb.ObservabilityConfig_LogFilter) *iblog.LoggerConfig {
 	config := &iblog.LoggerConfig{
 		Services: make(map[string]*iblog.MethodLoggerConfig),
@@ -258,8 +268,7 @@ func createBinaryLoggerConfig(filters []*configpb.ObservabilityConfig_LogFilter)
 	for _, filter := range filters {
 		if filter.Pattern == "*" {
 			// Match a "*"
-			if config.All != nil {
-				logger.Warningf("Ignored log_filter config: %+v", filter)
+			if !validateExistingMethodLoggerConfig(config.All, filter) {
 				continue
 			}
 			config.All = &iblog.MethodLoggerConfig{Header: uint64(filter.HeaderBytes), Message: uint64(filter.MessageBytes)}
@@ -270,16 +279,14 @@ func createBinaryLoggerConfig(filters []*configpb.ObservabilityConfig_LogFilter)
 		filterMethod := tokens[1]
 		if filterMethod == "*" {
 			// Handle "p.s/*" case
-			if config.Services[filterService] != nil {
-				logger.Warningf("Ignored log_filter config: %+v", filter)
+			if !validateExistingMethodLoggerConfig(config.Services[filterService], filter) {
 				continue
 			}
 			config.Services[filterService] = &iblog.MethodLoggerConfig{Header: uint64(filter.HeaderBytes), Message: uint64(filter.MessageBytes)}
 			continue
 		}
 		// Exact match like "p.s/m"
-		if config.Methods[filter.Pattern] != nil {
-			logger.Warningf("Ignored log_filter config: %+v", filter)
+		if !validateExistingMethodLoggerConfig(config.Methods[filter.Pattern], filter) {
 			continue
 		}
 		config.Methods[filter.Pattern] = &iblog.MethodLoggerConfig{Header: uint64(filter.HeaderBytes), Message: uint64(filter.MessageBytes)}
