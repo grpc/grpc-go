@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2020 gRPC authors.
+ * Copyright 2022 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,8 @@
  *
  */
 
-package e2e
+// Package rls contains utilities for RouteLookupService e2e tests.
+package rls
 
 import (
 	"context"
@@ -37,6 +38,29 @@ import (
 type RouteLookupResponse struct {
 	Resp *rlspb.RouteLookupResponse
 	Err  error
+}
+
+// SetupFakeRLSServer starts and returns a fake RouteLookupService server
+// listening on the given listener or on a random local port. Also returns a
+// channel for tests to get notified whenever the RouteLookup RPC is invoked on
+// the fake server.
+//
+// This function sets up the fake server to respond with an empty response for
+// the RouteLookup RPCs. Tests can override this by calling the
+// SetResponseCallback() method on the returned fake server.
+func SetupFakeRLSServer(t *testing.T, lis net.Listener, opts ...grpc.ServerOption) (*FakeRouteLookupServer, chan struct{}) {
+	s, cancel := StartFakeRouteLookupServer(t, lis, opts...)
+	t.Logf("Started fake RLS server at %q", s.Address)
+
+	ch := make(chan struct{}, 1)
+	s.SetRequestCallback(func(request *rlspb.RouteLookupRequest) {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	})
+	t.Cleanup(cancel)
+	return s, ch
 }
 
 // FakeRouteLookupServer is a fake implementation of the RouteLookupService.

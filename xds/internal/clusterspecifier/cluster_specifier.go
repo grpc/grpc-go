@@ -65,3 +65,8 @@ func Register(cs ClusterSpecifier) {
 func Get(typeURL string) ClusterSpecifier {
 	return m[typeURL]
 }
+
+// UnregisterForTesting unregisters the ClusterSpecifier for testing purposes.
+func UnregisterForTesting(typeURL string) {
+	delete(m, typeURL)
+}
