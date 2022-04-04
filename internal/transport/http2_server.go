@@ -1065,6 +1065,9 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 			if _, ok := err.(ConnectionError); ok {
 				return err
 			}
+			if s.ctx.Err() != nil {
+				return ContextErr(s.ctx.Err())
+			}
 			// TODO(mmukhi, dfawley): Make sure this is the right code to return.
 			return status.Errorf(codes.Internal, "transport: %v", err)
 		}
