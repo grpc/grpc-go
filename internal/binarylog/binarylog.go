@@ -96,9 +96,8 @@ type logger struct {
 }
 
 // NewLoggerFromConfig builds a logger with the given LoggerConfig.
-func NewLoggerFromConfig(config *LoggerConfig) Logger {
-	// Copies the LoggerConfig, so it's immutable pass this point.
-	return &logger{config: *config}
+func NewLoggerFromConfig(config LoggerConfig) Logger {
+	return &logger{config: config}
 }
 
 // newEmptyLogger creates an empty logger. The map fields need to be filled in

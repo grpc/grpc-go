@@ -65,7 +65,7 @@ var loggerTypeToEventLogger = map[binlogpb.GrpcLogEntry_Logger]grpclogrecordpb.G
 type binaryMethodLogger struct {
 	rpcID, serviceName, methodName string
 	originalMethodLogger           iblog.MethodLogger
-	wrappedMethodLogger            iblog.MethodLogger
+	childMethodLogger              iblog.MethodLogger
 	exporter                       loggingExporter
 }
 
@@ -76,12 +76,12 @@ func (ml *binaryMethodLogger) Log(c iblog.LogEntryConfig) {
 	}
 
 	// Fetch the compiled binary logging log entry
-	if ml.wrappedMethodLogger == nil {
+	if ml.childMethodLogger == nil {
 		logger.Info("No wrapped method logger found")
 		return
 	}
 	var binlogEntry *binlogpb.GrpcLogEntry
-	o, ok := ml.wrappedMethodLogger.(interface {
+	o, ok := ml.childMethodLogger.(interface {
 		Build(iblog.LogEntryConfig) *binlogpb.GrpcLogEntry
 	})
 	if !ok {
@@ -229,7 +229,7 @@ func (l *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
 
 	return &binaryMethodLogger{
 		originalMethodLogger: ol,
-		wrappedMethodLogger:  ml,
+		childMethodLogger:    ml,
 		rpcID:                uuid.NewString(),
 		exporter:             exporter,
 	}
@@ -258,8 +258,8 @@ func validateExistingMethodLoggerConfig(existing *iblog.MethodLoggerConfig, filt
 	return existing == nil
 }
 
-func createBinaryLoggerConfig(filters []*configpb.ObservabilityConfig_LogFilter) *iblog.LoggerConfig {
-	config := &iblog.LoggerConfig{
+func createBinaryLoggerConfig(filters []*configpb.ObservabilityConfig_LogFilter) iblog.LoggerConfig {
+	config := iblog.LoggerConfig{
 		Services: make(map[string]*iblog.MethodLoggerConfig),
 		Methods:  make(map[string]*iblog.MethodLoggerConfig),
 	}
