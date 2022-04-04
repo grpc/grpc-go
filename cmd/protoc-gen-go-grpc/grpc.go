@@ -36,7 +36,7 @@ const (
 
 type serviceGenerateHelperInterface interface {
 	formatFullMethodName(service *protogen.Service, method *protogen.Method) string
-	generateNewClientConnInterface(g *protogen.GeneratedFile, clientName string)
+	generateClientStruct(g *protogen.GeneratedFile, clientName string)
 	generateNewClientDefinitions(g *protogen.GeneratedFile, service *protogen.Service, clientName string)
 	generateUnimplementedServerType(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service)
 	generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string) []string
@@ -49,7 +49,7 @@ func (serviceGenerateHelper) formatFullMethodName(service *protogen.Service, met
 	return fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name())
 }
 
-func (serviceGenerateHelper) generateNewClientConnInterface(g *protogen.GeneratedFile, clientName string) {
+func (serviceGenerateHelper) generateClientStruct(g *protogen.GeneratedFile, clientName string) {
 	g.P("type ", unexport(clientName), " struct {")
 	g.P("cc ", grpcPackage.Ident("ClientConnInterface"))
 	g.P("}")
@@ -182,7 +182,7 @@ func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.Generated
 	g.P()
 
 	// Client structure.
-	helper.generateNewClientConnInterface(g, clientName)
+	helper.generateClientStruct(g, clientName)
 
 	// NewClient factory.
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
