@@ -105,26 +105,24 @@ func (cle *cloudLoggingExporter) EmitGrpcLogRecord(l *grpclogrecordpb.GrpcLogRec
 }
 
 func (cle *cloudLoggingExporter) Close() error {
+	var errFlush, errClose error
 	if cle.logger != nil {
-		if err := cle.logger.Flush(); err != nil {
-			// Try to close the client regardless the Flush is successful or not.
-			if cle.client != nil {
-				if err := cle.client.Close(); err != nil {
-					logger.Infof("Close CloudLogging client failed: %v", err)
-				} else {
-					cle.client = nil
-				}
-			}
-			return err
-		}
-		cle.logger = nil
+		errFlush = cle.logger.Flush()
 	}
 	if cle.client != nil {
-		if err := cle.client.Close(); err != nil {
-			return err
-		}
-		cle.client = nil
+		errClose = cle.client.Close()
 	}
+	if errFlush != nil && errClose != nil {
+		return fmt.Errorf("failed to close exporter. Flush failed: %v; Close failed: %v", errFlush, errClose)
+	}
+	if errFlush != nil {
+		return errFlush
+	}
+	if errClose != nil {
+		return errClose
+	}
+	cle.logger = nil
+	cle.client = nil
 	logger.Infof("Closed CloudLogging exporter")
 	return nil
 }
