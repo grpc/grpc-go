@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/internal/buffer"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
@@ -389,7 +390,9 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 		default:
 			b.logger.Infof("unexpected cluster type %v when handling update from cluster handler", cu.ClusterType)
 		}
-		dms[i].OutlierDetection = outlierDetectionToConfig(cu.OutlierDetection)
+		if envconfig.XDSOutlierDetection {
+			dms[i].OutlierDetection = outlierDetectionToConfig(cu.OutlierDetection)
+		}
 	}
 	lbCfg := &clusterresolver.LBConfig{
 		DiscoveryMechanisms: dms,

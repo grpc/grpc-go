@@ -29,6 +29,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
@@ -365,11 +366,14 @@ func (s) TestUpdateClientConnStateWithSameState(t *testing.T) {
 // different updates and verifies that the expect ClientConnState is propagated
 // to the edsBalancer.
 func (s) TestHandleClusterUpdate(t *testing.T) {
+	oldOutlierDetection := envconfig.XDSOutlierDetection
+	envconfig.XDSOutlierDetection = true
 	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	xdsC.SetBootstrapConfig(&bootstrap.Config{
 		XDSServer: defaultTestAuthorityServerConfig,
 	})
 	defer func() {
+		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -452,11 +456,14 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 // TestHandleClusterUpdateError covers the cases that an error is returned from
 // the watcher.
 func (s) TestHandleClusterUpdateError(t *testing.T) {
+	oldOutlierDetection := envconfig.XDSOutlierDetection
+	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
 	defer func() {
+		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -538,11 +545,14 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 
 // TestResolverError verifies the ResolverError() method in the CDS balancer.
 func (s) TestResolverError(t *testing.T) {
+	oldOutlierDetection := envconfig.XDSOutlierDetection
+	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
 	defer func() {
+		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -621,11 +631,14 @@ func (s) TestResolverError(t *testing.T) {
 // TestUpdateSubConnState verifies the UpdateSubConnState() method in the CDS
 // balancer.
 func (s) TestUpdateSubConnState(t *testing.T) {
+	oldOutlierDetection := envconfig.XDSOutlierDetection
+	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer func() {
+		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -657,11 +670,14 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 // TestCircuitBreaking verifies that the CDS balancer correctly updates a
 // service's counter on watch updates.
 func (s) TestCircuitBreaking(t *testing.T) {
+	oldOutlierDetection := envconfig.XDSOutlierDetection
+	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, _, cancel := setupWithXDSCreds(t)
 	defer func() {
+		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -692,11 +708,16 @@ func (s) TestCircuitBreaking(t *testing.T) {
 
 // TestClose verifies the Close() method in the the CDS balancer.
 func (s) TestClose(t *testing.T) {
+	oldOutlierDetection := envconfig.XDSOutlierDetection
+	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
-	defer cancel()
+	defer func() {
+		envconfig.XDSOutlierDetection = oldOutlierDetection
+		cancel()
+	}()
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
@@ -760,11 +781,14 @@ func (s) TestClose(t *testing.T) {
 }
 
 func (s) TestExitIdle(t *testing.T) {
+	oldOutlierDetection := envconfig.XDSOutlierDetection
+	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer func() {
+		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -839,6 +863,12 @@ func (s) TestParseConfig(t *testing.T) {
 }
 
 func (s) TestOutlierDetectionToConfig(t *testing.T) {
+	oldOutlierDetection := envconfig.XDSOutlierDetection
+	envconfig.XDSOutlierDetection = true
+	defer func() {
+		envconfig.XDSOutlierDetection = oldOutlierDetection
+	}()
+
 	tests := []struct {
 		name        string
 		od          *xdsresource.OutlierDetection
