@@ -96,7 +96,6 @@ func (serviceGenerateHelper) generateServerFunctions(gen *protogen.Plugin, file 
 		handlerNames = append(handlerNames, hname)
 	}
 	genServiceDesc(file, g, serviceDescVar, serverType, service, handlerNames)
-	return handlerNames
 }
 
 func (serviceGenerateHelper) formatHandlerFuncName(service *protogen.Service, hname string) string {
