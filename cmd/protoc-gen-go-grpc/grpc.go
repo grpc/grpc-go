@@ -39,7 +39,7 @@ type serviceGenerateHelperInterface interface {
 	generateClientStruct(g *protogen.GeneratedFile, clientName string)
 	generateNewClientDefinitions(g *protogen.GeneratedFile, service *protogen.Service, clientName string)
 	generateUnimplementedServerType(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service)
-	generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string) []string
+	generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string)
 	formatHandlerFuncName(service *protogen.Service, hname string) string
 }
 
@@ -86,7 +86,7 @@ func (serviceGenerateHelper) generateUnimplementedServerType(gen *protogen.Plugi
 	g.P()
 }
 
-func (serviceGenerateHelper) generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string) []string {
+func (serviceGenerateHelper) generateServerFunctions(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service, serverType string, serviceDescVar string) {
 	// Server handler implementations.
 	handlerNames := make([]string, 0, len(service.Methods))
 	for _, method := range service.Methods {
