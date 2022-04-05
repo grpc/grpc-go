@@ -27,7 +27,7 @@ package grpc.observability.config.v1alpha;
 option java_package = "io.grpc.observability.config";
 option java_multiple_files = true;
 option java_outer_classname = "ObservabilityConfigProto";
-option go_package = "google.golang.org/grpc/observability/internal/config";
+option go_package = "google.golang.org/grpc/gcp/observability/internal/config";
 
 // Configuration for observability behaviors. By default, no configuration is
 // required for tracing/metrics/logging to function. This config captures the
