@@ -11,4 +11,4 @@ require (
 	google.golang.org/protobuf v1.27.1
 )
 
-replace google.golang.org/grpc => ../
+replace google.golang.org/grpc => ../../
