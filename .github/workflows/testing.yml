@@ -50,9 +50,6 @@ jobs:
             goversion: 1.18
             testflags: -race
 
-          - type: extras
-            goversion: 1.18
-
           - type: tests
             goversion: 1.18
             goarch: 386
@@ -69,6 +66,9 @@ jobs:
 
           - type: tests
             goversion: 1.15
+
+          - type: extras
+            goversion: 1.18
 
     steps:
       # Setup the environment.
@@ -114,8 +114,13 @@ jobs:
       - name: Run extras tests
         if: matrix.type == 'extras'
         run: |
+          export TERM=${TERM:-xterm}
           go version
+          echo -e "\n-- Running Examples --"
           examples/examples_test.sh
+          echo -e "\n-- Running AdvancedTLS Examples --"
           security/advancedtls/examples/examples_test.sh
+          echo -e "\n-- Running Interop Test --"
           interop/interop_test.sh
+          echo -e "\n-- Running xDS E2E Test --"
           xds/internal/test/e2e/run.sh
