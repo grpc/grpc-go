@@ -1,0 +1,153 @@
+// Copyright 2022 The gRPC Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package grpc.observability.logging.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+
+option java_package = "io.grpc.observability.logging";
+option java_multiple_files = true;
+option java_outer_classname = "ObservabilityLoggingProto";
+option go_package = "google.golang.org/grpc/gcp/observability/internal/logging";
+
+message GrpcLogRecord {
+    // List of event types
+    enum EventType {
+        // Unknown event type
+        GRPC_CALL_UNKNOWN = 0;
+        // Header sent from client to server
+        GRPC_CALL_REQUEST_HEADER = 1;
+        // Header sent from server to client
+        GRPC_CALL_RESPONSE_HEADER = 2;
+        // Message sent from client to server
+        GRPC_CALL_REQUEST_MESSAGE = 3;
+        // Message sent from server to client
+        GRPC_CALL_RESPONSE_MESSAGE = 4;
+        // Trailer indicates the end of the gRPC call
+        GRPC_CALL_TRAILER = 5;
+        // A signal that client is done sending
+        GRPC_CALL_HALF_CLOSE = 6;
+        // A signal that the rpc is canceled
+        GRPC_CALL_CANCEL = 7;
+    }
+    // The entity that generates the log entry
+    enum EventLogger {
+        LOGGER_UNKNOWN = 0;
+        LOGGER_CLIENT = 1;
+        LOGGER_SERVER = 2;
+    }
+    // The log severity level of the log entry
+    enum LogLevel {
+        LOG_LEVEL_UNKNOWN = 0;
+        LOG_LEVEL_TRACE = 1;
+        LOG_LEVEL_DEBUG = 2;
+        LOG_LEVEL_INFO = 3;
+        LOG_LEVEL_WARN = 4;
+        LOG_LEVEL_ERROR = 5;
+        LOG_LEVEL_CRITICAL = 6;
+    }
+
+    // The timestamp of the log event
+    google.protobuf.Timestamp timestamp = 1;
+
+    // Uniquely identifies a call. The value must not be 0 in order to disambiguate
+    // from an unset value.
+    // Each call may have several log entries. They will all have the same rpc_id.
+    // Nothing is guaranteed about their value other than they are unique across
+    // different RPCs in the same gRPC process.
+    string rpc_id = 2;
+
+    EventType event_type = 3;      // one of the above EventType enum
+    EventLogger event_logger = 4;  // one of the above EventLogger enum
+
+    // the name of the service
+    string service_name = 5;
+    // the name of the RPC method
+    string method_name = 6;
+
+    LogLevel log_level = 7;        // one of the above LogLevel enum
+
+    // Peer address information. On client side, peer is logged on server
+    // header event or trailer event (if trailer-only). On server side, peer
+    // is always logged on the client header event.
+    Address peer_address = 8;
+
+    // the RPC timeout value
+    google.protobuf.Duration timeout = 11;
+
+    // A single process may be used to run multiple virtual servers with
+    // different identities.
+    // The authority is the name of such a server identify. It is typically a
+    // portion of the URI in the form of <host> or <host>:<port>.
+    string authority = 12;
+
+    // Size of the message or metadata, depending on the event type,
+    // regardless of whether the full message or metadata is being logged
+    // (i.e. could be truncated or omitted).
+    uint32 payload_size = 13;
+
+    // true if message or metadata field is either truncated or omitted due
+    // to config options
+    bool payload_truncated = 14;
+
+    // Used by header event or trailer event
+    Metadata metadata = 15;
+
+    // The entry sequence ID for this call. The first message has a value of 1,
+    // to disambiguate from an unset value. The purpose of this field is to
+    // detect missing entries in environments where durability or ordering is
+    // not guaranteed.
+    uint64 sequence_id = 16;
+
+    // Used by message event
+    bytes message = 17;
+
+    // The gRPC status code
+    uint32 status_code = 18;
+
+    // The gRPC status message
+    string status_message = 19;
+
+    // The value of the grpc-status-details-bin metadata key, if any.
+    // This is always an encoded google.rpc.Status message
+    bytes status_details = 20;
+
+    // A list of metadata pairs
+    message Metadata {
+        repeated MetadataEntry entry = 1;
+    }
+
+    // One metadata key value pair
+    message MetadataEntry {
+        string key = 1;
+        bytes value = 2;
+    }
+
+    // Address information
+    message Address {
+        enum Type {
+            TYPE_UNKNOWN = 0;
+            TYPE_IPV4 = 1;  // in 1.2.3.4 form
+            TYPE_IPV6 = 2;  // IPv6 canonical form (RFC5952 section 4)
+            TYPE_UNIX = 3;  // UDS string
+        }
+        Type type = 1;
+        string address = 2;
+        // only for TYPE_IPV4 and TYPE_IPV6
+        uint32 ip_port = 3;
+    }
+}
