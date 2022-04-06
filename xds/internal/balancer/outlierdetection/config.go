@@ -15,14 +15,13 @@
  * limitations under the License.
  */
 
-// Package outlierdetection implements a balancer that implements
-// Outlier Detection.
 package outlierdetection
 
 import (
-	"encoding/json"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -37,23 +36,23 @@ type SuccessRateEjection struct {
 	// success_rate_stdev_factor). This factor is divided by a thousand to get a
 	// double. That is, if the desired factor is 1.9, the runtime value should
 	// be 1900. Defaults to 1900.
-	StdevFactor uint32
+	StdevFactor uint32 `json:"stdevFactor,omitempty"`
 	// EnforcingSuccessRate is the % chance that a host will be actually ejected
 	// when an outlier status is detected through success rate statistics. This
 	// setting can be used to disable ejection or to ramp it up slowly. Defaults
 	// to 100.
-	EnforcingSuccessRate uint32
+	EnforcingSuccessRate uint32 `json:"enforcingSuccessRate,omitempty"`
 	// MinimumHosts is the number of hosts in a cluster that must have enough
 	// request volume to detect success rate outliers. If the number of hosts is
 	// less than this setting, outlier detection via success rate statistics is
 	// not performed for any host in the cluster. Defaults to 5.
-	MinimumHosts uint32
+	MinimumHosts uint32 `json:"minimumHosts,omitempty"`
 	// RequestVolume is the minimum number of total requests that must be
 	// collected in one interval (as defined by the interval duration above) to
 	// include this host in success rate based outlier detection. If the volume
 	// is lower than this setting, outlier detection via success rate statistics
 	// is not performed for that host. Defaults to 100.
-	RequestVolume uint32
+	RequestVolume uint32 `json:"requestVolume,omitempty"`
 }
 
 // Equal returns whether the SuccessRateEjection is the same with the parameter.
@@ -84,23 +83,23 @@ type FailurePercentageEjection struct {
 	// percentage-based outlier detection. If the failure percentage of a given
 	// host is greater than or equal to this value, it will be ejected. Defaults
 	// to 85.
-	Threshold uint32
+	Threshold uint32 `json:"threshold,omitempty"`
 	// EnforcingFailurePercentage is the % chance that a host will be actually
 	// ejected when an outlier status is detected through failure percentage
 	// statistics. This setting can be used to disable ejection or to ramp it up
 	// slowly. Defaults to 0.
-	EnforcingFailurePercentage uint32
+	EnforcingFailurePercentage uint32 `json:"enforcingFailurePercentage,omitempty"`
 	// MinimumHosts is the minimum number of hosts in a cluster in order to
 	// perform failure percentage-based ejection. If the total number of hosts
 	// in the cluster is less than this value, failure percentage-based ejection
 	// will not be performed. Defaults to 5.
-	MinimumHosts uint32
+	MinimumHosts uint32 `json:"minimumHosts,omitempty"`
 	// RequestVolume is the minimum number of total requests that must be
 	// collected in one interval (as defined by the interval duration above) to
 	// perform failure percentage-based ejection for this host. If the volume is
 	// lower than this setting, failure percentage-based ejection will not be
 	// performed for this host. Defaults to 50.
-	RequestVolume uint32
+	RequestVolume uint32 `json:"requestVolume,omitempty"`
 }
 
 // Equal returns whether the FailurePercentageEjection is the same with the
@@ -150,7 +149,7 @@ type LBConfig struct {
 	// algorithm. If set, failure rate ejections will be performed.
 	FailurePercentageEjection *FailurePercentageEjection `json:"failurePercentageEjection,omitempty"`
 	// ChildPolicy is the config for the child policy.
-	ChildPolicy/*[] why is this repeated in design?*/ serviceconfig.LoadBalancingConfig `json:"childPolicy,omitempty"`
+	ChildPolicy/*[] why is this repeated in design?*/ *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
 // Equal returns whether the LBConfig is the same with the parameter.
@@ -179,15 +178,5 @@ func (lbc *LBConfig) Equal(lbc2 *LBConfig) bool {
 	if !lbc.FailurePercentageEjection.Equal(lbc2.FailurePercentageEjection) {
 		return false
 	}
-	return lbc.ChildPolicy == lbc2.ChildPolicy
-}
-
-// MarshalJSON marshals a LBConfig to a quoted json string.
-func (lbc *LBConfig) MarshalJSON() ([]byte, error) {
-	return json.Marshal(lbc)
-}
-
-// UnmarshalJSON unmarshals a quoted json string to a LBConfig.
-func (lbc *LBConfig) UnmarshalJSON(b []byte) error {
-	return json.Unmarshal(b, lbc)
+	return cmp.Equal(lbc.ChildPolicy, lbc2.ChildPolicy)
 }
