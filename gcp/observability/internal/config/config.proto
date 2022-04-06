@@ -1,0 +1,78 @@
+// Copyright 2022 The gRPC Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// Observability Config is used by gRPC Observability plugin to control provided
+// observability features. It contains parameters to enable/disable certain
+// features, or fine tune the verbosity.
+//
+// Note that gRPC may use this config in JSON form, not in protobuf form. This
+// proto definition is intended to help document the schema but might not
+// actually be used directly by gRPC.
+
+syntax = "proto3";
+
+package grpc.observability.config.v1alpha;
+
+option java_package = "io.grpc.observability.config";
+option java_multiple_files = true;
+option java_outer_classname = "ObservabilityConfigProto";
+option go_package = "google.golang.org/grpc/gcp/observability/internal/config";
+
+// Configuration for observability behaviors. By default, no configuration is
+// required for tracing/metrics/logging to function. This config captures the
+// most common knobs for gRPC users. It's always possible to override with
+// explicit config in code.
+message ObservabilityConfig {
+    // Whether the logging data uploading to CloudLogging should be enabled or
+    // not. The default value is true.
+    bool enable_cloud_logging = 1;
+
+    // The destination GCP project identifier for the uploading log entries. If
+    // empty, the gRPC Observability plugin will attempt to fetch the project_id
+    // from the GCP environment variables, or from the default credentials.
+    string destination_project_id = 2;
+
+    message LogFilter {
+        // Pattern is a string which can select a group of method names. By
+        // default, the pattern is an empty string, matching no methods.
+        //
+        // Only "*" Wildcard is accepted for pattern. A pattern is in the form
+        // of <service>/<method> or just a character "*" .
+        //
+        // If the pattern is "*", it specifies the defaults for all the
+        // services; If the pattern is <service>/*, it specifies the defaults
+        // for all methods in the specified service <service>; If the pattern is
+        // */<method>, this is not supported.
+        //
+        // Examples:
+        //  - "Foo/Bar" selects only the method "Bar" from service "Foo"
+        //  - "Foo/*" selects all methods from service "Foo"
+        //  - "*" selects all methods from all services.
+        string pattern = 1;
+        // Number of bytes of each header to log. If the size of the header is
+        // greater than the defined limit, content pass the limit will be
+        // truncated. The default value is 0.
+        int32 header_bytes = 2;
+        // Number of bytes of each message to log. If the size of the message is
+        // greater than the defined limit, content pass the limit will be
+        // truncated. The default value is 0.
+        int32 message_bytes = 3;
+    }
+
+    // A list of method config. The order matters here - the first pattern which
+    // matches the current method will apply the associated config options in
+    // the LogFilter. Any other LogFilter that also matches that comes later
+    // will be ignored. So a LogFilter of "*/*" should appear last in this list.
+    repeated LogFilter log_filters = 3;
+}
