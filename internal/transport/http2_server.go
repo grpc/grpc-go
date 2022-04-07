@@ -959,7 +959,7 @@ func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
 	}
 	if err := t.writeHeaderLocked(s); err != nil {
 		s.hdrMu.Unlock()
-		return status.Errorf(codes.Internal, "transport: %+v", err)
+		return status.Convert(err).Err()
 	}
 	s.hdrMu.Unlock()
 	return nil
