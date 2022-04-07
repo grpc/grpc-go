@@ -37,11 +37,11 @@ type SuccessRateEjection struct {
 	// double. That is, if the desired factor is 1.9, the runtime value should
 	// be 1900. Defaults to 1900.
 	StdevFactor uint32 `json:"stdevFactor,omitempty"`
-	// EnforcingSuccessRate is the % chance that a host will be actually ejected
+	// EnforcementPercentage is the % chance that a host will be actually ejected
 	// when an outlier status is detected through success rate statistics. This
 	// setting can be used to disable ejection or to ramp it up slowly. Defaults
 	// to 100.
-	EnforcingSuccessRate uint32 `json:"enforcingSuccessRate,omitempty"`
+	EnforcementPercentage uint32 `json:"enforcementPercentage,omitempty"`
 	// MinimumHosts is the number of hosts in a cluster that must have enough
 	// request volume to detect success rate outliers. If the number of hosts is
 	// less than this setting, outlier detection via success rate statistics is
@@ -66,7 +66,7 @@ func (sre *SuccessRateEjection) Equal(sre2 *SuccessRateEjection) bool {
 	if sre.StdevFactor != sre2.StdevFactor {
 		return false
 	}
-	if sre.EnforcingSuccessRate != sre2.EnforcingSuccessRate {
+	if sre.EnforcementPercentage != sre2.EnforcementPercentage {
 		return false
 	}
 	if sre.MinimumHosts != sre2.MinimumHosts {
@@ -84,11 +84,11 @@ type FailurePercentageEjection struct {
 	// host is greater than or equal to this value, it will be ejected. Defaults
 	// to 85.
 	Threshold uint32 `json:"threshold,omitempty"`
-	// EnforcingFailurePercentage is the % chance that a host will be actually
+	// EnforcementPercentage is the % chance that a host will be actually
 	// ejected when an outlier status is detected through failure percentage
 	// statistics. This setting can be used to disable ejection or to ramp it up
 	// slowly. Defaults to 0.
-	EnforcingFailurePercentage uint32 `json:"enforcingFailurePercentage,omitempty"`
+	EnforcementPercentage uint32 `json:"enforcementPercentage,omitempty"`
 	// MinimumHosts is the minimum number of hosts in a cluster in order to
 	// perform failure percentage-based ejection. If the total number of hosts
 	// in the cluster is less than this value, failure percentage-based ejection
@@ -114,7 +114,7 @@ func (fpe *FailurePercentageEjection) Equal(fpe2 *FailurePercentageEjection) boo
 	if fpe.Threshold != fpe2.Threshold {
 		return false
 	}
-	if fpe.EnforcingFailurePercentage != fpe2.EnforcingFailurePercentage {
+	if fpe.EnforcementPercentage != fpe2.EnforcementPercentage {
 		return false
 	}
 	if fpe.MinimumHosts != fpe2.MinimumHosts {
@@ -149,7 +149,7 @@ type LBConfig struct {
 	// algorithm. If set, failure rate ejections will be performed.
 	FailurePercentageEjection *FailurePercentageEjection `json:"failurePercentageEjection,omitempty"`
 	// ChildPolicy is the config for the child policy.
-	ChildPolicy/*[] why is this repeated in design?*/ *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
+	ChildPolicy *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
 // Equal returns whether the LBConfig is the same with the parameter.

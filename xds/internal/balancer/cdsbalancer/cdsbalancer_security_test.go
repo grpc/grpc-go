@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
 	xdscredsinternal "google.golang.org/grpc/internal/credentials/xds"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/resolver"
@@ -225,14 +224,11 @@ func makeNewSubConn(ctx context.Context, edsCC balancer.ClientConn, parentCC *te
 // the address attributes added as part of the intercepted NewSubConn() method
 // indicate the use of fallback credentials.
 func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -254,7 +250,7 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
 	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, nil, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -283,14 +279,11 @@ func (s) TestSecurityConfigWithoutXDSCreds(t *testing.T) {
 // the address attributes added as part of the intercepted NewSubConn() method
 // indicate the use of fallback credentials.
 func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
 	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -313,7 +306,7 @@ func (s) TestNoSecurityConfigWithXDSCreds(t *testing.T) {
 	// newChildBalancer function as part of test setup. No security config is
 	// passed to the CDS balancer as part of this update.
 	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, nil, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -430,14 +423,11 @@ func (s) TestCertproviderStoreError(t *testing.T) {
 }
 
 func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
 	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -472,7 +462,7 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, nil, nil)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -489,14 +479,11 @@ func (s) TestSecurityConfigUpdate_BadToGood(t *testing.T) {
 // certificate providers are created, and that the NewSubConn() call adds
 // appropriate address attributes.
 func (s) TestGoodSecurityConfig(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
 	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -509,7 +496,7 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, nil, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
@@ -545,14 +532,11 @@ func (s) TestGoodSecurityConfig(t *testing.T) {
 }
 
 func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
 	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -565,7 +549,7 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, nil, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
@@ -598,14 +582,11 @@ func (s) TestSecurityConfigUpdate_GoodToFallback(t *testing.T) {
 // error is forwarded to the EDS balancer (which was created as part of the
 // first successful update).
 func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
 	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -618,7 +599,7 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 	// create a new EDS balancer. The fake EDS balancer created above will be
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, nil, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdateWithGoodSecurityCfg, nil}, wantCCS, edsB); err != nil {
@@ -662,14 +643,11 @@ func (s) TestSecurityConfigUpdate_GoodToBad(t *testing.T) {
 // Verifies that appropriate providers are created, and that address attributes
 // are added.
 func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer which uses xdsCredentials, pushes a
 	// ClientConnState update with a fake xdsClient, and makes sure that the CDS
 	// balancer registers a watch on the provided xdsClient.
 	xdsC, cdsB, edsB, tcc, cancel := setupWithXDSCreds(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -699,7 +677,7 @@ func (s) TestSecurityConfigUpdate_GoodToGood(t *testing.T) {
 			SubjectAltNameMatchers: testSANMatchers,
 		},
 	}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, nil, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {

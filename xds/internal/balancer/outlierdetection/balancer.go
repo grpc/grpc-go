@@ -81,14 +81,14 @@ func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 	if lbCfg.MaxEjectionPercent > 100 {
 		return nil, fmt.Errorf("LBConfig.MaxEjectionPercent = %v; must be <= 100", lbCfg.MaxEjectionPercent)
 	}
-	if lbCfg.SuccessRateEjection != nil && lbCfg.SuccessRateEjection.EnforcingSuccessRate > 100 { // TODO: Switch this name to "EnforcementPercentage"
-		return nil, fmt.Errorf("LBConfig.SuccessRateEjection.EnforcingSuccessRate = %v; must be <= 100", lbCfg.SuccessRateEjection.EnforcingSuccessRate)
+	if lbCfg.SuccessRateEjection != nil && lbCfg.SuccessRateEjection.EnforcementPercentage > 100 {
+		return nil, fmt.Errorf("LBConfig.SuccessRateEjection.EnforcementPercentage = %v; must be <= 100", lbCfg.SuccessRateEjection.EnforcementPercentage)
 	}
 	if lbCfg.FailurePercentageEjection != nil && lbCfg.FailurePercentageEjection.Threshold > 100 {
 		return nil, fmt.Errorf("LBConfig.FailurePercentageEjection.Threshold = %v; must be <= 100", lbCfg.FailurePercentageEjection.Threshold)
 	}
-	if lbCfg.FailurePercentageEjection != nil && lbCfg.FailurePercentageEjection.EnforcingFailurePercentage > 100 { // TODO: Switch this name to "EnforcementPercentage"
-		return nil, fmt.Errorf("LBConfig.FailurePercentageEjection.EnforcingFailurePercentage = %v; must be <= 100", lbCfg.FailurePercentageEjection.EnforcingFailurePercentage)
+	if lbCfg.FailurePercentageEjection != nil && lbCfg.FailurePercentageEjection.EnforcementPercentage > 100 {
+		return nil, fmt.Errorf("LBConfig.FailurePercentageEjection.EnforcementPercentage = %v; must be <= 100", lbCfg.FailurePercentageEjection.EnforcementPercentage)
 	}
 	return lbCfg, nil
 }

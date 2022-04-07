@@ -288,10 +288,10 @@ func outlierDetectionToConfig(od *xdsresource.OutlierDetection) *outlierdetectio
 	var sre *outlierdetection.SuccessRateEjection
 	if od.EnforcingSuccessRate != 0 {
 		sre = &outlierdetection.SuccessRateEjection{
-			StdevFactor:          od.SuccessRateStdevFactor,
-			EnforcingSuccessRate: od.EnforcingSuccessRate,
-			MinimumHosts:         od.SuccessRateMinimumHosts,
-			RequestVolume:        od.SuccessRateRequestVolume,
+			StdevFactor:           od.SuccessRateStdevFactor,
+			EnforcementPercentage: od.EnforcingSuccessRate,
+			MinimumHosts:          od.SuccessRateMinimumHosts,
+			RequestVolume:         od.SuccessRateRequestVolume,
 		}
 	}
 
@@ -301,10 +301,10 @@ func outlierDetectionToConfig(od *xdsresource.OutlierDetection) *outlierdetectio
 	var fpe *outlierdetection.FailurePercentageEjection
 	if od.EnforcingFailurePercentage != 0 {
 		fpe = &outlierdetection.FailurePercentageEjection{
-			Threshold:                  od.FailurePercentageThreshold,
-			EnforcingFailurePercentage: od.EnforcingFailurePercentage,
-			MinimumHosts:               od.FailurePercentageMinimumHosts,
-			RequestVolume:              od.FailurePercentageRequestVolume,
+			Threshold:             od.FailurePercentageThreshold,
+			EnforcementPercentage: od.EnforcingFailurePercentage,
+			MinimumHosts:          od.FailurePercentageMinimumHosts,
+			RequestVolume:         od.FailurePercentageRequestVolume,
 		}
 	}
 

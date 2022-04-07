@@ -427,16 +427,16 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 				MaxEjectionTime:    300 * time.Second,
 				MaxEjectionPercent: 10,
 				SuccessRateEjection: &outlierdetection.SuccessRateEjection{
-					StdevFactor:          1900,
-					EnforcingSuccessRate: 100,
-					MinimumHosts:         5,
-					RequestVolume:        100,
+					StdevFactor:           1900,
+					EnforcementPercentage: 100,
+					MinimumHosts:          5,
+					RequestVolume:         100,
 				},
 				FailurePercentageEjection: &outlierdetection.FailurePercentageEjection{
-					Threshold:                  85,
-					EnforcingFailurePercentage: 5,
-					MinimumHosts:               5,
-					RequestVolume:              50,
+					Threshold:             85,
+					EnforcementPercentage: 5,
+					MinimumHosts:          5,
+					RequestVolume:         50,
 				},
 			}),
 		},
@@ -456,14 +456,11 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 // TestHandleClusterUpdateError covers the cases that an error is returned from
 // the watcher.
 func (s) TestHandleClusterUpdateError(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -509,7 +506,7 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
 	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, nil, nil)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -545,14 +542,11 @@ func (s) TestHandleClusterUpdateError(t *testing.T) {
 
 // TestResolverError verifies the ResolverError() method in the CDS balancer.
 func (s) TestResolverError(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, tcc, cancel := setupWithWatch(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -597,7 +591,7 @@ func (s) TestResolverError(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
 	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, nil, nil)
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
 		t.Fatal(err)
 	}
@@ -631,14 +625,11 @@ func (s) TestResolverError(t *testing.T) {
 // TestUpdateSubConnState verifies the UpdateSubConnState() method in the CDS
 // balancer.
 func (s) TestUpdateSubConnState(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -649,7 +640,7 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
 	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, nil, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -670,14 +661,11 @@ func (s) TestUpdateSubConnState(t *testing.T) {
 // TestCircuitBreaking verifies that the CDS balancer correctly updates a
 // service's counter on watch updates.
 func (s) TestCircuitBreaking(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, _, cancel := setupWithXDSCreds(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -687,7 +675,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	// the service's counter with the new max requests.
 	var maxRequests uint32 = 1
 	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: clusterName, MaxRequests: &maxRequests}
-	wantCCS := edsCCS(clusterName, &maxRequests, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(clusterName, &maxRequests, false, nil, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -708,14 +696,11 @@ func (s) TestCircuitBreaking(t *testing.T) {
 
 // TestClose verifies the Close() method in the the CDS balancer.
 func (s) TestClose(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 	}()
 
@@ -725,7 +710,7 @@ func (s) TestClose(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
 	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, nil, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -781,14 +766,11 @@ func (s) TestClose(t *testing.T) {
 }
 
 func (s) TestExitIdle(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
 	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
 		cancel()
 		cdsB.Close()
 	}()
@@ -799,7 +781,7 @@ func (s) TestExitIdle(t *testing.T) {
 	// returned to the CDS balancer, because we have overridden the
 	// newChildBalancer function as part of test setup.
 	cdsUpdate := xdsresource.ClusterUpdate{ClusterName: serviceName}
-	wantCCS := edsCCS(serviceName, nil, false, nil, noopODLBCfg)
+	wantCCS := edsCCS(serviceName, nil, false, nil, nil)
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer ctxCancel()
 	if err := invokeWatchCbAndWait(ctx, xdsC, cdsWatchInfo{cdsUpdate, nil}, wantCCS, edsB); err != nil {
@@ -909,10 +891,10 @@ func (s) TestOutlierDetectionToConfig(t *testing.T) {
 				MaxEjectionPercent:  10,
 				SuccessRateEjection: nil,
 				FailurePercentageEjection: &outlierdetection.FailurePercentageEjection{
-					Threshold:                  85,
-					EnforcingFailurePercentage: 5,
-					MinimumHosts:               5,
-					RequestVolume:              50,
+					Threshold:             85,
+					EnforcementPercentage: 5,
+					MinimumHosts:          5,
+					RequestVolume:         50,
 				},
 			},
 		},
@@ -941,10 +923,10 @@ func (s) TestOutlierDetectionToConfig(t *testing.T) {
 				MaxEjectionTime:    300 * time.Second,
 				MaxEjectionPercent: 10,
 				SuccessRateEjection: &outlierdetection.SuccessRateEjection{
-					StdevFactor:          1900,
-					EnforcingSuccessRate: 100,
-					MinimumHosts:         5,
-					RequestVolume:        100,
+					StdevFactor:           1900,
+					EnforcementPercentage: 100,
+					MinimumHosts:          5,
+					RequestVolume:         100,
 				},
 				FailurePercentageEjection: nil,
 			},
@@ -971,16 +953,16 @@ func (s) TestOutlierDetectionToConfig(t *testing.T) {
 				MaxEjectionTime:    300 * time.Second,
 				MaxEjectionPercent: 10,
 				SuccessRateEjection: &outlierdetection.SuccessRateEjection{
-					StdevFactor:          1900,
-					EnforcingSuccessRate: 100,
-					MinimumHosts:         5,
-					RequestVolume:        100,
+					StdevFactor:           1900,
+					EnforcementPercentage: 100,
+					MinimumHosts:          5,
+					RequestVolume:         100,
 				},
 				FailurePercentageEjection: &outlierdetection.FailurePercentageEjection{
-					Threshold:                  85,
-					EnforcingFailurePercentage: 5,
-					MinimumHosts:               5,
-					RequestVolume:              50,
+					Threshold:             85,
+					EnforcementPercentage: 5,
+					MinimumHosts:          5,
+					RequestVolume:         50,
 				},
 			},
 		},

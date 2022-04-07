@@ -70,13 +70,13 @@ func (s) TestParseConfig(t *testing.T) {
 				"maxEjectionPercent": 10,
 				"successRateEjection": {
 					"stdevFactor": 1900,
-					"enforcingSuccessRate": 100,
+					"enforcementPercentage": 100,
 					"minimumHosts": 5,
 					"requestVolume": 100
 				},
 				"failurePercentageEjection": {
 					"threshold": 85,
-					"enforcingFailurePercentage": 5,
+					"enforcementPercentage": 5,
 					"minimumHosts": 5,
 					"requestVolume": 50
 				}
@@ -87,16 +87,16 @@ func (s) TestParseConfig(t *testing.T) {
 				MaxEjectionTime:    300 * time.Second,
 				MaxEjectionPercent: 10,
 				SuccessRateEjection: &SuccessRateEjection{
-					StdevFactor:          1900,
-					EnforcingSuccessRate: 100,
-					MinimumHosts:         5,
-					RequestVolume:        100,
+					StdevFactor:           1900,
+					EnforcementPercentage: 100,
+					MinimumHosts:          5,
+					RequestVolume:         100,
 				},
 				FailurePercentageEjection: &FailurePercentageEjection{
-					Threshold:                  85,
-					EnforcingFailurePercentage: 5,
-					MinimumHosts:               5,
-					RequestVolume:              50,
+					Threshold:             85,
+					EnforcementPercentage: 5,
+					MinimumHosts:          5,
+					RequestVolume:         50,
 				},
 			},
 		},
