@@ -52,7 +52,7 @@ import (
 var (
 	// ErrIllegalHeaderWrite indicates that setting header is illegal because of
 	// the stream's state.
-	ErrIllegalHeaderWrite = status.Error(codes.Internal, "transport: the stream is done or WriteHeader was already called")
+	ErrIllegalHeaderWrite = status.Error(codes.Internal, "transport: SendHeader called multiple times")
 	// ErrHeaderListSizeLimitViolation indicates that the header list size is larger
 	// than the limit set by peer.
 	ErrHeaderListSizeLimitViolation = status.Error(codes.Internal, "transport: trying to send header list size larger than the limit set by peer")
@@ -930,14 +930,23 @@ func (t *http2Server) checkForHeaderListSize(it interface{}) bool {
 	return true
 }
 
+func (t *http2Server) streamContextErr(s *Stream) error {
+	select {
+	case <-t.done:
+		return ErrConnClosing
+	default:
+	}
+	return ContextErr(s.ctx.Err())
+}
+
 // WriteHeader sends the header metadata md back to the client.
 func (t *http2Server) WriteHeader(s *Stream, md metadata.MD) error {
-	if s.getState() == streamDone {
-		return ContextErr(s.ctx.Err())
-	}
-
 	if s.updateHeaderSent() {
 		return ErrIllegalHeaderWrite
+	}
+
+	if s.getState() == streamDone {
+		return t.streamContextErr(s)
 	}
 
 	s.hdrMu.Lock()
@@ -1072,13 +1081,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		// Writing headers checks for this condition.
 		if s.getState() == streamDone {
 			// TODO(mmukhi, dfawley): Should the server write also return io.EOF?
-			s.cancel()
-			select {
-			case <-t.done:
-				return ErrConnClosing
-			default:
-			}
-			return ContextErr(s.ctx.Err())
+			return t.streamContextErr(s)
 		}
 	}
 	df := &dataFrame{
@@ -1088,12 +1091,7 @@ func (t *http2Server) Write(s *Stream, hdr []byte, data []byte, opts *Options) e
 		onEachWrite: t.setResetPingStrikes,
 	}
 	if err := s.wq.get(int32(len(hdr) + len(data))); err != nil {
-		select {
-		case <-t.done:
-			return ErrConnClosing
-		default:
-		}
-		return ContextErr(s.ctx.Err())
+		return t.streamContextErr(s)
 	}
 	return t.controlBuf.put(df)
 }
@@ -1254,6 +1252,8 @@ func (t *http2Server) deleteStream(s *Stream, eosReceived bool) {
 
 // finishStream closes the stream and puts the trailing headerFrame into controlbuf.
 func (t *http2Server) finishStream(s *Stream, rst bool, rstCode http2.ErrCode, hdr *headerFrame, eosReceived bool) {
+	s.cancel()
+
 	oldState := s.swapState(streamDone)
 	if oldState == streamDone {
 		// If the stream was already done, return.
