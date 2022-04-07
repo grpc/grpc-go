@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+// Package outlierdetection implements a balancer that implements
+// Outlier Detection.
 package outlierdetection
 
 import (
