@@ -1832,12 +1832,14 @@ func SetHeader(ctx context.Context, md metadata.MD) error {
 	return stream.SetHeader(md)
 }
 
-// SendHeader sends header metadata. It may be called at most once.  The
-// provided md and headers set by SetHeader() will be sent.
+// SendHeader sends header metadata. It may be called at most once, and may not
+// be called after any event that causes headers to be sent (see SetHeader for
+// a complete list).  The provided md and headers set by SetHeader() will be
+// sent.
 //
 // The error returned is compatible with the status package.  However, the
-// status will often not match the status seen by the client application, and
-// therefore, should not be relied upon for this purpose.
+// status code will often not match the RPC status as seen by the client
+// application, and therefore, should not be relied upon for this purpose.
 func SendHeader(ctx context.Context, md metadata.MD) error {
 	stream := ServerTransportStreamFromContext(ctx)
 	if stream == nil {
@@ -1853,8 +1855,8 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 // When called more than once, all the provided metadata will be merged.
 //
 // The error returned is compatible with the status package.  However, the
-// status will often not match the status seen by the client application, and
-// therefore, should not be relied upon for this purpose.
+// status code will often not match the RPC status as seen by the client
+// application, and therefore, should not be relied upon for this purpose.
 func SetTrailer(ctx context.Context, md metadata.MD) error {
 	if md.Len() == 0 {
 		return nil
