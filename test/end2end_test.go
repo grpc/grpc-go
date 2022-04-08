@@ -4964,8 +4964,8 @@ func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 		}
 		if err := stream.SendMsg(nil); err == nil {
 			t.Error("expected error sending message on stream after stream closed due to illegal data")
-		} else if status.Code(err) != codes.Internal {
-			t.Errorf("expected internal error, instead received '%v'", err)
+		} else if status.Code(err) != codes.Canceled {
+			t.Errorf("expected cancel error, instead received '%v'", err)
 		}
 		return nil
 	}}
