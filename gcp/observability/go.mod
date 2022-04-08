@@ -11,4 +11,6 @@ require (
 	google.golang.org/protobuf v1.27.1
 )
 
+// TODO(lidiz) remove the following line when we have a release containing the
+// necessary internal binary logging changes
 replace google.golang.org/grpc => ../../
