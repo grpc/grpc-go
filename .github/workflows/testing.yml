@@ -106,10 +106,12 @@ jobs:
         run: |
           go version
           go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc/...
-          cd ${GITHUB_WORKSPACE}/security/advancedtls && go test ${{ matrix.testflags }} -timeout 2m google.golang.org/grpc/security/advancedtls/...
-          cd ${GITHUB_WORKSPACE}/security/authorization && go test ${{ matrix.testflags }} -timeout 2m google.golang.org/grpc/security/authorization/...
-          cd ${GITHUB_WORKSPACE}/gcp/observability && go test ${{ matrix.testflags }} -timeout 2m google.golang.org/grpc/gcp/observability/...
-
+          cd "${GITHUB_WORKSPACE}"
+          for MOD_FILE in $(find . -name 'go.mod' | grep -v './go.mod'); do
+            pushd "$(dirname ${MOD_FILE})"
+            go test ${{ matrix.testflags }} -timeout 2m ./...
+            popd
+          done
 
       # Non-core gRPC tests (examples, interop, etc)
       - name: Run extras tests
