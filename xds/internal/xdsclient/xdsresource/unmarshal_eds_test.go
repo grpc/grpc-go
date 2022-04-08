@@ -65,6 +65,17 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "duplicate-locality-in-the-same-priority",
+			m: func() *v3endpointpb.ClusterLoadAssignment {
+				clab0 := newClaBuilder("test", nil)
+				clab0.addLocality("locality-0", 1, 0, []string{"addr1:314"}, nil)
+				clab0.addLocality("locality-0", 1, 0, []string{"addr1:314"}, nil) // Duplicate locality with the same priority.
+				return clab0.Build()
+			}(),
+			want:    EndpointsUpdate{},
+			wantErr: true,
+		},
+		{
 			name: "good",
 			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
@@ -98,6 +109,48 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 							Weight:       828,
 						}},
 						ID:       internal.LocalityID{SubZone: "locality-2"},
+						Priority: 0,
+						Weight:   1,
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "good duplicate locality with different priority",
+			m: func() *v3endpointpb.ClusterLoadAssignment {
+				clab0 := newClaBuilder("test", nil)
+				clab0.addLocality("locality-1", 1, 1, []string{"addr1:314"}, &addLocalityOptions{
+					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
+					Weight: []uint32{271},
+				})
+				// Same locality name, but with different priority.
+				clab0.addLocality("locality-1", 1, 0, []string{"addr2:159"}, &addLocalityOptions{
+					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_DRAINING},
+					Weight: []uint32{828},
+				})
+				return clab0.Build()
+			}(),
+			want: EndpointsUpdate{
+				Drops: nil,
+				Localities: []Locality{
+					{
+						Endpoints: []Endpoint{{
+							Address:      "addr1:314",
+							HealthStatus: EndpointHealthStatusUnhealthy,
+							Weight:       271,
+						}},
+						ID:       internal.LocalityID{SubZone: "locality-1"},
+						Priority: 1,
+						Weight:   1,
+					},
+					{
+						Endpoints: []Endpoint{{
+							Address:      "addr2:159",
+							HealthStatus: EndpointHealthStatusDraining,
+							Weight:       828,
+						}},
+						ID:       internal.LocalityID{SubZone: "locality-1"},
 						Priority: 0,
 						Weight:   1,
 					},
