@@ -1371,9 +1371,9 @@ func (as *addrConnStream) finish(err error) {
 // ServerStream defines the server-side behavior of a streaming RPC.
 //
 // Errors returned from ServerStream methods are compatible with the status
-// package.  However, the status will often not match the status seen by the
-// client application, and therefore, should not be relied upon for this
-// purpose.
+// package.  However, the status code will often not match the RPC status as
+// seen by the client application, and therefore, should not be relied upon for
+// this purpose.
 type ServerStream interface {
 	// SetHeader sets the header metadata. It may be called multiple times.
 	// When call multiple times, all the provided metadata will be merged.
