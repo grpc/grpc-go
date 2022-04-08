@@ -1816,11 +1816,11 @@ func (s *Server) getCodec(contentSubtype string) baseCodec {
 // - An RPC status is sent out (error or success).  This occurs when the handler
 //   returns.
 //
-// SetHeader will fail if called after any of these events.
+// SetHeader will fail if called after any of the events above.
 //
 // The error returned is compatible with the status package.  However, the
-// status will often not match the status seen by the client application, and
-// therefore, should not be relied upon for this purpose.
+// status code will often not match the RPC status as seen by the client
+// application, and therefore, should not be relied upon for this purpose.
 func SetHeader(ctx context.Context, md metadata.MD) error {
 	if md.Len() == 0 {
 		return nil
