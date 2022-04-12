@@ -25,7 +25,7 @@ import (
 	"os"
 
 	gcplogging "cloud.google.com/go/logging"
-	grpclogrecordpb "google.golang.org/grpc/observability/internal/logging"
+	grpclogrecordpb "google.golang.org/grpc/gcp/observability/internal/logging"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
