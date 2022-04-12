@@ -29,8 +29,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	_ "google.golang.org/grpc/balancer/grpclb"
-	_ "google.golang.org/grpc/balancer/rls"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/credentials/google"
@@ -40,7 +38,10 @@ import (
 	"google.golang.org/grpc/interop"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
-	_ "google.golang.org/grpc/xds/googledirectpath"
+
+	_ "google.golang.org/grpc/balancer/grpclb"      // Register the grpclb load balancing policy.
+	_ "google.golang.org/grpc/balancer/rls"         // Register the RLS load balancing policy.
+	_ "google.golang.org/grpc/xds/googledirectpath" // Register xDS resolver required for c2p directpath.
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
