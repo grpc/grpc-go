@@ -36,29 +36,29 @@ func (s) TestNewLoggerFromConfigString(t *testing.T) {
 	c := fmt.Sprintf("*{h:1;m:2},%s{h},%s{m},%s{h;m}", s1+"/*", fullM1, fullM2)
 	l := NewLoggerFromConfigString(c).(*logger)
 
-	if l.all.hdr != 1 || l.all.msg != 2 {
-		t.Errorf("l.all = %#v, want headerLen: 1, messageLen: 2", l.all)
+	if l.config.All.Header != 1 || l.config.All.Message != 2 {
+		t.Errorf("l.config.All = %#v, want headerLen: 1, messageLen: 2", l.config.All)
 	}
 
-	if ml, ok := l.services[s1]; ok {
-		if ml.hdr != maxUInt || ml.msg != 0 {
-			t.Errorf("want maxUInt header, 0 message, got header: %v, message: %v", ml.hdr, ml.msg)
+	if ml, ok := l.config.Services[s1]; ok {
+		if ml.Header != maxUInt || ml.Message != 0 {
+			t.Errorf("want maxUInt header, 0 message, got header: %v, message: %v", ml.Header, ml.Message)
 		}
 	} else {
 		t.Errorf("service/* is not set")
 	}
 
-	if ml, ok := l.methods[fullM1]; ok {
-		if ml.hdr != 0 || ml.msg != maxUInt {
-			t.Errorf("want 0 header, maxUInt message, got header: %v, message: %v", ml.hdr, ml.msg)
+	if ml, ok := l.config.Methods[fullM1]; ok {
+		if ml.Header != 0 || ml.Message != maxUInt {
+			t.Errorf("want 0 header, maxUInt message, got header: %v, message: %v", ml.Header, ml.Message)
 		}
 	} else {
 		t.Errorf("service/method{h} is not set")
 	}
 
-	if ml, ok := l.methods[fullM2]; ok {
-		if ml.hdr != maxUInt || ml.msg != maxUInt {
-			t.Errorf("want maxUInt header, maxUInt message, got header: %v, message: %v", ml.hdr, ml.msg)
+	if ml, ok := l.config.Methods[fullM2]; ok {
+		if ml.Header != maxUInt || ml.Message != maxUInt {
+			t.Errorf("want maxUInt header, maxUInt message, got header: %v, message: %v", ml.Header, ml.Message)
 		}
 	} else {
 		t.Errorf("service/method{h;m} is not set")
@@ -249,7 +249,7 @@ func (s) TestFillMethodLoggerWithConfigStringBlacklist(t *testing.T) {
 			t.Errorf("returned err %v, want nil", err)
 			continue
 		}
-		_, ok := l.blacklist[tc]
+		_, ok := l.config.Blacklist[tc]
 		if !ok {
 			t.Errorf("blacklist[%q] is not set", tc)
 		}
@@ -306,15 +306,15 @@ func (s) TestFillMethodLoggerWithConfigStringGlobal(t *testing.T) {
 			t.Errorf("returned err %v, want nil", err)
 			continue
 		}
-		if l.all == nil {
-			t.Errorf("l.all is not set")
+		if l.config.All == nil {
+			t.Errorf("l.config.All is not set")
 			continue
 		}
-		if hdr := l.all.hdr; hdr != tc.hdr {
+		if hdr := l.config.All.Header; hdr != tc.hdr {
 			t.Errorf("header length = %v, want %v", hdr, tc.hdr)
 
 		}
-		if msg := l.all.msg; msg != tc.msg {
+		if msg := l.config.All.Message; msg != tc.msg {
 			t.Errorf("message length = %v, want %v", msg, tc.msg)
 		}
 	}
@@ -371,16 +371,16 @@ func (s) TestFillMethodLoggerWithConfigStringPerService(t *testing.T) {
 			t.Errorf("returned err %v, want nil", err)
 			continue
 		}
-		ml, ok := l.services[serviceName]
+		ml, ok := l.config.Services[serviceName]
 		if !ok {
 			t.Errorf("l.service[%q] is not set", serviceName)
 			continue
 		}
-		if hdr := ml.hdr; hdr != tc.hdr {
+		if hdr := ml.Header; hdr != tc.hdr {
 			t.Errorf("header length = %v, want %v", hdr, tc.hdr)
 
 		}
-		if msg := ml.msg; msg != tc.msg {
+		if msg := ml.Message; msg != tc.msg {
 			t.Errorf("message length = %v, want %v", msg, tc.msg)
 		}
 	}
@@ -441,16 +441,16 @@ func (s) TestFillMethodLoggerWithConfigStringPerMethod(t *testing.T) {
 			t.Errorf("returned err %v, want nil", err)
 			continue
 		}
-		ml, ok := l.methods[fullMethodName]
+		ml, ok := l.config.Methods[fullMethodName]
 		if !ok {
-			t.Errorf("l.methods[%q] is not set", fullMethodName)
+			t.Errorf("l.config.Methods[%q] is not set", fullMethodName)
 			continue
 		}
-		if hdr := ml.hdr; hdr != tc.hdr {
+		if hdr := ml.Header; hdr != tc.hdr {
 			t.Errorf("header length = %v, want %v", hdr, tc.hdr)
 
 		}
-		if msg := ml.msg; msg != tc.msg {
+		if msg := ml.Message; msg != tc.msg {
 			t.Errorf("message length = %v, want %v", msg, tc.msg)
 		}
 	}

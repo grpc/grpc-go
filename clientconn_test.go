@@ -40,8 +40,17 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/testdata"
 )
+
+func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
+	scpr := r.CC.ParseServiceConfig(s)
+	if scpr.Err != nil {
+		panic(fmt.Sprintf("Error parsing config %q: %v", s, scpr.Err))
+	}
+	return scpr
+}
 
 func (s) TestDialWithTimeout(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -836,9 +845,13 @@ func (s) TestBackoffCancel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
 	}
-	<-dialStrCh
-	cc.Close()
-	// Should not leak. May need -count 5000 to exercise.
+	defer cc.Close()
+
+	select {
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout when waiting for custom dialer to be invoked during Dial")
+	case <-dialStrCh:
+	}
 }
 
 // UpdateAddresses should cause the next reconnect to begin from the top of the

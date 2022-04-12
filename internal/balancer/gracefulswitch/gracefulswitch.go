@@ -178,6 +178,9 @@ func (gsb *Balancer) ResolverError(err error) {
 }
 
 // ExitIdle forwards the call to the latest balancer created.
+//
+// If the latest balancer does not support ExitIdle, the subConns are
+// re-connected to manually.
 func (gsb *Balancer) ExitIdle() {
 	balToUpdate := gsb.latestBalancer()
 	if balToUpdate == nil {
@@ -188,6 +191,10 @@ func (gsb *Balancer) ExitIdle() {
 	// called.
 	if ei, ok := balToUpdate.Balancer.(balancer.ExitIdler); ok {
 		ei.ExitIdle()
+		return
+	}
+	for sc := range balToUpdate.subconns {
+		sc.Connect()
 	}
 }
 

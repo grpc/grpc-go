@@ -55,6 +55,7 @@ func main() {
 	if err != nil {
 		logger.Fatalf("failed to listen: %v", err)
 	}
+	logger.Infof("interop server listening on %v", lis.Addr())
 	var opts []grpc.ServerOption
 	if *useTLS {
 		if *certFile == "" {

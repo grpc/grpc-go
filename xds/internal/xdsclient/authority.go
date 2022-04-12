@@ -108,7 +108,7 @@ func (c *clientImpl) newAuthority(config *bootstrap.ServerConfig) (_ *authority,
 			ret.close()
 		}
 	}()
-	ctr, err := newController(config, ret.pubsub, c.updateValidator, c.logger)
+	ctr, err := newController(config, ret.pubsub, c.updateValidator, c.logger, nil)
 	if err != nil {
 		return nil, err
 	}

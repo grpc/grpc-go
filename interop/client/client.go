@@ -108,6 +108,7 @@ const (
 
 func main() {
 	flag.Parse()
+	logger.Infof("Client running with test case %q", *testCase)
 	var useGDC bool // use google default creds
 	var useCEC bool // use compute engine creds
 	if *customCredentialsType != "" {
