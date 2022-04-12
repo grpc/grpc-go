@@ -27,9 +27,9 @@ import (
 
 	"github.com/google/uuid"
 	binlogpb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
+	configpb "google.golang.org/grpc/gcp/observability/internal/config"
+	grpclogrecordpb "google.golang.org/grpc/gcp/observability/internal/logging"
 	iblog "google.golang.org/grpc/internal/binarylog"
-	configpb "google.golang.org/grpc/observability/internal/config"
-	grpclogrecordpb "google.golang.org/grpc/observability/internal/logging"
 )
 
 // translateMetadata translates the metadata from Binary Logging format to
@@ -203,7 +203,7 @@ func (l *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
 	// we batch up the uploads in the exporting RPC, the message content of that
 	// RPC will be logged. Without this exclusion, we may end up with an ever
 	// expanding message field in log entries, and crash the process with OOM.
-	if methodName == "google.logging.v2.LoggingServiceV2/WriteLogEntries" {
+	if methodName == "/google.logging.v2.LoggingServiceV2/WriteLogEntries" {
 		return ol
 	}
 
