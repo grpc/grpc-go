@@ -26,7 +26,7 @@ import (
 
 	gcplogging "cloud.google.com/go/logging"
 	"golang.org/x/oauth2/google"
-	configpb "google.golang.org/grpc/observability/internal/config"
+	configpb "google.golang.org/grpc/gcp/observability/internal/config"
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
