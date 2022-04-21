@@ -890,6 +890,49 @@ func (s) TestIgnoreDups(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for the cluster update to be written to the update buffer.")
 	}
-}
 
-// TODO: test set building and **deleting**
+	// The next section tests that the cluster handler component correctly keeps
+	// track of the clusters created. Once C is deleted, when an aggregate
+	// cluster then has C as a child, it should not ignore it anymore.
+
+	// Delete C by updating A with only child B.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
+		ClusterName:             "clusterA",
+		PrioritizedClusterNames: []string{"clusterB"},
+	}, nil)
+	fakeClient.WaitForCancelClusterWatch(ctx)
+
+	// Update B with C and D as children. Due to cluster C having been deleted,
+	// this should cause clusterC to be recreated as it is not part of the
+	// aggregate cluster graph anymore.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
+		ClusterName:             "clusterB",
+		PrioritizedClusterNames: []string{"clusterC", "clusterD"},
+	}, nil)
+
+	// should cause a watch to be started for cluster C.
+	fakeClient.WaitForWatchCluster(ctx)
+
+	// update C, should cause full update to be written.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeEDS,
+		ClusterName: "clusterC",
+	}, nil)
+
+	select {
+	case chu := <-ch.updateChannel:
+		if diff := cmp.Diff(chu.updates, []xdsresource.ClusterUpdate{{
+			ClusterType: xdsresource.ClusterTypeEDS,
+			ClusterName: "clusterC",
+		}, {
+			ClusterType: xdsresource.ClusterTypeEDS,
+			ClusterName: "clusterD",
+		}}); diff != "" {
+			t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for the cluster update to be written to the update buffer.")
+	}
+}
