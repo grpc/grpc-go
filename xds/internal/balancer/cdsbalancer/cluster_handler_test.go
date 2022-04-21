@@ -19,6 +19,7 @@ package cdsbalancer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -683,3 +684,212 @@ func (s) TestSwitchClusterNodeBetweenLeafAndAggregated(t *testing.T) {
 		t.Fatal("Timed out waiting for update from update channel.")
 	}
 }
+
+// TestExceedsMaxStackDepth tests the scenario where an aggregate cluster
+// exceeds the maximum depth, which is 16. This should cause an error to be
+// written to the update buffer.
+func (s) TestExceedsMaxStackDepth(t *testing.T) {
+	ch, fakeClient := setupTests()
+	ch.updateRootCluster("cluster0")
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err := fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+
+	for i := 0; i <= 15; i++ {
+		fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+			ClusterType:             xdsresource.ClusterTypeAggregate,
+			ClusterName:             "cluster" + fmt.Sprint(i),
+			PrioritizedClusterNames: []string{"cluster" + fmt.Sprint(i+1)},
+		}, nil)
+		if i == 15 {
+			// The 16th iteration will try and create a cluster which exceeds
+			// max stack depth and will thus error, so no CDS Watch will be
+			// started for the child.
+			continue
+		}
+		_, err = fakeClient.WaitForWatchCluster(ctx)
+		if err != nil {
+			t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+		}
+	}
+	select {
+	case chu := <-ch.updateChannel:
+		if chu.err.Error() != "aggregate cluster graph exceeds max depth" {
+			t.Fatalf("Did not receive the expected error, instead received: %v", chu.err.Error())
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for an error to be written to update channel.")
+	}
+}
+
+// TestDiamondDependency tests a diamond shaped aggregate cluster (A->[B,C];
+// B->D; C->D). Due to both B and C pointing to D as it's child, it should be
+// ignored for C. Once all 4 clusters have received a CDS update, an update
+// should be then written to the update buffer, specifying a single Cluster D.
+func (s) TestDiamondDependency(t *testing.T) {
+	ch, fakeClient := setupTests()
+	ch.updateRootCluster("clusterA")
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err := fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
+		ClusterName:             "clusterA",
+		PrioritizedClusterNames: []string{"clusterB", "clusterC"},
+	}, nil)
+	// Two watches should be started for both child clusters.
+	_, err = fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	_, err = fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	// B -> D.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
+		ClusterName:             "clusterB",
+		PrioritizedClusterNames: []string{"clusterD"},
+	}, nil)
+	_, err = fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+
+	// This shouldn't cause an update to be written to the update buffer,
+	// as cluster C has not received a cluster update yet.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeEDS,
+		ClusterName: "clusterD",
+	}, nil)
+
+	sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	select {
+	case <-ch.updateChannel:
+		t.Fatal("an update should not have been written to the update buffer")
+	case <-sCtx.Done():
+	}
+
+	// This update for C should cause an update to be written to the update
+	// buffer. When you search this aggregated cluster graph, each node has
+	// received an update. This update should only contain one clusterD, as
+	// clusterC does not create a clusterD child due to clusterD already have
+	// been created as a child of clusterB.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
+		ClusterName:             "clusterC",
+		PrioritizedClusterNames: []string{"clusterD"},
+	}, nil)
+
+	select {
+	case chu := <-ch.updateChannel:
+		if diff := cmp.Diff(chu.updates, []xdsresource.ClusterUpdate{{
+			ClusterType: xdsresource.ClusterTypeEDS,
+			ClusterName: "clusterD",
+		}}); diff != "" {
+			t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for the cluster update to be written to the update buffer.")
+	}
+	// cleanup, send out PR, then try and think of more test cases on top of it
+}
+
+// TestIgnoreDups tests the cluster (A->[B, C]; B->[C, D]). Due to both A and B
+// having C as it's child, B should ignore C as a child. The update written to
+// the update buffer should only contain one instance of cluster C.
+func (s) TestIgnoreDups(t *testing.T) {
+	ch, fakeClient := setupTests()
+	ch.updateRootCluster("clusterA")
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err := fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
+		ClusterName:             "clusterA",
+		PrioritizedClusterNames: []string{"clusterB", "clusterC"},
+	}, nil)
+	// Two watches should be started for each child cluster.
+	_, err = fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	_, err = fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	// The child cluster C should be silently ignored, as it is already part of
+	// the aggregate cluster graph as the child of the root cluster clusterA.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
+		ClusterName:             "clusterB",
+		PrioritizedClusterNames: []string{"clusterC", "clusterD"},
+	}, nil)
+	// Only one watch should be started, which is for clusterD.
+	// verify _ is clusterD
+	name, err := fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	if name != "clusterD" {
+		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: clusterD", name)
+	}
+
+	sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	if _, err = fakeClient.WaitForWatchCluster(sCtx); err == nil {
+		t.Fatalf("only one watch should have been started for the children of clusterB")
+	}
+
+	// This update should not cause an update to be written to the update
+	// buffer, as each cluster in the tree has not yet received a cluster
+	// update. With cluster B ignoring cluster C, the system should function as
+	// if cluster C was not a child of cluster B (meaning all 4 clusters should
+	// be required to get an update).
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeEDS,
+		ClusterName: "clusterC",
+	}, nil)
+	sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	select {
+	case <-ch.updateChannel:
+		t.Fatal("an update should not have been written to the update buffer")
+	case <-sCtx.Done():
+	}
+
+	// This update causes all 4 clusters in the aggregated cluster graph to have
+	// received an update, so an update should be written to the update buffer
+	// with only a single occurrence of cluster C.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeEDS,
+		ClusterName: "clusterD",
+	}, nil)
+	select {
+	case chu := <-ch.updateChannel:
+		if diff := cmp.Diff(chu.updates, []xdsresource.ClusterUpdate{{
+			ClusterType: xdsresource.ClusterTypeEDS,
+			ClusterName: "clusterD",
+		}, {
+			ClusterType: xdsresource.ClusterTypeEDS,
+			ClusterName: "clusterC",
+		}}); diff != "" {
+			t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for the cluster update to be written to the update buffer.")
+	}
+}
+
+// TODO: test set building and **deleting**

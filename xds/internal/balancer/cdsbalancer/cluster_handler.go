@@ -24,6 +24,8 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
+const maxDepth = 16
+
 var errNotReceivedUpdate = errors.New("tried to construct a cluster update on a cluster that has not received an update")
 
 // clusterHandlerUpdate wraps the information received from the registered CDS
@@ -57,6 +59,9 @@ type clusterHandler struct {
 	root            *clusterNode
 	rootClusterName string
 
+	// To ignore any duplicate clusters.
+	createdClusters map[string]bool
+
 	// A way to ping CDS Balancer about any updates or errors to a Node in the
 	// tree. This will either get called from this handler constructing an
 	// update or from a child with an error. Capacity of one as the only update
@@ -66,8 +71,9 @@ type clusterHandler struct {
 
 func newClusterHandler(parent *cdsBalancer) *clusterHandler {
 	return &clusterHandler{
-		parent:        parent,
-		updateChannel: make(chan clusterHandlerUpdate, 1),
+		parent:          parent,
+		updateChannel:   make(chan clusterHandlerUpdate, 1),
+		createdClusters: make(map[string]bool),
 	}
 }
 
@@ -76,7 +82,7 @@ func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
 	defer ch.clusterMutex.Unlock()
 	if ch.root == nil {
 		// Construct a root node on first update.
-		ch.root = createClusterNode(rootClusterName, ch.parent.xdsClient, ch)
+		ch.root = createClusterNode(rootClusterName, ch.parent.xdsClient, ch, 0)
 		ch.rootClusterName = rootClusterName
 		return
 	}
@@ -84,7 +90,7 @@ func (ch *clusterHandler) updateRootCluster(rootClusterName string) {
 	// new one, if not do nothing.
 	if rootClusterName != ch.rootClusterName {
 		ch.root.delete()
-		ch.root = createClusterNode(rootClusterName, ch.parent.xdsClient, ch)
+		ch.root = createClusterNode(rootClusterName, ch.parent.xdsClient, ch, 0)
 		ch.rootClusterName = rootClusterName
 	}
 }
@@ -149,13 +155,27 @@ type clusterNode struct {
 	receivedUpdate bool
 
 	clusterHandler *clusterHandler
+
+	depth int
 }
 
 // CreateClusterNode creates a cluster node from a given clusterName. This will
 // also start the watch for that cluster.
-func createClusterNode(clusterName string, xdsClient xdsclient.XDSClient, topLevelHandler *clusterHandler) *clusterNode {
+func createClusterNode(clusterName string, xdsClient xdsclient.XDSClient, topLevelHandler *clusterHandler, depth int) *clusterNode {
+	if depth >= maxDepth {
+		// For a ClusterUpdate, the only update CDS cares about is the most
+		// recent one, so opportunistically drain the update channel before
+		// sending the new update.
+		select {
+		case <-topLevelHandler.updateChannel:
+		default:
+		}
+		topLevelHandler.updateChannel <- clusterHandlerUpdate{err: errors.New("aggregate cluster graph exceeds max depth")}
+		return nil // ** What do we do in the error case again? If this returns nil, error, handle it a certain way
+	}
 	c := &clusterNode{
 		clusterHandler: topLevelHandler,
+		depth:          depth,
 	}
 	// Communicate with the xds client here.
 	topLevelHandler.parent.logger.Infof("CDS watch started on %v", clusterName)
@@ -164,6 +184,7 @@ func createClusterNode(clusterName string, xdsClient xdsclient.XDSClient, topLev
 		topLevelHandler.parent.logger.Infof("CDS watch canceled on %v", clusterName)
 		cancel()
 	}
+	topLevelHandler.createdClusters[clusterName] = true
 	return c
 }
 
@@ -171,6 +192,7 @@ func createClusterNode(clusterName string, xdsClient xdsclient.XDSClient, topLev
 // children.
 func (c *clusterNode) delete() {
 	c.cancelFunc()
+	delete(c.clusterHandler.createdClusters, c.clusterUpdate.ClusterName)
 	for _, child := range c.children {
 		child.delete()
 	}
@@ -261,7 +283,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsresource.ClusterUpdate, err er
 	// the update to build (ex. if a child is created and a watch is started,
 	// that child hasn't received an update yet due to the mutex lock on this
 	// callback).
-	var createdChild, deletedChild bool
+	var createdChild bool
 
 	// This map will represent the current children of the cluster. It will be
 	// first added to in order to represent the new children. It will then have
@@ -275,15 +297,27 @@ func (c *clusterNode) handleResp(clusterUpdate xdsresource.ClusterUpdate, err er
 	// Add and construct any new child nodes.
 	for child := range newChildren {
 		if _, inChildrenAlready := mapCurrentChildren[child]; !inChildrenAlready {
-			createdChild = true
-			mapCurrentChildren[child] = createClusterNode(child, c.clusterHandler.parent.xdsClient, c.clusterHandler)
+			// Ignore any duplicated cluster. The subsequent aggregate cluster
+			// and this components handling of it will be as if the child did
+			// not exist at all.
+			if !c.clusterHandler.createdClusters[child] {
+				createdChild = true
+				mapCurrentChildren[child] = createClusterNode(child, c.clusterHandler.parent.xdsClient, c.clusterHandler, c.depth+1)
+				continue
+			}
+			for i, name := range clusterUpdate.PrioritizedClusterNames {
+				if name == child {
+					clusterUpdate.PrioritizedClusterNames = append(clusterUpdate.PrioritizedClusterNames[:i], clusterUpdate.PrioritizedClusterNames[i+1:]...)
+					break
+				}
+			}
+			delete(newChildren, child)
 		}
 	}
 
 	// Delete any child nodes no longer in the aggregate cluster's children.
 	for child := range mapCurrentChildren {
 		if _, stillAChild := newChildren[child]; !stillAChild {
-			deletedChild = true
 			mapCurrentChildren[child].delete()
 			delete(mapCurrentChildren, child)
 		}
@@ -309,11 +343,11 @@ func (c *clusterNode) handleResp(clusterUpdate xdsresource.ClusterUpdate, err er
 	// If the cluster is an aggregate cluster, if this callback created any new
 	// child cluster nodes, then there's no possibility for a full cluster
 	// update to successfully build, as those created children will not have
-	// received an update yet. However, if there was simply a child deleted,
-	// then there is a possibility that it will have a full cluster update to
-	// build and also will have a changed overall cluster update from the
-	// deleted child.
-	if deletedChild && !createdChild {
+	// received an update yet. Even if this update did not delete a child, there
+	// is still a possibility for the cluster update to build, as the aggregate
+	// cluster can ignore duplicated children and thus the update can fill out
+	// the full cluster update tree.
+	if !createdChild {
 		c.clusterHandler.constructClusterUpdate()
 	}
 }
