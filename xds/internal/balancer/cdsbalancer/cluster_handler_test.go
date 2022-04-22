@@ -781,8 +781,8 @@ func (s) TestDiamondDependency(t *testing.T) {
 	// This update for C should cause an update to be written to the update
 	// buffer. When you search this aggregated cluster graph, each node has
 	// received an update. This update should only contain one clusterD, as
-	// clusterC does not create a clusterD child due to clusterD already have
-	// been created as a child of clusterB.
+	// clusterC does not add a clusterD child update due to the clusterD update
+	// already having been added as a child of clusterB.
 	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
 		ClusterType:             xdsresource.ClusterTypeAggregate,
 		ClusterName:             "clusterC",
@@ -800,12 +800,12 @@ func (s) TestDiamondDependency(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("Timed out waiting for the cluster update to be written to the update buffer.")
 	}
-	// cleanup, send out PR, then try and think of more test cases on top of it
 }
 
-// TestIgnoreDups tests the cluster (A->[B, C]; B->[C, D]). Due to both A and B
-// having C as it's child, B should ignore C as a child. The update written to
-// the update buffer should only contain one instance of cluster C.
+// TestIgnoreDups tests the cluster (A->[B, C]; B->[C, D]). Only one watch
+// should be started for cluster C. The update written to the update buffer
+// should only contain one instance of cluster C correctly as a higher priority
+// than D.
 func (s) TestIgnoreDups(t *testing.T) {
 	ch, fakeClient := setupTests()
 	ch.updateRootCluster("clusterA")
@@ -820,7 +820,7 @@ func (s) TestIgnoreDups(t *testing.T) {
 		ClusterName:             "clusterA",
 		PrioritizedClusterNames: []string{"clusterB", "clusterC"},
 	}, nil)
-	// Two watches should be started for each child cluster.
+	// Two watches should be started, one for each child cluster.
 	_, err = fakeClient.WaitForWatchCluster(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
@@ -829,15 +829,15 @@ func (s) TestIgnoreDups(t *testing.T) {
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
 	}
-	// The child cluster C should be silently ignored, as it is already part of
-	// the aggregate cluster graph as the child of the root cluster clusterA.
+	// The child cluster C should not have a watch started for it, as it is
+	// already part of the aggregate cluster graph as the child of the root
+	// cluster clusterA and has already had a watch started for it.
 	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
 		ClusterType:             xdsresource.ClusterTypeAggregate,
 		ClusterName:             "clusterB",
 		PrioritizedClusterNames: []string{"clusterC", "clusterD"},
 	}, nil)
-	// Only one watch should be started, which is for clusterD.
-	// verify _ is clusterD
+	// Only one watch should be started, which should be for clusterD.
 	name, err := fakeClient.WaitForWatchCluster(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
@@ -871,7 +871,8 @@ func (s) TestIgnoreDups(t *testing.T) {
 
 	// This update causes all 4 clusters in the aggregated cluster graph to have
 	// received an update, so an update should be written to the update buffer
-	// with only a single occurrence of cluster C.
+	// with only a single occurrence of cluster C as a higher priority than
+	// cluster D.
 	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
 		ClusterType: xdsresource.ClusterTypeEDS,
 		ClusterName: "clusterD",
@@ -880,10 +881,10 @@ func (s) TestIgnoreDups(t *testing.T) {
 	case chu := <-ch.updateChannel:
 		if diff := cmp.Diff(chu.updates, []xdsresource.ClusterUpdate{{
 			ClusterType: xdsresource.ClusterTypeEDS,
-			ClusterName: "clusterD",
+			ClusterName: "clusterC",
 		}, {
 			ClusterType: xdsresource.ClusterTypeEDS,
-			ClusterName: "clusterC",
+			ClusterName: "clusterD",
 		}}); diff != "" {
 			t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
 		}
@@ -891,34 +892,13 @@ func (s) TestIgnoreDups(t *testing.T) {
 		t.Fatal("Timed out waiting for the cluster update to be written to the update buffer.")
 	}
 
-	// The next section tests that the cluster handler component correctly keeps
-	// track of the clusters created. Once C is deleted, when an aggregate
-	// cluster then has C as a child, it should not ignore it anymore.
-
-	// Delete C by updating A with only child B.
+	// Delete A's ref to C by updating A with only child B. Since B still has a
+	// reference to C, C's watch should not be canceled, and also an update
+	// should correctly be built.
 	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
 		ClusterType:             xdsresource.ClusterTypeAggregate,
 		ClusterName:             "clusterA",
 		PrioritizedClusterNames: []string{"clusterB"},
-	}, nil)
-	fakeClient.WaitForCancelClusterWatch(ctx)
-
-	// Update B with C and D as children. Due to cluster C having been deleted,
-	// this should cause clusterC to be recreated as it is not part of the
-	// aggregate cluster graph anymore.
-	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
-		ClusterType:             xdsresource.ClusterTypeAggregate,
-		ClusterName:             "clusterB",
-		PrioritizedClusterNames: []string{"clusterC", "clusterD"},
-	}, nil)
-
-	// should cause a watch to be started for cluster C.
-	fakeClient.WaitForWatchCluster(ctx)
-
-	// update C, should cause full update to be written.
-	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
-		ClusterType: xdsresource.ClusterTypeEDS,
-		ClusterName: "clusterC",
 	}, nil)
 
 	select {
