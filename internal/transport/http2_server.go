@@ -454,27 +454,21 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return false
 	}
 
+	if parserError != nil {
+		t.controlBuf.put(&earlyAbortStream{
+			httpStatus:     400,
+			streamID:       streamID,
+			contentSubtype: s.contentSubtype,
+			status:         status.Newf(codes.Internal, "transport: http2Server.operateHeaders failed parse headers: %v", parserError),
+		})
+		return false
+	}
+
 	if !isGRPC || headerError {
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
 			rst:      true,
 			rstCode:  http2.ErrCodeProtocol,
-			onWrite:  func() {},
-		})
-		return false
-	}
-
-	if parserError != nil {
-		if err := t.WriteStatus(
-			s,
-			status.Newf(codes.Internal, "transport: http2Server.operateHeaders failed parse headers: %v", parserError),
-		); err != nil && logger.V(logLevel) {
-			logger.Infof("transport: http2Server.operateHeaders failed to write status %v", err)
-		}
-		t.controlBuf.put(&cleanupStream{
-			streamID: streamID,
-			rst:      true,
-			rstCode:  http2.ErrCodeInternal,
 			onWrite:  func() {},
 		})
 		return false

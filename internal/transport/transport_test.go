@@ -1688,14 +1688,13 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 // TestHeadersCausingStreamError tests headers that should cause a stream protocol
 // error, which would end up with a RST_STREAM being sent to the client and also
 // the server closing the stream.
-func (s) TestHeadersCausingResetStream(t *testing.T) {
+func (s) TestHeadersCausingStreamError(t *testing.T) {
 	tests := []struct {
 		name    string
 		headers []struct {
 			name   string
 			values []string
 		}
-		err http2.ErrCode
 	}{
 		// If the client sends an HTTP/2 request with a :method header with a
 		// value other than POST, as specified in the gRPC over HTTP/2
@@ -1711,7 +1710,6 @@ func (s) TestHeadersCausingResetStream(t *testing.T) {
 				{name: ":authority", values: []string{"localhost"}},
 				{name: "content-type", values: []string{"application/grpc"}},
 			},
-			err: http2.ErrCodeProtocol,
 		},
 		// "Transports must consider requests containing the Connection header
 		// as malformed" - A41 Malformed requests map to a stream error of type
@@ -1728,7 +1726,6 @@ func (s) TestHeadersCausingResetStream(t *testing.T) {
 				{name: "content-type", values: []string{"application/grpc"}},
 				{name: "connection", values: []string{"not-supported"}},
 			},
-			err: http2.ErrCodeProtocol,
 		},
 		// multiple :authority or multiple Host headers would make the eventual
 		// :authority ambiguous as per A41. Since these headers won't have a
@@ -1749,22 +1746,6 @@ func (s) TestHeadersCausingResetStream(t *testing.T) {
 				{name: ":authority", values: []string{"localhost", "localhost2"}},
 				{name: "host", values: []string{"localhost"}},
 			},
-			err: http2.ErrCodeProtocol,
-		},
-		{
-			name: "Timeout Parse Error",
-			headers: []struct {
-				name   string
-				values []string
-			}{
-				{name: ":method", values: []string{"POST"}},
-				{name: ":path", values: []string{"foo"}},
-				{name: ":authority", values: []string{"localhost"}},
-				{name: "content-type", values: []string{"application/grpc"}},
-				{name: "host", values: []string{"localhost"}},
-				{name: "grpc-timeout", values: []string{"1"}},
-			},
-			err: http2.ErrCodeInternal,
 		},
 	}
 	for _, test := range tests {
@@ -1803,7 +1784,7 @@ func (s) TestHeadersCausingResetStream(t *testing.T) {
 					case *http2.SettingsFrame:
 						// Do nothing. A settings frame is expected from server preface.
 					case *http2.RSTStreamFrame:
-						if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != test.err {
+						if frame.Header().StreamID != 1 || http2.ErrCode(frame.ErrCode) != http2.ErrCodeProtocol {
 							// Client only created a single stream, so RST Stream should be for that single stream.
 							result.Send(fmt.Errorf("RST stream received with streamID: %d and code %v, want streamID: 1 and code: http.ErrCodeFlowControl", frame.Header().StreamID, http2.ErrCode(frame.ErrCode)))
 						}
@@ -1849,13 +1830,14 @@ func (s) TestHeadersCausingResetStream(t *testing.T) {
 // TestHeadersMultipleHosts tests that a request with multiple hosts gets
 // rejected with HTTP Status 400 and gRPC status Internal, regardless of whether
 // the client is speaking gRPC or not.
-func (s) TestHeadersMultipleHosts(t *testing.T) {
+func (s) TestHeadersEarlyAbort(t *testing.T) {
 	tests := []struct {
 		name    string
 		headers []struct {
 			name   string
 			values []string
 		}
+		err string
 	}{
 		// Note: multiple authority headers are handled by the framer itself,
 		// which will cause a stream error. Thus, it will never get to
@@ -1876,6 +1858,7 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 				{name: ":authority", values: []string{"localhost"}},
 				{name: "host", values: []string{"localhost", "localhost2"}},
 			},
+			err: "both must only have 1 value as per HTTP/2 spec",
 		},
 		{
 			name: "Multiple host headers grpc",
@@ -1889,8 +1872,25 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 				{name: "content-type", values: []string{"application/grpc"}},
 				{name: "host", values: []string{"localhost", "localhost2"}},
 			},
+			err: "both must only have 1 value as per HTTP/2 spec",
+		},
+		{
+			name: "Timeout Parse Error",
+			headers: []struct {
+				name   string
+				values []string
+			}{
+				{name: ":method", values: []string{"POST"}},
+				{name: ":path", values: []string{"foo"}},
+				{name: ":authority", values: []string{"localhost"}},
+				{name: "content-type", values: []string{"application/grpc"}},
+				{name: "host", values: []string{"localhost"}},
+				{name: "grpc-timeout", values: []string{"1"}},
+			},
+			err: "operateHeaders failed parse headers",
 		},
 	}
+
 	for _, test := range tests {
 		server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
 		defer server.stop()
@@ -1948,7 +1948,7 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 						result.Send(fmt.Errorf("incorrect gRPC Status got %v, want 13", grpcStatus))
 						return
 					}
-					if !strings.Contains(grpcMessage, "both must only have 1 value as per HTTP/2 spec") {
+					if !strings.Contains(grpcMessage, test.err) {
 						result.Send(fmt.Errorf("incorrect gRPC message"))
 						return
 					}
