@@ -97,7 +97,7 @@ func (s) TestBlockingPickNoSubAvailable(t *testing.T) {
 	bp := newPickerWrapper()
 	var finishedCount uint64
 	bp.updatePicker(&testingPicker{err: balancer.ErrNoSubConnAvailable, maxCalled: goroutineCount})
-	// All goroutines should block because picker returns no sc available.
+	// All goroutines should block because picker returns no subConn available.
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
 			if tr, _, err := bp.pick(context.Background(), true, balancer.PickInfo{}); err != nil || tr != testT {
@@ -138,7 +138,7 @@ func (s) TestBlockingPickSCNotReady(t *testing.T) {
 	bp := newPickerWrapper()
 	bp.updatePicker(&testingPicker{sc: testSCNotReady, maxCalled: goroutineCount})
 	var finishedCount uint64
-	// All goroutines should block because sc is not ready.
+	// All goroutines should block because subConn is not ready.
 	for i := goroutineCount; i > 0; i-- {
 		go func() {
 			if tr, _, err := bp.pick(context.Background(), true, balancer.PickInfo{}); err != nil || tr != testT {

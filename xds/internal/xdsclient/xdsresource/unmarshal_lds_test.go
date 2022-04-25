@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -606,8 +607,30 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 			},
 		},
 		{
+			name:      "v2 listener resource wrapped",
+			resources: []*anypb.Any{testutils.MarshalAny(&v2xdspb.Resource{Resource: v2Lis})},
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v2LDSTarget: {Update: ListenerUpdate{RouteConfigName: v2RouteConfigName, Raw: v2Lis}},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
 			name:      "v3 listener resource",
 			resources: []*anypb.Any{v3LisWithFilters()},
+			wantUpdate: map[string]ListenerUpdateErrTuple{
+				v3LDSTarget: {Update: ListenerUpdate{RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList, Raw: v3LisWithFilters()}},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusACKed,
+				Version: testVersion,
+			},
+		},
+		{
+			name:      "v3 listener resource wrapped",
+			resources: []*anypb.Any{testutils.MarshalAny(&v3discoverypb.Resource{Resource: v3LisWithFilters()})},
 			wantUpdate: map[string]ListenerUpdateErrTuple{
 				v3LDSTarget: {Update: ListenerUpdate{RouteConfigName: v3RouteConfigName, MaxStreamDuration: time.Second, HTTPFilters: routerFilterList, Raw: v3LisWithFilters()}},
 			},

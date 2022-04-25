@@ -350,7 +350,7 @@ func (s) TestLog(t *testing.T) {
 
 func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 	testCases := []struct {
-		ml   *MethodLogger
+		ml   *methodLogger
 		mpPb *pb.Metadata
 	}{
 		{
@@ -417,7 +417,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 
 func (s) TestTruncateMetadataTruncated(t *testing.T) {
 	testCases := []struct {
-		ml   *MethodLogger
+		ml   *methodLogger
 		mpPb *pb.Metadata
 
 		entryLen int
@@ -478,7 +478,7 @@ func (s) TestTruncateMetadataTruncated(t *testing.T) {
 
 func (s) TestTruncateMessageNotTruncated(t *testing.T) {
 	testCases := []struct {
-		ml    *MethodLogger
+		ml    *methodLogger
 		msgPb *pb.Message
 	}{
 		{
@@ -511,7 +511,7 @@ func (s) TestTruncateMessageNotTruncated(t *testing.T) {
 
 func (s) TestTruncateMessageTruncated(t *testing.T) {
 	testCases := []struct {
-		ml    *MethodLogger
+		ml    *methodLogger
 		msgPb *pb.Message
 
 		oldLength uint32

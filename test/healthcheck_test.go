@@ -201,7 +201,7 @@ func (s) TestHealthCheckWatchStateChange(t *testing.T) {
 	cc, r := setupClient(t, nil)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	},
@@ -267,7 +267,7 @@ func (s) TestHealthCheckHealthServerNotRegistered(t *testing.T) {
 	cc, r := setupClient(t, nil)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	},
@@ -298,7 +298,7 @@ func (s) TestHealthCheckWithGoAway(t *testing.T) {
 	tc := testpb.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	},
@@ -376,7 +376,7 @@ func (s) TestHealthCheckWithConnClose(t *testing.T) {
 	tc := testpb.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	},
@@ -424,7 +424,7 @@ func (s) TestHealthCheckWithAddrConnDrain(t *testing.T) {
 	hcEnterChan, hcExitChan, testHealthCheckFuncWrapper := setupHealthCheckWrapper()
 	cc, r := setupClient(t, &clientConfig{testHealthCheckFuncWrapper: testHealthCheckFuncWrapper})
 	tc := testpb.NewTestServiceClient(cc)
-	sc := parseCfg(r, `{
+	sc := parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	},
@@ -506,7 +506,7 @@ func (s) TestHealthCheckWithClientConnClose(t *testing.T) {
 	tc := testpb.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	},
@@ -573,7 +573,7 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalledAddrConnShutDown(t *tes
 	// The serviceName "delay" is specially handled at server side, where response will not be sent
 	// back to client immediately upon receiving the request (client should receive no response until
 	// test ends).
-	sc := parseCfg(r, `{
+	sc := parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "delay"
 	},
@@ -638,7 +638,7 @@ func (s) TestHealthCheckWithoutSetConnectivityStateCalled(t *testing.T) {
 	// test ends).
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "delay"
 	},
@@ -679,7 +679,7 @@ func testHealthCheckDisableWithDialOption(t *testing.T, addr string) {
 	tc := testpb.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	},
@@ -713,7 +713,7 @@ func testHealthCheckDisableWithBalancer(t *testing.T, addr string) {
 	tc := testpb.NewTestServiceClient(cc)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: addr}},
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "foo"
 	},
@@ -787,7 +787,7 @@ func (s) TestHealthCheckChannelzCountingCallSuccess(t *testing.T) {
 	_, r := setupClient(t, nil)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "channelzSuccess"
 	},
@@ -834,7 +834,7 @@ func (s) TestHealthCheckChannelzCountingCallFailure(t *testing.T) {
 	_, r := setupClient(t, nil)
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: lis.Addr().String()}},
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
 	"healthCheckConfig": {
 		"serviceName": "channelzFailure"
 	},

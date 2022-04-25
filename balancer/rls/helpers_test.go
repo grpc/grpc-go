@@ -20,7 +20,6 @@ package rls
 
 import (
 	"context"
-	"net"
 	"strings"
 	"sync"
 	"testing"
@@ -35,7 +34,6 @@ import (
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
@@ -60,52 +58,6 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
-}
-
-// connWrapper wraps a net.Conn and pushes on a channel when closed.
-type connWrapper struct {
-	net.Conn
-	closeCh *testutils.Channel
-}
-
-func (cw *connWrapper) Close() error {
-	err := cw.Conn.Close()
-	cw.closeCh.Replace(nil)
-	return err
-}
-
-// listenerWrapper wraps a net.Listener and the returned net.Conn.
-//
-// It pushes on a channel whenever it accepts a new connection.
-type listenerWrapper struct {
-	net.Listener
-	newConnCh *testutils.Channel
-}
-
-func (l *listenerWrapper) Accept() (net.Conn, error) {
-	c, err := l.Listener.Accept()
-	if err != nil {
-		return nil, err
-	}
-	closeCh := testutils.NewChannel()
-	conn := &connWrapper{Conn: c, closeCh: closeCh}
-	l.newConnCh.Send(conn)
-	return conn, nil
-}
-
-func newListenerWrapper(t *testing.T, lis net.Listener) *listenerWrapper {
-	if lis == nil {
-		var err error
-		lis, err = testutils.LocalTCPListener()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return &listenerWrapper{
-		Listener:  lis,
-		newConnCh: testutils.NewChannel(),
-	}
 }
 
 // fakeBackoffStrategy is a fake implementation of the backoff.Strategy
@@ -171,29 +123,6 @@ func overrideAdaptiveThrottler(t *testing.T, f *fakeThrottler) {
 	origAdaptiveThrottler := newAdaptiveThrottler
 	newAdaptiveThrottler = func() adaptiveThrottler { return f }
 	t.Cleanup(func() { newAdaptiveThrottler = origAdaptiveThrottler })
-}
-
-// setupFakeRLSServer starts and returns a fake RouteLookupService server
-// listening on the given listener or on a random local port. Also returns a
-// channel for tests to get notified whenever the RouteLookup RPC is invoked on
-// the fake server.
-//
-// This function sets up the fake server to respond with an empty response for
-// the RouteLookup RPCs. Tests can override this by calling the
-// SetResponseCallback() method on the returned fake server.
-func setupFakeRLSServer(t *testing.T, lis net.Listener, opts ...grpc.ServerOption) (*e2e.FakeRouteLookupServer, chan struct{}) {
-	s, cancel := e2e.StartFakeRouteLookupServer(t, lis, opts...)
-	t.Logf("Started fake RLS server at %q", s.Address)
-
-	ch := make(chan struct{}, 1)
-	s.SetRequestCallback(func(request *rlspb.RouteLookupRequest) {
-		select {
-		case ch <- struct{}{}:
-		default:
-		}
-	})
-	t.Cleanup(cancel)
-	return s, ch
 }
 
 // buildBasicRLSConfig constructs a basic service config for the RLS LB policy

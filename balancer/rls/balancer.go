@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/buffer"
@@ -40,7 +41,10 @@ import (
 
 const (
 	// Name is the name of the RLS LB policy.
-	Name = "rls_experimental"
+	//
+	// It currently has an experimental suffix which would be removed once
+	// end-to-end testing of the policy is completed.
+	Name = internal.RLSLoadBalancingPolicyName
 	// Default frequency for data cache purging.
 	periodicCachePurgeFreq = time.Minute
 )

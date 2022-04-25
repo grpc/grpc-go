@@ -87,7 +87,7 @@ func loadFileDesc(filename string) (*descriptorpb.FileDescriptorProto, []byte) {
 func loadFileDescDynamic(b []byte) (*descriptorpb.FileDescriptorProto, protoreflect.FileDescriptor, []byte) {
 	m := new(descriptorpb.FileDescriptorProto)
 	if err := proto.Unmarshal(b, m); err != nil {
-		panic(fmt.Sprintf("failed to unmarshal dynamic proto raw descriptor"))
+		panic("failed to unmarshal dynamic proto raw descriptor")
 	}
 
 	fd, err := protodesc.NewFile(m, nil)

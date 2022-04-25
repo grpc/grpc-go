@@ -21,6 +21,7 @@ package xdsclient
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,7 +102,7 @@ type testController struct {
 func overrideNewController(t *testing.T) *testutils.Channel {
 	origNewController := newController
 	ch := testutils.NewChannel()
-	newController = func(config *bootstrap.ServerConfig, pubsub *pubsub.Pubsub, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger) (controllerInterface, error) {
+	newController = func(config *bootstrap.ServerConfig, pubsub *pubsub.Pubsub, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger, _ func(int) time.Duration) (controllerInterface, error) {
 		ret := newTestController(config)
 		ch.Send(ret)
 		return ret, nil
@@ -197,7 +198,7 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	}
 	gotUpdate := u.(xdsresource.ListenerUpdateErrTuple)
 	if wantErr != nil {
-		if gotUpdate.Err != wantErr {
+		if !strings.Contains(gotUpdate.Err.Error(), wantErr.Error()) {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
 		}
 		return nil
@@ -215,7 +216,7 @@ func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, w
 	}
 	gotUpdate := u.(xdsresource.RouteConfigUpdateErrTuple)
 	if wantErr != nil {
-		if gotUpdate.Err != wantErr {
+		if !strings.Contains(gotUpdate.Err.Error(), wantErr.Error()) {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
 		}
 		return nil
@@ -233,7 +234,7 @@ func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantU
 	}
 	gotUpdate := u.(xdsresource.ClusterUpdateErrTuple)
 	if wantErr != nil {
-		if gotUpdate.Err != wantErr {
+		if !strings.Contains(gotUpdate.Err.Error(), wantErr.Error()) {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
 		}
 		return nil
@@ -251,7 +252,7 @@ func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wan
 	}
 	gotUpdate := u.(xdsresource.EndpointsUpdateErrTuple)
 	if wantErr != nil {
-		if gotUpdate.Err != wantErr {
+		if !strings.Contains(gotUpdate.Err.Error(), wantErr.Error()) {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
 		}
 		return nil

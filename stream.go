@@ -462,7 +462,7 @@ type clientStream struct {
 
 	retryThrottler *retryThrottler // The throttler active when the RPC began.
 
-	binlog *binarylog.MethodLogger // Binary logger, can be nil.
+	binlog binarylog.MethodLogger // Binary logger, can be nil.
 	// serverHeaderBinlogged is a boolean for whether server header has been
 	// logged. Server header will be logged when the first time one of those
 	// happens: stream.Header(), stream.Recv().
@@ -1370,8 +1370,10 @@ func (as *addrConnStream) finish(err error) {
 
 // ServerStream defines the server-side behavior of a streaming RPC.
 //
-// All errors returned from ServerStream methods are compatible with the
-// status package.
+// Errors returned from ServerStream methods are compatible with the status
+// package.  However, the status code will often not match the RPC status as
+// seen by the client application, and therefore, should not be relied upon for
+// this purpose.
 type ServerStream interface {
 	// SetHeader sets the header metadata. It may be called multiple times.
 	// When call multiple times, all the provided metadata will be merged.
@@ -1434,7 +1436,7 @@ type serverStream struct {
 
 	statsHandler stats.Handler
 
-	binlog *binarylog.MethodLogger
+	binlog binarylog.MethodLogger
 	// serverHeaderBinlogged indicates whether server header has been logged. It
 	// will happen when one of the following two happens: stream.SendHeader(),
 	// stream.Send().

@@ -28,11 +28,19 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal/transport"
+	"google.golang.org/grpc/status"
 )
 
 type emptyServiceServer interface{}
 
 type testServer struct{}
+
+func errorDesc(err error) string {
+	if s, ok := status.FromError(err); ok {
+		return s.Message()
+	}
+	return err.Error()
+}
 
 func (s) TestStopBeforeServe(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")

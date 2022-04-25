@@ -229,20 +229,20 @@ func cachedCrl(rawIssuer []byte, cache Cache) (*certificateListExt, bool) {
 }
 
 // fetchIssuerCRL fetches and verifies the CRL for rawIssuer from disk or cache if configured in cfg.
-func fetchIssuerCRL(crlDistributionPoint string, rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) (*certificateListExt, error) {
+func fetchIssuerCRL(rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) (*certificateListExt, error) {
 	if cfg.Cache != nil {
 		if crl, ok := cachedCrl(rawIssuer, cfg.Cache); ok {
 			return crl, nil
 		}
 	}
 
-	crl, err := fetchCRL(crlDistributionPoint, rawIssuer, cfg)
+	crl, err := fetchCRL(rawIssuer, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("fetchCRL(%v) failed err = %v", crlDistributionPoint, err)
+		return nil, fmt.Errorf("fetchCRL() failed err = %v", err)
 	}
 
 	if err := verifyCRL(crl, rawIssuer, crlVerifyCrt); err != nil {
-		return nil, fmt.Errorf("verifyCRL(%v) failed err = %v", crlDistributionPoint, err)
+		return nil, fmt.Errorf("verifyCRL() failed err = %v", err)
 	}
 	if cfg.Cache != nil {
 		cfg.Cache.Add(hex.EncodeToString(rawIssuer), crl)
@@ -251,36 +251,27 @@ func fetchIssuerCRL(crlDistributionPoint string, rawIssuer []byte, crlVerifyCrt 
 }
 
 // checkCert checks a single certificate against the CRL defined in the certificate.
-// It will fetch and verify the CRL(s) defined by CRLDistributionPoints.
+// It will fetch and verify the CRL(s) defined in the root directory specified by cfg.
 // If we can't load any authoritative CRL files, the status is RevocationUndetermined.
 // c is the certificate to check.
 // crlVerifyCrt is the group of possible certificates to verify the crl.
 func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
-	if len(c.CRLDistributionPoints) == 0 {
-		return RevocationUnrevoked
+	crl, err := fetchIssuerCRL(c.RawIssuer, crlVerifyCrt, cfg)
+	if err != nil {
+		// We couldn't load any CRL files for the certificate, so we don't know if it's RevocationUnrevoked or not.
+		grpclogLogger.Warningf("getIssuerCRL(%v) err = %v", c.Issuer, err)
+		return RevocationUndetermined
 	}
-	// Iterate through CRL distribution points to check for status
-	for _, dp := range c.CRLDistributionPoints {
-		crl, err := fetchIssuerCRL(dp, c.RawIssuer, crlVerifyCrt, cfg)
-		if err != nil {
-			grpclogLogger.Warningf("getIssuerCRL(%v) err = %v", c.Issuer, err)
-			continue
-		}
-		revocation, err := checkCertRevocation(c, crl)
-		if err != nil {
-			grpclogLogger.Warningf("checkCertRevocation(CRL %v) failed %v", crl.CertList.TBSCertList.Issuer, err)
-			// We couldn't check the CRL file for some reason, so continue
-			// to the next file
-			continue
-		}
-		// Here we've gotten a CRL that loads and verifies.
-		// We only handle all-reasons CRL files, so this file
-		// is authoritative for the certificate.
-		return revocation
-
+	revocation, err := checkCertRevocation(c, crl)
+	if err != nil {
+		grpclogLogger.Warningf("checkCertRevocation(CRL %v) failed %v", crl.CertList.TBSCertList.Issuer, err)
+		// We couldn't check the CRL file for some reason, so we don't know if it's RevocationUnrevoked or not.
+		return RevocationUndetermined
 	}
-	// We couldn't load any CRL files for the certificate, so we don't know if it's RevocationUnrevoked or not.
-	return RevocationUndetermined
+	// Here we've gotten a CRL that loads and verifies.
+	// We only handle all-reasons CRL files, so this file
+	// is authoritative for the certificate.
+	return revocation
 }
 
 func checkCertRevocation(c *x509.Certificate, crl *certificateListExt) (RevocationStatus, error) {
@@ -430,7 +421,7 @@ func parseCRLExtensions(c *pkix.CertificateList) (*certificateListExt, error) {
 	return certList, nil
 }
 
-func fetchCRL(loc string, rawIssuer []byte, cfg RevocationConfig) (*certificateListExt, error) {
+func fetchCRL(rawIssuer []byte, cfg RevocationConfig) (*certificateListExt, error) {
 	var parsedCRL *certificateListExt
 	// 6.3.3 (a) (1) (ii)
 	// According to X509_LOOKUP_hash_dir the format is issuer_hash.rN where N is an increasing number.
