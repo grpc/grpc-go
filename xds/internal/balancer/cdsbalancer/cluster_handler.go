@@ -26,7 +26,10 @@ import (
 
 const maxDepth = 16
 
-var errNotReceivedUpdate = errors.New("tried to construct a cluster update on a cluster that has not received an update")
+var (
+	errNotReceivedUpdate = errors.New("tried to construct a cluster update on a cluster that has not received an update")
+	errExceedsMaxDepth   = errors.New("aggregate cluster graph exceeds max depth")
+)
 
 // clusterHandlerUpdate wraps the information received from the registered CDS
 // watcher. A non-nil error is propagated to the underlying cluster_resolver
@@ -59,9 +62,6 @@ type clusterHandler struct {
 	rootClusterName string
 
 	createdClusters map[string]*clusterNode
-
-	// To prevent duplicate clusters in a cluster update.
-	clustersSeenForUpdate map[string]bool // Switch this cluster handler set state -> function argument?
 
 	// A way to ping CDS Balancer about any updates or errors to a Node in the
 	// tree. This will either get called from this handler constructing an
@@ -102,11 +102,18 @@ func (ch *clusterHandler) constructClusterUpdate() {
 		// If root is nil, this handler is closed, ignore the update.
 		return
 	}
-	ch.clustersSeenForUpdate = make(map[string]bool)
-	clusterUpdate, err := ch.createdClusters[ch.rootClusterName].constructClusterUpdate()
+	clusterUpdate, err := ch.createdClusters[ch.rootClusterName].constructClusterUpdate(make(map[string]bool))
 	if err != nil {
-		// If there was an error received no op, as this simply means one of the
-		// children hasn't received an update yet.
+		// If there was an error received no op, as this can mean one of the
+		// children hasn't received an update yet, or the graph continued to
+		// stay in an error state. If the graph continues to stay in an error
+		// state, no new error needs to be written to the update buffer as that
+		// would be redundant information.
+		return
+	}
+	if clusterUpdate == nil {
+		// This means that there was an aggregated cluster with no EDS or DNS as
+		// leaf nodes. No update to be written.
 		return
 	}
 	// For a ClusterUpdate, the only update CDS cares about is the most
@@ -159,6 +166,12 @@ type clusterNode struct {
 
 	depth    int32
 	refCount int32
+
+	// maxDepthErr is set if this cluster node is an aggregate cluster and has a
+	// child that causes the graph to exceed the maximum depth allowed. This is
+	// used to show a cluster graph as being in an error state when it constructs
+	// a cluster update.
+	maxDepthErr error
 }
 
 // CreateClusterNode creates a cluster node from a given clusterName. This will
@@ -193,23 +206,28 @@ func (c *clusterNode) delete() {
 		c.cancelFunc()
 		delete(c.clusterHandler.createdClusters, c.clusterUpdate.ClusterName)
 		for _, child := range c.children {
-			c.clusterHandler.createdClusters[child].delete()
+			if c.clusterHandler.createdClusters[child] != nil {
+				c.clusterHandler.createdClusters[child].delete()
+			}
 		}
 	}
 }
 
 // Construct cluster update (potentially a list of ClusterUpdates) for a node.
-func (c *clusterNode) constructClusterUpdate() ([]xdsresource.ClusterUpdate, error) {
+func (c *clusterNode) constructClusterUpdate(clustersSeen map[string]bool) ([]xdsresource.ClusterUpdate, error) {
 	// If the cluster has not yet received an update, the cluster update is not
 	// yet ready.
 	if !c.receivedUpdate {
 		return nil, errNotReceivedUpdate
 	}
+	if c.maxDepthErr != nil {
+		return nil, c.maxDepthErr
+	}
 	// Ignore duplicates.
-	if c.clusterHandler.clustersSeenForUpdate[c.clusterUpdate.ClusterName] {
+	if clustersSeen[c.clusterUpdate.ClusterName] {
 		return []xdsresource.ClusterUpdate{}, nil
 	}
-	c.clusterHandler.clustersSeenForUpdate[c.clusterUpdate.ClusterName] = true
+	clustersSeen[c.clusterUpdate.ClusterName] = true
 
 	// Base case - LogicalDNS or EDS. Both of these cluster types will be tied
 	// to a single ClusterUpdate.
@@ -221,7 +239,7 @@ func (c *clusterNode) constructClusterUpdate() ([]xdsresource.ClusterUpdate, err
 	// it's children.
 	var childrenUpdates []xdsresource.ClusterUpdate
 	for _, child := range c.children {
-		childUpdateList, err := c.clusterHandler.createdClusters[child].constructClusterUpdate()
+		childUpdateList, err := c.clusterHandler.createdClusters[child].constructClusterUpdate(clustersSeen)
 		if err != nil {
 			return nil, err
 		}
@@ -246,6 +264,8 @@ func (c *clusterNode) handleResp(clusterUpdate xdsresource.ClusterUpdate, err er
 		default:
 		}
 		c.clusterHandler.updateChannel <- clusterHandlerUpdate{err: err}
+		c.receivedUpdate = false
+		c.maxDepthErr = nil
 		return
 	}
 
@@ -263,6 +283,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsresource.ClusterUpdate, err er
 			c.clusterHandler.createdClusters[child].delete()
 		}
 		c.children = nil
+		c.maxDepthErr = nil
 		// This is an update in the one leaf node, should try to send an update
 		// to the parent CDS balancer.
 		//
@@ -309,8 +330,9 @@ func (c *clusterNode) handleResp(clusterUpdate xdsresource.ClusterUpdate, err er
 				case <-c.clusterHandler.updateChannel:
 				default:
 				}
-				c.clusterHandler.updateChannel <- clusterHandlerUpdate{err: errors.New("aggregate cluster graph exceeds max depth")}
+				c.clusterHandler.updateChannel <- clusterHandlerUpdate{err: errExceedsMaxDepth}
 				c.children = []string{}
+				c.maxDepthErr = errExceedsMaxDepth
 				return
 			}
 			createClusterNode(child, c.clusterHandler.parent.xdsClient, c.clusterHandler, c.depth+1)
@@ -327,6 +349,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsresource.ClusterUpdate, err er
 
 	c.children = clusterUpdate.PrioritizedClusterNames
 
+	c.maxDepthErr = nil
 	// If the cluster is an aggregate cluster, if this callback created any new
 	// child cluster nodes, then there's no possibility for a full cluster
 	// update to successfully build, as those created children will not have

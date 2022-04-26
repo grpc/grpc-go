@@ -916,3 +916,177 @@ func (s) TestIgnoreDups(t *testing.T) {
 		t.Fatal("Timed out waiting for the cluster update to be written to the update buffer.")
 	}
 }
+
+// TestErrorStateWholeTree tests the scenario where the aggregate cluster graph
+// exceeds max depth. An error should be written to the update channel.
+// Afterward, if a valid response comes in for another cluster, no update should
+// be written to the update channel, as the aggregate cluster graph is still in
+// the same error state.
+func (s) TestErrorStateWholeTree(t *testing.T) {
+	ch, fakeClient := setupTests()
+	ch.updateRootCluster("cluster0")
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err := fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+
+	for i := 0; i <= 15; i++ {
+		fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+			ClusterType:             xdsresource.ClusterTypeAggregate,
+			ClusterName:             "cluster" + fmt.Sprint(i),
+			PrioritizedClusterNames: []string{"cluster" + fmt.Sprint(i+1)},
+		}, nil)
+		if i == 15 {
+			// The 16th iteration will try and create a cluster which exceeds
+			// max stack depth and will thus error, so no CDS Watch will be
+			// started for the child.
+			continue
+		}
+		_, err = fakeClient.WaitForWatchCluster(ctx)
+		if err != nil {
+			t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+		}
+	}
+	select {
+	case chu := <-ch.updateChannel:
+		if chu.err.Error() != "aggregate cluster graph exceeds max depth" {
+			t.Fatalf("Did not receive the expected error, instead received: %v", chu.err.Error())
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for an error to be written to update channel.")
+	}
+
+	// Invoke a cluster callback for a node in the graph that rests within the
+	// allowed depth. This will cause the system to try and construct a cluster
+	// update, and it shouldn't write an update as the aggregate cluster graph
+	// is still in an error state. Since the graph continues to stay in an error
+	// state, no new error needs to be written to the update buffer as that
+	// would be redundant information.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
+		ClusterName:             "cluster3",
+		PrioritizedClusterNames: []string{"cluster4"},
+	}, nil)
+
+	sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	select {
+	case <-ch.updateChannel:
+		t.Fatal("an update should not have been written to the update buffer")
+	case <-sCtx.Done():
+	}
+
+	// When you remove the child of cluster15 that causes the graph to be in the
+	// error state of exceeding max depth, the update should successfully
+	// construct and be written to the update buffer.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType: xdsresource.ClusterTypeEDS,
+		ClusterName: "cluster15",
+	}, nil)
+
+	select {
+	case chu := <-ch.updateChannel:
+		if diff := cmp.Diff(chu.updates, []xdsresource.ClusterUpdate{{
+			ClusterType: xdsresource.ClusterTypeEDS,
+			ClusterName: "cluster15",
+		}}); diff != "" {
+			t.Fatalf("got unexpected cluster update, diff (-got, +want): %v", diff)
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for the cluster update to be written to the update buffer.")
+	}
+}
+
+// TestNodeChildOfItself tests the scenario where the aggregate cluster graph
+// has a node that has child node of itself. The case for this is A -> A, and
+// since there is no base cluster (EDS or Logical DNS), no update should be
+// written if it tries to build a cluster update.
+func (s) TestNodeChildOfItself(t *testing.T) {
+	ch, fakeClient := setupTests()
+	ch.updateRootCluster("clusterA")
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	_, err := fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	// Invoke the callback informing the cluster handler that clusterA has a
+	// child that it is itself. Due to this child cluster being a duplicate, no
+	// watch should be started. Since there are no leaf nodes (i.e. EDS or
+	// Logical DNS), no update should be written to the update buffer.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
+		ClusterName:             "clusterA",
+		PrioritizedClusterNames: []string{"clusterA"},
+	}, nil)
+	sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	if _, err := fakeClient.WaitForWatchCluster(sCtx); err == nil {
+		t.Fatal("Watch should not have been started for clusterA")
+	}
+	sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	select {
+	case <-ch.updateChannel:
+		t.Fatal("update should not have been written to update buffer")
+	case <-sCtx.Done():
+	}
+
+	// Invoke the callback again informing the cluster handler that clusterA has
+	// a child that it is itself. Due to this child cluster being a duplicate,
+	// no watch should be started. Since there are no leaf nodes (i.e. EDS or
+	// Logical DNS), no update should be written to the update buffer.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
+		ClusterName:             "clusterA",
+		PrioritizedClusterNames: []string{"clusterA"},
+	}, nil)
+
+	sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	if _, err := fakeClient.WaitForWatchCluster(sCtx); err == nil {
+		t.Fatal("Watch should not have been started for clusterA")
+	}
+	sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	select {
+	case <-ch.updateChannel:
+		t.Fatal("update should not have been written to update buffer, as clusterB has not received an update yet")
+	case <-sCtx.Done():
+	}
+
+	// Inform the cluster handler that clusterA now has clusterB as a child.
+	// This should not cancel the watch for A, as it is still the root cluster
+	// and still has a ref count, not write an update to update buffer as
+	// cluster B has not received an update yet, and start a new watch for
+	// cluster B as it is not a duplicate.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
+		ClusterName:             "clusterA",
+		PrioritizedClusterNames: []string{"clusterB"},
+	}, nil)
+
+	sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	if _, err := fakeClient.WaitForCancelClusterWatch(sCtx); err == nil {
+		t.Fatal("clusterA should not have been canceled, as it is still the root cluster")
+	}
+
+	sCtx, cancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer cancel()
+	select {
+	case <-ch.updateChannel:
+		t.Fatal("update should not have been written to update buffer, as clusterB has not received an update yet")
+	case <-sCtx.Done():
+	}
+
+	gotCluster, err := fakeClient.WaitForWatchCluster(ctx)
+	if err != nil {
+		t.Fatalf("xdsClient.WatchCDS failed with error: %v", err)
+	}
+	if gotCluster != "clusterB" {
+		t.Fatalf("xdsClient.WatchCDS called for cluster: %v, want: %v", gotCluster, "clusterB")
+	}
+}
