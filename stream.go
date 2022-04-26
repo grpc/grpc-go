@@ -534,6 +534,10 @@ func (cs *clientStream) commitAttempt() {
 // the error that should be returned by the operation.  If the RPC should be
 // retried, the bool indicates whether it is being retried transparently.
 func (cs *clientStream) shouldRetry(err error) (bool, error) {
+	if cs.finished || cs.committed {
+		// RPC is finished or committed; cannot retry.
+		return false, err
+	}
 	if cs.attempt.s == nil {
 		// Error from NewClientStream.
 		nse, ok := err.(*transport.NewStreamError)
@@ -558,10 +562,6 @@ func (cs *clientStream) shouldRetry(err error) (bool, error) {
 		if !nse.DoNotTransparentRetry {
 			return true, nil
 		}
-	}
-	if cs.finished || cs.committed {
-		// RPC is finished or committed; cannot retry.
-		return false, err
 	}
 	// Wait for the trailers.
 	unprocessed := false
