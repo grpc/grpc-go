@@ -978,6 +978,23 @@ func (s) TestErrorStateWholeTree(t *testing.T) {
 	case <-sCtx.Done():
 	}
 
+	// Invoke the same cluster update for cluster 15, specifying it has a child
+	// cluster16. This should cause an error to be written to the update buffer,
+	// as it still exceeds the max depth.
+	fakeClient.InvokeWatchClusterCallback(xdsresource.ClusterUpdate{
+		ClusterType:             xdsresource.ClusterTypeAggregate,
+		ClusterName:             "cluster15",
+		PrioritizedClusterNames: []string{"cluster16"},
+	}, nil)
+	select {
+	case chu := <-ch.updateChannel:
+		if chu.err.Error() != "aggregate cluster graph exceeds max depth" {
+			t.Fatalf("Did not receive the expected error, instead received: %v", chu.err.Error())
+		}
+	case <-ctx.Done():
+		t.Fatal("Timed out waiting for an error to be written to update channel.")
+	}
+
 	// When you remove the child of cluster15 that causes the graph to be in the
 	// error state of exceeding max depth, the update should successfully
 	// construct and be written to the update buffer.

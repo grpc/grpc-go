@@ -223,7 +223,11 @@ func (c *clusterNode) constructClusterUpdate(clustersSeen map[string]bool) ([]xd
 	if c.maxDepthErr != nil {
 		return nil, c.maxDepthErr
 	}
-	// Ignore duplicates.
+	// Ignore duplicates. It's ok to ignore duplicates because the second
+	// occurrence of a cluster will never be used. I.e. in [C, D, C], the second
+	// C will never be used (the only way to fall back to lower priority D is if
+	// C is down, which means second C will never be chosen). Thus, [C, D, C] is
+	// logically equivalent to [C, D].
 	if clustersSeen[c.clusterUpdate.ClusterName] {
 		return []xdsresource.ClusterUpdate{}, nil
 	}
@@ -298,6 +302,19 @@ func (c *clusterNode) handleResp(clusterUpdate xdsresource.ClusterUpdate, err er
 	// Aggregate cluster handling.
 	newChildren := make(map[string]bool)
 	for _, childName := range clusterUpdate.PrioritizedClusterNames {
+		if c.depth == maxDepth-1 {
+			// For a ClusterUpdate, the only update CDS cares about is the most
+			// recent one, so opportunistically drain the update channel before
+			// sending the new update.
+			select {
+			case <-c.clusterHandler.updateChannel:
+			default:
+			}
+			c.clusterHandler.updateChannel <- clusterHandlerUpdate{err: errExceedsMaxDepth}
+			c.children = []string{}
+			c.maxDepthErr = errExceedsMaxDepth
+			return
+		}
 		newChildren[childName] = true
 	}
 
@@ -322,19 +339,6 @@ func (c *clusterNode) handleResp(clusterUpdate xdsresource.ClusterUpdate, err er
 	// Add and construct any new child nodes.
 	for child := range newChildren {
 		if _, inChildrenAlready := mapCurrentChildren[child]; !inChildrenAlready {
-			if c.depth == maxDepth-1 {
-				// For a ClusterUpdate, the only update CDS cares about is the most
-				// recent one, so opportunistically drain the update channel before
-				// sending the new update.
-				select {
-				case <-c.clusterHandler.updateChannel:
-				default:
-				}
-				c.clusterHandler.updateChannel <- clusterHandlerUpdate{err: errExceedsMaxDepth}
-				c.children = []string{}
-				c.maxDepthErr = errExceedsMaxDepth
-				return
-			}
 			createClusterNode(child, c.clusterHandler.parent.xdsClient, c.clusterHandler, c.depth+1)
 		}
 	}
