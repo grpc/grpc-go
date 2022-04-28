@@ -308,9 +308,21 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		return nil, err
 	}
 
-	op := func(a *csAttempt) error { return a.newStream() }
+	// Because this operation is always called either here (while creating the
+	// clientStream) or by the retry code while locked when replaying the
+	// operation, it is safe to access cs.attempt and cs.newAttempt directly.
+	op := func(a *csAttempt) error {
+		if err := cs.newAttempt.getTransport(); err != nil {
+			return err
+		}
+		if err := cs.newAttempt.newStream(); err != nil {
+			return err
+		}
+		cs.attempt = cs.newAttempt
+		cs.newAttempt = nil
+		return nil
+	}
 	if err := cs.withRetry(op, func() { cs.bufferForRetryLocked(0, op) }); err != nil {
-		cs.finish(err)
 		return nil, err
 	}
 
@@ -349,9 +361,15 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 	return cs, nil
 }
 
-// newAttemptLocked creates a new attempt with a transport.
-// If it succeeds, then it replaces clientStream's attempt with this new attempt.
-func (cs *clientStream) newAttemptLocked(isTransparent bool) (retErr error) {
+// newAttemptLocked creates a new csAttempt without a transport or stream.
+func (cs *clientStream) newAttemptLocked(isTransparent bool) error {
+	if err := cs.ctx.Err(); err != nil {
+		return toRPCErr(err)
+	}
+	if err := cs.cc.ctx.Err(); err != nil {
+		return ErrClientConnClosing
+	}
+
 	ctx := newContextWithRPCInfo(cs.ctx, cs.callInfo.failFast, cs.callInfo.codec, cs.cp, cs.comp)
 	method := cs.callHdr.Method
 	sh := cs.cc.dopts.copts.StatsHandler
@@ -385,27 +403,6 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (retErr error) {
 		ctx = trace.NewContext(ctx, trInfo.tr)
 	}
 
-	newAttempt := &csAttempt{
-		ctx:          ctx,
-		beginTime:    beginTime,
-		cs:           cs,
-		dc:           cs.cc.dopts.dc,
-		statsHandler: sh,
-		trInfo:       trInfo,
-	}
-	defer func() {
-		if retErr != nil {
-			// This attempt is not set in the clientStream, so it's finish won't
-			// be called. Call it here for stats and trace in case they are not
-			// nil.
-			newAttempt.finish(retErr)
-		}
-	}()
-
-	if err := ctx.Err(); err != nil {
-		return toRPCErr(err)
-	}
-
 	if cs.cc.parsedTarget.Scheme == "xds" {
 		// Add extra metadata (metadata that will be added by transport) to context
 		// so the balancer can see them.
@@ -413,16 +410,33 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (retErr error) {
 			"content-type", grpcutil.ContentType(cs.callHdr.ContentSubtype),
 		))
 	}
-	t, done, err := cs.cc.getTransport(ctx, cs.callInfo.failFast, cs.callHdr.Method)
+
+	cs.newAttempt = &csAttempt{
+		ctx:          ctx,
+		beginTime:    beginTime,
+		cs:           cs,
+		dc:           cs.cc.dopts.dc,
+		statsHandler: sh,
+		trInfo:       trInfo,
+	}
+	return nil
+}
+
+func (a *csAttempt) getTransport() error {
+	cs := a.cs
+
+	var err error
+	a.t, a.done, err = cs.cc.getTransport(a.ctx, cs.callInfo.failFast, cs.callHdr.Method)
 	if err != nil {
+		if de, ok := err.(dropError); ok {
+			err = de.error
+			a.drop = true
+		}
 		return err
 	}
-	if trInfo != nil {
-		trInfo.firstLine.SetRemoteAddr(t.RemoteAddr())
+	if a.trInfo != nil {
+		a.trInfo.firstLine.SetRemoteAddr(a.t.RemoteAddr())
 	}
-	newAttempt.t = t
-	newAttempt.done = done
-	cs.attempt = newAttempt
 	return nil
 }
 
@@ -431,12 +445,21 @@ func (a *csAttempt) newStream() error {
 	cs.callHdr.PreviousAttempts = cs.numRetries
 	s, err := a.t.NewStream(a.ctx, cs.callHdr)
 	if err != nil {
-		// Return without converting to an RPC error so retry code can
-		// inspect.
-		return err
+		nse, ok := err.(*transport.NewStreamError)
+		if !ok {
+			// Unexpected.
+			return err
+		}
+
+		if nse.AllowTransparentRetry {
+			a.allowTransparentRetry = true
+		}
+
+		// Unwrap and convert error.
+		return toRPCErr(nse.Err)
 	}
-	cs.attempt.s = s
-	cs.attempt.p = &parser{r: s}
+	a.s = s
+	a.p = &parser{r: s}
 	return nil
 }
 
@@ -484,6 +507,9 @@ type clientStream struct {
 	// then newClientStream calls finish on the clientStream and returns. So, finish method is the only
 	// place where we need to check if the attempt is nil.
 	attempt *csAttempt
+	// newAttempt is a partially-created attempt; it is promoted to the attempt
+	// field when a transport stream exists.
+	newAttempt *csAttempt
 	// TODO(hedging): hedging will have multiple attempts simultaneously.
 	committed  bool // active attempt committed for retry?
 	onCommit   func()
@@ -514,6 +540,11 @@ type csAttempt struct {
 
 	statsHandler stats.Handler
 	beginTime    time.Time
+
+	// set for newStream errors that may be transparently retried
+	allowTransparentRetry bool
+	// set for pick errors that are returned as a status
+	drop bool
 }
 
 func (cs *clientStream) commitAttemptLocked() {
@@ -534,40 +565,23 @@ func (cs *clientStream) commitAttempt() {
 // the error that should be returned by the operation.  If the RPC should be
 // retried, the bool indicates whether it is being retried transparently.
 func (cs *clientStream) shouldRetry(err error) (bool, error) {
-	if cs.finished || cs.committed {
-		// RPC is finished or committed; cannot retry.
+	attempt := cs.newAttempt
+	if attempt == nil {
+		attempt = cs.attempt
+	}
+
+	if cs.finished || cs.committed || attempt.drop {
+		// RPC is finished or committed or was dropped by the picker; cannot retry.
 		return false, err
 	}
-	if cs.attempt.s == nil {
-		// Error from NewClientStream.
-		nse, ok := err.(*transport.NewStreamError)
-		if !ok {
-			// Unexpected, but assume no I/O was performed and the RPC is not
-			// fatal, so retry indefinitely.
-			return true, nil
-		}
-
-		// Unwrap and convert error.
-		err = toRPCErr(nse.Err)
-
-		// Never retry DoNotRetry errors, which indicate the RPC should not be
-		// retried due to max header list size violation, etc.
-		if nse.DoNotRetry {
-			return false, err
-		}
-
-		// In the event of a non-IO operation error from NewStream, we never
-		// attempted to write anything to the wire, so we can retry
-		// indefinitely.
-		if !nse.DoNotTransparentRetry {
-			return true, nil
-		}
+	if attempt.s == nil && attempt.allowTransparentRetry {
+		return true, nil
 	}
 	// Wait for the trailers.
 	unprocessed := false
-	if cs.attempt.s != nil {
-		<-cs.attempt.s.Done()
-		unprocessed = cs.attempt.s.Unprocessed()
+	if attempt.s != nil {
+		<-attempt.s.Done()
+		unprocessed = attempt.s.Unprocessed()
 	}
 	if cs.firstAttempt && unprocessed {
 		// First attempt, stream unprocessed: transparently retry.
@@ -579,14 +593,14 @@ func (cs *clientStream) shouldRetry(err error) (bool, error) {
 
 	pushback := 0
 	hasPushback := false
-	if cs.attempt.s != nil {
-		if !cs.attempt.s.TrailersOnly() {
+	if attempt.s != nil {
+		if !attempt.s.TrailersOnly() {
 			return false, err
 		}
 
 		// TODO(retry): Move down if the spec changes to not check server pushback
 		// before considering this a failure for throttling.
-		sps := cs.attempt.s.Trailer()["grpc-retry-pushback-ms"]
+		sps := attempt.s.Trailer()["grpc-retry-pushback-ms"]
 		if len(sps) == 1 {
 			var e error
 			if pushback, e = strconv.Atoi(sps[0]); e != nil || pushback < 0 {
@@ -603,10 +617,10 @@ func (cs *clientStream) shouldRetry(err error) (bool, error) {
 	}
 
 	var code codes.Code
-	if cs.attempt.s != nil {
-		code = cs.attempt.s.Status().Code()
+	if attempt.s != nil {
+		code = attempt.s.Status().Code()
 	} else {
-		code = status.Convert(err).Code()
+		code = status.Code(err)
 	}
 
 	rp := cs.methodConfig.RetryPolicy
@@ -653,7 +667,11 @@ func (cs *clientStream) shouldRetry(err error) (bool, error) {
 // Returns nil if a retry was performed and succeeded; error otherwise.
 func (cs *clientStream) retryLocked(lastErr error) error {
 	for {
-		cs.attempt.finish(toRPCErr(lastErr))
+		attempt := cs.newAttempt
+		if attempt == nil {
+			attempt = cs.attempt
+		}
+		attempt.finish(toRPCErr(lastErr))
 		isTransparent, err := cs.shouldRetry(lastErr)
 		if err != nil {
 			cs.commitAttemptLocked()
@@ -661,6 +679,9 @@ func (cs *clientStream) retryLocked(lastErr error) error {
 		}
 		cs.firstAttempt = false
 		if err := cs.newAttemptLocked(isTransparent); err != nil {
+			// Only returns error if the clientconn is closed or the context of
+			// the stream is canceled.
+			cs.finish(err)
 			return err
 		}
 		if lastErr = cs.replayBufferLocked(); lastErr == nil {
@@ -673,7 +694,10 @@ func (cs *clientStream) Context() context.Context {
 	cs.commitAttempt()
 	// No need to lock before using attempt, since we know it is committed and
 	// cannot change.
-	return cs.attempt.s.Context()
+	if cs.attempt.s != nil {
+		return cs.attempt.s.Context()
+	}
+	return cs.ctx
 }
 
 func (cs *clientStream) withRetry(op func(a *csAttempt) error, onSuccess func()) error {
@@ -687,11 +711,14 @@ func (cs *clientStream) withRetry(op func(a *csAttempt) error, onSuccess func())
 			// already be status errors.
 			return toRPCErr(op(cs.attempt))
 		}
-		a := cs.attempt
+		a := cs.newAttempt
+		if a == nil {
+			a = cs.attempt
+		}
 		cs.mu.Unlock()
 		err := op(a)
 		cs.mu.Lock()
-		if a != cs.attempt {
+		if (cs.newAttempt == nil && a != cs.attempt) || (cs.newAttempt != nil && a != cs.newAttempt) {
 			// We started another attempt already.
 			continue
 		}
@@ -734,7 +761,7 @@ func (cs *clientStream) Header() (metadata.MD, error) {
 		cs.binlog.Log(logEntry)
 		cs.serverHeaderBinlogged = true
 	}
-	return m, err
+	return m, nil
 }
 
 func (cs *clientStream) Trailer() metadata.MD {
@@ -753,8 +780,11 @@ func (cs *clientStream) Trailer() metadata.MD {
 }
 
 func (cs *clientStream) replayBufferLocked() error {
-	a := cs.attempt
 	for _, f := range cs.buffer {
+		a := cs.newAttempt
+		if a == nil {
+			a = cs.attempt
+		}
 		if err := f(a); err != nil {
 			return err
 		}
@@ -805,11 +835,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	}
 	msgBytes := data // Store the pointer before setting to nil. For binary logging.
 	op := func(a *csAttempt) error {
-		err := a.sendMsg(m, hdr, payload, data)
-		// nil out the message and uncomp when replaying; they are only needed for
-		// stats which is disabled for subsequent attempts.
-		m, data = nil, nil
-		return err
+		return a.sendMsg(m, hdr, payload, data)
 	}
 	err = cs.withRetry(op, func() { cs.bufferForRetryLocked(len(hdr)+len(payload), op) })
 	if cs.binlog != nil && err == nil {
@@ -818,7 +844,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 			Message:      msgBytes,
 		})
 	}
-	return
+	return err
 }
 
 func (cs *clientStream) RecvMsg(m interface{}) error {
