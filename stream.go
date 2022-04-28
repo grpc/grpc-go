@@ -816,7 +816,6 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if len(payload) > *cs.callInfo.maxSendMessageSize {
 		return status.Errorf(codes.ResourceExhausted, "trying to send message larger than max (%d vs. %d)", len(payload), *cs.callInfo.maxSendMessageSize)
 	}
-	msgBytes := data // Store the pointer before setting to nil. For binary logging.
 	op := func(a *csAttempt) error {
 		return a.sendMsg(m, hdr, payload, data)
 	}
@@ -824,7 +823,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 	if cs.binlog != nil && err == nil {
 		cs.binlog.Log(&binarylog.ClientMessage{
 			OnClientSide: true,
-			Message:      msgBytes,
+			Message:      data,
 		})
 	}
 	return err
