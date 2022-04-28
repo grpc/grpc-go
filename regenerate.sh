@@ -122,10 +122,6 @@ mv ${WORKDIR}/out/google.golang.org/grpc/lookup/grpc_lookup_v1/* ${WORKDIR}/out/
 rm ${WORKDIR}/out/google.golang.org/grpc/reflection/grpc_testing_not_regenerate/*.pb.go
 
 # grpc/service_config/service_config.proto does not have a go_package option.
-mv ${WORKDIR}/out/grpc/service_config/service_config.pb.go internal/proto/grpc_service_config
-
-# grpc/testing does not have a go_package option.
-mv ${WORKDIR}/out/grpc/testing/*.pb.go interop/grpc_testing/
-mv ${WORKDIR}/out/grpc/core/*.pb.go interop/grpc_testing/core/
+mv ${WORKDIR}/out/internal/proto/grpc_service_config/service_config.pb.go internal/proto/grpc_service_config
 
 cp -R ${WORKDIR}/out/google.golang.org/grpc/* .
