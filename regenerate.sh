@@ -31,8 +31,8 @@ echo "remove existing generated files"
 # see grpc_testing_not_regenerate/README.md for details.
 rm -f $(find . -name '*.pb.go' | grep -v 'grpc_testing_not_regenerate')
 
-echo "go install google.golang.org/protobuf/cmd/protoc-gen-go"
-(cd test/tools && go install google.golang.org/protobuf/cmd/protoc-gen-go)
+echo "go install google.golang.org/protobuf/cmd/protoc-gen-go@latest"
+(cd test/tools && go install google.golang.org/protobuf/cmd/protoc-gen-go && protoc-gen-go --version)
 
 echo "go install cmd/protoc-gen-go-grpc"
 (cd cmd/protoc-gen-go-grpc && go install .)
@@ -41,7 +41,7 @@ echo "git clone https://github.com/grpc/grpc-proto"
 git clone --quiet https://github.com/grpc/grpc-proto ${WORKDIR}/grpc-proto
 
 echo "git clone https://github.com/protocolbuffers/protobuf"
-git clone --quiet https://github.com/protocolbuffers/protobuf ${WORKDIR}/protobuf
+git clone --quiet --depth 20 https://github.com/protocolbuffers/protobuf ${WORKDIR}/protobuf
 
 # Pull in code.proto as a proto dependency
 mkdir -p ${WORKDIR}/googleapis/google/rpc
@@ -122,10 +122,6 @@ mv ${WORKDIR}/out/google.golang.org/grpc/lookup/grpc_lookup_v1/* ${WORKDIR}/out/
 rm ${WORKDIR}/out/google.golang.org/grpc/reflection/grpc_testing_not_regenerate/*.pb.go
 
 # grpc/service_config/service_config.proto does not have a go_package option.
-mv ${WORKDIR}/out/grpc/service_config/service_config.pb.go internal/proto/grpc_service_config
-
-# grpc/testing does not have a go_package option.
-mv ${WORKDIR}/out/grpc/testing/*.pb.go interop/grpc_testing/
-mv ${WORKDIR}/out/grpc/core/*.pb.go interop/grpc_testing/core/
+mv ${WORKDIR}/out/internal/proto/grpc_service_config/service_config.pb.go internal/proto/grpc_service_config
 
 cp -R ${WORKDIR}/out/google.golang.org/grpc/* .

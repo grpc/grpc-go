@@ -25,13 +25,13 @@ import (
 
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -99,7 +99,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 	// cspNames represents all the cluster specifiers referenced by Route
 	// Actions - any cluster specifiers not referenced by a Route Action can be
 	// ignored and not emitted by the xdsclient.
-	var cspNames = make(map[string]bool)
+	cspNames := make(map[string]bool)
 	for _, vh := range rc.GetVirtualHosts() {
 		routes, cspNs, err := routesProtoToSlice(vh.Routes, csps, logger, v2)
 		if err != nil {
@@ -228,7 +228,7 @@ func generateRetryConfig(rp *v3routepb.RetryPolicy) (*RetryConfig, error) {
 
 func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecifier.BalancerConfig, logger *grpclog.PrefixLogger, v2 bool) ([]*Route, map[string]bool, error) {
 	var routesRet []*Route
-	var cspNames = make(map[string]bool)
+	cspNames := make(map[string]bool)
 	for _, r := range routes {
 		match := r.GetMatch()
 		if match == nil {

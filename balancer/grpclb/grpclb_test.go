@@ -47,10 +47,10 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 
-	durationpb "github.com/golang/protobuf/ptypes/duration"
 	lbgrpc "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	testpb "google.golang.org/grpc/test/grpc_testing"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
 )
 
 var (
@@ -91,6 +91,7 @@ func (c *serverNameCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, cred
 	}
 	return rawConn, nil, nil
 }
+
 func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -115,12 +116,15 @@ func (c *serverNameCheckCreds) ClientHandshake(ctx context.Context, authority st
 	}
 	return rawConn, nil, nil
 }
+
 func (c *serverNameCheckCreds) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{}
 }
+
 func (c *serverNameCheckCreds) Clone() credentials.TransportCredentials {
 	return &serverNameCheckCreds{}
 }
+
 func (c *serverNameCheckCreds) OverrideServerName(s string) error {
 	return nil
 }

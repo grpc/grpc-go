@@ -21,7 +21,7 @@
 package clusterspecifier
 
 import (
-	"github.com/golang/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 // BalancerConfig is the Go Native JSON representation of a balancer
@@ -41,10 +41,8 @@ type ClusterSpecifier interface {
 	ParseClusterSpecifierConfig(proto.Message) (BalancerConfig, error)
 }
 
-var (
-	// m is a map from scheme to filter.
-	m = make(map[string]ClusterSpecifier)
-)
+// m is a map from scheme to filter.
+var m = make(map[string]ClusterSpecifier)
 
 // Register registers the ClusterSpecifierPlugin to the ClusterSpecifier map.
 // cs.TypeURLs() will be used as the types for this ClusterSpecifierPlugin.

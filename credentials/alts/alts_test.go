@@ -25,9 +25,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 	"google.golang.org/grpc/internal/grpctest"
+	"google.golang.org/protobuf/proto"
 )
 
 type s struct {

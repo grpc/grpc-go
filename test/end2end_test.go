@@ -41,8 +41,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	anypb "github.com/golang/protobuf/ptypes/any"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
@@ -74,6 +72,8 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
+	"google.golang.org/protobuf/proto"
+	anypb "google.golang.org/protobuf/types/known/anypb"
 )
 
 const defaultHealthService = "grpc.health.v1.Health"
@@ -3593,7 +3593,6 @@ func testMultipleSetHeaderStreamingRPC(t *testing.T, e env) {
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
 	}
-
 }
 
 func (s) TestMultipleSetHeaderStreamingRPCError(t *testing.T) {
@@ -4205,7 +4204,6 @@ func testServerStreamingConcurrent(t *testing.T, e env) {
 		}()
 	}
 	wg.Wait()
-
 }
 
 func generatePayloadSizes() [][]int {
@@ -5061,15 +5059,19 @@ type clientFailCreds struct{}
 func (c *clientFailCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return rawConn, nil, nil
 }
+
 func (c *clientFailCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return nil, nil, fmt.Errorf("client handshake fails with fatal error")
 }
+
 func (c *clientFailCreds) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{}
 }
+
 func (c *clientFailCreds) Clone() credentials.TransportCredentials {
 	return c
 }
+
 func (c *clientFailCreds) OverrideServerName(s string) error {
 	return nil
 }
@@ -5630,7 +5632,6 @@ func (s) TestTapTimeout(t *testing.T) {
 			t.Fatalf("ss.Client.EmptyCall(ctx, _) = %v, %v; want nil, <status with Code()=Canceled>", res, err)
 		}
 	}
-
 }
 
 func (s) TestClientWriteFailsAfterServerClosesStream(t *testing.T) {
@@ -5752,7 +5753,6 @@ func (s) TestWaitForReadyConnection(t *testing.T) {
 	for _, e := range listTestEnv() {
 		testWaitForReadyConnection(t, e)
 	}
-
 }
 
 func testWaitForReadyConnection(t *testing.T, e env) {
@@ -7799,9 +7799,11 @@ func (cvd *credentialsVerifyDeadline) ClientHandshake(ctx context.Context, autho
 func (cvd *credentialsVerifyDeadline) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{}
 }
+
 func (cvd *credentialsVerifyDeadline) Clone() credentials.TransportCredentials {
 	return cvd
 }
+
 func (cvd *credentialsVerifyDeadline) OverrideServerName(s string) error {
 	return nil
 }

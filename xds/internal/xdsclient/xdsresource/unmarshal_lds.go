@@ -27,12 +27,11 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -145,17 +144,17 @@ func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.Prefi
 
 func unwrapHTTPFilterConfig(config *anypb.Any) (proto.Message, string, error) {
 	switch {
-	case ptypes.Is(config, &v3cncftypepb.TypedStruct{}):
+	case config.MessageIs(&v3cncftypepb.TypedStruct{}):
 		// The real type name is inside the new TypedStruct message.
 		s := new(v3cncftypepb.TypedStruct)
-		if err := ptypes.UnmarshalAny(config, s); err != nil {
+		if err := config.UnmarshalTo(s); err != nil {
 			return nil, "", fmt.Errorf("error unmarshalling TypedStruct filter config: %v", err)
 		}
 		return s, s.GetTypeUrl(), nil
-	case ptypes.Is(config, &v1udpatypepb.TypedStruct{}):
+	case config.MessageIs(&v1udpatypepb.TypedStruct{}):
 		// The real type name is inside the old TypedStruct message.
 		s := new(v1udpatypepb.TypedStruct)
-		if err := ptypes.UnmarshalAny(config, s); err != nil {
+		if err := config.UnmarshalTo(s); err != nil {
 			return nil, "", fmt.Errorf("error unmarshalling TypedStruct filter config: %v", err)
 		}
 		return s, s.GetTypeUrl(), nil
@@ -195,8 +194,8 @@ func processHTTPFilterOverrides(cfgs map[string]*anypb.Any) (map[string]httpfilt
 	for name, cfg := range cfgs {
 		optional := false
 		s := new(v3routepb.FilterConfig)
-		if ptypes.Is(cfg, s) {
-			if err := ptypes.UnmarshalAny(cfg, s); err != nil {
+		if cfg.MessageIs(s) {
+			if err := cfg.UnmarshalTo(s); err != nil {
 				return nil, fmt.Errorf("filter override %q: error unmarshalling FilterConfig: %v", name, err)
 			}
 			cfg = s.GetConfig()

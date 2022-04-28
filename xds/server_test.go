@@ -48,7 +48,7 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 const (

@@ -25,14 +25,14 @@ import (
 	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	"github.com/golang/protobuf/proto"
-	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/proto"
+	anypb "google.golang.org/protobuf/types/known/anypb"
 )
 
 const (
@@ -268,7 +268,7 @@ func (s) TestV2ClientAck(t *testing.T) {
 // Test when the first response is invalid, and is nacked, the nack requests
 // should have an empty version string.
 func (s) TestV2ClientAckFirstIsNack(t *testing.T) {
-	var versionLDS = 1000
+	versionLDS := 1000
 
 	fakeServer, cleanup := startServer(t)
 	defer cleanup()
@@ -303,7 +303,7 @@ func (s) TestV2ClientAckFirstIsNack(t *testing.T) {
 // Test when a nack is sent after a new watch, we nack with the previous acked
 // version (instead of resetting to empty string).
 func (s) TestV2ClientAckNackAfterNewWatch(t *testing.T) {
-	var versionLDS = 1000
+	versionLDS := 1000
 
 	fakeServer, cleanup := startServer(t)
 	defer cleanup()
@@ -348,7 +348,7 @@ func (s) TestV2ClientAckNackAfterNewWatch(t *testing.T) {
 // TestV2ClientAckNewWatchAfterCancel verifies the new request for a new watch
 // after the previous watch is canceled, has the right version.
 func (s) TestV2ClientAckNewWatchAfterCancel(t *testing.T) {
-	var versionCDS = 3000
+	versionCDS := 3000
 
 	fakeServer, cleanup := startServer(t)
 	defer cleanup()
@@ -406,7 +406,7 @@ func (s) TestV2ClientAckNewWatchAfterCancel(t *testing.T) {
 // because there's no active watch), the nonce will still be updated, and the
 // new request with the new watch will have the correct nonce.
 func (s) TestV2ClientAckCancelResponseRace(t *testing.T) {
-	var versionCDS = 3000
+	versionCDS := 3000
 
 	fakeServer, cleanup := startServer(t)
 	defer cleanup()

@@ -30,7 +30,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -39,6 +38,7 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
+	"google.golang.org/protobuf/proto"
 )
 
 func (s) TestRetryUnary(t *testing.T) {
@@ -490,11 +490,13 @@ type retryStatsHandler struct {
 func (*retryStatsHandler) TagRPC(ctx context.Context, _ *stats.RPCTagInfo) context.Context {
 	return ctx
 }
+
 func (h *retryStatsHandler) HandleRPC(_ context.Context, s stats.RPCStats) {
 	h.mu.Lock()
 	h.s = append(h.s, s)
 	h.mu.Unlock()
 }
+
 func (*retryStatsHandler) TagConn(ctx context.Context, _ *stats.ConnTagInfo) context.Context {
 	return ctx
 }

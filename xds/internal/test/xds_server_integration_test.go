@@ -48,10 +48,10 @@ import (
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
-	anypb "github.com/golang/protobuf/ptypes/any"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	testpb "google.golang.org/grpc/test/grpc_testing"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 const (

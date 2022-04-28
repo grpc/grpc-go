@@ -27,13 +27,13 @@ import (
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	anypb "github.com/golang/protobuf/ptypes/any"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func (s) TestEDSParseRespProto(t *testing.T) {
@@ -174,7 +174,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 }
 
 func (s) TestUnmarshalEndpoints(t *testing.T) {
-	var v3EndpointsAny = testutils.MarshalAny(func() *v3endpointpb.ClusterLoadAssignment {
+	v3EndpointsAny := testutils.MarshalAny(func() *v3endpointpb.ClusterLoadAssignment {
 		clab0 := newClaBuilder("test", nil)
 		clab0.addLocality("locality-1", 1, 1, []string{"addr1:314"}, &addLocalityOptions{
 			Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},

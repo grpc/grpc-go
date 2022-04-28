@@ -24,17 +24,17 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
-	apb "github.com/golang/protobuf/ptypes/any"
-	dpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	cpb "google.golang.org/genproto/googleapis/rpc/code"
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/status"
+	"google.golang.org/protobuf/proto"
+	apb "google.golang.org/protobuf/types/known/anypb"
+	dpb "google.golang.org/protobuf/types/known/durationpb"
 )
 
 type s struct {
@@ -315,7 +315,7 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 				},
 			}),
 			[]interface{}{
-				errors.New(`message type url "" is invalid`),
+				proto.Error, // we should not compare proto error by string
 				&epb.ResourceInfo{
 					ResourceType: "book",
 					ResourceName: "projects/1234/books/5678",
@@ -326,14 +326,10 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 	}
 	for _, tc := range tests {
 		got := tc.s.Details()
-		if !cmp.Equal(got, tc.i, cmp.Comparer(proto.Equal), cmp.Comparer(equalError)) {
+		if !cmp.Equal(got, tc.i, cmp.Comparer(proto.Equal), cmpopts.EquateErrors()) {
 			t.Errorf("(%v).Details() = %+v, want %+v", str(tc.s), got, tc.i)
 		}
 	}
-}
-
-func equalError(x, y error) bool {
-	return x == y || (x != nil && y != nil && x.Error() == y.Error())
 }
 
 func str(s *Status) string {
@@ -348,9 +344,9 @@ func str(s *Status) string {
 
 // mustMarshalAny converts a protobuf message to an any.
 func mustMarshalAny(msg proto.Message) *apb.Any {
-	any, err := ptypes.MarshalAny(msg)
+	any, err := apb.New(msg)
 	if err != nil {
-		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", msg, err))
+		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", msg, err))
 	}
 	return any
 }

@@ -26,7 +26,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/encoding"
 	protoenc "google.golang.org/grpc/encoding/proto"
@@ -34,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/status"
 	perfpb "google.golang.org/grpc/test/codec_perf"
+	"google.golang.org/protobuf/proto"
 )
 
 type fullReader struct {

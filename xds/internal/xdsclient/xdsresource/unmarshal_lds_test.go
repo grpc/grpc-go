@@ -24,7 +24,6 @@ import (
 	"time"
 
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/envconfig"
@@ -34,6 +33,7 @@ import (
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v1udpatypepb "github.com/cncf/udpa/go/udpa/type/v1"
@@ -50,9 +50,9 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
-	anypb "github.com/golang/protobuf/ptypes/any"
-	spb "github.com/golang/protobuf/ptypes/struct"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+	spb "google.golang.org/protobuf/types/known/structpb"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func (s) TestUnmarshalListener_ClientSide(t *testing.T) {

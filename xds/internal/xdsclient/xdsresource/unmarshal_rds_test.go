@@ -25,7 +25,6 @@ import (
 	"time"
 
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/codes"
@@ -34,6 +33,7 @@ import (
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -44,8 +44,8 @@ import (
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/rbac/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	anypb "github.com/golang/protobuf/ptypes/any"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {

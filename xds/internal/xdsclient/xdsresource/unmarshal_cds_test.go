@@ -41,7 +41,7 @@ import (
 	v3aggregateclusterpb "github.com/envoyproxy/go-control-plane/envoy/extensions/clusters/aggregate/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
-	anypb "github.com/golang/protobuf/ptypes/any"
+	anypb "google.golang.org/protobuf/types/known/anypb"
 )
 
 const (
@@ -669,7 +669,7 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 		sanRegexGood           = "san?regex?"
 		sanContains            = "san-contains"
 	)
-	var sanRE = regexp.MustCompile(sanRegexGood)
+	sanRE := regexp.MustCompile(sanRegexGood)
 
 	tests := []struct {
 		name       string

@@ -21,15 +21,12 @@
 package bootstrap
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/url"
 	"strings"
 
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
@@ -40,6 +37,8 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -370,7 +369,7 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	}
 
 	var node *v3corepb.Node
-	m := jsonpb.Unmarshaler{AllowUnknownFields: true}
+	m := protojson.UnmarshalOptions{DiscardUnknown: true}
 	for k, v := range jsonData {
 		switch k {
 		case "node":
@@ -381,7 +380,8 @@ func newConfigFromContents(data []byte) (*Config, error) {
 			// because we have set the `AllowUnknownFields` option on the
 			// unmarshaler.
 			node = &v3corepb.Node{}
-			if err := m.Unmarshal(bytes.NewReader(v), node); err != nil {
+			j, _ := v.MarshalJSON()
+			if err := m.Unmarshal(j, node); err != nil {
 				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
 			}
 		case "xds_servers":

@@ -26,7 +26,6 @@ import (
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
-	durationpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -36,6 +35,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
 
 	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2" // Register the v2 xDS API client.
 )

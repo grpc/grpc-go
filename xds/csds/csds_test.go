@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -38,6 +37,8 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -311,7 +312,7 @@ func checkForRequested(stream v3statuspbgrpc.ClientStatusDiscoveryService_Stream
 	}
 
 	if n := len(r.Config); n != 1 {
-		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(r))
+		return fmt.Errorf("got %d configs, want 1: %v", n, prototext.Format(r))
 	}
 
 	var want []*v3statuspb.ClientConfig_GenericXdsConfig
@@ -355,7 +356,7 @@ func checkForACKed(stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClie
 	}
 
 	if n := len(r.Config); n != 1 {
-		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(r))
+		return fmt.Errorf("got %d configs, want 1: %v", n, prototext.Format(r))
 	}
 
 	var want []*v3statuspb.ClientConfig_GenericXdsConfig
@@ -417,7 +418,7 @@ func checkForNACKed(nackResourceIdx int, stream v3statuspbgrpc.ClientStatusDisco
 	}
 
 	if n := len(r.Config); n != 1 {
-		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(r))
+		return fmt.Errorf("got %d configs, want 1: %v", n, prototext.Format(r))
 	}
 
 	var want []*v3statuspb.ClientConfig_GenericXdsConfig
@@ -548,7 +549,7 @@ func (s) TestCSDSNoXDSClient(t *testing.T) {
 		t.Fatalf("failed to recv response: %v", err)
 	}
 	if n := len(r.Config); n != 0 {
-		t.Fatalf("got %d configs, want 0: %v", n, proto.MarshalTextString(r))
+		t.Fatalf("got %d configs, want 0: %v", n, prototext.Format(r))
 	}
 }
 

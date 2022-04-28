@@ -23,8 +23,6 @@ import (
 	"context"
 	"net"
 
-	"github.com/golang/protobuf/ptypes"
-	wrpb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc"
 	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
@@ -34,6 +32,9 @@ import (
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+	wrpb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func init() {
@@ -79,7 +80,8 @@ func connectivityStateToProto(s connectivity.State) *channelzpb.ChannelConnectiv
 func channelTraceToProto(ct *channelz.ChannelTrace) *channelzpb.ChannelTrace {
 	pbt := &channelzpb.ChannelTrace{}
 	pbt.NumEventsLogged = ct.EventNum
-	if ts, err := ptypes.TimestampProto(ct.CreationTime); err == nil {
+	ts := timestamppb.New(ct.CreationTime)
+	if err := ts.CheckValid(); err == nil {
 		pbt.CreationTimestamp = ts
 	}
 	events := make([]*channelzpb.ChannelTraceEvent, 0, len(ct.Events))
@@ -88,7 +90,8 @@ func channelTraceToProto(ct *channelz.ChannelTrace) *channelzpb.ChannelTrace {
 			Description: e.Desc,
 			Severity:    channelzpb.ChannelTraceEvent_Severity(e.Severity),
 		}
-		if ts, err := ptypes.TimestampProto(e.Timestamp); err == nil {
+		ts := timestamppb.New(e.Timestamp)
+		if err := ts.CheckValid(); err == nil {
 			cte.Timestamp = ts
 		}
 		if e.RefID != 0 {
@@ -116,7 +119,8 @@ func channelMetricToProto(cm *channelz.ChannelMetric) *channelzpb.Channel {
 		CallsSucceeded: cm.ChannelData.CallsSucceeded,
 		CallsFailed:    cm.ChannelData.CallsFailed,
 	}
-	if ts, err := ptypes.TimestampProto(cm.ChannelData.LastCallStartedTimestamp); err == nil {
+	ts := timestamppb.New(cm.ChannelData.LastCallStartedTimestamp)
+	if err := ts.CheckValid(); err == nil {
 		c.Data.LastCallStartedTimestamp = ts
 	}
 	nestedChans := make([]*channelzpb.ChannelRef, 0, len(cm.NestedChans))
@@ -151,7 +155,8 @@ func subChannelMetricToProto(cm *channelz.SubChannelMetric) *channelzpb.Subchann
 		CallsSucceeded: cm.ChannelData.CallsSucceeded,
 		CallsFailed:    cm.ChannelData.CallsFailed,
 	}
-	if ts, err := ptypes.TimestampProto(cm.ChannelData.LastCallStartedTimestamp); err == nil {
+	ts := timestamppb.New(cm.ChannelData.LastCallStartedTimestamp)
+	if err := ts.CheckValid(); err == nil {
 		sc.Data.LastCallStartedTimestamp = ts
 	}
 	nestedChans := make([]*channelzpb.ChannelRef, 0, len(cm.NestedChans))
@@ -187,7 +192,7 @@ func securityToProto(se credentials.ChannelzSecurityValue) *channelzpb.Security 
 		otherSecurity := &channelzpb.Security_OtherSecurity{
 			Name: v.Name,
 		}
-		if anyval, err := ptypes.MarshalAny(v.Value); err == nil {
+		if anyval, err := anypb.New(v.Value); err == nil {
 			otherSecurity.Value = anyval
 		}
 		return &channelzpb.Security{Model: &channelzpb.Security_Other{Other: otherSecurity}}
@@ -227,17 +232,21 @@ func socketMetricToProto(sm *channelz.SocketMetric) *channelzpb.Socket {
 		MessagesReceived: sm.SocketData.MessagesReceived,
 		KeepAlivesSent:   sm.SocketData.KeepAlivesSent,
 	}
-	if ts, err := ptypes.TimestampProto(sm.SocketData.LastLocalStreamCreatedTimestamp); err == nil {
-		s.Data.LastLocalStreamCreatedTimestamp = ts
+	tsLlsc := timestamppb.New(sm.SocketData.LastLocalStreamCreatedTimestamp)
+	if err := tsLlsc.CheckValid(); err == nil {
+		s.Data.LastLocalStreamCreatedTimestamp = tsLlsc
 	}
-	if ts, err := ptypes.TimestampProto(sm.SocketData.LastRemoteStreamCreatedTimestamp); err == nil {
-		s.Data.LastRemoteStreamCreatedTimestamp = ts
+	tsLrsc := timestamppb.New(sm.SocketData.LastRemoteStreamCreatedTimestamp)
+	if err := tsLrsc.CheckValid(); err == nil {
+		s.Data.LastRemoteStreamCreatedTimestamp = tsLrsc
 	}
-	if ts, err := ptypes.TimestampProto(sm.SocketData.LastMessageSentTimestamp); err == nil {
-		s.Data.LastMessageSentTimestamp = ts
+	tsLms := timestamppb.New(sm.SocketData.LastMessageSentTimestamp)
+	if err := tsLms.CheckValid(); err == nil {
+		s.Data.LastMessageSentTimestamp = tsLms
 	}
-	if ts, err := ptypes.TimestampProto(sm.SocketData.LastMessageReceivedTimestamp); err == nil {
-		s.Data.LastMessageReceivedTimestamp = ts
+	tsLmr := timestamppb.New(sm.SocketData.LastMessageReceivedTimestamp)
+	if err := tsLmr.CheckValid(); err == nil {
+		s.Data.LastMessageReceivedTimestamp = tsLmr
 	}
 	s.Data.LocalFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.LocalFlowControlWindow}
 	s.Data.RemoteFlowControlWindow = &wrpb.Int64Value{Value: sm.SocketData.RemoteFlowControlWindow}
@@ -279,7 +288,8 @@ func serverMetricToProto(sm *channelz.ServerMetric) *channelzpb.Server {
 		CallsFailed:    sm.ServerData.CallsFailed,
 	}
 
-	if ts, err := ptypes.TimestampProto(sm.ServerData.LastCallStartedTimestamp); err == nil {
+	ts := timestamppb.New(sm.ServerData.LastCallStartedTimestamp)
+	if err := ts.CheckValid(); err == nil {
 		s.Data.LastCallStartedTimestamp = ts
 	}
 	sockets := make([]*channelzpb.SocketRef, 0, len(sm.ListenSockets))

@@ -25,13 +25,12 @@ import (
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -606,7 +605,7 @@ func processNetworkFilters(filters []*v3listenerpb.Filter) (*FilterChain, error)
 				return nil, fmt.Errorf("network filters {%+v} has unsupported network filter %q in filter {%+v}", filters, tc.GetTypeUrl(), filter)
 			}
 			hcm := &v3httppb.HttpConnectionManager{}
-			if err := ptypes.UnmarshalAny(tc, hcm); err != nil {
+			if err := tc.UnmarshalTo(hcm); err != nil {
 				return nil, fmt.Errorf("network filters {%+v} failed unmarshaling of network filter {%+v}: %v", filters, filter, err)
 			}
 			// "Any filters after HttpConnectionManager should be ignored during

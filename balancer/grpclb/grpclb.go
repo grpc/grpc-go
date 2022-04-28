@@ -40,8 +40,8 @@ import (
 	"google.golang.org/grpc/internal/resolver/dns"
 	"google.golang.org/grpc/resolver"
 
-	durationpb "github.com/golang/protobuf/ptypes/duration"
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
 )
 
 const (
@@ -50,8 +50,10 @@ const (
 	grpclbName             = "grpclb"
 )
 
-var errServerTerminatedConnection = errors.New("grpclb: failed to recv server list: server terminated connection")
-var logger = grpclog.Component("grpclb")
+var (
+	errServerTerminatedConnection = errors.New("grpclb: failed to recv server list: server terminated connection")
+	logger                        = grpclog.Component("grpclb")
+)
 
 func convertDuration(d *durationpb.Duration) time.Duration {
 	if d == nil {

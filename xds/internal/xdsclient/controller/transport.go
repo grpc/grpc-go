@@ -23,12 +23,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	controllerversion "google.golang.org/grpc/xds/internal/xdsclient/controller/version"
 	xdsresourceversion "google.golang.org/grpc/xds/internal/xdsclient/controller/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/protobuf/proto"
 )
 
 // AddWatch adds a watch for an xDS resource given its type and name.

@@ -12,3 +12,5 @@ require (
 replace google.golang.org/grpc => ../../
 
 replace google.golang.org/grpc/examples => ../../examples
+
+replace google.golang.org/grpc/reflection/grpc_testing_not_regenerate => ../../reflection/grpc_testing_not_regenerate

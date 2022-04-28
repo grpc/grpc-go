@@ -24,10 +24,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/durationpb"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v2endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
@@ -74,8 +74,8 @@ func (v2c *client) HandleLoadStatsResponse(s grpc.ClientStream) ([]string, time.
 	}
 	v2c.logger.Infof("lrs: received first LoadStatsResponse: %+v", pretty.ToJSON(resp))
 
-	interval, err := ptypes.Duration(resp.GetLoadReportingInterval())
-	if err != nil {
+	interval := resp.GetLoadReportingInterval().AsDuration()
+	if err := resp.GetLoadReportingInterval().CheckValid(); err != nil {
 		return nil, 0, fmt.Errorf("lrs: failed to convert report interval: %v", err)
 	}
 
@@ -142,7 +142,7 @@ func (v2c *client) SendLoadStatsRequest(s grpc.ClientStream, loads []*load.Data)
 			UpstreamLocalityStats: localityStats,
 			TotalDroppedRequests:  sd.TotalDrops,
 			DroppedRequests:       droppedReqs,
-			LoadReportInterval:    ptypes.DurationProto(sd.ReportInterval),
+			LoadReportInterval:    durationpb.New(sd.ReportInterval),
 		})
 
 	}

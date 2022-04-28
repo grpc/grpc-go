@@ -21,15 +21,14 @@ package service
 import (
 	"time"
 
-	"github.com/golang/protobuf/ptypes"
-	durpb "github.com/golang/protobuf/ptypes/duration"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/testutils"
+	durpb "google.golang.org/protobuf/types/known/durationpb"
 )
 
 func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
-	return ptypes.DurationProto(time.Duration(sec*1e9 + usec*1e3))
+	return durpb.New(time.Duration(sec*1e9 + usec*1e3))
 }
 
 func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {

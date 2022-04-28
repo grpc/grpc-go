@@ -20,10 +20,10 @@ package grpc_service_config_test
 import (
 	"testing"
 
-	"github.com/golang/protobuf/jsonpb"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	"google.golang.org/grpc/internal/grpctest"
 	scpb "google.golang.org/grpc/internal/proto/grpc_service_config"
+	"google.golang.org/protobuf/encoding/protojson"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 type s struct {
@@ -58,9 +58,9 @@ func (s) TestXdsConfigMarshalToJSON(t *testing.T) {
 			Value: "lrs.server.name",
 		},
 	}
-	j, err := (&jsonpb.Marshaler{}).MarshalToString(c)
+	j, err := protojson.Marshal(c)
 	if err != nil {
 		t.Fatalf("failed to marshal proto to json: %v", err)
 	}
-	t.Logf(j)
+	t.Logf(string(j))
 }

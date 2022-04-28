@@ -23,7 +23,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
@@ -36,6 +35,7 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/pubsub"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
@@ -43,8 +43,8 @@ import (
 	routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	httppb "github.com/envoyproxy/go-control-plane/envoy/config/filter/network/http_connection_manager/v2"
 	listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v2"
-	anypb "github.com/golang/protobuf/ptypes/any"
-	structpb "github.com/golang/protobuf/ptypes/struct"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 )
 
 type s struct {

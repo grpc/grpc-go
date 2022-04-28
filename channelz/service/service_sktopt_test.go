@@ -31,14 +31,13 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/golang/protobuf/ptypes"
-	durpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/sys/unix"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/protobuf/testing/protocmp"
+	durpb "google.golang.org/protobuf/types/known/durationpb"
 )
 
 func init() {
@@ -49,7 +48,8 @@ func init() {
 
 func convertToDuration(d *durpb.Duration) (sec int64, usec int64) {
 	if d != nil {
-		if dur, err := ptypes.Duration(d); err == nil {
+		if err := d.CheckValid(); err == nil {
+			dur := d.AsDuration()
 			sec = int64(int64(dur) / 1e9)
 			usec = (int64(dur) - sec*1e9) / 1e3
 		}
@@ -73,25 +73,25 @@ func protoToSocketOption(skopts []*channelzpb.SocketOption) *channelz.SocketOpti
 		switch opt.GetName() {
 		case "SO_LINGER":
 			protoLinger := &channelzpb.SocketOptionLinger{}
-			err := ptypes.UnmarshalAny(opt.GetAdditional(), protoLinger)
+			err := opt.GetAdditional().UnmarshalTo(protoLinger)
 			if err == nil {
 				skdata.Linger = protoToLinger(protoLinger)
 			}
 		case "SO_RCVTIMEO":
 			protoTimeout := &channelzpb.SocketOptionTimeout{}
-			err := ptypes.UnmarshalAny(opt.GetAdditional(), protoTimeout)
+			err := opt.GetAdditional().UnmarshalTo(protoTimeout)
 			if err == nil {
 				skdata.RecvTimeout = protoToTime(protoTimeout)
 			}
 		case "SO_SNDTIMEO":
 			protoTimeout := &channelzpb.SocketOptionTimeout{}
-			err := ptypes.UnmarshalAny(opt.GetAdditional(), protoTimeout)
+			err := opt.GetAdditional().UnmarshalTo(protoTimeout)
 			if err == nil {
 				skdata.SendTimeout = protoToTime(protoTimeout)
 			}
 		case "TCP_INFO":
 			tcpi := &channelzpb.SocketOptionTcpInfo{}
-			err := ptypes.UnmarshalAny(opt.GetAdditional(), tcpi)
+			err := opt.GetAdditional().UnmarshalTo(tcpi)
 			if err == nil {
 				skdata.TCPInfo = &unix.TCPInfo{
 					State:          uint8(tcpi.TcpiState),
@@ -120,7 +120,8 @@ func protoToSocketOption(skopts []*channelzpb.SocketOption) *channelz.SocketOpti
 					Snd_ssthresh:   tcpi.TcpiSndSsthresh,
 					Snd_cwnd:       tcpi.TcpiSndCwnd,
 					Advmss:         tcpi.TcpiAdvmss,
-					Reordering:     tcpi.TcpiReordering}
+					Reordering:     tcpi.TcpiReordering,
+				}
 			}
 		}
 	}

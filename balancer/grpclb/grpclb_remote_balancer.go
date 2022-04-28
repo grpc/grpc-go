@@ -26,8 +26,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	timestamppb "github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
@@ -39,6 +37,8 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/protobuf/proto"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // processServerList updates balancer's internal state, create/remove SubConns

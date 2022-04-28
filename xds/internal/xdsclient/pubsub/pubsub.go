@@ -27,11 +27,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/protobuf/proto"
 )
 
 // Pubsub maintains resource watchers and resource updates.

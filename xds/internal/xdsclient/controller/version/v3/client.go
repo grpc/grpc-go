@@ -23,7 +23,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/golang/protobuf/proto"
 	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -32,6 +31,7 @@ import (
 	controllerversion "google.golang.org/grpc/xds/internal/xdsclient/controller/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	xdsresourceversion "google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"

@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/binarylog"
 	"google.golang.org/grpc/credentials/insecure"
@@ -37,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
 	pb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"

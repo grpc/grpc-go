@@ -27,8 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
@@ -238,9 +236,8 @@ func protoToSecurity(protoSecurity *channelzpb.Security) credentials.ChannelzSec
 		return &credentials.TLSChannelzSecurityValue{StandardName: v.Tls.GetStandardName(), LocalCertificate: v.Tls.GetLocalCertificate(), RemoteCertificate: v.Tls.GetRemoteCertificate()}
 	case *channelzpb.Security_Other:
 		sv := &credentials.OtherChannelzSecurityValue{Name: v.Other.GetName()}
-		var x ptypes.DynamicAny
-		if err := ptypes.UnmarshalAny(v.Other.GetValue(), &x); err == nil {
-			sv.Value = x.Message
+		if msg, err := v.Other.GetValue().UnmarshalNew(); err == nil {
+			sv.Value = msg
 		}
 		return sv
 	}
@@ -268,20 +265,6 @@ func convertSocketRefSliceToMap(sktRefs []*channelzpb.SocketRef) map[int64]strin
 		m[sr.SocketId] = sr.Name
 	}
 	return m
-}
-
-type OtherSecurityValue struct {
-	LocalCertificate  []byte `protobuf:"bytes,1,opt,name=local_certificate,json=localCertificate,proto3" json:"local_certificate,omitempty"`
-	RemoteCertificate []byte `protobuf:"bytes,2,opt,name=remote_certificate,json=remoteCertificate,proto3" json:"remote_certificate,omitempty"`
-}
-
-func (m *OtherSecurityValue) Reset()         { *m = OtherSecurityValue{} }
-func (m *OtherSecurityValue) String() string { return proto.CompactTextString(m) }
-func (*OtherSecurityValue) ProtoMessage()    {}
-
-func init() {
-	// Ad-hoc registering the proto type here to facilitate UnmarshalAny of OtherSecurityValue.
-	proto.RegisterType((*OtherSecurityValue)(nil), "grpc.credentials.OtherChannelzSecurityValue")
 }
 
 func (s) TestGetTopChannels(t *testing.T) {

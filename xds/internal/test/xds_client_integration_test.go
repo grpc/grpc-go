@@ -48,8 +48,8 @@ import (
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 	testpb "google.golang.org/grpc/test/grpc_testing"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // clientSetup performs a bunch of steps common to all xDS client tests here:
