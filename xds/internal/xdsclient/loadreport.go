@@ -28,7 +28,9 @@ import (
 // It returns a Store for the user to report loads, a function to cancel the
 // load reporting stream.
 func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (*load.Store, func()) {
+	c.authorityMu.Lock()
 	a, err := c.newAuthority(server)
+	c.authorityMu.Unlock()
 	if err != nil {
 		c.logger.Infof("xds: failed to connect to the control plane to do load reporting for authority %q: %v", server, err)
 		return nil, func() {}
