@@ -300,8 +300,7 @@ func (c *clusterNode) handleResp(clusterUpdate xdsresource.ClusterUpdate, err er
 	}
 
 	// Aggregate cluster handling.
-	newChildren := make(map[string]bool)
-	for _, childName := range clusterUpdate.PrioritizedClusterNames {
+	if len(clusterUpdate.PrioritizedClusterNames) >= 1 {
 		if c.depth == maxDepth-1 {
 			// For a ClusterUpdate, the only update CDS cares about is the most
 			// recent one, so opportunistically drain the update channel before
@@ -315,6 +314,10 @@ func (c *clusterNode) handleResp(clusterUpdate xdsresource.ClusterUpdate, err er
 			c.maxDepthErr = errExceedsMaxDepth
 			return
 		}
+	}
+
+	newChildren := make(map[string]bool)
+	for _, childName := range clusterUpdate.PrioritizedClusterNames {
 		newChildren[childName] = true
 	}
 
