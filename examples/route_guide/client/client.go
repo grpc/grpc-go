@@ -51,7 +51,7 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	defer cancel()
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
-		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
+		log.Fatalf("client.GetFeature failed: %v", err)
 	}
 	log.Println(feature)
 }
@@ -63,7 +63,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 	defer cancel()
 	stream, err := client.ListFeatures(ctx, rect)
 	if err != nil {
-		log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+		log.Fatalf("client.ListFeatures failed: %v", err)
 	}
 	for {
 		feature, err := stream.Recv()
@@ -71,7 +71,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 			break
 		}
 		if err != nil {
-			log.Fatalf("%v.Recv() = _, %v", stream, err)
+			log.Fatalf("stream.Recv failed: %v", err)
 		}
 		log.Printf("Feature: name: %q, point:(%v, %v)", feature.GetName(),
 			feature.GetLocation().GetLatitude(), feature.GetLocation().GetLongitude())
@@ -92,16 +92,16 @@ func runRecordRoute(client pb.RouteGuideClient) {
 	defer cancel()
 	stream, err := client.RecordRoute(ctx)
 	if err != nil {
-		log.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
+		log.Fatalf("client.RecordRoute failed: %v", err)
 	}
 	for _, point := range points {
 		if err := stream.Send(point); err != nil {
-			log.Fatalf("%v.Send(%v) = %v", stream, point, err)
+			log.Fatalf("stream.Send(%v) failed: %v", point, err)
 		}
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
-		log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
+		log.Fatalf("stream.CloseAndRecv failed: %v", err)
 	}
 	log.Printf("Route summary: %v", reply)
 }
@@ -120,7 +120,7 @@ func runRouteChat(client pb.RouteGuideClient) {
 	defer cancel()
 	stream, err := client.RouteChat(ctx)
 	if err != nil {
-		log.Fatalf("%v.RouteChat(_) = _, %v", client, err)
+		log.Fatalf("client.RouteChat failed: %v", err)
 	}
 	waitc := make(chan struct{})
 	go func() {
