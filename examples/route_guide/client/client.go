@@ -71,7 +71,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 			break
 		}
 		if err != nil {
-			log.Fatalf("stream.Recv failed: %v", err)
+			log.Fatalf("client.ListFeatures failed: %v", err)
 		}
 		log.Printf("Feature: name: %q, point:(%v, %v)", feature.GetName(),
 			feature.GetLocation().GetLatitude(), feature.GetLocation().GetLongitude())
@@ -96,12 +96,12 @@ func runRecordRoute(client pb.RouteGuideClient) {
 	}
 	for _, point := range points {
 		if err := stream.Send(point); err != nil {
-			log.Fatalf("stream.Send(%v) failed: %v", point, err)
+			log.Fatalf("client.RecordRoute: stream.Send(%v) failed: %v", point, err)
 		}
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
-		log.Fatalf("stream.CloseAndRecv failed: %v", err)
+		log.Fatalf("client.RecordRoute failed: %v", err)
 	}
 	log.Printf("Route summary: %v", reply)
 }
@@ -132,14 +132,14 @@ func runRouteChat(client pb.RouteGuideClient) {
 				return
 			}
 			if err != nil {
-				log.Fatalf("Failed to receive a note : %v", err)
+				log.Fatalf("client.RouteChat failed: %v", err)
 			}
 			log.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
 		}
 	}()
 	for _, note := range notes {
 		if err := stream.Send(note); err != nil {
-			log.Fatalf("Failed to send a note: %v", err)
+			log.Fatalf("client.RouteChat: stream.Send(%v) failed: %v", note, err)
 		}
 	}
 	stream.CloseSend()
