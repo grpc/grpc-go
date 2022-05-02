@@ -115,7 +115,6 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 
 	// p0 is ready.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
@@ -223,7 +222,6 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 
 	// p0 is ready.
 	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
@@ -252,7 +250,6 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	}
 	sc1 := <-cc.NewSubConnCh
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 1.
@@ -313,7 +310,6 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	}
 	sc2 := <-cc.NewSubConnCh
 	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 2.
@@ -409,7 +405,6 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 
 	// p0 is ready.
 	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
@@ -438,7 +433,6 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 	}
 	sc1 := <-cc.NewSubConnCh
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 1.
@@ -566,7 +560,6 @@ func (s) TestPriority_HigherDownWhileAddingLower(t *testing.T) {
 	}
 	sc2 := <-cc.NewSubConnCh
 	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 2.
@@ -651,7 +644,6 @@ func (s) TestPriority_HigherReadyCloseAllLower(t *testing.T) {
 	}
 	sc2 := <-cc.NewSubConnCh
 	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 2.
@@ -752,7 +744,6 @@ func (s) TestPriority_InitTimeout(t *testing.T) {
 	// will be sent to the parent. Clear it here.
 	<-cc.NewPickerCh
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 1.
@@ -806,7 +797,6 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 	}
 	sc0 := <-cc.NewSubConnCh
 	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
@@ -880,7 +870,6 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 	}
 	sc11 := <-cc.NewSubConnCh
 	pb.UpdateSubConnState(sc11, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc11, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
@@ -924,7 +913,6 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 	// Send an ready update for the p0 sc that was received when re-adding
 	// priorities.
 	pb.UpdateSubConnState(sc01, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc01, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
@@ -980,7 +968,6 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 
 	// p0 is ready.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
@@ -1030,7 +1017,6 @@ func (s) TestPriority_HighPriorityNoEndpoints(t *testing.T) {
 
 	// p1 is ready.
 	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
@@ -1124,7 +1110,6 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 
 	// p0 is ready.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
@@ -1179,7 +1164,6 @@ func (s) TestPriority_MoveChildToHigherPriority(t *testing.T) {
 
 	// New p0 child is ready.
 	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only new subconns.
@@ -1242,7 +1226,6 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 	}
 	sc1 := <-cc.NewSubConnCh
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
@@ -1343,7 +1326,6 @@ func (s) TestPriority_RemoveReadyLowestChild(t *testing.T) {
 	}
 	sc1 := <-cc.NewSubConnCh
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
@@ -1435,7 +1417,6 @@ func (s) TestPriority_ReadyChildRemovedButInCache(t *testing.T) {
 
 	// p0 is ready.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
@@ -1539,7 +1520,6 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 
 	// p0 is ready.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
@@ -1580,7 +1560,6 @@ func (s) TestPriority_ChildPolicyChange(t *testing.T) {
 	}
 	sc2 := <-cc.NewSubConnCh
 	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pickfirst with the new subconns.

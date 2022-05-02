@@ -478,7 +478,6 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 	sc1 := <-cc.NewSubConnCh
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	<-cc.NewPickerCh // Clear the Connecting picker from the channel.
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Picks with drops.

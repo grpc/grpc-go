@@ -198,6 +198,7 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.S
 		b.logger.Warningf("priority: child balancer not found for child %v, priority %v", childName, priority)
 		return
 	}
+	oldChildState := child.state
 	child.state = s
 
 	// We start/stop the init timer of this child based on the new connectivity
@@ -228,6 +229,20 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.S
 	// syncing, the update being handled here is not sent to the parent. In that
 	// case, we need to do an explicit check here to forward the update.
 	if b.priorityInUse == oldPriorityInUse && b.priorityInUse == priority {
+		// Special handling for Connecting. If child was not switched, and this
+		// is a Connecting->Connecting transition, do not send the redundant
+		// update, since all Connecting pickers are the same (they tell the RPCs
+		// to repick).
+		//
+		// This can happen because the initial state of a child (before any
+		// update is received) is Connecting. When the child is started, it's
+		// picker is sent to the parent by syncPriority (to overwrite the old
+		// picker if there's any). When it reports Connecting after being
+		// started, it will send a Connecting update (handled here), causing a
+		// Connecting->Connecting transition.
+		if oldChildState.ConnectivityState == connectivity.Connecting && s.ConnectivityState == connectivity.Connecting {
+			return
+		}
 		// Only forward this update if sync() didn't switch child, and this
 		// child is in use.
 		//
