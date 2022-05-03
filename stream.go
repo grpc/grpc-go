@@ -673,7 +673,6 @@ func (cs *clientStream) retryLocked(attempt *csAttempt, lastErr error) error {
 		if err != nil {
 			// Only returns error if the clientconn is closed or the context of
 			// the stream is canceled.
-			cs.finish(err)
 			return err
 		}
 		// Note that the first op in the replay buffer always sets cs.attempt
