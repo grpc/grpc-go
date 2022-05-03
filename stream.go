@@ -309,9 +309,8 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		return nil, err
 	}
 
-	// Because this operation is always called either here (while creating the
-	// clientStream) or by the retry code while locked when replaying the
-	// operation, it is safe to access cs.attempt directly.
+	// Pick the transport to use and create a new stream on the transport.
+	// Assign cs.attempt upon success.
 	op := func(a *csAttempt) error {
 		if err := a.getTransport(); err != nil {
 			return err
@@ -319,6 +318,9 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		if err := a.newStream(); err != nil {
 			return err
 		}
+		// Because this operation is always called either here (while creating
+		// the clientStream) or by the retry code while locked when replaying
+		// the operation, it is safe to access cs.attempt directly.
 		cs.attempt = a
 		return nil
 	}
@@ -674,6 +676,8 @@ func (cs *clientStream) retryLocked(attempt *csAttempt, lastErr error) error {
 			cs.finish(err)
 			return err
 		}
+		// Note that the first op in the replay buffer always sets cs.attempt
+		// if it is able to pick a transport and create a stream.
 		if lastErr = cs.replayBufferLocked(attempt); lastErr == nil {
 			return nil
 		}
