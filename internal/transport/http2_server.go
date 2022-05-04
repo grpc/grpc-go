@@ -169,7 +169,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	// permitted in the HTTP2 spec.
 	maxStreams := config.MaxStreams
 	if maxStreams == 0 {
-		maxStreams = math.MaxUint32
+		maxStreams = defaultMaxStreamsServer
 	} else {
 		isettings = append(isettings, http2.Setting{
 			ID:  http2.SettingMaxConcurrentStreams,

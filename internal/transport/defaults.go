@@ -35,6 +35,7 @@ const (
 	defaultMaxConnectionIdle      = infinity
 	defaultMaxConnectionAge       = infinity
 	defaultMaxConnectionAgeGrace  = infinity
+	defaultMaxStreamsServer       = math.MaxUint32
 	defaultServerKeepaliveTime    = 2 * time.Hour
 	defaultServerKeepaliveTimeout = 20 * time.Second
 	defaultKeepalivePolicyMinTime = 5 * time.Minute

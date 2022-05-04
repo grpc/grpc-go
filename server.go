@@ -360,6 +360,7 @@ func MaxSendMsgSize(m int) ServerOption {
 
 // MaxConcurrentStreams returns a ServerOption that will apply a limit on the number
 // of concurrent streams to each ServerTransport.
+// If this is not set, gRPC uses the default `math.MaxInt32`.
 func MaxConcurrentStreams(n uint32) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.maxConcurrentStreams = n
