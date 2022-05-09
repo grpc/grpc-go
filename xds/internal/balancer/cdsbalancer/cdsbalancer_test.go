@@ -700,9 +700,7 @@ func (s) TestClose(t *testing.T) {
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
 	xdsC, cdsB, edsB, _, cancel := setupWithWatch(t)
-	defer func() {
-		cancel()
-	}()
+	defer cancel()
 
 	// Here we invoke the watch callback registered on the fake xdsClient. This
 	// will trigger the watch handler on the CDS balancer, which will attempt to
@@ -845,12 +843,6 @@ func (s) TestParseConfig(t *testing.T) {
 }
 
 func (s) TestOutlierDetectionToConfig(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
-	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
-	}()
-
 	tests := []struct {
 		name        string
 		od          *xdsresource.OutlierDetection
