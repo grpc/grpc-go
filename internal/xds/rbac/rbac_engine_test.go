@@ -936,8 +936,78 @@ func (s) TestChainEngine(t *testing.T) {
 				},
 			},
 		},
+		// This test tests that an RBAC policy configured with a metadata
+		// matcher as a permission doesn't match with any incoming RPC.
+		{
+			name: "metadata-never-matches",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"metadata-never-matches": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Metadata{
+									Metadata: &v3matcherpb.MetadataMatcher{},
+								}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				rpcData        *rpcData
+				wantStatusCode codes.Code
+			}{
+				{
+					rpcData: &rpcData{
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.PermissionDenied,
+				},
+			},
+		},
+		// This test tests that an RBAC policy configured with a metadata
+		// matcher with invert set to true as a permission always matches with
+		// any incoming RPC.
+		{
+			name: "metadata-invert-always-matches",
+			rbacConfigs: []*v3rbacpb.RBAC{
+				{
+					Policies: map[string]*v3rbacpb.Policy{
+						"metadata-invert-always-matches": {
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Metadata{
+									Metadata: &v3matcherpb.MetadataMatcher{Invert: true},
+								}},
+							},
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+			rbacQueries: []struct {
+				rpcData        *rpcData
+				wantStatusCode codes.Code
+			}{
+				{
+					rpcData: &rpcData{
+						fullMethod: "some method",
+						peerInfo: &peer.Peer{
+							Addr: &addr{ipAddress: "0.0.0.0"},
+						},
+					},
+					wantStatusCode: codes.OK,
+				},
+			},
+		},
 	}
-
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// Instantiate the chainedRBACEngine with different configurations that are
