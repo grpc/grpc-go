@@ -1223,6 +1223,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		ac.mu.Lock()
 		defer ac.mu.Unlock()
 		defer connClosed.Fire()
+		hcancel()
 		if !hcStarted || hctx.Err() != nil {
 			// We didn't start the health check or set the state to READY, so
 			// no need to do anything else here.
@@ -1233,7 +1234,6 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 			// state, since there may be a new transport in this addrConn.
 			return
 		}
-		hcancel()
 		ac.transport = nil
 		// Refresh the name resolver
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
