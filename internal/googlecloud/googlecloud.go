@@ -60,7 +60,7 @@ func isRunningOnGCE(manufacturer []byte, goos string) bool {
 	switch goos {
 	case "linux":
 		name = strings.TrimSpace(name)
-		return name == "Google" || name == "Google Compute Engine"
+		return strings.HasPrefix(name, "Google")
 	case "windows":
 		name = strings.Replace(name, " ", "", -1)
 		name = strings.Replace(name, "\n", "", -1)
