@@ -51,6 +51,9 @@ type priorityConfig struct {
 	edsResp xdsresource.EndpointsUpdate
 	// addresses is set only if type is DNS.
 	addresses []string
+	// Each discovery mechanism has a name generator so that the child policies
+	// can reuse names between updates (EDS updates for example).
+	childNameGen *nameGenerator
 }
 
 // buildPriorityConfigJSON builds balancer config for the passed in
@@ -118,10 +121,10 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 		retConfig = &priority.LBConfig{Children: make(map[string]*priority.Child)}
 		retAddrs  []resolver.Address
 	)
-	for i, p := range priorities {
+	for _, p := range priorities {
 		switch p.mechanism.Type {
 		case DiscoveryMechanismTypeEDS:
-			names, configs, addrs, err := buildClusterImplConfigForEDS(i, p.edsResp, p.mechanism, xdsLBPolicy)
+			names, configs, addrs, err := buildClusterImplConfigForEDS(p.childNameGen, p.edsResp, p.mechanism, xdsLBPolicy)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -135,7 +138,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			}
 			retAddrs = append(retAddrs, addrs...)
 		case DiscoveryMechanismTypeLogicalDNS:
-			name, config, addrs := buildClusterImplConfigForDNS(i, p.addresses, p.mechanism)
+			name, config, addrs := buildClusterImplConfigForDNS(p.childNameGen, p.addresses, p.mechanism)
 			retConfig.Priorities = append(retConfig.Priorities, name)
 			retConfig.Children[name] = &priority.Child{
 				Config: &internalserviceconfig.BalancerConfig{Name: clusterimpl.Name, Config: config},
@@ -149,11 +152,11 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 	return retConfig, retAddrs, nil
 }
 
-func buildClusterImplConfigForDNS(parentPriority int, addrStrs []string, mechanism DiscoveryMechanism) (string, *clusterimpl.LBConfig, []resolver.Address) {
+func buildClusterImplConfigForDNS(g *nameGenerator, addrStrs []string, mechanism DiscoveryMechanism) (string, *clusterimpl.LBConfig, []resolver.Address) {
 	// Endpoint picking policy for DNS is hardcoded to pick_first.
 	const childPolicy = "pick_first"
 	retAddrs := make([]resolver.Address, 0, len(addrStrs))
-	pName := fmt.Sprintf("priority-%v", parentPriority)
+	pName := fmt.Sprintf("priority-%v", g.prefix)
 	for _, addrStr := range addrStrs {
 		retAddrs = append(retAddrs, hierarchy.Set(resolver.Address{Addr: addrStr}, []string{pName}))
 	}
@@ -172,7 +175,7 @@ func buildClusterImplConfigForDNS(parentPriority int, addrStrs []string, mechani
 // - map{"p0":p0_config, "p1":p1_config}
 // - [p0_address_0, p0_address_1, p1_address_0, p1_address_1]
 //   - p0 addresses' hierarchy attributes are set to p0
-func buildClusterImplConfigForEDS(parentPriority int, edsResp xdsresource.EndpointsUpdate, mechanism DiscoveryMechanism, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]string, map[string]*clusterimpl.LBConfig, []resolver.Address, error) {
+func buildClusterImplConfigForEDS(g *nameGenerator, edsResp xdsresource.EndpointsUpdate, mechanism DiscoveryMechanism, xdsLBPolicy *internalserviceconfig.BalancerConfig) ([]string, map[string]*clusterimpl.LBConfig, []resolver.Address, error) {
 	drops := make([]clusterimpl.DropConfig, 0, len(edsResp.Drops))
 	for _, d := range edsResp.Drops {
 		drops = append(drops, clusterimpl.DropConfig{
@@ -181,15 +184,12 @@ func buildClusterImplConfigForEDS(parentPriority int, edsResp xdsresource.Endpoi
 		})
 	}
 
-	priorityChildNames, priorities := groupLocalitiesByPriority(edsResp.Localities)
-	retNames := make([]string, 0, len(priorityChildNames))
-	retAddrs := make([]resolver.Address, 0, len(priorityChildNames))
-	retConfigs := make(map[string]*clusterimpl.LBConfig, len(priorityChildNames))
-	for _, priorityName := range priorityChildNames {
-		priorityLocalities := priorities[priorityName]
-		// Prepend parent priority to the priority names, to avoid duplicates.
-		pName := fmt.Sprintf("priority-%v-%v", parentPriority, priorityName)
-		retNames = append(retNames, pName)
+	priorities := groupLocalitiesByPriority(edsResp.Localities)
+	retNames := g.generate(priorities)
+	retConfigs := make(map[string]*clusterimpl.LBConfig, len(retNames))
+	var retAddrs []resolver.Address
+	for i, pName := range retNames {
+		priorityLocalities := priorities[i]
 		cfg, addrs, err := priorityLocalitiesToClusterImpl(priorityLocalities, pName, mechanism, drops, xdsLBPolicy)
 		if err != nil {
 			return nil, nil, nil, err
@@ -202,33 +202,32 @@ func buildClusterImplConfigForEDS(parentPriority int, edsResp xdsresource.Endpoi
 
 // groupLocalitiesByPriority returns the localities grouped by priority.
 //
-// It also returns a list of strings where each string represents a priority,
-// and the list is sorted from higher priority to lower priority.
+// The returned list is sorted from higher priority to lower. Each item in the
+// list is a group of localities.
 //
 // For example, for L0-p0, L1-p0, L2-p1, results will be
-// - ["p0", "p1"]
-// - map{"p0":[L0, L1], "p1":[L2]}
-func groupLocalitiesByPriority(localities []xdsresource.Locality) ([]string, map[string][]xdsresource.Locality) {
+// - [[L0, L1], [L2]]
+func groupLocalitiesByPriority(localities []xdsresource.Locality) [][]xdsresource.Locality {
 	var priorityIntSlice []int
-	priorities := make(map[string][]xdsresource.Locality)
+	priorities := make(map[int][]xdsresource.Locality)
 	for _, locality := range localities {
 		if locality.Weight == 0 {
 			continue
 		}
-		priorityName := fmt.Sprintf("%v", locality.Priority)
-		priorities[priorityName] = append(priorities[priorityName], locality)
-		priorityIntSlice = append(priorityIntSlice, int(locality.Priority))
+		priority := int(locality.Priority)
+		priorities[priority] = append(priorities[priority], locality)
+		priorityIntSlice = append(priorityIntSlice, priority)
 	}
 	// Sort the priorities based on the int value, deduplicate, and then turn
 	// the sorted list into a string list. This will be child names, in priority
 	// order.
 	sort.Ints(priorityIntSlice)
 	priorityIntSliceDeduped := dedupSortedIntSlice(priorityIntSlice)
-	priorityNameSlice := make([]string, 0, len(priorityIntSliceDeduped))
+	ret := make([][]xdsresource.Locality, 0, len(priorityIntSliceDeduped))
 	for _, p := range priorityIntSliceDeduped {
-		priorityNameSlice = append(priorityNameSlice, fmt.Sprintf("%v", p))
+		ret = append(ret, priorities[p])
 	}
-	return priorityNameSlice, priorities
+	return ret
 }
 
 func dedupSortedIntSlice(a []int) []int {

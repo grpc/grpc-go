@@ -146,12 +146,14 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 					testLocalitiesP1[1],
 				},
 			},
+			childNameGen: newNameGenerator(0),
 		},
 		{
 			mechanism: DiscoveryMechanism{
 				Type: DiscoveryMechanismTypeLogicalDNS,
 			},
-			addresses: testAddressStrs[4],
+			addresses:    testAddressStrs[4],
+			childNameGen: newNameGenerator(1),
 		},
 	}, nil)
 	if err != nil {
@@ -196,13 +198,15 @@ func TestBuildPriorityConfig(t *testing.T) {
 					testLocalitiesP1[1],
 				},
 			},
+			childNameGen: newNameGenerator(0),
 		},
 		{
 			mechanism: DiscoveryMechanism{
 				Cluster: testClusterName2,
 				Type:    DiscoveryMechanismTypeLogicalDNS,
 			},
-			addresses: testAddressStrs[4],
+			addresses:    testAddressStrs[4],
+			childNameGen: newNameGenerator(1),
 		},
 	}, nil)
 
@@ -309,7 +313,7 @@ func TestBuildPriorityConfig(t *testing.T) {
 }
 
 func TestBuildClusterImplConfigForDNS(t *testing.T) {
-	gotName, gotConfig, gotAddrs := buildClusterImplConfigForDNS(3, testAddressStrs[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS})
+	gotName, gotConfig, gotAddrs := buildClusterImplConfigForDNS(newNameGenerator(3), testAddressStrs[0], DiscoveryMechanism{Cluster: testClusterName2, Type: DiscoveryMechanismTypeLogicalDNS})
 	wantName := "priority-3"
 	wantConfig := &clusterimpl.LBConfig{
 		Cluster: testClusterName2,
@@ -335,7 +339,7 @@ func TestBuildClusterImplConfigForDNS(t *testing.T) {
 
 func TestBuildClusterImplConfigForEDS(t *testing.T) {
 	gotNames, gotConfigs, gotAddrs, _ := buildClusterImplConfigForEDS(
-		2,
+		newNameGenerator(2),
 		xdsresource.EndpointsUpdate{
 			Drops: []xdsresource.OverloadDropConfig{
 				{
@@ -465,32 +469,28 @@ func TestGroupLocalitiesByPriority(t *testing.T) {
 	tests := []struct {
 		name           string
 		localities     []xdsresource.Locality
-		wantPriorities []string
-		wantLocalities map[string][]xdsresource.Locality
+		wantLocalities [][]xdsresource.Locality
 	}{
 		{
-			name:           "1 locality 1 priority",
-			localities:     []xdsresource.Locality{testLocalitiesP0[0]},
-			wantPriorities: []string{"0"},
-			wantLocalities: map[string][]xdsresource.Locality{
-				"0": {testLocalitiesP0[0]},
+			name:       "1 locality 1 priority",
+			localities: []xdsresource.Locality{testLocalitiesP0[0]},
+			wantLocalities: [][]xdsresource.Locality{
+				{testLocalitiesP0[0]},
 			},
 		},
 		{
-			name:           "2 locality 1 priority",
-			localities:     []xdsresource.Locality{testLocalitiesP0[0], testLocalitiesP0[1]},
-			wantPriorities: []string{"0"},
-			wantLocalities: map[string][]xdsresource.Locality{
-				"0": {testLocalitiesP0[0], testLocalitiesP0[1]},
+			name:       "2 locality 1 priority",
+			localities: []xdsresource.Locality{testLocalitiesP0[0], testLocalitiesP0[1]},
+			wantLocalities: [][]xdsresource.Locality{
+				{testLocalitiesP0[0], testLocalitiesP0[1]},
 			},
 		},
 		{
-			name:           "1 locality in each",
-			localities:     []xdsresource.Locality{testLocalitiesP0[0], testLocalitiesP1[0]},
-			wantPriorities: []string{"0", "1"},
-			wantLocalities: map[string][]xdsresource.Locality{
-				"0": {testLocalitiesP0[0]},
-				"1": {testLocalitiesP1[0]},
+			name:       "1 locality in each",
+			localities: []xdsresource.Locality{testLocalitiesP0[0], testLocalitiesP1[0]},
+			wantLocalities: [][]xdsresource.Locality{
+				{testLocalitiesP0[0]},
+				{testLocalitiesP1[0]},
 			},
 		},
 		{
@@ -498,10 +498,9 @@ func TestGroupLocalitiesByPriority(t *testing.T) {
 			localities: []xdsresource.Locality{
 				testLocalitiesP0[0], testLocalitiesP0[1],
 				testLocalitiesP1[0], testLocalitiesP1[1]},
-			wantPriorities: []string{"0", "1"},
-			wantLocalities: map[string][]xdsresource.Locality{
-				"0": {testLocalitiesP0[0], testLocalitiesP0[1]},
-				"1": {testLocalitiesP1[0], testLocalitiesP1[1]},
+			wantLocalities: [][]xdsresource.Locality{
+				{testLocalitiesP0[0], testLocalitiesP0[1]},
+				{testLocalitiesP1[0], testLocalitiesP1[1]},
 			},
 		},
 		{
@@ -512,19 +511,15 @@ func TestGroupLocalitiesByPriority(t *testing.T) {
 			localities: []xdsresource.Locality{
 				testLocalitiesP1[1], testLocalitiesP0[1],
 				testLocalitiesP1[0], testLocalitiesP0[0]},
-			wantPriorities: []string{"0", "1"},
-			wantLocalities: map[string][]xdsresource.Locality{
-				"0": {testLocalitiesP0[1], testLocalitiesP0[0]},
-				"1": {testLocalitiesP1[1], testLocalitiesP1[0]},
+			wantLocalities: [][]xdsresource.Locality{
+				{testLocalitiesP0[1], testLocalitiesP0[0]},
+				{testLocalitiesP1[1], testLocalitiesP1[0]},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotPriorities, gotLocalities := groupLocalitiesByPriority(tt.localities)
-			if diff := cmp.Diff(gotPriorities, tt.wantPriorities); diff != "" {
-				t.Errorf("groupLocalitiesByPriority() diff(-got +want) %v", diff)
-			}
+			gotLocalities := groupLocalitiesByPriority(tt.localities)
 			if diff := cmp.Diff(gotLocalities, tt.wantLocalities); diff != "" {
 				t.Errorf("groupLocalitiesByPriority() diff(-got +want) %v", diff)
 			}

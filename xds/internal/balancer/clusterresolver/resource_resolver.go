@@ -55,6 +55,8 @@ type resolverMechanismTuple struct {
 	dm    DiscoveryMechanism
 	dmKey discoveryMechanismKey
 	r     discoveryMechanism
+
+	childNameGen *nameGenerator
 }
 
 type resourceResolver struct {
@@ -65,14 +67,19 @@ type resourceResolver struct {
 	mu          sync.Mutex
 	mechanisms  []DiscoveryMechanism
 	children    []resolverMechanismTuple
-	childrenMap map[discoveryMechanismKey]discoveryMechanism
+	childrenMap map[discoveryMechanismKey]resolverMechanismTuple
+	// Each new discovery mechanism needs a child name generator to reuse child
+	// policy names. But to make sure the names cross discover mechanism doesn't
+	// conflict, we need a seq ID. This ID is incremented for each new discover
+	// mechanism.
+	childNameGeneratorSeqID uint64
 }
 
 func newResourceResolver(parent *clusterResolverBalancer) *resourceResolver {
 	return &resourceResolver{
 		parent:        parent,
 		updateChannel: make(chan *resourceUpdate, 1),
-		childrenMap:   make(map[discoveryMechanismKey]discoveryMechanism),
+		childrenMap:   make(map[discoveryMechanismKey]resolverMechanismTuple),
 	}
 }
 
@@ -112,31 +119,47 @@ func (rr *resourceResolver) updateMechanisms(mechanisms []DiscoveryMechanism) {
 			dmKey := discoveryMechanismKey{typ: dm.Type, name: nameToWatch}
 			newDMs[dmKey] = true
 
-			r := rr.childrenMap[dmKey]
-			if r == nil {
-				r = newEDSResolver(nameToWatch, rr.parent.xdsClient, rr)
+			r, ok := rr.childrenMap[dmKey]
+			if !ok {
+				r = resolverMechanismTuple{
+					dm:           dm,
+					dmKey:        dmKey,
+					r:            newEDSResolver(nameToWatch, rr.parent.xdsClient, rr),
+					childNameGen: newNameGenerator(rr.childNameGeneratorSeqID),
+				}
 				rr.childrenMap[dmKey] = r
+				rr.childNameGeneratorSeqID++
+			} else {
+				r.dm = dm
 			}
-			rr.children[i] = resolverMechanismTuple{dm: dm, dmKey: dmKey, r: r}
+			rr.children[i] = r
 		case DiscoveryMechanismTypeLogicalDNS:
 			// Name to resolve in DNS is the hostname, not the ClientConn
 			// target.
 			dmKey := discoveryMechanismKey{typ: dm.Type, name: dm.DNSHostname}
 			newDMs[dmKey] = true
 
-			r := rr.childrenMap[dmKey]
-			if r == nil {
-				r = newDNSResolver(dm.DNSHostname, rr)
+			r, ok := rr.childrenMap[dmKey]
+			if !ok {
+				r = resolverMechanismTuple{
+					dm:           dm,
+					dmKey:        dmKey,
+					r:            newDNSResolver(dm.DNSHostname, rr),
+					childNameGen: newNameGenerator(rr.childNameGeneratorSeqID),
+				}
 				rr.childrenMap[dmKey] = r
+				rr.childNameGeneratorSeqID++
+			} else {
+				r.dm = dm
 			}
-			rr.children[i] = resolverMechanismTuple{dm: dm, dmKey: dmKey, r: r}
+			rr.children[i] = r
 		}
 	}
 	// Stop the resources that were removed.
 	for dm, r := range rr.childrenMap {
 		if !newDMs[dm] {
 			delete(rr.childrenMap, dm)
-			r.stop()
+			r.r.stop()
 		}
 	}
 	// Regenerate even if there's no change in discovery mechanism, in case
@@ -150,7 +173,7 @@ func (rr *resourceResolver) resolveNow() {
 	rr.mu.Lock()
 	defer rr.mu.Unlock()
 	for _, r := range rr.childrenMap {
-		r.resolveNow()
+		r.r.resolveNow()
 	}
 }
 
@@ -159,7 +182,7 @@ func (rr *resourceResolver) stop() {
 	defer rr.mu.Unlock()
 	for dm, r := range rr.childrenMap {
 		delete(rr.childrenMap, dm)
-		r.stop()
+		r.r.stop()
 	}
 	rr.mechanisms = nil
 	rr.children = nil
@@ -180,7 +203,7 @@ func (rr *resourceResolver) generate() {
 			continue
 		}
 
-		u, ok := r.lastUpdate()
+		u, ok := r.r.lastUpdate()
 		if !ok {
 			// Don't send updates to parent until all resolvers have update to
 			// send.
@@ -188,9 +211,9 @@ func (rr *resourceResolver) generate() {
 		}
 		switch uu := u.(type) {
 		case xdsresource.EndpointsUpdate:
-			ret = append(ret, priorityConfig{mechanism: rDM.dm, edsResp: uu})
+			ret = append(ret, priorityConfig{mechanism: rDM.dm, edsResp: uu, childNameGen: rDM.childNameGen})
 		case []string:
-			ret = append(ret, priorityConfig{mechanism: rDM.dm, addresses: uu})
+			ret = append(ret, priorityConfig{mechanism: rDM.dm, addresses: uu, childNameGen: rDM.childNameGen})
 		}
 	}
 	select {
