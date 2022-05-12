@@ -1126,13 +1126,14 @@ func chainUnaryInterceptors(interceptors []UnaryServerInterceptor) UnaryServerIn
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, info *serviceInfo, md *MethodDesc, trInfo *traceInfo) (err error) {
-	for _, sh := range s.opts.statsHandler {
-		if sh != nil || trInfo != nil || channelz.IsOn() {
-			if channelz.IsOn() {
-				s.incrCallsStarted()
-			}
-			var statsBegin *stats.Begin
-			if sh != nil {
+
+	if len(s.opts.statsHandler) != 0 || trInfo != nil || channelz.IsOn() {
+		if channelz.IsOn() {
+			s.incrCallsStarted()
+		}
+		var statsBegin *stats.Begin
+		if len(s.opts.statsHandler) != 0 {
+			for _, sh := range s.opts.statsHandler {
 				beginTime := time.Now()
 				statsBegin = &stats.Begin{
 					BeginTime:      beginTime,
@@ -1141,29 +1142,31 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				}
 				sh.HandleRPC(stream.Context(), statsBegin)
 			}
+		}
+		if trInfo != nil {
+			trInfo.tr.LazyLog(&trInfo.firstLine, false)
+		}
+		// The deferred error handling for tracing, stats handler and channelz are
+		// combined into one function to reduce stack usage -- a defer takes ~56-64
+		// bytes on the stack, so overflowing the stack will require a stack
+		// re-allocation, which is expensive.
+		//
+		// To maintain behavior similar to separate deferred statements, statements
+		// should be executed in the reverse order. That is, tracing first, stats
+		// handler second, and channelz last. Note that panics *within* defers will
+		// lead to different behavior, but that's an acceptable compromise; that
+		// would be undefined behavior territory anyway.
+		defer func() {
 			if trInfo != nil {
-				trInfo.tr.LazyLog(&trInfo.firstLine, false)
-			}
-			// The deferred error handling for tracing, stats handler and channelz are
-			// combined into one function to reduce stack usage -- a defer takes ~56-64
-			// bytes on the stack, so overflowing the stack will require a stack
-			// re-allocation, which is expensive.
-			//
-			// To maintain behavior similar to separate deferred statements, statements
-			// should be executed in the reverse order. That is, tracing first, stats
-			// handler second, and channelz last. Note that panics *within* defers will
-			// lead to different behavior, but that's an acceptable compromise; that
-			// would be undefined behavior territory anyway.
-			defer func() {
-				if trInfo != nil {
-					if err != nil && err != io.EOF {
-						trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-						trInfo.tr.SetError()
-					}
-					trInfo.tr.Finish()
+				if err != nil && err != io.EOF {
+					trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+					trInfo.tr.SetError()
 				}
+				trInfo.tr.Finish()
+			}
 
-				if sh != nil {
+			if len(s.opts.statsHandler) != 0 {
+				for _, sh := range s.opts.statsHandler {
 					end := &stats.End{
 						BeginTime: statsBegin.BeginTime,
 						EndTime:   time.Now(),
@@ -1173,16 +1176,16 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 					}
 					sh.HandleRPC(stream.Context(), end)
 				}
+			}
 
-				if channelz.IsOn() {
-					if err != nil && err != io.EOF {
-						s.incrCallsFailed()
-					} else {
-						s.incrCallsSucceeded()
-					}
+			if channelz.IsOn() {
+				if err != nil && err != io.EOF {
+					s.incrCallsFailed()
+				} else {
+					s.incrCallsSucceeded()
 				}
-			}()
-		}
+			}
+		}()
 	}
 
 	binlog := binarylog.GetMethodLogger(stream.Method())
