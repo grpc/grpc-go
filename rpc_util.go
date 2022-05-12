@@ -721,6 +721,27 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 	return d, nil
 }
 
+// readAllWithSize is a direct clone of io.ReadAll, with the distinction that
+// a starting buffer size may be included, decreasing the total amount of times
+// the slice must be extended
+func readAllWithSize(r io.Reader, s int) ([]byte, error) {
+	b := make([]byte, 0, s)
+	for {
+		if len(b) == cap(b) {
+			// Add more capacity (let append pick how much).
+			b = append(b, 0)[:len(b)]
+		}
+		n, err := r.Read(b[len(b):cap(b)])
+		b = b[:len(b)+n]
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return b, err
+		}
+	}
+}
+
 // Using compressor, decompress d, returning data and size.
 // Optionally, if data will be over maxReceiveMessageSize, just return the size.
 func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize int) ([]byte, int, error) {
@@ -745,7 +766,7 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 	}
 	// Read from LimitReader with limit max+1. So if the underlying
 	// reader is over limit, the result will be bigger than max.
-	d, err = ioutil.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+	d, err = readAllWithSize(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1), len(d))
 	return d, len(d), err
 }
 
