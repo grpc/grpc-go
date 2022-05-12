@@ -374,20 +374,21 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 
 	ctx := newContextWithRPCInfo(cs.ctx, cs.callInfo.failFast, cs.callInfo.codec, cs.cp, cs.comp)
 	method := cs.callHdr.Method
-	sh := cs.cc.dopts.copts.StatsHandler
 	var beginTime time.Time
-	if sh != nil {
-		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast})
-		beginTime = time.Now()
-		begin := &stats.Begin{
-			Client:                    true,
-			BeginTime:                 beginTime,
-			FailFast:                  cs.callInfo.failFast,
-			IsClientStream:            cs.desc.ClientStreams,
-			IsServerStream:            cs.desc.ServerStreams,
-			IsTransparentRetryAttempt: isTransparent,
+	if len(cs.cc.dopts.copts.StatsHandler) != 0 {
+		for _, sh := range cs.cc.dopts.copts.StatsHandler {
+			ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast})
+			beginTime = time.Now()
+			begin := &stats.Begin{
+				Client:                    true,
+				BeginTime:                 beginTime,
+				FailFast:                  cs.callInfo.failFast,
+				IsClientStream:            cs.desc.ClientStreams,
+				IsServerStream:            cs.desc.ServerStreams,
+				IsTransparentRetryAttempt: isTransparent,
+			}
+			sh.HandleRPC(ctx, begin)
 		}
-		sh.HandleRPC(ctx, begin)
 	}
 
 	var trInfo *traceInfo
@@ -418,7 +419,7 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 		beginTime:    beginTime,
 		cs:           cs,
 		dc:           cs.cc.dopts.dc,
-		statsHandler: sh,
+		statsHandler: cs.cc.dopts.copts.StatsHandler,
 		trInfo:       trInfo,
 	}, nil
 }
@@ -536,7 +537,7 @@ type csAttempt struct {
 	// and cleared when the finish method is called.
 	trInfo *traceInfo
 
-	statsHandler stats.Handler
+	statsHandler []stats.Handler
 	beginTime    time.Time
 
 	// set for newStream errors that may be transparently retried
@@ -960,8 +961,10 @@ func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
 		}
 		return io.EOF
 	}
-	if a.statsHandler != nil {
-		a.statsHandler.HandleRPC(a.ctx, outPayload(true, m, data, payld, time.Now()))
+	if len(a.statsHandler) != 0 {
+		for _, sh := range a.statsHandler {
+			sh.HandleRPC(a.ctx, outPayload(true, m, data, payld, time.Now()))
+		}
 	}
 	if channelz.IsOn() {
 		a.t.IncrMsgSent()
@@ -971,7 +974,7 @@ func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
 
 func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 	cs := a.cs
-	if a.statsHandler != nil && payInfo == nil {
+	if len(a.statsHandler) != 0 && payInfo == nil {
 		payInfo = &payloadInfo{}
 	}
 
@@ -1008,16 +1011,18 @@ func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 		}
 		a.mu.Unlock()
 	}
-	if a.statsHandler != nil {
-		a.statsHandler.HandleRPC(a.ctx, &stats.InPayload{
-			Client:   true,
-			RecvTime: time.Now(),
-			Payload:  m,
-			// TODO truncate large payload.
-			Data:       payInfo.uncompressedBytes,
-			WireLength: payInfo.wireLength + headerLen,
-			Length:     len(payInfo.uncompressedBytes),
-		})
+	if len(a.statsHandler) != 0 {
+		for _, sh := range a.statsHandler {
+			sh.HandleRPC(a.ctx, &stats.InPayload{
+				Client:   true,
+				RecvTime: time.Now(),
+				Payload:  m,
+				// TODO truncate large payload.
+				Data:       payInfo.uncompressedBytes,
+				WireLength: payInfo.wireLength + headerLen,
+				Length:     len(payInfo.uncompressedBytes),
+			})
+		}
 	}
 	if channelz.IsOn() {
 		a.t.IncrMsgRecv()
@@ -1068,15 +1073,17 @@ func (a *csAttempt) finish(err error) {
 			ServerLoad:    balancerload.Parse(tr),
 		})
 	}
-	if a.statsHandler != nil {
-		end := &stats.End{
-			Client:    true,
-			BeginTime: a.beginTime,
-			EndTime:   time.Now(),
-			Trailer:   tr,
-			Error:     err,
+	if len(a.statsHandler) != 0 {
+		for _, sh := range a.statsHandler {
+			end := &stats.End{
+				Client:    true,
+				BeginTime: a.beginTime,
+				EndTime:   time.Now(),
+				Trailer:   tr,
+				Error:     err,
+			}
+			sh.HandleRPC(a.ctx, end)
 		}
-		a.statsHandler.HandleRPC(a.ctx, end)
 	}
 	if a.trInfo != nil && a.trInfo.tr != nil {
 		if err == nil {
@@ -1445,7 +1452,7 @@ type serverStream struct {
 	maxSendMessageSize    int
 	trInfo                *traceInfo
 
-	statsHandler stats.Handler
+	statsHandler []stats.Handler
 
 	binlog binarylog.MethodLogger
 	// serverHeaderBinlogged indicates whether server header has been logged. It
@@ -1555,8 +1562,10 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			Message: data,
 		})
 	}
-	if ss.statsHandler != nil {
-		ss.statsHandler.HandleRPC(ss.s.Context(), outPayload(false, m, data, payload, time.Now()))
+	if len(ss.statsHandler) != 0 {
+		for _, sh := range ss.statsHandler {
+			sh.HandleRPC(ss.s.Context(), outPayload(false, m, data, payload, time.Now()))
+		}
 	}
 	return nil
 }
@@ -1590,7 +1599,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 		}
 	}()
 	var payInfo *payloadInfo
-	if ss.statsHandler != nil || ss.binlog != nil {
+	if len(ss.statsHandler) != 0 || ss.binlog != nil {
 		payInfo = &payloadInfo{}
 	}
 	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxReceiveMessageSize, payInfo, ss.decomp); err != nil {
@@ -1605,15 +1614,17 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 		}
 		return toRPCErr(err)
 	}
-	if ss.statsHandler != nil {
-		ss.statsHandler.HandleRPC(ss.s.Context(), &stats.InPayload{
-			RecvTime: time.Now(),
-			Payload:  m,
-			// TODO truncate large payload.
-			Data:       payInfo.uncompressedBytes,
-			WireLength: payInfo.wireLength + headerLen,
-			Length:     len(payInfo.uncompressedBytes),
-		})
+	if len(ss.statsHandler) != 0 {
+		for _, sh := range ss.statsHandler {
+			sh.HandleRPC(ss.s.Context(), &stats.InPayload{
+				RecvTime: time.Now(),
+				Payload:  m,
+				// TODO truncate large payload.
+				Data:       payInfo.uncompressedBytes,
+				WireLength: payInfo.wireLength + headerLen,
+				Length:     len(payInfo.uncompressedBytes),
+			})
+		}
 	}
 	if ss.binlog != nil {
 		ss.binlog.Log(&binarylog.ClientMessage{

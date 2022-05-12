@@ -150,7 +150,7 @@ type serverOptions struct {
 	chainUnaryInts        []UnaryServerInterceptor
 	chainStreamInts       []StreamServerInterceptor
 	inTapHandle           tap.ServerInHandle
-	statsHandler          stats.Handler
+	statsHandler          []stats.Handler
 	maxConcurrentStreams  uint32
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
@@ -435,7 +435,7 @@ func InTapHandle(h tap.ServerInHandle) ServerOption {
 // StatsHandler returns a ServerOption that sets the stats handler for the server.
 func StatsHandler(h stats.Handler) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
-		o.statsHandler = h
+		o.statsHandler = append(o.statsHandler, h)
 	})
 }
 
@@ -1076,8 +1076,10 @@ func (s *Server) sendResponse(t transport.ServerTransport, stream *transport.Str
 		return status.Errorf(codes.ResourceExhausted, "grpc: trying to send message larger than max (%d vs. %d)", len(payload), s.opts.maxSendMessageSize)
 	}
 	err = t.Write(stream, hdr, payload, opts)
-	if err == nil && s.opts.statsHandler != nil {
-		s.opts.statsHandler.HandleRPC(stream.Context(), outPayload(false, msg, data, payload, time.Now()))
+	if err == nil && len(s.opts.statsHandler) != 0 {
+		for _, sh := range s.opts.statsHandler {
+			sh.HandleRPC(stream.Context(), outPayload(false, msg, data, payload, time.Now()))
+		}
 	}
 	return err
 }
@@ -1124,62 +1126,63 @@ func chainUnaryInterceptors(interceptors []UnaryServerInterceptor) UnaryServerIn
 }
 
 func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.Stream, info *serviceInfo, md *MethodDesc, trInfo *traceInfo) (err error) {
-	sh := s.opts.statsHandler
-	if sh != nil || trInfo != nil || channelz.IsOn() {
-		if channelz.IsOn() {
-			s.incrCallsStarted()
-		}
-		var statsBegin *stats.Begin
-		if sh != nil {
-			beginTime := time.Now()
-			statsBegin = &stats.Begin{
-				BeginTime:      beginTime,
-				IsClientStream: false,
-				IsServerStream: false,
-			}
-			sh.HandleRPC(stream.Context(), statsBegin)
-		}
-		if trInfo != nil {
-			trInfo.tr.LazyLog(&trInfo.firstLine, false)
-		}
-		// The deferred error handling for tracing, stats handler and channelz are
-		// combined into one function to reduce stack usage -- a defer takes ~56-64
-		// bytes on the stack, so overflowing the stack will require a stack
-		// re-allocation, which is expensive.
-		//
-		// To maintain behavior similar to separate deferred statements, statements
-		// should be executed in the reverse order. That is, tracing first, stats
-		// handler second, and channelz last. Note that panics *within* defers will
-		// lead to different behavior, but that's an acceptable compromise; that
-		// would be undefined behavior territory anyway.
-		defer func() {
-			if trInfo != nil {
-				if err != nil && err != io.EOF {
-					trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
-					trInfo.tr.SetError()
-				}
-				trInfo.tr.Finish()
-			}
-
-			if sh != nil {
-				end := &stats.End{
-					BeginTime: statsBegin.BeginTime,
-					EndTime:   time.Now(),
-				}
-				if err != nil && err != io.EOF {
-					end.Error = toRPCErr(err)
-				}
-				sh.HandleRPC(stream.Context(), end)
-			}
-
+	for _, sh := range s.opts.statsHandler {
+		if sh != nil || trInfo != nil || channelz.IsOn() {
 			if channelz.IsOn() {
-				if err != nil && err != io.EOF {
-					s.incrCallsFailed()
-				} else {
-					s.incrCallsSucceeded()
-				}
+				s.incrCallsStarted()
 			}
-		}()
+			var statsBegin *stats.Begin
+			if sh != nil {
+				beginTime := time.Now()
+				statsBegin = &stats.Begin{
+					BeginTime:      beginTime,
+					IsClientStream: false,
+					IsServerStream: false,
+				}
+				sh.HandleRPC(stream.Context(), statsBegin)
+			}
+			if trInfo != nil {
+				trInfo.tr.LazyLog(&trInfo.firstLine, false)
+			}
+			// The deferred error handling for tracing, stats handler and channelz are
+			// combined into one function to reduce stack usage -- a defer takes ~56-64
+			// bytes on the stack, so overflowing the stack will require a stack
+			// re-allocation, which is expensive.
+			//
+			// To maintain behavior similar to separate deferred statements, statements
+			// should be executed in the reverse order. That is, tracing first, stats
+			// handler second, and channelz last. Note that panics *within* defers will
+			// lead to different behavior, but that's an acceptable compromise; that
+			// would be undefined behavior territory anyway.
+			defer func() {
+				if trInfo != nil {
+					if err != nil && err != io.EOF {
+						trInfo.tr.LazyLog(&fmtStringer{"%v", []interface{}{err}}, true)
+						trInfo.tr.SetError()
+					}
+					trInfo.tr.Finish()
+				}
+
+				if sh != nil {
+					end := &stats.End{
+						BeginTime: statsBegin.BeginTime,
+						EndTime:   time.Now(),
+					}
+					if err != nil && err != io.EOF {
+						end.Error = toRPCErr(err)
+					}
+					sh.HandleRPC(stream.Context(), end)
+				}
+
+				if channelz.IsOn() {
+					if err != nil && err != io.EOF {
+						s.incrCallsFailed()
+					} else {
+						s.incrCallsSucceeded()
+					}
+				}
+			}()
+		}
 	}
 
 	binlog := binarylog.GetMethodLogger(stream.Method())
@@ -1243,7 +1246,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 
 	var payInfo *payloadInfo
-	if sh != nil || binlog != nil {
+	if len(s.opts.statsHandler) != 0 || binlog != nil {
 		payInfo = &payloadInfo{}
 	}
 	d, err := recvAndDecompress(&parser{r: stream}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp)
@@ -1260,14 +1263,16 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
-		if sh != nil {
-			sh.HandleRPC(stream.Context(), &stats.InPayload{
-				RecvTime:   time.Now(),
-				Payload:    v,
-				WireLength: payInfo.wireLength + headerLen,
-				Data:       d,
-				Length:     len(d),
-			})
+		if len(s.opts.statsHandler) != 0 {
+			for _, sh := range s.opts.statsHandler {
+				sh.HandleRPC(stream.Context(), &stats.InPayload{
+					RecvTime:   time.Now(),
+					Payload:    v,
+					WireLength: payInfo.wireLength + headerLen,
+					Data:       d,
+					Length:     len(d),
+				})
+			}
 		}
 		if binlog != nil {
 			binlog.Log(&binarylog.ClientMessage{
@@ -1418,16 +1423,17 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	if channelz.IsOn() {
 		s.incrCallsStarted()
 	}
-	sh := s.opts.statsHandler
 	var statsBegin *stats.Begin
-	if sh != nil {
+	if len(s.opts.statsHandler) != 0 {
 		beginTime := time.Now()
 		statsBegin = &stats.Begin{
 			BeginTime:      beginTime,
 			IsClientStream: sd.ClientStreams,
 			IsServerStream: sd.ServerStreams,
 		}
-		sh.HandleRPC(stream.Context(), statsBegin)
+		for _, sh := range s.opts.statsHandler {
+			sh.HandleRPC(stream.Context(), statsBegin)
+		}
 	}
 	ctx := NewContextWithServerTransportStream(stream.Context(), stream)
 	ss := &serverStream{
@@ -1439,10 +1445,10 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
 		trInfo:                trInfo,
-		statsHandler:          sh,
+		statsHandler:          s.opts.statsHandler,
 	}
 
-	if sh != nil || trInfo != nil || channelz.IsOn() {
+	if len(s.opts.statsHandler) != 0 || trInfo != nil || channelz.IsOn() {
 		// See comment in processUnaryRPC on defers.
 		defer func() {
 			if trInfo != nil {
@@ -1456,7 +1462,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 				ss.mu.Unlock()
 			}
 
-			if sh != nil {
+			if len(s.opts.statsHandler) != 0 {
 				end := &stats.End{
 					BeginTime: statsBegin.BeginTime,
 					EndTime:   time.Now(),
@@ -1464,7 +1470,9 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 				if err != nil && err != io.EOF {
 					end.Error = toRPCErr(err)
 				}
-				sh.HandleRPC(stream.Context(), end)
+				for _, sh := range s.opts.statsHandler {
+					sh.HandleRPC(stream.Context(), end)
+				}
 			}
 
 			if channelz.IsOn() {

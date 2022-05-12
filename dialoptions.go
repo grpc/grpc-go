@@ -380,7 +380,7 @@ func WithDialer(f func(string, time.Duration) (net.Conn, error)) DialOption {
 // all the RPCs and underlying network connections in this ClientConn.
 func WithStatsHandler(h stats.Handler) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.copts.StatsHandler = h
+		o.copts.StatsHandler = append(o.copts.StatsHandler, h)
 	})
 }
 

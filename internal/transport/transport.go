@@ -523,7 +523,7 @@ type ServerConfig struct {
 	ConnectionTimeout     time.Duration
 	Credentials           credentials.TransportCredentials
 	InTapHandle           tap.ServerInHandle
-	StatsHandler          stats.Handler
+	StatsHandler          []stats.Handler
 	KeepaliveParams       keepalive.ServerParameters
 	KeepalivePolicy       keepalive.EnforcementPolicy
 	InitialWindowSize     int32
@@ -554,7 +554,7 @@ type ConnectOptions struct {
 	// KeepaliveParams stores the keepalive parameters.
 	KeepaliveParams keepalive.ClientParameters
 	// StatsHandler stores the handler for stats.
-	StatsHandler stats.Handler
+	StatsHandler []stats.Handler
 	// InitialWindowSize sets the initial window size for a stream.
 	InitialWindowSize int32
 	// InitialConnWindowSize sets the initial window size for a connection.

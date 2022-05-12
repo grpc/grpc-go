@@ -82,7 +82,7 @@ type http2Server struct {
 	// updates, reset streams, and various settings) to the controller.
 	controlBuf *controlBuffer
 	fc         *trInFlow
-	stats      stats.Handler
+	stats      []stats.Handler
 	// Keepalive and max-age parameters for the server.
 	kp keepalive.ServerParameters
 	// Keepalive enforcement policy.
@@ -272,13 +272,15 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 			updateFlowControl: t.updateFlowControl,
 		}
 	}
-	if t.stats != nil {
-		t.ctx = t.stats.TagConn(t.ctx, &stats.ConnTagInfo{
-			RemoteAddr: t.remoteAddr,
-			LocalAddr:  t.localAddr,
-		})
-		connBegin := &stats.ConnBegin{}
-		t.stats.HandleConn(t.ctx, connBegin)
+	if len(t.stats) != 0 {
+		for _, sh := range t.stats {
+			t.ctx = sh.TagConn(t.ctx, &stats.ConnTagInfo{
+				RemoteAddr: t.remoteAddr,
+				LocalAddr:  t.localAddr,
+			})
+			connBegin := &stats.ConnBegin{}
+			sh.HandleConn(t.ctx, connBegin)
+		}
 	}
 	t.channelzID, err = channelz.RegisterNormalSocket(t, config.ChannelzParentID, fmt.Sprintf("%s -> %s", t.remoteAddr, t.localAddr))
 	if err != nil {
@@ -566,17 +568,19 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.adjustWindow(s, uint32(n))
 	}
 	s.ctx = traceCtx(s.ctx, s.method)
-	if t.stats != nil {
-		s.ctx = t.stats.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
-		inHeader := &stats.InHeader{
-			FullMethod:  s.method,
-			RemoteAddr:  t.remoteAddr,
-			LocalAddr:   t.localAddr,
-			Compression: s.recvCompress,
-			WireLength:  int(frame.Header().Length),
-			Header:      metadata.MD(mdata).Copy(),
+	if len(t.stats) != 0 {
+		for _, sh := range t.stats {
+			s.ctx = sh.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
+			inHeader := &stats.InHeader{
+				FullMethod:  s.method,
+				RemoteAddr:  t.remoteAddr,
+				LocalAddr:   t.localAddr,
+				Compression: s.recvCompress,
+				WireLength:  int(frame.Header().Length),
+				Header:      metadata.MD(mdata).Copy(),
+			}
+			sh.HandleRPC(s.ctx, inHeader)
 		}
-		t.stats.HandleRPC(s.ctx, inHeader)
 	}
 	s.ctxDone = s.ctx.Done()
 	s.wq = newWriteQuota(defaultWriteQuota, s.ctxDone)
@@ -992,14 +996,16 @@ func (t *http2Server) writeHeaderLocked(s *Stream) error {
 		t.closeStream(s, true, http2.ErrCodeInternal, false)
 		return ErrHeaderListSizeLimitViolation
 	}
-	if t.stats != nil {
-		// Note: Headers are compressed with hpack after this call returns.
-		// No WireLength field is set here.
-		outHeader := &stats.OutHeader{
-			Header:      s.header.Copy(),
-			Compression: s.sendCompress,
+	if len(t.stats) != 0 {
+		for _, sh := range t.stats {
+			// Note: Headers are compressed with hpack after this call returns.
+			// No WireLength field is set here.
+			outHeader := &stats.OutHeader{
+				Header:      s.header.Copy(),
+				Compression: s.sendCompress,
+			}
+			sh.HandleRPC(s.Context(), outHeader)
 		}
-		t.stats.HandleRPC(s.Context(), outHeader)
 	}
 	return nil
 }
@@ -1060,12 +1066,14 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	// Send a RST_STREAM after the trailers if the client has not already half-closed.
 	rst := s.getState() == streamActive
 	t.finishStream(s, rst, http2.ErrCodeNo, trailingHeader, true)
-	if t.stats != nil {
-		// Note: The trailer fields are compressed with hpack after this call returns.
-		// No WireLength field is set here.
-		t.stats.HandleRPC(s.Context(), &stats.OutTrailer{
-			Trailer: s.trailer.Copy(),
-		})
+	if len(t.stats) != 0 {
+		for _, sh := range t.stats {
+			// Note: The trailer fields are compressed with hpack after this call returns.
+			// No WireLength field is set here.
+			sh.HandleRPC(s.Context(), &stats.OutTrailer{
+				Trailer: s.trailer.Copy(),
+			})
+		}
 	}
 	return nil
 }
@@ -1218,9 +1226,11 @@ func (t *http2Server) Close() {
 	for _, s := range streams {
 		s.cancel()
 	}
-	if t.stats != nil {
-		connEnd := &stats.ConnEnd{}
-		t.stats.HandleConn(t.ctx, connEnd)
+	if len(t.stats) != 0 {
+		for _, sh := range t.stats {
+			connEnd := &stats.ConnEnd{}
+			sh.HandleConn(t.ctx, connEnd)
+		}
 	}
 }
 

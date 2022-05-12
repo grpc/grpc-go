@@ -90,7 +90,7 @@ type http2Client struct {
 	kp               keepalive.ClientParameters
 	keepaliveEnabled bool
 
-	statsHandler stats.Handler
+	statsHandler []stats.Handler
 
 	initialWindowSize int32
 
@@ -341,15 +341,17 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 			updateFlowControl: t.updateFlowControl,
 		}
 	}
-	if t.statsHandler != nil {
-		t.ctx = t.statsHandler.TagConn(t.ctx, &stats.ConnTagInfo{
-			RemoteAddr: t.remoteAddr,
-			LocalAddr:  t.localAddr,
-		})
-		connBegin := &stats.ConnBegin{
-			Client: true,
+	if len(t.statsHandler) != 0 {
+		for _, sh := range t.statsHandler {
+			t.ctx = sh.TagConn(t.ctx, &stats.ConnTagInfo{
+				RemoteAddr: t.remoteAddr,
+				LocalAddr:  t.localAddr,
+			})
+			connBegin := &stats.ConnBegin{
+				Client: true,
+			}
+			sh.HandleConn(t.ctx, connBegin)
 		}
-		t.statsHandler.HandleConn(t.ctx, connBegin)
 	}
 	t.channelzID, err = channelz.RegisterNormalSocket(t, opts.ChannelzParentID, fmt.Sprintf("%s -> %s", t.localAddr, t.remoteAddr))
 	if err != nil {
@@ -773,24 +775,27 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 			return nil, &NewStreamError{Err: ErrConnClosing, AllowTransparentRetry: true}
 		}
 	}
-	if t.statsHandler != nil {
+	if len(t.statsHandler) != 0 {
 		header, ok := metadata.FromOutgoingContext(ctx)
 		if ok {
 			header.Set("user-agent", t.userAgent)
 		} else {
 			header = metadata.Pairs("user-agent", t.userAgent)
 		}
-		// Note: The header fields are compressed with hpack after this call returns.
-		// No WireLength field is set here.
-		outHeader := &stats.OutHeader{
-			Client:      true,
-			FullMethod:  callHdr.Method,
-			RemoteAddr:  t.remoteAddr,
-			LocalAddr:   t.localAddr,
-			Compression: callHdr.SendCompress,
-			Header:      header,
+		for _, sh := range t.statsHandler {
+			// Note: The header fields are compressed with hpack after this call returns.
+			// No WireLength field is set here.
+			// Note: Creating a new stats object to prevent pollution.
+			outHeader := &stats.OutHeader{
+				Client:      true,
+				FullMethod:  callHdr.Method,
+				RemoteAddr:  t.remoteAddr,
+				LocalAddr:   t.localAddr,
+				Compression: callHdr.SendCompress,
+				Header:      header,
+			}
+			sh.HandleRPC(s.ctx, outHeader)
 		}
-		t.statsHandler.HandleRPC(s.ctx, outHeader)
 	}
 	return s, nil
 }
@@ -916,11 +921,13 @@ func (t *http2Client) Close(err error) {
 	for _, s := range streams {
 		t.closeStream(s, err, false, http2.ErrCodeNo, st, nil, false)
 	}
-	if t.statsHandler != nil {
-		connEnd := &stats.ConnEnd{
-			Client: true,
+	if len(t.statsHandler) != 0 {
+		for _, sh := range t.statsHandler {
+			connEnd := &stats.ConnEnd{
+				Client: true,
+			}
+			sh.HandleConn(t.ctx, connEnd)
 		}
-		t.statsHandler.HandleConn(t.ctx, connEnd)
 	}
 }
 
@@ -1432,22 +1439,24 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 		close(s.headerChan)
 	}
 
-	if t.statsHandler != nil {
-		if isHeader {
-			inHeader := &stats.InHeader{
-				Client:      true,
-				WireLength:  int(frame.Header().Length),
-				Header:      metadata.MD(mdata).Copy(),
-				Compression: s.recvCompress,
+	if len(t.statsHandler) != 0 {
+		for _, sh := range t.statsHandler {
+			if isHeader {
+				inHeader := &stats.InHeader{
+					Client:      true,
+					WireLength:  int(frame.Header().Length),
+					Header:      metadata.MD(mdata).Copy(),
+					Compression: s.recvCompress,
+				}
+				sh.HandleRPC(s.ctx, inHeader)
+			} else {
+				inTrailer := &stats.InTrailer{
+					Client:     true,
+					WireLength: int(frame.Header().Length),
+					Trailer:    metadata.MD(mdata).Copy(),
+				}
+				sh.HandleRPC(s.ctx, inTrailer)
 			}
-			t.statsHandler.HandleRPC(s.ctx, inHeader)
-		} else {
-			inTrailer := &stats.InTrailer{
-				Client:     true,
-				WireLength: int(frame.Header().Length),
-				Trailer:    metadata.MD(mdata).Copy(),
-			}
-			t.statsHandler.HandleRPC(s.ctx, inTrailer)
 		}
 	}
 
