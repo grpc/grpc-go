@@ -63,6 +63,14 @@ var (
 	// xDS-enabled server invokes this method on a grpc.Server when a particular
 	// listener moves to "not-serving" mode.
 	DrainServerTransports interface{} // func(*grpc.Server, string)
+	// SetDefaultServerOption sets an array of ServerOption that will be
+	// effective globally for newly created servers. The priority will be: 1.
+	// user-provided; 2. this method; 3. default values.
+	SetDefaultServerOption interface{} // func(opt ...ServerOption)
+	// SetDefaultDialOption sets an array of DialOption that will be effective
+	// globally for newly created client channels.The priority will be: 1.
+	// user-provided; 2. this method; 3. default values.
+	SetDefaultDialOption interface{} // func(opt ...DialOption)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

@@ -35,6 +35,12 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
+func init() {
+	internal.SetDefaultDialOption = func(opt ...DialOption) {
+		defaultDialOption = opt
+	}
+}
+
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
@@ -69,6 +75,8 @@ type dialOptions struct {
 type DialOption interface {
 	apply(*dialOptions)
 }
+
+var defaultDialOption []DialOption
 
 // EmptyDialOption does not alter the dial configuration. It can be embedded in
 // another structure to build custom dial options.
