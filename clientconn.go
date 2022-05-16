@@ -1223,7 +1223,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		ac.mu.Lock()
 		defer ac.mu.Unlock()
 		defer connClosed.Fire()
-		hcancel()
+		defer hcancel()
 		if !hcStarted || hctx.Err() != nil {
 			// We didn't start the health check or set the state to READY, so
 			// no need to do anything else here.
