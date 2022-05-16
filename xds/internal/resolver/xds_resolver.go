@@ -134,12 +134,12 @@ func (b *xdsResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, op
 	endpoint = strings.TrimPrefix(endpoint, "/")
 	resourceName := bootstrap.PopulateResourceTemplate(template, endpoint)
 
-	// Register a watch on the xdsClient for the user's dial target.
+	// Register a watch on the xdsClient for the resource name determined above.
 	cancelWatch := watchService(r.client, resourceName, r.handleServiceUpdate, r.logger)
-	r.logger.Infof("Watch started on resource name %v with xds-client %p", r.target.Endpoint, r.client)
+	r.logger.Infof("Watch started on resource name %v with xds-client %p", resourceName, r.client)
 	r.cancelWatch = func() {
 		cancelWatch()
-		r.logger.Infof("Watch cancel on resource name %v with xds-client %p", r.target.Endpoint, r.client)
+		r.logger.Infof("Watch cancel on resource name %v with xds-client %p", resourceName, r.client)
 	}
 
 	go r.run()
