@@ -182,7 +182,7 @@ func (odc *ODConfig) Equal(odc2 *ODConfig) bool {
 type LBConfig struct {
 	serviceconfig.LoadBalancingConfig `json:"-"`
 	// ODConfig is the Outlier Detection specific configuration.
-	ODConfig ODConfig `json:"odConfig,omitempty"`
+	ODConfig *ODConfig `json:"odConfig,omitempty"`
 	// ChildPolicy is the config for the child policy.
 	ChildPolicy *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
