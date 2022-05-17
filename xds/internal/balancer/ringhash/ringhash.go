@@ -156,7 +156,6 @@ func (sc *subConn) effectiveState() connectivity.State {
 // it's Connect() will be triggered. If the SubConn state is already Idle, it
 // will just call Connect().
 func (sc *subConn) queueConnect() {
-	fmt.Printf(" ===== queue connect for %v\n", sc)
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	sc.attemptingToConnect = true
@@ -377,8 +376,6 @@ func (b *ringhashBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 		b.cc.UpdateState(balancer.State{ConnectivityState: b.state, Picker: b.picker})
 	}
 
-	fmt.Println(" ---- overall state", b.state)
-
 	switch b.state {
 	case connectivity.Connecting, connectivity.TransientFailure:
 		// When overall state is TransientFailure, we need to make sure at least
@@ -397,7 +394,6 @@ func (b *ringhashBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 		// and trigger the next SubConn to connect.
 		for _, sc := range b.subConns {
 			if sc.isAttemptingToConnect() {
-				fmt.Printf(" +++++ %v is attempting to connect\n", sc)
 				return
 			}
 		}
