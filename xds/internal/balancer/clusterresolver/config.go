@@ -103,9 +103,9 @@ type DiscoveryMechanism struct {
 	// DNSHostname is the DNS name to resolve in "host:port" form. For type
 	// LOGICAL_DNS only.
 	DNSHostname string `json:"dnsHostname,omitempty"`
-	// OutlierDetection is the Outlier Detection LB configuration for this
+	// OutlierDetection is the Outlier Detection configuration for this
 	// priority.
-	OutlierDetection *outlierdetection.LBConfig `json:"outlierDetection,omitempty"`
+	OutlierDetection *outlierdetection.ODConfig `json:"outlierDetection,omitempty"`
 }
 
 // Equal returns whether the DiscoveryMechanism is the same with the parameter.

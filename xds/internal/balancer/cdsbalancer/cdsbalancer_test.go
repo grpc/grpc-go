@@ -56,7 +56,7 @@ var (
 		ServerURI: "self_server",
 		CredsType: "self_creds",
 	}
-	noopODLBCfg = &outlierdetection.LBConfig{
+	noopODLBCfg = &outlierdetection.ODConfig{
 		Interval: 1<<63 - 1,
 	}
 )
@@ -215,7 +215,7 @@ func cdsCCS(cluster string, xdsC xdsclient.XDSClient) balancer.ClientConnState {
 
 // edsCCS is a helper function to construct a good update passed from the
 // cdsBalancer to the edsBalancer.
-func edsCCS(service string, countMax *uint32, enableLRS bool, xdslbpolicy *internalserviceconfig.BalancerConfig, odConfig *outlierdetection.LBConfig) balancer.ClientConnState {
+func edsCCS(service string, countMax *uint32, enableLRS bool, xdslbpolicy *internalserviceconfig.BalancerConfig, odConfig *outlierdetection.ODConfig) balancer.ClientConnState {
 	discoveryMechanism := clusterresolver.DiscoveryMechanism{
 		Type:                  clusterresolver.DiscoveryMechanismTypeEDS,
 		Cluster:               service,
@@ -421,7 +421,7 @@ func (s) TestHandleClusterUpdate(t *testing.T) {
 				FailurePercentageMinimumHosts:  5,
 				FailurePercentageRequestVolume: 50,
 			}},
-			wantCCS: edsCCS(serviceName, nil, false, nil, &outlierdetection.LBConfig{
+			wantCCS: edsCCS(serviceName, nil, false, nil, &outlierdetection.ODConfig{
 				Interval:           10 * time.Second,
 				BaseEjectionTime:   30 * time.Second,
 				MaxEjectionTime:    300 * time.Second,
@@ -846,7 +846,7 @@ func (s) TestOutlierDetectionToConfig(t *testing.T) {
 	tests := []struct {
 		name        string
 		od          *xdsresource.OutlierDetection
-		odLBCfgWant *outlierdetection.LBConfig
+		odLBCfgWant *outlierdetection.ODConfig
 	}{
 		// "if the outlier_detection field is not set in the Cluster resource,
 		// a "no-op" outlier_detection config will be generated in the
@@ -876,7 +876,7 @@ func (s) TestOutlierDetectionToConfig(t *testing.T) {
 				FailurePercentageMinimumHosts:  5,
 				FailurePercentageRequestVolume: 50,
 			},
-			odLBCfgWant: &outlierdetection.LBConfig{
+			odLBCfgWant: &outlierdetection.ODConfig{
 				Interval:            10 * time.Second,
 				BaseEjectionTime:    30 * time.Second,
 				MaxEjectionTime:     300 * time.Second,
@@ -909,7 +909,7 @@ func (s) TestOutlierDetectionToConfig(t *testing.T) {
 				FailurePercentageMinimumHosts:  5,
 				FailurePercentageRequestVolume: 50,
 			},
-			odLBCfgWant: &outlierdetection.LBConfig{
+			odLBCfgWant: &outlierdetection.ODConfig{
 				Interval:           10 * time.Second,
 				BaseEjectionTime:   30 * time.Second,
 				MaxEjectionTime:    300 * time.Second,
@@ -939,7 +939,7 @@ func (s) TestOutlierDetectionToConfig(t *testing.T) {
 				FailurePercentageMinimumHosts:  5,
 				FailurePercentageRequestVolume: 50,
 			},
-			odLBCfgWant: &outlierdetection.LBConfig{
+			odLBCfgWant: &outlierdetection.ODConfig{
 				Interval:           10 * time.Second,
 				BaseEjectionTime:   30 * time.Second,
 				MaxEjectionTime:    300 * time.Second,

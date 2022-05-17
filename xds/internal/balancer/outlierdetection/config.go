@@ -124,9 +124,8 @@ func (fpe *FailurePercentageEjection) Equal(fpe2 *FailurePercentageEjection) boo
 	return fpe.RequestVolume == fpe2.RequestVolume
 }
 
-// LBConfig is the config for the outlier detection balancer.
-type LBConfig struct {
-	serviceconfig.LoadBalancingConfig `json:"-"`
+// ODConfig is the config for outlier detection behavior.
+type ODConfig struct {
 	// Interval is the time interval between ejection analysis sweeps. This can
 	// result in both new ejections as well as addresses being returned to
 	// service. Defaults to 10s.
@@ -149,34 +148,41 @@ type LBConfig struct {
 	// FailurePercentageEjection is the parameters for the failure percentage
 	// algorithm. If set, failure rate ejections will be performed.
 	FailurePercentageEjection *FailurePercentageEjection `json:"failurePercentageEjection,omitempty"`
-	// ChildPolicy is the config for the child policy.
-	ChildPolicy *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
 // Equal returns whether the LBConfig is the same with the parameter, outside of
 // the child policy. The child policy will need to be manually compared in tests
 // (to avoid cmp in this non-testing file).
-func (lbc *LBConfig) Equal(lbc2 *LBConfig) bool {
-	if lbc == nil && lbc2 == nil {
+func (odc *ODConfig) Equal(odc2 *ODConfig) bool {
+	if odc == nil && odc2 == nil {
 		return true
 	}
-	if (lbc != nil) != (lbc2 != nil) {
+	if (odc != nil) != (odc2 != nil) {
 		return false
 	}
-	if lbc.Interval != lbc2.Interval {
+	if odc.Interval != odc2.Interval {
 		return false
 	}
-	if lbc.BaseEjectionTime != lbc2.BaseEjectionTime {
+	if odc.BaseEjectionTime != odc2.BaseEjectionTime {
 		return false
 	}
-	if lbc.MaxEjectionTime != lbc2.MaxEjectionTime {
+	if odc.MaxEjectionTime != odc2.MaxEjectionTime {
 		return false
 	}
-	if lbc.MaxEjectionPercent != lbc2.MaxEjectionPercent {
+	if odc.MaxEjectionPercent != odc2.MaxEjectionPercent {
 		return false
 	}
-	if !lbc.SuccessRateEjection.Equal(lbc2.SuccessRateEjection) {
+	if !odc.SuccessRateEjection.Equal(odc2.SuccessRateEjection) {
 		return false
 	}
-	return lbc.FailurePercentageEjection.Equal(lbc2.FailurePercentageEjection)
+	return odc.FailurePercentageEjection.Equal(odc2.FailurePercentageEjection)
+}
+
+// LBConfig is the config for the outlier detection balancer.
+type LBConfig struct {
+	serviceconfig.LoadBalancingConfig `json:"-"`
+	// ODConfig is the Outlier Detection specific configuration.
+	ODConfig ODConfig `json:"odConfig,omitempty"`
+	// ChildPolicy is the config for the child policy.
+	ChildPolicy *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
