@@ -460,6 +460,8 @@ func (cse *connectivityStateEvaluator) recordTransition(oldState, newState conne
 		cse.nums[state] += updateVal
 	}
 	if oldState == connectivity.Shutdown {
+		// There's technically no transition from Shutdown. But we record a
+		// Shutdown->Idle transition when a new SubConn is created.
 		cse.sum++
 	}
 	if newState == connectivity.Shutdown {
