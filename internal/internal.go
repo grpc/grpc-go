@@ -63,6 +63,17 @@ var (
 	// xDS-enabled server invokes this method on a grpc.Server when a particular
 	// listener moves to "not-serving" mode.
 	DrainServerTransports interface{} // func(*grpc.Server, string)
+
+	// NewXDSResolverWithConfigForTesting creates a new xds resolver builder using
+	// the provided xds bootstrap config instead of the global configuration from
+	// the supported environment variables.  The resolver.Builder is meant to be
+	// used in conjunction with the grpc.WithResolvers DialOption.
+	//
+	// Testing Only
+	//
+	// This function should ONLY be used for testing and may not work with some
+	// other features, including the CSDS service.
+	NewXDSResolverWithConfigForTesting interface{} // func([]byte) (resolver.Builder, error)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

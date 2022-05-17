@@ -1,6 +1,3 @@
-//go:build !386
-// +build !386
-
 /*
  *
  * Copyright 2021 gRPC authors.
@@ -18,7 +15,7 @@
  * limitations under the License.
  */
 
-package xds_test
+package xds
 
 import (
 	"context"
@@ -32,13 +29,13 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	xdsinternal "google.golang.org/grpc/internal/xds"
+	"google.golang.org/grpc/resolver"
+	testgrpc "google.golang.org/grpc/test/grpc_testing"
 	testpb "google.golang.org/grpc/test/grpc_testing"
-	"google.golang.org/grpc/xds"
-	"google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/e2e"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
 // TestClientSideFederation tests that federation is supported.
@@ -83,22 +80,23 @@ func (s) TestClientSideFederation(t *testing.T) {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
-	resolver, err := xds.NewXDSResolverWithConfigForTesting(bootstrapContents)
+	resolverBuilder := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
+	resolver, err := resolverBuilder(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 	}
-	port, cleanup := clientSetup(t, &testService{})
+	port, cleanup := startTestService(t, nil)
 	defer cleanup()
 
 	const serviceName = "my-service-client-side-xds"
 	// LDS is old style name.
 	ldsName := serviceName
 	// RDS is new style, with the non default authority.
-	rdsName := testutils.BuildResourceName(xdsresource.RouteConfigResource, nonDefaultAuth, "route-"+serviceName, nil)
+	rdsName := fmt.Sprintf("xdstp://%s/envoy.config.route.v3.RouteConfiguration/%s", nonDefaultAuth, "route-"+serviceName)
 	// CDS is old style name.
 	cdsName := "cluster-" + serviceName
 	// EDS is new style, with the non default authority.
-	edsName := testutils.BuildResourceName(xdsresource.EndpointsResource, nonDefaultAuth, "endpoints-"+serviceName, nil)
+	edsName := fmt.Sprintf("xdstp://%s/envoy.config.route.v3.ClusterLoadAssignment/%s", nonDefaultAuth, "endpoints-"+serviceName)
 
 	// Split resources, put LDS/CDS in the default authority, and put RDS/EDS in
 	// the other authority.
@@ -135,7 +133,7 @@ func (s) TestClientSideFederation(t *testing.T) {
 	}
 	defer cc.Close()
 
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}

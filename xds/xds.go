@@ -32,9 +32,12 @@ import (
 
 	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal"
 	internaladmin "google.golang.org/grpc/internal/admin"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/csds"
+	"google.golang.org/grpc/xds/internal/clusterspecifier/rls"
+	"google.golang.org/grpc/xds/internal/httpfilter/rbac"
 
 	_ "google.golang.org/grpc/credentials/tls/certprovider/pemfile"         // Register the file watcher certificate provider plugin.
 	_ "google.golang.org/grpc/xds/internal/balancer"                        // Register the balancers.
@@ -74,22 +77,69 @@ func init() {
 		v3statusgrpc.RegisterClientStatusDiscoveryServiceServer(grpcServer, csdss)
 		return csdss.Close, nil
 	})
+
+	internal.NewXDSResolverWithConfigForTesting = func(bootstrapConfig []byte) (resolver.Builder, error) {
+		return xdsresolver.NewBuilderForTesting(bootstrapConfig)
+	}
 }
 
-// NewXDSResolverWithConfigForTesting creates a new xds resolver builder using
-// the provided xds bootstrap config instead of the global configuration from
-// the supported environment variables.  The resolver.Builder is meant to be
-// used in conjunction with the grpc.WithResolvers DialOption.
+// RegisterRLSClusterSpecifierPluginForTesting registers the RLS Cluster
+// Specifier Plugin for testing purposes, regardless of the XDSRLS environment
+// variable.
+//
+// TODO: Remove this function once the RLS env var is removed.
 //
 // Testing Only
 //
-// This function should ONLY be used for testing and may not work with some
-// other features, including the CSDS service.
+// This function should ONLY be used for testing purposes.
 //
 // Experimental
 //
-// Notice: This API is EXPERIMENTAL and may be changed or removed in a
-// later release.
-func NewXDSResolverWithConfigForTesting(bootstrapConfig []byte) (resolver.Builder, error) {
-	return xdsresolver.NewBuilderForTesting(bootstrapConfig)
+// Notice: This API is EXPERIMENTAL and will be removed in a later release.
+func RegisterRLSClusterSpecifierPluginForTesting() {
+	rls.RegisterForTesting()
+}
+
+// UnregisterRLSClusterSpecifierPluginForTesting unregisters the RLS Cluster
+// Specifier Plugin for testing purposes. This is needed because there is no way
+// to unregister the RLS Cluster Specifier Plugin after registering it solely
+// for testing purposes using RegisterRLSClusterSpecifierPluginForTesting().
+//
+// TODO: Remove this function once the RLS env var is removed.
+//
+// Testing Only
+//
+// This function should ONLY be used for testing purposes.
+//
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and will be removed in a later release.
+func UnregisterRLSClusterSpecifierPluginForTesting() {
+	rls.UnregisterForTesting()
+}
+
+// RegisterRBACHTTPFilterForTesting registers the RBAC HTTP Filter for testing
+// purposes, regardless of the RBAC environment variable.
+//
+// TODO: Remove this function once the RBAC env var is removed.
+//
+// Testing Only
+//
+// This function should ONLY be used for testing purposes.
+//
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and will be removed in a later release.
+func RegisterRBACHTTPFilterForTesting() {
+	rbac.RegisterForTesting()
+}
+
+// UnregisterRBACHTTPFilterForTesting unregisters the RBAC HTTP Filter for
+// testing purposes. This is needed because there is no way to unregister the
+// HTTP Filter after registering it solely for testing purposes using
+// RegisterRBACHTTPFilterForTesting().
+//
+// TODO: Remove this function once the RBAC env var is removed.
+func UnregisterRBACHTTPFilterForTesting() {
+	rbac.UnregisterForTesting()
 }

@@ -27,11 +27,12 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
+
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/grpc/xds/internal/testutils/e2e"
 )
 
 var (

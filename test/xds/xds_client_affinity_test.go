@@ -1,6 +1,3 @@
-//go:build !386
-// +build !386
-
 /*
  *
  * Copyright 2021 gRPC authors.
@@ -19,7 +16,7 @@
  *
  */
 
-package xds_test
+package xds
 
 import (
 	"context"
@@ -29,15 +26,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/xds/internal/testutils/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	testgrpc "google.golang.org/grpc/test/grpc_testing"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
-
-const hashHeaderName = "session_id"
 
 // hashRouteConfig returns a RouteConfig resource with hash policy set to
 // header "session_id".
@@ -53,7 +49,7 @@ func hashRouteConfig(routeName, ldsTarget, clusterName string) *v3routepb.RouteC
 					HashPolicy: []*v3routepb.RouteAction_HashPolicy{{
 						PolicySpecifier: &v3routepb.RouteAction_HashPolicy_Header_{
 							Header: &v3routepb.RouteAction_HashPolicy_Header{
-								HeaderName: hashHeaderName,
+								HeaderName: "session_id",
 							},
 						},
 						Terminal: true,
@@ -92,10 +88,10 @@ func (s) TestClientSideAffinitySanityCheck(t *testing.T) {
 		return func() { envconfig.XDSRingHash = old }
 	}()()
 
-	managementServer, nodeID, _, resolver, cleanup1 := setupManagementServer(t)
+	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t)
 	defer cleanup1()
 
-	port, cleanup2 := clientSetup(t, &testService{})
+	port, cleanup2 := startTestService(t, nil)
 	defer cleanup2()
 
 	const serviceName = "my-service-client-side-xds"
@@ -130,7 +126,7 @@ func (s) TestClientSideAffinitySanityCheck(t *testing.T) {
 	}
 	defer cc.Close()
 
-	client := testpb.NewTestServiceClient(cc)
+	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
 	}

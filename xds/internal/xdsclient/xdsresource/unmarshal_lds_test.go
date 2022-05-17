@@ -29,10 +29,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal/httpfilter"
-	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"
-	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
-	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/durationpb"
 
@@ -53,6 +51,9 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	spb "github.com/golang/protobuf/ptypes/struct"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
+
+	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"   // Register the RBAC HTTP filter.
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
 
 func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
