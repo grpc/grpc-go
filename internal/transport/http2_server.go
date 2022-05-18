@@ -448,6 +448,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			streamID:       streamID,
 			contentSubtype: s.contentSubtype,
 			status:         status.New(codes.Internal, errMsg),
+			rst:            !frame.StreamEnded(),
 		})
 		return false
 	}
@@ -530,6 +531,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			streamID:       streamID,
 			contentSubtype: s.contentSubtype,
 			status:         status.New(codes.Internal, errMsg),
+			rst:            !frame.StreamEnded(),
 		})
 		s.cancel()
 		return false
@@ -550,6 +552,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				streamID:       s.id,
 				contentSubtype: s.contentSubtype,
 				status:         stat,
+				rst:            !frame.StreamEnded(),
 			})
 			return false
 		}
