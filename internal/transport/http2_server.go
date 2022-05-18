@@ -521,14 +521,15 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	if httpMethod != http.MethodPost {
 		t.mu.Unlock()
+		errMsg := fmt.Sprintf("http2Server.operateHeaders parsed a :method field: %v which should be POST", httpMethod)
 		if logger.V(logLevel) {
-			logger.Infof("transport: http2Server.operateHeaders parsed a :method field: %v which should be POST", httpMethod)
+			logger.Infof("transport: %v", errMsg)
 		}
-		t.controlBuf.put(&cleanupStream{
-			streamID: streamID,
-			rst:      true,
-			rstCode:  http2.ErrCodeProtocol,
-			onWrite:  func() {},
+		t.controlBuf.put(&earlyAbortStream{
+			httpStatus:     405,
+			streamID:       streamID,
+			contentSubtype: s.contentSubtype,
+			status:         status.New(codes.Internal, errMsg),
 		})
 		s.cancel()
 		return false
