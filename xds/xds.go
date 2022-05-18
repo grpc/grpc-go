@@ -32,9 +32,7 @@ import (
 
 	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/internal"
 	internaladmin "google.golang.org/grpc/internal/admin"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/csds"
 	"google.golang.org/grpc/xds/internal/clusterspecifier/rls"
 	"google.golang.org/grpc/xds/internal/httpfilter/rbac"
@@ -45,7 +43,7 @@ import (
 	_ "google.golang.org/grpc/xds/internal/httpfilter/fault"                // Register the fault injection filter.
 	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"                 // Register the RBAC filter.
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"               // Register the router filter.
-	xdsresolver "google.golang.org/grpc/xds/internal/resolver"              // Register the xds_resolver.
+	_ "google.golang.org/grpc/xds/internal/resolver"                        // Register the xds_resolver
 	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2" // Register the v2 xDS API client.
 	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v3" // Register the v3 xDS API client.
 )
@@ -77,10 +75,6 @@ func init() {
 		v3statusgrpc.RegisterClientStatusDiscoveryServiceServer(grpcServer, csdss)
 		return csdss.Close, nil
 	})
-
-	internal.NewXDSResolverWithConfigForTesting = func(bootstrapConfig []byte) (resolver.Builder, error) {
-		return xdsresolver.NewBuilderForTesting(bootstrapConfig)
-	}
 }
 
 // RegisterRLSClusterSpecifierPluginForTesting registers the RLS Cluster
