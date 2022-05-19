@@ -30,11 +30,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/status"
-	"google.golang.org/grpc/xds"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -408,8 +408,8 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 	defer func() {
 		envconfig.XDSRBAC = oldRBAC
 	}()
-	xds.RegisterRBACHTTPFilterForTesting()
-	defer xds.UnregisterRBACHTTPFilterForTesting()
+	internal.RegisterRBACHTTPFilterForTesting()
+	defer internal.UnregisterRBACHTTPFilterForTesting()
 	tests := []struct {
 		name                string
 		rbacCfg             *rpb.RBAC

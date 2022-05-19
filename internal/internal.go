@@ -74,6 +74,35 @@ var (
 	// This function should ONLY be used for testing and may not work with some
 	// other features, including the CSDS service.
 	NewXDSResolverWithConfigForTesting interface{} // func([]byte) (resolver.Builder, error)
+
+	// RegisterRLSClusterSpecifierPluginForTesting registers the RLS Cluster
+	// Specifier Plugin for testing purposes, regardless of the XDSRLS environment
+	// variable.
+	//
+	// TODO: Remove this function once the RLS env var is removed.
+	RegisterRLSClusterSpecifierPluginForTesting func()
+
+	// UnregisterRLSClusterSpecifierPluginForTesting unregisters the RLS Cluster
+	// Specifier Plugin for testing purposes. This is needed because there is no way
+	// to unregister the RLS Cluster Specifier Plugin after registering it solely
+	// for testing purposes using RegisterRLSClusterSpecifierPluginForTesting().
+	//
+	// TODO: Remove this function once the RLS env var is removed.
+	UnregisterRLSClusterSpecifierPluginForTesting func()
+
+	// RegisterRBACHTTPFilterForTesting registers the RBAC HTTP Filter for testing
+	// purposes, regardless of the RBAC environment variable.
+	//
+	// TODO: Remove this function once the RBAC env var is removed.
+	RegisterRBACHTTPFilterForTesting func()
+
+	// UnregisterRBACHTTPFilterForTesting unregisters the RBAC HTTP Filter for
+	// testing purposes. This is needed because there is no way to unregister the
+	// HTTP Filter after registering it solely for testing purposes using
+	// RegisterRBACHTTPFilterForTesting().
+	//
+	// TODO: Remove this function once the RBAC env var is removed.
+	UnregisterRBACHTTPFilterForTesting func()
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

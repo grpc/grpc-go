@@ -25,11 +25,11 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/rls"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/xds"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -95,10 +95,10 @@ func defaultRouteConfigWithRLSCSP(routeName, ldsTarget string, rlsProto *rlspb.R
 func (s) TestRLSinxDS(t *testing.T) {
 	oldRLS := envconfig.XDSRLS
 	envconfig.XDSRLS = true
-	xds.RegisterRLSClusterSpecifierPluginForTesting()
+	internal.RegisterRLSClusterSpecifierPluginForTesting()
 	defer func() {
 		envconfig.XDSRLS = oldRLS
-		xds.UnregisterRLSClusterSpecifierPluginForTesting()
+		internal.UnregisterRLSClusterSpecifierPluginForTesting()
 	}()
 
 	// Set up all components and configuration necessary - management server,
