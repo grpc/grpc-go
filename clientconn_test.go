@@ -970,7 +970,7 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 		{Addr: lis3.Addr().String()},
 	}
 	rb := manual.NewBuilderWithScheme("whatever")
-	rb.InitialState(resolver.State{Addresses: addrsList})
+	rb.InitialState(resolver.State{Addresses: addrsList[0:2]})
 
 	client, err := Dial("whatever:///this-gets-overwritten",
 		WithTransportCredentials(insecure.NewCredentials()),
