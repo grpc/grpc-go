@@ -24,7 +24,6 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/resolver"
 )
 
 // PickFirstBalancerName is the name of the pick_first balancer.
@@ -48,7 +47,6 @@ type pickfirstBalancer struct {
 	state   connectivity.State
 	cc      balancer.ClientConn
 	subConn balancer.SubConn
-	addrs   []resolver.Address
 }
 
 func (b *pickfirstBalancer) ResolverError(err error) {
@@ -70,18 +68,6 @@ func (b *pickfirstBalancer) ResolverError(err error) {
 	})
 }
 
-func equalAddresses(a, b []resolver.Address) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, v := range a {
-		if !v.Equal(b[i]) {
-			return false
-		}
-	}
-	return true
-}
-
 func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if len(state.ResolverState.Addresses) == 0 {
 		// The resolver reported an empty address list. Treat it like an error by
@@ -95,21 +81,6 @@ func (b *pickfirstBalancer) UpdateClientConnState(state balancer.ClientConnState
 		b.ResolverError(errors.New("produced zero addresses"))
 		return balancer.ErrBadResolverState
 	}
-
-	if equalAddresses(b.addrs, state.ResolverState.Addresses) {
-		// Avoid updating SubConn addresses if the addresses are the same.
-		//
-		// Usually SubConns can compare the new addresses with the address in
-		// use, and will not recreate the connection if not necessary.
-		//
-		// A special case is if the SubConn is in Connecting (so it's still
-		// trying to connect the addresses, and there's no address in use).
-		// Calling update addresses, even with the same set of Addresses, cause
-		// the SubConn to stop connecting, and retry with the new (same) set of
-		// addresses.
-		return nil
-	}
-	b.addrs = state.ResolverState.Addresses
 
 	if b.subConn != nil {
 		b.cc.UpdateAddresses(b.subConn, state.ResolverState.Addresses)
