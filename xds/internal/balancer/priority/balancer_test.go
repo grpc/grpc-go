@@ -1854,22 +1854,6 @@ func (s) TestPriority_HighPriorityInitIdle(t *testing.T) {
 		t.Fatalf("pick returned %v, %v, want _, %v", pr, err, errsTestInitIdle[0])
 	}
 
-	// The ClientConn state update triggers a priority switch, from p0 -> p0
-	// (since p0 is still in use). Along with this the update, p0 also gets a
-	// ClientConn state update, with the addresses, which didn't change in this
-	// test (this update to the child is necessary in case the addresses are
-	// different).
-	//
-	// The test child policy, initIdleBalancer, blindly calls NewSubConn with
-	// all the addresses it receives, so this will trigger a NewSubConn with the
-	// old p0 addresses. (Note that in a real balancer, like roundrobin, no new
-	// SubConn will be created because the addresses didn't change).
-	//
-	// Clear those from the channel so the rest of the test can get the expected
-	// behavior.
-	<-cc.NewSubConnAddrsCh
-	<-cc.NewSubConnCh
-
 	// Turn p0 down, to start p1.
 	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
