@@ -1,4 +1,4 @@
-package balancer
+package hashring
 
 import (
 	"math/rand"
@@ -7,9 +7,8 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/balancer/hashring/consistent"
 	"google.golang.org/grpc/grpclog"
-
-	"github.com/authzed/spicedb/pkg/consistent"
 )
 
 type ctxKey string
