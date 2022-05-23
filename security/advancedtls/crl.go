@@ -27,6 +27,7 @@ import (
 	"encoding/asn1"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -34,6 +35,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/cryptobyte"
+	cbasn1 "golang.org/x/crypto/cryptobyte/asn1"
 	"google.golang.org/grpc/grpclog"
 )
 
@@ -83,6 +86,7 @@ type certificateListExt struct {
 	CertList *pkix.CertificateList
 	// RFC5280, 5.2.1, all conforming CRLs must have a AKID with the ID method.
 	AuthorityKeyID []byte
+	RawIssuer      []byte
 }
 
 const tagDirectoryName = 4
@@ -99,6 +103,11 @@ var (
 )
 
 // x509NameHash implements the OpenSSL X509_NAME_hash function for hashed directory lookups.
+//
+// NOTE: due to the behavior of asn1.Marshal, if the original encoding of the RDN sequence
+// contains strings which do not use the ASN.1 PrintableString type, the name will not be
+// re-encoded using those types, resulting in a hash which does not match that produced
+// by OpenSSL.
 func x509NameHash(r pkix.RDNSequence) string {
 	var canonBytes []byte
 	// First, canonicalize all the strings.
@@ -220,20 +229,20 @@ func cachedCrl(rawIssuer []byte, cache Cache) (*certificateListExt, bool) {
 }
 
 // fetchIssuerCRL fetches and verifies the CRL for rawIssuer from disk or cache if configured in cfg.
-func fetchIssuerCRL(crlDistributionPoint string, rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) (*certificateListExt, error) {
+func fetchIssuerCRL(rawIssuer []byte, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) (*certificateListExt, error) {
 	if cfg.Cache != nil {
 		if crl, ok := cachedCrl(rawIssuer, cfg.Cache); ok {
 			return crl, nil
 		}
 	}
 
-	crl, err := fetchCRL(crlDistributionPoint, rawIssuer, cfg)
+	crl, err := fetchCRL(rawIssuer, cfg)
 	if err != nil {
-		return nil, fmt.Errorf("fetchCRL(%v) failed err = %v", crlDistributionPoint, err)
+		return nil, fmt.Errorf("fetchCRL() failed err = %v", err)
 	}
 
 	if err := verifyCRL(crl, rawIssuer, crlVerifyCrt); err != nil {
-		return nil, fmt.Errorf("verifyCRL(%v) failed err = %v", crlDistributionPoint, err)
+		return nil, fmt.Errorf("verifyCRL() failed err = %v", err)
 	}
 	if cfg.Cache != nil {
 		cfg.Cache.Add(hex.EncodeToString(rawIssuer), crl)
@@ -242,45 +251,33 @@ func fetchIssuerCRL(crlDistributionPoint string, rawIssuer []byte, crlVerifyCrt 
 }
 
 // checkCert checks a single certificate against the CRL defined in the certificate.
-// It will fetch and verify the CRL(s) defined by CRLDistributionPoints.
+// It will fetch and verify the CRL(s) defined in the root directory specified by cfg.
 // If we can't load any authoritative CRL files, the status is RevocationUndetermined.
 // c is the certificate to check.
 // crlVerifyCrt is the group of possible certificates to verify the crl.
 func checkCert(c *x509.Certificate, crlVerifyCrt []*x509.Certificate, cfg RevocationConfig) RevocationStatus {
-	if len(c.CRLDistributionPoints) == 0 {
-		return RevocationUnrevoked
+	crl, err := fetchIssuerCRL(c.RawIssuer, crlVerifyCrt, cfg)
+	if err != nil {
+		// We couldn't load any CRL files for the certificate, so we don't know if it's RevocationUnrevoked or not.
+		grpclogLogger.Warningf("getIssuerCRL(%v) err = %v", c.Issuer, err)
+		return RevocationUndetermined
 	}
-	// Iterate through CRL distribution points to check for status
-	for _, dp := range c.CRLDistributionPoints {
-		crl, err := fetchIssuerCRL(dp, c.RawIssuer, crlVerifyCrt, cfg)
-		if err != nil {
-			grpclogLogger.Warningf("getIssuerCRL(%v) err = %v", c.Issuer, err)
-			continue
-		}
-		revocation, err := checkCertRevocation(c, crl)
-		if err != nil {
-			grpclogLogger.Warningf("checkCertRevocation(CRL %v) failed %v", crl.CertList.TBSCertList.Issuer, err)
-			// We couldn't check the CRL file for some reason, so continue
-			// to the next file
-			continue
-		}
-		// Here we've gotten a CRL that loads and verifies.
-		// We only handle all-reasons CRL files, so this file
-		// is authoritative for the certificate.
-		return revocation
-
+	revocation, err := checkCertRevocation(c, crl)
+	if err != nil {
+		grpclogLogger.Warningf("checkCertRevocation(CRL %v) failed %v", crl.CertList.TBSCertList.Issuer, err)
+		// We couldn't check the CRL file for some reason, so we don't know if it's RevocationUnrevoked or not.
+		return RevocationUndetermined
 	}
-	// We couldn't load any CRL files for the certificate, so we don't know if it's RevocationUnrevoked or not.
-	return RevocationUndetermined
+	// Here we've gotten a CRL that loads and verifies.
+	// We only handle all-reasons CRL files, so this file
+	// is authoritative for the certificate.
+	return revocation
 }
 
 func checkCertRevocation(c *x509.Certificate, crl *certificateListExt) (RevocationStatus, error) {
 	// Per section 5.3.3 we prime the certificate issuer with the CRL issuer.
 	// Subsequent entries use the previous entry's issuer.
-	rawEntryIssuer, err := asn1.Marshal(crl.CertList.TBSCertList.Issuer)
-	if err != nil {
-		return RevocationUndetermined, err
-	}
+	rawEntryIssuer := crl.RawIssuer
 
 	// Loop through all the revoked certificates.
 	for _, revCert := range crl.CertList.TBSCertList.RevokedCertificates {
@@ -424,7 +421,7 @@ func parseCRLExtensions(c *pkix.CertificateList) (*certificateListExt, error) {
 	return certList, nil
 }
 
-func fetchCRL(loc string, rawIssuer []byte, cfg RevocationConfig) (*certificateListExt, error) {
+func fetchCRL(rawIssuer []byte, cfg RevocationConfig) (*certificateListExt, error) {
 	var parsedCRL *certificateListExt
 	// 6.3.3 (a) (1) (ii)
 	// According to X509_LOOKUP_hash_dir the format is issuer_hash.rN where N is an increasing number.
@@ -456,10 +453,11 @@ func fetchCRL(loc string, rawIssuer []byte, cfg RevocationConfig) (*certificateL
 			continue
 		}
 
-		rawCRLIssuer, err := asn1.Marshal(certList.CertList.TBSCertList.Issuer)
+		rawCRLIssuer, err := extractCRLIssuer(crlBytes)
 		if err != nil {
-			return nil, fmt.Errorf("asn1.Marshal(%v) failed err = %v", certList.CertList.TBSCertList.Issuer, err)
+			return nil, err
 		}
+		certList.RawIssuer = rawCRLIssuer
 		// RFC5280, 6.3.3 (b) Verify the issuer and scope of the complete CRL.
 		if bytes.Equal(rawIssuer, rawCRLIssuer) {
 			parsedCRL = certList
@@ -478,10 +476,6 @@ func verifyCRL(crl *certificateListExt, rawIssuer []byte, chain []*x509.Certific
 	// RFC5280, 6.3.3 (f) Obtain and validateate the certification path for the issuer of the complete CRL
 	// We intentionally limit our CRLs to be signed with the same certificate path as the certificate
 	// so we can use the chain from the connection.
-	rawCRLIssuer, err := asn1.Marshal(crl.CertList.TBSCertList.Issuer)
-	if err != nil {
-		return fmt.Errorf("asn1.Marshal(%v) failed err = %v", crl.CertList.TBSCertList.Issuer, err)
-	}
 
 	for _, c := range chain {
 		// Use the key where the subject and KIDs match.
@@ -490,10 +484,35 @@ func verifyCRL(crl *certificateListExt, rawIssuer []byte, chain []*x509.Certific
 		// "Conforming CRL issuers MUST use the key identifier method, and MUST
 		// include this extension in all CRLs issued."
 		// So, this is much simpler than RFC4158 and should be compatible.
-		if bytes.Equal(c.SubjectKeyId, crl.AuthorityKeyID) && bytes.Equal(c.RawSubject, rawCRLIssuer) {
+		if bytes.Equal(c.SubjectKeyId, crl.AuthorityKeyID) && bytes.Equal(c.RawSubject, crl.RawIssuer) {
 			// RFC5280, 6.3.3 (g) Validate signature.
 			return c.CheckCRLSignature(crl.CertList)
 		}
 	}
 	return fmt.Errorf("verifyCRL: No certificates mached CRL issuer (%v)", crl.CertList.TBSCertList.Issuer)
+}
+
+var crlPemPrefix = []byte("-----BEGIN X509 CRL")
+
+// extractCRLIssuer extracts the raw ASN.1 encoding of the CRL issuer. Due to the design of
+// pkix.CertificateList and pkix.RDNSequence, it is not possible to reliably marshal the
+// parsed Issuer to it's original raw encoding.
+func extractCRLIssuer(crlBytes []byte) ([]byte, error) {
+	if bytes.HasPrefix(crlBytes, crlPemPrefix) {
+		block, _ := pem.Decode(crlBytes)
+		if block != nil && block.Type == "X509 CRL" {
+			crlBytes = block.Bytes
+		}
+	}
+
+	der := cryptobyte.String(crlBytes)
+	var issuer cryptobyte.String
+	if !der.ReadASN1(&der, cbasn1.SEQUENCE) ||
+		!der.ReadASN1(&der, cbasn1.SEQUENCE) ||
+		!der.SkipOptionalASN1(cbasn1.INTEGER) ||
+		!der.SkipASN1(cbasn1.SEQUENCE) ||
+		!der.ReadASN1Element(&issuer, cbasn1.SEQUENCE) {
+		return nil, errors.New("extractCRLIssuer: invalid ASN.1 encoding")
+	}
+	return issuer, nil
 }

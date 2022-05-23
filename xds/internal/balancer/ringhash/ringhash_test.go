@@ -365,8 +365,8 @@ func TestAddrWeightChange(t *testing.T) {
 }
 
 // TestSubConnToConnectWhenOverallTransientFailure covers the situation when the
-// overall state is TransientFailure, the SubConns turning Idle will be
-// triggered to Connect(). But not when the overall state is not
+// overall state is TransientFailure, the SubConns turning Idle will trigger the
+// next SubConn in the ring to Connect(). But not when the overall state is not
 // TransientFailure.
 func TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
 	wantAddrs := []resolver.Address{
@@ -377,30 +377,56 @@ func TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
 	_, b, p0 := setupTest(t, wantAddrs)
 	ring0 := p0.(*picker).ring
 
-	// Turn all SubConns to TransientFailure.
-	for _, it := range ring0.items {
-		b.UpdateSubConnState(it.sc.sc, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-	}
-
-	// The next one turning Idle should Connect().
+	// Turn the first subconn to transient failure.
 	sc0 := ring0.items[0].sc.sc
+	b.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	b.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Idle})
-	select {
-	case <-sc0.(*testutils.TestSubConn).ConnectCh:
-	case <-time.After(defaultTestTimeout):
-		t.Errorf("timeout waiting for Connect() from SubConn %v", sc0)
-	}
 
-	// If this SubConn is ready. Other SubConns turning Idle will not Connect().
-	b.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	b.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
-
-	// The third SubConn in the ring should connect.
+	// It will trigger the second subconn to connect (because overall state is
+	// Connect (when one subconn is TF)).
 	sc1 := ring0.items[1].sc.sc
-	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Idle})
 	select {
 	case <-sc1.(*testutils.TestSubConn).ConnectCh:
-		t.Errorf("unexpected Connect() from SubConn %v", sc1)
+	case <-time.After(defaultTestShortTimeout):
+		t.Fatalf("timeout waiting for Connect() from SubConn %v", sc1)
+	}
+
+	// Turn the second subconn to TF. This will set the overall state to TF.
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Idle})
+
+	// It will trigger the third subconn to connect.
+	sc2 := ring0.items[2].sc.sc
+	select {
+	case <-sc2.(*testutils.TestSubConn).ConnectCh:
+	case <-time.After(defaultTestShortTimeout):
+		t.Fatalf("timeout waiting for Connect() from SubConn %v", sc2)
+	}
+
+	// Turn the third subconn to TF. This will set the overall state to TF.
+	b.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	b.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Idle})
+
+	// It will trigger the first subconn to connect.
+	select {
+	case <-sc0.(*testutils.TestSubConn).ConnectCh:
+	case <-time.After(defaultTestShortTimeout):
+		t.Fatalf("timeout waiting for Connect() from SubConn %v", sc0)
+	}
+
+	// Turn the third subconn to TF again.
+	b.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	b.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Idle})
+
+	// This will not trigger any new Connect() on the SubConns, because sc0 is
+	// still attempting to connect, and we only need one SubConn to connect.
+	select {
+	case <-sc0.(*testutils.TestSubConn).ConnectCh:
+		t.Fatalf("unexpected Connect() from SubConn %v", sc0)
+	case <-sc1.(*testutils.TestSubConn).ConnectCh:
+		t.Fatalf("unexpected Connect() from SubConn %v", sc1)
+	case <-sc2.(*testutils.TestSubConn).ConnectCh:
+		t.Fatalf("unexpected Connect() from SubConn %v", sc2)
 	case <-time.After(defaultTestShortTimeout):
 	}
 }

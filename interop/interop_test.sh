@@ -36,13 +36,13 @@ clean () {
 }
 
 fail () {
-    echo "$(tput setaf 1) $1 $(tput sgr 0)"
+    echo "$(tput setaf 1) $(date): $1 $(tput sgr 0)"
     clean
     exit 1
 }
 
 pass () {
-    echo "$(tput setaf 2) $1 $(tput sgr 0)"
+    echo "$(tput setaf 2) $(date): $1 $(tput sgr 0)"
 }
 
 # Don't run some tests that need a special environment:
@@ -73,21 +73,30 @@ CASES=(
 )
 
 # Build server
+echo "$(tput setaf 4) $(date): building server $(tput sgr 0)"
 if ! go build -o /dev/null ./interop/server; then
   fail "failed to build server"
 else
   pass "successfully built server"
 fi
 
+# Build client
+echo "$(tput setaf 4) $(date): building client $(tput sgr 0)"
+if ! go build -o /dev/null ./interop/client; then
+  fail "failed to build client"
+else
+  pass "successfully built client"
+fi
+
 # Start server
 SERVER_LOG="$(mktemp)"
-go run ./interop/server --use_tls &> $SERVER_LOG  &
+GRPC_GO_LOG_SEVERITY_LEVEL=info go run ./interop/server --use_tls &> $SERVER_LOG  &
 
 for case in ${CASES[@]}; do
-    echo "$(tput setaf 4) testing: ${case} $(tput sgr 0)"
+    echo "$(tput setaf 4) $(date): testing: ${case} $(tput sgr 0)"
 
     CLIENT_LOG="$(mktemp)"
-    if ! timeout 20 go run ./interop/client --use_tls --server_host_override=foo.test.google.fr --use_test_ca --test_case="${case}" &> $CLIENT_LOG; then  
+    if ! GRPC_GO_LOG_SEVERITY_LEVEL=info timeout 20 go run ./interop/client --use_tls --server_host_override=foo.test.google.fr --use_test_ca --test_case="${case}" &> $CLIENT_LOG; then
         fail "FAIL: test case ${case}
         got server log:
         $(cat $SERVER_LOG)
@@ -95,7 +104,7 @@ for case in ${CASES[@]}; do
         $(cat $CLIENT_LOG)
         "
     else
-        pass "PASS: test case ${case}"
+      pass "PASS: test case ${case}"
     fi
 done
 

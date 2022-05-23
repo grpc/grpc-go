@@ -42,6 +42,11 @@ func UnmarshalEndpoints(opts *UnmarshalOptions) (map[string]EndpointsUpdateErrTu
 }
 
 func unmarshalEndpointsResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, EndpointsUpdate, error) {
+	r, err := unwrapResource(r)
+	if err != nil {
+		return "", EndpointsUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
+	}
+
 	if !IsEndpointsResource(r.GetTypeUrl()) {
 		return "", EndpointsUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
@@ -102,7 +107,7 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 	for _, dropPolicy := range m.GetPolicy().GetDropOverloads() {
 		ret.Drops = append(ret.Drops, parseDropPolicy(dropPolicy))
 	}
-	priorities := make(map[uint32]struct{})
+	priorities := make(map[uint32]map[string]bool)
 	for _, locality := range m.Endpoints {
 		l := locality.GetLocality()
 		if l == nil {
@@ -114,7 +119,16 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 			SubZone: l.SubZone,
 		}
 		priority := locality.GetPriority()
-		priorities[priority] = struct{}{}
+		localitiesWithPriority := priorities[priority]
+		if localitiesWithPriority == nil {
+			localitiesWithPriority = make(map[string]bool)
+			priorities[priority] = localitiesWithPriority
+		}
+		lidStr, _ := lid.ToString()
+		if localitiesWithPriority[lidStr] {
+			return EndpointsUpdate{}, fmt.Errorf("duplicate locality %s with the same priority %v", lidStr, priority)
+		}
+		localitiesWithPriority[lidStr] = true
 		ret.Localities = append(ret.Localities, Locality{
 			ID:        lid,
 			Endpoints: parseEndpoints(locality.GetLbEndpoints()),

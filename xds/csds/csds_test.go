@@ -30,6 +30,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
@@ -50,9 +52,7 @@ import (
 	v3statuspbgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
 
-const (
-	defaultTestTimeout = 10 * time.Second
-)
+const defaultTestTimeout = 10 * time.Second
 
 var cmpOpts = cmp.Options{
 	cmp.Transformer("sort", func(in []*v3statuspb.ClientConfig_GenericXdsConfig) []*v3statuspb.ClientConfig_GenericXdsConfig {
@@ -113,6 +113,14 @@ var (
 	ports        = []uint32{123, 456}
 )
 
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
 func init() {
 	for i := range ldsTargets {
 		listeners[i] = e2e.DefaultClientListener(ldsTargets[i], rdsTargets[i])
@@ -132,7 +140,7 @@ func init() {
 	}
 }
 
-func TestCSDS(t *testing.T) {
+func (s) TestCSDS(t *testing.T) {
 	const retryCount = 10
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -242,12 +250,13 @@ func commonSetup(ctx context.Context, t *testing.T) (xdsclient.XDSClient, *e2e.M
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	// Create xds_client.
 	xdsC, err := xdsclient.New()
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
-	oldNewXDSClient := newXDSClient
+	origNewXDSClient := newXDSClient
 	newXDSClient = func() xdsclient.XDSClient { return xdsC }
 
 	// Initialize an gRPC server and register CSDS on it.
@@ -257,6 +266,7 @@ func commonSetup(ctx context.Context, t *testing.T) (xdsclient.XDSClient, *e2e.M
 		t.Fatal(err)
 	}
 	v3statuspbgrpc.RegisterClientStatusDiscoveryServiceServer(server, csdss)
+
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -269,7 +279,7 @@ func commonSetup(ctx context.Context, t *testing.T) (xdsclient.XDSClient, *e2e.M
 	}()
 
 	// Create CSDS client.
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("cannot connect to server: %v", err)
 	}
@@ -284,7 +294,7 @@ func commonSetup(ctx context.Context, t *testing.T) (xdsclient.XDSClient, *e2e.M
 		conn.Close()
 		server.Stop()
 		csdss.Close()
-		newXDSClient = oldNewXDSClient
+		newXDSClient = origNewXDSClient
 		xdsC.Close()
 		bootstrapCleanup()
 	}
@@ -490,7 +500,7 @@ func checkForNACKed(nackResourceIdx int, stream v3statuspbgrpc.ClientStatusDisco
 	return nil
 }
 
-func TestCSDSNoXDSClient(t *testing.T) {
+func (s) TestCSDSNoXDSClient(t *testing.T) {
 	oldNewXDSClient := newXDSClient
 	newXDSClient = func() xdsclient.XDSClient { return nil }
 	defer func() { newXDSClient = oldNewXDSClient }()
@@ -516,7 +526,7 @@ func TestCSDSNoXDSClient(t *testing.T) {
 	defer server.Stop()
 
 	// Create CSDS client.
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("cannot connect to server: %v", err)
 	}

@@ -24,7 +24,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.15
+          go-version: 1.18
       - name: Checkout repo
         uses: actions/checkout@v2
 
@@ -40,31 +40,35 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
+      fail-fast: false
       matrix:
         include:
           - type: vet+tests
-            goversion: 1.17
+            goversion: 1.18
 
           - type: tests
-            goversion: 1.17
+            goversion: 1.18
             testflags: -race
 
-          - type: extras
-            goversion: 1.17
-
           - type: tests
-            goversion: 1.17
+            goversion: 1.18
             goarch: 386
 
           - type: tests
-            goversion: 1.17
+            goversion: 1.18
             goarch: arm64
+
+          - type: tests
+            goversion: 1.17
 
           - type: tests
             goversion: 1.16
 
           - type: tests
             goversion: 1.15
+
+          - type: extras
+            goversion: 1.18
 
     steps:
       # Setup the environment.
@@ -102,16 +106,24 @@ jobs:
         run: |
           go version
           go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc/...
-          cd ${GITHUB_WORKSPACE}/security/advancedtls && go test ${{ matrix.testflags }} -timeout 2m google.golang.org/grpc/security/advancedtls/...
-          cd ${GITHUB_WORKSPACE}/security/authorization && go test ${{ matrix.testflags }} -timeout 2m google.golang.org/grpc/security/authorization/...
-
+          cd "${GITHUB_WORKSPACE}"
+          for MOD_FILE in $(find . -name 'go.mod' | grep -Ev '^\./go\.mod'); do
+            pushd "$(dirname ${MOD_FILE})"
+            go test ${{ matrix.testflags }} -timeout 2m ./...
+            popd
+          done
 
       # Non-core gRPC tests (examples, interop, etc)
       - name: Run extras tests
         if: matrix.type == 'extras'
         run: |
+          export TERM=${TERM:-xterm}
           go version
+          echo -e "\n-- Running Examples --"
           examples/examples_test.sh
+          echo -e "\n-- Running AdvancedTLS Examples --"
           security/advancedtls/examples/examples_test.sh
+          echo -e "\n-- Running Interop Test --"
           interop/interop_test.sh
+          echo -e "\n-- Running xDS E2E Test --"
           xds/internal/test/e2e/run.sh

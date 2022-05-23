@@ -26,7 +26,9 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
+	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
+	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
 // DiscoveryMechanismType is the type of discovery mechanism.
@@ -84,11 +86,9 @@ func (t *DiscoveryMechanismType) UnmarshalJSON(b []byte) error {
 type DiscoveryMechanism struct {
 	// Cluster is the cluster name.
 	Cluster string `json:"cluster,omitempty"`
-	// LoadReportingServerName is the LRS server to send load reports to. If
-	// not present, load reporting will be disabled. If set to the empty string,
-	// load reporting will be sent to the same server that we obtained CDS data
-	// from.
-	LoadReportingServerName *string `json:"lrsLoadReportingServerName,omitempty"`
+	// LoadReportingServer is the LRS server to send load reports to. If not
+	// present, load reporting will be disabled.
+	LoadReportingServer *bootstrap.ServerConfig `json:"lrsLoadReportingServer,omitempty"`
 	// MaxConcurrentRequests is the maximum number of outstanding requests can
 	// be made to the upstream cluster. Default is 1024.
 	MaxConcurrentRequests *uint32 `json:"maxConcurrentRequests,omitempty"`
@@ -103,14 +103,15 @@ type DiscoveryMechanism struct {
 	// DNSHostname is the DNS name to resolve in "host:port" form. For type
 	// LOGICAL_DNS only.
 	DNSHostname string `json:"dnsHostname,omitempty"`
+	// OutlierDetection is the Outlier Detection LB configuration for this
+	// priority.
+	OutlierDetection *outlierdetection.LBConfig `json:"outlierDetection,omitempty"`
 }
 
 // Equal returns whether the DiscoveryMechanism is the same with the parameter.
 func (dm DiscoveryMechanism) Equal(b DiscoveryMechanism) bool {
 	switch {
 	case dm.Cluster != b.Cluster:
-		return false
-	case !equalStringP(dm.LoadReportingServerName, b.LoadReportingServerName):
 		return false
 	case !equalUint32P(dm.MaxConcurrentRequests, b.MaxConcurrentRequests):
 		return false
@@ -120,18 +121,17 @@ func (dm DiscoveryMechanism) Equal(b DiscoveryMechanism) bool {
 		return false
 	case dm.DNSHostname != b.DNSHostname:
 		return false
-	}
-	return true
-}
-
-func equalStringP(a, b *string) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
+	case !dm.OutlierDetection.EqualIgnoringChildPolicy(b.OutlierDetection):
 		return false
 	}
-	return *a == *b
+
+	if dm.LoadReportingServer == nil && b.LoadReportingServer == nil {
+		return true
+	}
+	if (dm.LoadReportingServer != nil) != (b.LoadReportingServer != nil) {
+		return false
+	}
+	return dm.LoadReportingServer.String() == b.LoadReportingServer.String()
 }
 
 func equalUint32P(a, b *uint32) bool {

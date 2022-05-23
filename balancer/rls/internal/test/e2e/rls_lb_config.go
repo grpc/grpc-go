@@ -33,6 +33,7 @@ import (
 // RLSConfig is a utility type to build service config for the RLS LB policy.
 type RLSConfig struct {
 	RouteLookupConfig                *rlspb.RouteLookupConfig
+	RouteLookupChannelServiceConfig  string
 	ChildPolicy                      *internalserviceconfig.BalancerConfig
 	ChildPolicyConfigTargetFieldName string
 }
@@ -60,12 +61,13 @@ func (c *RLSConfig) ServiceConfigJSON() (string, error) {
     {
       "rls_experimental": {
         "routeLookupConfig": %s,
+				"routeLookupChannelServiceConfig": %s,
         "childPolicy": %s,
         "childPolicyConfigTargetFieldName": %q
       }
     }
   ]
-}`, string(routeLookupCfg), string(childPolicy), c.ChildPolicyConfigTargetFieldName), nil
+}`, string(routeLookupCfg), c.RouteLookupChannelServiceConfig, string(childPolicy), c.ChildPolicyConfigTargetFieldName), nil
 }
 
 // LoadBalancingConfig generates load balancing config which can used as part of
@@ -87,9 +89,10 @@ func (c *RLSConfig) LoadBalancingConfig() (serviceconfig.LoadBalancingConfig, er
 	lbConfigJSON := fmt.Sprintf(`
 {
   "routeLookupConfig": %s,
+  "routeLookupChannelServiceConfig": %s,
   "childPolicy": %s,
   "childPolicyConfigTargetFieldName": %q
-}`, string(routeLookupCfg), string(childPolicy), c.ChildPolicyConfigTargetFieldName)
+}`, string(routeLookupCfg), c.RouteLookupChannelServiceConfig, string(childPolicy), c.ChildPolicyConfigTargetFieldName)
 
 	builder := balancer.Get("rls_experimental")
 	if builder == nil {

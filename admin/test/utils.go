@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/admin"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/status"
 )
@@ -78,7 +79,7 @@ func RunRegisterTests(t *testing.T, ec ExpectedStatusCodes) {
 		server.Serve(lis)
 	}()
 
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("cannot connect to server: %v", err)
 	}

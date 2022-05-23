@@ -289,18 +289,13 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 		scToRemove    []balancer.SubConn
 		scToRemoveMap = make(map[balancer.SubConn]struct{})
 	)
-	// Each subconn is removed twice. This is OK in production, but it makes
-	// testing harder.
-	//
+	// Each subconn is removed.
 	// The sub-balancer to be closed is priority's child, clusterimpl, who has
 	// weightedtarget as children.
-	//
-	// - When clusterimpl is removed from priority's balancergroup, all its
-	// subconns are removed once.
 	// - When clusterimpl is closed, it closes weightedtarget, and this
-	// weightedtarget's balancer removes all the same subconns again.
-	for i := 0; i < 4; i++ {
-		// We expect 2 subconns, so we recv from channel 4 times.
+	// weightedtarget's balancer removes all the subconns.
+	for i := 0; i < 2; i++ {
+		// We expect 2 subconns, so we recv from channel 2 times.
 		scToRemoveMap[<-cc.RemoveSubConnCh] = struct{}{}
 	}
 	for sc := range scToRemoveMap {
@@ -503,7 +498,6 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab1.Build()), nil)
 	// p0 subconn should be removed.
 	scToRemove := <-cc.RemoveSubConnCh
-	<-cc.RemoveSubConnCh // Drain the duplicate subconn removed.
 	if !cmp.Equal(scToRemove, sc0, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc0, scToRemove)
 	}
@@ -551,7 +545,6 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 
 	// p1 subconn should be removed.
 	scToRemove1 := <-cc.RemoveSubConnCh
-	<-cc.RemoveSubConnCh // Drain the duplicate subconn removed.
 	if !cmp.Equal(scToRemove1, sc11, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc11, scToRemove1)
 	}

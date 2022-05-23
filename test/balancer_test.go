@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
@@ -153,7 +152,7 @@ func (s) TestCredsBundleFromBalancer(t *testing.T) {
 	te := newTest(t, env{name: "creds-bundle", network: "tcp", balancer: ""})
 	te.tapHandle = authHandle
 	te.customDialOptions = []grpc.DialOption{
-		grpc.WithBalancerName(testBalancerName),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, testBalancerName)),
 	}
 	creds, err := credentials.NewServerTLSFromFile(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
@@ -188,7 +187,7 @@ func testPickExtraMetadata(t *testing.T, e env) {
 	)
 
 	te.customDialOptions = []grpc.DialOption{
-		grpc.WithBalancerName(testBalancerName),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, testBalancerName)),
 		grpc.WithUserAgent(testUserAgent),
 	}
 	te.startServer(&testServer{security: e.security})
@@ -236,7 +235,7 @@ func testDoneInfo(t *testing.T, e env) {
 	b := &testBalancer{}
 	balancer.Register(b)
 	te.customDialOptions = []grpc.DialOption{
-		grpc.WithBalancerName(testBalancerName),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, testBalancerName)),
 	}
 	te.userAgent = failAppUA
 	te.startServer(&testServer{security: e.security})
@@ -315,7 +314,7 @@ func testDoneLoads(t *testing.T) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	if err := ss.Start(nil, grpc.WithBalancerName(testBalancerName)); err != nil {
+	if err := ss.Start(nil, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, testBalancerName))); err != nil {
 		t.Fatalf("error starting testing server: %v", err)
 	}
 	defer ss.Stop()
@@ -393,8 +392,10 @@ func (s) TestNonGRPCLBBalancerGetsNoGRPCLBAddress(t *testing.T) {
 	b := newTestBalancerKeepAddresses()
 	balancer.Register(b)
 
-	cc, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r),
-		grpc.WithBalancerName(b.Name()))
+	cc, err := grpc.Dial(r.Scheme()+":///test.server",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, b.Name())))
 	if err != nil {
 		t.Fatalf("failed to dial: %v", err)
 	}
@@ -655,7 +656,7 @@ func (s) TestServersSwap(t *testing.T) {
 	// Initialize client
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: addr1}}})
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(r))
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
@@ -676,87 +677,6 @@ func (s) TestServersSwap(t *testing.T) {
 			t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
 		} else if res.Username == two {
 			break // pass
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
-
-// TestEmptyAddrs verifies client behavior when a working connection is
-// removed.  In pick first and round-robin, both will continue using the old
-// connections.
-func (s) TestEmptyAddrs(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	// Initialize server
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Error while listening. Err: %v", err)
-	}
-	s := grpc.NewServer()
-	defer s.Stop()
-	const one = "1"
-	ts := &funcServer{
-		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			return &testpb.SimpleResponse{Username: one}, nil
-		},
-	}
-	testpb.RegisterTestServiceServer(s, ts)
-	go s.Serve(lis)
-
-	// Initialize pickfirst client
-	pfr := manual.NewBuilderWithScheme("whatever")
-
-	pfr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
-
-	pfcc, err := grpc.DialContext(ctx, pfr.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(pfr))
-	if err != nil {
-		t.Fatalf("Error creating client: %v", err)
-	}
-	defer pfcc.Close()
-	pfclient := testpb.NewTestServiceClient(pfcc)
-
-	// Confirm we are connected to the server
-	if res, err := pfclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil || res.Username != one {
-		t.Fatalf("UnaryCall(_) = %v, %v; want {Username: %q}, nil", res, err, one)
-	}
-
-	// Remove all addresses.
-	pfr.UpdateState(resolver.State{})
-
-	// Initialize roundrobin client
-	rrr := manual.NewBuilderWithScheme("whatever")
-
-	rrr.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: lis.Addr().String()}}})
-
-	rrcc, err := grpc.DialContext(ctx, rrr.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(rrr),
-		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{ "loadBalancingConfig": [{"%v": {}}] }`, roundrobin.Name)))
-	if err != nil {
-		t.Fatalf("Error creating client: %v", err)
-	}
-	defer rrcc.Close()
-	rrclient := testpb.NewTestServiceClient(rrcc)
-
-	// Confirm we are connected to the server
-	if res, err := rrclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil || res.Username != one {
-		t.Fatalf("UnaryCall(_) = %v, %v; want {Username: %q}, nil", res, err, one)
-	}
-
-	// Remove all addresses.
-	rrr.UpdateState(resolver.State{})
-
-	// Confirm several new RPCs succeed on pick first.
-	for i := 0; i < 10; i++ {
-		if _, err := pfclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
-			t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-
-	// Confirm several new RPCs succeed on round robin.
-	for i := 0; i < 10; i++ {
-		if _, err := pfclient.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
-			t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
@@ -785,7 +705,7 @@ func (s) TestWaitForReady(t *testing.T) {
 	// Initialize client
 	r := manual.NewBuilderWithScheme("whatever")
 
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithInsecure(), grpc.WithResolvers(r))
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}

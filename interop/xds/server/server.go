@@ -100,10 +100,7 @@ func (x *xdsUpdateHealthServiceImpl) SetNotServing(_ context.Context, _ *testpb.
 }
 
 func xdsServingModeCallback(addr net.Addr, args xds.ServingModeChangeArgs) {
-	logger.Infof("Serving mode for xDS server at %s changed to %s", addr.String(), args.Mode)
-	if args.Err != nil {
-		logger.Infof("ServingModeCallback returned error: %v", args.Err)
-	}
+	logger.Infof("Serving mode callback for xDS server at %q invoked with mode: %q, err: %v", addr.String(), args.Mode, args.Err)
 }
 
 func main() {

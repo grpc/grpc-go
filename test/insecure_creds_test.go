@@ -23,7 +23,6 @@ import (
 	"net"
 	"strings"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -35,8 +34,6 @@ import (
 
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
-
-const defaultTestTimeout = 5 * time.Second
 
 // testLegacyPerRPCCredentials is a PerRPCCredentials that has yet incorporated security level.
 type testLegacyPerRPCCredentials struct{}
@@ -124,7 +121,7 @@ func (s) TestInsecureCreds(t *testing.T) {
 			go s.Serve(lis)
 
 			addr := lis.Addr().String()
-			opts := []grpc.DialOption{grpc.WithInsecure()}
+			opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 			if test.clientInsecureCreds {
 				opts = []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 			}

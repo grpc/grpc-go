@@ -26,21 +26,39 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/proto/grpc_lookup_v1"
+	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
-
-	// Blank import to init the RLS LB policy.
-	_ "google.golang.org/grpc/balancer/rls"
 )
-
-const rlsBalancerName = "rls_experimental"
 
 func init() {
 	if envconfig.XDSRLS {
 		clusterspecifier.Register(rls{})
+	}
+}
+
+// RegisterForTesting registers the RLS Cluster Specifier Plugin for testing
+// purposes, regardless of the XDSRLS environment variable. This is needed
+// because there is no way to set the XDSRLS environment variable to true in a
+// test before init() in this package is run.
+//
+// TODO: Remove this function once the RLS env var is removed.
+func RegisterForTesting() {
+	clusterspecifier.Register(rls{})
+}
+
+// UnregisterForTesting unregisters the RLS Cluster Specifier Plugin for testing
+// purposes. This is needed because there is no way to unregister the RLS
+// Cluster Specifier Plugin after registering it solely for testing purposes
+// using rls.RegisterForTesting().
+//
+// TODO: Remove this function once the RLS env var is removed.
+func UnregisterForTesting() {
+	for _, typeURL := range rls.TypeURLs(rls{}) {
+		clusterspecifier.UnregisterForTesting(typeURL)
 	}
 }
 
@@ -67,7 +85,7 @@ func (rls) ParseClusterSpecifierConfig(cfg proto.Message) (clusterspecifier.Bala
 	if !ok {
 		return nil, fmt.Errorf("rls_csp: error parsing config %v: unknown type %T", cfg, cfg)
 	}
-	rlcs := new(grpc_lookup_v1.RouteLookupClusterSpecifier)
+	rlcs := new(rlspb.RouteLookupClusterSpecifier)
 
 	if err := ptypes.UnmarshalAny(any, rlcs); err != nil {
 		return nil, fmt.Errorf("rls_csp: error parsing config %v: %v", cfg, err)
@@ -91,14 +109,13 @@ func (rls) ParseClusterSpecifierConfig(cfg proto.Message) (clusterspecifier.Bala
 		return nil, fmt.Errorf("rls_csp: error marshaling load balancing config %v: %v", lbCfgJSON, err)
 	}
 
-	rlsBB := balancer.Get(rlsBalancerName)
+	rlsBB := balancer.Get(internal.RLSLoadBalancingPolicyName)
 	if rlsBB == nil {
 		return nil, fmt.Errorf("RLS LB policy not registered")
 	}
-	_, err = rlsBB.(balancer.ConfigParser).ParseConfig(rawJSON)
-	if err != nil {
+	if _, err = rlsBB.(balancer.ConfigParser).ParseConfig(rawJSON); err != nil {
 		return nil, fmt.Errorf("rls_csp: validation error from rls lb policy parsing %v", err)
 	}
 
-	return clusterspecifier.BalancerConfig{{rlsBalancerName: lbCfgJSON}}, nil
+	return clusterspecifier.BalancerConfig{{internal.RLSLoadBalancingPolicyName: lbCfgJSON}}, nil
 }
