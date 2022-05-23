@@ -153,10 +153,10 @@ type LBConfig struct {
 	ChildPolicy *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
-// EqualODOnly returns whether the LBConfig is same with the parameter outside
-// of the child policy, only comparing the Outlier Detection specific
-// configuration.
-func (lbc *LBConfig) EqualODOnly(lbc2 *LBConfig) bool {
+// EqualIgnoringChildPolicy returns whether the LBConfig is same with the
+// parameter outside of the child policy, only comparing the Outlier Detection
+// specific configuration.
+func (lbc *LBConfig) EqualIgnoringChildPolicy(lbc2 *LBConfig) bool {
 	if lbc == nil && lbc2 == nil {
 		return true
 	}
