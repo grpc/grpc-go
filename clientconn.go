@@ -1238,6 +1238,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		ac.mu.Lock()
 		defer ac.mu.Unlock()
 		defer connClosed.Fire()
+		defer hcancel()
 		if !hcStarted || hctx.Err() != nil {
 			// We didn't start the health check or set the state to READY, so
 			// no need to do anything else here.
@@ -1248,7 +1249,6 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 			// state, since there may be a new transport in this addrConn.
 			return
 		}
-		hcancel()
 		ac.transport = nil
 		// Refresh the name resolver
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
@@ -1271,6 +1271,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, addr, copts, func() { prefaceReceived.Fire() }, onGoAway, onClose)
 	if err != nil {
 		// newTr is either nil, or closed.
+		hcancel()
 		channelz.Warningf(logger, ac.channelzID, "grpc: addrConn.createTransport failed to connect to %s. Err: %v", addr, err)
 		return err
 	}
