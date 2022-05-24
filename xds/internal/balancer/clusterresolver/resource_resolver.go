@@ -210,13 +210,7 @@ func (rr *resourceResolver) stop() {
 func (rr *resourceResolver) generate() {
 	var ret []priorityConfig
 	for _, rDM := range rr.children {
-		r, ok := rr.childrenMap[rDM.dmKey]
-		if !ok {
-			rr.parent.logger.Infof("resolver for %+v not found, should never happen", rDM.dmKey)
-			continue
-		}
-
-		u, ok := r.r.lastUpdate()
+		u, ok := rDM.r.lastUpdate()
 		if !ok {
 			// Don't send updates to parent until all resolvers have update to
 			// send.
