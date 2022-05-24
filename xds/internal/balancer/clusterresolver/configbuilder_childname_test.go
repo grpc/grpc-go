@@ -35,15 +35,17 @@ func Test_nameGenerator_generate(t *testing.T) {
 	}{
 		{
 			name:   "init, two new priorities",
+			prefix: 3,
 			input1: nil,
 			input2: [][]xdsresource.Locality{
 				{{ID: internal.LocalityID{Zone: "L0"}}},
 				{{ID: internal.LocalityID{Zone: "L1"}}},
 			},
-			want: []string{"priority-0-0", "priority-0-1"},
+			want: []string{"priority-3-0", "priority-3-1"},
 		},
 		{
-			name: "one new priority",
+			name:   "one new priority",
+			prefix: 1,
 			input1: [][]xdsresource.Locality{
 				{{ID: internal.LocalityID{Zone: "L0"}}},
 			},
@@ -51,10 +53,11 @@ func Test_nameGenerator_generate(t *testing.T) {
 				{{ID: internal.LocalityID{Zone: "L0"}}},
 				{{ID: internal.LocalityID{Zone: "L1"}}},
 			},
-			want: []string{"priority-0-0", "priority-0-1"},
+			want: []string{"priority-1-0", "priority-1-1"},
 		},
 		{
-			name: "merge two priorities",
+			name:   "merge two priorities",
+			prefix: 4,
 			input1: [][]xdsresource.Locality{
 				{{ID: internal.LocalityID{Zone: "L0"}}},
 				{{ID: internal.LocalityID{Zone: "L1"}}},
@@ -64,7 +67,7 @@ func Test_nameGenerator_generate(t *testing.T) {
 				{{ID: internal.LocalityID{Zone: "L0"}}, {ID: internal.LocalityID{Zone: "L1"}}},
 				{{ID: internal.LocalityID{Zone: "L2"}}},
 			},
-			want: []string{"priority-0-0", "priority-0-2"},
+			want: []string{"priority-4-0", "priority-4-2"},
 		},
 		{
 			name: "swap two priorities",

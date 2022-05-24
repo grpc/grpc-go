@@ -64,14 +64,20 @@ type resourceResolver struct {
 	updateChannel chan *resourceUpdate
 
 	// mu protects the slice and map, and content of the resolvers in the slice.
-	mu          sync.Mutex
-	mechanisms  []DiscoveryMechanism
-	children    []resolverMechanismTuple
+	mu         sync.Mutex
+	mechanisms []DiscoveryMechanism
+	children   []resolverMechanismTuple
+	// childrenMap's key only needs the resolver implementation (type
+	// discoveryMechanism) and the childNameGen. The other two fields are not
+	// used.
+	//
+	// TODO(cleanup): maybe we can make a new type with just the necessary
+	// fields, and use it here instead.
 	childrenMap map[discoveryMechanismKey]resolverMechanismTuple
 	// Each new discovery mechanism needs a child name generator to reuse child
-	// policy names. But to make sure the names cross discover mechanism doesn't
-	// conflict, we need a seq ID. This ID is incremented for each new discover
-	// mechanism.
+	// policy names. But to make sure the names across discover mechanism
+	// doesn't conflict, we need a seq ID. This ID is incremented for each new
+	// discover mechanism.
 	childNameGeneratorSeqID uint64
 }
 
@@ -130,6 +136,13 @@ func (rr *resourceResolver) updateMechanisms(mechanisms []DiscoveryMechanism) {
 				rr.childrenMap[dmKey] = r
 				rr.childNameGeneratorSeqID++
 			} else {
+				// If this is not new, keep the fields (especially
+				// childNameGen), and only update te DiscoveryMechanism.
+				//
+				// Note that the same dmKey doesn't mean the same
+				// DiscoveryMechanism. There are fields (e.g.
+				// MaxConcurrentRequests) in DiscoveryMechanism that are not
+				// copied to dmKey, we need to keep those updated.
 				r.dm = dm
 			}
 			rr.children[i] = r
