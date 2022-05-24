@@ -40,9 +40,9 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/httpfilter/router"
-	"google.golang.org/grpc/xds/internal/testutils/e2e"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 

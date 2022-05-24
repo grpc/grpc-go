@@ -1,6 +1,3 @@
-//go:build !386
-// +build !386
-
 /*
  *
  * Copyright 2021 gRPC authors.
@@ -19,7 +16,7 @@
  *
  */
 
-package xds_test
+package xds
 
 import (
 	"context"
@@ -30,10 +27,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal/testutils"
-	"google.golang.org/grpc/xds/internal/testutils/e2e"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	testgrpc "google.golang.org/grpc/test/grpc_testing"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
@@ -43,7 +41,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 		missingIdentityProviderInstance = "missing-identity-provider-instance"
 		missingRootProviderInstance     = "missing-root-provider-instance"
 	)
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := setupManagementServer(t)
+	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t)
 	defer cleanup1()
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
@@ -207,7 +205,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 			}
 			ctx2, cancel2 := context.WithTimeout(ctx, timeout)
 			defer cancel2()
-			client := testpb.NewTestServiceClient(cc)
+			client := testgrpc.NewTestServiceClient(cc)
 			if _, err := client.EmptyCall(ctx2, &testpb.Empty{}, grpc.WaitForReady(true)); (err != nil) != test.wantErr {
 				t.Fatalf("EmptyCall() returned err: %v, wantErr %v", err, test.wantErr)
 			}
@@ -323,13 +321,13 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// setupManagementServer() sets up a bootstrap file with certificate
+			// SetupManagementServer() sets up a bootstrap file with certificate
 			// provider instance names: `e2e.ServerSideCertProviderInstance` and
 			// `e2e.ClientSideCertProviderInstance`.
-			managementServer, nodeID, _, resolver, cleanup1 := setupManagementServer(t)
+			managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t)
 			defer cleanup1()
 
-			port, cleanup2 := clientSetup(t, &testService{})
+			port, cleanup2 := startTestService(t, nil)
 			defer cleanup2()
 
 			// This creates a `Cluster` resource with a security config which
@@ -363,7 +361,7 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 			}
 			ctx2, cancel2 := context.WithTimeout(ctx, timeout)
 			defer cancel2()
-			client := testpb.NewTestServiceClient(cc)
+			client := testgrpc.NewTestServiceClient(cc)
 			if _, err := client.EmptyCall(ctx2, &testpb.Empty{}, grpc.WaitForReady(true)); (err != nil) != test.wantErr {
 				t.Fatalf("EmptyCall() returned err: %v, wantErr %v", err, test.wantErr)
 			}
