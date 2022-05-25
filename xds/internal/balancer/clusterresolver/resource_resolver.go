@@ -67,7 +67,7 @@ type resourceResolver struct {
 	mu         sync.Mutex
 	mechanisms []DiscoveryMechanism
 	children   []resolverMechanismTuple
-	// childrenMap's key only needs the resolver implementation (type
+	// childrenMap's value only needs the resolver implementation (type
 	// discoveryMechanism) and the childNameGen. The other two fields are not
 	// used.
 	//
@@ -137,7 +137,7 @@ func (rr *resourceResolver) updateMechanisms(mechanisms []DiscoveryMechanism) {
 				rr.childNameGeneratorSeqID++
 			} else {
 				// If this is not new, keep the fields (especially
-				// childNameGen), and only update te DiscoveryMechanism.
+				// childNameGen), and only update the DiscoveryMechanism.
 				//
 				// Note that the same dmKey doesn't mean the same
 				// DiscoveryMechanism. There are fields (e.g.
