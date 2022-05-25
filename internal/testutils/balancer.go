@@ -188,9 +188,9 @@ func (tcc *TestClientConn) WaitForErrPicker(ctx context.Context) error {
 }
 
 // WaitForPickerWithErr waits until an error picker is pushed to this
-// ClientConn with the error matching the wanted error.  Also drains the
-// matching entry from the state channel.  Returns an error if the provided
-// context expires, including the last received picker error (if any).
+// ClientConn with the error matching the wanted error.  Returns an error if
+// the provided context expires, including the last received picker error (if
+// any).
 func (tcc *TestClientConn) WaitForPickerWithErr(ctx context.Context, want error) error {
 	lastErr := errors.New("received no picker")
 	for {
@@ -198,7 +198,6 @@ func (tcc *TestClientConn) WaitForPickerWithErr(ctx context.Context, want error)
 		case <-ctx.Done():
 			return fmt.Errorf("timeout when waiting for an error picker with %v; last picker error: %v", want, lastErr)
 		case picker := <-tcc.NewPickerCh:
-			<-tcc.NewStateCh
 			for i := 0; i < 5; i++ {
 				if _, lastErr = picker.Pick(balancer.PickInfo{}); lastErr == nil || lastErr.Error() != want.Error() {
 					break
@@ -210,9 +209,8 @@ func (tcc *TestClientConn) WaitForPickerWithErr(ctx context.Context, want error)
 }
 
 // WaitForConnectivityState waits until the state pushed to this ClientConn
-// matches the wanted state.  Also drains the matching entry from the picker
-// channel.  Returns an error if the provided context expires, including the
-// last received state (if any).
+// matches the wanted state.  Returns an error if the provided context expires,
+// including the last received state (if any).
 func (tcc *TestClientConn) WaitForConnectivityState(ctx context.Context, want connectivity.State) error {
 	var lastState connectivity.State = -1
 	for {
@@ -220,7 +218,6 @@ func (tcc *TestClientConn) WaitForConnectivityState(ctx context.Context, want co
 		case <-ctx.Done():
 			return fmt.Errorf("timeout when waiting for state to be %s; last state: %s", want, lastState)
 		case s := <-tcc.NewStateCh:
-			<-tcc.NewPickerCh
 			if s == want {
 				return nil
 			}
@@ -230,17 +227,22 @@ func (tcc *TestClientConn) WaitForConnectivityState(ctx context.Context, want co
 }
 
 // WaitForRoundRobinPicker waits for a picker that passes IsRoundRobin.  Also
-// drains the matching state channel and requires it to be READY to be
-// considered.  Returns an error if the provided context expires, including the
-// last received error from IsRoundRobin or the picker (if any).
+// drains the matching state channel and requires it to be READY (if an entry
+// is pending) to be considered.  Returns an error if the provided context
+// expires, including the last received error from IsRoundRobin or the picker
+// (if any).
 func (tcc *TestClientConn) WaitForRoundRobinPicker(ctx context.Context, want ...balancer.SubConn) error {
 	lastErr := errors.New("received no picker")
 	for {
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("timeout when waiting for round robin picker with %v; last error: %v", want, lastErr)
-		case s := <-tcc.NewStateCh:
-			p := <-tcc.NewPickerCh
+		case p := <-tcc.NewPickerCh:
+			s := connectivity.Ready
+			select {
+			case s = <-tcc.NewStateCh:
+			default:
+			}
 			if s != connectivity.Ready {
 				lastErr = fmt.Errorf("received state %v instead of ready", s)
 				break
@@ -250,12 +252,32 @@ func (tcc *TestClientConn) WaitForRoundRobinPicker(ctx context.Context, want ...
 				sc, err := p.Pick(balancer.PickInfo{})
 				if err != nil {
 					pickerErr = err
+				} else if sc.Done != nil {
+					sc.Done(balancer.DoneInfo{})
 				}
 				return sc.SubConn
 			}); pickerErr != nil {
 				lastErr = pickerErr
 				continue
 			} else if err != nil {
+				lastErr = err
+				continue
+			}
+			return nil
+		}
+	}
+}
+
+// WaitForPicker waits for a picker that results in f returning nil.  If the
+// context expires, returns the last error returned by f (if any).
+func (tcc *TestClientConn) WaitForPicker(ctx context.Context, f func(balancer.Picker) error) error {
+	lastErr := errors.New("received no picker")
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout when waiting for picker; last error: %v", lastErr)
+		case p := <-tcc.NewPickerCh:
+			if err := f(p); err != nil {
 				lastErr = err
 				continue
 			}
