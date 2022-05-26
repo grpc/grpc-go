@@ -68,7 +68,8 @@ func (s) TestResourceResolverOneEDSResource(t *testing.T) {
 					Cluster:        testClusterName,
 					EDSServiceName: testEDSServcie,
 				},
-				edsResp: testEDSUpdates[0],
+				edsResp:      testEDSUpdates[0],
+				childNameGen: newNameGenerator(0),
 			}},
 		},
 		{
@@ -81,7 +82,8 @@ func (s) TestResourceResolverOneEDSResource(t *testing.T) {
 					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterName,
 				},
-				edsResp: testEDSUpdates[1],
+				edsResp:      testEDSUpdates[1],
+				childNameGen: newNameGenerator(0),
 			}},
 		},
 	} {
@@ -107,7 +109,7 @@ func (s) TestResourceResolverOneEDSResource(t *testing.T) {
 			fakeClient.InvokeWatchEDSCallback("", test.edsUpdate, nil)
 			select {
 			case u := <-rr.updateChannel:
-				if diff := cmp.Diff(u.priorities, test.want, cmp.AllowUnexported(priorityConfig{})); diff != "" {
+				if diff := cmp.Diff(u.priorities, test.want, cmp.AllowUnexported(priorityConfig{}, nameGenerator{})); diff != "" {
 					t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
@@ -161,7 +163,8 @@ func (s) TestResourceResolverOneDNSResource(t *testing.T) {
 					Type:        DiscoveryMechanismTypeLogicalDNS,
 					DNSHostname: testDNSTarget,
 				},
-				addresses: []string{"1.1.1.1", "2.2.2.2"},
+				addresses:    []string{"1.1.1.1", "2.2.2.2"},
+				childNameGen: newNameGenerator(0),
 			}},
 		},
 	} {
@@ -189,7 +192,7 @@ func (s) TestResourceResolverOneDNSResource(t *testing.T) {
 			dnsR.UpdateState(resolver.State{Addresses: test.addrs})
 			select {
 			case u := <-rr.updateChannel:
-				if diff := cmp.Diff(u.priorities, test.want, cmp.AllowUnexported(priorityConfig{})); diff != "" {
+				if diff := cmp.Diff(u.priorities, test.want, cmp.AllowUnexported(priorityConfig{}, nameGenerator{})); diff != "" {
 					t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 				}
 			case <-ctx.Done():
@@ -243,8 +246,9 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 				Cluster:        testClusterName,
 				EDSServiceName: testEDSServcie,
 			},
-			edsResp: testEDSUpdates[0],
-		}}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
+			edsResp:      testEDSUpdates[0],
+			childNameGen: newNameGenerator(0),
+		}}, cmp.AllowUnexported(priorityConfig{}, nameGenerator{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -289,8 +293,9 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 				Type:    DiscoveryMechanismTypeEDS,
 				Cluster: testClusterName,
 			},
-			edsResp: testEDSUpdates[1],
-		}}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
+			edsResp:      testEDSUpdates[1],
+			childNameGen: newNameGenerator(1),
+		}}, cmp.AllowUnexported(priorityConfig{}, nameGenerator{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -317,8 +322,9 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 				Cluster:               testClusterName,
 				MaxConcurrentRequests: newUint32(123),
 			},
-			edsResp: testEDSUpdates[1],
-		}}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
+			edsResp:      testEDSUpdates[1],
+			childNameGen: newNameGenerator(1),
+		}}, cmp.AllowUnexported(priorityConfig{}, nameGenerator{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -388,7 +394,8 @@ func (s) TestResourceResolverNoChangeNoUpdate(t *testing.T) {
 					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterNames[0],
 				},
-				edsResp: testEDSUpdates[0],
+				edsResp:      testEDSUpdates[0],
+				childNameGen: newNameGenerator(0),
 			},
 			{
 				mechanism: DiscoveryMechanism{
@@ -396,9 +403,10 @@ func (s) TestResourceResolverNoChangeNoUpdate(t *testing.T) {
 					Cluster:               testClusterNames[1],
 					MaxConcurrentRequests: newUint32(100),
 				},
-				edsResp: testEDSUpdates[1],
+				edsResp:      testEDSUpdates[1],
+				childNameGen: newNameGenerator(1),
 			},
-		}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
+		}, cmp.AllowUnexported(priorityConfig{}, nameGenerator{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -500,16 +508,18 @@ func (s) TestResourceResolverChangePriority(t *testing.T) {
 					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterNames[0],
 				},
-				edsResp: testEDSUpdates[0],
+				edsResp:      testEDSUpdates[0],
+				childNameGen: newNameGenerator(0),
 			},
 			{
 				mechanism: DiscoveryMechanism{
 					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterNames[1],
 				},
-				edsResp: testEDSUpdates[1],
+				edsResp:      testEDSUpdates[1],
+				childNameGen: newNameGenerator(1),
 			},
-		}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
+		}, cmp.AllowUnexported(priorityConfig{}, nameGenerator{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -541,16 +551,18 @@ func (s) TestResourceResolverChangePriority(t *testing.T) {
 					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterNames[1],
 				},
-				edsResp: testEDSUpdates[1],
+				edsResp:      testEDSUpdates[1],
+				childNameGen: newNameGenerator(1),
 			},
 			{
 				mechanism: DiscoveryMechanism{
 					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterNames[0],
 				},
-				edsResp: testEDSUpdates[0],
+				edsResp:      testEDSUpdates[0],
+				childNameGen: newNameGenerator(0),
 			},
-		}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
+		}, cmp.AllowUnexported(priorityConfig{}, nameGenerator{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -628,16 +640,18 @@ func (s) TestResourceResolverEDSAndDNS(t *testing.T) {
 					Type:    DiscoveryMechanismTypeEDS,
 					Cluster: testClusterName,
 				},
-				edsResp: testEDSUpdates[0],
+				edsResp:      testEDSUpdates[0],
+				childNameGen: newNameGenerator(0),
 			},
 			{
 				mechanism: DiscoveryMechanism{
 					Type:        DiscoveryMechanismTypeLogicalDNS,
 					DNSHostname: testDNSTarget,
 				},
-				addresses: []string{"1.1.1.1", "2.2.2.2"},
+				addresses:    []string{"1.1.1.1", "2.2.2.2"},
+				childNameGen: newNameGenerator(1),
 			},
-		}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
+		}, cmp.AllowUnexported(priorityConfig{}, nameGenerator{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -689,8 +703,9 @@ func (s) TestResourceResolverChangeFromEDSToDNS(t *testing.T) {
 				Type:    DiscoveryMechanismTypeEDS,
 				Cluster: testClusterName,
 			},
-			edsResp: testEDSUpdates[0],
-		}}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
+			edsResp:      testEDSUpdates[0],
+			childNameGen: newNameGenerator(0),
+		}}, cmp.AllowUnexported(priorityConfig{}, nameGenerator{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -726,8 +741,9 @@ func (s) TestResourceResolverChangeFromEDSToDNS(t *testing.T) {
 				Type:        DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname: testDNSTarget,
 			},
-			addresses: []string{"1.1.1.1", "2.2.2.2"},
-		}}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
+			addresses:    []string{"1.1.1.1", "2.2.2.2"},
+			childNameGen: newNameGenerator(1),
+		}}, cmp.AllowUnexported(priorityConfig{}, nameGenerator{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -847,8 +863,9 @@ func (s) TestResourceResolverDNSResolveNow(t *testing.T) {
 				Type:        DiscoveryMechanismTypeLogicalDNS,
 				DNSHostname: testDNSTarget,
 			},
-			addresses: []string{"1.1.1.1", "2.2.2.2"},
-		}}, cmp.AllowUnexported(priorityConfig{})); diff != "" {
+			addresses:    []string{"1.1.1.1", "2.2.2.2"},
+			childNameGen: newNameGenerator(0),
+		}}, cmp.AllowUnexported(priorityConfig{}, nameGenerator{})); diff != "" {
 			t.Fatalf("got unexpected resource update, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
