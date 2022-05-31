@@ -28,15 +28,17 @@ package service
 
 import (
 	"context"
-	"reflect"
 	"strconv"
 	"testing"
 
 	"github.com/golang/protobuf/ptypes"
 	durpb "github.com/golang/protobuf/ptypes/duration"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/sys/unix"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/protobuf/testing/protocmp"
 )
 
 func init() {
@@ -126,7 +128,7 @@ func protoToSocketOption(skopts []*channelzpb.SocketOption) *channelz.SocketOpti
 }
 
 func (s) TestGetSocketOptions(t *testing.T) {
-	czCleanup := channelz.NewChannelzStorage()
+	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer cleanupWrapper(czCleanup, t)
 	ss := []*dummySocket{
 		{
@@ -139,20 +141,27 @@ func (s) TestGetSocketOptions(t *testing.T) {
 		},
 	}
 	svr := newCZServer()
-	ids := make([]int64, len(ss))
+	ids := make([]*channelz.Identifier, len(ss))
 	svrID := channelz.RegisterServer(&dummyServer{}, "")
 	defer channelz.RemoveEntry(svrID)
 	for i, s := range ss {
-		ids[i] = channelz.RegisterNormalSocket(s, svrID, strconv.Itoa(i))
+		ids[i], _ = channelz.RegisterNormalSocket(s, svrID, strconv.Itoa(i))
 		defer channelz.RemoveEntry(ids[i])
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	for i, s := range ss {
-		resp, _ := svr.GetSocket(ctx, &channelzpb.GetSocketRequest{SocketId: ids[i]})
-		metrics := resp.GetSocket()
-		if !reflect.DeepEqual(metrics.GetRef(), &channelzpb.SocketRef{SocketId: ids[i], Name: strconv.Itoa(i)}) || !reflect.DeepEqual(socketProtoToStruct(metrics), s) {
-			t.Fatalf("resp.GetSocket() want: metrics.GetRef() = %#v and %#v, got: metrics.GetRef() = %#v and %#v", &channelzpb.SocketRef{SocketId: ids[i], Name: strconv.Itoa(i)}, s, metrics.GetRef(), socketProtoToStruct(metrics))
+		resp, _ := svr.GetSocket(ctx, &channelzpb.GetSocketRequest{SocketId: ids[i].Int()})
+		got, want := resp.GetSocket().GetRef(), &channelzpb.SocketRef{SocketId: ids[i].Int(), Name: strconv.Itoa(i)}
+		if !cmp.Equal(got, want, cmpopts.IgnoreUnexported(channelzpb.SocketRef{})) {
+			t.Fatalf("resp.GetSocket() returned metrics.GetRef() = %#v, want %#v", got, want)
+		}
+		socket, err := socketProtoToStruct(resp.GetSocket())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diff := cmp.Diff(s, socket, protocmp.Transform(), cmp.AllowUnexported(dummySocket{})); diff != "" {
+			t.Fatalf("unexpected socket, diff (-want +got):\n%s", diff)
 		}
 	}
 }

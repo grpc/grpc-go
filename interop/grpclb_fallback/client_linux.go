@@ -42,16 +42,14 @@ import (
 )
 
 var (
-	customCredentialsType         = flag.String("custom_credentials_type", "", "Client creds to use")
-	serverURI                     = flag.String("server_uri", "dns:///staging-grpc-directpath-fallback-test.googleapis.com:443", "The server host name")
-	unrouteLBAndBackendAddrsCmd   = flag.String("unroute_lb_and_backend_addrs_cmd", "", "Command to make LB and backend address unroutable")
-	blackholeLBAndBackendAddrsCmd = flag.String("blackhole_lb_and_backend_addrs_cmd", "", "Command to make LB and backend addresses blackholed")
-	testCase                      = flag.String("test_case", "",
+	customCredentialsType   = flag.String("custom_credentials_type", "", "Client creds to use")
+	serverURI               = flag.String("server_uri", "dns:///staging-grpc-directpath-fallback-test.googleapis.com:443", "The server host name")
+	induceFallbackCmd       = flag.String("induce_fallback_cmd", "", "Command to induce fallback e.g. by making certain addresses unroutable")
+	fallbackDeadlineSeconds = flag.Int("fallback_deadline_seconds", 1, "How long to wait for fallback to happen after induce_fallback_cmd")
+	testCase                = flag.String("test_case", "",
 		`Configure different test cases. Valid options are:
-        fast_fallback_before_startup : LB/backend connections fail fast before RPC's have been made;
-        fast_fallback_after_startup : LB/backend connections fail fast after RPC's have been made;
-        slow_fallback_before_startup : LB/backend connections black hole before RPC's have been made;
-        slow_fallback_after_startup : LB/backend connections black hole after RPC's have been made;`)
+        fallback_before_startup : LB/backend connections fail before RPC's have been made;
+        fallback_after_startup : LB/backend connections fail after RPC's have been made;`)
 	infoLog  = log.New(os.Stderr, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	errorLog = log.New(os.Stderr, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 )
@@ -132,7 +130,7 @@ func waitForFallbackAndDoRPCs(client testgrpc.TestServiceClient, fallbackDeadlin
 	fallbackRetryCount := 0
 	fellBack := false
 	for time.Now().Before(fallbackDeadline) {
-		g := doRPCAndGetPath(client, 1*time.Second)
+		g := doRPCAndGetPath(client, 20*time.Second)
 		if g == testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_FALLBACK {
 			infoLog.Println("Made one successul RPC to a fallback. Now expect the same for the rest.")
 			fellBack = true
@@ -155,69 +153,39 @@ func waitForFallbackAndDoRPCs(client testgrpc.TestServiceClient, fallbackDeadlin
 	}
 }
 
-func doFastFallbackBeforeStartup() {
-	runCmd(*unrouteLBAndBackendAddrsCmd)
-	fallbackDeadline := time.Now().Add(5 * time.Second)
+func doFallbackBeforeStartup() {
+	runCmd(*induceFallbackCmd)
+	fallbackDeadline := time.Now().Add(time.Duration(*fallbackDeadlineSeconds) * time.Second)
 	conn := createTestConn()
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 	waitForFallbackAndDoRPCs(client, fallbackDeadline)
 }
 
-func doSlowFallbackBeforeStartup() {
-	runCmd(*blackholeLBAndBackendAddrsCmd)
-	fallbackDeadline := time.Now().Add(20 * time.Second)
-	conn := createTestConn()
-	defer conn.Close()
-	client := testgrpc.NewTestServiceClient(conn)
-	waitForFallbackAndDoRPCs(client, fallbackDeadline)
-}
-
-func doFastFallbackAfterStartup() {
+func doFallbackAfterStartup() {
 	conn := createTestConn()
 	defer conn.Close()
 	client := testgrpc.NewTestServiceClient(conn)
 	if g := doRPCAndGetPath(client, 20*time.Second); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
 		errorLog.Fatalf("Expected RPC to take grpclb route type BACKEND. Got: %v", g)
 	}
-	runCmd(*unrouteLBAndBackendAddrsCmd)
-	fallbackDeadline := time.Now().Add(40 * time.Second)
-	waitForFallbackAndDoRPCs(client, fallbackDeadline)
-}
-
-func doSlowFallbackAfterStartup() {
-	conn := createTestConn()
-	defer conn.Close()
-	client := testgrpc.NewTestServiceClient(conn)
-	if g := doRPCAndGetPath(client, 20*time.Second); g != testpb.GrpclbRouteType_GRPCLB_ROUTE_TYPE_BACKEND {
-		errorLog.Fatalf("Expected RPC to take grpclb route type BACKEND. Got: %v", g)
-	}
-	runCmd(*blackholeLBAndBackendAddrsCmd)
-	fallbackDeadline := time.Now().Add(40 * time.Second)
+	runCmd(*induceFallbackCmd)
+	fallbackDeadline := time.Now().Add(time.Duration(*fallbackDeadlineSeconds) * time.Second)
 	waitForFallbackAndDoRPCs(client, fallbackDeadline)
 }
 
 func main() {
 	flag.Parse()
-	if len(*unrouteLBAndBackendAddrsCmd) == 0 {
-		errorLog.Fatalf("--unroute_lb_and_backend_addrs_cmd unset")
-	}
-	if len(*blackholeLBAndBackendAddrsCmd) == 0 {
-		errorLog.Fatalf("--blackhole_lb_and_backend_addrs_cmd unset")
+	if len(*induceFallbackCmd) == 0 {
+		errorLog.Fatalf("--induce_fallback_cmd unset")
 	}
 	switch *testCase {
-	case "fast_fallback_before_startup":
-		doFastFallbackBeforeStartup()
-		log.Printf("FastFallbackBeforeStartup done!\n")
-	case "fast_fallback_after_startup":
-		doFastFallbackAfterStartup()
-		log.Printf("FastFallbackAfterStartup done!\n")
-	case "slow_fallback_before_startup":
-		doSlowFallbackBeforeStartup()
-		log.Printf("SlowFallbackBeforeStartup done!\n")
-	case "slow_fallback_after_startup":
-		doSlowFallbackAfterStartup()
-		log.Printf("SlowFallbackAfterStartup done!\n")
+	case "fallback_before_startup":
+		doFallbackBeforeStartup()
+		log.Printf("FallbackBeforeStartup done!\n")
+	case "fallback_after_startup":
+		doFallbackAfterStartup()
+		log.Printf("FallbackAfterStartup done!\n")
 	default:
 		errorLog.Fatalf("Unsupported test case: %v", *testCase)
 	}

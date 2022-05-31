@@ -88,8 +88,19 @@ type Controller struct {
 	lrsClients map[string]*lrsClient
 }
 
+var grpcDial = grpc.Dial
+
+// SetGRPCDial sets the dialer for the controller. The dial can be used to
+// manipulate the dial options or change the target if needed.
+// The SetGRPCDial must be called before gRPC initialization to make sure it
+// affects all the controllers created.
+// To reset any dialer set, pass in grpc.Dial as the parameter.
+func SetGRPCDial(dialer func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) {
+	grpcDial = dialer
+}
+
 // New creates a new controller.
-func New(config *bootstrap.ServerConfig, updateHandler pubsub.UpdateHandler, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger) (_ *Controller, retErr error) {
+func New(config *bootstrap.ServerConfig, updateHandler pubsub.UpdateHandler, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger, boff func(int) time.Duration) (_ *Controller, retErr error) {
 	switch {
 	case config == nil:
 		return nil, errors.New("xds: no xds_server provided")
@@ -109,12 +120,15 @@ func New(config *bootstrap.ServerConfig, updateHandler pubsub.UpdateHandler, val
 		}),
 	}
 
+	if boff == nil {
+		boff = backoff.DefaultExponential.Backoff
+	}
 	ret := &Controller{
 		config:          config,
 		updateValidator: validator,
 		updateHandler:   updateHandler,
 
-		backoff:    backoff.DefaultExponential.Backoff, // TODO: should this be configurable?
+		backoff:    boff,
 		streamCh:   make(chan grpc.ClientStream, 1),
 		sendCh:     buffer.NewUnbounded(),
 		watchMap:   make(map[xdsresource.ResourceType]map[string]bool),
@@ -130,7 +144,7 @@ func New(config *bootstrap.ServerConfig, updateHandler pubsub.UpdateHandler, val
 		}
 	}()
 
-	cc, err := grpc.Dial(config.ServerURI, dopts...)
+	cc, err := grpcDial(config.ServerURI, dopts...)
 	if err != nil {
 		// An error from a non-blocking dial indicates something serious.
 		return nil, fmt.Errorf("xds: failed to dial control plane {%s}: %v", config.ServerURI, err)

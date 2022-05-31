@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/keepalive"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -57,7 +58,7 @@ func (s) TestGracefulClientOnGoAway(t *testing.T) {
 	}
 	go s.Serve(lis)
 
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial server: %v", err)
 	}
