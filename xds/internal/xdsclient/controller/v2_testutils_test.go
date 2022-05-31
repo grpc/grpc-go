@@ -458,13 +458,10 @@ func newTestController(p pubsub.UpdateHandler, controlPlanAddr string, n *basepb
 		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 		TransportAPI: version.TransportV2,
 		NodeProto:    n,
-	}, p, nil, l)
+	}, p, nil, l, b)
 	if err != nil {
 		return nil, err
 	}
-	// This direct setting backoff seems a bit hacky, but should be OK for the
-	// tests. Or we need to make it configurable in New().
-	c.backoff = b
 	return c, nil
 }
 

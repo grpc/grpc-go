@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/channelz/service"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 
@@ -59,7 +60,7 @@ func main() {
 	/***** Initialize manual resolver and Dial *****/
 	r := manual.NewBuilderWithScheme("whatever")
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithInsecure(), grpc.WithResolvers(r), grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
+	conn, err := grpc.Dial(r.Scheme()+":///test.server", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r), grpc.WithDefaultServiceConfig(`{"loadBalancingPolicy":"round_robin"}`))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}

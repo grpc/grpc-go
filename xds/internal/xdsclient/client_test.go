@@ -21,6 +21,7 @@ package xdsclient
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,7 +102,7 @@ type testController struct {
 func overrideNewController(t *testing.T) *testutils.Channel {
 	origNewController := newController
 	ch := testutils.NewChannel()
-	newController = func(config *bootstrap.ServerConfig, pubsub *pubsub.Pubsub, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger) (controllerInterface, error) {
+	newController = func(config *bootstrap.ServerConfig, pubsub *pubsub.Pubsub, validator xdsresource.UpdateValidatorFunc, logger *grpclog.PrefixLogger, _ func(int) time.Duration) (controllerInterface, error) {
 		ret := newTestController(config)
 		ch.Send(ret)
 		return ret, nil
@@ -197,7 +198,7 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 	}
 	gotUpdate := u.(xdsresource.ListenerUpdateErrTuple)
 	if wantErr != nil {
-		if gotUpdate.Err != wantErr {
+		if !strings.Contains(gotUpdate.Err.Error(), wantErr.Error()) {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
 		}
 		return nil
@@ -215,7 +216,7 @@ func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, w
 	}
 	gotUpdate := u.(xdsresource.RouteConfigUpdateErrTuple)
 	if wantErr != nil {
-		if gotUpdate.Err != wantErr {
+		if !strings.Contains(gotUpdate.Err.Error(), wantErr.Error()) {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
 		}
 		return nil
@@ -233,7 +234,7 @@ func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantU
 	}
 	gotUpdate := u.(xdsresource.ClusterUpdateErrTuple)
 	if wantErr != nil {
-		if gotUpdate.Err != wantErr {
+		if !strings.Contains(gotUpdate.Err.Error(), wantErr.Error()) {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
 		}
 		return nil
@@ -251,7 +252,7 @@ func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wan
 	}
 	gotUpdate := u.(xdsresource.EndpointsUpdateErrTuple)
 	if wantErr != nil {
-		if gotUpdate.Err != wantErr {
+		if !strings.Contains(gotUpdate.Err.Error(), wantErr.Error()) {
 			return fmt.Errorf("unexpected error: %v, want %v", gotUpdate.Err, wantErr)
 		}
 		return nil
@@ -260,114 +261,4 @@ func verifyEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel, wan
 		return fmt.Errorf("unexpected endpointsUpdate: (%v, %v), want: (%v, nil)", gotUpdate.Update, gotUpdate.Err, wantUpdate)
 	}
 	return nil
-}
-
-// Test that multiple New() returns the same Client. And only when the last
-// client is closed, the underlying client is closed.
-func (s) TestClientNewSingleton(t *testing.T) {
-	oldBootstrapNewConfig := bootstrapNewConfig
-	bootstrapNewConfig = func() (*bootstrap.Config, error) {
-		return &bootstrap.Config{
-			XDSServer: &bootstrap.ServerConfig{
-				ServerURI: testXDSServer,
-				Creds:     grpc.WithInsecure(),
-				NodeProto: xdstestutils.EmptyNodeProtoV2,
-			},
-		}, nil
-	}
-	defer func() { bootstrapNewConfig = oldBootstrapNewConfig }()
-
-	ctrlCh := overrideNewController(t)
-
-	// The first New(). Should create a Client and a new APIClient.
-	client, err := newRefCounted()
-	if err != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-
-	// Call a watch to create the controller.
-	client.WatchCluster("doesnot-matter", func(update xdsresource.ClusterUpdate, err error) {})
-
-	clientImpl := client.clientImpl
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	c, err := ctrlCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for API client to be created: %v", err)
-	}
-	apiClient := c.(*testController)
-
-	// Call New() again. They should all return the same client implementation,
-	// and should not create new API client.
-	const count = 9
-	for i := 0; i < count; i++ {
-		tc, terr := newRefCounted()
-		if terr != nil {
-			client.Close()
-			t.Fatalf("%d-th call to New() failed with error: %v", i, terr)
-		}
-		if tc.clientImpl != clientImpl {
-			client.Close()
-			tc.Close()
-			t.Fatalf("%d-th call to New() got a different client %p, want %p", i, tc.clientImpl, clientImpl)
-		}
-
-		sctx, scancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
-		defer scancel()
-		_, err := ctrlCh.Receive(sctx)
-		if err == nil {
-			client.Close()
-			t.Fatalf("%d-th call to New() created a new API client", i)
-		}
-	}
-
-	// Call Close(). Nothing should be actually closed until the last ref calls
-	// Close().
-	for i := 0; i < count; i++ {
-		client.Close()
-		if clientImpl.done.HasFired() {
-			t.Fatalf("%d-th call to Close(), unexpected done in the client implemenation", i)
-		}
-		if apiClient.done.HasFired() {
-			t.Fatalf("%d-th call to Close(), unexpected done in the API client", i)
-		}
-	}
-
-	// Call the last Close(). The underlying implementation and API Client
-	// should all be closed.
-	client.Close()
-	if !clientImpl.done.HasFired() {
-		t.Fatalf("want client implementation to be closed, got not done")
-	}
-	if !apiClient.done.HasFired() {
-		t.Fatalf("want API client to be closed, got not done")
-	}
-
-	// Call New() again after the previous Client is actually closed. Should
-	// create a Client and a new APIClient.
-	client2, err2 := newRefCounted()
-	if err2 != nil {
-		t.Fatalf("failed to create client: %v", err)
-	}
-	defer client2.Close()
-
-	// Call a watch to create the controller.
-	client2.WatchCluster("abc", func(update xdsresource.ClusterUpdate, err error) {})
-
-	c2, err := ctrlCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout when waiting for API client to be created: %v", err)
-	}
-	apiClient2 := c2.(*testController)
-
-	// The client wrapper with ref count should be the same.
-	if client2 != client {
-		t.Fatalf("New() after Close() should return the same client wrapper, got different %p, %p", client2, client)
-	}
-	if client2.clientImpl == clientImpl {
-		t.Fatalf("New() after Close() should return different client implementation, got the same %p", client2.clientImpl)
-	}
-	if apiClient2 == apiClient {
-		t.Fatalf("New() after Close() should return different API client, got the same %p", apiClient2)
-	}
 }

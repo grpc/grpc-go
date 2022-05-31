@@ -50,6 +50,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/health"
@@ -67,7 +68,6 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
@@ -801,7 +801,7 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 	case "empty":
 		// Don't add any transport creds option.
 	default:
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 	// TODO(bar) switch balancer case "pick_first".
 	var scheme string
@@ -811,7 +811,7 @@ func (te *test) configDial(opts ...grpc.DialOption) ([]grpc.DialOption, string) 
 		scheme = te.resolverScheme + ":///"
 	}
 	if te.e.balancer != "" {
-		opts = append(opts, grpc.WithBalancerName(te.e.balancer))
+		opts = append(opts, grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, te.e.balancer)))
 	}
 	if te.clientInitialWindowSize > 0 {
 		opts = append(opts, grpc.WithInitialWindowSize(te.clientInitialWindowSize))
@@ -1508,7 +1508,7 @@ func testFailFast(t *testing.T, e env) {
 
 	cc := te.clientConn()
 	tc := testpb.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
@@ -1517,9 +1517,10 @@ func testFailFast(t *testing.T, e env) {
 	te.srv.Stop()
 	// Loop until the server teardown is propagated to the client.
 	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := ctx.Err(); err != nil {
+			t.Fatalf("EmptyCall did not return UNAVAILABLE before timeout")
+		}
 		_, err := tc.EmptyCall(ctx, &testpb.Empty{})
-		cancel()
 		if status.Code(err) == codes.Unavailable {
 			break
 		}
@@ -1573,7 +1574,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -1614,7 +1615,7 @@ func (s) TestGetMethodConfig(t *testing.T) {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s", err, codes.DeadlineExceeded)
 	}
 
-	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: parseCfg(r, `{
+	r.UpdateState(resolver.State{Addresses: addrs, ServiceConfig: parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -1661,7 +1662,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -1704,7 +1705,7 @@ func (s) TestServiceConfigWaitForReady(t *testing.T) {
 	// Case2:Client API set failfast to be false, and service config set wait_for_ready to be true, and the rpc will wait until deadline exceeds.
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -1750,7 +1751,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	addrs := []resolver.Address{{Addr: te.srvAddr}}
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -1797,7 +1798,7 @@ func (s) TestServiceConfigTimeout(t *testing.T) {
 	// Case2: Client API sets timeout to be 1hr and ServiceConfig sets timeout to be 1ns. Timeout should be 1ns (min of 1ns and 1hr) and the rpc will wait until deadline exceeds.
 	r.UpdateState(resolver.State{
 		Addresses: addrs,
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -1868,7 +1869,7 @@ func (s) TestServiceConfigMaxMsgSize(t *testing.T) {
 	cc1 := te1.clientConn(grpc.WithResolvers(r))
 
 	addrs := []resolver.Address{{Addr: te1.srvAddr}}
-	sc := parseCfg(r, `{
+	sc := parseServiceConfig(t, r, `{
     "methodConfig": [
         {
             "name": [
@@ -2107,7 +2108,7 @@ func (s) TestStreamingRPCWithTimeoutInServiceConfigRecv(t *testing.T) {
 
 	r.UpdateState(resolver.State{
 		Addresses: []resolver.Address{{Addr: te.srvAddr}},
-		ServiceConfig: parseCfg(r, `{
+		ServiceConfig: parseServiceConfig(t, r, `{
 	    "methodConfig": [
 	        {
 	            "name": [
@@ -3740,7 +3741,7 @@ func (s) TestTransparentRetry(t *testing.T) {
 		},
 	}
 	server.start(t, lis)
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial due to err: %v", err)
 	}
@@ -4964,8 +4965,8 @@ func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 		}
 		if err := stream.SendMsg(nil); err == nil {
 			t.Error("expected error sending message on stream after stream closed due to illegal data")
-		} else if status.Code(err) != codes.Internal {
-			t.Errorf("expected internal error, instead received '%v'", err)
+		} else if status.Code(err) != codes.Canceled {
+			t.Errorf("expected cancel error, instead received '%v'", err)
 		}
 		return nil
 	}}
@@ -5131,7 +5132,7 @@ func (s) TestFlowControlLogicalRace(t *testing.T) {
 
 	go s.Serve(lis)
 
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.Dial(%q) = %v", lis.Addr().String(), err)
 	}
@@ -6561,7 +6562,7 @@ func (s) TestServeExitsWhenListenerClosed(t *testing.T) {
 		close(done)
 	}()
 
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to dial server: %v", err)
 	}
@@ -6780,7 +6781,7 @@ func (s) TestDisabledIOBuffers(t *testing.T) {
 	defer s.Stop()
 	dctx, dcancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer dcancel()
-	cc, err := grpc.DialContext(dctx, lis.Addr().String(), grpc.WithInsecure(), grpc.WithWriteBufferSize(0), grpc.WithReadBufferSize(0))
+	cc, err := grpc.DialContext(dctx, lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithWriteBufferSize(0), grpc.WithReadBufferSize(0))
 	if err != nil {
 		t.Fatalf("Failed to dial server")
 	}
@@ -6982,7 +6983,7 @@ func (s) TestNetPipeConn(t *testing.T) {
 	go s.Serve(pl)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, "", grpc.WithInsecure(), grpc.WithDialer(pl.Dialer()))
+	cc, err := grpc.DialContext(ctx, "", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithDialer(pl.Dialer()))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
@@ -7082,7 +7083,7 @@ func (s) TestGoAwayThenClose(t *testing.T) {
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithInsecure())
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Error creating client: %v", err)
 	}
@@ -7185,7 +7186,7 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 		time.Sleep(time.Second)
 		r.UpdateState(resolver.State{
 			Addresses: []resolver.Address{{Addr: te.srvAddr}},
-			ServiceConfig: parseCfg(r, `{
+			ServiceConfig: parseServiceConfig(t, r, `{
 		    "methodConfig": [
 		        {
 		            "name": [
@@ -7483,7 +7484,7 @@ func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string
 		responses: []httpServerResponse{{trailers: headerFields}},
 	}
 	server.start(t, lis)
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to dial due to err: %v", err)
 	}
@@ -7498,14 +7499,6 @@ func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string
 	if _, err := stream.Recv(); err == nil || status.Code(err) != errCode {
 		t.Fatalf("stream.Recv() = _, %v, want error code: %v", err, errCode)
 	}
-}
-
-func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
-	g := r.CC.ParseServiceConfig(s)
-	if g.Err != nil {
-		panic(fmt.Sprintf("Error parsing config %q: %v", s, g.Err))
-	}
-	return g
 }
 
 func (s) TestClientCancellationPropagatesUnary(t *testing.T) {

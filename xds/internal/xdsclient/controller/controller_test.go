@@ -24,10 +24,17 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 const testXDSServer = "xds-server"
+
+// noopUpdateHandler ignores all updates. It's to be used in tests where the
+// updates don't matter. To avoid potential nil panic.
+var noopUpdateHandler = &testUpdateReceiver{
+	f: func(rType xdsresource.ResourceType, d map[string]interface{}, md xdsresource.UpdateMetadata) {},
+}
 
 // TestNew covers that New() returns an error if the input *ServerConfig
 // contains invalid content.
@@ -80,7 +87,7 @@ func (s) TestNew(t *testing.T) {
 			name: "happy-case",
 			config: &bootstrap.ServerConfig{
 				ServerURI: testXDSServer,
-				Creds:     grpc.WithInsecure(),
+				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 				NodeProto: testutils.EmptyNodeProtoV2,
 			},
 		},
@@ -88,7 +95,7 @@ func (s) TestNew(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c, err := New(test.config, nil, nil, nil) // Only testing the config, other inputs are left as nil.
+			c, err := New(test.config, noopUpdateHandler, nil, nil, nil) // Only testing the config, other inputs are left as nil.
 			defer func() {
 				if c != nil {
 					c.Close()
@@ -98,5 +105,50 @@ func (s) TestNew(t *testing.T) {
 				t.Fatalf("New(%+v) = %v, wantErr: %v", test.config, err, test.wantErr)
 			}
 		})
+	}
+}
+
+func (s) TestNewWithGRPCDial(t *testing.T) {
+	config := &bootstrap.ServerConfig{
+		ServerURI: testXDSServer,
+		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+		NodeProto: testutils.EmptyNodeProtoV2,
+	}
+
+	customDialerCalled := false
+	customDialer := func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+		customDialerCalled = true
+		return grpc.Dial(target, opts...)
+	}
+
+	// Set the dialer and make sure it is called.
+	SetGRPCDial(customDialer)
+	c, err := New(config, noopUpdateHandler, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("New(%+v) = %v, want no error", config, err)
+	}
+	if c != nil {
+		c.Close()
+	}
+
+	if !customDialerCalled {
+		t.Errorf("New(%+v) custom dialer called = false, want true", config)
+	}
+	customDialerCalled = false
+
+	// Reset the dialer and make sure it is not called.
+	SetGRPCDial(grpc.Dial)
+	c, err = New(config, noopUpdateHandler, nil, nil, nil)
+	defer func() {
+		if c != nil {
+			c.Close()
+		}
+	}()
+	if err != nil {
+		t.Fatalf("New(%+v) = %v, want no error", config, err)
+	}
+
+	if customDialerCalled {
+		t.Errorf("New(%+v) interceptor called = true, want false", config)
 	}
 }

@@ -46,6 +46,11 @@ func UnmarshalListener(opts *UnmarshalOptions) (map[string]ListenerUpdateErrTupl
 }
 
 func unmarshalListenerResource(r *anypb.Any, f UpdateValidatorFunc, logger *grpclog.PrefixLogger) (string, ListenerUpdate, error) {
+	r, err := unwrapResource(r)
+	if err != nil {
+		return "", ListenerUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
+	}
+
 	if !IsListenerResource(r.GetTypeUrl()) {
 		return "", ListenerUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
@@ -102,8 +107,8 @@ func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.Prefi
 
 	switch apiLis.RouteSpecifier.(type) {
 	case *v3httppb.HttpConnectionManager_Rds:
-		if apiLis.GetRds().GetConfigSource().GetAds() == nil {
-			return nil, fmt.Errorf("ConfigSource is not ADS: %+v", lis)
+		if configsource := apiLis.GetRds().GetConfigSource(); configsource.GetAds() == nil && configsource.GetSelf() == nil {
+			return nil, fmt.Errorf("LDS's RDS configSource is not ADS or Self: %+v", lis)
 		}
 		name := apiLis.GetRds().GetRouteConfigName()
 		if name == "" {

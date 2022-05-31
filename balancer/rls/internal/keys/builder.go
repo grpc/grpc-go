@@ -120,6 +120,10 @@ type KeyMap struct {
 // RLSKey builds the RLS keys to be used for the given request, identified by
 // the request path and the request headers stored in metadata.
 func (bm BuilderMap) RLSKey(md metadata.MD, host, path string) KeyMap {
+	// The path passed in is of the form "/service/method". The keyBuilderMap is
+	// indexed with keys of the form "/service/" or "/service/method". The service
+	// that we set in the keyMap (to be sent out in the RLS request) should not
+	// include any slashes though.
 	i := strings.LastIndex(path, "/")
 	service, method := path[:i+1], path[i+1:]
 	b, ok := bm[path]
@@ -135,7 +139,7 @@ func (bm BuilderMap) RLSKey(md metadata.MD, host, path string) KeyMap {
 		kvMap[b.hostKey] = host
 	}
 	if b.serviceKey != "" {
-		kvMap[b.serviceKey] = service
+		kvMap[b.serviceKey] = strings.Trim(service, "/")
 	}
 	if b.methodKey != "" {
 		kvMap[b.methodKey] = method

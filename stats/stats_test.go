@@ -30,6 +30,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -246,7 +247,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 		return te.cc
 	}
 	opts := []grpc.DialOption{
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 		grpc.WithUserAgent("test/0.0.1"),
 	}

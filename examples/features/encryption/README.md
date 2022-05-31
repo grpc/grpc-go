@@ -85,3 +85,22 @@ dial to server with the client credential.
 
 Finally, make an RPC to test the secure connection based upon ALTS is
 successfully up.
+
+### mTLS
+
+In mutual TLS (mTLS), the client and the server authenticate each other. gRPC
+allows users to configure mutual TLS at the connection level.
+
+In normal TLS, the server is only concerned with presenting the server
+certificate for clients to verify. In mutual TLS, the server also loads in a
+list of trusted CA files for verifying client presented certificates with.
+This is done via setting
+[`tls.Config.ClientCAs`](https://pkg.go.dev/crypto/tls#Config.ClientCAs)
+to the list of trusted CA files,
+and setting [`tls.config.ClientAuth`](https://pkg.go.dev/crypto/tls#Config.ClientAuth)
+to [`tls.RequireAndVerifyClientCert`](https://pkg.go.dev/crypto/tls#RequireAndVerifyClientCert).
+
+In normal TLS, the client is only concerned with authenticating the server by
+using one or more trusted CA file. In mutual TLS, the client also presents its
+client certificate to the server for authentication. This is done via setting
+[`tls.Config.Certificates`](https://pkg.go.dev/crypto/tls#Config.Certificates).

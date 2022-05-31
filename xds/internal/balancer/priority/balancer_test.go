@@ -414,9 +414,8 @@ func (s) TestPriority_HighPriorityToConnectingFromReady(t *testing.T) {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
-	// Turn 0 to Connecting, will start and use 1. Because 0 changing from Ready
-	// to Connecting is a failure.
-	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	// Turn 0 to TransientFailure, will start and use 1.
+	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
 	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
 	// will retry.
@@ -741,6 +740,9 @@ func (s) TestPriority_InitTimeout(t *testing.T) {
 	}
 	sc1 := <-cc.NewSubConnCh
 
+	// After the init timer of p0, when switching to p1, a connecting picker
+	// will be sent to the parent. Clear it here.
+	<-cc.NewPickerCh
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
@@ -859,6 +861,7 @@ func (s) TestPriority_RemovesAllPriorities(t *testing.T) {
 	// Don't send any update to p0, so to not override the old state of p0.
 	// Later, connect to p1 and then remove p1. This will fallback to p0, and
 	// will send p0's old picker if they are not correctly removed.
+	<-cc.NewPickerCh // Clear the picker from old p0.
 
 	// p1 will be used after priority init timeout.
 	addrs11 := <-cc.NewSubConnAddrsCh

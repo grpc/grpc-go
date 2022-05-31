@@ -67,7 +67,15 @@ func (s) TestLRSClient(t *testing.T) {
 	defer cancel()
 
 	// Report to the same address should not create new ClientConn.
-	store1, lrsCancel1 := xdsC.ReportLoad(fs.Address)
+	store1, lrsCancel1 := xdsC.ReportLoad(
+		&bootstrap.ServerConfig{
+			ServerURI:    fs.Address,
+			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
+			CredsType:    "insecure",
+			TransportAPI: version.TransportV2,
+			NodeProto:    &v2corepb.Node{},
+		},
+	)
 	defer lrsCancel1()
 
 	if u, err := fs.NewConnChan.Receive(ctx); err != nil {
@@ -87,7 +95,15 @@ func (s) TestLRSClient(t *testing.T) {
 	defer sCleanup2()
 
 	// Report to a different address should create new ClientConn.
-	store2, lrsCancel2 := xdsC.ReportLoad(fs2.Address)
+	store2, lrsCancel2 := xdsC.ReportLoad(
+		&bootstrap.ServerConfig{
+			ServerURI:    fs2.Address,
+			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
+			CredsType:    "insecure",
+			TransportAPI: version.TransportV2,
+			NodeProto:    &v2corepb.Node{},
+		},
+	)
 	defer lrsCancel2()
 	if u, err := fs2.NewConnChan.Receive(ctx); err != nil {
 		t.Errorf("unexpected timeout: %v, %v, want NewConn", u, err)

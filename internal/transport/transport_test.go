@@ -27,6 +27,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
@@ -40,6 +41,7 @@ import (
 	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/testutils"
@@ -53,16 +55,6 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
-}
-
-type server struct {
-	lis        net.Listener
-	port       string
-	startedErr chan error // error (or nil) with server start value
-	mu         sync.Mutex
-	conns      map[ServerTransport]bool
-	h          *testStreamHandler
-	ready      chan struct{}
 }
 
 var (
@@ -298,6 +290,25 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *Stream) {
 	}
 }
 
+type server struct {
+	lis        net.Listener
+	port       string
+	startedErr chan error // error (or nil) with server start value
+	mu         sync.Mutex
+	conns      map[ServerTransport]bool
+	h          *testStreamHandler
+	ready      chan struct{}
+	channelzID *channelz.Identifier
+}
+
+func newTestServer() *server {
+	return &server{
+		startedErr: make(chan error, 1),
+		ready:      make(chan struct{}),
+		channelzID: channelz.NewIdentifierForTesting(channelz.RefServer, time.Now().Unix(), nil),
+	}
+}
+
 // start starts server. Other goroutines should block on s.readyChan for further operations.
 func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hType) {
 	var err error
@@ -421,9 +432,10 @@ func (s *server) addr() string {
 	return s.lis.Addr().String()
 }
 
-func setUpServerOnly(t *testing.T, port int, serverConfig *ServerConfig, ht hType) *server {
-	server := &server{startedErr: make(chan error, 1), ready: make(chan struct{})}
-	go server.start(t, port, serverConfig, ht)
+func setUpServerOnly(t *testing.T, port int, sc *ServerConfig, ht hType) *server {
+	server := newTestServer()
+	sc.ChannelzParentID = server.channelzID
+	go server.start(t, port, sc, ht)
 	server.wait(t, 2*time.Second)
 	return server
 }
@@ -432,9 +444,11 @@ func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, *http2
 	return setUpWithOptions(t, port, &ServerConfig{MaxStreams: maxStreams}, ht, ConnectOptions{})
 }
 
-func setUpWithOptions(t *testing.T, port int, serverConfig *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
-	server := setUpServerOnly(t, port, serverConfig, ht)
+func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
+	server := setUpServerOnly(t, port, sc, ht)
 	addr := resolver.Address{Addr: "localhost:" + server.port}
+	copts.ChannelzParentID = channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil)
+
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func() {}, func(GoAwayReason) {}, func() {})
 	if connErr != nil {
@@ -1298,11 +1312,14 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	}()
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
-	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, ConnectOptions{}, func() {}, func(GoAwayReason) {}, func() {})
+
+	copts := ConnectOptions{ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil)}
+	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
 	defer ct.Close(fmt.Errorf("closed manually by test"))
+
 	str, err := ct.NewStream(connectCtx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("Error while creating stream: %v", err)
@@ -1546,6 +1563,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	loopyServerStreams := map[uint32]*outStream{}
 	// Get all the streams from server reader and writer and client writer.
 	st.mu.Lock()
+	client.mu.Lock()
 	for _, stream := range clientStreams {
 		id := stream.id
 		serverStreams[id] = st.activeStreams[id]
@@ -1553,6 +1571,7 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 		loopyClientStreams[id] = client.loopy.estdStreams[id]
 
 	}
+	client.mu.Unlock()
 	st.mu.Unlock()
 	// Close all streams
 	for _, stream := range clientStreams {
@@ -1574,6 +1593,9 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 		sstream := serverStreams[id]
 		loopyServerStream := loopyServerStreams[id]
 		loopyClientStream := loopyClientStreams[id]
+		if loopyServerStream == nil {
+			t.Fatalf("Unexpected nil loopyServerStream")
+		}
 		// Check stream flow control.
 		if int(cstream.fc.limit+cstream.fc.delta-cstream.fc.pendingData-cstream.fc.pendingUpdate) != int(st.loopy.oiws)-loopyServerStream.bytesOutStanding {
 			t.Fatalf("Account mismatch: client stream inflow limit(%d) + delta(%d) - pendingData(%d) - pendingUpdate(%d) != server outgoing InitialWindowSize(%d) - outgoingStream.bytesOutStanding(%d)", cstream.fc.limit, cstream.fc.delta, cstream.fc.pendingData, cstream.fc.pendingUpdate, st.loopy.oiws, loopyServerStream.bytesOutStanding)
@@ -1674,21 +1696,6 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 			values []string
 		}
 	}{
-		// If the client sends an HTTP/2 request with a :method header with a
-		// value other than POST, as specified in the gRPC over HTTP/2
-		// specification, the server should close the stream.
-		{
-			name: "Client Sending Wrong Method",
-			headers: []struct {
-				name   string
-				values []string
-			}{
-				{name: ":method", values: []string{"PUT"}},
-				{name: ":path", values: []string{"foo"}},
-				{name: ":authority", values: []string{"localhost"}},
-				{name: "content-type", values: []string{"application/grpc"}},
-			},
-		},
 		// "Transports must consider requests containing the Connection header
 		// as malformed" - A41 Malformed requests map to a stream error of type
 		// PROTOCOL_ERROR.
@@ -1805,25 +1812,30 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 	}
 }
 
-// TestHeadersMultipleHosts tests that a request with multiple hosts gets
-// rejected with HTTP Status 400 and gRPC status Internal, regardless of whether
-// the client is speaking gRPC or not.
-func (s) TestHeadersMultipleHosts(t *testing.T) {
+// TestHeadersHTTPStatusGRPCStatus tests requests with certain headers get a
+// certain HTTP and gRPC status back.
+func (s) TestHeadersHTTPStatusGRPCStatus(t *testing.T) {
 	tests := []struct {
 		name    string
 		headers []struct {
 			name   string
 			values []string
 		}
+		httpStatusWant  string
+		grpcStatusWant  string
+		grpcMessageWant string
 	}{
 		// Note: multiple authority headers are handled by the framer itself,
 		// which will cause a stream error. Thus, it will never get to
-		// operateHeaders with the check in operateHeaders for possible grpc-status sent back.
+		// operateHeaders with the check in operateHeaders for possible
+		// grpc-status sent back.
 
 		// multiple :authority or multiple Host headers would make the eventual
 		// :authority ambiguous as per A41. This takes precedence even over the
 		// fact a request is non grpc. All of these requests should be rejected
-		// with grpc-status Internal.
+		// with grpc-status Internal. Thus, requests with multiple hosts should
+		// get rejected with HTTP Status 400 and gRPC status Internal,
+		// regardless of whether the client is speaking gRPC or not.
 		{
 			name: "Multiple host headers non grpc",
 			headers: []struct {
@@ -1835,6 +1847,9 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 				{name: ":authority", values: []string{"localhost"}},
 				{name: "host", values: []string{"localhost", "localhost2"}},
 			},
+			httpStatusWant:  "400",
+			grpcStatusWant:  "13",
+			grpcMessageWant: "both must only have 1 value as per HTTP/2 spec",
 		},
 		{
 			name: "Multiple host headers grpc",
@@ -1848,6 +1863,27 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 				{name: "content-type", values: []string{"application/grpc"}},
 				{name: "host", values: []string{"localhost", "localhost2"}},
 			},
+			httpStatusWant:  "400",
+			grpcStatusWant:  "13",
+			grpcMessageWant: "both must only have 1 value as per HTTP/2 spec",
+		},
+		// If the client sends an HTTP/2 request with a :method header with a
+		// value other than POST, as specified in the gRPC over HTTP/2
+		// specification, the server should fail the RPC.
+		{
+			name: "Client Sending Wrong Method",
+			headers: []struct {
+				name   string
+				values []string
+			}{
+				{name: ":method", values: []string{"PUT"}},
+				{name: ":path", values: []string{"foo"}},
+				{name: ":authority", values: []string{"localhost"}},
+				{name: "content-type", values: []string{"application/grpc"}},
+			},
+			httpStatusWant:  "405",
+			grpcStatusWant:  "13",
+			grpcMessageWant: "which should be POST",
 		},
 	}
 	for _, test := range tests {
@@ -1887,10 +1923,10 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 				case *http2.SettingsFrame:
 					// Do nothing. A settings frame is expected from server preface.
 				case *http2.MetaHeadersFrame:
-					var status, grpcStatus, grpcMessage string
+					var httpStatus, grpcStatus, grpcMessage string
 					for _, header := range frame.Fields {
 						if header.Name == ":status" {
-							status = header.Value
+							httpStatus = header.Value
 						}
 						if header.Name == "grpc-status" {
 							grpcStatus = header.Value
@@ -1899,15 +1935,15 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 							grpcMessage = header.Value
 						}
 					}
-					if status != "400" {
-						result.Send(fmt.Errorf("incorrect HTTP Status got %v, want 200", status))
+					if httpStatus != test.httpStatusWant {
+						result.Send(fmt.Errorf("incorrect HTTP Status got %v, want %v", httpStatus, test.httpStatusWant))
 						return
 					}
-					if grpcStatus != "13" { // grpc status code internal
-						result.Send(fmt.Errorf("incorrect gRPC Status got %v, want 13", grpcStatus))
+					if grpcStatus != test.grpcStatusWant { // grpc status code internal
+						result.Send(fmt.Errorf("incorrect gRPC Status got %v, want %v", grpcStatus, test.grpcStatusWant))
 						return
 					}
-					if !strings.Contains(grpcMessage, "both must only have 1 value as per HTTP/2 spec") {
+					if !strings.Contains(grpcMessage, test.grpcMessageWant) {
 						result.Send(fmt.Errorf("incorrect gRPC message"))
 						return
 					}
@@ -2175,7 +2211,11 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 	defer cancel()
 	creds := &attrTransportCreds{}
 
-	tr, err := NewClientTransport(ctx, context.Background(), addr, ConnectOptions{TransportCredentials: creds}, func() {}, func(GoAwayReason) {}, func() {})
+	copts := ConnectOptions{
+		TransportCredentials: creds,
+		ChannelzParentID:     channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+	}
+	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
 	}
@@ -2212,7 +2252,11 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 		return (&net.Dialer{}).DialContext(ctx, "tcp", addr)
 	}
 
-	tr, err := NewClientTransport(ctx, context.Background(), addr, ConnectOptions{Dialer: dialer}, func() {}, func(GoAwayReason) {}, func() {})
+	copts := ConnectOptions{
+		Dialer:           dialer,
+		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
+	}
+	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func() {}, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
 	}
@@ -2397,5 +2441,12 @@ func (s) TestClientDecodeHeaderStatusErr(t *testing.T) {
 				t.Fatalf("operateHeaders(%v); status = \ngot: %s\nwant: %s", test.metaHeaderFrame, got, want)
 			}
 		})
+	}
+}
+
+func TestConnectionError_Unwrap(t *testing.T) {
+	err := connectionErrorf(false, os.ErrNotExist, "unwrap me")
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Error("ConnectionError does not unwrap")
 	}
 }

@@ -32,6 +32,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/examples/data"
 	pb "google.golang.org/grpc/examples/route_guide/routeguide"
 )
@@ -50,7 +51,7 @@ func printFeature(client pb.RouteGuideClient, point *pb.Point) {
 	defer cancel()
 	feature, err := client.GetFeature(ctx, point)
 	if err != nil {
-		log.Fatalf("%v.GetFeatures(_) = _, %v: ", client, err)
+		log.Fatalf("client.GetFeature failed: %v", err)
 	}
 	log.Println(feature)
 }
@@ -62,7 +63,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 	defer cancel()
 	stream, err := client.ListFeatures(ctx, rect)
 	if err != nil {
-		log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+		log.Fatalf("client.ListFeatures failed: %v", err)
 	}
 	for {
 		feature, err := stream.Recv()
@@ -70,7 +71,7 @@ func printFeatures(client pb.RouteGuideClient, rect *pb.Rectangle) {
 			break
 		}
 		if err != nil {
-			log.Fatalf("%v.ListFeatures(_) = _, %v", client, err)
+			log.Fatalf("client.ListFeatures failed: %v", err)
 		}
 		log.Printf("Feature: name: %q, point:(%v, %v)", feature.GetName(),
 			feature.GetLocation().GetLatitude(), feature.GetLocation().GetLongitude())
@@ -91,16 +92,16 @@ func runRecordRoute(client pb.RouteGuideClient) {
 	defer cancel()
 	stream, err := client.RecordRoute(ctx)
 	if err != nil {
-		log.Fatalf("%v.RecordRoute(_) = _, %v", client, err)
+		log.Fatalf("client.RecordRoute failed: %v", err)
 	}
 	for _, point := range points {
 		if err := stream.Send(point); err != nil {
-			log.Fatalf("%v.Send(%v) = %v", stream, point, err)
+			log.Fatalf("client.RecordRoute: stream.Send(%v) failed: %v", point, err)
 		}
 	}
 	reply, err := stream.CloseAndRecv()
 	if err != nil {
-		log.Fatalf("%v.CloseAndRecv() got error %v, want %v", stream, err, nil)
+		log.Fatalf("client.RecordRoute failed: %v", err)
 	}
 	log.Printf("Route summary: %v", reply)
 }
@@ -119,7 +120,7 @@ func runRouteChat(client pb.RouteGuideClient) {
 	defer cancel()
 	stream, err := client.RouteChat(ctx)
 	if err != nil {
-		log.Fatalf("%v.RouteChat(_) = _, %v", client, err)
+		log.Fatalf("client.RouteChat failed: %v", err)
 	}
 	waitc := make(chan struct{})
 	go func() {
@@ -131,14 +132,14 @@ func runRouteChat(client pb.RouteGuideClient) {
 				return
 			}
 			if err != nil {
-				log.Fatalf("Failed to receive a note : %v", err)
+				log.Fatalf("client.RouteChat failed: %v", err)
 			}
 			log.Printf("Got message %s at point(%d, %d)", in.Message, in.Location.Latitude, in.Location.Longitude)
 		}
 	}()
 	for _, note := range notes {
 		if err := stream.Send(note); err != nil {
-			log.Fatalf("Failed to send a note: %v", err)
+			log.Fatalf("client.RouteChat: stream.Send(%v) failed: %v", note, err)
 		}
 	}
 	stream.CloseSend()
@@ -164,7 +165,7 @@ func main() {
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	} else {
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
 
 	conn, err := grpc.Dial(*serverAddr, opts...)

@@ -19,7 +19,12 @@
 // Package stub implements a balancer for testing purposes.
 package stub
 
-import "google.golang.org/grpc/balancer"
+import (
+	"encoding/json"
+
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/serviceconfig"
+)
 
 // BalancerFuncs contains all balancer.Balancer functions with a preceding
 // *BalancerData parameter for passing additional instance information.  Any
@@ -28,6 +33,8 @@ type BalancerFuncs struct {
 	// Init is called after ClientConn and BuildOptions are set in
 	// BalancerData.  It may be used to initialize BalancerData.Data.
 	Init func(*BalancerData)
+	// ParseConfig is used for parsing LB configs, if specified.
+	ParseConfig func(json.RawMessage) (serviceconfig.LoadBalancingConfig, error)
 
 	UpdateClientConnState func(*BalancerData, balancer.ClientConnState) error
 	ResolverError         func(*BalancerData, error)
@@ -96,6 +103,13 @@ func (bb bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 }
 
 func (bb bb) Name() string { return bb.name }
+
+func (bb bb) ParseConfig(lbCfg json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	if bb.bf.ParseConfig != nil {
+		return bb.bf.ParseConfig(lbCfg)
+	}
+	return nil, nil
+}
 
 // Register registers a stub balancer builder which will call the provided
 // functions.  The name used should be unique.

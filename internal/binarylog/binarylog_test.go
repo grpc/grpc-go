@@ -93,7 +93,7 @@ func (s) TestGetMethodLogger(t *testing.T) {
 			t.Errorf("in: %q, failed to create logger from config string", tc.in)
 			continue
 		}
-		ml := l.getMethodLogger(tc.method)
+		ml := l.GetMethodLogger(tc.method).(*methodLogger)
 		if ml == nil {
 			t.Errorf("in: %q, method logger is nil, want non-nil", tc.in)
 			continue
@@ -149,7 +149,7 @@ func (s) TestGetMethodLoggerOff(t *testing.T) {
 			t.Errorf("in: %q, failed to create logger from config string", tc.in)
 			continue
 		}
-		ml := l.getMethodLogger(tc.method)
+		ml := l.GetMethodLogger(tc.method)
 		if ml != nil {
 			t.Errorf("in: %q, method logger is non-nil, want nil", tc.in)
 		}

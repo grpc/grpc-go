@@ -33,6 +33,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
@@ -43,7 +45,8 @@ import (
 func (s) TestRetryUnary(t *testing.T) {
 	i := -1
 	ss := &stubserver.StubServer{
-		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
+		EmptyCallF: func(context.Context, *testpb.Empty) (r *testpb.Empty, err error) {
+			defer func() { t.Logf("server call %v returning err %v", i, err) }()
 			i++
 			switch i {
 			case 0, 2, 5:
@@ -54,11 +57,8 @@ func (s) TestRetryUnary(t *testing.T) {
 			return nil, status.New(codes.AlreadyExists, "retryable error").Err()
 		},
 	}
-	if err := ss.Start([]grpc.ServerOption{}); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
-	ss.NewServiceConfig(`{
+	if err := ss.Start([]grpc.ServerOption{},
+		grpc.WithDefaultServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -69,18 +69,10 @@ func (s) TestRetryUnary(t *testing.T) {
         "BackoffMultiplier": 1.0,
         "RetryableStatusCodes": [ "ALREADY_EXISTS" ]
       }
-    }]}`)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	for {
-		if ctx.Err() != nil {
-			t.Fatalf("Timed out waiting for service config update")
-		}
-		if ss.CC.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
-			break
-		}
-		time.Sleep(time.Millisecond)
+    }]}`)); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
 	}
-	cancel()
+	defer ss.Stop()
 
 	testCases := []struct {
 		code  codes.Code
@@ -94,7 +86,8 @@ func (s) TestRetryUnary(t *testing.T) {
 		{codes.Internal, 11},
 		{codes.AlreadyExists, 15},
 	}
-	for _, tc := range testCases {
+	for num, tc := range testCases {
+		t.Log("Case", num)
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
@@ -119,11 +112,8 @@ func (s) TestRetryThrottling(t *testing.T) {
 			return nil, status.New(codes.Unavailable, "retryable error").Err()
 		},
 	}
-	if err := ss.Start([]grpc.ServerOption{}); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
-	ss.NewServiceConfig(`{
+	if err := ss.Start([]grpc.ServerOption{},
+		grpc.WithDefaultServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -139,18 +129,10 @@ func (s) TestRetryThrottling(t *testing.T) {
       "maxTokens": 10,
       "tokenRatio": 0.5
     }
-  }`)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	for {
-		if ctx.Err() != nil {
-			t.Fatalf("Timed out waiting for service config update")
-		}
-		if ss.CC.GetMethodConfig("/grpc.testing.TestService/EmptyCall").WaitForReady != nil {
-			break
-		}
-		time.Sleep(time.Millisecond)
+    }`)); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
 	}
-	cancel()
+	defer ss.Stop()
 
 	testCases := []struct {
 		code  codes.Code
@@ -429,11 +411,8 @@ func (s) TestRetryStreaming(t *testing.T) {
 			return nil
 		},
 	}
-	if err := ss.Start([]grpc.ServerOption{}, grpc.WithDefaultCallOptions(grpc.MaxRetryRPCBufferSize(200))); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
-	ss.NewServiceConfig(`{
+	if err := ss.Start([]grpc.ServerOption{}, grpc.WithDefaultCallOptions(grpc.MaxRetryRPCBufferSize(200)),
+		grpc.WithDefaultServiceConfig(`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
       "waitForReady": true,
@@ -444,7 +423,10 @@ func (s) TestRetryStreaming(t *testing.T) {
           "BackoffMultiplier": 1.0,
           "RetryableStatusCodes": [ "UNAVAILABLE" ]
       }
-    }]}`)
+    }]}`)); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	for {
 		if ctx.Err() != nil {
@@ -531,7 +513,7 @@ func (s) TestRetryStats(t *testing.T) {
 	}
 	server.start(t, lis)
 	handler := &retryStatsHandler{}
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure(), grpc.WithStatsHandler(handler),
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithStatsHandler(handler),
 		grpc.WithDefaultServiceConfig((`{
     "methodConfig": [{
       "name": [{"service": "grpc.testing.TestService"}],
@@ -642,4 +624,86 @@ func (s) TestRetryStats(t *testing.T) {
 	if diff < 10*time.Millisecond || diff > 50*time.Millisecond {
 		t.Fatalf("pushback time before final attempt = %v; want ~10ms", diff)
 	}
+}
+
+func (s) TestRetryTransparentWhenCommitted(t *testing.T) {
+	// With MaxConcurrentStreams=1:
+	//
+	// 1. Create stream 1 that is retriable.
+	// 2. Stream 1 is created and fails with a retriable code.
+	// 3. Create dummy stream 2, blocking indefinitely.
+	// 4. Stream 1 retries (and blocks until stream 2 finishes)
+	// 5. Stream 1 is canceled manually.
+	//
+	// If there is no bug, the stream is done and errors with CANCELED.  With a bug:
+	//
+	// 6. Stream 1 has a nil stream (attempt.s).  Operations like CloseSend will panic.
+
+	first := grpcsync.NewEvent()
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			// signal?
+			if !first.HasFired() {
+				first.Fire()
+				t.Log("returned first error")
+				return status.Error(codes.AlreadyExists, "first attempt fails and is retriable")
+			}
+			t.Log("blocking")
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	if err := ss.Start([]grpc.ServerOption{grpc.MaxConcurrentStreams(1)},
+		grpc.WithDefaultServiceConfig(`{
+    "methodConfig": [{
+      "name": [{"service": "grpc.testing.TestService"}],
+      "waitForReady": true,
+      "retryPolicy": {
+        "MaxAttempts": 2,
+        "InitialBackoff": ".1s",
+        "MaxBackoff": ".1s",
+        "BackoffMultiplier": 1.0,
+        "RetryableStatusCodes": [ "ALREADY_EXISTS" ]
+      }
+    }]}`)); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx1, cancel1 := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel1()
+	ctx2, cancel2 := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel2()
+
+	stream1, err := ss.Client.FullDuplexCall(ctx1)
+	if err != nil {
+		t.Fatalf("Error creating stream 1: %v", err)
+	}
+
+	// Create dummy stream to block indefinitely.
+	_, err = ss.Client.FullDuplexCall(ctx2)
+	if err != nil {
+		t.Errorf("Error creating stream 2: %v", err)
+	}
+
+	stream1Closed := grpcsync.NewEvent()
+	go func() {
+		_, err := stream1.Recv()
+		// Will trigger a retry when it sees the ALREADY_EXISTS error
+		if status.Code(err) != codes.Canceled {
+			t.Errorf("Expected stream1 to be canceled; got error: %v", err)
+		}
+		stream1Closed.Fire()
+	}()
+
+	// Wait longer than the retry backoff timer.
+	time.Sleep(200 * time.Millisecond)
+	cancel1()
+
+	// Operations on the stream should not panic.
+	<-stream1Closed.Done()
+	stream1.CloseSend()
+	stream1.Recv()
+	stream1.Send(&testpb.StreamingOutputCallRequest{})
 }

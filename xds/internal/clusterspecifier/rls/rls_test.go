@@ -25,13 +25,14 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	_ "google.golang.org/grpc/balancer/rls"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/internal/proto/grpc_lookup_v1"
+	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/internal/testutils"
-	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	_ "google.golang.org/grpc/balancer/rls"                      // Register the RLS LB policy.
+	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // Register the CDS LB policy.
 )
 
 func init() {
@@ -106,17 +107,17 @@ func (s) TestParseClusterSpecifierConfig(t *testing.T) {
 }
 
 // This will error because the required match field is set in grpc key builder.
-var rlsClusterSpecifierConfigError = testutils.MarshalAny(&grpc_lookup_v1.RouteLookupClusterSpecifier{
-	RouteLookupConfig: &grpc_lookup_v1.RouteLookupConfig{
-		GrpcKeybuilders: []*grpc_lookup_v1.GrpcKeyBuilder{
+var rlsClusterSpecifierConfigError = testutils.MarshalAny(&rlspb.RouteLookupClusterSpecifier{
+	RouteLookupConfig: &rlspb.RouteLookupConfig{
+		GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
 			{
-				Names: []*grpc_lookup_v1.GrpcKeyBuilder_Name{
+				Names: []*rlspb.GrpcKeyBuilder_Name{
 					{
 						Service: "service",
 						Method:  "method",
 					},
 				},
-				Headers: []*grpc_lookup_v1.NameMatcher{
+				Headers: []*rlspb.NameMatcher{
 					{
 						Key:           "k1",
 						RequiredMatch: true,
@@ -130,17 +131,17 @@ var rlsClusterSpecifierConfigError = testutils.MarshalAny(&grpc_lookup_v1.RouteL
 
 // Corresponds to the rls unit test case in
 // balancer/rls/internal/config_test.go.
-var rlsClusterSpecifierConfigWithoutTransformations = testutils.MarshalAny(&grpc_lookup_v1.RouteLookupClusterSpecifier{
-	RouteLookupConfig: &grpc_lookup_v1.RouteLookupConfig{
-		GrpcKeybuilders: []*grpc_lookup_v1.GrpcKeyBuilder{
+var rlsClusterSpecifierConfigWithoutTransformations = testutils.MarshalAny(&rlspb.RouteLookupClusterSpecifier{
+	RouteLookupConfig: &rlspb.RouteLookupConfig{
+		GrpcKeybuilders: []*rlspb.GrpcKeyBuilder{
 			{
-				Names: []*grpc_lookup_v1.GrpcKeyBuilder_Name{
+				Names: []*rlspb.GrpcKeyBuilder_Name{
 					{
 						Service: "service",
 						Method:  "method",
 					},
 				},
-				Headers: []*grpc_lookup_v1.NameMatcher{
+				Headers: []*rlspb.NameMatcher{
 					{
 						Key:   "k1",
 						Names: []string{"v1"},

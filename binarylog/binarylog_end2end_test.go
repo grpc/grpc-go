@@ -31,6 +31,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/binarylog"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/grpclog"
 	iblog "google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/grpctest"
@@ -310,7 +311,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 	if te.cc != nil {
 		return te.cc
 	}
-	opts := []grpc.DialOption{grpc.WithInsecure(), grpc.WithBlock()}
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithBlock()}
 
 	var err error
 	te.cc, err = grpc.Dial(te.srvAddr, opts...)

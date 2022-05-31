@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	ppb "google.golang.org/grpc/profiling/proto"
 )
 
@@ -78,7 +79,7 @@ func remoteCommand() error {
 	}
 
 	logger.Infof("dialing %s", *flagAddress)
-	cc, err := grpc.Dial(*flagAddress, grpc.WithInsecure())
+	cc, err := grpc.Dial(*flagAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logger.Errorf("cannot dial %s: %v", *flagAddress, err)
 		return err

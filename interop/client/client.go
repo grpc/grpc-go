@@ -29,16 +29,19 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	_ "google.golang.org/grpc/balancer/grpclb"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
-	_ "google.golang.org/grpc/xds/googledirectpath"
+
+	_ "google.golang.org/grpc/balancer/grpclb"      // Register the grpclb load balancing policy.
+	_ "google.golang.org/grpc/balancer/rls"         // Register the RLS load balancing policy.
+	_ "google.golang.org/grpc/xds/googledirectpath" // Register xDS resolver required for c2p directpath.
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 )
@@ -106,6 +109,7 @@ const (
 
 func main() {
 	flag.Parse()
+	logger.Infof("Client running with test case %q", *testCase)
 	var useGDC bool // use google default creds
 	var useCEC bool // use compute engine creds
 	if *customCredentialsType != "" {
@@ -176,7 +180,7 @@ func main() {
 	case credsComputeEngineCreds:
 		opts = append(opts, grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()))
 	case credsNone:
-		opts = append(opts, grpc.WithInsecure())
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	default:
 		logger.Fatal("Invalid creds")
 	}
