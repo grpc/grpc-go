@@ -36,8 +36,8 @@ import (
 )
 
 func init() {
-	internal.SetDefaultDialOption = func(opt ...DialOption) {
-		defaultDialOption = opt
+	internal.AddDefaultDialOptions = func(opt ...DialOption) {
+		defaultDialOption = append(defaultDialOption, opt...)
 	}
 }
 
@@ -565,7 +565,7 @@ func withHealthCheckFunc(f internal.HealthChecker) DialOption {
 	})
 }
 
-func defaultDialOptions() dialOptions {
+func newDefaultDialOptions() dialOptions {
 	return dialOptions{
 		healthCheckFunc: internal.HealthCheckFunc,
 		copts: transport.ConnectOptions{
