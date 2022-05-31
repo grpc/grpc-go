@@ -121,7 +121,7 @@ func (dm DiscoveryMechanism) Equal(b DiscoveryMechanism) bool {
 		return false
 	case dm.DNSHostname != b.DNSHostname:
 		return false
-	case !dm.OutlierDetection.Equal(b.OutlierDetection):
+	case !dm.OutlierDetection.EqualIgnoringChildPolicy(b.OutlierDetection):
 		return false
 	}
 

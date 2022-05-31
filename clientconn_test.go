@@ -854,9 +854,10 @@ func (s) TestBackoffCancel(t *testing.T) {
 	}
 }
 
-// UpdateAddresses should cause the next reconnect to begin from the top of the
-// list if the connection is not READY.
-func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
+// TestUpdateAddresses_NoopIfCalledWithSameAddresses tests that UpdateAddresses
+// should be noop if UpdateAddresses is called with the same list of addresses,
+// even when the SubConn is in Connecting and doesn't have a current address.
+func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 	lis1, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Error while listening. Err: %v", err)
@@ -1008,19 +1009,20 @@ func (s) TestUpdateAddresses_RetryFromFirstAddr(t *testing.T) {
 	}
 	client.mu.Unlock()
 
+	// Call UpdateAddresses with the same list of addresses, it should be a noop
+	// (even when the SubConn is Connecting, and doesn't have a curAddr).
 	ac.acbw.UpdateAddresses(addrsList)
 
 	// We've called tryUpdateAddrs - now let's make server2 close the
-	// connection and check that it goes back to server1 instead of continuing
-	// to server3 or trying server2 again.
+	// connection and check that it continues to server3.
 	close(closeServer2)
 
 	select {
 	case <-server1ContactedSecondTime:
+		t.Fatal("server1 was contacted a second time, but it should have continued to server 3")
 	case <-server2ContactedSecondTime:
-		t.Fatal("server2 was contacted a second time, but it after tryUpdateAddrs it should have re-started the list and tried server1")
+		t.Fatal("server2 was contacted a second time, but it should have continued to server 3")
 	case <-server3Contacted:
-		t.Fatal("server3 was contacted, but after tryUpdateAddrs it should have re-started the list and tried server1")
 	case <-timeout:
 		t.Fatal("timed out waiting for any server to be contacted after tryUpdateAddrs")
 	}

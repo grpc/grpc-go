@@ -1696,21 +1696,6 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 			values []string
 		}
 	}{
-		// If the client sends an HTTP/2 request with a :method header with a
-		// value other than POST, as specified in the gRPC over HTTP/2
-		// specification, the server should close the stream.
-		{
-			name: "Client Sending Wrong Method",
-			headers: []struct {
-				name   string
-				values []string
-			}{
-				{name: ":method", values: []string{"PUT"}},
-				{name: ":path", values: []string{"foo"}},
-				{name: ":authority", values: []string{"localhost"}},
-				{name: "content-type", values: []string{"application/grpc"}},
-			},
-		},
 		// "Transports must consider requests containing the Connection header
 		// as malformed" - A41 Malformed requests map to a stream error of type
 		// PROTOCOL_ERROR.
@@ -1827,25 +1812,30 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 	}
 }
 
-// TestHeadersMultipleHosts tests that a request with multiple hosts gets
-// rejected with HTTP Status 400 and gRPC status Internal, regardless of whether
-// the client is speaking gRPC or not.
-func (s) TestHeadersMultipleHosts(t *testing.T) {
+// TestHeadersHTTPStatusGRPCStatus tests requests with certain headers get a
+// certain HTTP and gRPC status back.
+func (s) TestHeadersHTTPStatusGRPCStatus(t *testing.T) {
 	tests := []struct {
 		name    string
 		headers []struct {
 			name   string
 			values []string
 		}
+		httpStatusWant  string
+		grpcStatusWant  string
+		grpcMessageWant string
 	}{
 		// Note: multiple authority headers are handled by the framer itself,
 		// which will cause a stream error. Thus, it will never get to
-		// operateHeaders with the check in operateHeaders for possible grpc-status sent back.
+		// operateHeaders with the check in operateHeaders for possible
+		// grpc-status sent back.
 
 		// multiple :authority or multiple Host headers would make the eventual
 		// :authority ambiguous as per A41. This takes precedence even over the
 		// fact a request is non grpc. All of these requests should be rejected
-		// with grpc-status Internal.
+		// with grpc-status Internal. Thus, requests with multiple hosts should
+		// get rejected with HTTP Status 400 and gRPC status Internal,
+		// regardless of whether the client is speaking gRPC or not.
 		{
 			name: "Multiple host headers non grpc",
 			headers: []struct {
@@ -1857,6 +1847,9 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 				{name: ":authority", values: []string{"localhost"}},
 				{name: "host", values: []string{"localhost", "localhost2"}},
 			},
+			httpStatusWant:  "400",
+			grpcStatusWant:  "13",
+			grpcMessageWant: "both must only have 1 value as per HTTP/2 spec",
 		},
 		{
 			name: "Multiple host headers grpc",
@@ -1870,6 +1863,27 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 				{name: "content-type", values: []string{"application/grpc"}},
 				{name: "host", values: []string{"localhost", "localhost2"}},
 			},
+			httpStatusWant:  "400",
+			grpcStatusWant:  "13",
+			grpcMessageWant: "both must only have 1 value as per HTTP/2 spec",
+		},
+		// If the client sends an HTTP/2 request with a :method header with a
+		// value other than POST, as specified in the gRPC over HTTP/2
+		// specification, the server should fail the RPC.
+		{
+			name: "Client Sending Wrong Method",
+			headers: []struct {
+				name   string
+				values []string
+			}{
+				{name: ":method", values: []string{"PUT"}},
+				{name: ":path", values: []string{"foo"}},
+				{name: ":authority", values: []string{"localhost"}},
+				{name: "content-type", values: []string{"application/grpc"}},
+			},
+			httpStatusWant:  "405",
+			grpcStatusWant:  "13",
+			grpcMessageWant: "which should be POST",
 		},
 	}
 	for _, test := range tests {
@@ -1909,10 +1923,10 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 				case *http2.SettingsFrame:
 					// Do nothing. A settings frame is expected from server preface.
 				case *http2.MetaHeadersFrame:
-					var status, grpcStatus, grpcMessage string
+					var httpStatus, grpcStatus, grpcMessage string
 					for _, header := range frame.Fields {
 						if header.Name == ":status" {
-							status = header.Value
+							httpStatus = header.Value
 						}
 						if header.Name == "grpc-status" {
 							grpcStatus = header.Value
@@ -1921,15 +1935,15 @@ func (s) TestHeadersMultipleHosts(t *testing.T) {
 							grpcMessage = header.Value
 						}
 					}
-					if status != "400" {
-						result.Send(fmt.Errorf("incorrect HTTP Status got %v, want 200", status))
+					if httpStatus != test.httpStatusWant {
+						result.Send(fmt.Errorf("incorrect HTTP Status got %v, want %v", httpStatus, test.httpStatusWant))
 						return
 					}
-					if grpcStatus != "13" { // grpc status code internal
-						result.Send(fmt.Errorf("incorrect gRPC Status got %v, want 13", grpcStatus))
+					if grpcStatus != test.grpcStatusWant { // grpc status code internal
+						result.Send(fmt.Errorf("incorrect gRPC Status got %v, want %v", grpcStatus, test.grpcStatusWant))
 						return
 					}
-					if !strings.Contains(grpcMessage, "both must only have 1 value as per HTTP/2 spec") {
+					if !strings.Contains(grpcMessage, test.grpcMessageWant) {
 						result.Send(fmt.Errorf("incorrect gRPC message"))
 						return
 					}

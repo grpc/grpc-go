@@ -145,7 +145,7 @@ func (cb *childBalancer) startInitTimer() {
 		// Re-sync the priority. This will switch to the next priority if
 		// there's any. Note that it's important sync() is called after setting
 		// initTimer to nil.
-		cb.parent.syncPriority()
+		cb.parent.syncPriority(false)
 	})
 }
 

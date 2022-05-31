@@ -22,7 +22,6 @@ package outlierdetection
 import (
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
 )
@@ -154,8 +153,10 @@ type LBConfig struct {
 	ChildPolicy *internalserviceconfig.BalancerConfig `json:"childPolicy,omitempty"`
 }
 
-// Equal returns whether the LBConfig is the same with the parameter.
-func (lbc *LBConfig) Equal(lbc2 *LBConfig) bool {
+// EqualIgnoringChildPolicy returns whether the LBConfig is same with the
+// parameter outside of the child policy, only comparing the Outlier Detection
+// specific configuration.
+func (lbc *LBConfig) EqualIgnoringChildPolicy(lbc2 *LBConfig) bool {
 	if lbc == nil && lbc2 == nil {
 		return true
 	}
@@ -177,8 +178,5 @@ func (lbc *LBConfig) Equal(lbc2 *LBConfig) bool {
 	if !lbc.SuccessRateEjection.Equal(lbc2.SuccessRateEjection) {
 		return false
 	}
-	if !lbc.FailurePercentageEjection.Equal(lbc2.FailurePercentageEjection) {
-		return false
-	}
-	return cmp.Equal(lbc.ChildPolicy, lbc2.ChildPolicy)
+	return lbc.FailurePercentageEjection.Equal(lbc2.FailurePercentageEjection)
 }

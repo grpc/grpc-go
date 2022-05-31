@@ -170,7 +170,7 @@ func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 	}
 	// Sync the states of all children to the new updated priorities. This
 	// include starting/stopping child balancers when necessary.
-	b.syncPriority()
+	b.syncPriority(true)
 
 	return nil
 }

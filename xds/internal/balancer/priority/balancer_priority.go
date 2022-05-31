@@ -68,7 +68,7 @@ var (
 //     - forward the new addresses and config
 //
 // Caller must hold b.mu.
-func (b *priorityBalancer) syncPriority() {
+func (b *priorityBalancer) syncPriority(forceUpdate bool) {
 	// Everything was removed by the update.
 	if len(b.priorities) == 0 {
 		b.childInUse = ""
@@ -99,8 +99,16 @@ func (b *priorityBalancer) syncPriority() {
 				b.cc.UpdateState(child.state)
 			}
 			b.logger.Infof("switching to (%q, %v) in syncPriority", child.name, p)
+			oldChildInUse := b.childInUse
 			b.switchToChild(child, p)
-			child.sendUpdate()
+			if b.childInUse != oldChildInUse || forceUpdate {
+				// If child is switched, send the update to the new child.
+				//
+				// Or if forceUpdate is true (when this is triggered by a
+				// ClientConn update), because the ClientConn update might
+				// contain changes for this child.
+				child.sendUpdate()
+			}
 			break
 		}
 	}
@@ -220,7 +228,7 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.S
 	}
 
 	oldPriorityInUse := b.priorityInUse
-	child.parent.syncPriority()
+	child.parent.syncPriority(false)
 	// If child is switched by syncPriority(), it also sends the update from the
 	// new child to overwrite the old picker used by the parent.
 	//

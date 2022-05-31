@@ -187,6 +187,83 @@ func (tcc *TestClientConn) WaitForErrPicker(ctx context.Context) error {
 	return nil
 }
 
+// WaitForPickerWithErr waits until an error picker is pushed to this
+// ClientConn with the error matching the wanted error.  Also drains the
+// matching entry from the state channel.  Returns an error if the provided
+// context expires, including the last received picker error (if any).
+func (tcc *TestClientConn) WaitForPickerWithErr(ctx context.Context, want error) error {
+	lastErr := errors.New("received no picker")
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout when waiting for an error picker with %v; last picker error: %v", want, lastErr)
+		case picker := <-tcc.NewPickerCh:
+			<-tcc.NewStateCh
+			for i := 0; i < 5; i++ {
+				if _, lastErr = picker.Pick(balancer.PickInfo{}); lastErr == nil || lastErr.Error() != want.Error() {
+					break
+				}
+				return nil
+			}
+		}
+	}
+}
+
+// WaitForConnectivityState waits until the state pushed to this ClientConn
+// matches the wanted state.  Also drains the matching entry from the picker
+// channel.  Returns an error if the provided context expires, including the
+// last received state (if any).
+func (tcc *TestClientConn) WaitForConnectivityState(ctx context.Context, want connectivity.State) error {
+	var lastState connectivity.State = -1
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout when waiting for state to be %s; last state: %s", want, lastState)
+		case s := <-tcc.NewStateCh:
+			<-tcc.NewPickerCh
+			if s == want {
+				return nil
+			}
+			lastState = s
+		}
+	}
+}
+
+// WaitForRoundRobinPicker waits for a picker that passes IsRoundRobin.  Also
+// drains the matching state channel and requires it to be READY to be
+// considered.  Returns an error if the provided context expires, including the
+// last received error from IsRoundRobin or the picker (if any).
+func (tcc *TestClientConn) WaitForRoundRobinPicker(ctx context.Context, want ...balancer.SubConn) error {
+	lastErr := errors.New("received no picker")
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout when waiting for round robin picker with %v; last error: %v", want, lastErr)
+		case s := <-tcc.NewStateCh:
+			p := <-tcc.NewPickerCh
+			if s != connectivity.Ready {
+				lastErr = fmt.Errorf("received state %v instead of ready", s)
+				break
+			}
+			var pickerErr error
+			if err := IsRoundRobin(want, func() balancer.SubConn {
+				sc, err := p.Pick(balancer.PickInfo{})
+				if err != nil {
+					pickerErr = err
+				}
+				return sc.SubConn
+			}); pickerErr != nil {
+				lastErr = pickerErr
+				continue
+			} else if err != nil {
+				lastErr = err
+				continue
+			}
+			return nil
+		}
+	}
+}
+
 // IsRoundRobin checks whether f's return value is roundrobin of elements from
 // want. But it doesn't check for the order. Note that want can contain
 // duplicate items, which makes it weight-round-robin.
