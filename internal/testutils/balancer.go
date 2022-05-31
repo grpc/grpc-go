@@ -190,7 +190,7 @@ func (tcc *TestClientConn) WaitForErrPicker(ctx context.Context) error {
 // WaitForPickerWithErr waits until an error picker is pushed to this
 // ClientConn with the error matching the wanted error.  Returns an error if
 // the provided context expires, including the last received picker error (if
-// any).
+// any).  Also drains the matching entry from the state channel.
 func (tcc *TestClientConn) WaitForPickerWithErr(ctx context.Context, want error) error {
 	lastErr := errors.New("received no picker")
 	for {
