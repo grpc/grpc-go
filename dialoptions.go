@@ -36,8 +36,8 @@ import (
 )
 
 func init() {
-	internal.AddDefaultDialOptions = func(opt ...DialOption) {
-		defaultDialOption = append(defaultDialOption, opt...)
+	internal.SetDefaultDialOption = func(opt ...DialOption) {
+		defaultDialOption = opt
 	}
 }
 

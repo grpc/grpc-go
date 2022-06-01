@@ -67,10 +67,10 @@ var (
 	// effective globally for newly created servers. The priority will be: 1.
 	// user-provided; 2. this method; 3. default values.
 	SetDefaultServerOption interface{} // func(opt ...ServerOption)
-	// AddDefaultDialOptions adds an array of DialOption that will be effective
+	// SetDefaultDialOption sets an array of DialOption that will be effective
 	// globally for newly created client channels. The priority will be: 1.
 	// user-provided; 2. this method; 3. default values.
-	AddDefaultDialOptions interface{} // func(opt ...DialOption)
+	SetDefaultDialOption interface{} // func(opt ...DialOption)
 
 	// NewXDSResolverWithConfigForTesting creates a new xds resolver builder using
 	// the provided xds bootstrap config instead of the global configuration from
