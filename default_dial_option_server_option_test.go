@@ -25,30 +25,30 @@ import (
 	"google.golang.org/grpc/internal"
 )
 
-func (s) TestSetDefaultDialOptions(t *testing.T) {
+func (s) TestAddDefaultDialOptions(t *testing.T) {
 	opts := []DialOption{WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials())}
-	internal.SetDefaultDialOption.(func(opt ...DialOption))(opts...)
+	internal.AddDefaultDialOptions.(func(opt ...DialOption))(opts...)
 	for i, opt := range opts {
-		if defaultDialOption[i] != opt {
-			t.Fatalf("Unexpected default dial option at index %d: %v != %v", i, defaultDialOption[i], opt)
+		if extraDefaultDialOption[i] != opt {
+			t.Fatalf("Unexpected default dial option at index %d: %v != %v", i, extraDefaultDialOption[i], opt)
 		}
 	}
-	internal.SetDefaultDialOption.(func(opt ...DialOption))()
-	if len(defaultDialOption) != 0 {
-		t.Fatalf("Unexpected len of defaultDialOption: %d != 0", len(defaultDialOption))
+	internal.ClearDefaultDialOptions()
+	if len(extraDefaultDialOption) != 0 {
+		t.Fatalf("Unexpected len of extraDefaultDialOption: %d != 0", len(extraDefaultDialOption))
 	}
 }
 
-func (s) TestSetDefaultServerOptions(t *testing.T) {
+func (s) TestAddDefaultServerOptions(t *testing.T) {
 	opts := []ServerOption{StatsHandler(nil), Creds(insecure.NewCredentials()), MaxRecvMsgSize(1024)}
-	internal.SetDefaultServerOption.(func(opt ...ServerOption))(opts...)
+	internal.AddDefaultServerOptions.(func(opt ...ServerOption))(opts...)
 	for i, opt := range opts {
-		if defaultServerOption[i] != opt {
-			t.Fatalf("Unexpected default server option at index %d: %v != %v", i, defaultServerOption[i], opt)
+		if extraDefaultServerOption[i] != opt {
+			t.Fatalf("Unexpected default server option at index %d: %v != %v", i, extraDefaultServerOption[i], opt)
 		}
 	}
-	internal.SetDefaultServerOption.(func(opt ...ServerOption))()
-	if len(defaultServerOption) != 0 {
-		t.Fatalf("Unexpected len of defaultServerOption: %d != 0", len(defaultServerOption))
+	internal.ClearDefaultServerOptions()
+	if len(extraDefaultServerOption) != 0 {
+		t.Fatalf("Unexpected len of extraDefaultServerOption: %d != 0", len(extraDefaultServerOption))
 	}
 }
