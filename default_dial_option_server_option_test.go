@@ -29,13 +29,13 @@ func (s) TestAddDefaultDialOptions(t *testing.T) {
 	opts := []DialOption{WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials())}
 	internal.AddDefaultDialOptions.(func(opt ...DialOption))(opts...)
 	for i, opt := range opts {
-		if extraDefaultDialOption[i] != opt {
-			t.Fatalf("Unexpected default dial option at index %d: %v != %v", i, extraDefaultDialOption[i], opt)
+		if extraDialOption[i] != opt {
+			t.Fatalf("Unexpected default dial option at index %d: %v != %v", i, extraDialOption[i], opt)
 		}
 	}
 	internal.ClearDefaultDialOptions()
-	if len(extraDefaultDialOption) != 0 {
-		t.Fatalf("Unexpected len of extraDefaultDialOption: %d != 0", len(extraDefaultDialOption))
+	if len(extraDialOption) != 0 {
+		t.Fatalf("Unexpected len of extraDialOption: %d != 0", len(extraDialOption))
 	}
 }
 
@@ -43,12 +43,12 @@ func (s) TestAddDefaultServerOptions(t *testing.T) {
 	opts := []ServerOption{StatsHandler(nil), Creds(insecure.NewCredentials()), MaxRecvMsgSize(1024)}
 	internal.AddDefaultServerOptions.(func(opt ...ServerOption))(opts...)
 	for i, opt := range opts {
-		if extraDefaultServerOption[i] != opt {
-			t.Fatalf("Unexpected default server option at index %d: %v != %v", i, extraDefaultServerOption[i], opt)
+		if extraServerOption[i] != opt {
+			t.Fatalf("Unexpected default server option at index %d: %v != %v", i, extraServerOption[i], opt)
 		}
 	}
 	internal.ClearDefaultServerOptions()
-	if len(extraDefaultServerOption) != 0 {
-		t.Fatalf("Unexpected len of extraDefaultServerOption: %d != 0", len(extraDefaultServerOption))
+	if len(extraServerOption) != 0 {
+		t.Fatalf("Unexpected len of extraServerOption: %d != 0", len(extraServerOption))
 	}
 }
