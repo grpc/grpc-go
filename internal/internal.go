@@ -63,17 +63,17 @@ var (
 	// xDS-enabled server invokes this method on a grpc.Server when a particular
 	// listener moves to "not-serving" mode.
 	DrainServerTransports interface{} // func(*grpc.Server, string)
-	// AddDefaultServerOptions adds an array of ServerOption that will be
+	// AddExtraServerOptions adds an array of ServerOption that will be
 	// effective globally for newly created servers. The priority will be: 1.
 	// user-provided; 2. this method; 3. default values.
-	AddDefaultServerOptions interface{} // func(opt ...ServerOption)
+	AddExtraServerOptions interface{} // func(opt ...ServerOption)
 	// ClearDefaultServerOptions clears the array of default ServerOption. This
 	// method is useful in testing and benchmarking.
 	ClearDefaultServerOptions func()
-	// AddDefaultDialOptions adds an array of DialOption that will be effective
+	// AddExtraDialOptions adds an array of DialOption that will be effective
 	// globally for newly created client channels. The priority will be: 1.
 	// user-provided; 2. this method; 3. default values.
-	AddDefaultDialOptions interface{} // func(opt ...DialOption)
+	AddExtraDialOptions interface{} // func(opt ...DialOption)
 	// ClearDefaultDialOptions clears the array of default DialOption. This
 	// method is useful in testing and benchmarking.
 	ClearDefaultDialOptions func()

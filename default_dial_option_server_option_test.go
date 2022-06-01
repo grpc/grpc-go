@@ -25,9 +25,9 @@ import (
 	"google.golang.org/grpc/internal"
 )
 
-func (s) TestAddDefaultDialOptions(t *testing.T) {
+func (s) TestAddExtraDialOptions(t *testing.T) {
 	opts := []DialOption{WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials())}
-	internal.AddDefaultDialOptions.(func(opt ...DialOption))(opts...)
+	internal.AddExtraDialOptions.(func(opt ...DialOption))(opts...)
 	for i, opt := range opts {
 		if extraDialOption[i] != opt {
 			t.Fatalf("Unexpected default dial option at index %d: %v != %v", i, extraDialOption[i], opt)
@@ -39,9 +39,9 @@ func (s) TestAddDefaultDialOptions(t *testing.T) {
 	}
 }
 
-func (s) TestAddDefaultServerOptions(t *testing.T) {
+func (s) TestAddExtraServerOptions(t *testing.T) {
 	opts := []ServerOption{StatsHandler(nil), Creds(insecure.NewCredentials()), MaxRecvMsgSize(1024)}
-	internal.AddDefaultServerOptions.(func(opt ...ServerOption))(opts...)
+	internal.AddExtraServerOptions.(func(opt ...ServerOption))(opts...)
 	for i, opt := range opts {
 		if extraServerOption[i] != opt {
 			t.Fatalf("Unexpected default server option at index %d: %v != %v", i, extraServerOption[i], opt)

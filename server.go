@@ -73,7 +73,7 @@ func init() {
 	internal.DrainServerTransports = func(srv *Server, addr string) {
 		srv.drainServerTransports(addr)
 	}
-	internal.AddDefaultServerOptions = func(opt ...ServerOption) {
+	internal.AddExtraServerOptions = func(opt ...ServerOption) {
 		extraServerOption = opt
 	}
 	internal.ClearDefaultServerOptions = func() {
