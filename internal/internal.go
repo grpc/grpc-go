@@ -67,16 +67,16 @@ var (
 	// effective globally for newly created servers. The priority will be: 1.
 	// user-provided; 2. this method; 3. default values.
 	AddExtraServerOptions interface{} // func(opt ...ServerOption)
-	// ClearDefaultServerOptions clears the array of default ServerOption. This
+	// ClearExtraServerOptions clears the array of extra ServerOption. This
 	// method is useful in testing and benchmarking.
-	ClearDefaultServerOptions func()
+	ClearExtraServerOptions func()
 	// AddExtraDialOptions adds an array of DialOption that will be effective
 	// globally for newly created client channels. The priority will be: 1.
 	// user-provided; 2. this method; 3. default values.
 	AddExtraDialOptions interface{} // func(opt ...DialOption)
-	// ClearDefaultDialOptions clears the array of default DialOption. This
+	// ClearExtraDialOptions clears the array of extra DialOption. This
 	// method is useful in testing and benchmarking.
-	ClearDefaultDialOptions func()
+	ClearExtraDialOptions func()
 
 	// NewXDSResolverWithConfigForTesting creates a new xds resolver builder using
 	// the provided xds bootstrap config instead of the global configuration from

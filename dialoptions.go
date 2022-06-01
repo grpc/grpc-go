@@ -37,10 +37,10 @@ import (
 
 func init() {
 	internal.AddExtraDialOptions = func(opt ...DialOption) {
-		extraDialOption = append(extraDialOption, opt...)
+		extraDialOptions = append(extraDialOptions, opt...)
 	}
-	internal.ClearDefaultDialOptions = func() {
-		extraDialOption = nil
+	internal.ClearExtraDialOptions = func() {
+		extraDialOptions = nil
 	}
 }
 
@@ -79,7 +79,7 @@ type DialOption interface {
 	apply(*dialOptions)
 }
 
-var extraDialOption []DialOption
+var extraDialOptions []DialOption
 
 // EmptyDialOption does not alter the dial configuration. It can be embedded in
 // another structure to build custom dial options.

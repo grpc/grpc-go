@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"strings"
 	"testing"
 
 	"google.golang.org/grpc/credentials/insecure"
@@ -26,29 +27,56 @@ import (
 )
 
 func (s) TestAddExtraDialOptions(t *testing.T) {
+	// Ensure the Dial fails without credentials
+	if _, err := Dial("fake"); err == nil {
+		t.Fatalf("Dialing without a credential did not fail")
+	} else {
+		if !strings.Contains(err.Error(), "no transport security set") {
+			t.Fatalf("Dialing failed with unexpected error: %v", err)
+		}
+	}
+
+	// Set and check the DialOptions
 	opts := []DialOption{WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials())}
 	internal.AddExtraDialOptions.(func(opt ...DialOption))(opts...)
 	for i, opt := range opts {
-		if extraDialOption[i] != opt {
-			t.Fatalf("Unexpected default dial option at index %d: %v != %v", i, extraDialOption[i], opt)
+		if extraDialOptions[i] != opt {
+			t.Fatalf("Unexpected extra dial option at index %d: %v != %v", i, extraDialOptions[i], opt)
 		}
 	}
-	internal.ClearDefaultDialOptions()
-	if len(extraDialOption) != 0 {
-		t.Fatalf("Unexpected len of extraDialOption: %d != 0", len(extraDialOption))
+
+	// Ensure the Dial passes with the extra dial options
+	if cc, err := Dial("fake"); err != nil {
+		t.Fatalf("Dialing with insecure credential failed: %v", err)
+	} else {
+		cc.Close()
+	}
+
+	internal.ClearExtraDialOptions()
+	if len(extraDialOptions) != 0 {
+		t.Fatalf("Unexpected len of extraDialOptions: %d != 0", len(extraDialOptions))
 	}
 }
 
 func (s) TestAddExtraServerOptions(t *testing.T) {
-	opts := []ServerOption{StatsHandler(nil), Creds(insecure.NewCredentials()), MaxRecvMsgSize(1024)}
+	const maxRecvSize = 998765
+	// Set and check the ServerOptions
+	opts := []ServerOption{StatsHandler(nil), Creds(insecure.NewCredentials()), MaxRecvMsgSize(maxRecvSize)}
 	internal.AddExtraServerOptions.(func(opt ...ServerOption))(opts...)
 	for i, opt := range opts {
-		if extraServerOption[i] != opt {
-			t.Fatalf("Unexpected default server option at index %d: %v != %v", i, extraServerOption[i], opt)
+		if extraServerOptions[i] != opt {
+			t.Fatalf("Unexpected extra server option at index %d: %v != %v", i, extraServerOptions[i], opt)
 		}
 	}
-	internal.ClearDefaultServerOptions()
-	if len(extraServerOption) != 0 {
-		t.Fatalf("Unexpected len of extraServerOption: %d != 0", len(extraServerOption))
+
+	// Ensure the extra server options applies to new servers
+	s := NewServer()
+	if s.opts.maxReceiveMessageSize != maxRecvSize {
+		t.Fatalf("Unexpected s.opts.maxReceiveMessageSize: %d != %d", s.opts.maxReceiveMessageSize, maxRecvSize)
+	}
+
+	internal.ClearExtraServerOptions()
+	if len(extraServerOptions) != 0 {
+		t.Fatalf("Unexpected len of extraServerOptions: %d != 0", len(extraServerOptions))
 	}
 }
