@@ -826,6 +826,32 @@ func (s) TestInlineCallbackInBuild(t *testing.T) {
 	}
 }
 
+// TestExitIdle tests the ExitIdle operation on the Graceful Switch Balancer for
+// both possible codepaths, one where the child implements ExitIdler interface
+// and one where the child doesn't implement ExitIdler interface.
+func (s) TestExitIdle(t *testing.T) {
+	_, gsb := setup(t)
+	// switch to a balancer that implements ExitIdle{} (will populate current).
+	gsb.SwitchTo(mockBalancerBuilder1{})
+	currBal := gsb.balancerCurrent.Balancer.(*mockBalancer)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// exitIdle on the Graceful Switch Balancer should get forwarded to the
+	// current child as it implements exitIdle.
+	gsb.ExitIdle()
+	if err := currBal.waitForExitIdle(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// switch to a balancer that doesn't implement ExitIdle{} (will populate
+	// pending).
+	gsb.SwitchTo(verifyBalancerBuilder{})
+	// ExitIdle{} for a balancer that doesn't implement ExitIdle{} will cause
+	// all the SubConns for the pendingBalancer to reconnect, no SubConns
+	// created for the pending so a no-op.
+	gsb.ExitIdle()
+}
+
 const balancerName1 = "mock_balancer_1"
 const balancerName2 = "mock_balancer_2"
 const verifyBalName = "verifyNoSubConnUpdateAfterCloseBalancer"
@@ -839,6 +865,7 @@ func (mockBalancerBuilder1) Build(cc balancer.ClientConn, opts balancer.BuildOpt
 		scStateCh:     testutils.NewChannel(),
 		resolverErrCh: testutils.NewChannel(),
 		closeCh:       testutils.NewChannel(),
+		exitIdleCh:    testutils.NewChannel(),
 		cc:            cc,
 	}
 }
@@ -863,6 +890,8 @@ type mockBalancer struct {
 	resolverErrCh *testutils.Channel
 	// closeCh is a channel used to signal the closing of this balancer.
 	closeCh *testutils.Channel
+	// exitIdleCh is a channel used to signal the receipt of an ExitIdle call.
+	exitIdleCh *testutils.Channel
 	// Hold onto ClientConn wrapper to communicate with it
 	cc balancer.ClientConn
 }
@@ -888,6 +917,10 @@ func (mb1 *mockBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.
 
 func (mb1 *mockBalancer) Close() {
 	mb1.closeCh.Send(struct{}{})
+}
+
+func (mb1 *mockBalancer) ExitIdle() {
+	mb1.exitIdleCh.Send(struct{}{})
 }
 
 // waitForClientConnUpdate verifies if the mockBalancer receives the
@@ -936,6 +969,15 @@ func (mb1 *mockBalancer) waitForResolverError(ctx context.Context, wantErr error
 func (mb1 *mockBalancer) waitForClose(ctx context.Context) error {
 	if _, err := mb1.closeCh.Receive(ctx); err != nil {
 		return fmt.Errorf("error waiting for Close(): %v", err)
+	}
+	return nil
+}
+
+// waitForExitIdle verifies that ExitIdle gets called on the mockBalancer before
+// the context expires.
+func (mb1 *mockBalancer) waitForExitIdle(ctx context.Context) error {
+	if _, err := mb1.exitIdleCh.Receive(ctx); err != nil {
+		return fmt.Errorf("error waiting for ExitIdle(): %v", err)
 	}
 	return nil
 }
