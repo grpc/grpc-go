@@ -375,20 +375,19 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 	ctx := newContextWithRPCInfo(cs.ctx, cs.callInfo.failFast, cs.callInfo.codec, cs.cp, cs.comp)
 	method := cs.callHdr.Method
 	var beginTime time.Time
-	if len(cs.cc.dopts.copts.StatsHandler) != 0 {
-		for _, sh := range cs.cc.dopts.copts.StatsHandler {
-			ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast})
-			beginTime = time.Now()
-			begin := &stats.Begin{
-				Client:                    true,
-				BeginTime:                 beginTime,
-				FailFast:                  cs.callInfo.failFast,
-				IsClientStream:            cs.desc.ClientStreams,
-				IsServerStream:            cs.desc.ServerStreams,
-				IsTransparentRetryAttempt: isTransparent,
-			}
-			sh.HandleRPC(ctx, begin)
+	shs := cs.cc.dopts.copts.StatsHandlers
+	for _, sh := range shs {
+		ctx = sh.TagRPC(ctx, &stats.RPCTagInfo{FullMethodName: method, FailFast: cs.callInfo.failFast})
+		beginTime = time.Now()
+		begin := &stats.Begin{
+			Client:                    true,
+			BeginTime:                 beginTime,
+			FailFast:                  cs.callInfo.failFast,
+			IsClientStream:            cs.desc.ClientStreams,
+			IsServerStream:            cs.desc.ServerStreams,
+			IsTransparentRetryAttempt: isTransparent,
 		}
+		sh.HandleRPC(ctx, begin)
 	}
 
 	var trInfo *traceInfo
@@ -415,12 +414,12 @@ func (cs *clientStream) newAttemptLocked(isTransparent bool) (*csAttempt, error)
 	}
 
 	return &csAttempt{
-		ctx:          ctx,
-		beginTime:    beginTime,
-		cs:           cs,
-		dc:           cs.cc.dopts.dc,
-		statsHandler: cs.cc.dopts.copts.StatsHandler,
-		trInfo:       trInfo,
+		ctx:           ctx,
+		beginTime:     beginTime,
+		cs:            cs,
+		dc:            cs.cc.dopts.dc,
+		statsHandlers: shs,
+		trInfo:        trInfo,
 	}, nil
 }
 
@@ -537,8 +536,8 @@ type csAttempt struct {
 	// and cleared when the finish method is called.
 	trInfo *traceInfo
 
-	statsHandler []stats.Handler
-	beginTime    time.Time
+	statsHandlers []stats.Handler
+	beginTime     time.Time
 
 	// set for newStream errors that may be transparently retried
 	allowTransparentRetry bool
@@ -961,10 +960,8 @@ func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
 		}
 		return io.EOF
 	}
-	if len(a.statsHandler) != 0 {
-		for _, sh := range a.statsHandler {
-			sh.HandleRPC(a.ctx, outPayload(true, m, data, payld, time.Now()))
-		}
+	for _, sh := range a.statsHandlers {
+		sh.HandleRPC(a.ctx, outPayload(true, m, data, payld, time.Now()))
 	}
 	if channelz.IsOn() {
 		a.t.IncrMsgSent()
@@ -974,7 +971,7 @@ func (a *csAttempt) sendMsg(m interface{}, hdr, payld, data []byte) error {
 
 func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 	cs := a.cs
-	if len(a.statsHandler) != 0 && payInfo == nil {
+	if len(a.statsHandlers) != 0 && payInfo == nil {
 		payInfo = &payloadInfo{}
 	}
 
@@ -1011,18 +1008,16 @@ func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 		}
 		a.mu.Unlock()
 	}
-	if len(a.statsHandler) != 0 {
-		for _, sh := range a.statsHandler {
-			sh.HandleRPC(a.ctx, &stats.InPayload{
-				Client:   true,
-				RecvTime: time.Now(),
-				Payload:  m,
-				// TODO truncate large payload.
-				Data:       payInfo.uncompressedBytes,
-				WireLength: payInfo.wireLength + headerLen,
-				Length:     len(payInfo.uncompressedBytes),
-			})
-		}
+	for _, sh := range a.statsHandlers {
+		sh.HandleRPC(a.ctx, &stats.InPayload{
+			Client:   true,
+			RecvTime: time.Now(),
+			Payload:  m,
+			// TODO truncate large payload.
+			Data:       payInfo.uncompressedBytes,
+			WireLength: payInfo.wireLength + headerLen,
+			Length:     len(payInfo.uncompressedBytes),
+		})
 	}
 	if channelz.IsOn() {
 		a.t.IncrMsgRecv()
@@ -1073,17 +1068,15 @@ func (a *csAttempt) finish(err error) {
 			ServerLoad:    balancerload.Parse(tr),
 		})
 	}
-	if len(a.statsHandler) != 0 {
-		for _, sh := range a.statsHandler {
-			end := &stats.End{
-				Client:    true,
-				BeginTime: a.beginTime,
-				EndTime:   time.Now(),
-				Trailer:   tr,
-				Error:     err,
-			}
-			sh.HandleRPC(a.ctx, end)
+	for _, sh := range a.statsHandlers {
+		end := &stats.End{
+			Client:    true,
+			BeginTime: a.beginTime,
+			EndTime:   time.Now(),
+			Trailer:   tr,
+			Error:     err,
 		}
+		sh.HandleRPC(a.ctx, end)
 	}
 	if a.trInfo != nil && a.trInfo.tr != nil {
 		if err == nil {

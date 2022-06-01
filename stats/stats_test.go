@@ -176,10 +176,10 @@ func (s *testServer) StreamingOutputCall(in *testpb.StreamingOutputCallRequest, 
 // func, modified as needed, and then started with its startServer method.
 // It should be cleaned up with the tearDown method.
 type test struct {
-	t                  *testing.T
-	compress           string
-	clientStatsHandler []stats.Handler
-	serverStatsHandler []stats.Handler
+	t                   *testing.T
+	compress            string
+	clientStatsHandlers []stats.Handler
+	serverStatsHandlers []stats.Handler
 
 	testServer testgrpc.TestServiceServer // nil means none
 	// srv and srvAddr are set once startServer is called.
@@ -204,12 +204,12 @@ type testConfig struct {
 // newTest returns a new test using the provided testing.T and
 // environment.  It is returned with default values. Tests should
 // modify it before calling its startServer and clientConn methods.
-func newTest(t *testing.T, tc *testConfig, ch []stats.Handler, sh []stats.Handler) *test {
+func newTest(t *testing.T, tc *testConfig, chs []stats.Handler, shs []stats.Handler) *test {
 	te := &test{
-		t:                  t,
-		compress:           tc.compress,
-		clientStatsHandler: ch,
-		serverStatsHandler: sh,
+		t:                   t,
+		compress:            tc.compress,
+		clientStatsHandlers: chs,
+		serverStatsHandlers: shs,
 	}
 	return te
 }
@@ -229,10 +229,8 @@ func (te *test) startServer(ts testgrpc.TestServiceServer) {
 			grpc.RPCDecompressor(grpc.NewGZIPDecompressor()),
 		)
 	}
-	if len(te.serverStatsHandler) != 0 {
-		for _, sh := range te.serverStatsHandler {
-			opts = append(opts, grpc.StatsHandler(sh))
-		}
+	for _, sh := range te.serverStatsHandlers {
+		opts = append(opts, grpc.StatsHandler(sh))
 	}
 	s := grpc.NewServer(opts...)
 	te.srv = s
@@ -259,10 +257,8 @@ func (te *test) clientConn() *grpc.ClientConn {
 			grpc.WithDecompressor(grpc.NewGZIPDecompressor()),
 		)
 	}
-	if len(te.clientStatsHandler) != 0 {
-		for _, sh := range te.clientStatsHandler {
-			opts = append(opts, grpc.WithStatsHandler(sh))
-		}
+	for _, sh := range te.clientStatsHandlers {
+		opts = append(opts, grpc.WithStatsHandler(sh))
 	}
 
 	var err error
@@ -1395,26 +1391,6 @@ func (s) TestMultipleClientStatsHandler(t *testing.T) {
 	te.cc.Close()
 	te.srv.GracefulStop() // Wait for the server to stop.
 
-	for start := time.Now(); time.Since(start) < defaultTestTimeout; {
-		h.mu.Lock()
-		if _, ok := h.gotRPC[len(h.gotRPC)-1].s.(*stats.End); ok {
-			h.mu.Unlock()
-			break
-		}
-		h.mu.Unlock()
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	for start := time.Now(); time.Since(start) < defaultTestTimeout; {
-		h.mu.Lock()
-		if _, ok := h.gotConn[len(h.gotConn)-1].s.(*stats.ConnEnd); ok {
-			h.mu.Unlock()
-			break
-		}
-		h.mu.Unlock()
-		time.Sleep(10 * time.Millisecond)
-	}
-
 	// Each RPC generates 6 stats events on the client-side, times 2 StatsHandler
 	if len(h.gotRPC) != 12 {
 		t.Fatalf("h.gotRPC: unexpected amount of RPCStats: %v != %v", len(h.gotRPC), 12)
@@ -1440,26 +1416,6 @@ func (s) TestMultipleServerStatsHandler(t *testing.T) {
 	}
 	te.cc.Close()
 	te.srv.GracefulStop() // Wait for the server to stop.
-
-	for start := time.Now(); time.Since(start) < defaultTestTimeout; {
-		h.mu.Lock()
-		if _, ok := h.gotRPC[len(h.gotRPC)-1].s.(*stats.End); ok {
-			h.mu.Unlock()
-			break
-		}
-		h.mu.Unlock()
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	for start := time.Now(); time.Since(start) < defaultTestTimeout; {
-		h.mu.Lock()
-		if _, ok := h.gotConn[len(h.gotConn)-1].s.(*stats.ConnEnd); ok {
-			h.mu.Unlock()
-			break
-		}
-		h.mu.Unlock()
-		time.Sleep(10 * time.Millisecond)
-	}
 
 	// Each RPC generates 6 stats events on the server-side, times 2 StatsHandler
 	if len(h.gotRPC) != 12 {

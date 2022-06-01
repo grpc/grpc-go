@@ -257,7 +257,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		fc:                &trInFlow{limit: uint32(icwz)},
 		state:             reachable,
 		activeStreams:     make(map[uint32]*Stream),
-		stats:             config.StatsHandler,
+		stats:             config.StatsHandlers,
 		kp:                kp,
 		idle:              time.Now(),
 		kep:               kep,
@@ -272,15 +272,13 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 			updateFlowControl: t.updateFlowControl,
 		}
 	}
-	if len(t.stats) != 0 {
-		for _, sh := range t.stats {
-			t.ctx = sh.TagConn(t.ctx, &stats.ConnTagInfo{
-				RemoteAddr: t.remoteAddr,
-				LocalAddr:  t.localAddr,
-			})
-			connBegin := &stats.ConnBegin{}
-			sh.HandleConn(t.ctx, connBegin)
-		}
+	for _, sh := range t.stats {
+		t.ctx = sh.TagConn(t.ctx, &stats.ConnTagInfo{
+			RemoteAddr: t.remoteAddr,
+			LocalAddr:  t.localAddr,
+		})
+		connBegin := &stats.ConnBegin{}
+		sh.HandleConn(t.ctx, connBegin)
 	}
 	t.channelzID, err = channelz.RegisterNormalSocket(t, config.ChannelzParentID, fmt.Sprintf("%s -> %s", t.remoteAddr, t.localAddr))
 	if err != nil {
@@ -568,19 +566,17 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		t.adjustWindow(s, uint32(n))
 	}
 	s.ctx = traceCtx(s.ctx, s.method)
-	if len(t.stats) != 0 {
-		for _, sh := range t.stats {
-			s.ctx = sh.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
-			inHeader := &stats.InHeader{
-				FullMethod:  s.method,
-				RemoteAddr:  t.remoteAddr,
-				LocalAddr:   t.localAddr,
-				Compression: s.recvCompress,
-				WireLength:  int(frame.Header().Length),
-				Header:      metadata.MD(mdata).Copy(),
-			}
-			sh.HandleRPC(s.ctx, inHeader)
+	for _, sh := range t.stats {
+		s.ctx = sh.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
+		inHeader := &stats.InHeader{
+			FullMethod:  s.method,
+			RemoteAddr:  t.remoteAddr,
+			LocalAddr:   t.localAddr,
+			Compression: s.recvCompress,
+			WireLength:  int(frame.Header().Length),
+			Header:      metadata.MD(mdata).Copy(),
 		}
+		sh.HandleRPC(s.ctx, inHeader)
 	}
 	s.ctxDone = s.ctx.Done()
 	s.wq = newWriteQuota(defaultWriteQuota, s.ctxDone)
@@ -996,16 +992,14 @@ func (t *http2Server) writeHeaderLocked(s *Stream) error {
 		t.closeStream(s, true, http2.ErrCodeInternal, false)
 		return ErrHeaderListSizeLimitViolation
 	}
-	if len(t.stats) != 0 {
-		for _, sh := range t.stats {
-			// Note: Headers are compressed with hpack after this call returns.
-			// No WireLength field is set here.
-			outHeader := &stats.OutHeader{
-				Header:      s.header.Copy(),
-				Compression: s.sendCompress,
-			}
-			sh.HandleRPC(s.Context(), outHeader)
+	for _, sh := range t.stats {
+		// Note: Headers are compressed with hpack after this call returns.
+		// No WireLength field is set here.
+		outHeader := &stats.OutHeader{
+			Header:      s.header.Copy(),
+			Compression: s.sendCompress,
 		}
+		sh.HandleRPC(s.Context(), outHeader)
 	}
 	return nil
 }
@@ -1066,14 +1060,12 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	// Send a RST_STREAM after the trailers if the client has not already half-closed.
 	rst := s.getState() == streamActive
 	t.finishStream(s, rst, http2.ErrCodeNo, trailingHeader, true)
-	if len(t.stats) != 0 {
-		for _, sh := range t.stats {
-			// Note: The trailer fields are compressed with hpack after this call returns.
-			// No WireLength field is set here.
-			sh.HandleRPC(s.Context(), &stats.OutTrailer{
-				Trailer: s.trailer.Copy(),
-			})
-		}
+	for _, sh := range t.stats {
+		// Note: The trailer fields are compressed with hpack after this call returns.
+		// No WireLength field is set here.
+		sh.HandleRPC(s.Context(), &stats.OutTrailer{
+			Trailer: s.trailer.Copy(),
+		})
 	}
 	return nil
 }
@@ -1226,11 +1218,9 @@ func (t *http2Server) Close() {
 	for _, s := range streams {
 		s.cancel()
 	}
-	if len(t.stats) != 0 {
-		for _, sh := range t.stats {
-			connEnd := &stats.ConnEnd{}
-			sh.HandleConn(t.ctx, connEnd)
-		}
+	for _, sh := range t.stats {
+		connEnd := &stats.ConnEnd{}
+		sh.HandleConn(t.ctx, connEnd)
 	}
 }
 

@@ -228,14 +228,12 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 	})
 
 	if err == nil { // transport has not been closed
-		if len(ht.stats) != 0 {
-			// Note: The trailer fields are compressed with hpack after this call returns.
-			// No WireLength field is set here.
-			for _, sh := range ht.stats {
-				sh.HandleRPC(s.Context(), &stats.OutTrailer{
-					Trailer: s.trailer.Copy(),
-				})
-			}
+		// Note: The trailer fields are compressed with hpack after this call returns.
+		// No WireLength field is set here.
+		for _, sh := range ht.stats {
+			sh.HandleRPC(s.Context(), &stats.OutTrailer{
+				Trailer: s.trailer.Copy(),
+			})
 		}
 	}
 	ht.Close()
@@ -316,15 +314,13 @@ func (ht *serverHandlerTransport) WriteHeader(s *Stream, md metadata.MD) error {
 	})
 
 	if err == nil {
-		if len(ht.stats) != 0 {
-			for _, sh := range ht.stats {
-				// Note: The header fields are compressed with hpack after this call returns.
-				// No WireLength field is set here.
-				sh.HandleRPC(s.Context(), &stats.OutHeader{
-					Header:      md.Copy(),
-					Compression: s.sendCompress,
-				})
-			}
+		for _, sh := range ht.stats {
+			// Note: The header fields are compressed with hpack after this call returns.
+			// No WireLength field is set here.
+			sh.HandleRPC(s.Context(), &stats.OutHeader{
+				Header:      md.Copy(),
+				Compression: s.sendCompress,
+			})
 		}
 	}
 	return err
@@ -373,16 +369,14 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 	}
 	ctx = metadata.NewIncomingContext(ctx, ht.headerMD)
 	s.ctx = peer.NewContext(ctx, pr)
-	if len(ht.stats) != 0 {
-		for _, sh := range ht.stats {
-			s.ctx = sh.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
-			inHeader := &stats.InHeader{
-				FullMethod:  s.method,
-				RemoteAddr:  ht.RemoteAddr(),
-				Compression: s.recvCompress,
-			}
-			sh.HandleRPC(s.ctx, inHeader)
+	for _, sh := range ht.stats {
+		s.ctx = sh.TagRPC(s.ctx, &stats.RPCTagInfo{FullMethodName: s.method})
+		inHeader := &stats.InHeader{
+			FullMethod:  s.method,
+			RemoteAddr:  ht.RemoteAddr(),
+			Compression: s.recvCompress,
 		}
+		sh.HandleRPC(s.ctx, inHeader)
 	}
 	s.trReader = &transportReader{
 		reader:        &recvBufferReader{ctx: s.ctx, ctxDone: s.ctx.Done(), recv: s.buf, freeBuffer: func(*bytes.Buffer) {}},
