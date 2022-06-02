@@ -1391,6 +1391,26 @@ func (s) TestMultipleClientStatsHandler(t *testing.T) {
 	te.cc.Close()
 	te.srv.GracefulStop() // Wait for the server to stop.
 
+	for start := time.Now(); time.Since(start) < defaultTestTimeout; {
+		h.mu.Lock()
+		if _, ok := h.gotRPC[len(h.gotRPC)-1].s.(*stats.End); ok {
+			h.mu.Unlock()
+			break
+		}
+		h.mu.Unlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	for start := time.Now(); time.Since(start) < defaultTestTimeout; {
+		h.mu.Lock()
+		if _, ok := h.gotConn[len(h.gotConn)-1].s.(*stats.ConnEnd); ok {
+			h.mu.Unlock()
+			break
+		}
+		h.mu.Unlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	// Each RPC generates 6 stats events on the client-side, times 2 StatsHandler
 	if len(h.gotRPC) != 12 {
 		t.Fatalf("h.gotRPC: unexpected amount of RPCStats: %v != %v", len(h.gotRPC), 12)
@@ -1416,6 +1436,26 @@ func (s) TestMultipleServerStatsHandler(t *testing.T) {
 	}
 	te.cc.Close()
 	te.srv.GracefulStop() // Wait for the server to stop.
+
+	for start := time.Now(); time.Since(start) < defaultTestTimeout; {
+		h.mu.Lock()
+		if _, ok := h.gotRPC[len(h.gotRPC)-1].s.(*stats.End); ok {
+			h.mu.Unlock()
+			break
+		}
+		h.mu.Unlock()
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	for start := time.Now(); time.Since(start) < defaultTestTimeout; {
+		h.mu.Lock()
+		if _, ok := h.gotConn[len(h.gotConn)-1].s.(*stats.ConnEnd); ok {
+			h.mu.Unlock()
+			break
+		}
+		h.mu.Unlock()
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	// Each RPC generates 6 stats events on the server-side, times 2 StatsHandler
 	if len(h.gotRPC) != 12 {
