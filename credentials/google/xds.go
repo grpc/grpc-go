@@ -21,6 +21,7 @@ package google
 import (
 	"context"
 	"net"
+	"net/url"
 	"strings"
 
 	"google.golang.org/grpc/credentials"
@@ -28,6 +29,8 @@ import (
 )
 
 const cfeClusterNamePrefix = "google_cfe_"
+const cfeClusterResourceNamePrefix = "/envoy.config.cluster.v3.Cluster/google_cfe_"
+const cfeClusterAuthorityName = "traffic-director-c2p.xds.googleapis.com"
 
 // clusterTransportCreds is a combo of TLS + ALTS.
 //
@@ -50,18 +53,36 @@ func newClusterTransportCreds(tls, alts credentials.TransportCredentials) *clust
 	}
 }
 
-func (c *clusterTransportCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+func isXDSNonCFECluster(ctx context.Context) bool {
 	chi := credentials.ClientHandshakeInfoFromContext(ctx)
 	if chi.Attributes == nil {
-		return c.tls.ClientHandshake(ctx, authority, rawConn)
+		return false
 	}
 	cn, ok := internal.GetXDSHandshakeClusterName(chi.Attributes)
 	if !ok || strings.HasPrefix(cn, cfeClusterNamePrefix) {
-		return c.tls.ClientHandshake(ctx, authority, rawConn)
+		return false
 	}
-	// If attributes have cluster name, and cluster name is not cfe, it's a
-	// backend address, use ALTS.
-	return c.alts.ClientHandshake(ctx, authority, rawConn)
+	if strings.HasPrefix(cn, cfeClusterNamePrefix) {
+		return false
+	}
+	if !strings.HasPrefix(cn, "xdstp:") {
+		return true
+	}
+	u, err := url.Parse(cn)
+	if err != nil {
+		// Shouldn't happen, but assume ALTS.
+		return true
+	}
+	return u.Host != cfeClusterAuthorityName || !strings.HasPrefix(u.Path, cfeClusterResourceNamePrefix)
+}
+
+func (c *clusterTransportCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
+	if isXDSNonCFECluster(ctx) {
+		// If attributes have cluster name, and cluster name is not cfe, it's a
+		// backend address, use ALTS.
+		return c.alts.ClientHandshake(ctx, authority, rawConn)
+	}
+	return c.tls.ClientHandshake(ctx, authority, rawConn)
 }
 
 func (c *clusterTransportCreds) ServerHandshake(conn net.Conn) (net.Conn, credentials.AuthInfo, error) {
