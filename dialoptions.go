@@ -35,6 +35,15 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
+func init() {
+	internal.AddExtraDialOptions = func(opt ...DialOption) {
+		extraDialOptions = append(extraDialOptions, opt...)
+	}
+	internal.ClearExtraDialOptions = func() {
+		extraDialOptions = nil
+	}
+}
+
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
 // values passed to Dial.
 type dialOptions struct {
@@ -69,6 +78,8 @@ type dialOptions struct {
 type DialOption interface {
 	apply(*dialOptions)
 }
+
+var extraDialOptions []DialOption
 
 // EmptyDialOption does not alter the dial configuration. It can be embedded in
 // another structure to build custom dial options.

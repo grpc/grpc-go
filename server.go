@@ -73,6 +73,12 @@ func init() {
 	internal.DrainServerTransports = func(srv *Server, addr string) {
 		srv.drainServerTransports(addr)
 	}
+	internal.AddExtraServerOptions = func(opt ...ServerOption) {
+		extraServerOptions = opt
+	}
+	internal.ClearExtraServerOptions = func() {
+		extraServerOptions = nil
+	}
 }
 
 var statusOK = status.New(codes.OK, "")
@@ -174,6 +180,7 @@ var defaultServerOptions = serverOptions{
 	writeBufferSize:       defaultWriteBufSize,
 	readBufferSize:        defaultReadBufSize,
 }
+var extraServerOptions []ServerOption
 
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption interface {
@@ -560,6 +567,9 @@ func (s *Server) stopServerWorkers() {
 // started to accept requests yet.
 func NewServer(opt ...ServerOption) *Server {
 	opts := defaultServerOptions
+	for _, o := range extraServerOptions {
+		o.apply(&opts)
+	}
 	for _, o := range opt {
 		o.apply(&opts)
 	}
