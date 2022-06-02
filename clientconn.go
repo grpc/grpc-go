@@ -137,7 +137,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		target:            target,
 		csMgr:             &connectivityStateManager{},
 		conns:             make(map[*addrConn]struct{}),
-		dopts:             newDefaultDialOptions(),
+		dopts:             defaultDialOptions(),
 		blockingpicker:    newPickerWrapper(),
 		czData:            new(channelzData),
 		firstResolveEvent: grpcsync.NewEvent(),

@@ -568,7 +568,7 @@ func withHealthCheckFunc(f internal.HealthChecker) DialOption {
 	})
 }
 
-func newDefaultDialOptions() dialOptions {
+func defaultDialOptions() dialOptions {
 	return dialOptions{
 		healthCheckFunc: internal.HealthCheckFunc,
 		copts: transport.ConnectOptions{
