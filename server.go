@@ -1420,15 +1420,16 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	if channelz.IsOn() {
 		s.incrCallsStarted()
 	}
+	shs := s.opts.statsHandlers
 	var statsBegin *stats.Begin
-	if len(s.opts.statsHandlers) != 0 {
+	if len(shs) != 0 {
 		beginTime := time.Now()
 		statsBegin = &stats.Begin{
 			BeginTime:      beginTime,
 			IsClientStream: sd.ClientStreams,
 			IsServerStream: sd.ServerStreams,
 		}
-		for _, sh := range s.opts.statsHandlers {
+		for _, sh := range shs {
 			sh.HandleRPC(stream.Context(), statsBegin)
 		}
 	}
@@ -1442,10 +1443,10 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
 		trInfo:                trInfo,
-		statsHandler:          s.opts.statsHandlers,
+		statsHandler:          shs,
 	}
 
-	if len(s.opts.statsHandlers) != 0 || trInfo != nil || channelz.IsOn() {
+	if len(shs) != 0 || trInfo != nil || channelz.IsOn() {
 		// See comment in processUnaryRPC on defers.
 		defer func() {
 			if trInfo != nil {
@@ -1459,7 +1460,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 				ss.mu.Unlock()
 			}
 
-			if len(s.opts.statsHandlers) != 0 {
+			if len(shs) != 0 {
 				end := &stats.End{
 					BeginTime: statsBegin.BeginTime,
 					EndTime:   time.Now(),
@@ -1467,7 +1468,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 				if err != nil && err != io.EOF {
 					end.Error = toRPCErr(err)
 				}
-				for _, sh := range s.opts.statsHandlers {
+				for _, sh := range shs {
 					sh.HandleRPC(stream.Context(), end)
 				}
 			}
