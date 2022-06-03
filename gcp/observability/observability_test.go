@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"go.opencensus.io/stats/view"
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	configpb "google.golang.org/grpc/gcp/observability/internal/config"
@@ -69,6 +71,7 @@ var (
 	testErrorPayload          = []byte{77, 97, 114, 116, 104, 97}
 	testErrorMessage          = "test case injected error"
 	infinitySizeBytes   int32 = 1024 * 1024 * 1024
+	defaultRequestCount       = 24
 )
 
 type testServer struct {
@@ -124,6 +127,7 @@ func (fle *fakeLoggingExporter) Close() error {
 type test struct {
 	t   *testing.T
 	fle *fakeLoggingExporter
+	fe  *fakeOpenCensusExporter
 
 	testServer testgrpc.TestServiceServer // nil means none
 	// srv and srvAddr are set once startServer is called.
@@ -141,7 +145,7 @@ func (te *test) tearDown() {
 	te.srv.Stop()
 	End()
 
-	if !te.fle.isClosed {
+	if te.fle != nil && !te.fle.isClosed {
 		te.t.Fatalf("fakeLoggingExporter not closed!")
 	}
 }
@@ -151,8 +155,7 @@ func (te *test) tearDown() {
 // modify it before calling its startServer and clientConn methods.
 func newTest(t *testing.T) *test {
 	return &test{
-		t:   t,
-		fle: &fakeLoggingExporter{t: t},
+		t: t,
 	}
 }
 
@@ -194,6 +197,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 
 func (te *test) enablePluginWithConfig(config *configpb.ObservabilityConfig) {
 	// Injects the fake exporter for testing purposes
+	te.fle = &fakeLoggingExporter{t: te.t}
 	defaultLogger = newBinaryLogger(nil)
 	iblog.SetLogger(defaultLogger)
 	if err := defaultLogger.start(config, te.fle); err != nil {
@@ -213,6 +217,18 @@ func (te *test) enablePluginWithCaptureAll() {
 			},
 		},
 	})
+}
+
+func (te *test) enableOpenCensus() {
+	defaultMetricsReportingInterval = time.Millisecond * 100
+	config := &configpb.ObservabilityConfig{
+		EnableCloudLogging:      true,
+		EnableCloudTrace:        true,
+		EnableCloudMonitoring:   true,
+		GlobalTraceSamplingRate: 1.0,
+	}
+	te.fe = &fakeOpenCensusExporter{SeenViews: make(map[string]string), t: te.t}
+	startOpenCensus(config, te.fe)
 }
 
 func checkEventCommon(t *testing.T, seen *grpclogrecordpb.GrpcLogRecord) {
@@ -327,6 +343,48 @@ func checkEventTrailer(t *testing.T, seen *grpclogrecordpb.GrpcLogRecord, want *
 	if !bytes.Equal(seen.Metadata.Entry[0].Value, []byte(testTrailerMetadata["trailer"][0])) {
 		t.Fatalf("unexpected trailer value: %v", seen.Metadata.Entry[0].Value)
 	}
+}
+
+const (
+	TypeOpenCensusViewDistribution string = "distribution"
+	TypeOpenCensusViewCount               = "count"
+	TypeOpenCensusViewSum                 = "sum"
+	TypeOpenCensusViewLastValue           = "last_value"
+)
+
+type fakeOpenCensusExporter struct {
+	// The map of the observed View name and type
+	SeenViews map[string]string
+	// Number of spans
+	SeenSpans int
+
+	t  *testing.T
+	mu sync.RWMutex
+}
+
+func (fe *fakeOpenCensusExporter) ExportView(vd *view.Data) {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	for _, row := range vd.Rows {
+		fe.t.Logf("Metrics[%s]", vd.View.Name)
+		switch row.Data.(type) {
+		case *view.DistributionData:
+			fe.SeenViews[vd.View.Name] = TypeOpenCensusViewDistribution
+		case *view.CountData:
+			fe.SeenViews[vd.View.Name] = TypeOpenCensusViewCount
+		case *view.SumData:
+			fe.SeenViews[vd.View.Name] = TypeOpenCensusViewSum
+		case *view.LastValueData:
+			fe.SeenViews[vd.View.Name] = TypeOpenCensusViewLastValue
+		}
+	}
+}
+
+func (fe *fakeOpenCensusExporter) ExportSpan(vd *trace.SpanData) {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	fe.SeenSpans++
+	fe.t.Logf("Span[%v]", vd.Name)
 }
 
 func (s) TestLoggingForOkCall(t *testing.T) {
@@ -638,5 +696,63 @@ func (s) TestNoEnvSet(t *testing.T) {
 	// If there is no observability config set at all, the Start should return an error.
 	if err := Start(context.Background()); err == nil {
 		t.Fatalf("Invalid patterns not triggering error")
+	}
+}
+
+func (s) TestOpenCensusIntegration(t *testing.T) {
+	te := newTest(t)
+	defer te.tearDown()
+	te.enableOpenCensus()
+	te.startServer(&testServer{})
+	tc := testgrpc.NewTestServiceClient(te.clientConn())
+
+	var (
+		req *testpb.SimpleRequest
+		err error
+
+		validClientViews, validServerViews, validSpans bool
+	)
+	for i := 0; i < defaultRequestCount; i++ {
+		req = &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}
+		tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+		defer cancel()
+		_, err = tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testHeaderMetadata), req)
+		if err != nil {
+			t.Fatalf("unary call failed: %v", err)
+		}
+	}
+	t.Logf("unary call passed count=%v", defaultRequestCount)
+
+	// Wait for the gRPC transport to gracefully close to ensure no lost event.
+	te.cc.Close()
+	te.srv.GracefulStop()
+
+	deadline := time.Now().Add(defaultTestTimeout)
+	for time.Now().Before(deadline) {
+		validClientViews = false
+		validServerViews = false
+		validSpans = false
+		te.fe.mu.RLock()
+		if value, ok := te.fe.SeenViews["grpc.io/client/completed_rpcs"]; ok {
+			if value == TypeOpenCensusViewCount {
+				validClientViews = true
+			}
+		}
+		if value, ok := te.fe.SeenViews["grpc.io/server/completed_rpcs"]; ok {
+			if value == TypeOpenCensusViewCount {
+				validServerViews = true
+			}
+		}
+		if te.fe.SeenSpans > 0 {
+			validSpans = true
+		}
+		te.fe.mu.RUnlock()
+		if validClientViews && validServerViews && validSpans {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if !validClientViews || !validServerViews || !validSpans {
+		t.Fatalf("Invalid OpenCensus export data: validClientViews=%v validServerViews=%v validSpans=%v", validClientViews, validServerViews, validSpans)
 	}
 }

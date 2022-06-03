@@ -65,6 +65,11 @@ func Start(ctx context.Context) error {
 		return err
 	}
 
+	// Enabling tracing and metrics via OpenCensus
+	if err := startOpenCensus(config, nil); err != nil {
+		return err
+	}
+
 	// Logging is controlled by the config at methods level.
 	return defaultLogger.Start(ctx, config)
 }
