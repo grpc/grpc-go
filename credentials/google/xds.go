@@ -62,9 +62,6 @@ func isXDSNonCFECluster(ctx context.Context) bool {
 	if !ok || strings.HasPrefix(cn, cfeClusterNamePrefix) {
 		return false
 	}
-	if strings.HasPrefix(cn, cfeClusterNamePrefix) {
-		return false
-	}
 	if !strings.HasPrefix(cn, "xdstp:") {
 		return true
 	}
