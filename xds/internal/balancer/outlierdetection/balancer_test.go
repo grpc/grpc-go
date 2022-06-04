@@ -20,11 +20,11 @@ package outlierdetection
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
@@ -41,29 +41,22 @@ func Test(t *testing.T) {
 
 // TestParseConfig verifies the ParseConfig() method in the CDS balancer.
 func (s) TestParseConfig(t *testing.T) {
-	bb := balancer.Get(Name)
-	if bb == nil {
-		t.Fatalf("balancer.Get(%q) returned nil", Name)
-	}
-	parser, ok := bb.(balancer.ConfigParser)
-	if !ok {
-		t.Fatalf("balancer %q does not implement the ConfigParser interface", Name)
-	}
+	parser := bb{}
 
 	tests := []struct {
 		name    string
-		input   json.RawMessage
+		input   string
 		wantCfg serviceconfig.LoadBalancingConfig
-		wantErr bool
+		wantErr string
 	}{
 		{
 			name:    "noop-lb-config",
-			input:   json.RawMessage(`{"interval": 9223372036854775807}`),
+			input:   `{"interval": 9223372036854775807}`,
 			wantCfg: &LBConfig{Interval: 1<<63 - 1},
 		},
 		{
 			name: "good-lb-config",
-			input: json.RawMessage(`{
+			input: `{
 				"interval": 10000000000,
 				"baseEjectionTime": 30000000000,
 				"maxEjectionTime": 300000000000,
@@ -80,7 +73,7 @@ func (s) TestParseConfig(t *testing.T) {
 					"minimumHosts": 5,
 					"requestVolume": 50
 				}
-			}`),
+			}`,
 			wantCfg: &LBConfig{
 				Interval:           10 * time.Second,
 				BaseEjectionTime:   30 * time.Second,
@@ -102,54 +95,54 @@ func (s) TestParseConfig(t *testing.T) {
 		},
 		{
 			name:    "interval-is-negative",
-			input:   json.RawMessage(`{"interval": -10}`),
-			wantErr: true,
+			input:   `{"interval": -10}`,
+			wantErr: "LBConfig.Interval = -10ns; must be >= 0",
 		},
 		{
 			name:    "base-ejection-time-is-negative",
-			input:   json.RawMessage(`{"baseEjectionTime": -10}`),
-			wantErr: true,
+			input:   `{"baseEjectionTime": -10}`,
+			wantErr: "LBConfig.BaseEjectionTime = -10ns; must be >= 0",
 		},
 		{
 			name:    "max-ejection-time-is-negative",
-			input:   json.RawMessage(`{"maxEjectionTime": -10}`),
-			wantErr: true,
+			input:   `{"maxEjectionTime": -10}`,
+			wantErr: "LBConfig.MaxEjectionTime = -10ns; must be >= 0",
 		},
 		{
 			name:    "max-ejection-percent-is-greater-than-100",
-			input:   json.RawMessage(`{"maxEjectionPercent": 150}`),
-			wantErr: true,
+			input:   `{"maxEjectionPercent": 150}`,
+			wantErr: "LBConfig.MaxEjectionPercent = 150; must be <= 100",
 		},
 		{
-			name: "enforcing-success-rate-is-greater-than-100",
-			input: json.RawMessage(`{
+			name: "enforcement-percentage-success-rate-is-greater-than-100",
+			input: `{
 				"successRateEjection": {
-					"enforcingSuccessRate": 100,
-				},
-			}`),
-			wantErr: true,
+					"enforcementPercentage": 150
+				}
+			}`,
+			wantErr: "LBConfig.SuccessRateEjection.EnforcementPercentage = 150; must be <= 100",
 		},
 		{
 			name: "failure-percentage-threshold-is-greater-than-100",
-			input: json.RawMessage(`{
+			input: `{
 				"failurePercentageEjection": {
-					"threshold": 150,
-				},
-			}`),
-			wantErr: true,
+					"threshold": 150
+				}
+			}`,
+			wantErr: "LBConfig.FailurePercentageEjection.Threshold = 150; must be <= 100",
 		},
 		{
-			name: "enforcing-failure-percentage-is-greater-than-100",
-			input: json.RawMessage(`{
+			name: "enforcement-percentage-failure-percentage-ejection-is-greater-than-100",
+			input: `{
 				"failurePercentageEjection": {
-					"enforcingFailurePercentage": 150,
-				},
-			}`),
-			wantErr: true,
+					"enforcementPercentage": 150
+				}
+			}`,
+			wantErr: "LBConfig.FailurePercentageEjection.EnforcementPercentage = 150; must be <= 100",
 		},
 		{
 			name: "child-policy",
-			input: json.RawMessage(`{
+			input: `{
 				"childPolicy": [
 				{
 					"xds_cluster_impl_experimental": {
@@ -157,7 +150,7 @@ func (s) TestParseConfig(t *testing.T) {
 					}
 				}
 			]
-			}`),
+			}`,
 			wantCfg: &LBConfig{
 				ChildPolicy: &internalserviceconfig.BalancerConfig{
 					Name: "xds_cluster_impl_experimental",
@@ -170,11 +163,14 @@ func (s) TestParseConfig(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			gotCfg, gotErr := parser.ParseConfig(test.input)
-			if (gotErr != nil) != test.wantErr {
+			gotCfg, gotErr := parser.ParseConfig(json.RawMessage(test.input))
+			if gotErr != nil && !strings.Contains(gotErr.Error(), test.wantErr) {
 				t.Fatalf("ParseConfig(%v) = %v, wantErr %v", string(test.input), gotErr, test.wantErr)
 			}
-			if test.wantErr {
+			if (gotErr != nil) != (test.wantErr != "") {
+				t.Fatalf("ParseConfig(%v) = %v, wantErr %v", test.input, gotErr, test.wantErr)
+			}
+			if test.wantErr != "" {
 				return
 			}
 			if diff := cmp.Diff(gotCfg, test.wantCfg); diff != "" {

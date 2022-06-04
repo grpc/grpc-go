@@ -38,7 +38,7 @@ func init() {
 type bb struct{}
 
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
-	return &outlierDetectionBalancer{}
+	return nil
 }
 
 func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
@@ -95,27 +95,4 @@ func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 
 func (bb) Name() string {
 	return Name
-}
-
-type outlierDetectionBalancer struct {
-}
-
-func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	return nil
-}
-
-func (b *outlierDetectionBalancer) ResolverError(err error) {
-
-}
-
-func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
-
-}
-
-func (b *outlierDetectionBalancer) Close() {
-
-}
-
-func (b *outlierDetectionBalancer) ExitIdle() {
-
 }

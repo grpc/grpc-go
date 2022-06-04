@@ -130,14 +130,11 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			if err != nil {
 				return nil, nil, err
 			}
+			retConfig.Priorities = append(retConfig.Priorities, names...)
+			retAddrs = append(retAddrs, addrs...)
 			var odCfgs map[string]*outlierdetection.LBConfig
 			if envconfig.XDSOutlierDetection {
 				odCfgs = convertClusterImplMapToOutlierDetection(configs, p.mechanism.OutlierDetection)
-			}
-			retConfig.Priorities = append(retConfig.Priorities, names...)
-			retAddrs = append(retAddrs, addrs...)
-
-			if envconfig.XDSOutlierDetection {
 				for n, c := range odCfgs {
 					retConfig.Children[n] = &priority.Child{
 						Config: &internalserviceconfig.BalancerConfig{Name: outlierdetection.Name, Config: c},
@@ -157,13 +154,11 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			}
 		case DiscoveryMechanismTypeLogicalDNS:
 			name, config, addrs := buildClusterImplConfigForDNS(p.childNameGen, p.addresses, p.mechanism)
+			retConfig.Priorities = append(retConfig.Priorities, name)
+			retAddrs = append(retAddrs, addrs...)
 			var odCfg *outlierdetection.LBConfig
 			if envconfig.XDSOutlierDetection {
 				odCfg = makeClusterImplOutlierDetectionChild(*config, *p.mechanism.OutlierDetection)
-			}
-			retConfig.Priorities = append(retConfig.Priorities, name)
-			retAddrs = append(retAddrs, addrs...)
-			if envconfig.XDSOutlierDetection {
 				retConfig.Children[name] = &priority.Child{
 					Config: &internalserviceconfig.BalancerConfig{Name: outlierdetection.Name, Config: odCfg},
 					// Not ignore re-resolution from DNS children, they will trigger
@@ -184,7 +179,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 }
 
 func convertClusterImplMapToOutlierDetection(ciCfgs map[string]*clusterimpl.LBConfig, odCfg *outlierdetection.LBConfig) map[string]*outlierdetection.LBConfig {
-	odCfgs := make(map[string]*outlierdetection.LBConfig)
+	odCfgs := make(map[string]*outlierdetection.LBConfig, len(ciCfgs))
 	for n, c := range ciCfgs {
 		odCfgs[n] = makeClusterImplOutlierDetectionChild(*c, *odCfg)
 	}
