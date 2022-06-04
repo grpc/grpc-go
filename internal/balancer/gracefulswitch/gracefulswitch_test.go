@@ -846,10 +846,18 @@ func (s) TestExitIdle(t *testing.T) {
 	// switch to a balancer that doesn't implement ExitIdle{} (will populate
 	// pending).
 	gsb.SwitchTo(verifyBalancerBuilder{})
-	// ExitIdle{} for a balancer that doesn't implement ExitIdle{} will cause
-	// all the SubConns for the pendingBalancer to reconnect, no SubConns
-	// created for the pending so a no-op.
-	gsb.ExitIdle()
+	// call exitIdle concurrently with newSubConn to make sure there is not a
+	// data race.
+	done := make(chan struct{})
+	go func() {
+		gsb.ExitIdle()
+		close(done)
+	}()
+	pendBal := gsb.balancerPending.Balancer.(*verifyBalancer)
+	for i := 0; i < 10; i++ {
+		pendBal.newSubConn([]resolver.Address{}, balancer.NewSubConnOptions{})
+	}
+	<-done
 }
 
 const balancerName1 = "mock_balancer_1"
