@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
@@ -74,6 +75,46 @@ func startTestService(t *testing.T, server *stubserver.StubServer) (uint32, func
 }
 
 func (s) TestClientSideXDS(t *testing.T) {
+	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t)
+	defer cleanup1()
+
+	port, cleanup2 := startTestService(t, nil)
+	defer cleanup2()
+
+	const serviceName = "my-service-client-side-xds"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testgrpc.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+}
+
+func (s) TestOutlierDetection(t *testing.T) {
+	oldOD := envconfig.XDSOutlierDetection
+	envconfig.XDSOutlierDetection = true
+	defer func() {
+		envconfig.XDSOutlierDetection = oldOD
+	}()
+
 	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t)
 	defer cleanup1()
 
