@@ -122,6 +122,22 @@ func (s) TestClientHandshakeBasedOnClusterName(t *testing.T) {
 				// CFE should use tls.
 				wantTyp: "tls",
 			},
+			{
+				name: "with xdstp CFE cluster name",
+				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
+					Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, "xdstp://traffic-director-c2p.xds.googleapis.com/envoy.config.cluster.v3.Cluster/google_cfe_bigtable.googleapis.com").Attributes,
+				}),
+				// CFE should use tls.
+				wantTyp: "tls",
+			},
+			{
+				name: "with xdstp non-CFE cluster name",
+				ctx: icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
+					Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, "xdstp://other.com/envoy.config.cluster.v3.Cluster/google_cfe_bigtable.googleapis.com").Attributes,
+				}),
+				// non-CFE should use atls.
+				wantTyp: "alts",
+			},
 		}
 		for _, tt := range tests {
 			t.Run(bundleTyp+" "+tt.name, func(t *testing.T) {
