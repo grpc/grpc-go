@@ -27,10 +27,12 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/keys"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -129,9 +131,15 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		// We get here only if the data cache entry has expired. If entry is in
 		// backoff, delegate to default target or fail the pick.
 		if dcEntry.backoffState != nil && dcEntry.backoffTime.After(now) {
-			status := dcEntry.status
+			st := dcEntry.status
 			p.lb.cacheMu.RUnlock()
-			return p.useDefaultPickIfPossible(info, status)
+
+			// Avoid propagating the status code received on control plane RPCs to the
+			// data plane which can lead to unexpected outcomes as we do not control
+			// the status code sent by the control plane. Propagating the status
+			// message received from the control plane is still fine, as it could be
+			// useful for debugging purposes.
+			return p.useDefaultPickIfPossible(info, status.Error(codes.Unavailable, fmt.Sprintf("most recent error from RLS server: %v", st.Error())))
 		}
 
 		// We get here only if the entry has expired and is not in backoff.
@@ -220,7 +228,12 @@ func (p *rlsPicker) sendRequestAndReturnPick(cacheKey cacheKey, bs *backoffState
 
 	// Entry is in backoff. Delegate to default target or fail the pick.
 	case dcEntry.backoffState != nil && dcEntry.backoffTime.After(now):
-		return p.useDefaultPickIfPossible(info, dcEntry.status)
+		// Avoid propagating the status code received on control plane RPCs to the
+		// data plane which can lead to unexpected outcomes as we do not control
+		// the status code sent by the control plane. Propagating the status
+		// message received from the control plane is still fine, as it could be
+		// useful for debugging purposes.
+		return p.useDefaultPickIfPossible(info, status.Error(codes.Unavailable, fmt.Sprintf("most recent error from RLS server: %v", dcEntry.status.Error())))
 
 	// Entry has expired, but is not in backoff. Send request and queue pick.
 	default:

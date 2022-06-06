@@ -20,7 +20,6 @@ package rls
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -29,6 +28,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	rlstest "google.golang.org/grpc/internal/testutils/rls"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
@@ -512,7 +512,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntryInBackoff(t *testing.T
 
 			// Set up the fake RLS server to return errors. This will push the cache
 			// entry into backoff.
-			var rlsLastErr = errors.New("last RLS request failed")
+			var rlsLastErr = status.Error(codes.DeadlineExceeded, "last RLS request failed")
 			rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
 				return &rlstest.RouteLookupResponse{Err: rlsLastErr}
 			})
@@ -524,7 +524,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntryInBackoff(t *testing.T
 			if test.withDefaultTarget {
 				makeTestRPCAndExpectItToReachBackend(ctx, t, cc, defBackendCh)
 			} else {
-				makeTestRPCAndVerifyError(ctx, t, cc, codes.Unknown, rlsLastErr)
+				makeTestRPCAndVerifyError(ctx, t, cc, codes.Unavailable, rlsLastErr)
 			}
 		})
 	}
