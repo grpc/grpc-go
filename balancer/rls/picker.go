@@ -139,7 +139,7 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 			// the status code sent by the control plane. Propagating the status
 			// message received from the control plane is still fine, as it could be
 			// useful for debugging purposes.
-			return p.useDefaultPickIfPossible(info, status.Error(codes.Unavailable, st.Error()))
+			return p.useDefaultPickIfPossible(info, status.Error(codes.Unavailable, fmt.Sprintf("most recent error from RLS server: %v", st.Error())))
 		}
 
 		// We get here only if the entry has expired and is not in backoff.
@@ -233,7 +233,7 @@ func (p *rlsPicker) sendRequestAndReturnPick(cacheKey cacheKey, bs *backoffState
 		// the status code sent by the control plane. Propagating the status
 		// message received from the control plane is still fine, as it could be
 		// useful for debugging purposes.
-		return p.useDefaultPickIfPossible(info, status.Error(codes.Unavailable, dcEntry.status.Error()))
+		return p.useDefaultPickIfPossible(info, status.Error(codes.Unavailable, fmt.Sprintf("most recent error from RLS server: %v", dcEntry.status.Error())))
 
 	// Entry has expired, but is not in backoff. Send request and queue pick.
 	default:
