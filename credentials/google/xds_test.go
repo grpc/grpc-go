@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-func (s) TestIsXDSNonCFECluster(t *testing.T) {
+func (s) TestIsDirectPathCluster(t *testing.T) {
 	c := func(cluster string) context.Context {
 		return icredentials.NewClientHandshakeInfoContext(context.Background(), credentials.ClientHandshakeInfo{
 			Attributes: internal.SetXDSHandshakeClusterName(resolver.Address{}, cluster).Attributes,
@@ -50,8 +50,8 @@ func (s) TestIsXDSNonCFECluster(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := isXDSNonCFECluster(tc.ctx); got != tc.want {
-				t.Errorf("isXDSNonCFECluster(_) = %v; want %v", got, tc.want)
+			if got := isDirectPathCluster(tc.ctx); got != tc.want {
+				t.Errorf("isDirectPathCluster(_) = %v; want %v", got, tc.want)
 			}
 		})
 	}
