@@ -22,6 +22,7 @@ package outlierdetection
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"google.golang.org/grpc/balancer"
@@ -43,7 +44,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 
 func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
 	var lbCfg *LBConfig
-	if err := json.Unmarshal(s, &lbCfg); err != nil {
+	if err := json.Unmarshal(s, &lbCfg); err != nil { // Validates child config if present as well.
 		return nil, fmt.Errorf("xds: unable to unmarshal LBconfig: %s, error: %v", string(s), err)
 	}
 
@@ -90,6 +91,11 @@ func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 	if lbCfg.FailurePercentageEjection != nil && lbCfg.FailurePercentageEjection.EnforcementPercentage > 100 {
 		return nil, fmt.Errorf("LBConfig.FailurePercentageEjection.EnforcementPercentage = %v; must be <= 100", lbCfg.FailurePercentageEjection.EnforcementPercentage)
 	}
+
+	if lbCfg.ChildPolicy == nil {
+		return nil, errors.New("LBConfig.ChildPolicy needs to be present")
+	}
+
 	return lbCfg, nil
 }
 

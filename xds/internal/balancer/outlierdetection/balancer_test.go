@@ -20,11 +20,13 @@ package outlierdetection
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/serviceconfig"
@@ -50,9 +52,26 @@ func (s) TestParseConfig(t *testing.T) {
 		wantErr string
 	}{
 		{
-			name:    "noop-lb-config",
-			input:   `{"interval": 9223372036854775807}`,
-			wantCfg: &LBConfig{Interval: 1<<63 - 1},
+			name: "noop-lb-config",
+			input: `{
+				"interval": 9223372036854775807,
+				"childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
+				}
+				]
+			}`,
+			wantCfg: &LBConfig{
+				Interval: 1<<63 - 1,
+				ChildPolicy: &internalserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
+				},
+			},
 		},
 		{
 			name: "good-lb-config",
@@ -72,7 +91,14 @@ func (s) TestParseConfig(t *testing.T) {
 					"enforcementPercentage": 5,
 					"minimumHosts": 5,
 					"requestVolume": 50
+				},
+                "childPolicy": [
+				{
+					"xds_cluster_impl_experimental": {
+						"cluster": "test_cluster"
+					}
 				}
+				]
 			}`,
 			wantCfg: &LBConfig{
 				Interval:           10 * time.Second,
@@ -90,6 +116,12 @@ func (s) TestParseConfig(t *testing.T) {
 					EnforcementPercentage: 5,
 					MinimumHosts:          5,
 					RequestVolume:         50,
+				},
+				ChildPolicy: &internalserviceconfig.BalancerConfig{
+					Name: "xds_cluster_impl_experimental",
+					Config: &clusterimpl.LBConfig{
+						Cluster: "test_cluster",
+					},
 				},
 			},
 		},
@@ -141,6 +173,42 @@ func (s) TestParseConfig(t *testing.T) {
 			wantErr: "LBConfig.FailurePercentageEjection.EnforcementPercentage = 150; must be <= 100",
 		},
 		{
+			name: "child-policy-not-present",
+			input: `{
+				"interval": 10000000000,
+				"baseEjectionTime": 30000000000,
+				"maxEjectionTime": 300000000000,
+				"maxEjectionPercent": 10,
+				"successRateEjection": {
+					"stdevFactor": 1900,
+					"enforcementPercentage": 100,
+					"minimumHosts": 5,
+					"requestVolume": 100
+				},
+				"failurePercentageEjection": {
+					"threshold": 85,
+					"enforcementPercentage": 5,
+					"minimumHosts": 5,
+					"requestVolume": 50
+				}
+			}`,
+			wantErr: "LBConfig.ChildPolicy needs to be present",
+		},
+		{
+			name: "child-policy-present-but-parse-error",
+			input: `{
+				"interval": 9223372036854775807,
+				"childPolicy": [
+				{
+					"errParseConfigBalancer": {
+						"cluster": "test_cluster"
+					}
+				}
+			]
+			}`,
+			wantErr: "error parsing loadBalancingConfig for policy \"errParseConfigBalancer\"",
+		},
+		{
 			name: "child-policy",
 			input: `{
 				"childPolicy": [
@@ -185,4 +253,22 @@ func (lbc *LBConfig) Equal(lbc2 *LBConfig) bool {
 		return false
 	}
 	return cmp.Equal(lbc.ChildPolicy, lbc2.ChildPolicy)
+}
+
+func init() {
+	balancer.Register(errParseConfigBuilder{})
+}
+
+type errParseConfigBuilder struct{}
+
+func (errParseConfigBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return nil
+}
+
+func (errParseConfigBuilder) Name() string {
+	return "errParseConfigBalancer"
+}
+
+func (errParseConfigBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	return nil, errors.New("some error")
 }
