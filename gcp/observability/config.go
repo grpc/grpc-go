@@ -82,6 +82,9 @@ func parseObservabilityConfig() (*configpb.ObservabilityConfig, error) {
 		if err := validateFilters(&config); err != nil {
 			return nil, fmt.Errorf("error parsing observability config: %v", err)
 		}
+		if config.GlobalTraceSamplingRate > 1 || config.GlobalTraceSamplingRate < 0 {
+			return nil, fmt.Errorf("error parsing observability config: invalid global trace sampling rate %v", config.GlobalTraceSamplingRate)
+		}
 		logger.Infof("Parsed ObservabilityConfig: %+v", &config)
 		return &config, nil
 	}

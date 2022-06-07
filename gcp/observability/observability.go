@@ -45,11 +45,9 @@ func init() {
 //
 //   - it loads observability config from environment;
 //   - it registers default exporters if not disabled by the config;
-//   - it sets up binary logging sink against the logging exporter.
+//   - it sets up telemetry collectors (binary logging sink or StatsHandlers).
 //
 // Note: this method should only be invoked once.
-// Note: currently, the binarylog module only supports one sink, so using the
-// "observability" module will conflict with existing binarylog usage.
 // Note: handle the error
 func Start(ctx context.Context) error {
 	config, err := parseObservabilityConfig()
@@ -63,6 +61,11 @@ func Start(ctx context.Context) error {
 	// Set the project ID if it isn't configured manually.
 	if err := ensureProjectIDInObservabilityConfig(ctx, config); err != nil {
 		return err
+	}
+
+	// Enabling tracing and metrics via OpenCensus
+	if err := startOpenCensus(config, nil); err != nil {
+		return fmt.Errorf("failed to instrument OpenCensus: %v", err)
 	}
 
 	// Logging is controlled by the config at methods level.
