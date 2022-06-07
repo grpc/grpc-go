@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -436,6 +437,81 @@ func (s) TestUpdateClientConnState(t *testing.T) {
 		BalancerConfig: testClusterImplBalancerConfig{},
 	}); err != nil {
 		t.Fatalf("Error waiting for Client Conn update: %v", err)
+	}
+}
+
+// TestUpdateClientConnStateDifferentType invokes the UpdateClientConnState
+// method on the odBalancer with two different types and verifies that the child
+// balancer is built and updated properly on the first, and the second update
+// closes the child and builds a new one.
+func (s) TestUpdateClientConnStateDifferentType(t *testing.T) {
+	od, _ := setup(t)
+	defer od.Close() // this will leak a goroutine otherwise
+
+	od.UpdateClientConnState(balancer.ClientConnState{
+		BalancerConfig: &LBConfig{
+			Interval:           10 * time.Second,
+			BaseEjectionTime:   30 * time.Second,
+			MaxEjectionTime:    300 * time.Second,
+			MaxEjectionPercent: 10,
+			SuccessRateEjection: &SuccessRateEjection{
+				StdevFactor:           1900,
+				EnforcementPercentage: 100,
+				MinimumHosts:          5,
+				RequestVolume:         100,
+			},
+			FailurePercentageEjection: &FailurePercentageEjection{
+				Threshold:             85,
+				EnforcementPercentage: 5,
+				MinimumHosts:          5,
+				RequestVolume:         50,
+			},
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name:   tcibname,
+				Config: testClusterImplBalancerConfig{},
+			},
+		},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	ciChild := od.child.(*testClusterImplBalancer)
+	// The child balancer should be created and forwarded the ClientConn update
+	// from the first successful UpdateClientConnState call.
+	if err := ciChild.waitForClientConnUpdate(ctx, balancer.ClientConnState{
+		BalancerConfig: testClusterImplBalancerConfig{},
+	}); err != nil {
+		t.Fatalf("Error waiting for Client Conn update: %v", err)
+	}
+
+	od.UpdateClientConnState(balancer.ClientConnState{
+		BalancerConfig: &LBConfig{
+			Interval:           10 * time.Second,
+			BaseEjectionTime:   30 * time.Second,
+			MaxEjectionTime:    300 * time.Second,
+			MaxEjectionPercent: 10,
+			SuccessRateEjection: &SuccessRateEjection{
+				StdevFactor:           1900,
+				EnforcementPercentage: 100,
+				MinimumHosts:          5,
+				RequestVolume:         100,
+			},
+			FailurePercentageEjection: &FailurePercentageEjection{
+				Threshold:             85,
+				EnforcementPercentage: 5,
+				MinimumHosts:          5,
+				RequestVolume:         50,
+			},
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name:   verifyBalancerName,
+				Config: verifyBalancerConfig{},
+			},
+		},
+	})
+
+	// Verify previous child balancer closed.
+	if err := ciChild.waitForClose(ctx); err != nil {
+		t.Fatalf("Error waiting for Close() call on child balancer %v", err)
 	}
 }
 
@@ -1786,7 +1862,10 @@ func (s) TestConcurrentOperations(t *testing.T) {
 	}
 
 	finished := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
 			select {
 			case <-finished:
@@ -1803,7 +1882,9 @@ func (s) TestConcurrentOperations(t *testing.T) {
 		}
 	}()
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
 			select {
 			case <-finished:
@@ -1817,7 +1898,9 @@ func (s) TestConcurrentOperations(t *testing.T) {
 	// call Outlier Detection's balancer.ClientConn operations asynchrously.
 	// balancer.ClientConn operations have no guarantee from the API to be
 	// called synchronously.
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		for {
 			select {
 			case <-finished:
@@ -1834,15 +1917,21 @@ func (s) TestConcurrentOperations(t *testing.T) {
 		}
 	}()
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		od.NewSubConn([]resolver.Address{{Addr: "address4"}}, balancer.NewSubConnOptions{})
 	}()
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		od.RemoveSubConn(scw1)
 	}()
 
+	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		od.UpdateAddresses(scw2, []resolver.Address{
 			{
 				Addr: "address3",
@@ -1878,9 +1967,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 	od.ExitIdle()
 	od.Close()
 	close(finished)
-	// Do I need to wait for all the spawned goroutines to return here in this
-	// main testing goroutine? It works fine without a sync point, but I feel
-	// like other tests wait.
+	wg.Wait()
 }
 
 type verifyBalancerConfig struct {

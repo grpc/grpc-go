@@ -151,24 +151,12 @@ type outlierDetectionBalancer struct {
 	cc     balancer.ClientConn
 	bOpts  balancer.BuildOptions
 
-	// closeMu guards against run() reading a subconn update, reading that the
-	// child is not nil, and then a Close() call comes in, clears the balancer,
-	// and then run() continues to try and write the SubConn update to the
-	// child.
-	closeMu sync.Mutex
-	// child gets first written to on UpdateClientConnState and niled on Close.
-	// The only concurrent read that can happen is SubConnUpdates that are
-	// processed by run() (The rest of the child balancer calls are guaranteed
-	// to be called concurrently with Close(), as they are present in operations
-	// defined as part of the balancer.Balancer API.). This can only race with
-	// Close(), (child has to be built to receive SubConn updates) so protect
-	// SubConn updates and Close() with closeMu. nil checks on the child for
-	// forwarding updates are used as an invariant of the outlier detection
-	// balancer if it is closed.
-	child balancer.Balancer
-
-	// closeMu...canUpdateSubConnState cause close? If so move move niling to
-	// run(), and protect other reads with mu
+	// childMu protects child and also updates to the child (to uphold the
+	// balancer.Balancer API guarantee of synchronous calls). It also protects
+	// against run() reading that the child is not nil for SubConn updates, and
+	// then UpdateClientConnState or Close writing to the the child.
+	childMu sync.Mutex
+	child   balancer.Balancer
 
 	// mu guards access to a lot of the core LB Policy State. It also prevents
 	// intersplicing certain operations.
@@ -205,14 +193,19 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 	}
 
 	// Reject whole config if any errors, don't persist it for later
-	bb := balancer.Get(lbCfg.ChildPolicy.Name) // can nil panic, but child config already validated, (does parsing actually make sure child config is there?)
+	bb := balancer.Get(lbCfg.ChildPolicy.Name)
 	if bb == nil {
 		return fmt.Errorf("balancer %q not registered", lbCfg.ChildPolicy.Name)
 	}
 
-	if b.child == nil {
+	if b.child == nil || b.odCfg.ChildPolicy.Name != lbCfg.ChildPolicy.Name {
+		b.childMu.Lock()
+		if b.child != nil {
+			b.child.Close()
+		}
 		// What if this is nil? Seems fine
 		b.child = bb.Build(b, b.bOpts)
+		b.childMu.Unlock()
 	}
 
 	b.mu.Lock()
@@ -274,6 +267,8 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 	b.pickerUpdateCh.Put(lbCfg)
 
 	// then pass the address list along to the child policy.
+	b.childMu.Lock()
+	defer b.childMu.Unlock()
 	return b.child.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  s.ResolverState,
 		BalancerConfig: b.odCfg.ChildPolicy.Config,
@@ -282,6 +277,8 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 
 func (b *outlierDetectionBalancer) ResolverError(err error) {
 	if b.child != nil {
+		b.childMu.Lock()
+		defer b.childMu.Unlock()
 		b.child.ResolverError(err)
 	}
 }
@@ -307,11 +304,10 @@ func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state
 func (b *outlierDetectionBalancer) Close() {
 	b.closed.Fire()
 	if b.child != nil {
-		b.closeMu.Lock()
-		child := b.child
+		b.childMu.Lock()
+		b.child.Close()
 		b.child = nil
-		b.closeMu.Unlock()
-		child.Close()
+		b.childMu.Unlock()
 	}
 
 	// Any other cleanup needs to happen (subconns, other resources?)
@@ -327,13 +323,15 @@ func (b *outlierDetectionBalancer) ExitIdle() {
 		return
 	}
 	if ei, ok := b.child.(balancer.ExitIdler); ok {
+		b.childMu.Lock()
+		defer b.childMu.Unlock()
 		ei.ExitIdle()
 		return
 	}
-	// Fallback for children handled in clusterimpl balancer - do we ever
-	// validate that it's a clusterimpl child for the config? We should?
-	// Removing SubConns is defined in API and also in graceful switch balancer,
-	// but already done in ClusterImpl.
+
+	// Fallback for children handled in clusterimpl balancer Removing SubConns
+	// is defined in API and also in graceful switch balancer, but already done
+	// in ClusterImpl. I guess we should do that here?
 }
 
 // "The outlier_detection LB policy will provide a picker that delegates to the
@@ -670,11 +668,11 @@ func (b *outlierDetectionBalancer) run() {
 			case *scUpdate:
 				scw := u.scw
 				scw.latestState = u.state
-				b.closeMu.Lock()
+				b.childMu.Lock()
 				if !scw.ejected && b.child != nil {
-					b.child.UpdateSubConnState(scw, u.state) // can this call back and close, no close comes from higher level...unless UpdateSubConnState -> UpdateState -> Close(), that would cause deadlock
+					b.child.UpdateSubConnState(scw, u.state)
 				}
-				b.closeMu.Unlock()
+				b.childMu.Unlock()
 			case *ejectedUpdate:
 				scw := u.scw
 				scw.ejected = u.ejected
@@ -692,11 +690,11 @@ func (b *outlierDetectionBalancer) run() {
 					// along updates from the underlying subchannel."
 					stateToUpdate = scw.latestState // If this has never been written to will send connectivity IDLE which seems fine to me
 				}
-				b.closeMu.Lock()
+				b.childMu.Lock()
 				if b.child != nil {
 					b.child.UpdateSubConnState(scw, stateToUpdate)
 				}
-				b.closeMu.Unlock()
+				b.childMu.Unlock()
 			}
 		case update := <-b.pickerUpdateCh.Get():
 			b.pickerUpdateCh.Load()
@@ -706,7 +704,7 @@ func (b *outlierDetectionBalancer) run() {
 			switch u := update.(type) {
 			case balancer.State:
 				b.childState = u
-				b.mu.Lock() // Could make another mu that only protect the config to prevent this from blocking, but I think this is cleaner
+				b.mu.Lock()
 				noopCfg := b.noopConfig()
 				b.mu.Unlock()
 				b.recentPickerNoop = noopCfg
