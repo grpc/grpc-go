@@ -47,14 +47,11 @@ func startOpenCensus(config *configpb.ObservabilityConfig, exporter interface{})
 		return nil
 	}
 
-	var (
-		so  trace.StartOptions
-		err error
-	)
 	if exporter == nil {
 		// Create the Stackdriver exporter, which is shared between tracing and stats
 		mr := monitoredresource.Autodetect()
 		logger.Infof("Detected MonitoredResource:: %+v", mr)
+		var err error
 		if exporter, err = stackdriver.NewExporter(stackdriver.Options{
 			ProjectID:         config.DestinationProjectId,
 			MonitoredResource: mr,
@@ -63,6 +60,7 @@ func startOpenCensus(config *configpb.ObservabilityConfig, exporter interface{})
 		}
 	}
 
+	var so trace.StartOptions
 	if config.EnableCloudTrace {
 		so.Sampler = trace.ProbabilitySampler(config.GlobalTraceSamplingRate)
 		trace.RegisterExporter(exporter.(trace.Exporter))

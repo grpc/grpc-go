@@ -464,14 +464,10 @@ func (s) TestLoggingForErrorCall(t *testing.T) {
 	te.startServer(&testServer{})
 	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
-	var (
-		req *testpb.SimpleRequest
-		err error
-	)
-	req = &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testErrorPayload}}
+	req := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testErrorPayload}}
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err = tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testHeaderMetadata), req)
+	_, err := tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testHeaderMetadata), req)
 	if err == nil {
 		t.Fatalf("unary call expected to fail, but passed")
 	}
@@ -528,15 +524,10 @@ func (s) TestEmptyConfig(t *testing.T) {
 	te.startServer(&testServer{})
 	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
-	var (
-		resp *testpb.SimpleResponse
-		req  *testpb.SimpleRequest
-		err  error
-	)
-	req = &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}
+	req := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	resp, err = tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testHeaderMetadata), req)
+	resp, err := tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testHeaderMetadata), req)
 	if err != nil {
 		t.Fatalf("unary call failed: %v", err)
 	}
@@ -706,17 +697,11 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 	te.startServer(&testServer{})
 	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
-	var (
-		req *testpb.SimpleRequest
-		err error
-
-		validClientViews, validServerViews, validSpans bool
-	)
 	for i := 0; i < defaultRequestCount; i++ {
-		req = &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}
+		req := &testpb.SimpleRequest{Payload: &testpb.Payload{Body: testOkPayload}}
 		tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 		defer cancel()
-		_, err = tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testHeaderMetadata), req)
+		_, err := tc.UnaryCall(metadata.NewOutgoingContext(tCtx, testHeaderMetadata), req)
 		if err != nil {
 			t.Fatalf("unary call failed: %v", err)
 		}
@@ -727,32 +712,30 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 	te.cc.Close()
 	te.srv.GracefulStop()
 
-	deadline := time.Now().Add(defaultTestTimeout)
-	for time.Now().Before(deadline) {
-		validClientViews = false
-		validServerViews = false
-		validSpans = false
+	var clientViewsError, serverViewsError, spansError error
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	for ctx.Err() == nil {
+		clientViewsError = nil
+		serverViewsError = nil
+		spansError = nil
 		te.fe.mu.RLock()
-		if value, ok := te.fe.SeenViews["grpc.io/client/completed_rpcs"]; ok {
-			if value == TypeOpenCensusViewCount {
-				validClientViews = true
-			}
+		if value := te.fe.SeenViews["grpc.io/client/completed_rpcs"]; value != TypeOpenCensusViewCount {
+			clientViewsError = fmt.Errorf("unexpected type for grpc.io/client/completed_rpcs: %s != %s", value, TypeOpenCensusViewCount)
 		}
-		if value, ok := te.fe.SeenViews["grpc.io/server/completed_rpcs"]; ok {
-			if value == TypeOpenCensusViewCount {
-				validServerViews = true
-			}
+		if value := te.fe.SeenViews["grpc.io/server/completed_rpcs"]; value != TypeOpenCensusViewCount {
+			serverViewsError = fmt.Errorf("unexpected type for grpc.io/server/completed_rpcs: %s != %s", value, TypeOpenCensusViewCount)
 		}
-		if te.fe.SeenSpans > 0 {
-			validSpans = true
+		if te.fe.SeenSpans <= 0 {
+			spansError = fmt.Errorf("unexpected number of seen spans: %v <= 0", te.fe.SeenSpans)
 		}
 		te.fe.mu.RUnlock()
-		if validClientViews && validServerViews && validSpans {
+		if clientViewsError == nil && serverViewsError == nil && spansError == nil {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if !validClientViews || !validServerViews || !validSpans {
-		t.Fatalf("Invalid OpenCensus export data: validClientViews=%v validServerViews=%v validSpans=%v", validClientViews, validServerViews, validSpans)
+	if clientViewsError != nil || serverViewsError != nil || spansError != nil {
+		t.Fatalf("Invalid OpenCensus export data: clientViewsError=%v; serverViewsError=%v; spansError=%v", clientViewsError, serverViewsError, spansError)
 	}
 }
