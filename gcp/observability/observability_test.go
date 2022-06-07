@@ -712,30 +712,28 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 	te.cc.Close()
 	te.srv.GracefulStop()
 
-	var clientViewsError, serverViewsError, spansError error
+	var errs []error
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	for ctx.Err() == nil {
-		clientViewsError = nil
-		serverViewsError = nil
-		spansError = nil
+		errs = nil
 		te.fe.mu.RLock()
 		if value := te.fe.SeenViews["grpc.io/client/completed_rpcs"]; value != TypeOpenCensusViewCount {
-			clientViewsError = fmt.Errorf("unexpected type for grpc.io/client/completed_rpcs: %s != %s", value, TypeOpenCensusViewCount)
+			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/client/completed_rpcs: %s != %s", value, TypeOpenCensusViewCount))
 		}
 		if value := te.fe.SeenViews["grpc.io/server/completed_rpcs"]; value != TypeOpenCensusViewCount {
-			serverViewsError = fmt.Errorf("unexpected type for grpc.io/server/completed_rpcs: %s != %s", value, TypeOpenCensusViewCount)
+			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/server/completed_rpcs: %s != %s", value, TypeOpenCensusViewCount))
 		}
 		if te.fe.SeenSpans <= 0 {
-			spansError = fmt.Errorf("unexpected number of seen spans: %v <= 0", te.fe.SeenSpans)
+			errs = append(errs, fmt.Errorf("unexpected number of seen spans: %v <= 0", te.fe.SeenSpans))
 		}
 		te.fe.mu.RUnlock()
-		if clientViewsError == nil && serverViewsError == nil && spansError == nil {
+		if len(errs) == 0 {
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	if clientViewsError != nil || serverViewsError != nil || spansError != nil {
-		t.Fatalf("Invalid OpenCensus export data: clientViewsError=%v; serverViewsError=%v; spansError=%v", clientViewsError, serverViewsError, spansError)
+	if len(errs) != 0 {
+		t.Fatalf("Invalid OpenCensus export data: %v", errs)
 	}
 }
