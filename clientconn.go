@@ -1041,7 +1041,7 @@ func (cc *ClientConn) Close() error {
 	}
 
 	for ac := range conns {
-		ac.tearDown(ErrClientConnClosing)
+		cc.removeAddrConn(ac, ErrClientConnClosing)
 	}
 	ted := &channelz.TraceEventDesc{
 		Desc:     "Channel deleted",
