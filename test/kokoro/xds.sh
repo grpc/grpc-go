@@ -7,12 +7,6 @@ cd github
 
 export GOPATH="${HOME}/gopath"
 pushd grpc-go/interop/xds/client
-branch=$(git branch --all --no-color --contains "${KOKORO_GITHUB_COMMIT}" \
-    | grep -v HEAD | head -1)
-shopt -s extglob
-branch="${branch//[[:space:]]}"
-branch="${branch##remotes/origin/}"
-shopt -u extglob
 # Install a version of Go supported by gRPC for the new features, e.g.
 # errors.Is()
 curl --retry 3 -O -L https://go.dev/dl/go1.17.3.linux-amd64.tar.gz
@@ -22,7 +16,7 @@ sudo ln -s /usr/local/go/bin/go /usr/bin/go
 for i in 1 2 3; do go build && break || sleep 5; done
 popd
 
-git clone -b "${branch}" --single-branch --depth=1 https://github.com/grpc/grpc.git
+git clone -b master --single-branch --depth=1 https://github.com/grpc/grpc.git
 
 grpc/tools/run_tests/helper_scripts/prep_xds.sh
 
@@ -33,7 +27,7 @@ grpc/tools/run_tests/helper_scripts/prep_xds.sh
 # they are added into "all".
 GRPC_GO_LOG_VERBOSITY_LEVEL=99 GRPC_GO_LOG_SEVERITY_LEVEL=info \
   python3 grpc/tools/run_tests/run_xds_tests.py \
-    --test_case="all,circuit_breaking,timeout,fault_injection,csds" \
+    --test_case="ping_pong,circuit_breaking" \
     --project_id=grpc-testing \
     --project_num=830293263384 \
     --source_image=projects/grpc-testing/global/images/xds-test-server-5 \
@@ -48,4 +42,3 @@ GRPC_GO_LOG_VERBOSITY_LEVEL=99 GRPC_GO_LOG_SEVERITY_LEVEL=info \
       {fail_on_failed_rpc} \
       {rpcs_to_send} \
       {metadata_to_send}"
-
