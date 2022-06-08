@@ -58,7 +58,7 @@ func newCloudLoggingExporter(ctx context.Context, projectID string) (*cloudLoggi
 	return &cloudLoggingExporter{
 		projectID: projectID,
 		client:    c,
-		logger:    c.Logger("grpc", gcplogging.CommonLabels(customTags)),
+		logger:    c.Logger("microservices.googleapis.com/observability/grpc", gcplogging.CommonLabels(customTags)),
 	}, nil
 }
 
