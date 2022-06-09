@@ -1120,10 +1120,10 @@ func testAddrWithAttrs(addrStr string, weight *uint32, priority string, lID *int
 
 func TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 	tests := []struct {
-		name          string
-		ciCfgsMap     map[string]*clusterimpl.LBConfig
-		odCfg         *outlierdetection.LBConfig
-		odCfgsMapWant map[string]*outlierdetection.LBConfig
+		name       string
+		ciCfgsMap  map[string]*clusterimpl.LBConfig
+		odCfg      *outlierdetection.LBConfig
+		wantODCfgs map[string]*outlierdetection.LBConfig
 	}{
 		{
 			name: "single-entry-noop",
@@ -1135,7 +1135,7 @@ func TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 			odCfg: &outlierdetection.LBConfig{
 				Interval: 1<<63 - 1,
 			},
-			odCfgsMapWant: map[string]*outlierdetection.LBConfig{
+			wantODCfgs: map[string]*outlierdetection.LBConfig{
 				"child1": {
 					Interval: 1<<63 - 1,
 					ChildPolicy: &internalserviceconfig.BalancerConfig{
@@ -1160,7 +1160,7 @@ func TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 			odCfg: &outlierdetection.LBConfig{
 				Interval: 1<<63 - 1,
 			},
-			odCfgsMapWant: map[string]*outlierdetection.LBConfig{
+			wantODCfgs: map[string]*outlierdetection.LBConfig{
 				"child1": {
 					Interval: 1<<63 - 1,
 					ChildPolicy: &internalserviceconfig.BalancerConfig{
@@ -1185,7 +1185,7 @@ func TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			got := convertClusterImplMapToOutlierDetection(test.ciCfgsMap, test.odCfg)
-			if diff := cmp.Diff(got, test.odCfgsMapWant); diff != "" {
+			if diff := cmp.Diff(got, test.wantODCfgs); diff != "" {
 				t.Fatalf("convertClusterImplMapToOutlierDetection() diff(-got +want) %v", diff)
 			}
 		})

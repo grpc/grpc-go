@@ -30,12 +30,13 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedtarget"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
-	"google.golang.org/grpc/xds/internal"
+	xdsinternal "google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
 	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
@@ -61,7 +62,7 @@ var (
 		Localities: []xdsresource.Locality{
 			{
 				Endpoints: []xdsresource.Endpoint{{Address: "endpoint1"}},
-				ID:        internal.LocalityID{Zone: "zone"},
+				ID:        xdsinternal.LocalityID{Zone: "zone"},
 				Priority:  1,
 				Weight:    100,
 			},
@@ -534,6 +535,7 @@ func newLBConfigWithOneEDSAndOutlierDetection(edsServiceName string, odCfg *outl
 func (s) TestOutlierDetection(t *testing.T) {
 	oldOutlierDetection := envconfig.XDSOutlierDetection
 	envconfig.XDSOutlierDetection = true
+	internal.RegisterOutlierDetectionBalancerForTesting()
 	defer func() {
 		envconfig.XDSOutlierDetection = oldOutlierDetection
 	}()
@@ -575,7 +577,7 @@ func (s) TestOutlierDetection(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	localityID := internal.LocalityID{Zone: "zone"}
+	localityID := xdsinternal.LocalityID{Zone: "zone"}
 	// The priority configuration generated should have Outlier Detection as a
 	// direct child due to Outlier Detection being turned on.
 	pCfgWant := &priority.LBConfig{

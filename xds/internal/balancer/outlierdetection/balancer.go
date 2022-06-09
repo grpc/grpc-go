@@ -26,6 +26,8 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/serviceconfig"
 )
 
@@ -33,7 +35,16 @@ import (
 const Name = "outlier_detection_experimental"
 
 func init() {
-	balancer.Register(bb{})
+	if envconfig.XDSOutlierDetection {
+		balancer.Register(bb{})
+	}
+	// TODO: Remove these once the Outlier Detection env var is removed.
+	internal.RegisterOutlierDetectionBalancerForTesting = func() {
+		balancer.Register(bb{})
+	}
+	internal.UnregisterOutlierDetectionBalancerForTesting = func() {
+		internal.BalancerUnregister(Name)
+	}
 }
 
 type bb struct{}
@@ -56,44 +67,35 @@ func (bb) ParseConfig(s json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 	// method. "When parsing a config from JSON, if any of these requirements is
 	// violated, that should be treated as a parsing error." - A50
 
+	switch {
 	// "The google.protobuf.Duration fields interval, base_ejection_time, and
 	// max_ejection_time must obey the restrictions in the
 	// google.protobuf.Duration documentation and they must have non-negative
 	// values." - A50
-
 	// Approximately 290 years is the maximum time that time.Duration (int64)
 	// can represent. The restrictions on the protobuf.Duration field are to be
 	// within +-10000 years. Thus, just check for negative values.
-	if lbCfg.Interval < 0 {
-		return nil, fmt.Errorf("LBConfig.Interval = %v; must be >= 0", lbCfg.Interval)
-	}
-	if lbCfg.BaseEjectionTime < 0 {
-		return nil, fmt.Errorf("LBConfig.BaseEjectionTime = %v; must be >= 0", lbCfg.BaseEjectionTime)
-	}
-	if lbCfg.MaxEjectionTime < 0 {
-		return nil, fmt.Errorf("LBConfig.MaxEjectionTime = %v; must be >= 0", lbCfg.MaxEjectionTime)
-	}
-
+	case lbCfg.Interval < 0:
+		return nil, fmt.Errorf("OutlierDetectionLoadBalancingConfig.interval = %s; must be >= 0", lbCfg.Interval)
+	case lbCfg.BaseEjectionTime < 0:
+		return nil, fmt.Errorf("OutlierDetectionLoadBalancingConfig.base_ejection_time = %s; must be >= 0", lbCfg.BaseEjectionTime)
+	case lbCfg.MaxEjectionTime < 0:
+		return nil, fmt.Errorf("OutlierDetectionLoadBalancingConfig.max_ejection_time = %s; must be >= 0", lbCfg.MaxEjectionTime)
 	// "The fields max_ejection_percent,
 	// success_rate_ejection.enforcement_percentage,
 	// failure_percentage_ejection.threshold, and
 	// failure_percentage.enforcement_percentage must have values less than or
 	// equal to 100." - A50
-	if lbCfg.MaxEjectionPercent > 100 {
-		return nil, fmt.Errorf("LBConfig.MaxEjectionPercent = %v; must be <= 100", lbCfg.MaxEjectionPercent)
-	}
-	if lbCfg.SuccessRateEjection != nil && lbCfg.SuccessRateEjection.EnforcementPercentage > 100 {
-		return nil, fmt.Errorf("LBConfig.SuccessRateEjection.EnforcementPercentage = %v; must be <= 100", lbCfg.SuccessRateEjection.EnforcementPercentage)
-	}
-	if lbCfg.FailurePercentageEjection != nil && lbCfg.FailurePercentageEjection.Threshold > 100 {
-		return nil, fmt.Errorf("LBConfig.FailurePercentageEjection.Threshold = %v; must be <= 100", lbCfg.FailurePercentageEjection.Threshold)
-	}
-	if lbCfg.FailurePercentageEjection != nil && lbCfg.FailurePercentageEjection.EnforcementPercentage > 100 {
-		return nil, fmt.Errorf("LBConfig.FailurePercentageEjection.EnforcementPercentage = %v; must be <= 100", lbCfg.FailurePercentageEjection.EnforcementPercentage)
-	}
-
-	if lbCfg.ChildPolicy == nil {
-		return nil, errors.New("LBConfig.ChildPolicy needs to be present")
+	case lbCfg.MaxEjectionPercent > 100:
+		return nil, fmt.Errorf("OutlierDetectionLoadBalancingConfig.max_ejection_percent = %v; must be <= 100", lbCfg.MaxEjectionPercent)
+	case lbCfg.SuccessRateEjection != nil && lbCfg.SuccessRateEjection.EnforcementPercentage > 100:
+		return nil, fmt.Errorf("OutlierDetectionLoadBalancingConfig.SuccessRateEjection.enforcement_percentage = %v; must be <= 100", lbCfg.SuccessRateEjection.EnforcementPercentage)
+	case lbCfg.FailurePercentageEjection != nil && lbCfg.FailurePercentageEjection.Threshold > 100:
+		return nil, fmt.Errorf("OutlierDetectionLoadBalancingConfig.FailurePercentageEjection.threshold = %v; must be <= 100", lbCfg.FailurePercentageEjection.Threshold)
+	case lbCfg.FailurePercentageEjection != nil && lbCfg.FailurePercentageEjection.EnforcementPercentage > 100:
+		return nil, fmt.Errorf("OutlierDetectionLoadBalancingConfig.FailurePercentageEjection.enforcement_percentage = %v; must be <= 100", lbCfg.FailurePercentageEjection.EnforcementPercentage)
+	case lbCfg.ChildPolicy == nil:
+		return nil, errors.New("OutlierDetectionLoadBalancingConfig.child_policy must be present")
 	}
 
 	return lbCfg, nil

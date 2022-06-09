@@ -41,7 +41,8 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// TestParseConfig verifies the ParseConfig() method in the CDS balancer.
+// TestParseConfig verifies the ParseConfig() method in the Outlier Detection
+// Balancer.
 func (s) TestParseConfig(t *testing.T) {
 	parser := bb{}
 
@@ -128,22 +129,22 @@ func (s) TestParseConfig(t *testing.T) {
 		{
 			name:    "interval-is-negative",
 			input:   `{"interval": -10}`,
-			wantErr: "LBConfig.Interval = -10ns; must be >= 0",
+			wantErr: "OutlierDetectionLoadBalancingConfig.interval = -10ns; must be >= 0",
 		},
 		{
 			name:    "base-ejection-time-is-negative",
 			input:   `{"baseEjectionTime": -10}`,
-			wantErr: "LBConfig.BaseEjectionTime = -10ns; must be >= 0",
+			wantErr: "OutlierDetectionLoadBalancingConfig.base_ejection_time = -10ns; must be >= 0",
 		},
 		{
 			name:    "max-ejection-time-is-negative",
 			input:   `{"maxEjectionTime": -10}`,
-			wantErr: "LBConfig.MaxEjectionTime = -10ns; must be >= 0",
+			wantErr: "OutlierDetectionLoadBalancingConfig.max_ejection_time = -10ns; must be >= 0",
 		},
 		{
 			name:    "max-ejection-percent-is-greater-than-100",
 			input:   `{"maxEjectionPercent": 150}`,
-			wantErr: "LBConfig.MaxEjectionPercent = 150; must be <= 100",
+			wantErr: "OutlierDetectionLoadBalancingConfig.max_ejection_percent = 150; must be <= 100",
 		},
 		{
 			name: "enforcement-percentage-success-rate-is-greater-than-100",
@@ -152,7 +153,7 @@ func (s) TestParseConfig(t *testing.T) {
 					"enforcementPercentage": 150
 				}
 			}`,
-			wantErr: "LBConfig.SuccessRateEjection.EnforcementPercentage = 150; must be <= 100",
+			wantErr: "OutlierDetectionLoadBalancingConfig.SuccessRateEjection.enforcement_percentage = 150; must be <= 100",
 		},
 		{
 			name: "failure-percentage-threshold-is-greater-than-100",
@@ -161,7 +162,7 @@ func (s) TestParseConfig(t *testing.T) {
 					"threshold": 150
 				}
 			}`,
-			wantErr: "LBConfig.FailurePercentageEjection.Threshold = 150; must be <= 100",
+			wantErr: "OutlierDetectionLoadBalancingConfig.FailurePercentageEjection.threshold = 150; must be <= 100",
 		},
 		{
 			name: "enforcement-percentage-failure-percentage-ejection-is-greater-than-100",
@@ -170,7 +171,7 @@ func (s) TestParseConfig(t *testing.T) {
 					"enforcementPercentage": 150
 				}
 			}`,
-			wantErr: "LBConfig.FailurePercentageEjection.EnforcementPercentage = 150; must be <= 100",
+			wantErr: "OutlierDetectionLoadBalancingConfig.FailurePercentageEjection.enforcement_percentage = 150; must be <= 100",
 		},
 		{
 			name: "child-policy-not-present",
@@ -192,7 +193,7 @@ func (s) TestParseConfig(t *testing.T) {
 					"requestVolume": 50
 				}
 			}`,
-			wantErr: "LBConfig.ChildPolicy needs to be present",
+			wantErr: "OutlierDetectionLoadBalancingConfig.child_policy must be present",
 		},
 		{
 			name: "child-policy-present-but-parse-error",
@@ -207,6 +208,20 @@ func (s) TestParseConfig(t *testing.T) {
 			]
 			}`,
 			wantErr: "error parsing loadBalancingConfig for policy \"errParseConfigBalancer\"",
+		},
+		{
+			name: "no-supported-child-policy",
+			input: `{
+				"interval": 9223372036854775807,
+				"childPolicy": [
+				{
+					"doesNotExistBalancer": {
+						"cluster": "test_cluster"
+					}
+				}
+			]
+			}`,
+			wantErr: "invalid loadBalancingConfig: no supported policies found",
 		},
 		{
 			name: "child-policy",
@@ -233,7 +248,7 @@ func (s) TestParseConfig(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			gotCfg, gotErr := parser.ParseConfig(json.RawMessage(test.input))
 			if gotErr != nil && !strings.Contains(gotErr.Error(), test.wantErr) {
-				t.Fatalf("ParseConfig(%v) = %v, wantErr %v", string(test.input), gotErr, test.wantErr)
+				t.Fatalf("ParseConfig(%v) = %v, wantErr %v", test.input, gotErr, test.wantErr)
 			}
 			if (gotErr != nil) != (test.wantErr != "") {
 				t.Fatalf("ParseConfig(%v) = %v, wantErr %v", test.input, gotErr, test.wantErr)
