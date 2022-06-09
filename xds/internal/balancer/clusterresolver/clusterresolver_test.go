@@ -522,7 +522,7 @@ func newLBConfigWithOneEDS(edsServiceName string) *LBConfig {
 	}
 }
 
-func newLBConfigWithOneEDSAndOutlierDetection(edsServiceName string, odCfg *outlierdetection.LBConfig) *LBConfig {
+func newLBConfigWithOneEDSAndOutlierDetection(edsServiceName string, odCfg outlierdetection.LBConfig) *LBConfig {
 	lbCfg := newLBConfigWithOneEDS(edsServiceName)
 	lbCfg.DiscoveryMechanisms[0].OutlierDetection = odCfg
 	return lbCfg

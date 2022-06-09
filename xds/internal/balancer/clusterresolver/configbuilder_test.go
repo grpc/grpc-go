@@ -71,7 +71,7 @@ var (
 			return out
 		})}
 
-	noopODCfg = &outlierdetection.LBConfig{
+	noopODCfg = outlierdetection.LBConfig{
 		Interval: 1<<63 - 1,
 	}
 )
@@ -1122,7 +1122,7 @@ func TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 	tests := []struct {
 		name       string
 		ciCfgsMap  map[string]*clusterimpl.LBConfig
-		odCfg      *outlierdetection.LBConfig
+		odCfg      outlierdetection.LBConfig
 		wantODCfgs map[string]*outlierdetection.LBConfig
 	}{
 		{
@@ -1132,7 +1132,7 @@ func TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 					Cluster: "cluster1",
 				},
 			},
-			odCfg: &outlierdetection.LBConfig{
+			odCfg: outlierdetection.LBConfig{
 				Interval: 1<<63 - 1,
 			},
 			wantODCfgs: map[string]*outlierdetection.LBConfig{
@@ -1157,7 +1157,7 @@ func TestConvertClusterImplMapToOutlierDetection(t *testing.T) {
 					Cluster: "cluster2",
 				},
 			},
-			odCfg: &outlierdetection.LBConfig{
+			odCfg: outlierdetection.LBConfig{
 				Interval: 1<<63 - 1,
 			},
 			wantODCfgs: map[string]*outlierdetection.LBConfig{

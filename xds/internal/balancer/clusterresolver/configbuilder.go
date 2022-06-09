@@ -158,7 +158,7 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 			retAddrs = append(retAddrs, addrs...)
 			var odCfg *outlierdetection.LBConfig
 			if envconfig.XDSOutlierDetection {
-				odCfg = makeClusterImplOutlierDetectionChild(*config, p.mechanism.OutlierDetection)
+				odCfg = makeClusterImplOutlierDetectionChild(config, p.mechanism.OutlierDetection)
 				retConfig.Children[name] = &priority.Child{
 					Config: &internalserviceconfig.BalancerConfig{Name: outlierdetection.Name, Config: odCfg},
 					// Not ignore re-resolution from DNS children, they will trigger
@@ -178,21 +178,18 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 	return retConfig, retAddrs, nil
 }
 
-func convertClusterImplMapToOutlierDetection(ciCfgs map[string]*clusterimpl.LBConfig, odCfg *outlierdetection.LBConfig) map[string]*outlierdetection.LBConfig {
+func convertClusterImplMapToOutlierDetection(ciCfgs map[string]*clusterimpl.LBConfig, odCfg outlierdetection.LBConfig) map[string]*outlierdetection.LBConfig {
 	odCfgs := make(map[string]*outlierdetection.LBConfig, len(ciCfgs))
 	for n, c := range ciCfgs {
-		odCfgs[n] = makeClusterImplOutlierDetectionChild(*c, odCfg)
+		odCfgs[n] = makeClusterImplOutlierDetectionChild(c, odCfg)
 	}
 	return odCfgs
 }
 
-func makeClusterImplOutlierDetectionChild(ciCfg clusterimpl.LBConfig, odCfg *outlierdetection.LBConfig) *outlierdetection.LBConfig {
-	odCfgRet := &outlierdetection.LBConfig{}
-	if odCfg != nil {
-		*odCfgRet = *odCfg
-	}
-	odCfgRet.ChildPolicy = &internalserviceconfig.BalancerConfig{Name: clusterimpl.Name, Config: &ciCfg}
-	return odCfgRet
+func makeClusterImplOutlierDetectionChild(ciCfg *clusterimpl.LBConfig, odCfg outlierdetection.LBConfig) *outlierdetection.LBConfig {
+	odCfgRet := odCfg
+	odCfgRet.ChildPolicy = &internalserviceconfig.BalancerConfig{Name: clusterimpl.Name, Config: ciCfg}
+	return &odCfgRet
 }
 
 func buildClusterImplConfigForDNS(g *nameGenerator, addrStrs []string, mechanism DiscoveryMechanism) (string, *clusterimpl.LBConfig, []resolver.Address) {
