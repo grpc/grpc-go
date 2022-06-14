@@ -715,12 +715,13 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 // DoSoakTest runs large unary RPCs in a loop for a configurable number of times, with configurable failure thresholds.
 // If resetChannel is false, then each RPC will be performed on tc. Otherwise, each RPC will be performed on a new
 // stub that is created with the provided server address and dial options.
-func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, perIterationMaxAcceptableLatency time.Duration, overallDeadline time.Time) {
+func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, perIterationMaxAcceptableLatency time.Duration, minTimeBetweenRPRCs time.Duration, overallDeadline time.Time) {
 	start := time.Now()
 	ctx, cancel := context.WithDeadline(context.Background(), overallDeadline)
 	defer cancel()
 	iterationsDone := 0
 	totalFailures := 0
+	t := time.NewTicker(minTimeBetweenRPRCs)
 	hopts := stats.HistogramOptions{
 		NumBuckets:     20,
 		GrowthFactor:   1,
@@ -747,7 +748,11 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d succeeded\n", i, latencyMs)
+		select {
+		case <-t.C:
+		}
 	}
+	t.Stop()
 	var b bytes.Buffer
 	h.Print(&b)
 	fmt.Fprintln(os.Stderr, "Histogram of per-iteration latencies in milliseconds:")
