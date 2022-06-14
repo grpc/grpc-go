@@ -757,7 +757,9 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 			}
 		}
 	}
-	t.Stop()
+	if t != nil {
+		t.Stop()
+	}
 	var b bytes.Buffer
 	h.Print(&b)
 	fmt.Fprintln(os.Stderr, "Histogram of per-iteration latencies in milliseconds:")
