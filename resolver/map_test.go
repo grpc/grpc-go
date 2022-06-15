@@ -140,3 +140,24 @@ func (s) TestAddressMap_Keys(t *testing.T) {
 		t.Fatalf("addrMap.Keys returned unexpected elements (-want, +got):\n%v", d)
 	}
 }
+
+func (s) TestAddressMap_Values(t *testing.T) {
+	addrMap := NewAddressMap()
+	addrMap.Set(addr1, 1)
+	addrMap.Set(addr2, 2)
+	addrMap.Set(addr3, 3)
+	addrMap.Set(addr4, 4)
+	addrMap.Set(addr5, 5)
+	addrMap.Set(addr6, 6)
+	addrMap.Set(addr7, 7) // aliases addr1
+
+	want := []int{2, 3, 4, 5, 6, 7}
+	var got []int
+	for _, v := range addrMap.Values() {
+		got = append(got, v.(int))
+	}
+	sort.Ints(got)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("addrMap.Values returned unexpected elements (-want, +got):\n%v", diff)
+	}
+}

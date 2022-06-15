@@ -41,12 +41,8 @@ func NewAddressMap() *AddressMap {
 // find returns the index of addr in the addressMapEntry slice, or -1 if not
 // present.
 func (l addressMapEntryList) find(addr Address) int {
-	if len(l) == 0 {
-		return -1
-	}
 	for i, entry := range l {
-		if entry.addr.ServerName == addr.ServerName &&
-			entry.addr.Attributes.Equal(addr.Attributes) {
+		if entry.addr.equalWithAttributes(addr) {
 			return i
 		}
 	}
@@ -66,10 +62,10 @@ func (a *AddressMap) Get(addr Address) (value interface{}, ok bool) {
 func (a *AddressMap) Set(addr Address, value interface{}) {
 	entryList := a.m[addr.Addr]
 	if entry := entryList.find(addr); entry != -1 {
-		a.m[addr.Addr][entry].value = value
+		entryList[entry].value = value
 		return
 	}
-	a.m[addr.Addr] = append(a.m[addr.Addr], &addressMapEntry{addr: addr, value: value})
+	a.m[addr.Addr] = append(entryList, &addressMapEntry{addr: addr, value: value})
 }
 
 // Delete removes addr from the map.
@@ -103,6 +99,17 @@ func (a *AddressMap) Keys() []Address {
 	for _, entryList := range a.m {
 		for _, entry := range entryList {
 			ret = append(ret, entry.addr)
+		}
+	}
+	return ret
+}
+
+// Values returns a slice of all current map values.
+func (a *AddressMap) Values() []interface{} {
+	ret := make([]interface{}, 0, a.Len())
+	for _, entryList := range a.m {
+		for _, entry := range entryList {
+			ret = append(ret, entry.value)
 		}
 	}
 	return ret
