@@ -91,11 +91,34 @@ type serviceUpdateWatcher struct {
 }
 
 func (w *serviceUpdateWatcher) handleLDSResp(update xdsresource.ListenerUpdate, err error) {
+	w.processLDSResp(update, err)
+
+	w.mu.Lock()
+	if w.rdsCancel != nil {
+		w.rdsCancel()
+	}
+	w.mu.Unlock()
+
+	// WatchRouteConfig could invoke handleRDSResp inline if it cannot find a
+	// matching authority from the bootstrap configuration for the one specified
+	// in the given RDS resource name. Therefore, we cannot call it while still
+	// holding the lock (the acquisition of this lock is the first step in
+	// handleRDSResp).
+	rdsCancel := w.c.WatchRouteConfig(update.RouteConfigName, w.handleRDSResp)
+
+	w.mu.Lock()
+	w.rdsCancel = rdsCancel
+	w.mu.Unlock()
+}
+
+// processLDSResp processes a ListenerUpdate and updates corresponding internal
+// state. The return value indicates whether an RDS watch is to be started.
+func (w *serviceUpdateWatcher) processLDSResp(update xdsresource.ListenerUpdate, err error) bool {
 	w.logger.Infof("received LDS update: %+v, err: %v", pretty.ToJSON(update), err)
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.closed {
-		return
+		return false
 	}
 	if err != nil {
 		// We check the error type and do different things. For now, the only
@@ -111,7 +134,7 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsresource.ListenerUpdate, 
 		// The other error cases still return early without canceling the
 		// existing RDS watch.
 		w.serviceCb(serviceUpdate{}, err)
-		return
+		return false
 	}
 
 	w.lastUpdate.ldsConfig = ldsConfig{
@@ -129,7 +152,7 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsresource.ListenerUpdate, 
 
 		// Handle the inline RDS update as if it's from an RDS watch.
 		w.applyRouteConfigUpdate(*update.InlineRouteConfig)
-		return
+		return false
 	}
 
 	// RDS name from update is not an empty string, need RDS to fetch the
@@ -150,13 +173,10 @@ func (w *serviceUpdateWatcher) handleLDSResp(update xdsresource.ListenerUpdate, 
 			// which means an RDS was received.
 			w.serviceCb(w.lastUpdate, nil)
 		}
-		return
+		return false
 	}
 	w.rdsName = update.RouteConfigName
-	if w.rdsCancel != nil {
-		w.rdsCancel()
-	}
-	w.rdsCancel = w.c.WatchRouteConfig(update.RouteConfigName, w.handleRDSResp)
+	return true
 }
 
 func (w *serviceUpdateWatcher) applyRouteConfigUpdate(update xdsresource.RouteConfigUpdate) {

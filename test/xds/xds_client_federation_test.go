@@ -21,6 +21,7 @@ package xds_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
@@ -137,5 +138,110 @@ func (s) TestClientSideFederation(t *testing.T) {
 	client := testgrpc.NewTestServiceClient(cc)
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+}
+
+func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
+	oldXDSFederation := envconfig.XDSFederation
+	envconfig.XDSFederation = true
+	defer func() { envconfig.XDSFederation = oldXDSFederation }()
+
+	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t)
+	defer cleanup1()
+
+	port, cleanup2 := startTestService(t, nil)
+	defer cleanup2()
+
+	const serviceName = "my-service-client-side-xds"
+	resources := e2e.DefaultClientResources(e2e.ResourceParams{
+		DialTarget: serviceName,
+		NodeID:     nodeID,
+		Host:       "localhost",
+		Port:       port,
+		SecLevel:   e2e.SecurityLevelNone,
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := managementServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testpb.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+
+	_, err = grpc.Dial(fmt.Sprintf("xds://unknown-authority/%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	if err == nil || !strings.Contains(err.Error(), `authority "unknown-authority" is not found in the bootstrap file`) {
+		t.Fatal("grpc.Dial() for target with unknown authority succeeded")
+	}
+}
+
+func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
+	oldXDSFederation := envconfig.XDSFederation
+	envconfig.XDSFederation = true
+	defer func() { envconfig.XDSFederation = oldXDSFederation }()
+
+	// Start a management server as the default authority.
+	mgmtServer, err := e2e.StartManagementServer()
+	if err != nil {
+		t.Fatalf("Failed to spin up the xDS management server: %v", err)
+	}
+	t.Cleanup(mgmtServer.Stop)
+
+	// Create a bootstrap file in a temporary directory.
+	nodeID := uuid.New().String()
+	bootstrapContents, err := xdsinternal.BootstrapContents(xdsinternal.BootstrapOptions{
+		Version:                            xdsinternal.TransportV3,
+		NodeID:                             nodeID,
+		ServerURI:                          mgmtServer.Address,
+		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap file: %v", err)
+	}
+
+	resolverBuilder := internal.NewXDSResolverWithConfigForTesting.(func([]byte) (resolver.Builder, error))
+	resolver, err := resolverBuilder(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+	}
+
+	// LDS is old style name.
+	// RDS is new style, with an unknown authority.
+	const serviceName = "my-service-client-side-xds"
+	const unknownAuthority = "unknown-authority"
+	ldsName := serviceName
+	rdsName := fmt.Sprintf("xdstp:///envoy.config.route.v3.RouteConfiguration/%s/%s", unknownAuthority, "route-"+serviceName)
+
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, ldsName, "cluster-"+serviceName)},
+		SkipValidation: true, // This update has only LDS and RDS resources.
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a ClientConn and make a successful RPC.
+	cc, err := grpc.Dial(fmt.Sprintf("xds:///%s", serviceName), grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+	if err != nil {
+		t.Fatalf("failed to dial local test server: %v", err)
+	}
+	defer cc.Close()
+
+	client := testpb.NewTestServiceClient(cc)
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+		t.Fatal("rpc EmptyCall() succeeded when expected to fail")
 	}
 }
