@@ -147,12 +147,6 @@ func (a Address) Equal(o Address) bool {
 		a.Type == o.Type && a.Metadata == o.Metadata
 }
 
-// equalWithAttributes is a limited comparison operation where select fields of
-// Address are used to decide if a and o are identical.
-func (a Address) equalWithAttributes(o Address) bool {
-	return a.Addr == o.Addr && a.ServerName == o.ServerName && a.Attributes.Equal(o.Attributes)
-}
-
 // String returns JSON formatted string representation of the address.
 func (a Address) String() string {
 	return pretty.ToJSON(a)
