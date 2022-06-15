@@ -24,7 +24,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestParseConfig(t *testing.T) {
+func (s) TestParseConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		js      string

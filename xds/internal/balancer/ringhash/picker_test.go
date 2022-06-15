@@ -46,7 +46,7 @@ func newTestRing(cStats []connectivity.State) *ring {
 	return &ring{items: items}
 }
 
-func TestPickerPickFirstTwo(t *testing.T) {
+func (s) TestPickerPickFirstTwo(t *testing.T) {
 	tests := []struct {
 		name            string
 		ring            *ring
@@ -121,7 +121,7 @@ func TestPickerPickFirstTwo(t *testing.T) {
 // TestPickerPickTriggerTFConnect covers that if the picked SubConn is
 // TransientFailures, all SubConns until a non-TransientFailure are queued for
 // Connect().
-func TestPickerPickTriggerTFConnect(t *testing.T) {
+func (s) TestPickerPickTriggerTFConnect(t *testing.T) {
 	ring := newTestRing([]connectivity.State{
 		connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure,
 		connectivity.Idle, connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure,
@@ -152,7 +152,7 @@ func TestPickerPickTriggerTFConnect(t *testing.T) {
 // TestPickerPickTriggerTFReturnReady covers that if the picked SubConn is
 // TransientFailure, SubConn 2 and 3 are TransientFailure, 4 is Ready. SubConn 2
 // and 3 will Connect(), and 4 will be returned.
-func TestPickerPickTriggerTFReturnReady(t *testing.T) {
+func (s) TestPickerPickTriggerTFReturnReady(t *testing.T) {
 	ring := newTestRing([]connectivity.State{
 		connectivity.TransientFailure, connectivity.TransientFailure, connectivity.TransientFailure, connectivity.Ready,
 	})
@@ -178,7 +178,7 @@ func TestPickerPickTriggerTFReturnReady(t *testing.T) {
 // TransientFailure, SubConn 2 is TransientFailure, 3 is Idle (init Idle). Pick
 // will be queue, SubConn 3 will Connect(), SubConn 4 and 5 (in TransientFailre)
 // will not queue a Connect.
-func TestPickerPickTriggerTFWithIdle(t *testing.T) {
+func (s) TestPickerPickTriggerTFWithIdle(t *testing.T) {
 	ring := newTestRing([]connectivity.State{
 		connectivity.TransientFailure, connectivity.TransientFailure, connectivity.Idle, connectivity.TransientFailure, connectivity.TransientFailure,
 	})
@@ -211,7 +211,7 @@ func TestPickerPickTriggerTFWithIdle(t *testing.T) {
 	}
 }
 
-func TestNextSkippingDuplicatesNoDup(t *testing.T) {
+func (s) TestNextSkippingDuplicatesNoDup(t *testing.T) {
 	testRing := newTestRing([]connectivity.State{connectivity.Idle, connectivity.Idle})
 	tests := []struct {
 		name string
@@ -265,7 +265,7 @@ func addDups(r *ring, count int) *ring {
 	return &ring{items: items}
 }
 
-func TestNextSkippingDuplicatesMoreDup(t *testing.T) {
+func (s) TestNextSkippingDuplicatesMoreDup(t *testing.T) {
 	testRing := newTestRing([]connectivity.State{connectivity.Idle, connectivity.Idle})
 	// Make a new ring with duplicate SubConns.
 	dupTestRing := addDups(testRing, 3)
@@ -274,7 +274,7 @@ func TestNextSkippingDuplicatesMoreDup(t *testing.T) {
 	}
 }
 
-func TestNextSkippingDuplicatesOnlyDup(t *testing.T) {
+func (s) TestNextSkippingDuplicatesOnlyDup(t *testing.T) {
 	testRing := newTestRing([]connectivity.State{connectivity.Idle})
 	// Make a new ring with only duplicate SubConns.
 	dupTestRing := addDups(testRing, 3)
