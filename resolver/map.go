@@ -44,6 +44,10 @@ type AddressMap struct {
 	m map[Address]addressMapEntryList
 }
 
+func toMapKey(addr *Address) Address {
+	return Address{Addr: addr.Addr, ServerName: addr.ServerName}
+}
+
 type addressMapEntryList []*addressMapEntry
 
 // NewAddressMap creates a new AddressMap.
@@ -66,7 +70,7 @@ func (l addressMapEntryList) find(addr Address) int {
 
 // Get returns the value for the address in the map, if present.
 func (a *AddressMap) Get(addr Address) (value interface{}, ok bool) {
-	addrKey := Address{Addr: addr.Addr, ServerName: addr.ServerName}
+	addrKey := toMapKey(&addr)
 	entryList := a.m[addrKey]
 	if entry := entryList.find(addr); entry != -1 {
 		return entryList[entry].value, true
@@ -76,7 +80,7 @@ func (a *AddressMap) Get(addr Address) (value interface{}, ok bool) {
 
 // Set updates or adds the value to the address in the map.
 func (a *AddressMap) Set(addr Address, value interface{}) {
-	addrKey := Address{Addr: addr.Addr, ServerName: addr.ServerName}
+	addrKey := toMapKey(&addr)
 	entryList := a.m[addrKey]
 	if entry := entryList.find(addr); entry != -1 {
 		entryList[entry].value = value
@@ -87,7 +91,7 @@ func (a *AddressMap) Set(addr Address, value interface{}) {
 
 // Delete removes addr from the map.
 func (a *AddressMap) Delete(addr Address) {
-	addrKey := Address{Addr: addr.Addr, ServerName: addr.ServerName}
+	addrKey := toMapKey(&addr)
 	entryList := a.m[addrKey]
 	entry := entryList.find(addr)
 	if entry == -1 {
