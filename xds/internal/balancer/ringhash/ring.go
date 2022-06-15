@@ -43,8 +43,8 @@ type ringEntry struct {
 	sc   *subConn
 }
 
-// newRing creates a ring from the subConns. The ring size is limited by the
-// passed in max/min.
+// newRing creates a ring from the subConns stored in the AddressMap. The ring
+// size is limited by the passed in max/min.
 //
 // ring entries will be created for each subConn, and subConn with high weight
 // (specified by the address) may have multiple entries.
@@ -64,7 +64,7 @@ type ringEntry struct {
 //
 // To pick from a ring, a binary search will be done for the given target hash,
 // and first item with hash >= given hash will be returned.
-func newRing(subConns map[resolver.Address]*subConn, minRingSize, maxRingSize uint64) (*ring, error) {
+func newRing(subConns *resolver.AddressMap, minRingSize, maxRingSize uint64) (*ring, error) {
 	// https://github.com/envoyproxy/envoy/blob/765c970f06a4c962961a0e03a467e165b276d50f/source/common/upstream/ring_hash_lb.cc#L114
 	normalizedWeights, minWeight, err := normalizeWeights(subConns)
 	if err != nil {
@@ -111,26 +111,27 @@ func newRing(subConns map[resolver.Address]*subConn, minRingSize, maxRingSize ui
 
 // normalizeWeights divides all the weights by the sum, so that the total weight
 // is 1.
-func normalizeWeights(subConns map[resolver.Address]*subConn) (_ []subConnWithWeight, min float64, _ error) {
-	if len(subConns) == 0 {
+func normalizeWeights(subConns *resolver.AddressMap) (_ []subConnWithWeight, min float64, _ error) {
+	if subConns.Len() == 0 {
 		return nil, 0, fmt.Errorf("number of subconns is 0")
 	}
 	var weightSum uint32
-	for a := range subConns {
-		// The address weight was moved from attributes to the Metadata field.
-		// This is necessary (all the attributes need to be stripped) for the
-		// balancer to detect identical {address+weight} combination.
-		weightSum += a.Metadata.(uint32)
+	for _, a := range subConns.Keys() {
+		// The address weight was moved from `BalancerAttributes` field to the
+		// `Attributes` field in `updateAddresses()` method.
+		weightSum += getWeightAttribute(a)
 	}
 	if weightSum == 0 {
 		return nil, 0, fmt.Errorf("total weight of all subconns is 0")
 	}
 	weightSumF := float64(weightSum)
-	ret := make([]subConnWithWeight, 0, len(subConns))
+	ret := make([]subConnWithWeight, 0, subConns.Len())
 	min = math.MaxFloat64
-	for a, sc := range subConns {
-		nw := float64(a.Metadata.(uint32)) / weightSumF
-		ret = append(ret, subConnWithWeight{sc: sc, weight: nw})
+	for _, a := range subConns.Keys() {
+		v, _ := subConns.Get(a)
+		scInfo := v.(*subConn)
+		nw := float64(getWeightAttribute(a)) / weightSumF
+		ret = append(ret, subConnWithWeight{sc: scInfo, weight: nw})
 		if nw < min {
 			min = nw
 		}

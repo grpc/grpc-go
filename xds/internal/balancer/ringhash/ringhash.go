@@ -47,7 +47,7 @@ type bb struct{}
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &ringhashBalancer{
 		cc:       cc,
-		subConns: make(map[resolver.Address]*subConn),
+		subConns: resolver.NewAddressMap(),
 		scStates: make(map[balancer.SubConn]*subConn),
 		csEvltr:  &connectivityStateEvaluator{},
 	}
@@ -180,7 +180,18 @@ type ringhashBalancer struct {
 
 	config *LBConfig
 
-	subConns map[resolver.Address]*subConn // `attributes` is stripped from the keys of this map (the addresses)
+	// The key for this map is a resolver.Address with the following
+	// modification:
+	//  - `Attributes` field is cleared and rewritten with a single attribute
+	//     containing the weight of the address. The `AddressMap` type uses the
+	//     `Attributes` field to determine equality, but ignores the
+	//     `BalancerAttributes` field. Hence, we copy over the weight of the
+	//     address from the latter to the former.
+	// The ringhash LB policy is concerned only with the address value and its
+	// weight, when comparing addresses received as part of a ClientConnUpdate.
+	//
+	// The value type stored in this map is a `*subConn`.
+	subConns *resolver.AddressMap
 	scStates map[balancer.SubConn]*subConn
 
 	// ring is always in sync with subConns. When subConns change, a new ring is
@@ -208,39 +219,33 @@ type ringhashBalancer struct {
 // SubConn states are Idle.
 func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 	var addrsUpdated bool
-	// addrsSet is the set converted from addrs, it's used for quick lookup of
-	// an address.
-	//
-	// Addresses in this map all have attributes stripped, but metadata set to
-	// the weight. So that weight change can be detected.
-	//
-	// TODO: this won't be necessary if there are ways to compare address
-	// attributes.
-	addrsSet := make(map[resolver.Address]struct{})
-	for _, a := range addrs {
-		aNoAttrs := a
-		// Strip attributes but set Metadata to the weight.
-		aNoAttrs.Attributes = nil
-		w := weightedroundrobin.GetAddrInfo(a).Weight
-		if w == 0 {
+	// addrsSet is the set converted from addrs, it's used for quick lookup of an
+	// address. Key type here is the same as that of the `subConns` map.
+	addrsSet := resolver.NewAddressMap()
+	for _, addr := range addrs {
+		addrInfo := weightedroundrobin.GetAddrInfo(addr)
+		if addrInfo.Weight == 0 {
+
 			// If weight is not set, use 1.
-			w = 1
+			addrInfo.Weight = 1
 		}
-		aNoAttrs.Metadata = w
-		addrsSet[aNoAttrs] = struct{}{}
-		if scInfo, ok := b.subConns[aNoAttrs]; !ok {
+		modifiedAddr := addr
+		modifiedAddr.Attributes = nil
+		modifiedAddr = setWeightAttribute(modifiedAddr, addrInfo.Weight)
+		addrsSet.Set(modifiedAddr, true)
+		if val, ok := b.subConns.Get(modifiedAddr); !ok {
 			// When creating SubConn, the original address with attributes is
 			// passed through. So that connection configurations in attributes
 			// (like creds) will be used.
-			sc, err := b.cc.NewSubConn([]resolver.Address{a}, balancer.NewSubConnOptions{HealthCheckEnabled: true})
+			sc, err := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{HealthCheckEnabled: true})
 			if err != nil {
 				logger.Warningf("base.baseBalancer: failed to create new SubConn: %v", err)
 				continue
 			}
-			scs := &subConn{addr: a.Addr, sc: sc}
+			scs := &subConn{addr: addr.Addr, sc: sc}
 			scs.setState(connectivity.Idle)
 			b.state = b.csEvltr.recordTransition(connectivity.Shutdown, connectivity.Idle)
-			b.subConns[aNoAttrs] = scs
+			b.subConns.Set(modifiedAddr, scs)
 			b.scStates[sc] = scs
 			addrsUpdated = true
 		} else {
@@ -248,15 +253,17 @@ func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 			// changed. The SubConn does a reflect.DeepEqual of the new and old
 			// addresses. So this is a noop if the current address is the same
 			// as the old one (including attributes).
-			b.subConns[aNoAttrs] = scInfo
-			b.cc.UpdateAddresses(scInfo.sc, []resolver.Address{a})
+			scInfo := val.(*subConn)
+			b.cc.UpdateAddresses(scInfo.sc, []resolver.Address{addr})
 		}
 	}
-	for a, scInfo := range b.subConns {
-		// a was removed by resolver.
-		if _, ok := addrsSet[a]; !ok {
+	for _, addr := range b.subConns.Keys() {
+		// addr was removed by resolver.
+		if _, ok := addrsSet.Get(addr); !ok {
+			v, _ := b.subConns.Get(addr)
+			scInfo := v.(*subConn)
 			b.cc.RemoveSubConn(scInfo.sc)
-			delete(b.subConns, a)
+			b.subConns.Delete(addr)
 			addrsUpdated = true
 			// Keep the state of this sc in b.scStates until sc's state becomes Shutdown.
 			// The entry will be deleted in UpdateSubConnState.
@@ -304,7 +311,7 @@ func (b *ringhashBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 
 func (b *ringhashBalancer) ResolverError(err error) {
 	b.resolverErr = err
-	if len(b.subConns) == 0 {
+	if b.subConns.Len() == 0 {
 		b.state = connectivity.TransientFailure
 	}
 
@@ -392,7 +399,8 @@ func (b *ringhashBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 		// attempting to connect, we need to trigger one. But since the deleted
 		// SubConn will eventually send a shutdown update, this code will run
 		// and trigger the next SubConn to connect.
-		for _, sc := range b.subConns {
+		for _, v := range b.subConns.Values() {
+			sc := v.(*subConn)
 			if sc.isAttemptingToConnect() {
 				return
 			}
