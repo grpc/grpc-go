@@ -54,7 +54,7 @@ func SetAddrInfo(addr resolver.Address, addrInfo AddrInfo) resolver.Address {
 	return addr
 }
 
-// GetAddrInfo returns the AddrInfo stored in the BalancerAttributes fields of
+// GetAddrInfo returns the AddrInfo stored in the BalancerAttributes field of
 // addr.
 //
 // Experimental
