@@ -136,13 +136,15 @@ func (s) TestDropByCategory(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	// This should get the connecting picker.
-	cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable)
+	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
+		t.Fatal(err.Error())
+	}
 
 	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
 
 	const rpcCount = 20
-	cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
 		for i := 0; i < rpcCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
 			// Even RPCs are dropped.
@@ -160,7 +162,9 @@ func (s) TestDropByCategory(t *testing.T) {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err.Error())
+	}
 
 	// Dump load data from the store and compare with expected counts.
 	loadStore := xdsC.LoadStore()
@@ -207,7 +211,7 @@ func (s) TestDropByCategory(t *testing.T) {
 		t.Fatalf("unexpected error from UpdateClientConnState: %v", err)
 	}
 
-	cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
 		for i := 0; i < rpcCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
 			// Even RPCs are dropped.
@@ -225,7 +229,9 @@ func (s) TestDropByCategory(t *testing.T) {
 			}
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err.Error())
+	}
 
 	const dropCount2 = rpcCount * dropNumerator2 / dropDenominator2
 	wantStatsData1 := []*load.Data{{
@@ -293,7 +299,7 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
 	const rpcCount = 100
-	cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
 		dones := []func(){}
 		for i := 0; i < rpcCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
@@ -330,7 +336,9 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 		}
 
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err.Error())
+	}
 
 	// Dump load data from the store and compare with expected counts.
 	loadStore := xdsC.LoadStore()
@@ -452,7 +460,9 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 	sc1 := <-cc.NewSubConnCh
 	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
 	// This should get the connecting picker.
-	cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable)
+	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
+		t.Fatal(err.Error())
+	}
 
 	addrs1 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs1[0].Addr, testBackendAddrs[0].Addr; got != want {
@@ -465,7 +475,9 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 
 	b.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	// Test pick with one backend.
-	cc.WaitForRoundRobinPicker(ctx, sc1)
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
+		t.Fatal(err.Error())
+	}
 
 	const testClusterName2 = "test-cluster-2"
 	var addr2 = resolver.Address{Addr: "2.2.2.2"}
@@ -617,7 +629,7 @@ func (s) TestLoadReporting(t *testing.T) {
 	// Test pick with one backend.
 	const successCount = 5
 	const errorCount = 5
-	cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
 		for i := 0; i < successCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
 			if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
@@ -633,7 +645,9 @@ func (s) TestLoadReporting(t *testing.T) {
 			gotSCSt.Done(balancer.DoneInfo{Err: fmt.Errorf("error")})
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err.Error())
+	}
 
 	// Dump load data from the store and compare with expected counts.
 	loadStore := xdsC.LoadStore()

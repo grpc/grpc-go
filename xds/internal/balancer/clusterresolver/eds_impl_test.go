@@ -484,20 +484,27 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Picks with drops.
-	cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
 		dones := []func(){}
+		defer func() {
+			for _, f := range dones {
+				f()
+			}
+		}()
+
 		for i := 0; i < 100; i++ {
 			pr, err := p.Pick(balancer.PickInfo{})
+			if pr.Done != nil {
+				dones = append(dones, func() {
+					pr.Done(balancer.DoneInfo{})
+				})
+			}
+
 			if i < 50 && err != nil {
 				return fmt.Errorf("The first 50%% picks should be non-drops, got error %v", err)
 			} else if i > 50 && err == nil {
 				return fmt.Errorf("The second 50%% picks should be drops, got error <nil>")
 			}
-			dones = append(dones, func() {
-				if pr.Done != nil {
-					pr.Done(balancer.DoneInfo{})
-				}
-			})
 		}
 
 		for _, done := range dones {
@@ -508,22 +515,21 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 		// Pick without drops.
 		for i := 0; i < 50; i++ {
 			pr, err := p.Pick(balancer.PickInfo{})
+			if pr.Done != nil {
+				dones = append(dones, func() {
+					pr.Done(balancer.DoneInfo{})
+				})
+			}
+
 			if err != nil {
 				return fmt.Errorf("The third 50%% picks should be non-drops, got error %v", err)
 			}
-			dones = append(dones, func() {
-				if pr.Done != nil {
-					pr.Done(balancer.DoneInfo{})
-				}
-			})
 		}
 
-		// Without this, future tests with the same service name will fail.
-		for _, done := range dones {
-			done()
-		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err.Error())
+	}
 
 	// Send another update, with only circuit breaking update (and no picker
 	// update afterwards). Make sure the new picker uses the new configs.
@@ -541,20 +547,26 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 	}
 
 	// Picks with drops.
-	cc.WaitForPicker(ctx, func(p balancer.Picker) error {
+	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
 		dones := []func(){}
+		defer func() {
+			for _, f := range dones {
+				f()
+			}
+		}()
+
 		for i := 0; i < 100; i++ {
 			pr, err := p.Pick(balancer.PickInfo{})
+			if pr.Done != nil {
+				dones = append(dones, func() {
+					pr.Done(balancer.DoneInfo{})
+				})
+			}
 			if i < 10 && err != nil {
 				return fmt.Errorf("The first 10%% picks should be non-drops, got error %v", err)
 			} else if i > 10 && err == nil {
 				return fmt.Errorf("The next 90%% picks should be drops, got error <nil>")
 			}
-			dones = append(dones, func() {
-				if pr.Done != nil {
-					pr.Done(balancer.DoneInfo{})
-				}
-			})
 		}
 
 		for _, done := range dones {
@@ -565,20 +577,18 @@ func (s) TestEDS_CircuitBreaking(t *testing.T) {
 		// Pick without drops.
 		for i := 0; i < 10; i++ {
 			pr, err := p.Pick(balancer.PickInfo{})
+			if pr.Done != nil {
+				dones = append(dones, func() {
+					pr.Done(balancer.DoneInfo{})
+				})
+			}
+
 			if err != nil {
 				return fmt.Errorf("The next 10%% picks should be non-drops, got error %v", err)
 			}
-			dones = append(dones, func() {
-				if pr.Done != nil {
-					pr.Done(balancer.DoneInfo{})
-				}
-			})
-		}
-
-		// Without this, future tests with the same service name will fail.
-		for _, done := range dones {
-			done()
 		}
 		return nil
-	})
+	}); err != nil {
+		t.Fatal(err.Error())
+	}
 }

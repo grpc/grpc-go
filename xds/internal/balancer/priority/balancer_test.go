@@ -1961,7 +1961,7 @@ func (s) TestPriority_HighPriorityUpdatesWhenLowInUse(t *testing.T) {
 		ResolverState: resolver.State{
 			Addresses: []resolver.Address{
 				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[2]}, []string{"child-0"}),
-				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[1]}, []string{"child-1"}),
+				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[3]}, []string{"child-1"}),
 			},
 		},
 		BalancerConfig: &LBConfig{
@@ -1975,15 +1975,31 @@ func (s) TestPriority_HighPriorityUpdatesWhenLowInUse(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	addrs2 := <-cc.NewSubConnAddrsCh
-	if got, want := addrs2[0].Addr, testBackendAddrStrs[2]; got != want {
-		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	// Two new subconns are created by the previous update; one by p0 and one
+	// by p1.  They don't happen concurrently, but they could happen in any
+	// order.
+	t.Log("Make p0 and p1 both ready; p0 should be used.")
+	var sc2, sc3 balancer.SubConn
+	for i := 0; i < 2; i++ {
+		addr := <-cc.NewSubConnAddrsCh
+		sc := <-cc.NewSubConnCh
+		switch addr[0].Addr {
+		case testBackendAddrStrs[2]:
+			sc2 = sc
+		case testBackendAddrStrs[3]:
+			sc3 = sc
+		default:
+			t.Fatalf("sc is created with addr %v, want %v or %v", addr[0].Addr, testBackendAddrStrs[2], testBackendAddrStrs[3])
+		}
+		pb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+		pb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 	}
-	sc2 := <-cc.NewSubConnCh
-
-	t.Log("Make p0 ready.")
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
-	pb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	if sc2 == nil {
+		t.Fatalf("sc not created with addr %v", testBackendAddrStrs[2])
+	}
+	if sc3 == nil {
+		t.Fatalf("sc not created with addr %v", testBackendAddrStrs[3])
+	}
 
 	// Test pick with 0.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {

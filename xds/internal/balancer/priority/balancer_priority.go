@@ -68,7 +68,7 @@ var (
 //
 // Caller must hold b.mu.
 func (b *priorityBalancer) syncPriority(childUpdating string) {
-	if b.inhibitChildUpdates {
+	if b.inhibitPickerUpdates {
 		return
 	}
 	for p, name := range b.priorities {

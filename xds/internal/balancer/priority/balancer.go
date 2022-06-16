@@ -101,7 +101,7 @@ type priorityBalancer struct {
 	// an update of the aggregated picker to the parent.  Cleared after all
 	// sub-balancers have finished UpdateClientConnState, after which
 	// syncPriority is called manually.
-	inhibitChildUpdates bool
+	inhibitPickerUpdates bool
 }
 
 func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
@@ -176,12 +176,19 @@ func (b *priorityBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 		return nil
 	}
 
-	b.inhibitChildUpdates = true
-	b.mu.Unlock()
 	// This will sync the states of all children to the new updated
 	// priorities. Includes starting/stopping child balancers when necessary.
+	// Block picker updates until all children have had a chance to call
+	// UpdateState to prevent races where, e.g., the active priority reports
+	// transient failure but a higher priority may have reported something that
+	// made it active, and if the transient failure update is handled first,
+	// RPCs could fail.
+	b.inhibitPickerUpdates = true
+	// Add an item to queue to notify us when the current items in the queue
+	// are done and syncPriority has been called.
 	done := make(chan struct{})
-	b.childBalancerStateUpdate.Put(clearInhibitChildUpdates{done: done})
+	b.childBalancerStateUpdate.Put(resumePickerUpdates{done: done})
+	b.mu.Unlock()
 	<-done
 
 	return nil
@@ -229,7 +236,7 @@ type childBalancerState struct {
 	s    balancer.State
 }
 
-type clearInhibitChildUpdates struct {
+type resumePickerUpdates struct {
 	done chan struct{}
 }
 
@@ -251,8 +258,8 @@ func (b *priorityBalancer) run() {
 			switch s := u.(type) {
 			case childBalancerState:
 				b.handleChildStateUpdate(s.name, s.s)
-			case clearInhibitChildUpdates:
-				b.inhibitChildUpdates = false
+			case resumePickerUpdates:
+				b.inhibitPickerUpdates = false
 				b.syncPriority("")
 				close(s.done)
 			}
