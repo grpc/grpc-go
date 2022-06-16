@@ -183,10 +183,10 @@ type ringhashBalancer struct {
 	// The key for this map is a resolver.Address with the following
 	// modification:
 	//  - `Attributes` field is cleared and rewritten with a single attribute
-	//     containing the weight of the address. The `AddressMap` type uses the
-	//     `Attributes` field to determine equality, but ignores the
-	//     `BalancerAttributes` field. Hence, we copy over the weight of the
-	//     address from the latter to the former.
+	//    containing the weight of the address. The `AddressMap` type uses the
+	//    `Attributes` field to determine equality, but ignores the
+	//    `BalancerAttributes` field. Hence, we copy over the weight of the
+	//    address from the latter to the former.
 	// The ringhash LB policy is concerned only with the address value and its
 	// weight, when comparing addresses received as part of a ClientConnUpdate.
 	//
