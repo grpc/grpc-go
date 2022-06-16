@@ -47,24 +47,47 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 	}
 	lis := testutils.NewRestartableListener(l)
 
+	// Maps to store ACK versions before and after stream restart.
 	ackVersionsBeforeRestart := make(map[string]string)
 	ackVersionsAfterRestart := make(map[string]string)
+	// Channels to notify that all expected resources have been requested by the
+	// xdsClient before and after stream restart.
+	resourcesRequestedBeforeStreamClose := make(chan struct{}, 1)
+	resourcesRequestedAfterStreamClose := make(chan struct{}, 1)
+	// Event to notify stream closure.
 	streamClosed := grpcsync.NewEvent()
-	resourcesRequestedAfterStreamClose := make(chan struct{})
+	const wantResources = 4
+
 	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, &e2e.ManagementServerOptions{
 		Listener: lis,
 		OnStreamRequest: func(id int64, request *v3discoverypb.DiscoveryRequest) error {
 			// Populate the versions in the appropriate map based on whether the
 			// stream has closed.
 			if !streamClosed.HasFired() {
-				if len(request.GetResourceNames()) != 0 {
+				// Prior to stream closure, record only non-empty version numbers. The
+				// client first requests for a resource with version set to empty
+				// string. After receipt of the response, it sends another request for
+				// the same resource, this time with a non-empty version string. This
+				// corresponds to ACKs, and this is what we want to capture.
+				if len(request.GetResourceNames()) != 0 && request.GetVersionInfo() != "" {
 					ackVersionsBeforeRestart[request.GetTypeUrl()] = request.GetVersionInfo()
+					if len(ackVersionsBeforeRestart) == wantResources {
+						select {
+						case resourcesRequestedBeforeStreamClose <- struct{}{}:
+						default:
+						}
+					}
 				}
 				return nil
 			}
+			// After stream closure, capture the first request for every resource.
+			// This should not be set to an empty version string, but instead should
+			// be set to the version last ACKed before stream closure.
 			if len(request.GetResourceNames()) != 0 {
-				ackVersionsAfterRestart[request.GetTypeUrl()] = request.GetVersionInfo()
-				if len(ackVersionsAfterRestart) == len(ackVersionsBeforeRestart) {
+				if ackVersionsAfterRestart[request.GetTypeUrl()] == "" {
+					ackVersionsAfterRestart[request.GetTypeUrl()] = request.GetVersionInfo()
+				}
+				if len(ackVersionsAfterRestart) == wantResources {
 					select {
 					case resourcesRequestedAfterStreamClose <- struct{}{}:
 					default:
@@ -104,8 +127,15 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 	defer cc.Close()
 
 	client := testgrpc.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
+	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
+	}
+
+	// Wait for all the resources to be ACKed.
+	select {
+	case <-resourcesRequestedBeforeStreamClose:
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for resource to be ACKed before stream restart")
 	}
 
 	// Stop the listener on the management server. This will cause the client to
