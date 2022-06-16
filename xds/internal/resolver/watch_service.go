@@ -91,7 +91,10 @@ type serviceUpdateWatcher struct {
 }
 
 func (w *serviceUpdateWatcher) handleLDSResp(update xdsresource.ListenerUpdate, err error) {
-	w.processLDSResp(update, err)
+	if !w.processLDSResp(update, err) {
+		// Return early if we don't have to watch a RouteConfigName.
+		return
+	}
 
 	w.mu.Lock()
 	if w.rdsCancel != nil {
