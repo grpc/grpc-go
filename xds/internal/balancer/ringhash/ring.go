@@ -95,7 +95,7 @@ func newRing(subConns *resolver.AddressMap, minRingSize, maxRingSize uint64) (*r
 	for _, scw := range normalizedWeights {
 		targetIdx += scale * scw.weight
 		for float64(idx) < targetIdx {
-			h := xxhash.Sum64String(scw.sc.addr + strconv.Itoa(len(items)))
+			h := xxhash.Sum64String(scw.sc.addr + strconv.Itoa(idx))
 			items = append(items, &ringEntry{idx: idx, hash: h, sc: scw.sc})
 			idx++
 		}
