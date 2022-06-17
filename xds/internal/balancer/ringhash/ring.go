@@ -111,7 +111,7 @@ func newRing(subConns *resolver.AddressMap, minRingSize, maxRingSize uint64) (*r
 
 // normalizeWeights divides all the weights by the sum, so that the total weight
 // is 1.
-func normalizeWeights(subConns *resolver.AddressMap) (_ []subConnWithWeight, min float64, _ error) {
+func normalizeWeights(subConns *resolver.AddressMap) ([]subConnWithWeight, float64, error) {
 	keys := subConns.Keys()
 	if len(keys) == 0 {
 		return nil, 0, fmt.Errorf("number of subconns is 0")
@@ -127,7 +127,7 @@ func normalizeWeights(subConns *resolver.AddressMap) (_ []subConnWithWeight, min
 	}
 	weightSumF := float64(weightSum)
 	ret := make([]subConnWithWeight, 0, len(keys))
-	min = math.MaxFloat64
+	min := float64(1.0)
 	for _, a := range keys {
 		v, _ := subConns.Get(a)
 		scInfo := v.(*subConn)
