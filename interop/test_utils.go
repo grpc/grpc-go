@@ -677,7 +677,7 @@ func DoPickFirstUnary(tc testgrpc.TestServiceClient) {
 	}
 }
 
-func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, resetChannel bool, serverAddr string, dopts []grpc.DialOption) (latency time.Duration, peer peer.Peer, err error) {
+func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, resetChannel bool, serverAddr string, dopts []grpc.DialOption, copts []grpc.CallOption) (latency time.Duration, err error) {
 	start := time.Now()
 	client := tc
 	if resetChannel {
@@ -699,7 +699,7 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 		Payload:      pl,
 	}
 	var reply *testpb.SimpleResponse
-	reply, err = client.UnaryCall(ctx, req, grpc.Peer(&peer))
+	reply, err = client.UnaryCall(ctx, req, copts...)
 	if err != nil {
 		err = fmt.Errorf("/TestService/UnaryCall RPC failed: %s", err)
 		return
@@ -734,20 +734,21 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 			break
 		}
 		iterationsDone++
-		latency, peer, err := doOneSoakIteration(ctx, tc, resetChannel, serverAddr, dopts)
+		var p peer.Peer
+		latency, err := doOneSoakIteration(ctx, tc, resetChannel, serverAddr, dopts, []grpc.CallOption{grpc.Peer(&p)})
 		latencyMs := int64(latency / time.Millisecond)
 		h.Add(latencyMs)
 		if err != nil {
 			totalFailures++
-			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s failed: %s\n", i, latencyMs, peer.Addr.String(), err)
+			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s failed: %s\n", i, latencyMs, p.Addr.String(), err)
 			continue
 		}
 		if latency > perIterationMaxAcceptableLatency {
 			totalFailures++
-			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s exceeds max acceptable latency: %d\n", i, latencyMs, peer.Addr.String(), perIterationMaxAcceptableLatency.Milliseconds())
+			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s exceeds max acceptable latency: %d\n", i, latencyMs, p.Addr.String(), perIterationMaxAcceptableLatency.Milliseconds())
 			continue
 		}
-		fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s succeeded\n", i, latencyMs, peer.Addr.String())
+		fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s succeeded\n", i, latencyMs, p.Addr.String())
 	}
 	var b bytes.Buffer
 	h.Print(&b)
