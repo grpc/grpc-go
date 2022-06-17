@@ -26,11 +26,13 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/balancer/weightedtarget"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
+	"google.golang.org/grpc/xds/internal/balancer/outlierdetection"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -129,27 +131,65 @@ func buildPriorityConfig(priorities []priorityConfig, xdsLBPolicy *internalservi
 				return nil, nil, err
 			}
 			retConfig.Priorities = append(retConfig.Priorities, names...)
+			retAddrs = append(retAddrs, addrs...)
+			var odCfgs map[string]*outlierdetection.LBConfig
+			if envconfig.XDSOutlierDetection {
+				odCfgs = convertClusterImplMapToOutlierDetection(configs, p.mechanism.OutlierDetection)
+				for n, c := range odCfgs {
+					retConfig.Children[n] = &priority.Child{
+						Config: &internalserviceconfig.BalancerConfig{Name: outlierdetection.Name, Config: c},
+						// Ignore all re-resolution from EDS children.
+						IgnoreReresolutionRequests: true,
+					}
+				}
+				continue
+			}
 			for n, c := range configs {
 				retConfig.Children[n] = &priority.Child{
 					Config: &internalserviceconfig.BalancerConfig{Name: clusterimpl.Name, Config: c},
 					// Ignore all re-resolution from EDS children.
 					IgnoreReresolutionRequests: true,
 				}
+
 			}
-			retAddrs = append(retAddrs, addrs...)
 		case DiscoveryMechanismTypeLogicalDNS:
 			name, config, addrs := buildClusterImplConfigForDNS(p.childNameGen, p.addresses, p.mechanism)
 			retConfig.Priorities = append(retConfig.Priorities, name)
+			retAddrs = append(retAddrs, addrs...)
+			var odCfg *outlierdetection.LBConfig
+			if envconfig.XDSOutlierDetection {
+				odCfg = makeClusterImplOutlierDetectionChild(config, p.mechanism.OutlierDetection)
+				retConfig.Children[name] = &priority.Child{
+					Config: &internalserviceconfig.BalancerConfig{Name: outlierdetection.Name, Config: odCfg},
+					// Not ignore re-resolution from DNS children, they will trigger
+					// DNS to re-resolve.
+					IgnoreReresolutionRequests: false,
+				}
+				continue
+			}
 			retConfig.Children[name] = &priority.Child{
 				Config: &internalserviceconfig.BalancerConfig{Name: clusterimpl.Name, Config: config},
 				// Not ignore re-resolution from DNS children, they will trigger
 				// DNS to re-resolve.
 				IgnoreReresolutionRequests: false,
 			}
-			retAddrs = append(retAddrs, addrs...)
 		}
 	}
 	return retConfig, retAddrs, nil
+}
+
+func convertClusterImplMapToOutlierDetection(ciCfgs map[string]*clusterimpl.LBConfig, odCfg outlierdetection.LBConfig) map[string]*outlierdetection.LBConfig {
+	odCfgs := make(map[string]*outlierdetection.LBConfig, len(ciCfgs))
+	for n, c := range ciCfgs {
+		odCfgs[n] = makeClusterImplOutlierDetectionChild(c, odCfg)
+	}
+	return odCfgs
+}
+
+func makeClusterImplOutlierDetectionChild(ciCfg *clusterimpl.LBConfig, odCfg outlierdetection.LBConfig) *outlierdetection.LBConfig {
+	odCfgRet := odCfg
+	odCfgRet.ChildPolicy = &internalserviceconfig.BalancerConfig{Name: clusterimpl.Name, Config: ciCfg}
+	return &odCfgRet
 }
 
 func buildClusterImplConfigForDNS(g *nameGenerator, addrStrs []string, mechanism DiscoveryMechanism) (string, *clusterimpl.LBConfig, []resolver.Address) {
