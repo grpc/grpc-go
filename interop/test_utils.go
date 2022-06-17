@@ -721,10 +721,6 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 	defer cancel()
 	iterationsDone := 0
 	totalFailures := 0
-	var t *time.Ticker
-	if minTimeBetweenRPCs.Nanoseconds() > 0 {
-		t = time.NewTicker(minTimeBetweenRPCs)
-	}
 	hopts := stats.HistogramOptions{
 		NumBuckets:     20,
 		GrowthFactor:   1,
@@ -736,6 +732,7 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 		if time.Now().After(overallDeadline) {
 			break
 		}
+		earliestNextStart := time.After(minTimeBetweenRPCs)
 		iterationsDone++
 		latency, err := doOneSoakIteration(ctx, tc, resetChannel, serverAddr, dopts)
 		latencyMs := int64(latency / time.Millisecond)
@@ -751,14 +748,7 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d succeeded\n", i, latencyMs)
-		if t != nil {
-			select {
-			case <-t.C:
-			}
-		}
-	}
-	if t != nil {
-		t.Stop()
+		<-earliestNextStart
 	}
 	var b bytes.Buffer
 	h.Print(&b)
