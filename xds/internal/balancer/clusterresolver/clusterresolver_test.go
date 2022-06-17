@@ -145,7 +145,7 @@ func (f *fakeChildBalancer) waitForClientConnStateChangeVerifyBalancerConfig(ctx
 		return err
 	}
 	gotCCS := ccs.(balancer.ClientConnState)
-	if diff := cmp.Diff(gotCCS, wantCCS, cmpopts.IgnoreFields(resolver.State{}, "Addresses", "ServiceConfig", "Attributes")); diff != "" {
+	if diff := cmp.Diff(gotCCS, wantCCS, cmpopts.IgnoreFields(balancer.ClientConnState{}, "ResolverState")); diff != "" {
 		return fmt.Errorf("received unexpected ClientConnState, diff (-got +want): %v", diff)
 	}
 	return nil
