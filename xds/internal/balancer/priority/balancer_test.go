@@ -149,8 +149,6 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	}
 
 	select {
-	case <-cc.NewPickerCh:
-		t.Fatalf("got unexpected new picker")
 	case sc := <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn: %s", sc)
 	case sc := <-cc.RemoveSubConnCh:
@@ -1884,5 +1882,127 @@ func (s) TestPriority_AddLowPriorityWhenHighIsInIdle(t *testing.T) {
 	if got, want := addrsNew[0].Addr, testBackendAddrStrs[0]; got != want {
 		// Fail if p1 is started and creates a SubConn.
 		t.Fatalf("got unexpected call to NewSubConn with addr: %v, want %v", addrsNew, want)
+	}
+}
+
+// Lower priority is used when higher priority is not ready; higher priority
+// still gets updates.
+//
+// Init 0 and 1; 0 is down, 1 is up, use 1; update 0; 0 is up, use 0
+func (s) TestPriority_HighPriorityUpdatesWhenLowInUse(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	cc := testutils.NewTestClientConn(t)
+	bb := balancer.Get(Name)
+	pb := bb.Build(cc, balancer.BuildOptions{})
+	defer pb.Close()
+
+	t.Log("Two localities, with priorities [0, 1], each with one backend.")
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: []resolver.Address{
+				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[0]}, []string{"child-0"}),
+				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[1]}, []string{"child-1"}),
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Children: map[string]*Child{
+				"child-0": {Config: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+				"child-1": {Config: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+			},
+			Priorities: []string{"child-0", "child-1"},
+		},
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	addrs0 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs0[0].Addr, testBackendAddrStrs[0]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc0 := <-cc.NewSubConnCh
+
+	t.Log("Make p0 fail.")
+	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+
+	// Before 1 gets READY, picker should return NoSubConnAvailable, so RPCs
+	// will retry.
+	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	t.Log("Make p1 ready.")
+	addrs1 := <-cc.NewSubConnAddrsCh
+	if got, want := addrs1[0].Addr, testBackendAddrStrs[1]; got != want {
+		t.Fatalf("sc is created with addr %v, want %v", got, want)
+	}
+	sc1 := <-cc.NewSubConnCh
+	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+
+	// Test pick with 1.
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+	// Does not change the aggregate state, because round robin does not leave
+	// TRANIENT_FAILURE if a subconn goes CONNECTING.
+	pb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
+		t.Fatal(err.Error())
+	}
+
+	t.Log("Change p0 to use new address.")
+	if err := pb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: []resolver.Address{
+				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[2]}, []string{"child-0"}),
+				hierarchy.Set(resolver.Address{Addr: testBackendAddrStrs[3]}, []string{"child-1"}),
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Children: map[string]*Child{
+				"child-0": {Config: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+				"child-1": {Config: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name}},
+			},
+			Priorities: []string{"child-0", "child-1"},
+		},
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	// Two new subconns are created by the previous update; one by p0 and one
+	// by p1.  They don't happen concurrently, but they could happen in any
+	// order.
+	t.Log("Make p0 and p1 both ready; p0 should be used.")
+	var sc2, sc3 balancer.SubConn
+	for i := 0; i < 2; i++ {
+		addr := <-cc.NewSubConnAddrsCh
+		sc := <-cc.NewSubConnCh
+		switch addr[0].Addr {
+		case testBackendAddrStrs[2]:
+			sc2 = sc
+		case testBackendAddrStrs[3]:
+			sc3 = sc
+		default:
+			t.Fatalf("sc is created with addr %v, want %v or %v", addr[0].Addr, testBackendAddrStrs[2], testBackendAddrStrs[3])
+		}
+		pb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+		pb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Ready})
+	}
+	if sc2 == nil {
+		t.Fatalf("sc not created with addr %v", testBackendAddrStrs[2])
+	}
+	if sc3 == nil {
+		t.Fatalf("sc not created with addr %v", testBackendAddrStrs[3])
+	}
+
+	// Test pick with 0.
+	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
+		t.Fatal(err.Error())
 	}
 }
