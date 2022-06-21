@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -30,12 +31,14 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/status"
 	testgrpc "google.golang.org/grpc/test/grpc_testing"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -240,8 +243,21 @@ func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
 	}
 	defer cc.Close()
 
+	// Since the RDS resource name returned by the management server contains an
+	// unknown authority, the xDS resolver will not push a successful update on
+	// the channel. The first RPC on the channel always waits for a good update
+	// from the resolver before being able to proceed. So, we expect this RPC to
+	// exceed its deadline, and as we don't want this test to take
+	// `defaultTestTimeout` amount of time to succeed, we pass it a shorter
+	// deadline.
+	sCtx, sCancel := context.WithTimeout(ctx, 1*time.Second)
+	defer sCancel()
 	client := testpb.NewTestServiceClient(cc)
-	if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+	_, err = client.EmptyCall(sCtx, &testpb.Empty{})
+	if err == nil {
 		t.Fatal("rpc EmptyCall() succeeded when expected to fail")
+	}
+	if got := status.Code(err); got != codes.DeadlineExceeded {
+		t.Fatalf("rpc EmptyCall() returned code: %v, want %v", got, codes.DeadlineExceeded)
 	}
 }
