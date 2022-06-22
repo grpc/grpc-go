@@ -61,7 +61,6 @@ func readResourceVersions(ctx context.Context, ch chan resourceVersionTuple) (ma
 			return nil, errors.New("timeout when waiting for all resources to be re-requested after stream restart")
 		}
 	}
-	return versionsMap, nil
 }
 
 // TestClientResourceVersionAfterStreamRestart tests the scenario where the
