@@ -20,6 +20,7 @@ package xds_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -35,6 +36,34 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
+// We are interested in LDS, RDS, CDS and EDS resources as part of the regular
+// xDS flow on the client.
+const wantResources = 4
+
+// resourceVersionTuple holds the resource's type URL and version string.
+type resourceVersionTuple struct {
+	typeURL string
+	version string
+}
+
+// readResourceVersions builds a map from resource's type URL to the version
+// string, by reading resourceVersionTuples pushed on to the provided channel.
+func readResourceVersions(ctx context.Context, ch chan resourceVersionTuple) (map[string]string, error) {
+	versionsMap := make(map[string]string)
+	for {
+		select {
+		case tuple := <-ch:
+			versionsMap[tuple.typeURL] = tuple.version
+			if len(versionsMap) == wantResources {
+				return versionsMap, nil
+			}
+		case <-ctx.Done():
+			return nil, errors.New("timeout when waiting for all resources to be re-requested after stream restart")
+		}
+	}
+	return versionsMap, nil
+}
+
 // TestClientResourceVersionAfterStreamRestart tests the scenario where the
 // xdsClient's ADS stream to the management server gets broken. This test
 // verifies that the version number on the initial request on the new stream
@@ -47,16 +76,12 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 	}
 	lis := testutils.NewRestartableListener(l)
 
-	// Maps to store ACK versions before and after stream restart.
-	ackVersionsBeforeRestart := make(map[string]string)
-	ackVersionsAfterRestart := make(map[string]string)
-	// Channels to notify that all expected resources have been requested by the
-	// xdsClient before and after stream restart.
-	resourcesRequestedBeforeStreamClose := make(chan struct{}, 1)
-	resourcesRequestedAfterStreamClose := make(chan struct{}, 1)
+	// Channels to push resource versions requested by the xdsClient before and
+	// after stream restart.
+	resourcesRequestedBeforeStreamClose := make(chan resourceVersionTuple, wantResources)
+	resourcesRequestedAfterStreamClose := make(chan resourceVersionTuple, wantResources)
 	// Event to notify stream closure.
 	streamClosed := grpcsync.NewEvent()
-	const wantResources = 4
 
 	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, &e2e.ManagementServerOptions{
 		Listener: lis,
@@ -70,12 +95,9 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 				// the same resource, this time with a non-empty version string. This
 				// corresponds to ACKs, and this is what we want to capture.
 				if len(request.GetResourceNames()) != 0 && request.GetVersionInfo() != "" {
-					ackVersionsBeforeRestart[request.GetTypeUrl()] = request.GetVersionInfo()
-					if len(ackVersionsBeforeRestart) == wantResources {
-						select {
-						case resourcesRequestedBeforeStreamClose <- struct{}{}:
-						default:
-						}
+					resourcesRequestedBeforeStreamClose <- resourceVersionTuple{
+						typeURL: request.GetTypeUrl(),
+						version: request.GetVersionInfo(),
 					}
 				}
 				return nil
@@ -84,14 +106,9 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 			// This should not be set to an empty version string, but instead should
 			// be set to the version last ACKed before stream closure.
 			if len(request.GetResourceNames()) != 0 {
-				if ackVersionsAfterRestart[request.GetTypeUrl()] == "" {
-					ackVersionsAfterRestart[request.GetTypeUrl()] = request.GetVersionInfo()
-				}
-				if len(ackVersionsAfterRestart) == wantResources {
-					select {
-					case resourcesRequestedAfterStreamClose <- struct{}{}:
-					default:
-					}
+				resourcesRequestedAfterStreamClose <- resourceVersionTuple{
+					typeURL: request.GetTypeUrl(),
+					version: request.GetVersionInfo(),
 				}
 			}
 			return nil
@@ -132,10 +149,9 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 	}
 
 	// Wait for all the resources to be ACKed.
-	select {
-	case <-resourcesRequestedBeforeStreamClose:
-	case <-ctx.Done():
-		t.Fatal("timeout waiting for resource to be ACKed before stream restart")
+	ackVersionsBeforeRestart, err := readResourceVersions(ctx, resourcesRequestedBeforeStreamClose)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	// Stop the listener on the management server. This will cause the client to
@@ -150,10 +166,9 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 	lis.Restart()
 
 	// Wait for all the previously sent resources to be re-requested.
-	select {
-	case <-resourcesRequestedAfterStreamClose:
-	case <-ctx.Done():
-		t.Fatal("timeout when waiting for all resources to be re-requested after stream restart")
+	ackVersionsAfterRestart, err := readResourceVersions(ctx, resourcesRequestedAfterStreamClose)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	if !cmp.Equal(ackVersionsBeforeRestart, ackVersionsAfterRestart) {
