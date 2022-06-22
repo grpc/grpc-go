@@ -105,7 +105,7 @@ type DiscoveryMechanism struct {
 	DNSHostname string `json:"dnsHostname,omitempty"`
 	// OutlierDetection is the Outlier Detection LB configuration for this
 	// priority.
-	OutlierDetection *outlierdetection.LBConfig `json:"outlierDetection,omitempty"`
+	OutlierDetection outlierdetection.LBConfig `json:"outlierDetection,omitempty"`
 }
 
 // Equal returns whether the DiscoveryMechanism is the same with the parameter.
@@ -121,7 +121,7 @@ func (dm DiscoveryMechanism) Equal(b DiscoveryMechanism) bool {
 		return false
 	case dm.DNSHostname != b.DNSHostname:
 		return false
-	case !dm.OutlierDetection.EqualIgnoringChildPolicy(b.OutlierDetection):
+	case !dm.OutlierDetection.EqualIgnoringChildPolicy(&b.OutlierDetection):
 		return false
 	}
 

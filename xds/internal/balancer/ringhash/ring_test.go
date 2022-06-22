@@ -31,7 +31,7 @@ func testAddr(addr string, weight uint32) resolver.Address {
 	return resolver.Address{Addr: addr, Metadata: weight}
 }
 
-func TestRingNew(t *testing.T) {
+func (s) TestRingNew(t *testing.T) {
 	testAddrs := []resolver.Address{
 		testAddr("a", 3),
 		testAddr("b", 3),
@@ -75,7 +75,7 @@ func equalApproximately(x, y float64) bool {
 	return delta/mean < 0.25
 }
 
-func TestRingPick(t *testing.T) {
+func (s) TestRingPick(t *testing.T) {
 	r, _ := newRing(map[resolver.Address]*subConn{
 		{Addr: "a", Metadata: uint32(3)}: {addr: "a"},
 		{Addr: "b", Metadata: uint32(3)}: {addr: "b"},
@@ -97,7 +97,7 @@ func TestRingPick(t *testing.T) {
 	}
 }
 
-func TestRingNext(t *testing.T) {
+func (s) TestRingNext(t *testing.T) {
 	r, _ := newRing(map[resolver.Address]*subConn{
 		{Addr: "a", Metadata: uint32(3)}: {addr: "a"},
 		{Addr: "b", Metadata: uint32(3)}: {addr: "b"},

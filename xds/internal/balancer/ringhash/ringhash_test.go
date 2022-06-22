@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 )
@@ -98,7 +99,15 @@ func setupTest(t *testing.T, addrs []resolver.Address) (*testutils.TestClientCon
 	return cc, b, p1
 }
 
-func TestOneSubConn(t *testing.T) {
+type s struct {
+	grpctest.Tester
+}
+
+func Test(t *testing.T) {
+	grpctest.RunSubTests(t, s{})
+}
+
+func (s) TestOneSubConn(t *testing.T) {
 	wantAddr1 := resolver.Address{Addr: testBackendAddrStrs[0]}
 	cc, b, p0 := setupTest(t, []resolver.Address{wantAddr1})
 	ring0 := p0.(*picker).ring
@@ -135,7 +144,7 @@ func TestOneSubConn(t *testing.T) {
 // TestThreeBackendsAffinity covers that there are 3 SubConns, RPCs with the
 // same hash always pick the same SubConn. When the one picked is down, another
 // one will be picked.
-func TestThreeSubConnsAffinity(t *testing.T) {
+func (s) TestThreeSubConnsAffinity(t *testing.T) {
 	wantAddrs := []resolver.Address{
 		{Addr: testBackendAddrStrs[0]},
 		{Addr: testBackendAddrStrs[1]},
@@ -228,7 +237,7 @@ func TestThreeSubConnsAffinity(t *testing.T) {
 // TestThreeBackendsAffinity covers that there are 3 SubConns, RPCs with the
 // same hash always pick the same SubConn. Then try different hash to pick
 // another backend, and verify the first hash still picks the first backend.
-func TestThreeSubConnsAffinityMultiple(t *testing.T) {
+func (s) TestThreeSubConnsAffinityMultiple(t *testing.T) {
 	wantAddrs := []resolver.Address{
 		{Addr: testBackendAddrStrs[0]},
 		{Addr: testBackendAddrStrs[1]},
@@ -299,7 +308,7 @@ func TestThreeSubConnsAffinityMultiple(t *testing.T) {
 	}
 }
 
-func TestAddrWeightChange(t *testing.T) {
+func (s) TestAddrWeightChange(t *testing.T) {
 	wantAddrs := []resolver.Address{
 		{Addr: testBackendAddrStrs[0]},
 		{Addr: testBackendAddrStrs[1]},
@@ -368,7 +377,7 @@ func TestAddrWeightChange(t *testing.T) {
 // overall state is TransientFailure, the SubConns turning Idle will trigger the
 // next SubConn in the ring to Connect(). But not when the overall state is not
 // TransientFailure.
-func TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
+func (s) TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
 	wantAddrs := []resolver.Address{
 		{Addr: testBackendAddrStrs[0]},
 		{Addr: testBackendAddrStrs[1]},
@@ -431,7 +440,7 @@ func TestSubConnToConnectWhenOverallTransientFailure(t *testing.T) {
 	}
 }
 
-func TestConnectivityStateEvaluatorRecordTransition(t *testing.T) {
+func (s) TestConnectivityStateEvaluatorRecordTransition(t *testing.T) {
 	tests := []struct {
 		name     string
 		from, to []connectivity.State
