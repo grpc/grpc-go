@@ -16,8 +16,9 @@
  *
  */
 
-// Package outlierdetection implements a balancer that implements
-// Outlier Detection.
+// Package outlierdetection provides an implementation of the outlier detection
+// LB policy, as defined in
+// https://github.com/grpc/proposal/blob/master/A50-xds-outlier-detection.md.
 package outlierdetection
 
 import (
