@@ -65,11 +65,9 @@ func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, err
 }
 
 type subConn struct {
-	addr string
-	sc   balancer.SubConn
-
-	weightMu sync.Mutex
-	weight   uint32
+	addr   string
+	weight uint32
+	sc     balancer.SubConn
 
 	mu sync.RWMutex
 	// This is the actual state of this SubConn (as updated by the ClientConn).
@@ -237,9 +235,7 @@ func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 			// subConn uniqueness.
 			scInfo := val.(*subConn)
 			if oldWeight := scInfo.weight; oldWeight != newWeight {
-				scInfo.weightMu.Lock()
 				scInfo.weight = newWeight
-				scInfo.weightMu.Unlock()
 				b.subConns.Set(addr, scInfo)
 				// Return true to force recreation of the ring.
 				addrsUpdated = true
