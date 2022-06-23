@@ -23,10 +23,11 @@
 package pubsub
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
+	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
@@ -43,7 +44,7 @@ type Pubsub struct {
 	done               *grpcsync.Event
 	logger             *grpclog.PrefixLogger
 	watchExpiryTimeout time.Duration
-	nodeIDJSON         string
+	nodeID             string
 
 	updateCh *buffer.Unbounded // chan *watcherInfoWithUpdate
 	// All the following maps are to keep the updates/metadata in a cache.
@@ -65,12 +66,19 @@ type Pubsub struct {
 // New creates a new Pubsub.
 //
 // The passed in nodeID will be attached to all errors sent to the watchers.
-func New(watchExpiryTimeout time.Duration, nodeID proto.Message, logger *grpclog.PrefixLogger) *Pubsub {
+func New(watchExpiryTimeout time.Duration, nodeProto proto.Message, logger *grpclog.PrefixLogger) *Pubsub {
+	nodeID := ""
+	if v3, ok := nodeProto.(*v3corepb.Node); ok {
+		nodeID = v3.GetId()
+	} else if v2, ok := nodeProto.(*v2corepb.Node); ok {
+		nodeID = v2.GetId()
+	}
+
 	pb := &Pubsub{
 		done:               grpcsync.NewEvent(),
 		logger:             logger,
 		watchExpiryTimeout: watchExpiryTimeout,
-		nodeIDJSON:         fmt.Sprint(nodeID),
+		nodeID:             nodeID,
 
 		updateCh:    buffer.NewUnbounded(),
 		ldsWatchers: make(map[string]map[*watchInfo]bool),
