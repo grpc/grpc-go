@@ -168,18 +168,13 @@ type LBConfig struct {
 	XDSLBPolicy *internalserviceconfig.BalancerConfig `json:"xdsLbPolicy,omitempty"`
 }
 
-const (
-	rrName = roundrobin.Name
-	rhName = ringhash.Name
-)
-
 func parseConfig(c json.RawMessage) (*LBConfig, error) {
 	var cfg LBConfig
 	if err := json.Unmarshal(c, &cfg); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to unmarshal balancer config %s into cluster-resolver config, error: %v", string(c), err)
 	}
-	if lbp := cfg.XDSLBPolicy; lbp != nil && !strings.EqualFold(lbp.Name, rrName) && !strings.EqualFold(lbp.Name, rhName) {
-		return nil, fmt.Errorf("unsupported child policy with name %q, not one of {%q,%q}", lbp.Name, rrName, rhName)
+	if lbp := cfg.XDSLBPolicy; lbp != nil && !strings.EqualFold(lbp.Name, roundrobin.Name) && !strings.EqualFold(lbp.Name, ringhash.Name) {
+		return nil, fmt.Errorf("unsupported child policy with name %q, not one of {%q,%q}", lbp.Name, roundrobin.Name, ringhash.Name)
 	}
 	return &cfg, nil
 }

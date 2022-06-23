@@ -95,11 +95,7 @@ func (bb) Name() string {
 }
 
 func (bb) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
-	var cfg LBConfig
-	if err := json.Unmarshal(c, &cfg); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal balancer config %s into cluster-resolver config, error: %v", string(c), err)
-	}
-	return &cfg, nil
+	return parseConfig(c)
 }
 
 // ccUpdate wraps a clientConn update received from gRPC (pushed from the

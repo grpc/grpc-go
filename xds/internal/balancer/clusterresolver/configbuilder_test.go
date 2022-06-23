@@ -731,7 +731,7 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 			},
 		},
 		priorityName: "test-priority",
-		childPolicy:  &internalserviceconfig.BalancerConfig{Name: rrName},
+		childPolicy:  &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
 		mechanism: DiscoveryMechanism{
 			Cluster:        testClusterName,
 			Type:           DiscoveryMechanismTypeEDS,
@@ -789,7 +789,7 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 				},
 			},
 			priorityName: "test-priority",
-			childPolicy:  &internalserviceconfig.BalancerConfig{Name: rhName, Config: &ringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2}},
+			childPolicy:  &internalserviceconfig.BalancerConfig{Name: ringhash.Name, Config: &ringhash.LBConfig{MinRingSize: 1, MaxRingSize: 2}},
 			// lrsServer is nil, so LRS policy will not be used.
 			wantConfig: &clusterimpl.LBConfig{
 				ChildPolicy: &internalserviceconfig.BalancerConfig{
