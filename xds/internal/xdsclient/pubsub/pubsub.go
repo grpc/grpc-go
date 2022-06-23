@@ -26,9 +26,6 @@ import (
 	"sync"
 	"time"
 
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -66,14 +63,7 @@ type Pubsub struct {
 // New creates a new Pubsub.
 //
 // The passed in nodeID will be attached to all errors sent to the watchers.
-func New(watchExpiryTimeout time.Duration, nodeProto proto.Message, logger *grpclog.PrefixLogger) *Pubsub {
-	nodeID := ""
-	if v3, ok := nodeProto.(*v3corepb.Node); ok {
-		nodeID = v3.GetId()
-	} else if v2, ok := nodeProto.(*v2corepb.Node); ok {
-		nodeID = v2.GetId()
-	}
-
+func New(watchExpiryTimeout time.Duration, nodeID string, logger *grpclog.PrefixLogger) *Pubsub {
 	pb := &Pubsub{
 		done:               grpcsync.NewEvent(),
 		logger:             logger,
