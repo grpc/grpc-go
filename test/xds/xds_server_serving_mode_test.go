@@ -112,9 +112,16 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 	// suppressed, server will recycle client connections.
 	errCh := make(chan error, 1)
 	go func() {
-		if cc.WaitForStateChange(ctx, connectivity.Ready) {
-			errCh <- fmt.Errorf("unexpected connectivity state change {%s --> %s} on the client connection", connectivity.Ready, cc.GetState())
-			return
+		for {
+			state := cc.GetState()
+			if !(state == connectivity.Ready || state == connectivity.Idle) {
+				errCh <- fmt.Errorf("unexpected connectivity state change {%s --> %s} on the client connection", connectivity.Ready, cc.GetState())
+				return
+			}
+			if !cc.WaitForStateChange(ctx, state) {
+				// Break out of the for loop when the context has been cancelled.
+				break
+			}
 		}
 		errCh <- nil
 	}()
