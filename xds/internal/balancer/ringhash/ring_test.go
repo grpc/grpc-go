@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	xxhash "github.com/cespare/xxhash/v2"
+	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -43,7 +44,7 @@ func init() {
 }
 
 func testAddr(addr string, weight uint32) resolver.Address {
-	return setWeightAttribute(resolver.Address{Addr: addr}, weight)
+	return weightedroundrobin.SetAddrInfo(resolver.Address{Addr: addr}, weightedroundrobin.AddrInfo{Weight: weight})
 }
 
 func (s) TestRingNew(t *testing.T) {

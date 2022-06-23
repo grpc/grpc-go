@@ -68,6 +68,9 @@ type subConn struct {
 	addr string
 	sc   balancer.SubConn
 
+	weightMu sync.Mutex
+	weight   uint32
+
 	mu sync.RWMutex
 	// This is the actual state of this SubConn (as updated by the ClientConn).
 	// The effective state can be different, see comment of attemptedToConnect.
@@ -178,20 +181,8 @@ type ringhashBalancer struct {
 	cc     balancer.ClientConn
 	logger *grpclog.PrefixLogger
 
-	config *LBConfig
-
-	// The key for this map is a resolver.Address with the following
-	// modification:
-	//  - `Attributes` field is cleared and rewritten with a single attribute
-	//    containing the weight of the address. The `AddressMap` type uses the
-	//    `Attributes` field to determine equality, but ignores the
-	//    `BalancerAttributes` field. Hence, we copy over the weight of the
-	//    address from the latter to the former.
-	// The ringhash LB policy is concerned only with the address value and its
-	// weight, when comparing addresses received as part of a ClientConnUpdate.
-	//
-	// The value type stored in this map is a `*subConn`.
-	subConns *resolver.AddressMap
+	config   *LBConfig
+	subConns *resolver.AddressMap // Map from resolver.Address to `*subConn`.
 	scStates map[balancer.SubConn]*subConn
 
 	// ring is always in sync with subConns. When subConns change, a new ring is
@@ -219,42 +210,40 @@ type ringhashBalancer struct {
 // SubConn states are Idle.
 func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 	var addrsUpdated bool
-	// addrsSet is the set converted from addrs, it's used for quick lookup of an
-	// address. Key type here is the same as that of the `subConns` map.
+	// addrsSet is the set converted from addrs, used for quick lookup.
 	addrsSet := resolver.NewAddressMap()
 	for _, addr := range addrs {
-		addrInfo := weightedroundrobin.GetAddrInfo(addr)
-		if addrInfo.Weight == 0 {
-
-			// If weight is not set, use 1.
-			addrInfo.Weight = 1
-		}
-		modifiedAddr := addr
-		modifiedAddr.Attributes = nil
-		modifiedAddr = setWeightAttribute(modifiedAddr, addrInfo.Weight)
-		addrsSet.Set(modifiedAddr, true)
-		if val, ok := b.subConns.Get(modifiedAddr); !ok {
-			// When creating SubConn, the original address with attributes is
-			// passed through. So that connection configurations in attributes
-			// (like creds) will be used.
+		addrsSet.Set(addr, true)
+		newWeight := getWeightAttribute(addr)
+		if val, ok := b.subConns.Get(addr); !ok {
 			sc, err := b.cc.NewSubConn([]resolver.Address{addr}, balancer.NewSubConnOptions{HealthCheckEnabled: true})
 			if err != nil {
 				logger.Warningf("base.baseBalancer: failed to create new SubConn: %v", err)
 				continue
 			}
-			scs := &subConn{addr: addr.Addr, sc: sc}
+			scs := &subConn{addr: addr.Addr, weight: newWeight, sc: sc}
 			scs.setState(connectivity.Idle)
 			b.state = b.csEvltr.recordTransition(connectivity.Shutdown, connectivity.Idle)
-			b.subConns.Set(modifiedAddr, scs)
+			b.subConns.Set(addr, scs)
 			b.scStates[sc] = scs
 			addrsUpdated = true
 		} else {
-			// Always update the subconn's address in case the attributes
-			// changed. The SubConn does a reflect.DeepEqual of the new and old
-			// addresses. So this is a noop if the current address is the same
-			// as the old one (including attributes).
+			// We have seen this address before and created a subConn for it. If the
+			// weight associated with the address has changed, update the subConns map
+			// with the new weight. This will be used when a new ring is created.
+			//
+			// There is no need to call UpdateAddresses on the subConn at this point
+			// since *only* the weight attribute has changed, and that does not affect
+			// subConn uniqueness.
 			scInfo := val.(*subConn)
-			b.cc.UpdateAddresses(scInfo.sc, []resolver.Address{addr})
+			if oldWeight := scInfo.weight; oldWeight != newWeight {
+				scInfo.weightMu.Lock()
+				scInfo.weight = newWeight
+				scInfo.weightMu.Unlock()
+				b.subConns.Set(addr, scInfo)
+				// Return true to force recreation of the ring.
+				addrsUpdated = true
+			}
 		}
 	}
 	for _, addr := range b.subConns.Keys() {
@@ -492,4 +481,19 @@ func (cse *connectivityStateEvaluator) recordTransition(oldState, newState conne
 		return connectivity.Idle
 	}
 	return connectivity.TransientFailure
+}
+
+// getWeightAttribute is a convenience function which returns the value of the
+// weight attribute stored in the BalancerAttributes field of addr, using the
+// weightedroundrobin package.
+//
+// When used in the xDS context, the weight attribute is guaranteed to be
+// non-zero. But, when used in a non-xDS context, the weight attribute could be
+// unset. A Default of 1 is used in the latter case.
+func getWeightAttribute(addr resolver.Address) uint32 {
+	w := weightedroundrobin.GetAddrInfo(addr).Weight
+	if w == 0 {
+		return 1
+	}
+	return w
 }

@@ -40,6 +40,7 @@ var (
 	cmpOpts = cmp.Options{
 		cmp.AllowUnexported(testutils.TestSubConn{}, ringEntry{}, subConn{}),
 		cmpopts.IgnoreFields(subConn{}, "mu"),
+		cmpopts.IgnoreFields(subConn{}, "weightMu"),
 	}
 )
 

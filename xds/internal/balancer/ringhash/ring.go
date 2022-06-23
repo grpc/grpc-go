@@ -118,8 +118,6 @@ func normalizeWeights(subConns *resolver.AddressMap) ([]subConnWithWeight, float
 	}
 	var weightSum uint32
 	for _, a := range keys {
-		// The address weight was moved from `BalancerAttributes` field to the
-		// `Attributes` field in `updateAddresses()` method.
 		weightSum += getWeightAttribute(a)
 	}
 	if weightSum == 0 {
