@@ -750,7 +750,7 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s succeeded\n", i, latencyMs, p.Addr.String())
-    <-earliestNextStart
+		<-earliestNextStart
 	}
 	var b bytes.Buffer
 	h.Print(&b)
