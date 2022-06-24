@@ -37,8 +37,8 @@ import (
 	"google.golang.org/grpc/xds"
 
 	xdscreds "google.golang.org/grpc/credentials/xds"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
