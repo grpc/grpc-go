@@ -183,7 +183,20 @@ func buildClusterImplConfigForEDS(g *nameGenerator, edsResp xdsresource.Endpoint
 			RequestsPerMillion: d.Numerator * million / d.Denominator,
 		})
 	}
-
+	// To provide the xds_wrr_locality load balancer information about locality
+	// weights received from EDS, the cluster resolver will populate a new
+	// attribute in the resolved addresses. The new attribute will contain a map
+	// from a locality struct to a locality weight integer. Note that a change
+	// in this attribute would still allow associated subchannels to be reused -
+	// it will not affect their uniqueness.
+	/*
+	type Locality struct {
+	    Endpoints []Endpoint
+	    ID        internal.LocalityID
+	    Priority  uint32
+	    Weight    uint32
+	}
+	*/
 	priorities := groupLocalitiesByPriority(edsResp.Localities)
 	retNames := g.generate(priorities)
 	retConfigs := make(map[string]*clusterimpl.LBConfig, len(retNames))
@@ -261,10 +274,19 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 		LoadReportingServer:   mechanism.LoadReportingServer,
 		MaxConcurrentRequests: mechanism.MaxConcurrentRequests,
 		DropCategories:        drops,
-		// ChildPolicy is not set. Will be set based on xdsLBPolicy
+
+		// xdsLBPolicy now comes in as JSON and you literally just stick it right here, regardless of the control plane proto configuration it is sent from
+
+		// xdsWRRPolicy will prepare the weighted target + endpoint picking policy, this will stick locality information received from EDS in attributes passed downward
+		// to help this policy prepare weighted target
 	}
 
-	if xdsLBPolicy == nil || xdsLBPolicy.Name == rrName {
+	// this branching logic for config preparation in the xdsclient when the load balancing field isn't set (that will then determine the JSON)
+	// gets all of this too.
+
+	// the invariant that determines this (switch on that enum, needs to do this preparation in the xdsclient + marshal into raw JSON)
+
+	if xdsLBPolicy == nil || xdsLBPolicy.Name == rrName { // rr branch
 		// If lb policy is ROUND_ROBIN:
 		// - locality-picking policy is weighted_target
 		// - endpoint-picking policy is round_robin
@@ -275,10 +297,10 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 		return clusterImplCfg, addrs, nil
 	}
 
-	if xdsLBPolicy.Name == rhName {
+	if xdsLBPolicy.Name == rhName { // ring hash branch
 		// If lb policy is RIHG_HASH, will build one ring_hash policy as child.
 		// The endpoints from all localities will be flattened to one addresses
-		// list, and the ring_hash policy will pick endpoints from it.
+		// list, and the ring_hash policy will pick endpoints from it. // This concept of flattening endpoints from all localities to a single address list is how it will work if not configured with wrr locality
 		logger.Infof("xds lb policy is %q, building config with ring_hash", rhName)
 		addrs := localitiesToRingHash(localities, priorityName)
 		// Set child to ring_hash, note that the ring_hash config is from

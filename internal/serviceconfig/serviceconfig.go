@@ -55,7 +55,7 @@ func (bc *BalancerConfig) MarshalJSON() ([]byte, error) {
 		// If config is nil, return empty config `{}`.
 		return []byte(fmt.Sprintf(`[{%q: %v}]`, bc.Name, "{}")), nil
 	}
-	c, err := json.Marshal(bc.Config)
+	c, err := json.Marshal(bc.Config) // this takes externalserviceconfig.LoadBalancingConfig and marshals into JSON
 	if err != nil {
 		return nil, err
 	}

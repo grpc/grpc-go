@@ -18,6 +18,7 @@
 package xdsresource
 
 import (
+	"encoding/json"
 	"time"
 
 	"google.golang.org/protobuf/types/known/anypb"
@@ -155,7 +156,11 @@ type ClusterUpdate struct {
 	//
 	// When we add more support policies, this can be made an interface, and
 	// will be set to different types based on the policy type.
-	LBPolicy *ClusterLBPolicyRingHash
+	// LBPolicy *ClusterLBPolicyRingHash
+
+	// s to
+	// Json::Array lb_policy_config; is json.RawMessage == JSON::Array (I think so, but if you want for sure you can triage)
+	LBPolicy json.RawMessage
 
 	// OutlierDetection is the outlier detection configuration for this cluster.
 	// If nil, it means this cluster does not use the outlier detection feature.
