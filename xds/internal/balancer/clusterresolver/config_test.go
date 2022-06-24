@@ -274,6 +274,9 @@ func TestParseConfig(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("parseConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
+			if tt.wantErr {
+				return
+			}
 			if diff := cmp.Diff(got, tt.want); diff != "" {
 				t.Errorf("parseConfig() got unexpected output, diff (-got +want): %v", diff)
 			}
