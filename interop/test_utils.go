@@ -716,7 +716,7 @@ func doOneSoakIteration(ctx context.Context, tc testgrpc.TestServiceClient, rese
 // DoSoakTest runs large unary RPCs in a loop for a configurable number of times, with configurable failure thresholds.
 // If resetChannel is false, then each RPC will be performed on tc. Otherwise, each RPC will be performed on a new
 // stub that is created with the provided server address and dial options.
-func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, perIterationMaxAcceptableLatency time.Duration, overallDeadline time.Time) {
+func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.DialOption, resetChannel bool, soakIterations int, maxFailures int, perIterationMaxAcceptableLatency time.Duration, minTimeBetweenRPCs time.Duration, overallDeadline time.Time) {
 	start := time.Now()
 	ctx, cancel := context.WithDeadline(context.Background(), overallDeadline)
 	defer cancel()
@@ -733,6 +733,7 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 		if time.Now().After(overallDeadline) {
 			break
 		}
+		earliestNextStart := time.After(minTimeBetweenRPCs)
 		iterationsDone++
 		var p peer.Peer
 		latency, err := doOneSoakIteration(ctx, tc, resetChannel, serverAddr, dopts, []grpc.CallOption{grpc.Peer(&p)})
@@ -749,6 +750,7 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 			continue
 		}
 		fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s succeeded\n", i, latencyMs, p.Addr.String())
+		<-earliestNextStart
 	}
 	var b bytes.Buffer
 	h.Print(&b)
