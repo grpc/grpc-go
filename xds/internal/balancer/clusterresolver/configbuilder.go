@@ -304,22 +304,22 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 		// ChildPolicy is not set. Will be set based on xdsLBPolicy
 	}
 
-	if xdsLBPolicy == nil || xdsLBPolicy.Name == rrName {
+	if xdsLBPolicy == nil || xdsLBPolicy.Name == roundrobin.Name {
 		// If lb policy is ROUND_ROBIN:
 		// - locality-picking policy is weighted_target
 		// - endpoint-picking policy is round_robin
-		logger.Infof("xds lb policy is %q, building config with weighted_target + round_robin", rrName)
+		logger.Infof("xds lb policy is %q, building config with weighted_target + round_robin", roundrobin.Name)
 		// Child of weighted_target is hardcoded to round_robin.
 		wtConfig, addrs := localitiesToWeightedTarget(localities, priorityName, rrBalancerConfig)
 		clusterImplCfg.ChildPolicy = &internalserviceconfig.BalancerConfig{Name: weightedtarget.Name, Config: wtConfig}
 		return clusterImplCfg, addrs, nil
 	}
 
-	if xdsLBPolicy.Name == rhName {
+	if xdsLBPolicy.Name == ringhash.Name {
 		// If lb policy is RIHG_HASH, will build one ring_hash policy as child.
 		// The endpoints from all localities will be flattened to one addresses
 		// list, and the ring_hash policy will pick endpoints from it.
-		logger.Infof("xds lb policy is %q, building config with ring_hash", rhName)
+		logger.Infof("xds lb policy is %q, building config with ring_hash", ringhash.Name)
 		addrs := localitiesToRingHash(localities, priorityName)
 		// Set child to ring_hash, note that the ring_hash config is from
 		// xdsLBPolicy.
@@ -327,7 +327,7 @@ func priorityLocalitiesToClusterImpl(localities []xdsresource.Locality, priority
 		return clusterImplCfg, addrs, nil
 	}
 
-	return nil, nil, fmt.Errorf("unsupported xds LB policy %q, not one of {%q,%q}", xdsLBPolicy.Name, rrName, rhName)
+	return nil, nil, fmt.Errorf("unsupported xds LB policy %q, not one of {%q,%q}", xdsLBPolicy.Name, roundrobin.Name, ringhash.Name)
 }
 
 // localitiesToRingHash takes a list of localities (with the same priority), and
