@@ -190,7 +190,7 @@ func (s) TestRecordTransition_MultipleSubConns_DifferentStates(t *testing.T) {
 		wantState     connectivity.State
 	}{
 		{
-			name: "alteast one ready",
+			name: "atleast one ready",
 			subConnStates: [][]connectivity.State{
 				{connectivity.Idle, connectivity.Connecting, connectivity.Ready},
 				{connectivity.Idle},
@@ -200,7 +200,7 @@ func (s) TestRecordTransition_MultipleSubConns_DifferentStates(t *testing.T) {
 			wantState: connectivity.Ready,
 		},
 		{
-			name: "alteast one connecting",
+			name: "atleast one connecting",
 			subConnStates: [][]connectivity.State{
 				{connectivity.Idle, connectivity.Connecting, connectivity.Ready, connectivity.Connecting},
 				{connectivity.Idle},
@@ -209,7 +209,7 @@ func (s) TestRecordTransition_MultipleSubConns_DifferentStates(t *testing.T) {
 			wantState: connectivity.Connecting,
 		},
 		{
-			name: "alteast one idle",
+			name: "atleast one idle",
 			subConnStates: [][]connectivity.State{
 				{connectivity.Idle, connectivity.Connecting, connectivity.Ready, connectivity.Idle},
 				{connectivity.Idle, connectivity.Connecting, connectivity.TransientFailure},
@@ -217,7 +217,7 @@ func (s) TestRecordTransition_MultipleSubConns_DifferentStates(t *testing.T) {
 			wantState: connectivity.Idle,
 		},
 		{
-			name: "alteast one transient failure",
+			name: "atleast one transient failure",
 			subConnStates: [][]connectivity.State{
 				{connectivity.Idle, connectivity.Connecting, connectivity.Ready, connectivity.TransientFailure},
 				{connectivity.TransientFailure},
