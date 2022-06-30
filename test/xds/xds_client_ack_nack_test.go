@@ -145,20 +145,14 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 	// Wait for all the previously sent resources to be re-requested.
 	<-acksReceived.Done()
 
-	// Retrieve and compare ACKs from before and after stream restart.
-	var idBeforeRestart, idAfterRestart int64
-	for id := range ackVersionsMap {
-		if id > idAfterRestart {
-			idBeforeRestart = idAfterRestart
-			idAfterRestart = id
-		} else {
-			idBeforeRestart = id
-		}
-	}
-	acksBeforeRestart := ackVersionsMap[idBeforeRestart]
-	acksAfterRestart := ackVersionsMap[idAfterRestart]
-	if !cmp.Equal(acksBeforeRestart, acksAfterRestart) {
-		t.Fatalf("ACKs before restart: %v and ACKs after restart: %v don't match", acksBeforeRestart, acksAfterRestart)
+	// We depend on the fact that the management server assigns monotonically
+	// increasing stream IDs starting at 1.
+	const (
+		idBeforeRestart = 1
+		idAfterRestart  = 2
+	)
+	if diff := cmp.Diff(ackVersionsMap[idBeforeRestart], ackVersionsMap[idAfterRestart]); diff != "" {
+		t.Fatalf("unexpected diff in ack versions before and after stream restart (-want, +got):\n%s", diff)
 	}
 	if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
 		t.Fatalf("rpc EmptyCall() failed: %v", err)
