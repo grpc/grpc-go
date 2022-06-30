@@ -295,31 +295,6 @@ func (s) TestEDS_TwoLocalities(t *testing.T) {
 	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc2, sc2, sc2, sc2, sc3, sc4}); err != nil {
 		t.Fatal(err)
 	}
-
-	// Change weight of the locality[1] to 0, it should never be picked.
-	clab6 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
-	clab6.AddLocality(testSubZones[1], 0, 0, testEndpointAddrs[1:2], nil)
-	clab6.AddLocality(testSubZones[2], 1, 0, testEndpointAddrs[2:4], nil)
-	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab6.Build()), nil)
-
-	// Changing weight of locality[1] to 0 caused it to be removed. It's subconn
-	// should also be removed.
-	//
-	// NOTE: this is because we handle locality with weight 0 same as the
-	// locality doesn't exist. If this changes in the future, this removeSubConn
-	// behavior will also change.
-	scToRemove2 := <-cc.RemoveSubConnCh
-	if !cmp.Equal(scToRemove2, sc2, cmp.AllowUnexported(testutils.TestSubConn{})) {
-		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scToRemove2)
-	}
-
-	// Test pick with two subconns different locality weight.
-	//
-	// Locality-1 will be not be picked, and locality-2 will be picked.
-	// Locality-2 contains sc3 and sc4. So expect sc3, sc4.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc3, sc4}); err != nil {
-		t.Fatal(err)
-	}
 }
 
 // The EDS balancer gets EDS resp with unhealthy endpoints. Test that only
