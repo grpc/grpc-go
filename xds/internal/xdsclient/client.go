@@ -41,7 +41,7 @@ type XDSClient interface {
 	WatchRouteConfig(string, func(xdsresource.RouteConfigUpdate, error)) func()
 	WatchCluster(string, func(xdsresource.ClusterUpdate, error)) func()
 	WatchEndpoints(string, func(xdsresource.EndpointsUpdate, error)) func()
-	ReportLoad(server *bootstrap.ServerConfig) (*load.Store, func())
+	ReportLoad(*bootstrap.ServerConfig) (*load.Store, func())
 
 	DumpLDS() map[string]xdsresource.UpdateWithMD
 	DumpRDS() map[string]xdsresource.UpdateWithMD
