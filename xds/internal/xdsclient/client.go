@@ -29,8 +29,28 @@ import (
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/xds/internal/xdsclient/load"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
+
+// XDSClient is a full fledged gRPC client which queries a set of discovery APIs
+// (collectively termed as xDS) on a remote management server, to discover
+// various dynamic resources.
+type XDSClient interface {
+	WatchListener(string, func(xdsresource.ListenerUpdate, error)) func()
+	WatchRouteConfig(string, func(xdsresource.RouteConfigUpdate, error)) func()
+	WatchCluster(string, func(xdsresource.ClusterUpdate, error)) func()
+	WatchEndpoints(string, func(xdsresource.EndpointsUpdate, error)) func()
+	ReportLoad(server *bootstrap.ServerConfig) (*load.Store, func())
+
+	DumpLDS() map[string]xdsresource.UpdateWithMD
+	DumpRDS() map[string]xdsresource.UpdateWithMD
+	DumpCDS() map[string]xdsresource.UpdateWithMD
+	DumpEDS() map[string]xdsresource.UpdateWithMD
+
+	BootstrapConfig() *bootstrap.Config
+	Close()
+}
 
 // clientImpl is the real implementation of the xds client. The exported Client
 // is a wrapper of this struct with a ref count.
