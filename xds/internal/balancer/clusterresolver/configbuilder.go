@@ -251,9 +251,6 @@ func groupLocalitiesByPriority(localities []xdsresource.Locality) [][]xdsresourc
 	var priorityIntSlice []int
 	priorities := make(map[int][]xdsresource.Locality)
 	for _, locality := range localities {
-		if locality.Weight == 0 {
-			continue
-		}
 		priority := int(locality.Priority)
 		priorities[priority] = append(priorities[priority], locality)
 		priorityIntSlice = append(priorityIntSlice, priority)
