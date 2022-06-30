@@ -254,9 +254,6 @@ func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
 	defer sCancel()
 	client := testpb.NewTestServiceClient(cc)
 	_, err = client.EmptyCall(sCtx, &testpb.Empty{})
-	if err == nil {
-		t.Fatal("rpc EmptyCall() succeeded when expected to fail")
-	}
 	if got := status.Code(err); got != codes.DeadlineExceeded {
 		t.Fatalf("rpc EmptyCall() returned code: %v, want %v", got, codes.DeadlineExceeded)
 	}
