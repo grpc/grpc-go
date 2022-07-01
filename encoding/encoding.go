@@ -128,3 +128,13 @@ func RegisterCodec(codec Codec) {
 func GetCodec(contentSubtype string) Codec {
 	return registeredCodecs[contentSubtype]
 }
+
+// MessageWrapper defines the interface for wrapped messages.
+type MessageWrapper interface {
+	// Interface returns the underlying message.
+	Interface() interface{}
+}
+
+// MessageWrapperHandler wraps a message before it will be encoded/decoded.
+// A new handler can be registered with the generated RegisterMessageWrapper function.
+type MessageWrapperHandler func(v interface{}) MessageWrapper

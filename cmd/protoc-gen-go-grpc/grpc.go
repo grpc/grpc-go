@@ -28,10 +28,11 @@ import (
 )
 
 const (
-	contextPackage = protogen.GoImportPath("context")
-	grpcPackage    = protogen.GoImportPath("google.golang.org/grpc")
-	codesPackage   = protogen.GoImportPath("google.golang.org/grpc/codes")
-	statusPackage  = protogen.GoImportPath("google.golang.org/grpc/status")
+	contextPackage  = protogen.GoImportPath("context")
+	grpcPackage     = protogen.GoImportPath("google.golang.org/grpc")
+	codesPackage    = protogen.GoImportPath("google.golang.org/grpc/codes")
+	statusPackage   = protogen.GoImportPath("google.golang.org/grpc/status")
+	encodingPackage = protogen.GoImportPath("google.golang.org/grpc/encoding")
 )
 
 type serviceGenerateHelperInterface interface {
@@ -47,6 +48,14 @@ type serviceGenerateHelper struct{}
 
 func (serviceGenerateHelper) formatFullMethodName(service *protogen.Service, method *protogen.Method) string {
 	return fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name())
+}
+
+func generateMessageWrapperRegistrar(g *protogen.GeneratedFile) {
+	g.P("var msgWrapperHandler ", encodingPackage.Ident("MessageWrapperHandler"))
+	g.P("func RegisterMessageWrapper(handler ", encodingPackage.Ident("MessageWrapperHandler"), ") {")
+	g.P("msgWrapperHandler = handler")
+	g.P("}")
+	g.P()
 }
 
 func (serviceGenerateHelper) generateClientStruct(g *protogen.GeneratedFile, clientName string) {
@@ -144,12 +153,12 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 	if len(file.Services) == 0 {
 		return
 	}
-
 	g.P("// This is a compile-time assertion to ensure that this generated file")
 	g.P("// is compatible with the grpc package it is being compiled against.")
 	g.P("// Requires gRPC-Go v1.32.0 or later.")
 	g.P("const _ = ", grpcPackage.Ident("SupportPackageIsVersion7")) // When changing, update version number above.
 	g.P()
+	generateMessageWrapperRegistrar(g)
 	for _, service := range file.Services {
 		genService(gen, file, g, service)
 	}
@@ -284,8 +293,14 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	}
 	g.P("func (c *", unexport(service.GoName), "Client) ", clientSignature(g, method), "{")
 	if !method.Desc.IsStreamingServer() && !method.Desc.IsStreamingClient() {
+		g.P("var inw, outw interface{}")
 		g.P("out := new(", method.Output.GoIdent, ")")
-		g.P(`err := c.cc.Invoke(ctx, "`, sname, `", in, out, opts...)`)
+		g.P("if msgWrapperHandler != nil {")
+		g.P("inw, outw = msgWrapperHandler(in), msgWrapperHandler(out)")
+		g.P("} else {")
+		g.P("inw, outw = in, out")
+		g.P("}")
+		g.P(`err := c.cc.Invoke(ctx, "`, sname, `", inw, outw, opts...)`)
 		g.P("if err != nil { return nil, err }")
 		g.P("return out, nil")
 		g.P("}")
@@ -416,17 +431,29 @@ func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	hname := fmt.Sprintf("_%s_%s_Handler", service.GoName, method.GoName)
 
 	if !method.Desc.IsStreamingClient() && !method.Desc.IsStreamingServer() {
-		g.P("func ", hnameFuncNameFormatter(hname), "(srv interface{}, ctx ", contextPackage.Ident("Context"), ", dec func(interface{}) error, interceptor ", grpcPackage.Ident("UnaryServerInterceptor"), ") (interface{}, error) {")
-		g.P("in := new(", method.Input.GoIdent, ")")
-		g.P("if err := dec(in); err != nil { return nil, err }")
-		g.P("if interceptor == nil { return srv.(", service.GoName, "Server).", method.GoName, "(ctx, in) }")
-		g.P("info := &", grpcPackage.Ident("UnaryServerInfo"), "{")
-		g.P("Server: srv,")
 		fullMethodName := helper.formatFullMethodName(service, method)
+		g.P("func ", hnameFuncNameFormatter(hname), "(srv interface{}, ctx ", contextPackage.Ident("Context"), ", dec func(interface{}) error, interceptor ", grpcPackage.Ident("UnaryServerInterceptor"), ") (interface{}, error) {")
+		g.P("var in interface{}")
+		g.P("var unwrap func() interface{}")
+		g.P("if msgWrapperHandler != nil {")
+		g.P("in = msgWrapperHandler(new(", method.Input.GoIdent, "))")
+		g.P("unwrap = func() interface{} {")
+		g.P("return in.(", encodingPackage.Ident("MessageWrapper"), ").Interface().(*", method.Input.GoIdent, ")")
+		g.P("}")
+		g.P("} else {")
+		g.P("in = new(", method.Input.GoIdent, ")")
+		g.P("unwrap = func() interface{} {")
+		g.P("return in")
+		g.P("}")
+		g.P("}")
+		g.P("if err := dec(in); err != nil { return nil, err }")
+		g.P("if interceptor == nil { return srv.(", service.GoName, "Server).", method.GoName, "(ctx, unwrap().(*", method.Input.GoIdent, ")) }")
+		g.P("info := &", grpcPackage.Ident("UnaryServerInfo"), "{")
+		g.P("Server:     srv,")
 		g.P("FullMethod: \"", fullMethodName, "\",")
 		g.P("}")
 		g.P("handler := func(ctx ", contextPackage.Ident("Context"), ", req interface{}) (interface{}, error) {")
-		g.P("return srv.(", service.GoName, "Server).", method.GoName, "(ctx, req.(*", method.Input.GoIdent, "))")
+		g.P("return srv.(", service.GoName, "Server).", method.GoName, "(ctx, unwrap().(*", method.Input.GoIdent, "))")
 		g.P("}")
 		g.P("return interceptor(ctx, in, info, handler)")
 		g.P("}")
