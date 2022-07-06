@@ -33,7 +33,7 @@ type controlPlane struct {
 
 func newControlPlane() (*controlPlane, error) {
 	// Spin up an xDS management server on a local port.
-	server, err := e2e.StartManagementServer()
+	server, err := e2e.StartManagementServer(nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to spin up the xDS management server: %v", err)
 	}

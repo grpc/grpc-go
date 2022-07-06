@@ -166,12 +166,20 @@ func (t *Controller) sendExisting(stream grpc.ClientStream) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	// Reset the ack versions when the stream restarts.
-	t.versionMap = make(map[xdsresource.ResourceType]string)
+	// Reset only the nonce when the stream restarts.
+	//
+	// xDS spec says the following. See section:
+	// https://www.envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol#ack-nack-and-resource-type-instance-version
+	//
+	// Note that the version for a resource type is not a property of an
+	// individual xDS stream but rather a property of the resources themselves. If
+	// the stream becomes broken and the client creates a new stream, the client’s
+	// initial request on the new stream should indicate the most recent version
+	// seen by the client on the previous stream
 	t.nonceMap = make(map[xdsresource.ResourceType]string)
 
 	for rType, s := range t.watchMap {
-		if err := t.vClient.SendRequest(stream, mapToSlice(s), rType, "", "", ""); err != nil {
+		if err := t.vClient.SendRequest(stream, mapToSlice(s), rType, t.versionMap[rType], "", ""); err != nil {
 			t.logger.Warningf("ADS request failed: %v", err)
 			return false
 		}
@@ -296,8 +304,8 @@ func (t *Controller) processWatchInfo(w *watchAction) (target []string, rType xd
 	rType = w.rType
 	target = mapToSlice(current)
 	// We don't reset version or nonce when a new watch is started. The version
-	// and nonce from previous response are carried by the request unless the
-	// stream is recreated.
+	// and nonce from previous response are carried by the request. Only the nonce
+	// is reset when the stream is recreated.
 	ver = t.versionMap[rType]
 	nonce = t.nonceMap[rType]
 	return target, rType, ver, nonce

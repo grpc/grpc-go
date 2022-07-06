@@ -104,7 +104,7 @@ func (s) TestRLSinxDS(t *testing.T) {
 	// Set up all components and configuration necessary - management server,
 	// xDS resolver, fake RLS Server, and xDS configuration which specifies an
 	// RLS Balancer that communicates to this set up fake RLS Server.
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t)
+	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
 	defer cleanup1()
 	port, cleanup2 := startTestService(t, nil)
 	defer cleanup2()
