@@ -399,7 +399,7 @@ func (tb *testClusterImplBalancer) waitForSubConnUpdate(ctx context.Context, wan
 		return err
 	}
 	gotSCS := scs.(subConnWithState)
-	if !cmp.Equal(gotSCS, wantSCS, cmp.AllowUnexported(subConnWithState{}, testutils.TestSubConn{}, subConnWrapper{}, object{}), cmpopts.IgnoreFields(subConnWrapper{}, "scUpdateCh")) {
+	if !cmp.Equal(gotSCS, wantSCS, cmp.AllowUnexported(subConnWithState{}, testutils.TestSubConn{}, subConnWrapper{}, addressInfo{}), cmpopts.IgnoreFields(subConnWrapper{}, "scUpdateCh")) {
 		return fmt.Errorf("received SubConnState: %+v, want %+v", gotSCS, wantSCS)
 	}
 	return nil
@@ -969,7 +969,7 @@ func (s) TestPicker(t *testing.T) {
 		pi.Done(balancer.DoneInfo{})
 		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
 		od.mu.Lock()
-		obj, ok := od.odAddrs["address1"]
+		obj, ok := od.addrs["address1"]
 		if !ok {
 			t.Fatal("map entry for address: address1 not present in map")
 		}
@@ -1039,7 +1039,7 @@ func (s) TestPicker(t *testing.T) {
 		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
 		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
 		od.mu.Lock()
-		obj, ok := od.odAddrs["address1"]
+		obj, ok := od.addrs["address1"]
 		if !ok {
 			t.Fatal("map entry for address: address1 not present in map")
 		}
@@ -1088,7 +1088,7 @@ func (s) TestPicker(t *testing.T) {
 		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
 		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
 		od.mu.Lock()
-		obj, ok := od.odAddrs["address1"]
+		obj, ok := od.addrs["address1"]
 		if !ok {
 			t.Fatal("map entry for address: address1 not present in map")
 		}

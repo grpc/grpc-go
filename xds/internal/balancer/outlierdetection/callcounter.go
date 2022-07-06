@@ -35,10 +35,11 @@ func newCallCounter() *callCounter {
 	}
 }
 
+// callCounter has two buckets, which each count successes and failures. The
+// activeBucket is used to actively count any finished RPC's, and the
+// inactiveBucket is populated with this activeBucket's data every interval for
+// use by the Outlier Detection algorithm.
 type callCounter struct {
-	// "The object contains two buckets, and each bucket has a number counting
-	// successes, and another counting failures." - A50
-
 	// activeBucket updates every time a call finishes (from picker passed to
 	// Client Conn), so protect pointer read with atomic load of unsafe.Pointer
 	// so picker does not have to grab a mutex per RPC, the critical path.

@@ -42,10 +42,13 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// TestOutlierDetection tests an xDS configured ClientConn with an Outlier
-// Detection present in the system which is a logical no-op. An RPC should
-// proceed as normal.
-func (s) TestOutlierDetection(t *testing.T) {
+// TestOutlierDetection_NoopConfig tests the scenario where the Outlier
+// Detection feature is enabled on the gRPC client, but it receives no Outlier
+// Detection configuration from the management server. This should result in a
+// no-op Outlier Detection configuration being used to configure the Outlier
+// Detection balancer. This test verifies that an RPC is able to proceed
+// normally with this configuration.
+func (s) TestOutlierDetection_NoopConfig(t *testing.T) {
 	oldOD := envconfig.XDSOutlierDetection
 	envconfig.XDSOutlierDetection = true
 	internal.RegisterOutlierDetectionBalancerForTesting()
@@ -54,7 +57,7 @@ func (s) TestOutlierDetection(t *testing.T) {
 		internal.UnregisterOutlierDetectionBalancerForTesting()
 	}()
 
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t)
+	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
 	defer cleanup1()
 
 	port, cleanup2 := startTestService(t, nil)
@@ -87,12 +90,12 @@ func (s) TestOutlierDetection(t *testing.T) {
 	}
 }
 
-// defaultClientResourcesSpecifyingMultipleBackendsAndOutlierDetection returns
-// xDS resources which correspond to multiple upstreams, corresponding different
-// backends listening on different localhost:port combinations. The resources
-// also configure an Outlier Detection Balancer set up with Failure Percentage
-// Algorithm, which ejects endpoints based on failure rate.
-func defaultClientResourcesSpecifyingMultipleBackendsAndOutlierDetection(params e2e.ResourceParams, ports []uint32) e2e.UpdateOptions {
+// defaultClientResourcesMultipleBackendsAndOD returns xDS resources which
+// correspond to multiple upstreams, corresponding different backends listening
+// on different localhost:port combinations. The resources also configure an
+// Outlier Detection Balancer set up with Failure Percentage Algorithm, which
+// ejects endpoints based on failure rate.
+func defaultClientResourcesMultipleBackendsAndOD(params e2e.ResourceParams, ports []uint32) e2e.UpdateOptions {
 	routeConfigName := "route-" + params.DialTarget
 	clusterName := "cluster-" + params.DialTarget
 	endpointsName := "endpoints-" + params.DialTarget
@@ -108,9 +111,7 @@ func defaultClientResourcesSpecifyingMultipleBackendsAndOutlierDetection(params 
 func defaultClusterWithOutlierDetection(clusterName, edsServiceName string, secLevel e2e.SecurityLevel) *v3clusterpb.Cluster {
 	cluster := e2e.DefaultCluster(clusterName, edsServiceName, secLevel)
 	cluster.OutlierDetection = &v3clusterpb.OutlierDetection{
-		Interval: &durationpb.Duration{
-			Nanos: 500000000,
-		},
+		Interval:                       &durationpb.Duration{Nanos: 50000000}, // .5 seconds
 		BaseEjectionTime:               &durationpb.Duration{Seconds: 30},
 		MaxEjectionTime:                &durationpb.Duration{Seconds: 300},
 		MaxEjectionPercent:             &wrapperspb.UInt32Value{Value: 1},
@@ -136,7 +137,7 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 		internal.UnregisterOutlierDetectionBalancerForTesting()
 	}()
 
-	managementServer, nodeID, _, resolver, cleanup := e2e.SetupManagementServer(t)
+	managementServer, nodeID, _, resolver, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
 
 	// counters for how many times backends got called
@@ -172,7 +173,7 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 	defer cleanup3()
 
 	const serviceName = "my-service-client-side-xds"
-	resources := defaultClientResourcesSpecifyingMultipleBackendsAndOutlierDetection(e2e.ResourceParams{
+	resources := defaultClientResourcesMultipleBackendsAndOD(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",
