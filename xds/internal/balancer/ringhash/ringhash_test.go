@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/xds/internal"
 )
 
 var (
@@ -489,5 +490,28 @@ func (s) TestConnectivityStateEvaluatorRecordTransition(t *testing.T) {
 				t.Errorf("recordTransition() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestAddrBalancerAttributesChange tests the case where the ringhash balancer
+// receives a ClientConnUpdate with the same config and addresses as received in
+// the previous update. Although the `BalancerAttributes` contents are the same,
+// the pointer is different. This test verifies that subConns are not recreated
+// in this scenario.
+func (s) TestAddrBalancerAttributesChange(t *testing.T) {
+	addrs1 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, internal.LocalityID{Region: "americas"})}
+	cc, b, _ := setupTest(t, addrs1)
+
+	addrs2 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, internal.LocalityID{Region: "americas"})}
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{Addresses: addrs2},
+		BalancerConfig: nil,
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState returned err: %v", err)
+	}
+	select {
+	case <-cc.NewSubConnCh:
+		t.Fatal("new subConn created for an update with the same addresses")
+	case <-time.After(defaultTestShortTimeout):
 	}
 }
