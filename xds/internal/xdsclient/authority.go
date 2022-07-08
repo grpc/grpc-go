@@ -54,7 +54,9 @@ func (c *clientImpl) findAuthority(n *xdsresource.Name) (_ *authority, unref fun
 		if !ok {
 			return nil, nil, fmt.Errorf("xds: failed to find authority %q", authority)
 		}
-		config = cfg.XDSServer
+		if cfg.XDSServer != nil {
+			config = cfg.XDSServer
+		}
 	}
 
 	a, err := c.newAuthorityLocked(config)
