@@ -63,7 +63,7 @@ type BootstrapOptions struct {
 	// features) are assumed to be the same as the default authority (they can
 	// be added later if needed).
 	//
-	// If the env var correponding to federation (envconfig.XDSFederation) is
+	// If the env var corresponding to federation (envconfig.XDSFederation) is
 	// set, an entry with empty string as the key and empty server config as
 	// value will be added. This will be used by new style resource names with
 	// an empty authority.
