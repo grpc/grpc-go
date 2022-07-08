@@ -62,6 +62,11 @@ type BootstrapOptions struct {
 	// map[authority-name]ServerURI). The other fields (version, creds,
 	// features) are assumed to be the same as the default authority (they can
 	// be added later if needed).
+	//
+	// If the env var correponding to federation (envconfig.XDSFederation) is
+	// set, an entry with empty string as the key and empty server config as
+	// value will be added. This will be used by new style resource names with
+	// an empty authority.
 	Authorities map[string]string
 }
 
@@ -122,6 +127,11 @@ func BootstrapContents(opts BootstrapOptions) ([]byte, error) {
 	}
 
 	auths := make(map[string]authority)
+	if envconfig.XDSFederation {
+		// This will end up using the top-level server list for new style
+		// resources with empty authority.
+		auths[""] = authority{}
+	}
 	for n, auURI := range opts.Authorities {
 		auths[n] = authority{XdsServers: []server{{
 			ServerURI:      auURI,
