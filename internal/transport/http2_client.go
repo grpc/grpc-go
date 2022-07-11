@@ -1219,7 +1219,9 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	default:
 		t.setGoAwayReason(f)
 		close(t.goAway)
+		t.mu.Unlock()
 		t.controlBuf.put(&incomingGoAway{})
+		t.mu.Lock()
 		// Notify the clientconn about the GOAWAY before we set the state to
 		// draining, to allow the client to stop attempting to create streams
 		// before disallowing new streams on this connection.
