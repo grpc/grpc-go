@@ -8041,3 +8041,44 @@ func (s) TestServerClosesConn(t *testing.T) {
 	}
 	t.Fatalf("timed out waiting for conns to be closed by server; still open: %v", atomic.LoadInt32(&wrapLis.connsOpen))
 }
+
+// TestUnexpectedEOF tests a scenario where a client invokes two unary RPC
+// calls. The first call receives a payload which exceeds max grpc receive
+// message length, and the second gets a large response. This second RPC should
+// not fail with unexpected.EOF.
+func (s) TestUnexpectedEOF(t *testing.T) {
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{
+				Payload: &testpb.Payload{
+					Body: bytes.Repeat([]byte("a"), int(in.ResponseSize)),
+				},
+			}, nil
+		},
+	}
+	if err := ss.Start([]grpc.ServerOption{}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	for i := 0; i < 10; i++ {
+		// exceeds grpc.DefaultMaxRecvMessageSize, this should error with
+		// RESOURCE_EXHAUSTED error.
+		_, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{ResponseSize: 4194304})
+		if err != nil {
+			if e, ok := status.FromError(err); ok {
+				if e.Code() != codes.ResourceExhausted {
+					t.Fatalf("unexpected err in UnaryCall: %v", err)
+				}
+			}
+		}
+		// Larger response that doesn't exceed DefaultMaxRecvMessageSize, this
+		// should work normally.
+		_, err = ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{ResponseSize: 275075})
+		if err != nil {
+			t.Fatalf("unexpected err in UnaryCall: %v", err)
+		}
+	}
+}

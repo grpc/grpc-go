@@ -685,6 +685,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 				cleanup(err)
 				return err
 			}
+			s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
 			t.activeStreams[id] = s
 			if channelz.IsOn() {
 				atomic.AddInt64(&t.czData.streamsStarted, 1)
@@ -718,7 +719,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		h.streamID = t.nextID
 		t.nextID += 2
 		s.id = h.streamID
-		s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
 		if t.streamQuota > 0 && t.waitingStreams > 0 {
 			select {
 			case t.streamsQuotaAvailable <- struct{}{}:
@@ -1003,13 +1003,13 @@ func (t *http2Client) updateWindow(s *Stream, n uint32) {
 // for the transport and the stream based on the current bdp
 // estimation.
 func (t *http2Client) updateFlowControl(n uint32) {
-	t.mu.Lock()
-	for _, s := range t.activeStreams {
-		s.fc.newLimit(n)
-	}
-	t.mu.Unlock()
 	updateIWS := func(interface{}) bool {
 		t.initialWindowSize = int32(n)
+		t.mu.Lock()
+		for _, s := range t.activeStreams {
+			s.fc.newLimit(n)
+		}
+		t.mu.Unlock()
 		return true
 	}
 	t.controlBuf.executeAndPut(updateIWS, &outgoingWindowUpdate{streamID: 0, increment: t.fc.newLimit(n)})
