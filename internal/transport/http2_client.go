@@ -748,13 +748,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 	}
 	for {
 		success, err := t.controlBuf.executeAndPut(func(it interface{}) bool {
-			if !checkForHeaderListSize(it) {
-				return false
-			}
-			if !checkForStreamQuota(it) {
-				return false
-			}
-			return true
+			return checkForHeaderListSize(it) && checkForStreamQuota(it)
 		}, hdr)
 		if err != nil {
 			// Connection closed.

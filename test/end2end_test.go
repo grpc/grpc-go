@@ -8068,10 +8068,11 @@ func (s) TestUnexpectedEOF(t *testing.T) {
 		// RESOURCE_EXHAUSTED error.
 		_, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{ResponseSize: 4194304})
 		if err != nil {
-			if e, ok := status.FromError(err); ok {
-				if e.Code() != codes.ResourceExhausted {
-					t.Fatalf("unexpected err in UnaryCall: %v", err)
-				}
+			// This check doesn't fail on a non status error. However, the main
+			// this is testing for is an unexpected EOF with a status code
+			// INTERNAL so this is fine.
+			if code := status.Code(err); code != codes.ResourceExhausted {
+				t.Fatalf("unexpected err in UnaryCall: %v", err)
 			}
 		}
 		// Larger response that doesn't exceed DefaultMaxRecvMessageSize, this
