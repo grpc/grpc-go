@@ -685,8 +685,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 				cleanup(err)
 				return err
 			}
-			s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
-			t.activeStreams[id] = s
 			if channelz.IsOn() {
 				atomic.AddInt64(&t.czData.streamsStarted, 1)
 				atomic.StoreInt64(&t.czData.lastStreamCreatedTime, time.Now().UnixNano())
@@ -719,6 +717,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		h.streamID = t.nextID
 		t.nextID += 2
 		s.id = h.streamID
+		s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
+		t.mu.Lock()
+		if t.activeStreams != nil { // Can be niled from Close()
+			t.activeStreams[s.id] = s
+		}
+		t.mu.Unlock()
 		if t.streamQuota > 0 && t.waitingStreams > 0 {
 			select {
 			case t.streamsQuotaAvailable <- struct{}{}:
@@ -744,10 +748,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 	}
 	for {
 		success, err := t.controlBuf.executeAndPut(func(it interface{}) bool {
-			if !checkForStreamQuota(it) {
+			if !checkForHeaderListSize(it) {
 				return false
 			}
-			if !checkForHeaderListSize(it) {
+			if !checkForStreamQuota(it) {
 				return false
 			}
 			return true
