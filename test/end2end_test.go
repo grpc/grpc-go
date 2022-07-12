@@ -8066,20 +8066,18 @@ func (s) TestUnexpectedEOF(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		// exceeds grpc.DefaultMaxRecvMessageSize, this should error with
 		// RESOURCE_EXHAUSTED error.
-		_, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{ResponseSize: 4194304})
-		if err != nil {
+		if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{ResponseSize: 4194304}); err != nil {
 			// This check doesn't fail on a non status error. However, the main
 			// this is testing for is an unexpected EOF with a status code
 			// INTERNAL so this is fine.
 			if code := status.Code(err); code != codes.ResourceExhausted {
-				t.Fatalf("unexpected err in UnaryCall: %v", err)
+				t.Fatalf("UnaryCall RPC returned error: %v, want status code %v", err, codes.ResourceExhausted)
 			}
 		}
 		// Larger response that doesn't exceed DefaultMaxRecvMessageSize, this
 		// should work normally.
-		_, err = ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{ResponseSize: 275075})
-		if err != nil {
-			t.Fatalf("unexpected err in UnaryCall: %v", err)
+		if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{ResponseSize: 275075}); err != nil {
+			t.Fatalf("UnaryCall RPC failed: %v", err)
 		}
 	}
 }
