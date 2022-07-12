@@ -18,12 +18,7 @@ First start the server:
 go run server/main.go
 ```
 
-Then run the client.  Note that when running the client, `GRPC_GO_RETRY=on` must be set in
-your environment:
-
-```bash
-GRPC_GO_RETRY=on go run client/main.go
-```
+Then run the client.
 
 ## Usage
 
