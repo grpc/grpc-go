@@ -969,7 +969,7 @@ func (s) TestPicker(t *testing.T) {
 		pi.Done(balancer.DoneInfo{})
 		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
 		od.mu.Lock()
-		obj, ok := od.addrs["address1"]
+		addrInfo, ok := od.addrs["address1"]
 		if !ok {
 			t.Fatal("map entry for address: address1 not present in map")
 		}
@@ -978,7 +978,7 @@ func (s) TestPicker(t *testing.T) {
 			numFailures:   1,
 			requestVolume: 2,
 		}
-		if diff := cmp.Diff((*bucket)(obj.callCounter.activeBucket), bucketWant); diff != "" { // no need for atomic read because not concurrent with Done() call from picker
+		if diff := cmp.Diff((*bucket)(addrInfo.callCounter.activeBucket), bucketWant); diff != "" { // no need for atomic read because not concurrent with Done() call from picker
 			t.Fatalf("callCounter is different than expected, diff (-got +want): %v", diff)
 		}
 		od.mu.Unlock()
@@ -1039,7 +1039,7 @@ func (s) TestPicker(t *testing.T) {
 		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
 		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
 		od.mu.Lock()
-		obj, ok := od.addrs["address1"]
+		addrInfo, ok := od.addrs["address1"]
 		if !ok {
 			t.Fatal("map entry for address: address1 not present in map")
 		}
@@ -1049,7 +1049,7 @@ func (s) TestPicker(t *testing.T) {
 		// should not count, as the outlier detection balancer is configured
 		// with a no-op configuration.
 		bucketWant := &bucket{}
-		if diff := cmp.Diff((*bucket)(obj.callCounter.activeBucket), bucketWant); diff != "" { // no need for atomic read because not concurrent with Done() call
+		if diff := cmp.Diff((*bucket)(addrInfo.callCounter.activeBucket), bucketWant); diff != "" { // no need for atomic read because not concurrent with Done() call
 			t.Fatalf("callCounter is different than expected, diff (-got +want): %v", diff)
 		}
 		od.mu.Unlock()
@@ -1088,7 +1088,7 @@ func (s) TestPicker(t *testing.T) {
 		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
 		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
 		od.mu.Lock()
-		obj, ok := od.addrs["address1"]
+		addrInfo, ok := od.addrs["address1"]
 		if !ok {
 			t.Fatal("map entry for address: address1 not present in map")
 		}
@@ -1098,7 +1098,7 @@ func (s) TestPicker(t *testing.T) {
 		// should not count, as the outlier detection balancer is configured
 		// with a no-op configuration.
 		bucketWant := &bucket{}
-		if diff := cmp.Diff((*bucket)(obj.callCounter.activeBucket), bucketWant); diff != "" { // no need for atomic read because not concurrent with Done() call
+		if diff := cmp.Diff((*bucket)(addrInfo.callCounter.activeBucket), bucketWant); diff != "" { // no need for atomic read because not concurrent with Done() call
 			t.Fatalf("callCounter is different than expected, diff (-got +want): %v", diff)
 		}
 		od.mu.Unlock()
