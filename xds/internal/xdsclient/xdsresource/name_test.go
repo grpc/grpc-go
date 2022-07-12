@@ -18,54 +18,76 @@
 package xdsresource
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/envconfig"
 )
 
 func TestParseName(t *testing.T) {
 	tests := []struct {
-		name string
-		env  bool // Whether federation env is set to true.
-		in   string
-		want *Name
+		name    string
+		env     bool // Whether federation env is set to true.
+		in      string
+		want    *Name
+		wantStr string
 	}{
 		{
-			name: "env off",
-			env:  false,
-			in:   "xdstp://auth/type/id",
-			want: &Name{ID: "xdstp://auth/type/id"},
+			name:    "env off",
+			env:     false,
+			in:      "xdstp://auth/type/id",
+			want:    &Name{ID: "xdstp://auth/type/id"},
+			wantStr: "xdstp://auth/type/id",
 		},
 		{
-			name: "old style name",
-			env:  true,
-			in:   "test-resource",
-			want: &Name{ID: "test-resource"},
+			name:    "old style name",
+			env:     true,
+			in:      "test-resource",
+			want:    &Name{ID: "test-resource"},
+			wantStr: "test-resource",
 		},
 		{
-			name: "invalid not url",
-			env:  true,
-			in:   "a:/b/c",
-			want: &Name{ID: "a:/b/c"},
+			name:    "invalid not url",
+			env:     true,
+			in:      "a:/b/c",
+			want:    &Name{ID: "a:/b/c"},
+			wantStr: "a:/b/c",
 		},
 		{
-			name: "invalid no resource type",
-			env:  true,
-			in:   "xdstp://auth/id",
-			want: &Name{ID: "xdstp://auth/id"},
+			name:    "invalid no resource type",
+			env:     true,
+			in:      "xdstp://auth/id",
+			want:    &Name{ID: "xdstp://auth/id"},
+			wantStr: "xdstp://auth/id",
 		},
 		{
-			name: "valid no ctx params",
-			env:  true,
-			in:   "xdstp://auth/type/id",
-			want: &Name{Scheme: "xdstp", Authority: "auth", Type: "type", ID: "id"},
+			name:    "valid with no authority",
+			env:     true,
+			in:      "xdstp:///type/id",
+			want:    &Name{Scheme: "xdstp", Authority: "", Type: "type", ID: "id"},
+			wantStr: "xdstp:///type/id",
 		},
 		{
-			name: "valid with ctx params",
-			env:  true,
-			in:   "xdstp://auth/type/id?a=1&b=2",
-			want: &Name{Scheme: "xdstp", Authority: "auth", Type: "type", ID: "id", ContextParams: map[string]string{"a": "1", "b": "2"}},
+			name:    "valid no ctx params",
+			env:     true,
+			in:      "xdstp://auth/type/id",
+			want:    &Name{Scheme: "xdstp", Authority: "auth", Type: "type", ID: "id"},
+			wantStr: "xdstp://auth/type/id",
+		},
+		{
+			name:    "valid with ctx params",
+			env:     true,
+			in:      "xdstp://auth/type/id?a=1&b=2",
+			want:    &Name{Scheme: "xdstp", Authority: "auth", Type: "type", ID: "id", ContextParams: map[string]string{"a": "1", "b": "2"}},
+			wantStr: "xdstp://auth/type/id?a=1&b=2",
+		},
+		{
+			name:    "valid with ctx params sorted by keys",
+			env:     true,
+			in:      "xdstp://auth/type/id?b=2&a=1",
+			want:    &Name{Scheme: "xdstp", Authority: "auth", Type: "type", ID: "id", ContextParams: map[string]string{"a": "1", "b": "2"}},
+			wantStr: "xdstp://auth/type/id?a=1&b=2",
 		},
 	}
 	for _, tt := range tests {
@@ -77,8 +99,12 @@ func TestParseName(t *testing.T) {
 					return func() { envconfig.XDSFederation = oldEnv }
 				}()()
 			}
-			if got := ParseName(tt.in); !reflect.DeepEqual(got, tt.want) {
+			got := ParseName(tt.in)
+			if !cmp.Equal(got, tt.want, cmpopts.IgnoreFields(Name{}, "processingDirective")) {
 				t.Errorf("ParseName() = %#v, want %#v", got, tt.want)
+			}
+			if gotStr := got.String(); gotStr != tt.wantStr {
+				t.Errorf("Name.String() = %s, want %s", gotStr, tt.wantStr)
 			}
 		})
 	}
