@@ -722,6 +722,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
 		t.mu.Lock()
 		if t.activeStreams == nil { // Can be niled from Close().
+			t.mu.Unlock()
 			return false // Don't create a stream if the transport is already closed.
 		}
 		t.activeStreams[s.id] = s
