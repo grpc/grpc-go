@@ -78,6 +78,7 @@ type http2Client struct {
 	framer *framer
 	// controlBuf delivers all the control related tasks (e.g., window
 	// updates, reset streams, and various settings) to the controller.
+	// Do not access controlBuf with mu held.
 	controlBuf *controlBuffer
 	fc         *trInFlow
 	// The scheme used: https if TLS is on, http otherwise.
@@ -109,6 +110,7 @@ type http2Client struct {
 	waitingStreams        uint32
 	nextID                uint32
 
+	// Do not access controlBuf with mu held.
 	mu            sync.Mutex // guard the following variables
 	state         transportState
 	activeStreams map[uint32]*Stream
@@ -719,8 +721,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		s.id = h.streamID
 		s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
 		t.mu.Lock()
-		if t.activeStreams != nil { // Can be niled from Close()
+		if t.activeStreams != nil { // Can be niled from Close().
 			t.activeStreams[s.id] = s
+		} else {
+			return false // Don't create a stream if the transport is already closed.
 		}
 		t.mu.Unlock()
 		if t.streamQuota > 0 && t.waitingStreams > 0 {
