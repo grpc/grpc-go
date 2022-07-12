@@ -527,7 +527,7 @@ func WithDefaultServiceConfig(s string) DialOption {
 // WithDisableRetry returns a DialOption that disables retries, even if the
 // service config enables them.  This does not impact transparent retries, which
 // will happen automatically if no data is written to the wire or if the RPC is
-// unprocessed by the remote server. Retry support is enabled by default.
+// unprocessed by the remote server.
 func WithDisableRetry() DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.disableRetry = true

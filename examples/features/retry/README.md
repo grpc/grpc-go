@@ -18,7 +18,11 @@ First start the server:
 go run server/main.go
 ```
 
-Then run the client.
+Then run the client:
+
+```bash
+go run client/main.go
+```
 
 ## Usage
 
