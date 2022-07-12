@@ -86,7 +86,7 @@ func defaultWatchFunc(s *testHealthServer, in *healthpb.HealthCheckRequest, stre
 type healthWatchFunc func(s *testHealthServer, in *healthpb.HealthCheckRequest, stream healthgrpc.Health_WatchServer) error
 
 type testHealthServer struct {
-	healthpb.UnimplementedHealthServer
+	healthgrpc.UnimplementedHealthServer
 	watchFunc healthWatchFunc
 	mu        sync.Mutex
 	status    map[string]healthpb.HealthCheckResponse_ServingStatus

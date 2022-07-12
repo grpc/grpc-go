@@ -76,6 +76,20 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "missing locality weight",
+			m: func() *v3endpointpb.ClusterLoadAssignment {
+				clab0 := newClaBuilder("test", nil)
+				clab0.addLocality("locality-1", 0, 1, []string{"addr1:314"}, &addLocalityOptions{
+					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_HEALTHY},
+				})
+				clab0.addLocality("locality-2", 0, 0, []string{"addr2:159"}, &addLocalityOptions{
+					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_HEALTHY},
+				})
+				return clab0.Build()
+			}(),
+			want: EndpointsUpdate{},
+		},
+		{
 			name: "good",
 			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
@@ -161,7 +175,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseEDSRespProto(tt.m)
+			got, err := parseEDSRespProto(tt.m, nil)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseEDSRespProto() error = %v, wantErr %v", err, tt.wantErr)
 				return

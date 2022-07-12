@@ -35,6 +35,7 @@ import (
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 	"google.golang.org/grpc/health"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/xds"
 )
@@ -95,7 +96,7 @@ func main() {
 	grpcServer := grpc.NewServer()
 	healthServer := health.NewServer()
 	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
-	healthpb.RegisterHealthServer(grpcServer, healthServer)
+	healthgrpc.RegisterHealthServer(grpcServer, healthServer)
 
 	log.Printf("Serving GreeterService on %s and HealthService on %s", greeterLis.Addr().String(), healthLis.Addr().String())
 	go func() {
