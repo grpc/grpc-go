@@ -741,7 +741,11 @@ func DoSoakTest(tc testgrpc.TestServiceClient, serverAddr string, dopts []grpc.D
 		h.Add(latencyMs)
 		if err != nil {
 			totalFailures++
-			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s failed: %s\n", i, latencyMs, p.Addr.String(), err)
+			addrStr := "nil"
+			if p.Addr != nil {
+				addrStr = p.Addr.String()
+			}
+			fmt.Fprintf(os.Stderr, "soak iteration: %d elapsed_ms: %d peer: %s failed: %s\n", i, latencyMs, addrStr, err)
 			continue
 		}
 		if latency > perIterationMaxAcceptableLatency {
