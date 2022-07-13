@@ -59,7 +59,10 @@ func (v3c *client) SendFirstLoadStatsRequest(s grpc.ClientStream) error {
 
 	req := &lrspb.LoadStatsRequest{Node: node}
 	v3c.logger.Infof("lrs: sending init LoadStatsRequest: %v", pretty.ToJSON(req))
-	return stream.Send(req)
+	if err := stream.Send(req); err != nil {
+		return getStreamError(stream)
+	}
+	return nil
 }
 
 func (v3c *client) HandleLoadStatsResponse(s grpc.ClientStream) ([]string, time.Duration, error) {
@@ -148,5 +151,17 @@ func (v3c *client) SendLoadStatsRequest(s grpc.ClientStream, loads []*load.Data)
 
 	req := &lrspb.LoadStatsRequest{ClusterStats: clusterStats}
 	v3c.logger.Infof("lrs: sending LRS loads: %+v", pretty.ToJSON(req))
-	return stream.Send(req)
+	if err := stream.Send(req); err != nil {
+		return getStreamError(stream)
+	}
+	return nil
+}
+
+func getStreamError(stream lrsStream) error {
+	for {
+		_, err := stream.Recv()
+		if err != nil {
+			return err
+		}
+	}
 }

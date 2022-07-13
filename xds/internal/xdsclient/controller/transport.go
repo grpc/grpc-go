@@ -99,10 +99,10 @@ func (t *Controller) run(ctx context.Context) {
 // new requests to send on the stream.
 //
 // For each new request (watchAction), it's
-//  - processed and added to the watch map
-//    - so resend will pick them up when there are new streams
-//  - sent on the current stream if there's one
-//    - the current stream is cleared when any send on it fails
+//   - processed and added to the watch map
+//     so, resend will pick them up when there are new streams
+//   - sent on the current stream if there's one
+//     the current stream is cleared when any send on it fails
 //
 // For each new stream, all the existing requests will be resent.
 //
@@ -388,26 +388,34 @@ func (t *Controller) reportLoad(ctx context.Context, cc *grpc.ClientConn, opts c
 
 		retries++
 		lastStreamStartTime = time.Now()
-		stream, err := t.vClient.NewLoadStatsStream(ctx, cc)
+		// streamCtx is created and canceled in case we terminate the stream
+		// early for any reason, to avoid gRPC-Go leaking the RPC's monitoring
+		// goroutine.
+		streamCtx, cancel := context.WithCancel(ctx)
+		stream, err := t.vClient.NewLoadStatsStream(streamCtx, cc)
 		if err != nil {
 			t.logger.Warningf("lrs: failed to create stream: %v", err)
+			cancel()
 			continue
 		}
 		t.logger.Infof("lrs: created LRS stream")
 
 		if err := t.vClient.SendFirstLoadStatsRequest(stream); err != nil {
 			t.logger.Warningf("lrs: failed to send first request: %v", err)
+			cancel()
 			continue
 		}
 
 		clusters, interval, err := t.vClient.HandleLoadStatsResponse(stream)
 		if err != nil {
-			t.logger.Warningf("%v", err)
+			t.logger.Warningf("lrs: error from stream: %v", err)
+			cancel()
 			continue
 		}
 
 		retries = 0
-		t.sendLoads(ctx, stream, opts.LoadStore, clusters, interval)
+		t.sendLoads(streamCtx, stream, opts.LoadStore, clusters, interval)
+		cancel()
 	}
 }
 
@@ -421,7 +429,7 @@ func (t *Controller) sendLoads(ctx context.Context, stream grpc.ClientStream, st
 			return
 		}
 		if err := t.vClient.SendLoadStatsRequest(stream, store.Stats(clusterNames)); err != nil {
-			t.logger.Warningf("%v", err)
+			t.logger.Warningf("lrs: error from stream: %v", err)
 			return
 		}
 	}
