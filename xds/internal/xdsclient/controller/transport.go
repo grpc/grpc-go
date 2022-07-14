@@ -414,7 +414,6 @@ func (t *Controller) reportLoad(ctx context.Context, cc *grpc.ClientConn, opts c
 
 			retries = 0
 			t.sendLoads(streamCtx, stream, opts.LoadStore, clusters, interval)
-			cancel()
 		}()
 	}
 }
