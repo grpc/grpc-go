@@ -160,8 +160,7 @@ func (v2c *client) SendLoadStatsRequest(s grpc.ClientStream, loads []*load.Data)
 
 func getStreamError(stream lrsStream) error {
 	for {
-		_, err := stream.Recv()
-		if err != nil {
+		if _, err := stream.Recv(); err != nil {
 			return err
 		}
 	}

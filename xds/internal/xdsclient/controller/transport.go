@@ -388,34 +388,34 @@ func (t *Controller) reportLoad(ctx context.Context, cc *grpc.ClientConn, opts c
 
 		retries++
 		lastStreamStartTime = time.Now()
-		// streamCtx is created and canceled in case we terminate the stream
-		// early for any reason, to avoid gRPC-Go leaking the RPC's monitoring
-		// goroutine.
-		streamCtx, cancel := context.WithCancel(ctx)
-		stream, err := t.vClient.NewLoadStatsStream(streamCtx, cc)
-		if err != nil {
-			t.logger.Warningf("lrs: failed to create stream: %v", err)
-			cancel()
-			continue
-		}
-		t.logger.Infof("lrs: created LRS stream")
+		func() {
+			// streamCtx is created and canceled in case we terminate the stream
+			// early for any reason, to avoid gRPC-Go leaking the RPC's monitoring
+			// goroutine.
+			streamCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			stream, err := t.vClient.NewLoadStatsStream(streamCtx, cc)
+			if err != nil {
+				t.logger.Warningf("lrs: failed to create stream: %v", err)
+				return
+			}
+			t.logger.Infof("lrs: created LRS stream")
 
-		if err := t.vClient.SendFirstLoadStatsRequest(stream); err != nil {
-			t.logger.Warningf("lrs: failed to send first request: %v", err)
-			cancel()
-			continue
-		}
+			if err := t.vClient.SendFirstLoadStatsRequest(stream); err != nil {
+				t.logger.Warningf("lrs: failed to send first request: %v", err)
+				return
+			}
 
-		clusters, interval, err := t.vClient.HandleLoadStatsResponse(stream)
-		if err != nil {
-			t.logger.Warningf("lrs: error from stream: %v", err)
-			cancel()
-			continue
-		}
+			clusters, interval, err := t.vClient.HandleLoadStatsResponse(stream)
+			if err != nil {
+				t.logger.Warningf("lrs: error from stream: %v", err)
+				return
+			}
 
-		retries = 0
-		t.sendLoads(streamCtx, stream, opts.LoadStore, clusters, interval)
-		cancel()
+			retries = 0
+			t.sendLoads(streamCtx, stream, opts.LoadStore, clusters, interval)
+			cancel()
+		}()
 	}
 }
 
