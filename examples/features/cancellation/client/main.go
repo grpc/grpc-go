@@ -91,5 +91,5 @@ func main() {
 	sendMessage(stream, "closed")
 
 	// This Recv should never succeed.
-	recvMessage(stream, codes.Canceled)
+	recvMessage(stream, codes.Cancelled)
 }

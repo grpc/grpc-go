@@ -181,7 +181,7 @@ func generateRetryConfig(rp *v3routepb.RetryPolicy) (*RetryConfig, error) {
 	for _, s := range strings.Split(rp.GetRetryOn(), ",") {
 		switch strings.TrimSpace(strings.ToLower(s)) {
 		case "cancelled":
-			cfg.RetryOn[codes.Canceled] = true
+			cfg.RetryOn[codes.Cancelled] = true
 		case "deadline-exceeded":
 			cfg.RetryOn[codes.DeadlineExceeded] = true
 		case "internal":

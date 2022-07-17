@@ -660,7 +660,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 				&v3routepb.RetryPolicy{RetryOn: "cancelled"},
 				&v3routepb.RetryPolicy{RetryOn: "deadline-exceeded,unsupported", NumRetries: &wrapperspb.UInt32Value{Value: 2}}),
 			wantUpdate: goodUpdateWithRetryPolicy(
-				&RetryConfig{RetryOn: map[codes.Code]bool{codes.Canceled: true}, NumRetries: 1, RetryBackoff: defaultRetryBackoff},
+				&RetryConfig{RetryOn: map[codes.Code]bool{codes.Cancelled: true}, NumRetries: 1, RetryBackoff: defaultRetryBackoff},
 				&RetryConfig{RetryOn: map[codes.Code]bool{codes.DeadlineExceeded: true}, NumRetries: 2, RetryBackoff: defaultRetryBackoff}),
 		},
 		{

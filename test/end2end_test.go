@@ -3800,8 +3800,8 @@ func testCancel(t *testing.T, e env) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	time.AfterFunc(1*time.Millisecond, cancel)
-	if r, err := tc.UnaryCall(ctx, req); status.Code(err) != codes.Canceled {
-		t.Fatalf("TestService/UnaryCall(_, _) = %v, %v; want _, error code: %s", r, err, codes.Canceled)
+	if r, err := tc.UnaryCall(ctx, req); status.Code(err) != codes.Cancelled {
+		t.Fatalf("TestService/UnaryCall(_, _) = %v, %v; want _, error code: %s", r, err, codes.Cancelled)
 	}
 	awaitNewConnLogOutput()
 }
@@ -4879,8 +4879,8 @@ func testClientRequestBodyErrorCancelStreamingInput(t *testing.T, e env) {
 		case <-time.After(3 * time.Second):
 			t.Fatal("timeout waiting for error")
 		}
-		if grpc.Code(got) != codes.Canceled {
-			t.Errorf("error = %#v; want error code %s", got, codes.Canceled)
+		if grpc.Code(got) != codes.Cancelled {
+			t.Errorf("error = %#v; want error code %s", got, codes.Cancelled)
 		}
 	})
 }
@@ -4910,7 +4910,7 @@ func testClientInitialHeaderEndStream(t *testing.T, e env) {
 		data, err := stream.Recv()
 		if err == nil {
 			t.Errorf("unexpected data received in func server method: '%v'", data)
-		} else if status.Code(err) != codes.Canceled {
+		} else if status.Code(err) != codes.Cancelled {
 			t.Errorf("expected canceled error, instead received '%v'", err)
 		}
 		return nil
@@ -4957,7 +4957,7 @@ func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 				break
 			}
 			if err != nil {
-				if status.Code(err) != codes.Canceled {
+				if status.Code(err) != codes.Cancelled {
 					t.Errorf("expected canceled error, instead received '%v'", err)
 				}
 				break
@@ -4965,7 +4965,7 @@ func testClientSendDataAfterCloseSend(t *testing.T, e env) {
 		}
 		if err := stream.SendMsg(nil); err == nil {
 			t.Error("expected error sending message on stream after stream closed due to illegal data")
-		} else if status.Code(err) != codes.Canceled {
+		} else if status.Code(err) != codes.Cancelled {
 			t.Errorf("expected cancel error, instead received '%v'", err)
 		}
 		return nil
@@ -5052,8 +5052,8 @@ func testClientResourceExhaustedCancelFullDuplex(t *testing.T, e env) {
 		t.Fatalf("%v.Recv() = _, %v, want _, error code: %s", stream, err, codes.ResourceExhausted)
 	}
 	err = <-recvErr
-	if status.Code(err) != codes.Canceled {
-		t.Fatalf("server got error %v, want error code: %s", err, codes.Canceled)
+	if status.Code(err) != codes.Cancelled {
+		t.Fatalf("server got error %v, want error code: %s", err, codes.Cancelled)
 	}
 }
 
@@ -5613,7 +5613,7 @@ func (s) TestTapTimeout(t *testing.T) {
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			<-ctx.Done()
-			return nil, status.Errorf(codes.Canceled, ctx.Err().Error())
+			return nil, status.Errorf(codes.Cancelled, ctx.Err().Error())
 		},
 	}
 	if err := ss.Start(sopts); err != nil {
@@ -5627,8 +5627,8 @@ func (s) TestTapTimeout(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		res, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
 		cancel()
-		if s, ok := status.FromError(err); !ok || s.Code() != codes.Canceled {
-			t.Fatalf("ss.Client.EmptyCall(ctx, _) = %v, %v; want nil, <status with Code()=Canceled>", res, err)
+		if s, ok := status.FromError(err); !ok || s.Code() != codes.Cancelled {
+			t.Fatalf("ss.Client.EmptyCall(ctx, _) = %v, %v; want nil, <status with Code()=Cancelled>", res, err)
 		}
 	}
 
@@ -7510,7 +7510,7 @@ func (s) TestClientCancellationPropagatesUnary(t *testing.T) {
 			<-ctx.Done()
 			err := ctx.Err()
 			if err != context.Canceled {
-				t.Errorf("ctx.Err() = %v; want context.Canceled", err)
+				t.Errorf("ctx.Err() = %v; want context.Cancelled", err)
 			}
 			close(done)
 			return nil, err
@@ -7525,8 +7525,8 @@ func (s) TestClientCancellationPropagatesUnary(t *testing.T) {
 
 	wg.Add(1)
 	go func() {
-		if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Canceled {
-			t.Errorf("ss.Client.EmptyCall() = _, %v; want _, Code()=codes.Canceled", err)
+		if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Cancelled {
+			t.Errorf("ss.Client.EmptyCall() = _, %v; want _, Code()=codes.Cancelled", err)
 		}
 		wg.Done()
 	}()
@@ -7635,8 +7635,8 @@ func (s) TestCanceledRPCCallOptionRace(t *testing.T) {
 				return
 			}
 			cancel()
-			if _, err := stream.Recv(); status.Code(err) != codes.Canceled {
-				t.Errorf("%v compleled with error %v, want %s", stream, err, codes.Canceled)
+			if _, err := stream.Recv(); status.Code(err) != codes.Cancelled {
+				t.Errorf("%v compleled with error %v, want %s", stream, err, codes.Cancelled)
 				return
 			}
 			// If recv returns before call options are executed, peer.Addr is not set,

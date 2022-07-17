@@ -691,7 +691,7 @@ func (s) TestRetryTransparentWhenCommitted(t *testing.T) {
 	go func() {
 		_, err := stream1.Recv()
 		// Will trigger a retry when it sees the ALREADY_EXISTS error
-		if status.Code(err) != codes.Canceled {
+		if status.Code(err) != codes.Cancelled {
 			t.Errorf("Expected stream1 to be canceled; got error: %v", err)
 		}
 		stream1Closed.Fire()

@@ -456,7 +456,7 @@ func mapRecvMsgError(err error) error {
 		}
 	}
 	if strings.Contains(err.Error(), "body closed by handler") {
-		return status.Error(codes.Canceled, err.Error())
+		return status.Error(codes.Cancelled, err.Error())
 	}
 	return connectionErrorf(true, err, err.Error())
 }

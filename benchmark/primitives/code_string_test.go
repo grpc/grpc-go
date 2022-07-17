@@ -61,7 +61,7 @@ func (i codeBench) String() string {
 
 var nameMap = map[codeBench]string{
 	OK:                 "OK",
-	Canceled:           "Canceled",
+	Canceled:           "Cancelled",
 	Unknown:            "Unknown",
 	InvalidArgument:    "InvalidArgument",
 	DeadlineExceeded:   "DeadlineExceeded",

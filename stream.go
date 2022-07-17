@@ -930,7 +930,7 @@ func (cs *clientStream) finish(err error) {
 	//
 	// Only one of cancel or trailer needs to be logged. In the cases where
 	// users don't call RecvMsg, users must have already canceled the RPC.
-	if cs.binlog != nil && status.Code(err) == codes.Canceled {
+	if cs.binlog != nil && status.Code(err) == codes.Cancelled {
 		cs.binlog.Log(&binarylog.Cancel{
 			OnClientSide: true,
 		})
@@ -1199,7 +1199,7 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		go func() {
 			select {
 			case <-ac.ctx.Done():
-				as.finish(status.Error(codes.Canceled, "grpc: the SubConn is closing"))
+				as.finish(status.Error(codes.Cancelled, "grpc: the SubConn is closing"))
 			case <-ctx.Done():
 				as.finish(toRPCErr(ctx.Err()))
 			}

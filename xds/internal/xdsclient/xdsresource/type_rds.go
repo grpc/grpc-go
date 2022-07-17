@@ -59,7 +59,7 @@ type VirtualHost struct {
 // RetryConfig contains all retry-related configuration in either a VirtualHost
 // or Route.
 type RetryConfig struct {
-	// RetryOn is a set of status codes on which to retry.  Only Canceled,
+	// RetryOn is a set of status codes on which to retry.  Only Cancelled,
 	// DeadlineExceeded, Internal, ResourceExhausted, and Unavailable are
 	// supported; any other values will be omitted.
 	RetryOn      map[codes.Code]bool

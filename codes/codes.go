@@ -32,11 +32,11 @@ const (
 	// OK is returned on success.
 	OK Code = 0
 
-	// Canceled indicates the operation was canceled (typically by the caller).
+	// Cancelled indicates the operation was cancelled (typically by the caller).
 	//
 	// The gRPC framework will generate this error code when cancellation
 	// is requested.
-	Canceled Code = 1
+	Cancelled Code = 1
 
 	// Unknown error. An example of where this error may be returned is
 	// if a Status value received from another address space belongs to
@@ -197,7 +197,7 @@ const (
 
 var strToCode = map[string]Code{
 	`"OK"`: OK,
-	`"CANCELLED"`:/* [sic] */ Canceled,
+	`"CANCELLED"`:/* [sic] */ Cancelled,
 	`"UNKNOWN"`:             Unknown,
 	`"INVALID_ARGUMENT"`:    InvalidArgument,
 	`"DEADLINE_EXCEEDED"`:   DeadlineExceeded,

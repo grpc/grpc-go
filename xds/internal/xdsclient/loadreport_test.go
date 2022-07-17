@@ -150,7 +150,7 @@ func (s) TestLRSClient(t *testing.T) {
 	lrsCancel2()
 
 	// Server should receive a stream canceled error.
-	if u, err := fs2.LRSRequestChan.Receive(ctx); err != nil || status.Code(u.(*fakeserver.Request).Err) != codes.Canceled {
+	if u, err := fs2.LRSRequestChan.Receive(ctx); err != nil || status.Code(u.(*fakeserver.Request).Err) != codes.Cancelled {
 		t.Errorf("unexpected LRS request: %v, %v, want error canceled", u, err)
 	}
 }

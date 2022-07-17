@@ -24,8 +24,8 @@ func (c Code) String() string {
 	switch c {
 	case OK:
 		return "OK"
-	case Canceled:
-		return "Canceled"
+	case Cancelled:
+		return "Cancelled"
 	case Unknown:
 		return "Unknown"
 	case InvalidArgument:

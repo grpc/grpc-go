@@ -98,11 +98,11 @@ func (s *Server) Watch(in *healthpb.HealthCheckRequest, stream healthgrpc.Health
 			lastSentStatus = servingStatus
 			err := stream.Send(&healthpb.HealthCheckResponse{Status: servingStatus})
 			if err != nil {
-				return status.Error(codes.Canceled, "Stream has ended.")
+				return status.Error(codes.Cancelled, "Stream has ended.")
 			}
 		// Context done. Removes the update channel from the updates map.
 		case <-stream.Context().Done():
-			return status.Error(codes.Canceled, "Stream has ended.")
+			return status.Error(codes.Cancelled, "Stream has ended.")
 		}
 	}
 }
