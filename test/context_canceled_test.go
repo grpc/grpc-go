@@ -149,8 +149,8 @@ func (s) TestCancelWhileRecvingWithCompression(t *testing.T) {
 		for {
 			_, err := s.Recv()
 			if err != nil {
-				if status.Code(err) != codes.Canceled {
-					t.Fatalf("recv failed with %v, want Canceled", err)
+				if status.Code(err) != codes.Cancelled {
+					t.Fatalf("recv failed with %v, want Cancelled", err)
 				}
 				break
 			}

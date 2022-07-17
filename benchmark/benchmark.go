@@ -124,7 +124,7 @@ func (s *testServer) UnconstrainedStreamingCall(stream testgrpc.BenchmarkService
 			// Using RecvMsg rather than Recv to prevent reallocation of SimpleRequest.
 			err := stream.RecvMsg(in)
 			switch status.Code(err) {
-			case codes.Canceled:
+			case codes.Cancelled:
 				return
 			case codes.OK:
 			default:

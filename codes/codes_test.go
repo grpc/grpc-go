@@ -47,7 +47,7 @@ func (s) TestUnmarshalJSON(t *testing.T) {
 
 func (s) TestJSONUnmarshal(t *testing.T) {
 	var got []Code
-	want := []Code{OK, NotFound, Internal, Canceled}
+	want := []Code{OK, NotFound, Internal, Cancelled}
 	in := `["OK", "NOT_FOUND", "INTERNAL", "CANCELLED"]`
 	err := json.Unmarshal([]byte(in), &got)
 	if err != nil || !reflect.DeepEqual(got, want) {

@@ -1107,7 +1107,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 		}
 		statusCode = codes.Unknown
 	}
-	if statusCode == codes.Canceled {
+	if statusCode == codes.Cancelled {
 		if d, ok := s.ctx.Deadline(); ok && !d.After(time.Now()) {
 			// Our deadline was already exceeded, and that was likely the cause
 			// of this cancelation.  Alter the status code accordingly.

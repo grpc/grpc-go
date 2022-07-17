@@ -63,8 +63,8 @@ var (
 	// the ClientConn is closing.
 	//
 	// Deprecated: this error should not be relied upon by users; use the status
-	// code of Canceled instead.
-	ErrClientConnClosing = status.Error(codes.Canceled, "grpc: the client connection is closing")
+	// code of Cancelled instead.
+	ErrClientConnClosing = status.Error(codes.Cancelled, "grpc: the client connection is closing")
 	// errConnDrain indicates that the connection starts to be drained and does not accept any new RPCs.
 	errConnDrain = errors.New("grpc: the connection is drained")
 	// errConnClosing indicates that the connection is closing.
@@ -1383,7 +1383,7 @@ func (ac *addrConn) startHealthCheck(ctx context.Context) {
 		ac.mu.Lock()
 		if ac.transport != currentTr {
 			ac.mu.Unlock()
-			return nil, status.Error(codes.Canceled, "the provided transport is no longer valid to use")
+			return nil, status.Error(codes.Cancelled, "the provided transport is no longer valid to use")
 		}
 		ac.mu.Unlock()
 		return newNonRetryClientStream(ctx, &StreamDesc{ServerStreams: true}, method, currentTr, ac)

@@ -58,8 +58,8 @@ func (s) TestClientConnClose_WithPendingRPC(t *testing.T) {
 		// This RPC would block until the ClientConn is closed, because the
 		// resolver has not provided its first update yet.
 		_, err := client.EmptyCall(ctx, &testpb.Empty{})
-		if status.Code(err) != codes.Canceled || !strings.Contains(err.Error(), "client connection is closing") {
-			doneErrCh <- fmt.Errorf("EmptyCall() = %v, want %s", err, codes.Canceled)
+		if status.Code(err) != codes.Cancelled || !strings.Contains(err.Error(), "client connection is closing") {
+			doneErrCh <- fmt.Errorf("EmptyCall() = %v, want %s", err, codes.Cancelled)
 		}
 		doneErrCh <- nil
 	}()

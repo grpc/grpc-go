@@ -129,7 +129,7 @@ func FromContextError(err error) *Status {
 		return New(codes.DeadlineExceeded, err.Error())
 	}
 	if errors.Is(err, context.Canceled) {
-		return New(codes.Canceled, err.Error())
+		return New(codes.Cancelled, err.Error())
 	}
 	return New(codes.Unknown, err.Error())
 }
