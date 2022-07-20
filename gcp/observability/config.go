@@ -74,9 +74,10 @@ func validateFilters(config *configpb.ObservabilityConfig) error {
 	return nil
 }
 
-// unmarshalConfig unmarshals a json string representing an observability config
-// into it's protobuf format.
-func unmarshalConfig(rawJSON json.RawMessage) (*configpb.ObservabilityConfig, error) {
+// unmarshalAndVerifyConfig unmarshals a json string representing an
+// observability config into it's protobuf format, and also verifies the
+// configuration's fields for validity.
+func unmarshalAndVerifyConfig(rawJSON json.RawMessage) (*configpb.ObservabilityConfig, error) {
 	var config configpb.ObservabilityConfig
 	if err := protojson.Unmarshal(rawJSON, &config); err != nil {
 		return nil, fmt.Errorf("error parsing observability config: %v", err)
@@ -95,11 +96,11 @@ func parseObservabilityConfig() (*configpb.ObservabilityConfig, error) {
 	if fileSystemPath := os.Getenv(envObservabilityConfigJSON); fileSystemPath != "" {
 		content, err := os.ReadFile(fileSystemPath)
 		if err != nil {
-			return nil, fmt.Errorf("error reading file from env var %v: %v", envObservabilityConfigJSON, err)
+			return nil, fmt.Errorf("error reading observability configuration file %q: %v", fileSystemPath, err)
 		}
-		return unmarshalConfig(content)
+		return unmarshalAndVerifyConfig(content)
 	} else if content := os.Getenv(envObservabilityConfig); content != "" {
-		return unmarshalConfig([]byte(content))
+		return unmarshalAndVerifyConfig([]byte(content))
 	}
 	// If the ENV var doesn't exist, do nothing
 	return nil, nil
