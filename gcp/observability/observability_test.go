@@ -675,6 +675,7 @@ func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to convert config to JSON: %v", err)
 	}
+	os.Setenv(envObservabilityConfigJSON, "")
 	os.Setenv(envObservabilityConfig, string(configJSON))
 	// If there is at least one invalid pattern, which should not be silently tolerated.
 	if err := Start(context.Background()); err == nil {
@@ -682,7 +683,113 @@ func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
 	}
 }
 
+// TestJSONEnvVarSet tests a valid observability configuration specified by the
+// GRPC_CONFIG_OBSERVABILITY_JSON environment variable, whose value represents a
+// file path pointing to a JSON encoded config.
+func (s) TestJSONEnvVarSet(t *testing.T) {
+	config := &configpb.ObservabilityConfig{
+		EnableCloudLogging:   true,
+		DestinationProjectId: "fake",
+		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
+			{
+				Pattern:      "*",
+				HeaderBytes:  infinitySizeBytes,
+				MessageBytes: infinitySizeBytes,
+			},
+		},
+	}
+
+	configJSON, err := protojson.Marshal(config)
+	if err != nil {
+		t.Fatalf("failed to convert config to JSON: %v", err)
+	}
+
+	configJSONFile, err := os.Create("/tmp/configJSON")
+	if err != nil {
+		t.Fatalf("cannot create file /tmp/configJSON: %v", err)
+	}
+	defer configJSONFile.Close()
+	_, err = configJSONFile.Write(configJSON)
+	if err != nil {
+		t.Fatalf("cannot write marshalled JSON: %v", err)
+	}
+	os.Setenv(envObservabilityConfigJSON, "/tmp/configJSON")
+
+	if err := Start(context.Background()); err != nil {
+		t.Fatalf("error starting observability with valid config through file system: %v", err)
+	}
+	defer End()
+}
+
+// TestBothConfigEnvVarsSet tests the scenario where both configuration
+// environment variables are set. The file system environment variable should
+// take precedence, and and error should return in the case of the file system
+// configuration being invalid, even if the direct configuration environment
+// variable is set and valid.
+func (s) TestBothConfigEnvVarsSet(t *testing.T) {
+	invalidConfig := &configpb.ObservabilityConfig{
+		EnableCloudLogging:   true,
+		DestinationProjectId: "fake",
+		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
+			{
+				Pattern: ":-)",
+			},
+			{
+				Pattern: "*",
+			},
+		},
+	}
+	invalidConfigJSON, err := protojson.Marshal(invalidConfig)
+	if err != nil {
+		t.Fatalf("failed to convert config to JSON: %v", err)
+	}
+
+	invalidConfigJSONFile, err := os.Create("/tmp/InvalidConfigJSON")
+	if err != nil {
+		t.Fatalf("cannot create file /tmp/InvalidConfigJSON: %v", err)
+	}
+	defer invalidConfigJSONFile.Close()
+	_, err = invalidConfigJSONFile.Write(invalidConfigJSON)
+	if err != nil {
+		t.Fatalf("cannot write marshalled JSON: %v", err)
+	}
+	os.Setenv(envObservabilityConfigJSON, "/tmp/InvalidConfigJSON")
+
+	// This configuration should be ignored, as precedence 2.
+	validConfig := &configpb.ObservabilityConfig{
+		EnableCloudLogging:   true,
+		DestinationProjectId: "fake",
+		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
+			{
+				Pattern:      "*",
+				HeaderBytes:  infinitySizeBytes,
+				MessageBytes: infinitySizeBytes,
+			},
+		},
+	}
+	validConfigJSON, err := protojson.Marshal(validConfig)
+	if err != nil {
+		t.Fatalf("failed to convert config to JSON: %v", err)
+	}
+	os.Setenv(envObservabilityConfig, string(validConfigJSON))
+	if err := Start(context.Background()); err == nil {
+		t.Fatalf("Invalid patterns not triggering error")
+	}
+}
+
+// TestErrInFileSystemEnvVar tests the scenario where an observability
+// configuration is specified with environment variable that specifies a
+// location in the file system for configuration, and this location doesn't have
+// a file (or valid configuration).
+func (s) TestErrInFileSystemEnvVar(t *testing.T) {
+	os.Setenv(envObservabilityConfigJSON, "/this-file/does-not-exist")
+	if err := Start(context.Background()); err == nil {
+		t.Fatalf("Invalid file system path not triggering error")
+	}
+}
+
 func (s) TestNoEnvSet(t *testing.T) {
+	os.Setenv(envObservabilityConfigJSON, "")
 	os.Setenv(envObservabilityConfig, "")
 	// If there is no observability config set at all, the Start should return an error.
 	if err := Start(context.Background()); err == nil {
