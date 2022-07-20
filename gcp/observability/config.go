@@ -22,6 +22,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"regexp"
 
@@ -94,7 +95,7 @@ func unmarshalAndVerifyConfig(rawJSON json.RawMessage) (*configpb.ObservabilityC
 
 func parseObservabilityConfig() (*configpb.ObservabilityConfig, error) {
 	if fileSystemPath := os.Getenv(envObservabilityConfigJSON); fileSystemPath != "" {
-		content, err := os.ReadFile(fileSystemPath)
+		content, err := ioutil.ReadFile(fileSystemPath) // TODO: Switch to os.ReadFile once dropped support for go 1.15
 		if err != nil {
 			return nil, fmt.Errorf("error reading observability configuration file %q: %v", fileSystemPath, err)
 		}
