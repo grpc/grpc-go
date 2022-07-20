@@ -76,7 +76,7 @@ func validateFilters(config *configpb.ObservabilityConfig) error {
 }
 
 // unmarshalAndVerifyConfig unmarshals a json string representing an
-// observability config into it's protobuf format, and also verifies the
+// observability config into its protobuf format, and also verifies the
 // configuration's fields for validity.
 func unmarshalAndVerifyConfig(rawJSON json.RawMessage) (*configpb.ObservabilityConfig, error) {
 	var config configpb.ObservabilityConfig

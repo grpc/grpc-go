@@ -689,29 +689,29 @@ func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
 // place in the temporary portion of the file system dependent on system. It
 // also sets the environment variable GRPC_CONFIG_OBSERVABILITY_JSON to point to
 // this created config.
-func createTmpConfigInFileSystem(rawJSON json.RawMessage) (*os.File, error) {
+func createTmpConfigInFileSystem(rawJSON string) (*os.File, error) {
 	configJSONFile, err := ioutil.TempFile(os.TempDir(), "configJSON-")
 	if err != nil {
 		return nil, fmt.Errorf("cannot create file %v: %v", configJSONFile.Name(), err)
 	}
-	defer configJSONFile.Close()
-	_, err = configJSONFile.Write(rawJSON)
+	_, err = configJSONFile.Write(json.RawMessage(rawJSON))
 	if err != nil {
 		return nil, fmt.Errorf("cannot write marshalled JSON: %v", err)
 	}
 	os.Setenv(envObservabilityConfigJSON, configJSONFile.Name())
-	return configJSONFile, nil /// do you even need to return this file if you're already closing it here?
+	return configJSONFile, nil
 }
 
 // TestJSONEnvVarSet tests a valid observability configuration specified by the
 // GRPC_CONFIG_OBSERVABILITY_JSON environment variable, whose value represents a
 // file path pointing to a JSON encoded config.
 func (s) TestJSONEnvVarSet(t *testing.T) {
-	configJSON := json.RawMessage(`{
+	configJSON := `{
 		"destinationProjectId": "fake",
 		"logFilters":[{"pattern":"*","headerBytes":1073741824,"messageBytes":1073741824}]
-	}`)
-	_, err := createTmpConfigInFileSystem(configJSON)
+	}`
+	configJSONFile, err := createTmpConfigInFileSystem(configJSON)
+	defer configJSONFile.Close()
 	if err != nil {
 		t.Fatalf("failed to create config in file system: %v", err)
 	}
@@ -729,11 +729,12 @@ func (s) TestJSONEnvVarSet(t *testing.T) {
 // configuration being invalid, even if the direct configuration environment
 // variable is set and valid.
 func (s) TestBothConfigEnvVarsSet(t *testing.T) {
-	configJSON := json.RawMessage(`{
+	configJSON := `{
 		"destinationProjectId":"fake",
 		"logFilters":[{"pattern":":-)"}, {"pattern":"*"}]
-	}`)
-	_, err := createTmpConfigInFileSystem(configJSON)
+	}`
+	configJSONFile, err := createTmpConfigInFileSystem(configJSON)
+	defer configJSONFile.Close()
 	if err != nil {
 		t.Fatalf("failed to create config in file system: %v", err)
 	}
