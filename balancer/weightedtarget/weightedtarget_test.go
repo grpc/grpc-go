@@ -1219,35 +1219,6 @@ func (s) TestInitialIdle(t *testing.T) {
 	}
 }
 
-type updateStateBalancerBuilder struct{}
-
-func (updateStateBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	return &updateStateBalancer{cc: cc}
-}
-
-const updateStateBalancerName = "update_state_balancer"
-
-func (updateStateBalancerBuilder) Name() string {
-	return updateStateBalancerName
-}
-
-func init() {
-	balancer.Register(updateStateBalancerBuilder{})
-}
-
-type updateStateBalancer struct {
-	cc balancer.ClientConn
-	balancer.Balancer
-}
-
-func (b *updateStateBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
-	b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: nil})
-	b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: nil})
-	return nil
-}
-
-func (b *updateStateBalancer) Close() {}
-
 // tcc wraps a testutils.TestClientConn but stores all state transitions in a
 // slice.
 type tcc struct {
@@ -1262,6 +1233,16 @@ func (t *tcc) UpdateState(bs balancer.State) {
 
 func (s) TestUpdateStatePauses(t *testing.T) {
 	cc := &tcc{TestClientConn: testutils.NewTestClientConn(t)}
+
+	balFuncs := stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, s balancer.ClientConnState) error {
+			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: nil})
+			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: nil})
+			return nil
+		},
+	}
+	stub.Register("update_state_balancer", balFuncs)
+
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
 	defer wtb.Close()
 
