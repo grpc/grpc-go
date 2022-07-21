@@ -169,7 +169,7 @@ func (s) Test_E2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		break
 	}
 
-	// The EmptyCall RPC is expected to delete ealier injected metrics.
+	// The EmptyCall RPC is expected to delete earlier injected metrics.
 	if _, err := testStub.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall failed: %v", err)
 	}
