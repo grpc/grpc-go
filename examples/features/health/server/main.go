@@ -30,8 +30,7 @@ import (
 	"google.golang.org/grpc"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/health"
-	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	grpchealth "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 var (
@@ -63,20 +62,20 @@ func main() {
 
 	s := grpc.NewServer()
 	healthcheck := health.NewServer()
-	healthgrpc.RegisterHealthServer(s, healthcheck)
+	grpchealth.RegisterHealthServer(s, healthcheck)
 	pb.RegisterEchoServer(s, &echoServer{})
 
 	go func() {
 		// asynchronously inspect dependencies and toggle serving status as needed
-		next := healthpb.HealthCheckResponse_SERVING
+		next := grpchealth.HealthCheckResponse_SERVING
 
 		for {
 			healthcheck.SetServingStatus(system, next)
 
-			if next == healthpb.HealthCheckResponse_SERVING {
-				next = healthpb.HealthCheckResponse_NOT_SERVING
+			if next == grpchealth.HealthCheckResponse_SERVING {
+				next = grpchealth.HealthCheckResponse_NOT_SERVING
 			} else {
-				next = healthpb.HealthCheckResponse_SERVING
+				next = grpchealth.HealthCheckResponse_SERVING
 			}
 
 			time.Sleep(*sleep)
