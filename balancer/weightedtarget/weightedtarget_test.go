@@ -1218,3 +1218,77 @@ func (s) TestInitialIdle(t *testing.T) {
 		t.Fatalf("Received aggregated state: %v, want Idle", state)
 	}
 }
+
+type updateStateBalancerBuilder struct{}
+
+func (updateStateBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &updateStateBalancer{cc: cc}
+}
+
+const updateStateBalancerName = "update_state_balancer"
+
+func (updateStateBalancerBuilder) Name() string {
+	return updateStateBalancerName
+}
+
+func init() {
+	balancer.Register(updateStateBalancerBuilder{})
+}
+
+type updateStateBalancer struct {
+	cc balancer.ClientConn
+	balancer.Balancer
+}
+
+func (b *updateStateBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
+	b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: nil})
+	b.cc.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: nil})
+	return nil
+}
+
+func (b *updateStateBalancer) Close() {}
+
+// tcc wraps a testutils.TestClientConn but stores all state transitions in a
+// slice.
+type tcc struct {
+	*testutils.TestClientConn
+	states []balancer.State
+}
+
+func (t *tcc) UpdateState(bs balancer.State) {
+	t.states = append(t.states, bs)
+	t.TestClientConn.UpdateState(bs)
+}
+
+func (s) TestUpdateStatePauses(t *testing.T) {
+	cc := &tcc{TestClientConn: testutils.NewTestClientConn(t)}
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
+	defer wtb.Close()
+
+	config, err := wtbParser.ParseConfig([]byte(`
+{
+  "targets": {
+    "cluster_1": {
+      "weight":1,
+      "childPolicy": [{"update_state_balancer": ""}]
+    }
+  }
+}`))
+	if err != nil {
+		t.Fatalf("failed to parse balancer config: %v", err)
+	}
+
+	// Send the config, and an address with hierarchy path ["cluster_1"].
+	addrs := []resolver.Address{{Addr: testBackendAddrStrs[0], Attributes: nil}}
+	if err := wtb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{Addresses: []resolver.Address{hierarchy.Set(addrs[0], []string{"cds:cluster_1"})}},
+		BalancerConfig: config,
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	// Verify that the only state update is the second one called by the child.
+	if len(cc.states) != 1 || cc.states[0].ConnectivityState != connectivity.Ready {
+		t.Fatalf("cc.states = %v; want [connectivity.Ready]", cc.states)
+	}
+}
