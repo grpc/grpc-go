@@ -655,7 +655,8 @@ func DoPickFirstUnary(tc testgrpc.TestServiceClient) {
 		Payload:      pl,
 		FillServerId: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// TODO(mohanli): Revert the timeout back to 10s once TD migrates to xdstp.
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	var serverID string
 	for i := 0; i < rpcCount; i++ {
