@@ -45,36 +45,62 @@ const rrServiceConfig = `{"loadBalancingConfig": [{"round_robin":{}}]}`
 
 func checkRoundRobin(ctx context.Context, cc *grpc.ClientConn, addrs []resolver.Address) error {
 	client := testgrpc.NewTestServiceClient(cc)
-	// Make sure connections to all backends are up.
+	// Make sure connections to all backends are up. We need to do this two
+	// times (to be sure that round_robin has kicked in) because the channel
+	// could have been configured with a different LB policy before the switch
+	// to round_robin. And the previous LB policy could be sharing backends with
+	// round_robin, and therefore in the first iteration of this loop, RPCs
+	// could land on backends owned by the previous LB policy.
 	backendCount := len(addrs)
-	for i := 0; i < backendCount; i++ {
-		for {
-			time.Sleep(time.Millisecond)
-			if ctx.Err() != nil {
-				return fmt.Errorf("timeout waiting for connection to %q to be up", addrs[i].Addr)
-			}
-			var peer peer.Peer
-			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
-				// Some tests remove backends and check if round robin is happening
-				// across the remaining backends. In such cases, RPCs can initially fail
-				// on the connection using the removed backend. Just keep retrying and
-				// eventually the connection using the removed backend will shutdown and
-				// will be removed.
-				continue
-			}
-			if peer.Addr.String() == addrs[i].Addr {
-				break
+	for j := 0; j < 2; j++ {
+		for i := 0; i < backendCount; i++ {
+			for {
+				time.Sleep(time.Millisecond)
+				if ctx.Err() != nil {
+					return fmt.Errorf("timeout waiting for connection to %q to be up", addrs[i].Addr)
+				}
+				var peer peer.Peer
+				if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
+					// Some tests remove backends and check if round robin is happening
+					// across the remaining backends. In such cases, RPCs can initially fail
+					// on the connection using the removed backend. Just keep retrying and
+					// eventually the connection using the removed backend will shutdown and
+					// will be removed.
+					continue
+				}
+				if peer.Addr.String() == addrs[i].Addr {
+					break
+				}
 			}
 		}
 	}
-	// Make sure RPCs are sent to all backends.
-	for i := 0; i < 3*backendCount; i++ {
+
+	// At this point, we have seen RPCs being sent to all the backends that
+	// we care about. But this doesn't mean that the subConns in the
+	// round_robin picker are in the same order as that of addrs. So, we
+	// need to figure out the order of the subConns first.
+	firstIteration := make([]string, backendCount)
+	for i := 0; i < backendCount; i++ {
 		var peer peer.Peer
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
 			return fmt.Errorf("EmptyCall() = %v, want <nil>", err)
 		}
-		if gotPeer, wantPeer := peer.Addr.String(), addrs[i%backendCount].Addr; gotPeer != wantPeer {
-			return fmt.Errorf("rpc sent to peer %q, want peer %q", gotPeer, wantPeer)
+		firstIteration[i] = peer.Addr.String()
+	}
+
+	// Make another two passes and ensure the order is maintained.
+	var secondIteration []string
+	for i := 0; i < 2; i++ {
+		for _, want := range firstIteration {
+			var peer peer.Peer
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
+				return fmt.Errorf("EmptyCall() = %v, want <nil>", err)
+			}
+			got := peer.Addr.String()
+			secondIteration = append(secondIteration, got)
+			if got != want {
+				return fmt.Errorf("non-roundrobin, first iter: %v, second iter: %v", firstIteration, secondIteration)
+			}
 		}
 	}
 	return nil
