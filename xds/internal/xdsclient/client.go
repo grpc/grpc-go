@@ -52,6 +52,8 @@ type XDSClient interface {
 	Close()
 }
 
+var _ XDSClient = &clientImpl{}
+
 // clientImpl is the real implementation of the xds client. The exported Client
 // is a wrapper of this struct with a ref count.
 //
@@ -105,7 +107,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration, i
 
 // BootstrapConfig returns the configuration read from the bootstrap file.
 // Callers must treat the return value as read-only.
-func (c *clientRefCounted) BootstrapConfig() *bootstrap.Config {
+func (c *clientImpl) BootstrapConfig() *bootstrap.Config {
 	return c.config
 }
 
