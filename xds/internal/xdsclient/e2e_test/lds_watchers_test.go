@@ -64,13 +64,12 @@ const (
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 	defaultTestTimeout            = 5 * time.Second
 	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
-)
 
-var cmpOpts = []cmp.Option{
-	cmpopts.EquateEmpty(),
-	cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
-	cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
-}
+	ldsName         = "xdsclient-test-lds-resource"
+	rdsName         = "xdsclient-test-rds-resource"
+	ldsNameNewStyle = "xdstp:///envoy.config.listener.v3.Listener/xdsclient-test-lds-resource"
+	rdsNameNewStyle = "xdstp:///envoy.config.listener.v3.Listener/xdsclient-test-rds-resource"
+)
 
 func newStringP(s string) *string {
 	return &s
@@ -130,6 +129,11 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
 		}
 	}
+	cmpOpts := []cmp.Option{
+		cmpopts.EquateEmpty(),
+		cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
+		cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
+	}
 	if diff := cmp.Diff(wantUpdate.Update, got.Update, cmpOpts...); diff != "" {
 		return fmt.Errorf("received unepected diff in the listener resource update: (-want, got):\n%s", diff)
 	}
@@ -137,12 +141,14 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 }
 
 // TestLDSWatch covers the case where a single watcher exists for a single
-// listener resource. The following sequence of events happen:
-// 1. A watch is registered for a listener resource
-// 2. Management server sends an update for the resource being watched
-// 3. Management server sends an update for a resource *not* being watched
-// 4. Watch is cancelled
-// 5. Management server sends an update for the original resource
+// listener resource. The test verifies the following scenarios:
+// 1. An update from the management server containing the resource being
+//    watched, results in the invocation of the watch callback
+// 2. An update from the management server containing a resource *not* being
+//    watched, does not result in the invocation of the watch callback
+// 3. After the watch is cancelled, an update from the management server
+//    containing the resource that was being watched, does not result in the
+//    invocation of the watch callback
 //
 // The test is run for old and new style names.
 func (s) TestLDSWatch(t *testing.T) {
@@ -157,10 +163,6 @@ func (s) TestLDSWatch(t *testing.T) {
 	}
 	defer client.Close()
 
-	const (
-		ldsName = "xdsclient-test-lds-resource"
-		rdsName = "xdsclient-test-rds-resource"
-	)
 	tests := []struct {
 		desc                   string
 		resourceName           string
@@ -184,13 +186,13 @@ func (s) TestLDSWatch(t *testing.T) {
 		},
 		{
 			desc:                   "new style resource",
-			resourceName:           fmt.Sprintf("xdstp:///envoy.config.listener.v3.Listener/%s", ldsName),
-			watchedResource:        e2e.DefaultClientListener(fmt.Sprintf("xdstp:///envoy.config.listener.v3.Listener/%s", ldsName), rdsName),
-			updatedWatchedResource: e2e.DefaultClientListener(fmt.Sprintf("xdstp:///envoy.config.listener.v3.Listener/%s", ldsName), "new-rds-resource"),
-			notWatchedResource:     e2e.DefaultClientListener("unsubscribed-lds-resource", rdsName),
+			resourceName:           ldsNameNewStyle,
+			watchedResource:        e2e.DefaultClientListener(ldsNameNewStyle, rdsNameNewStyle),
+			updatedWatchedResource: e2e.DefaultClientListener(ldsNameNewStyle, "new-rds-resource"),
+			notWatchedResource:     e2e.DefaultClientListener("unsubscribed-lds-resource", rdsNameNewStyle),
 			wantUpdate: xdsresource.ListenerUpdateErrTuple{
 				Update: xdsresource.ListenerUpdate{
-					RouteConfigName: rdsName,
+					RouteConfigName: rdsNameNewStyle,
 					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 				},
 			},
@@ -216,7 +218,7 @@ func (s) TestLDSWatch(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			if err := mgmtServer.Update(ctx, resources); err != nil {
-				t.Fatal(err)
+				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
 
 			// Verify the contents of the received update.
@@ -232,7 +234,7 @@ func (s) TestLDSWatch(t *testing.T) {
 				SkipValidation: true,
 			}
 			if err := mgmtServer.Update(ctx, resources); err != nil {
-				t.Fatal(err)
+				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
 			if err := verifyNoListenerUpdate(ctx, updateCh); err != nil {
 				t.Fatal(err)
@@ -247,7 +249,7 @@ func (s) TestLDSWatch(t *testing.T) {
 				SkipValidation: true,
 			}
 			if err := mgmtServer.Update(ctx, resources); err != nil {
-				t.Fatal(err)
+				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
 			if err := verifyNoListenerUpdate(ctx, updateCh); err != nil {
 				t.Fatal(err)
@@ -257,12 +259,15 @@ func (s) TestLDSWatch(t *testing.T) {
 }
 
 // TestLDSWatch_TwoWatchesForSameResourceName covers the case where two watchers
-// exist for a single listener resource. The following sequence of events
-// happen:
-// 1. Two watches are registered for a listener resource
-// 2. Management server sends an update for the resource being watched
-// 4. One of the watches is cancelled
-// 5. Management server sends an update for the original resource
+// exist for a single listener resource.  The test verifies the following
+// scenarios:
+// 1. An update from the management server containing the resource being
+//    watched, results in the invocation of both watch callbacks
+// 2. After one of the watches is cancelled, a redundant update from the
+//    management server does not result in the invocation of either of the watch
+//    callbacks
+// 3. An update from the management server containing the resource being
+//    watched, results in the invocation of the un-cancelled watch callback
 //
 // The test is run for old and new style names.
 func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
@@ -277,10 +282,6 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 	}
 	defer client.Close()
 
-	const (
-		ldsName = "xdsclient-test-lds-resource"
-		rdsName = "xdsclient-test-rds-resource"
-	)
 	tests := []struct {
 		desc                   string
 		resourceName           string
@@ -309,12 +310,12 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 		},
 		{
 			desc:                   "new style resource",
-			resourceName:           fmt.Sprintf("xdstp:///envoy.config.listener.v3.Listener/%s", ldsName),
-			watchedResource:        e2e.DefaultClientListener(fmt.Sprintf("xdstp:///envoy.config.listener.v3.Listener/%s", ldsName), rdsName),
-			updatedWatchedResource: e2e.DefaultClientListener(fmt.Sprintf("xdstp:///envoy.config.listener.v3.Listener/%s", ldsName), "new-rds-resource"),
+			resourceName:           ldsNameNewStyle,
+			watchedResource:        e2e.DefaultClientListener(ldsNameNewStyle, rdsNameNewStyle),
+			updatedWatchedResource: e2e.DefaultClientListener(ldsNameNewStyle, "new-rds-resource"),
 			wantUpdateV1: xdsresource.ListenerUpdateErrTuple{
 				Update: xdsresource.ListenerUpdate{
-					RouteConfigName: rdsName,
+					RouteConfigName: rdsNameNewStyle,
 					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
 				},
 			},
@@ -342,7 +343,7 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			})
 
 			// Configure the management server to return a single listener
-			// resource, corresponding to the one we registered a watch for.
+			// resource, corresponding to the one we registered watches for.
 			resources := e2e.UpdateOptions{
 				NodeID:         nodeID,
 				Listeners:      []*v3listenerpb.Listener{test.watchedResource},
@@ -351,7 +352,7 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			if err := mgmtServer.Update(ctx, resources); err != nil {
-				t.Fatal(err)
+				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
 
 			// Verify the contents of the received update.
@@ -367,7 +368,7 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			// two watch callbacks should be invoked.
 			ldsCancel2()
 			if err := mgmtServer.Update(ctx, resources); err != nil {
-				t.Fatal(err)
+				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
 			if err := verifyNoListenerUpdate(ctx, updateCh1); err != nil {
 				t.Fatal(err)
@@ -377,14 +378,14 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			}
 
 			// Update to the resource being watched. The un-cancelled callback
-			// shuold be invoked while the cancelled one should not be.
+			// should be invoked while the cancelled one should not be.
 			resources = e2e.UpdateOptions{
 				NodeID:         nodeID,
 				Listeners:      []*v3listenerpb.Listener{test.updatedWatchedResource},
 				SkipValidation: true,
 			}
 			if err := mgmtServer.Update(ctx, resources); err != nil {
-				t.Fatal(err)
+				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
 			if err := verifyListenerUpdate(ctx, updateCh1, test.wantUpdateV2); err != nil {
 				t.Fatal(err)
@@ -396,12 +397,11 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 	}
 }
 
-// TestLDSWatch_ThreeWatchesForDifferentResourceNames covers the case where
-// three watchers exist across two listener resources. The following sequence of
-// events happen:
-// 1. Three watches are registered for two listener resources
-// 2. Management server sends an update containing both resources
-// 3. All watches should be invoked with appropriate updates
+// TestLDSWatch_ThreeWatchesForDifferentResourceNames covers the case with three
+// watchers (two watchers for one resource, and the third watcher for another
+// resource), exist across two listener resources.  The test verifies that an
+// update from the management server containing both resources result in the
+// invocation of all watch callbacks.
 //
 // The test is run with both old and new style names.
 func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
@@ -415,11 +415,6 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
 	defer client.Close()
-
-	const (
-		ldsName = "xdsclient-test-lds-resource"
-		rdsName = "xdsclient-test-rds-resource"
-	)
 
 	// Register two watches for the same listener resource and have the
 	// callbacks push the received updates on to a channel.
@@ -436,7 +431,7 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 
 	// Register the third watch for a different listener resource.
 	updateCh3 := testutils.NewChannel()
-	ldsCancel3 := client.WatchListener(fmt.Sprintf("xdstp:///envoy.config.listener.v3.Listener/%s", ldsName), func(u xdsresource.ListenerUpdate, err error) {
+	ldsCancel3 := client.WatchListener(ldsNameNewStyle, func(u xdsresource.ListenerUpdate, err error) {
 		updateCh3.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
 	})
 	defer ldsCancel3()
@@ -447,14 +442,14 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 		NodeID: nodeID,
 		Listeners: []*v3listenerpb.Listener{
 			e2e.DefaultClientListener(ldsName, rdsName),
-			e2e.DefaultClientListener(fmt.Sprintf("xdstp:///envoy.config.listener.v3.Listener/%s", ldsName), rdsName),
+			e2e.DefaultClientListener(ldsNameNewStyle, rdsName),
 		},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
 	// Verify the contents of the received update for the all watchers. The two
@@ -477,12 +472,10 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	}
 }
 
-// TestLDSWatch_ResourceCaching covers the case where watch is called after the
-// update is in cache. The following sequence of events happen:
-// 1. A watch is registered for a listener resource
-// 2. Management server sends an update for the resource being watched
-// 3. Another watch is registered for the same resource
-// 4. xdsClient is expected to handle this watch from its cache.
+// TestLDSWatch_ResourceCaching covers the case where a watch is registered for
+// a resource which is already in the cache.  The test verifies that the new
+// watch is handled from the cache, without a request being sent to the
+// management server.
 func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	overrideFedEnvVar(t)
 	firstRequestReceived := false
@@ -515,11 +508,6 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	}
 	defer client.Close()
 
-	const (
-		ldsName = "xdsclient-test-lds-resource"
-		rdsName = "xdsclient-test-rds-resource"
-	)
-
 	// Register a watch for a listener resource and have the watch
 	// callback push the received update on to a channel.
 	updateCh1 := testutils.NewChannel()
@@ -538,7 +526,7 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
 	// Verify the contents of the received update.
@@ -578,12 +566,10 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 }
 
 // TestLDSWatch_ResourceRemoved covers the cases where a resource being watched
-// is removed from the management server. The following sequence of events
-// happen:
-// 1. Two watches are registered for two listener resources
-// 2. Management server sends an update containing both resources.
-// 3. Management server sends an update removing one of the above resources
-// 4. Management server sends an update which modifies the exisiting resource.
+// is removed from the management server. The test verifies that removing
+// resources from the management server triggers the watch callback with
+// resource removed error. It also verifies that the watch callback for an
+// unrelated resource is not invoked during the above flow.
 //
 // The test is run with both old and new style names.
 func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
@@ -598,11 +584,6 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	}
 	defer client.Close()
 
-	const (
-		ldsName = "xdsclient-test-lds-resource"
-		rdsName = "xdsclient-test-rds-resource"
-	)
-
 	// Register two watches for two listener resources and have the
 	// callbacks push the received updates on to a channel.
 	resourceName1 := ldsName
@@ -612,7 +593,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	})
 	defer ldsCancel1()
 
-	resourceName2 := fmt.Sprintf("xdstp:///envoy.config.listener.v3.Listener/%s", ldsName)
+	resourceName2 := ldsNameNewStyle
 	updateCh2 := testutils.NewChannel()
 	ldsCancel2 := client.WatchListener(resourceName2, func(u xdsresource.ListenerUpdate, err error) {
 		updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
@@ -632,7 +613,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
 	// Verify the contents of the received update for both watchers. The two
@@ -658,7 +639,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
 	// The first watcher should receive a resource removed error, while the
@@ -673,14 +654,14 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	}
 
 	// Update the second listener resource on the management server. The first
-	// watcher should not see an update, while the second wather should.
+	// watcher should not see an update, while the second watcher should.
 	resources = e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(resourceName2, "new-rds-resource")},
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 	if err := verifyNoListenerUpdate(ctx, updateCh1); err != nil {
 		t.Fatal(err)
@@ -696,8 +677,9 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	}
 }
 
-// TestLDSWatch_NACKError covers the case that an update is NACK'ed, and
-// verifies that the error is propagated to the watcher.
+// TestLDSWatch_NACKError covers the case where an update from the management
+// server is NACK'ed by the xdsclient. The test verifies that the error is
+// propagated to the watcher.
 func (s) TestLDSWatch_NACKError(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
@@ -709,11 +691,6 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
 	defer client.Close()
-
-	const (
-		ldsName = "xdsclient-test-lds-resource"
-		rdsName = "xdsclient-test-rds-resource"
-	)
 
 	// Register a watch for a listener resource and have the watch
 	// callback push the received update on to a channel.
@@ -733,7 +710,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
 	// Verify that the expected error is propagated to the watcher.
@@ -747,10 +724,11 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	}
 }
 
-// TestLDSWatch_PartialValid covers the case where a response contains both
-// valid and invalid resources. This response will be NACK'ed by the xdsclient.
-// But the watchers with valid resources should receive the update, those with
-// invalid resources should receive an error.
+// TestLDSWatch_PartialValid covers the case where a response from the
+// management server contains both valid and invalid resources and is expected
+// to be NACK'ed by the xdsclient. The test verifies that watchers corresponding
+// to the valid resource (in the response) receive the update, while watchers
+// corresponding to the invalid resource receive an error.
 func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
@@ -763,11 +741,6 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	}
 	defer client.Close()
 
-	const (
-		ldsName = "xdsclient-test-lds-resource"
-		rdsName = "xdsclient-test-rds-resource"
-	)
-
 	// Register two watches for listener resources. The first watch is expected
 	// to receive an error because the received resource is NACKed. The second
 	// watch is expected to get a good update.
@@ -776,7 +749,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 		updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
 	})
 	defer ldsCancel1()
-	resourceName2 := fmt.Sprintf("xdstp:///envoy.config.listener.v3.Listener/%s", ldsName)
+	resourceName2 := ldsNameNewStyle
 	updateCh2 := testutils.NewChannel()
 	ldsCancel2 := client.WatchListener(resourceName2, func(u xdsresource.ListenerUpdate, err error) {
 		updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
@@ -796,7 +769,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
 	// Verify that the expected error is propagated to the watcher which
@@ -810,7 +783,8 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 		t.Fatalf("update received with error: %v, want %q", gotErr, wantNACKErr)
 	}
 
-	// Verify that the watcher requesting for the good resource receives a good update.
+	// Verify that the watcher watching the good resource receives a good
+	// update.
 	wantUpdate := xdsresource.ListenerUpdateErrTuple{
 		Update: xdsresource.ListenerUpdate{
 			RouteConfigName: rdsName,

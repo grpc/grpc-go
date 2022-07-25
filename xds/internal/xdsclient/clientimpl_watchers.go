@@ -28,7 +28,6 @@ import (
 // after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchListener(serviceName string, cb func(xdsresource.ListenerUpdate, error)) (cancel func()) {
 	n := xdsresource.ParseName(serviceName)
-	logger.Infof("easwars: parsed name is %+V, %s", n, n)
 	a, unref, err := c.findAuthority(n)
 	if err != nil {
 		cb(xdsresource.ListenerUpdate{}, err)
