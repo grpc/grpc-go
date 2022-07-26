@@ -253,22 +253,27 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 		}
 	}
 
+	if b.intervalTimer != nil {
+		b.intervalTimer.Stop()
+	}
 	if !b.noopConfig() {
-		if b.intervalTimer != nil {
-			b.intervalTimer.Stop()
-		}
 		b.intervalTimer = afterFunc(interval, func() {
 			b.intervalTimerAlgorithm()
 		})
 	} else {
 		// "If a config is provided with both the `success_rate_ejection` and
 		// `failure_percentage_ejection` fields unset, skip starting the timer and
-		// unset the timer start timestamp."
+		// do the following:"
+		// "Unset the timer start timestamp."
 		b.timerStartTime = time.Time{}
-		// Should we stop the timer here as well? Not defined in gRFC but I feel
-		// like it might make sense as you don't want to eject addresses. Also
-		// how will addresses eventually get unejected in this case if only one
-		// more pass of the interval timer after no-op configuration comes in?
+		for _, addrInfo := range b.addrs {
+			// "Uneject all currently ejected addresses."
+			if !addrInfo.latestEjectionTimestamp.IsZero() {
+				b.unejectAddress(addrInfo)
+			}
+			// "Reset each address's ejection time multiplier to 0."
+			addrInfo.ejectionTimeMultiplier = 0
+		}
 	}
 	b.mu.Unlock()
 	b.pickerUpdateCh.Put(lbCfg)
