@@ -20,8 +20,10 @@ package rls
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +32,7 @@ import (
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/rls/internal/test/e2e"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
@@ -39,6 +42,7 @@ import (
 	rlstest "google.golang.org/grpc/internal/testutils/rls"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/testdata"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -832,4 +836,264 @@ func (s) TestControlChannelConnectivityStateMonitoring(t *testing.T) {
 	// should succeed with an RLS request being sent out.
 	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, backendCh)
 	verifyRLSRequest(t, rlsReqCh, true)
+}
+
+const wrappingTopLevelBalancerName = "wrapping-top-level-balancer"
+const multipleUpdateStateChildBalancerName = "multiple-update-state-child-balancer"
+
+type wrappingTopLevelBalancerBuilder struct {
+	balCh chan balancer.Balancer
+}
+
+func (w *wrappingTopLevelBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	tlb := &wrappingTopLevelBalancer{ClientConn: cc}
+	tlb.Balancer = balancer.Get(Name).Build(tlb, balancer.BuildOptions{})
+	w.balCh <- tlb
+	return tlb
+}
+
+func (w *wrappingTopLevelBalancerBuilder) Name() string {
+	return wrappingTopLevelBalancerName
+}
+
+func (w *wrappingTopLevelBalancerBuilder) ParseConfig(sc json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	parser := balancer.Get(Name).(balancer.ConfigParser)
+	return parser.ParseConfig(sc)
+}
+
+// wrappingTopLevelBalancer acts as the top-level LB policy on the channel and
+// wraps an RLS LB policy. It forwards all balancer API calls unmodified to the
+// underlying RLS LB policy. It overrides the UpdateState method on the
+// balancer.ClientConn passed to the RLS LB policy and stores all state updates
+// pushed by the latter.
+type wrappingTopLevelBalancer struct {
+	balancer.ClientConn
+	balancer.Balancer
+
+	mu     sync.Mutex
+	states []balancer.State
+}
+
+func (w *wrappingTopLevelBalancer) UpdateState(bs balancer.State) {
+	w.mu.Lock()
+	w.states = append(w.states, bs)
+	w.mu.Unlock()
+	w.ClientConn.UpdateState(bs)
+}
+
+func (w *wrappingTopLevelBalancer) getStates() []balancer.State {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	states := make([]balancer.State, len(w.states))
+	for i, s := range w.states {
+		states[i] = s
+	}
+	return states
+}
+
+// wrappedPickFirstBalancerBuilder builds a balancer which wraps a pickfirst
+// balancer. The wrapping balancing receives addresses to be passed to the
+// underlying pickfirst balancer as part of its configuration.
+type wrappedPickFirstBalancerBuilder struct{}
+
+func (wrappedPickFirstBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	builder := balancer.Get(grpc.PickFirstBalancerName)
+	wpfb := &wrappedPickFirstBalancer{
+		ClientConn: cc,
+	}
+	pf := builder.Build(wpfb, opts)
+	wpfb.Balancer = pf
+	return wpfb
+}
+
+func (wrappedPickFirstBalancerBuilder) Name() string {
+	return multipleUpdateStateChildBalancerName
+}
+
+type WrappedPickFirstBalancerConfig struct {
+	serviceconfig.LoadBalancingConfig
+	Backend string // The target for which this child policy was created.
+}
+
+func (wbb *wrappedPickFirstBalancerBuilder) ParseConfig(c json.RawMessage) (serviceconfig.LoadBalancingConfig, error) {
+	cfg := &WrappedPickFirstBalancerConfig{}
+	if err := json.Unmarshal(c, cfg); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// wrappedPickFirstBalancer wraps a pickfirst balancer and makes multiple calls
+// to UpdateState when handling a config update in UpdateClientConnState. When
+// this policy is used as a child policy of the RLS LB policy, it is expected
+// that the latter suppress these updates and push a single picker update on the
+// channel (after the config has been processed by all child policies).
+type wrappedPickFirstBalancer struct {
+	balancer.Balancer
+	balancer.ClientConn
+}
+
+func (wb *wrappedPickFirstBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
+	wb.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Idle, Picker: &testutils.TestConstPicker{Err: balancer.ErrNoSubConnAvailable}})
+	wb.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: &testutils.TestConstPicker{Err: balancer.ErrNoSubConnAvailable}})
+
+	cfg := ccs.BalancerConfig.(*WrappedPickFirstBalancerConfig)
+	return wb.Balancer.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{Addresses: []resolver.Address{{Addr: cfg.Backend}}},
+	})
+}
+
+func (wb *wrappedPickFirstBalancer) UpdateState(state balancer.State) {
+	// Eat it if IDLE - allows it to switch over only on a READY SubConn.
+	if state.ConnectivityState == connectivity.Idle {
+		return
+	}
+	wb.ClientConn.UpdateState(state)
+}
+
+// TestUpdateStatePauses tests the scenario where a config update received by
+// the RLS LB policy results in multiple UpdateState calls from the child
+// policies. This test verifies that picker updates are paused when the config
+// update is being processed by RLS LB policy and its child policies.
+//
+// The test uses a wrapping balancer as the top-level LB policy on the channel.
+// The wrapping balancing wraps an RLS LB policy as a child policy and forwards
+// all calls to it. It also records the UpdateState() calls from the RLS LB
+// policy and makes it available for inspection by the test.
+//
+// The test uses another wrapped balancer (which wraps a pickfirst balancer) as
+// the child policy of the RLS LB policy. This balancer makes multiple
+// UpdateState calls when handling an update from its parent in
+// UpdateClientConnState.
+func (s) TestUpdateStatePauses(t *testing.T) {
+	// Override the hook to get notified when UpdateClientConnState is done.
+	clientConnUpdateDone := make(chan struct{}, 1)
+	origClientConnUpdateHook := clientConnUpdateHook
+	clientConnUpdateHook = func() { clientConnUpdateDone <- struct{}{} }
+	defer func() { clientConnUpdateHook = origClientConnUpdateHook }()
+
+	// Register the top-level wrapping balancer which forwards calls to RLS.
+	bb := &wrappingTopLevelBalancerBuilder{balCh: make(chan balancer.Balancer, 1)}
+	balancer.Register(bb)
+
+	// Start an RLS server and set the throttler to never throttle requests.
+	rlsServer, rlsReqCh := rlstest.SetupFakeRLSServer(t, nil)
+	overrideAdaptiveThrottler(t, neverThrottlingThrottler())
+
+	// Start a test backend and set the RLS server to respond with it.
+	testBackendCh, testBackendAddress := startBackend(t)
+	rlsServer.SetResponseCallback(func(_ context.Context, req *rlspb.RouteLookupRequest) *rlstest.RouteLookupResponse {
+		return &rlstest.RouteLookupResponse{Resp: &rlspb.RouteLookupResponse{Targets: []string{testBackendAddress}}}
+	})
+
+	// Register a child policy which wraps a pickfirst balancer and receives the
+	// backend address as part of its configuration.
+	balancer.Register(&wrappedPickFirstBalancerBuilder{})
+
+	// Register a manual resolver and push the RLS service config through it.
+	r := manual.NewBuilderWithScheme("rls-e2e")
+	scJSON := fmt.Sprintf(`
+{
+  "loadBalancingConfig": [
+    {
+      "%s": {
+		"routeLookupConfig": {
+			"grpcKeybuilders": [{
+				"names": [{"service": "grpc.testing.TestService"}]
+			}],
+			"lookupService": "%s",
+			"cacheSizeBytes": 1000
+		},
+		"childPolicy": [{"%s": {}}],
+		"childPolicyConfigTargetFieldName": "Backend"
+      }
+    }
+  ]
+}`, wrappingTopLevelBalancerName, rlsServer.Address, multipleUpdateStateChildBalancerName)
+	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON)
+	r.InitialState(resolver.State{ServiceConfig: sc})
+
+	cc, err := grpc.Dial(r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("grpc.Dial() failed: %v", err)
+	}
+	defer cc.Close()
+
+	// Wait for the clientconn update to be processed by the RLS LB policy.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+	case <-clientConnUpdateDone:
+	}
+
+	// Get the top-level LB policy configured on the channel, to be able to read
+	// the state updates pushed by its child (the RLS LB policy.)
+	var wb *wrappingTopLevelBalancer
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for state update on the top-level LB policy")
+	case b := <-bb.balCh:
+		wb = b.(*wrappingTopLevelBalancer)
+	}
+
+	// It is important to note that at this point no child policies have been
+	// created because we have not attempted any RPC so far. When we attempt an
+	// RPC (below), child policies will be created and their configs will be
+	// pushed to them. But this config update will not happen in the context of
+	// a config update on the parent.
+
+	// Make an RPC and ensure it gets routed to the test backend.
+	makeTestRPCAndExpectItToReachBackend(ctx, t, cc, testBackendCh)
+
+	// Make sure an RLS request is sent out.
+	verifyRLSRequest(t, rlsReqCh, true)
+
+	// Cache the state changes seen up to this point.
+	states0 := wb.getStates()
+
+	// Push an updated service config. As mentioned earlier, the previous config
+	// updates on the child policies did not happen in the context of a config
+	// update on the parent. Hence, this update is required to force the
+	// scenario which we are interesting in testing here, i.e child policies get
+	// config updates as part of the parent policy getting its config update.
+	scJSON = fmt.Sprintf(`
+{
+  "loadBalancingConfig": [
+    {
+      "%s": {
+		"routeLookupConfig": {
+			"grpcKeybuilders": [{
+				"names": [
+					{"service": "grpc.testing.TestService"},
+					{"service": "grpc.health.v1.Health"}
+				]
+			}],
+			"lookupService": "%s",
+			"cacheSizeBytes": 1000
+		},
+		"childPolicy": [{"%s": {}}],
+		"childPolicyConfigTargetFieldName": "Backend"
+      }
+    }
+  ]
+}`, wrappingTopLevelBalancerName, rlsServer.Address, multipleUpdateStateChildBalancerName)
+	sc = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(scJSON)
+	r.UpdateState(resolver.State{ServiceConfig: sc})
+
+	// Wait for the clientconn update to be processed by the RLS LB policy.
+	select {
+	case <-ctx.Done():
+	case <-clientConnUpdateDone:
+	}
+
+	// Even though the child policies used in this test make multiple calls to
+	// UpdateState as part of handling their configs, we expect the RLS policy
+	// to inhibit picker updates during this time frame, and send a single
+	// picker once the config update is completely handled.
+	states1 := wb.getStates()
+	if len(states1) != len(states0)+1 {
+		t.Fatalf("more than one state update seen. before %v, after %v", states0, states1)
+	}
 }
