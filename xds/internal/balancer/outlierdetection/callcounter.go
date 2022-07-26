@@ -23,9 +23,9 @@ import (
 )
 
 type bucket struct {
-	numSuccesses  int64
-	numFailures   int64
-	requestVolume int64 // numSuccesses + numFailures, needed because this number will be used in interval timer algorithm
+	numSuccesses  uint32
+	numFailures   uint32
+	requestVolume uint32 // numSuccesses + numFailures, needed because this number will be used in interval timer algorithm
 }
 
 func newCallCounter() *callCounter {
@@ -69,9 +69,9 @@ func (cc *callCounter) swap() {
 	// dealing with picker race condition. See the wrappedPicker explanation for
 	// the write to activeBucket for a more in depth explanation.
 	cc.inactiveBucket = &bucket{
-		numSuccesses:  atomic.LoadInt64(&ab.numSuccesses),
-		numFailures:   atomic.LoadInt64(&ab.numFailures),
-		requestVolume: atomic.LoadInt64(&ab.requestVolume),
+		numSuccesses:  atomic.LoadUint32(&ab.numSuccesses),
+		numFailures:   atomic.LoadUint32(&ab.numFailures),
+		requestVolume: atomic.LoadUint32(&ab.requestVolume),
 	}
 	atomic.StorePointer(&cc.activeBucket, unsafe.Pointer(&bucket{}))
 	// end result, same as in gRFC: the inactive bucket contains the number of

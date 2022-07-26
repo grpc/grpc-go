@@ -2000,7 +2000,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 
 	// Call balancer.Balancers synchronously in this goroutine, upholding the
 	// balancer.Balancer API guarantee.
-	od.UpdateSubConnState(scw1, balancer.SubConnState{
+	od.UpdateSubConnState(scw1.(*subConnWrapper).SubConn, balancer.SubConnState{
 		ConnectivityState: connectivity.Connecting,
 	})
 	od.ResolverError(errors.New("some error"))

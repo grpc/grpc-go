@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/resolver"
@@ -76,6 +77,8 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 		scUpdateCh:     buffer.NewUnbounded(),
 		pickerUpdateCh: buffer.NewUnbounded(),
 	}
+	b.logger = prefixLogger(b)
+	b.logger.Infof("Created")
 	go b.run()
 	return b
 }
@@ -153,6 +156,7 @@ type outlierDetectionBalancer struct {
 	closed *grpcsync.Event
 	cc     balancer.ClientConn
 	bOpts  balancer.BuildOptions
+	logger *grpclog.PrefixLogger
 
 	// childMu protects child and also updates to the child (to uphold the
 	// balancer.Balancer API guarantee of synchronous calls). It also protects
@@ -192,6 +196,7 @@ func (b *outlierDetectionBalancer) noopConfig() bool {
 func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	lbCfg, ok := s.BalancerConfig.(*LBConfig)
 	if !ok {
+		b.logger.Errorf("received config with unexpected type %T: %v", s.BalancerConfig, s.BalancerConfig)
 		return balancer.ErrBadResolverState
 	}
 
@@ -242,7 +247,7 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 		// timer and start the timer for the configured interval minus the
 		// difference between the current time and the previous start timestamp,
 		// or 0 if that would be negative.
-		interval = b.cfg.Interval - (now().Sub(b.timerStartTime))
+		interval = b.cfg.Interval - now().Sub(b.timerStartTime)
 		if interval < 0 {
 			interval = 0
 		}
@@ -278,11 +283,12 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 }
 
 func (b *outlierDetectionBalancer) ResolverError(err error) {
-	if b.child != nil {
-		b.childMu.Lock()
-		defer b.childMu.Unlock()
-		b.child.ResolverError(err)
+	if b.child == nil {
+		return
 	}
+	b.childMu.Lock()
+	defer b.childMu.Unlock()
+	b.child.ResolverError(err)
 }
 
 func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
@@ -290,7 +296,9 @@ func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state
 	defer b.mu.Unlock()
 	scw, ok := b.scWrappers[sc]
 	if !ok {
-		// Return, shouldn't happen if passed up scw
+		// Shouldn't happen if passed down a SubConnWrapper to child on SubConn
+		// creation.
+		b.logger.Errorf("UpdateSubConnState called with SubConn that has no corresponding SubConnWrapper")
 		return
 	}
 	if state.ConnectivityState == connectivity.Shutdown {
@@ -300,7 +308,6 @@ func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state
 		scw:   scw,
 		state: state,
 	})
-
 }
 
 func (b *outlierDetectionBalancer) Close() {
@@ -358,7 +365,6 @@ func (wp *wrappedPicker) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 			pr.Done(di)
 		}
 	}
-	// Shouldn't happen, defensive programming.
 	scw, ok := pr.SubConn.(*subConnWrapper)
 	if !ok {
 		return balancer.PickResult{
@@ -400,16 +406,15 @@ func incrementCounter(sc balancer.SubConn, info balancer.DoneInfo) {
 	ab := (*bucket)(atomic.LoadPointer(&addrInfo.callCounter.activeBucket))
 
 	if info.Err == nil {
-		atomic.AddInt64(&ab.numSuccesses, 1)
+		atomic.AddUint32(&ab.numSuccesses, 1)
 	} else {
-		atomic.AddInt64(&ab.numFailures, 1)
+		atomic.AddUint32(&ab.numFailures, 1)
 	}
-	atomic.AddInt64(&ab.requestVolume, 1)
+	atomic.AddUint32(&ab.requestVolume, 1)
 }
 
 func (b *outlierDetectionBalancer) UpdateState(s balancer.State) {
 	b.pickerUpdateCh.Put(s)
-
 }
 
 func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
@@ -470,7 +475,7 @@ func (b *outlierDetectionBalancer) appendIfPresent(addr string, scw *subConnWrap
 	return addrInfo
 }
 
-// removeSubConnFromAddressesMapEntry removes the scw from it's map entry if
+// removeSubConnFromAddressesMapEntry removes the scw from its map entry if
 // present.
 func (b *outlierDetectionBalancer) removeSubConnFromAddressesMapEntry(scw *subConnWrapper) {
 	addrInfo := (*addressInfo)(atomic.LoadPointer(&scw.addressInfo))
@@ -739,7 +744,7 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 func (b *outlierDetectionBalancer) numAddrsWithAtLeastRequestVolume() uint32 {
 	var numAddrs uint32
 	for _, addrInfo := range b.addrs {
-		if uint32(addrInfo.callCounter.inactiveBucket.requestVolume) >= b.cfg.SuccessRateEjection.RequestVolume {
+		if addrInfo.callCounter.inactiveBucket.requestVolume >= b.cfg.SuccessRateEjection.RequestVolume {
 			numAddrs++
 		}
 	}
@@ -756,7 +761,7 @@ func (b *outlierDetectionBalancer) meanAndStdDevOfSuccessesAtLeastRequestVolume(
 	var mean float64
 	for _, addrInfo := range b.addrs {
 		// "of at least success_rate_ejection.request_volume"
-		if uint32(addrInfo.callCounter.inactiveBucket.requestVolume) >= b.cfg.SuccessRateEjection.RequestVolume {
+		if addrInfo.callCounter.inactiveBucket.requestVolume >= b.cfg.SuccessRateEjection.RequestVolume {
 			totalFractionOfSuccessfulRequests += float64(addrInfo.callCounter.inactiveBucket.numSuccesses) / float64(addrInfo.callCounter.inactiveBucket.requestVolume)
 		}
 	}
@@ -769,17 +774,16 @@ func (b *outlierDetectionBalancer) meanAndStdDevOfSuccessesAtLeastRequestVolume(
 
 	variance := sumOfSquares / float64(len(b.addrs))
 	return mean, math.Sqrt(variance)
-
 }
 
-// syccessRateAlgorithm ejects any addresses where the success rate falls below
+// successRateAlgorithm ejects any addresses where the success rate falls below
 // the other addresses according to mean and standard deviation, and if overall
 // applicable from other set heuristics.
 func (b *outlierDetectionBalancer) successRateAlgorithm() {
 	// 1. If the number of addresses with request volume of at least
 	// success_rate_ejection.request_volume is less than
 	// success_rate_ejection.minimum_hosts, stop.
-	if b.numAddrsWithAtLeastRequestVolume() < b.cfg.SuccessRateEjection.MinimumHosts { // TODO: O(n) search, is there a way to optimize this?
+	if b.numAddrsWithAtLeastRequestVolume() < b.cfg.SuccessRateEjection.MinimumHosts {
 		return
 	}
 
@@ -800,7 +804,7 @@ func (b *outlierDetectionBalancer) successRateAlgorithm() {
 
 		// ii. If the address's total request volume is less than
 		// success_rate_ejection.request_volume, continue to the next address.
-		if ccb.requestVolume < int64(sre.RequestVolume) {
+		if ccb.requestVolume < sre.RequestVolume {
 			continue
 		}
 
@@ -840,7 +844,7 @@ func (b *outlierDetectionBalancer) failurePercentageAlgorithm() {
 		// ii. If the address's total request volume is less than
 		// failure_percentage_ejection.request_volume, continue to the next
 		// address.
-		if uint32(ccb.requestVolume) < fpe.RequestVolume {
+		if ccb.requestVolume < fpe.RequestVolume {
 			continue
 		}
 		//  2c. If the address's failure percentage is greater than
@@ -888,7 +892,7 @@ func (b *outlierDetectionBalancer) unejectAddress(addrInfo *addressInfo) {
 // addressInfo contains the runtime information about an address that pertains
 // to Outlier Detection, including the counter for successful/failing RPC's, and
 // also information about whether the addresses has been ejected, and the
-// SubConns that are present that use this address. This struct and all of it's
+// SubConns that are present that use this address. This struct and all of its
 // fields is protected by outlierDetectionBalancer.mu in the case where it
 // accessed through the address map. In the case of Picker callbacks, the writes
 // to the activeBucket of callCounter are protected by atomically loading and
