@@ -498,6 +498,7 @@ func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 
 // genStandaloneComments prints all leading comments for a FileDescriptorProto
 // location identified by the field number n.
+// Grabbed from: https://github.com/protocolbuffers/protobuf-go/blob/master/cmd/protoc-gen-go/internal_gengo/main.go#L110
 func genStandaloneComments(g *protogen.GeneratedFile, desc protoreflect.FileDescriptor, n int32) {
 	loc := desc.SourceLocations().ByPath(protoreflect.SourcePath{n})
 	for _, s := range loc.LeadingDetachedComments {
