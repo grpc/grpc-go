@@ -3249,6 +3249,7 @@ func testMetadataUnaryRPC(t *testing.T, e env) {
 		delete(header, "date")    // the Date header is also optional
 		delete(header, "user-agent")
 		delete(header, "content-type")
+		delete(header, "grpc-accept-encoding")
 	}
 	if !reflect.DeepEqual(header, testMetadata) {
 		t.Fatalf("Received header metadata %v, want %v", header, testMetadata)
@@ -3288,6 +3289,7 @@ func testMetadataOrderUnaryRPC(t *testing.T, e env) {
 		delete(header, "date")    // the Date header is also optional
 		delete(header, "user-agent")
 		delete(header, "content-type")
+		delete(header, "grpc-accept-encoding")
 	}
 
 	if !reflect.DeepEqual(header, newMetadata) {
@@ -3400,6 +3402,8 @@ func testSetAndSendHeaderUnaryRPC(t *testing.T, e env) {
 	}
 	delete(header, "user-agent")
 	delete(header, "content-type")
+	delete(header, "grpc-accept-encoding")
+
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -3444,6 +3448,7 @@ func testMultipleSetHeaderUnaryRPC(t *testing.T, e env) {
 	}
 	delete(header, "user-agent")
 	delete(header, "content-type")
+	delete(header, "grpc-accept-encoding")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -3487,6 +3492,7 @@ func testMultipleSetHeaderUnaryRPCError(t *testing.T, e env) {
 	}
 	delete(header, "user-agent")
 	delete(header, "content-type")
+	delete(header, "grpc-accept-encoding")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -3527,6 +3533,7 @@ func testSetAndSendHeaderStreamingRPC(t *testing.T, e env) {
 	}
 	delete(header, "user-agent")
 	delete(header, "content-type")
+	delete(header, "grpc-accept-encoding")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -3590,6 +3597,7 @@ func testMultipleSetHeaderStreamingRPC(t *testing.T, e env) {
 	}
 	delete(header, "user-agent")
 	delete(header, "content-type")
+	delete(header, "grpc-accept-encoding")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -3650,6 +3658,7 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 	}
 	delete(header, "user-agent")
 	delete(header, "content-type")
+	delete(header, "grpc-accept-encoding")
 	expectedHeader := metadata.Join(testMetadata, testMetadata2)
 	if !reflect.DeepEqual(header, expectedHeader) {
 		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
@@ -3981,6 +3990,7 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 		delete(headerMD, "trailer") // ignore if present
 		delete(headerMD, "user-agent")
 		delete(headerMD, "content-type")
+		delete(headerMD, "grpc-accept-encoding")
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#1 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
@@ -3989,6 +3999,7 @@ func testMetadataStreamingRPC(t *testing.T, e env) {
 		delete(headerMD, "trailer") // ignore if present
 		delete(headerMD, "user-agent")
 		delete(headerMD, "content-type")
+		delete(headerMD, "grpc-accept-encoding")
 		if err != nil || !reflect.DeepEqual(testMetadata, headerMD) {
 			t.Errorf("#2 %v.Header() = %v, %v, want %v, <nil>", stream, headerMD, err, testMetadata)
 		}
@@ -5428,6 +5439,72 @@ func (s) TestForceServerCodec(t *testing.T) {
 	const wantMarshalCount = 1
 	if marshalCount != wantMarshalCount {
 		t.Fatalf("protoCodec.marshalCount = %d; want %d", marshalCount, wantMarshalCount)
+	}
+}
+
+// renameCompressor is a grpc.Compressor wrapper that allows customizing the
+// Type() of another compressor.
+type renameCompressor struct {
+	grpc.Compressor
+	name string
+}
+
+func (r *renameCompressor) Type() string { return r.name }
+
+// renameDecompressor is a grpc.Decompressor wrapper that allows customizing the
+// Type() of another Decompressor.
+type renameDecompressor struct {
+	grpc.Decompressor
+	name string
+}
+
+func (r *renameDecompressor) Type() string { return r.name }
+
+func (s) TestClientForwardsGrpcAcceptEncodingHeader(t *testing.T) {
+	wantGrpcAcceptEncodingCh := make(chan []string, 1)
+	defer close(wantGrpcAcceptEncodingCh)
+
+	compressor := renameCompressor{Compressor: grpc.NewGZIPCompressor(), name: "testgzip"}
+	decompressor := renameDecompressor{Decompressor: grpc.NewGZIPDecompressor(), name: "testgzip"}
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			md, ok := metadata.FromIncomingContext(ctx)
+			if !ok {
+				return nil, status.Errorf(codes.Internal, "no metadata in context")
+			}
+			if got, want := md["grpc-accept-encoding"], <-wantGrpcAcceptEncodingCh; !reflect.DeepEqual(got, want) {
+				return nil, status.Errorf(codes.Internal, "got grpc-accept-encoding=%q; want [%q]", got, want)
+			}
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.Start([]grpc.ServerOption{grpc.RPCDecompressor(&decompressor)}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	wantGrpcAcceptEncodingCh <- []string{"gzip"}
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
+	}
+
+	wantGrpcAcceptEncodingCh <- []string{"gzip"}
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.UseCompressor("gzip")); err != nil {
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
+	}
+
+	// Use compressor directly which is not registered via
+	// encoding.RegisterCompressor.
+	if err := ss.StartClient(grpc.WithCompressor(&compressor)); err != nil {
+		t.Fatalf("Error starting client: %v", err)
+	}
+	wantGrpcAcceptEncodingCh <- []string{"gzip,testgzip"}
+	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("ss.Client.EmptyCall(_, _) = _, %v; want _, nil", err)
 	}
 }
 
