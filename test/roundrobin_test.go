@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -74,34 +75,21 @@ func checkRoundRobin(ctx context.Context, cc *grpc.ClientConn, addrs []resolver.
 			}
 		}
 	}
-
-	// At this point, we have seen RPCs being sent to all the backends that
-	// we care about. But this doesn't mean that the subConns in the
-	// round_robin picker are in the same order as that of addrs. So, we
-	// need to figure out the order of the subConns first.
-	firstIteration := make([]string, backendCount)
-	for i := 0; i < backendCount; i++ {
-		var peer peer.Peer
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
-			return fmt.Errorf("EmptyCall() = %v, want <nil>", err)
-		}
-		firstIteration[i] = peer.Addr.String()
-	}
-
-	// Make another two passes and ensure the order is maintained.
-	var secondIteration []string
-	for i := 0; i < 2; i++ {
-		for _, want := range firstIteration {
+	// Perform 3 iterations and ensure they are all equal.
+	var iterations [][]string
+	for i := 0; i < 3; i++ {
+		iteration := make([]string, backendCount)
+		for c := 0; c < backendCount; c++ {
 			var peer peer.Peer
 			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
 				return fmt.Errorf("EmptyCall() = %v, want <nil>", err)
 			}
-			got := peer.Addr.String()
-			secondIteration = append(secondIteration, got)
-			if got != want {
-				return fmt.Errorf("non-roundrobin, first iter: %v, second iter: %v", firstIteration, secondIteration)
-			}
+			iteration[c] = peer.Addr.String()
 		}
+		iterations = append(iterations, iteration)
+	}
+	if !cmp.Equal(iterations[0], iterations[1]) || !cmp.Equal(iterations[0], iterations[2]) {
+		return fmt.Errorf("non-roundrobin, first iter: %v, second iter: %v, third iter: %v", iterations[0], iterations[1], iterations[2])
 	}
 	return nil
 }
