@@ -224,7 +224,9 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 	addrs := make(map[string]bool, len(s.ResolverState.Addresses))
 	for _, addr := range s.ResolverState.Addresses {
 		addrs[addr.Addr] = true
-		b.addrs[addr.Addr] = newAddressInfo()
+		if _, ok := b.addrs[addr.Addr]; !ok {
+			b.addrs[addr.Addr] = newAddressInfo()
+		}
 	}
 	for addr := range b.addrs {
 		if !addrs[addr] {

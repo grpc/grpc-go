@@ -1017,7 +1017,7 @@ func (s) TestPicker(t *testing.T) {
 
 	// The connectivity state sent to the Client Conn should be the persisted
 	// recent state received from the last UpdateState() call, which in this
-	// case is connecting.
+	// case is ready.
 	select {
 	case <-ctx.Done():
 		t.Fatal("timeout waiting for picker update on ClientConn, should have updated because no-op config changed on UpdateClientConnState")
@@ -1044,12 +1044,17 @@ func (s) TestPicker(t *testing.T) {
 			t.Fatal("map entry for address: address1 not present in map")
 		}
 
-		// The active bucket should be cleared because the interval timer
-		// algorithm didn't run in between ClientConn updates and the picker
-		// should not count, as the outlier detection balancer is configured
-		// with a no-op configuration.
-		bucketWant := &bucket{}
+		// The active bucket should be the same as before the no-op
+		// configuration came in because the interval timer algorithm didn't run
+		// in between ClientConn updates and the picker should not count, as the
+		// outlier detection balancer is configured with a no-op configuration.
+		bucketWant := &bucket{
+			numSuccesses:  1,
+			numFailures:   1,
+			requestVolume: 2,
+		}
 		if diff := cmp.Diff((*bucket)(addrInfo.callCounter.activeBucket), bucketWant); diff != "" { // no need for atomic read because not concurrent with Done() call
+			od.mu.Unlock()
 			t.Fatalf("callCounter is different than expected, diff (-got +want): %v", diff)
 		}
 		od.mu.Unlock()
@@ -1093,11 +1098,15 @@ func (s) TestPicker(t *testing.T) {
 			t.Fatal("map entry for address: address1 not present in map")
 		}
 
-		// The active bucket should be cleared because the interval timer
-		// algorithm didn't run in between ClientConn updates and the picker
-		// should not count, as the outlier detection balancer is configured
-		// with a no-op configuration.
-		bucketWant := &bucket{}
+		// The active bucket should be the same as before the no-op
+		// configuration came in because the interval timer algorithm didn't run
+		// in between ClientConn updates and the picker should not count, as the
+		// outlier detection balancer is configured with a no-op configuration.
+		bucketWant := &bucket{
+			numSuccesses:  1,
+			numFailures:   1,
+			requestVolume: 2,
+		}
 		if diff := cmp.Diff((*bucket)(addrInfo.callCounter.activeBucket), bucketWant); diff != "" { // no need for atomic read because not concurrent with Done() call
 			t.Fatalf("callCounter is different than expected, diff (-got +want): %v", diff)
 		}
@@ -1336,9 +1345,201 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("Error waiting for Sub Conn update: %v", err)
 		}
+	}
+}
 
+// TestEjectUnejectSuccessRateFromNoopConfig tests that any ejected Addresses
+// are unejected upon the receipt of a no-op Outlier Detection Configuration.
+func (s) TestEjectUnejectSuccessRateFromNoopConfig(t *testing.T) {
+	internal.RegisterOutlierDetectionBalancerForTesting()
+	// Setup the outlier detection balancer to a point where it will be in a
+	// situation to potentially eject addresses.
+	od, tcc := setup(t)
+	defer func() {
+		od.Close()
+		internal.UnregisterOutlierDetectionBalancerForTesting()
+	}()
+
+	od.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: []resolver.Address{
+				{
+					Addr: "address1",
+				},
+				{
+					Addr: "address2",
+				},
+				{
+					Addr: "address3",
+				},
+			},
+		},
+		BalancerConfig: &LBConfig{
+			Interval:           1<<63 - 1, // so the interval will never run unless called manually in test.
+			BaseEjectionTime:   30 * time.Second,
+			MaxEjectionTime:    300 * time.Second,
+			MaxEjectionPercent: 10,
+			SuccessRateEjection: &SuccessRateEjection{
+				StdevFactor:           500,
+				EnforcementPercentage: 100,
+				MinimumHosts:          3,
+				RequestVolume:         3,
+			},
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name:   tcibname,
+				Config: testClusterImplBalancerConfig{},
+			},
+		},
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	child := od.child.(*testClusterImplBalancer)
+	if err := child.waitForClientConnUpdate(ctx, balancer.ClientConnState{
+		ResolverState: resolver.State{
+			Addresses: []resolver.Address{
+				{
+					Addr: "address1",
+				},
+				{
+					Addr: "address2",
+				},
+				{
+					Addr: "address3",
+				},
+			},
+		},
+		BalancerConfig: testClusterImplBalancerConfig{},
+	}); err != nil {
+		t.Fatalf("Error waiting for Client Conn update: %v", err)
 	}
 
+	scw1, err := od.NewSubConn([]resolver.Address{
+		{
+			Addr: "address1",
+		},
+	}, balancer.NewSubConnOptions{})
+	if err != nil {
+		t.Fatalf("error in od.NewSubConn call: %v", err)
+	}
+	if err != nil {
+		t.Fatalf("error in od.NewSubConn call: %v", err)
+	}
+
+	scw2, err := od.NewSubConn([]resolver.Address{
+		{
+			Addr: "address2",
+		},
+	}, balancer.NewSubConnOptions{})
+	if err != nil {
+		t.Fatalf("error in od.NewSubConn call: %v", err)
+	}
+
+	scw3, err := od.NewSubConn([]resolver.Address{
+		{
+			Addr: "address3",
+		},
+	}, balancer.NewSubConnOptions{})
+	if err != nil {
+		t.Fatalf("error in od.NewSubConn call: %v", err)
+	}
+
+	od.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Ready,
+		Picker: &rrPicker{
+			scs: []balancer.SubConn{scw1, scw2, scw3},
+		},
+	})
+
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for a UpdateState call on the ClientConn")
+	case picker := <-tcc.NewPickerCh:
+		// Set two of the upstream addresses to have five successes each, and
+		// one of the upstream addresses to have five failures. This should
+		// cause the address which has five failures to be ejected according the
+		// SuccessRateAlgorithm.
+		for i := 0; i < 2; i++ {
+			pi, err := picker.Pick(balancer.PickInfo{})
+			if err != nil {
+				t.Fatalf("Picker.Pick should not have errored")
+			}
+			pi.Done(balancer.DoneInfo{})
+			pi.Done(balancer.DoneInfo{})
+			pi.Done(balancer.DoneInfo{})
+			pi.Done(balancer.DoneInfo{})
+			pi.Done(balancer.DoneInfo{})
+		}
+		pi, err := picker.Pick(balancer.PickInfo{})
+		if err != nil {
+			t.Fatalf("Picker.Pick should not have errored")
+		}
+		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
+		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
+		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
+		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
+		pi.Done(balancer.DoneInfo{Err: errors.New("some error")})
+
+		// should eject address that always errored.
+		od.intervalTimerAlgorithm()
+		// Due to the address being ejected, the SubConn with that address
+		// should be ejected, meaning a TRANSIENT_FAILURE connectivity state
+		// gets reported to the child.
+		if err := child.waitForSubConnUpdate(ctx, subConnWithState{
+			sc:    scw3,
+			state: balancer.SubConnState{ConnectivityState: connectivity.TransientFailure}, // Represents ejected
+		}); err != nil {
+			t.Fatalf("Error waiting for Sub Conn update: %v", err)
+		}
+		// Only one address should be ejected.
+		sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+		defer sCancel()
+		if err := child.waitForSubConnUpdate(sCtx, subConnWithState{}); err == nil {
+			t.Fatalf("Only one SubConn update should have been sent (only one SubConn got ejected)")
+		}
+		// Now that an address is ejected, SubConn updates for SubConns using
+		// that address should not be forwarded downward. These SubConn updates
+		// will be cached to update the child sometime in the future when the
+		// address gets unejected.
+		od.UpdateSubConnState(pi.SubConn, balancer.SubConnState{
+			ConnectivityState: connectivity.Connecting,
+		})
+		if err := child.waitForSubConnUpdate(sCtx, subConnWithState{}); err == nil {
+			t.Fatalf("SubConn update should not have been forwarded (the SubConn is ejected)")
+		}
+		// Update the Outlier Detection Balancer with a no-op configuration.
+		// This should cause any ejected addresses to become unejected.
+		od.UpdateClientConnState(balancer.ClientConnState{
+			ResolverState: resolver.State{
+				Addresses: []resolver.Address{
+					{
+						Addr: "address1",
+					},
+					{
+						Addr: "address2",
+					},
+					{
+						Addr: "address3",
+					},
+				},
+			},
+			BalancerConfig: &LBConfig{
+				Interval: 1<<63 - 1, // so the interval will never run unless called manually in test.
+				ChildPolicy: &internalserviceconfig.BalancerConfig{
+					Name:   tcibname,
+					Config: testClusterImplBalancerConfig{},
+				},
+			},
+		})
+		// unejected SubConn should report latest persisted state - which is
+		// connecting from earlier.
+		if err := child.waitForSubConnUpdate(ctx, subConnWithState{
+			sc:    scw3,
+			state: balancer.SubConnState{ConnectivityState: connectivity.Connecting},
+		}); err != nil {
+			t.Fatalf("Error waiting for Sub Conn update: %v", err)
+		}
+	}
 }
 
 // TestEjectFailureRate tests the functionality of the interval timer
