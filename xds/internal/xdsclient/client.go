@@ -44,5 +44,3 @@ type XDSClient interface {
 	BootstrapConfig() *bootstrap.Config
 	Close()
 }
-
-var _ XDSClient = &clientImpl{}

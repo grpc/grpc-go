@@ -28,6 +28,8 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
 
+var _ XDSClient = &clientImpl{}
+
 // clientImpl is the real implementation of the xds client. The exported Client
 // is a wrapper of this struct with a ref count.
 //
