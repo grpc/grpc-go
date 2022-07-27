@@ -71,10 +71,6 @@ const (
 	rdsNameNewStyle = "xdstp:///envoy.config.listener.v3.Listener/xdsclient-test-rds-resource"
 )
 
-func newStringP(s string) *string {
-	return &s
-}
-
 // badListenerResource returns a listener resource for the given name which does
 // not contain the `RouteSpecifier` field in the HTTPConnectionManager, and
 // hence is expected to be NACKed by the client.
