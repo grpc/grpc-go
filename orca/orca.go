@@ -30,7 +30,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
@@ -39,7 +38,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
-	v3orcaservicegrpc "github.com/cncf/xds/go/xds/service/orca/v3"
 )
 
 var logger = grpclog.Component("orca-backend-metrics")
@@ -96,62 +94,6 @@ type wrappedStream struct {
 
 func (w *wrappedStream) Context() context.Context {
 	return w.ctx
-}
-
-// minOutOfBandReportingInterval is the absolute minimum value supported for
-// out-of-band metrics reporting.
-const minOutOfBandReportingInterval = 30 * time.Second
-
-// OutOfBandMetricsReportingOptions contains options to configure out-of-metrics
-// metrics reporting from server applications.
-type OutOfBandMetricsReportingOptions struct {
-	// MinReportingInterval sets the lower bound for how often out-of-band
-	// metrics are reported on the streaming RPC initiated by the client.  If
-	// unspecified or less than the default value of 30s, the default is used.
-	// Clients may request a higher value as part of the StreamCoreMetrics
-	// streaming RPC.
-	MinReportingInterval time.Duration
-}
-
-// EnableOutOfBandMetricsReporting registers an implementation of the
-// [OpenRcaService] on the provider service registrar [grpc.ServiceRegistrar].
-//
-// [OpenRcaService]: https://github.com/cncf/xds/blob/main/xds/service/orca/v3/orca.proto
-func EnableOutOfBandMetricsReporting(s grpc.ServiceRegistrar, opts OutOfBandMetricsReportingOptions) error {
-	if opts.MinReportingInterval < minOutOfBandReportingInterval {
-		opts.MinReportingInterval = minOutOfBandReportingInterval
-	}
-	return enableOutOfBandMetricsReporting(s, opts)
-}
-
-// EnableOutOfBandMetricsReportingForTesting registers an implementation of the
-// [OpenRcaService] on the provider service registrar [grpc.ServiceRegistrar].
-// Similar to EnableOutOfBandMetricsReporting, except no validation is done on
-// the provided options.
-//
-// [OpenRcaService]: https://github.com/cncf/xds/blob/main/xds/service/orca/v3/orca.proto
-//
-// Testing Only
-//
-// This function should ONLY be used for testing purposes.
-func EnableOutOfBandMetricsReportingForTesting(s grpc.ServiceRegistrar, opts OutOfBandMetricsReportingOptions) error {
-	return enableOutOfBandMetricsReporting(s, opts)
-}
-
-func enableOutOfBandMetricsReporting(s grpc.ServiceRegistrar, opts OutOfBandMetricsReportingOptions) error {
-	// TODO(easwars): Once the generated pb.gos are updated, we wont need this
-	// type assertion any more, since the new versions accept a
-	// grpc.ServiceRegistrar in their registration functions.
-	srv, ok := s.(*grpc.Server)
-	if !ok {
-		return fmt.Errorf("concrete type of grpc.ServiceRegistrar passed in is %T, only supported type is %T", s, &grpc.Server{})
-	}
-	service := newServiceImpl(opts)
-	v3orcaservicegrpc.RegisterOpenRcaServiceServer(srv, service)
-
-	// Initialize the global out-of-band metric recorder.
-	oobRecorder = &OutOfBandMetricRecorder{recorder: newMetricRecorder()}
-	return nil
 }
 
 // ToLoadReport unmarshals a binary encoded [ORCA LoadReport] protobuf message

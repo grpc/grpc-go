@@ -28,12 +28,10 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/orca"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
@@ -43,7 +41,10 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-const requestsMetricKey = "test-service-requests"
+const (
+	queueSizeMetricKey = "test-service-queue-size"
+	requestsMetricKey  = "test-service-requests"
+)
 
 // An implementation of grpc_testing.TestService for the purpose of this test.
 // We cannot use the StubServer approach here because we need to register the
@@ -53,32 +54,26 @@ type testServiceImpl struct {
 	requests int64
 
 	testgrpc.TestServiceServer
+	orcaSrv *orca.Server
 }
 
 func (t *testServiceImpl) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	rec := orca.GetOutOfBandMetricRecorder()
-	if rec == nil {
-		return nil, status.Error(codes.Internal, "out-of-band metrics recorder missing")
-	}
-
 	t.mu.Lock()
 	t.requests++
-	rec.SetUtilizationMetric(requestsMetricKey, float64(t.requests))
 	t.mu.Unlock()
-	rec.SetCPUUtilizationMetric(50.0)
-	rec.SetMemoryUtilizationMetric(99.0)
+
+	t.orcaSrv.SetAllUtilizationMetrics(map[string]float64{queueSizeMetricKey: 10.0})
+	t.orcaSrv.SetUtilizationMetric(requestsMetricKey, float64(t.requests))
+	t.orcaSrv.SetCPUUtilizationMetric(50.0)
+	t.orcaSrv.SetMemoryUtilizationMetric(99.0)
 	return &testpb.SimpleResponse{}, nil
 }
 
 func (t *testServiceImpl) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	rec := orca.GetOutOfBandMetricRecorder()
-	if rec == nil {
-		return nil, status.Error(codes.Internal, "out-of-band metrics recorder missing")
-	}
-
-	rec.DeleteUtilizationMetric(requestsMetricKey)
-	rec.DeleteCPUUtilizationMetric()
-	rec.DeleteMemoryUtilizationMetric()
+	t.orcaSrv.DeleteUtilizationMetric(queueSizeMetricKey)
+	t.orcaSrv.DeleteUtilizationMetric(requestsMetricKey)
+	t.orcaSrv.DeleteCPUUtilizationMetric()
+	t.orcaSrv.DeleteMemoryUtilizationMetric()
 	return &testpb.Empty{}, nil
 }
 
@@ -93,16 +88,16 @@ func (s) Test_E2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Register the test service implementation on a grpc server.
+	// Register the OpenRCAService with a very short metrics reporting interval.
 	s := grpc.NewServer()
-	testpb.RegisterTestServiceServer(s, &testServiceImpl{})
-
-	// Register the OpenRCAService on the same grpc server, with a very short
-	// metrics reporting interval.
 	const shortReportingInterval = 100 * time.Millisecond
-	if err := orca.EnableOutOfBandMetricsReportingForTesting(s, orca.OutOfBandMetricsReportingOptions{MinReportingInterval: shortReportingInterval}); err != nil {
+	orcaSrv, err := orca.Register(s, orca.ServerOptions{MinReportingInterval: shortReportingInterval})
+	if err != nil {
 		t.Fatalf("orca.EnableOutOfBandMetricsReportingForTesting() failed: %v", err)
 	}
+
+	// Register the test service implementation on the same grpc server, and start serving.
+	testpb.RegisterTestServiceServer(s, &testServiceImpl{orcaSrv: orcaSrv})
 	go s.Serve(lis)
 	defer s.Stop()
 	t.Logf("Started gRPC server at %s...", lis.Addr().String())
@@ -155,7 +150,10 @@ func (s) Test_E2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		wantProto := &v3orcapb.OrcaLoadReport{
 			CpuUtilization: 50.0,
 			MemUtilization: 99.0,
-			Utilization:    map[string]float64{requestsMetricKey: 100.0},
+			Utilization: map[string]float64{
+				queueSizeMetricKey: 10.0,
+				requestsMetricKey:  100.0,
+			},
 		}
 		gotProto, err := stream.Recv()
 		if err != nil {
@@ -182,10 +180,7 @@ func (s) Test_E2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		default:
 		}
 
-		wantProto := &v3orcapb.OrcaLoadReport{
-			CpuUtilization: 0.0,
-			MemUtilization: 0.0,
-		}
+		wantProto := &v3orcapb.OrcaLoadReport{}
 		gotProto, err := stream.Recv()
 		if err != nil {
 			t.Fatalf("Recv() failed: %v", err)
