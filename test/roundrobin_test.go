@@ -62,10 +62,11 @@ func checkRoundRobin(ctx context.Context, cc *grpc.ClientConn, addrs []resolver.
 				}
 				var peer peer.Peer
 				if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(&peer)); err != nil {
-					// Some tests remove backends and check if round robin is happening
-					// across the remaining backends. In such cases, RPCs can initially fail
-					// on the connection using the removed backend. Just keep retrying and
-					// eventually the connection using the removed backend will shutdown and
+					// Some tests remove backends and check if round robin is
+					// happening across the remaining backends. In such cases,
+					// RPCs can initially fail on the connection using the
+					// removed backend. Just keep retrying and eventually the
+					// connection using the removed backend will shutdown and
 					// will be removed.
 					continue
 				}
@@ -75,7 +76,7 @@ func checkRoundRobin(ctx context.Context, cc *grpc.ClientConn, addrs []resolver.
 			}
 		}
 	}
-	// Perform 3 iterations and ensure they are all equal.
+	// Perform 3 iterations.
 	var iterations [][]string
 	for i := 0; i < 3; i++ {
 		iteration := make([]string, backendCount)
@@ -88,6 +89,20 @@ func checkRoundRobin(ctx context.Context, cc *grpc.ClientConn, addrs []resolver.
 		}
 		iterations = append(iterations, iteration)
 	}
+	// Ensure the the first iteration contains all addresses in addrs. To
+	// support duplicate addresses, we determine the count of each address.
+	wantAddrCount := make(map[string]int)
+	for _, addr := range addrs {
+		wantAddrCount[addr.Addr]++
+	}
+	gotAddrCount := make(map[string]int)
+	for _, addr := range iterations[0] {
+		gotAddrCount[addr]++
+	}
+	if !cmp.Equal(gotAddrCount, wantAddrCount) {
+		return fmt.Errorf("non-roundrobin, got address count in one iteration: %v, want: %v", gotAddrCount, wantAddrCount)
+	}
+	// Ensure all three iterations contain the same addresses.
 	if !cmp.Equal(iterations[0], iterations[1]) || !cmp.Equal(iterations[0], iterations[2]) {
 		return fmt.Errorf("non-roundrobin, first iter: %v, second iter: %v, third iter: %v", iterations[0], iterations[1], iterations[2])
 	}
