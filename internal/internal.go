@@ -77,6 +77,9 @@ var (
 	// ClearExtraDialOptions clears the array of extra DialOption. This
 	// method is useful in testing and benchmarking.
 	ClearExtraDialOptions func()
+	// JoinServerOptions combines the server options passed as arguments into a
+	// single server option.
+	JoinServerOptions interface{} // func(...grpc.ServerOption) grpc.ServerOption
 
 	// NewXDSResolverWithConfigForTesting creates a new xds resolver builder using
 	// the provided xds bootstrap config instead of the global configuration from

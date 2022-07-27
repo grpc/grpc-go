@@ -54,8 +54,8 @@ const defaultTestTimeout = 5 * time.Second
 // backend metrics from the server application for a unary RPC, and verifies
 // that expected load reports are received at the client.
 func (s) Test_E2E_CustomBackendMetrics_PerRPC_Unary(t *testing.T) {
-	// An interceptor which enables reporting of custom backend metrics.
-	enablingInterceptor := orca.EnableMetricsReportingForUnaryRPCs()
+	// A server option which enables reporting of per-call backend metrics.
+	callMetricsServerOption := orca.CallMetricsServerOption()
 
 	// An interceptor which injects custom backend metrics.
 	injectingInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
@@ -90,7 +90,7 @@ func (s) Test_E2E_CustomBackendMetrics_PerRPC_Unary(t *testing.T) {
 	}
 
 	// Start the stub server with a chain of unary interceptors.
-	if err := srv.StartServer(grpc.ChainUnaryInterceptor(enablingInterceptor, injectingInterceptor)); err != nil {
+	if err := srv.StartServer(callMetricsServerOption, grpc.ChainUnaryInterceptor(injectingInterceptor)); err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
 	defer srv.Stop()
@@ -132,8 +132,8 @@ func (s) Test_E2E_CustomBackendMetrics_PerRPC_Unary(t *testing.T) {
 // backend metrics from the server application for a streaming RPC, and verifies
 // that expected load reports are received at the client.
 func (s) Test_E2E_CustomBackendMetrics_PerRPC_Streaming(t *testing.T) {
-	// An interceptor which enables reporting of custom backend metrics.
-	enablingInterceptor := orca.EnableMetricsReportingForStreamingRPCs()
+	// A server option which enables reporting of per-call backend metrics.
+	callMetricsServerOption := orca.CallMetricsServerOption()
 
 	// An interceptor which injects custom backend metrics.
 	injectingInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
@@ -183,7 +183,7 @@ func (s) Test_E2E_CustomBackendMetrics_PerRPC_Streaming(t *testing.T) {
 	}
 
 	// Start the stub server with a chain of streaming interceptors.
-	if err := srv.StartServer(grpc.ChainStreamInterceptor(enablingInterceptor, injectingInterceptor)); err != nil {
+	if err := srv.StartServer(callMetricsServerOption, grpc.ChainStreamInterceptor(injectingInterceptor)); err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
 	defer srv.Stop()

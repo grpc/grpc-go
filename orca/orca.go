@@ -34,6 +34,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 
@@ -43,12 +44,12 @@ import (
 
 var logger = grpclog.Component("orca-backend-metrics")
 
-// EnableMetricsReportingForUnaryRPCs returns a server interceptor which enables
-// the reporting of per-RPC custom backend metrics for unary RPCs.
+// CallMetricsServerOption retuns a server option which enables the reporting of
+// per-RPC custom backend metrics for unary RPCs.
 //
 // Server applications interested in injecting custom backend metrics should
-// install this interceptor when creating a gRPC server, preferably as the first
-// interceptor in their chain, using grpc.ChainUnaryInterceptor().
+// pass the server option returned from this function as the first argument to
+// grpc.NewServer().
 //
 // Subsequently, server RPC handlers can retrieve a reference to the RPC
 // specific custom metrics recorder [CallMetricRecorder] to be used, via a call
@@ -60,8 +61,8 @@ var logger = grpclog.Component("orca-backend-metrics")
 // being set be "endpoint-load-metrics-bin".
 //
 // [ORCA LoadReport]: (https://github.com/cncf/xds/blob/main/xds/data/orca/v3/orca_load_report.proto#L15)
-func EnableMetricsReportingForUnaryRPCs() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func CallMetricsServerOption() grpc.ServerOption {
+	unaryInt := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 		r := &CallMetricRecorder{recorder: newMetricRecorder()}
 		ctxWithRecorder := setCallMetricRecorder(ctx, r)
 		resp, err := handler(ctxWithRecorder, req)
@@ -70,6 +71,19 @@ func EnableMetricsReportingForUnaryRPCs() grpc.UnaryServerInterceptor {
 		}
 		return resp, err
 	}
+	streamInt := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+		r := &CallMetricRecorder{recorder: newMetricRecorder()}
+		ctxWithRecorder := setCallMetricRecorder(ss.Context(), r)
+		err := handler(srv, &wrappedStream{
+			ServerStream: ss,
+			ctx:          ctxWithRecorder,
+		})
+		if err2 := r.recorder.setTrailerMetadata(ss.Context()); err2 != nil {
+			logger.Warning(err2)
+		}
+		return err
+	}
+	return internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)(grpc.ChainUnaryInterceptor(unaryInt), grpc.ChainStreamInterceptor(streamInt))
 }
 
 // wrappedStream wraps the grpc.ServerStream received by the streaming
@@ -82,23 +96,6 @@ type wrappedStream struct {
 
 func (w *wrappedStream) Context() context.Context {
 	return w.ctx
-}
-
-// EnableMetricsReportingForStreamingRPCs is similar to
-// EnableReportingForUnaryRPCs, except that is it to be used for streaming RPCs.
-func EnableMetricsReportingForStreamingRPCs() grpc.StreamServerInterceptor {
-	return func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		r := &CallMetricRecorder{recorder: newMetricRecorder()}
-		ctxWithRecorder := setCallMetricRecorder(ss.Context(), r)
-		err := handler(srv, &wrappedStream{
-			ServerStream: ss,
-			ctx:          ctxWithRecorder,
-		})
-		if err2 := r.recorder.setTrailerMetadata(ss.Context()); err2 != nil {
-			logger.Warning(err2)
-		}
-		return err
-	}
 }
 
 // minOutOfBandReportingInterval is the absolute minimum value supported for
