@@ -143,12 +143,12 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 // TestLDSWatch covers the case where a single watcher exists for a single
 // listener resource. The test verifies the following scenarios:
 // 1. An update from the management server containing the resource being
-//    watched, results in the invocation of the watch callback
+//    watched should result in the invocation of the watch callback.
 // 2. An update from the management server containing a resource *not* being
-//    watched, does not result in the invocation of the watch callback
+//    watched should not result in the invocation of the watch callback.
 // 3. After the watch is cancelled, an update from the management server
-//    containing the resource that was being watched, does not result in the
-//    invocation of the watch callback
+//    containing the resource that was being watched should not result in the
+//    invocation of the watch callback.
 //
 // The test is run for old and new style names.
 func (s) TestLDSWatch(t *testing.T) {
@@ -262,12 +262,13 @@ func (s) TestLDSWatch(t *testing.T) {
 // exist for a single listener resource.  The test verifies the following
 // scenarios:
 // 1. An update from the management server containing the resource being
-//    watched, results in the invocation of both watch callbacks
+//    watched should result in the invocation of both watch callbacks.
 // 2. After one of the watches is cancelled, a redundant update from the
-//    management server does not result in the invocation of either of the watch
-//    callbacks
+//    management server should not result in the invocation of either of the
+//    watch callbacks.
 // 3. An update from the management server containing the resource being
-//    watched, results in the invocation of the un-cancelled watch callback
+//    watched should result in the invocation of the un-cancelled watch
+//    callback.
 //
 // The test is run for old and new style names.
 func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
@@ -400,7 +401,7 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 // TestLDSWatch_ThreeWatchesForDifferentResourceNames covers the case with three
 // watchers (two watchers for one resource, and the third watcher for another
 // resource), exist across two listener resources.  The test verifies that an
-// update from the management server containing both resources result in the
+// update from the management server containing both resources results in the
 // invocation of all watch callbacks.
 //
 // The test is run with both old and new style names.
@@ -473,9 +474,9 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 }
 
 // TestLDSWatch_ResourceCaching covers the case where a watch is registered for
-// a resource which is already in the cache.  The test verifies that the new
-// watch is handled from the cache, without a request being sent to the
-// management server.
+// a resource which is already present in the cache.  The test verifies that the
+// watch callback is invoked with the contents from the cache, instead of a
+// request being sent to the management server.
 func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	overrideFedEnvVar(t)
 	firstRequestReceived := false
@@ -566,10 +567,14 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 }
 
 // TestLDSWatch_ResourceRemoved covers the cases where a resource being watched
-// is removed from the management server. The test verifies that removing
-// resources from the management server triggers the watch callback with
-// resource removed error. It also verifies that the watch callback for an
-// unrelated resource is not invoked during the above flow.
+// is removed from the management server. The test verifies the following
+// scenarios:
+// 1. Removing a resource should trigger the watch callback with a resource
+//    removed error. It should not trigger the watch callback for an unrelated
+//    resource.
+// 2. An update to another resource should result in the invocation of the watch
+//    callback associated with that resource.  It should not result in the
+//    invocation of the watch callback associated with the deleted resource.
 //
 // The test is run with both old and new style names.
 func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
@@ -727,8 +732,8 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 // TestLDSWatch_PartialValid covers the case where a response from the
 // management server contains both valid and invalid resources and is expected
 // to be NACK'ed by the xdsclient. The test verifies that watchers corresponding
-// to the valid resource (in the response) receive the update, while watchers
-// corresponding to the invalid resource receive an error.
+// to the valid resource receive the update, while watchers corresponding to the
+// invalid resource receive an error.
 func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
@@ -756,8 +761,8 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	})
 	defer ldsCancel2()
 
-	// Configure the management server two listener resources. One of these is a
-	// bad resource causing the update to be NACKed.
+	// Configure the management with server two listener resources. One of these
+	// is a bad resource causing the update to be NACKed.
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Listeners: []*v3listenerpb.Listener{
