@@ -80,6 +80,9 @@ func (m *metricRecorder) deleteUtilization(name string) {
 }
 
 func (m *metricRecorder) setAllUtilization(kvs map[string]float64) {
+	// A copy needs to be made here to ensure that any modifications to the
+	// input map by the caller does not interfere with the values stored in this
+	// metricRecorder, and vice versa.
 	utils := make(map[string]float64, len(kvs))
 	for k, v := range kvs {
 		utils[k] = v
