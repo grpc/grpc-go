@@ -8050,7 +8050,7 @@ func (s) TestNilStatsHandler(t *testing.T) {
 			return &testpb.SimpleResponse{}, nil
 		},
 	}
-	if err := ss.Start([]grpc.ServerOption{}, grpc.WithStatsHandler(nil)); err != nil {
+	if err := ss.Start([]grpc.ServerOption{grpc.StatsHandler(nil)}, grpc.WithStatsHandler(nil)); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
