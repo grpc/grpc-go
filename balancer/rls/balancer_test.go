@@ -958,7 +958,7 @@ func (wb *wrappedPickFirstBalancer) UpdateState(state balancer.State) {
 // update is being processed by RLS LB policy and its child policies.
 //
 // The test uses a wrapping balancer as the top-level LB policy on the channel.
-// The wrapping balancing wraps an RLS LB policy as a child policy and forwards
+// The wrapping balancer wraps an RLS LB policy as a child policy and forwards
 // all calls to it. It also records the UpdateState() calls from the RLS LB
 // policy and makes it available for inspection by the test.
 //
