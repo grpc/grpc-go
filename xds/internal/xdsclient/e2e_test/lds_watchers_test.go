@@ -46,10 +46,10 @@ import (
 	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v3" // Register the v3 xDS API client.
 )
 
-func overrideFedEnvVar(t *testing.T) {
+func overrideFedEnvVar(t *testing.T) func() {
 	oldFed := envconfig.XDSFederation
 	envconfig.XDSFederation = true
-	t.Cleanup(func() { envconfig.XDSFederation = oldFed })
+	return func() { envconfig.XDSFederation = oldFed }
 }
 
 type s struct {
@@ -148,7 +148,7 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 //
 // The test is run for old and new style names.
 func (s) TestLDSWatch(t *testing.T) {
-	overrideFedEnvVar(t)
+	defer overrideFedEnvVar(t)()
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
 
@@ -268,7 +268,7 @@ func (s) TestLDSWatch(t *testing.T) {
 //
 // The test is run for old and new style names.
 func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
-	overrideFedEnvVar(t)
+	defer overrideFedEnvVar(t)()
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
 
@@ -402,7 +402,7 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 //
 // The test is run with both old and new style names.
 func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
-	overrideFedEnvVar(t)
+	defer overrideFedEnvVar(t)()
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
 
@@ -474,7 +474,7 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 // watch callback is invoked with the contents from the cache, instead of a
 // request being sent to the management server.
 func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
-	overrideFedEnvVar(t)
+	defer overrideFedEnvVar(t)()
 	firstRequestReceived := false
 	firstAckReceived := grpcsync.NewEvent()
 	secondRequestReceived := grpcsync.NewEvent()
@@ -574,7 +574,7 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 //
 // The test is run with both old and new style names.
 func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
-	overrideFedEnvVar(t)
+	defer overrideFedEnvVar(t)()
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
 
@@ -682,7 +682,7 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 // server is NACK'ed by the xdsclient. The test verifies that the error is
 // propagated to the watcher.
 func (s) TestLDSWatch_NACKError(t *testing.T) {
-	overrideFedEnvVar(t)
+	defer overrideFedEnvVar(t)()
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
 
@@ -731,7 +731,7 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 // to the valid resource receive the update, while watchers corresponding to the
 // invalid resource receive an error.
 func (s) TestLDSWatch_PartialValid(t *testing.T) {
-	overrideFedEnvVar(t)
+	defer overrideFedEnvVar(t)()
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
 
