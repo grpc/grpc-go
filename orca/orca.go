@@ -42,8 +42,8 @@ import (
 
 var logger = grpclog.Component("orca-backend-metrics")
 
-// CallMetricsServerOption retuns a server option which enables the reporting of
-// per-RPC custom backend metrics for unary RPCs.
+// CallMetricsServerOption returns a server option which enables the reporting
+// of per-RPC custom backend metrics for unary RPCs.
 //
 // Server applications interested in injecting custom backend metrics should
 // pass the server option returned from this function as the first argument to
