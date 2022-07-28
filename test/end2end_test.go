@@ -8080,8 +8080,10 @@ func (s) TestUnexpectedEOF(t *testing.T) {
 
 // TestRecvWhileReturningStatus performs a Recv in a service handler while the
 // handler returns its status.  A race condition could result in the server
-// sending headers twice (once as a result of the status and once as a result
-// of the failed Recv call).
+// sending the first headers frame without the HTTP :status header.  This can
+// happen when the failed Recv (due to the handler returning) and the handler's
+// status both attempt to write the status, which would be the first headers
+// frame sent, simultaneously.
 func (s) TestRecvWhileReturningStatus(t *testing.T) {
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
