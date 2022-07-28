@@ -31,8 +31,10 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/fakegrpclb"
+	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
+
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
@@ -134,7 +136,8 @@ func (s) TestBalancerSwitch_Basic(t *testing.T) {
 		Addresses:     addrs,
 		ServiceConfig: parseServiceConfig(t, r, rrServiceConfig),
 	})
-	if err := checkRoundRobin(ctx, cc, addrs); err != nil {
+	client := testpb.NewTestServiceClient(cc)
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs); err != nil {
 		t.Fatal(err)
 	}
 
@@ -169,7 +172,8 @@ func (s) TestBalancerSwitch_grpclbToPickFirst(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lbServer.Address(), Type: resolver.GRPCLB}}})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkRoundRobin(ctx, cc, addrs[0:1]); err != nil {
+	client := testpb.NewTestServiceClient(cc)
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[0:1]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -177,7 +181,7 @@ func (s) TestBalancerSwitch_grpclbToPickFirst(t *testing.T) {
 	// This should not lead to a balancer switch.
 	const nonExistentServer = "non-existent-grpclb-server-address"
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: nonExistentServer, Type: resolver.GRPCLB}}})
-	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -220,14 +224,15 @@ func (s) TestBalancerSwitch_pickFirstToGRPCLB(t *testing.T) {
 	// to the grpclb server we created above. This will cause the channel to
 	// switch to the "grpclb" balancer, which returns a single backend address.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lbServer.Address(), Type: resolver.GRPCLB}}})
-	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
+	client := testpb.NewTestServiceClient(cc)
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Push a resolver update containing a non-existent grpclb server address.
 	// This should not lead to a balancer switch.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: "nonExistentServer", Type: resolver.GRPCLB}}})
-	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -272,7 +277,8 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: addrs[1:], ServiceConfig: scpr})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
+	client := testpb.NewTestServiceClient(cc)
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -283,13 +289,13 @@ func (s) TestBalancerSwitch_RoundRobinToGRPCLB(t *testing.T) {
 		Addresses:     []resolver.Address{{Addr: lbServer.Address(), Type: resolver.GRPCLB}},
 		ServiceConfig: scpr,
 	})
-	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Switch back to "round_robin".
 	r.UpdateState(resolver.State{Addresses: addrs[1:], ServiceConfig: scpr})
-	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -337,7 +343,8 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 		Addresses:     addrs,
 		ServiceConfig: parseServiceConfig(t, r, rrServiceConfig),
 	})
-	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
+	client := testpb.NewTestServiceClient(cc)
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -375,7 +382,8 @@ func (s) TestBalancerSwitch_grpclbAddressOverridesLoadBalancingPolicy(t *testing
 	r.UpdateState(resolver.State{
 		Addresses: append(addrs[1:], resolver.Address{Addr: lbServer.Address(), Type: resolver.GRPCLB}),
 	})
-	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
+	client := testpb.NewTestServiceClient(cc)
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -388,13 +396,13 @@ func (s) TestBalancerSwitch_grpclbAddressOverridesLoadBalancingPolicy(t *testing
 		Addresses:     append(addrs[1:], resolver.Address{Addr: lbServer.Address(), Type: resolver.GRPCLB}),
 		ServiceConfig: scpr,
 	})
-	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Switch to "round_robin" by removing the address of type "grpclb".
 	r.UpdateState(resolver.State{Addresses: addrs[1:]})
-	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -422,7 +430,8 @@ func (s) TestBalancerSwitch_LoadBalancingConfigTrumps(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{{Addr: lbServer.Address(), Type: resolver.GRPCLB}}})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkRoundRobin(ctx, cc, addrs[:1]); err != nil {
+	client := testpb.NewTestServiceClient(cc)
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -432,7 +441,7 @@ func (s) TestBalancerSwitch_LoadBalancingConfigTrumps(t *testing.T) {
 		Addresses:     addrs[1:],
 		ServiceConfig: parseServiceConfig(t, r, rrServiceConfig),
 	})
-	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -444,7 +453,7 @@ func (s) TestBalancerSwitch_LoadBalancingConfigTrumps(t *testing.T) {
 	// else, the address of type "grpclb" should be ignored.
 	grpclbAddr := resolver.Address{Addr: "non-existent-grpclb-server-address", Type: resolver.GRPCLB}
 	r.UpdateState(resolver.State{Addresses: append(addrs[1:], grpclbAddr)})
-	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -545,7 +554,8 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 		Addresses:     addrs[1:],
 		ServiceConfig: parseServiceConfig(t, r, rrServiceConfig),
 	})
-	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
+	client := testpb.NewTestServiceClient(cc)
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -591,7 +601,7 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 		t.Fatal("Timeout when waiting for a ClientConnState update on the new balancer")
 	case <-ccUpdateCh:
 	}
-	if err := checkRoundRobin(ctx, cc, addrs[1:]); err != nil {
+	if err := rrutil.CheckRoundRobinRPCs(ctx, client, addrs[1:]); err != nil {
 		t.Fatal(err)
 	}
 
