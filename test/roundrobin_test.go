@@ -99,8 +99,8 @@ func checkRoundRobin(ctx context.Context, cc *grpc.ClientConn, addrs []resolver.
 	for _, addr := range iterations[0] {
 		gotAddrCount[addr]++
 	}
-	if !cmp.Equal(gotAddrCount, wantAddrCount) {
-		return fmt.Errorf("non-roundrobin, got address count in one iteration: %v, want: %v", gotAddrCount, wantAddrCount)
+	if diff := cmp.Diff(gotAddrCount, wantAddrCount); diff != "" {
+		return fmt.Errorf("non-roundrobin, got address count in one iteration: %v, want: %v, Diff: %s", gotAddrCount, wantAddrCount, diff)
 	}
 	// Ensure all three iterations contain the same addresses.
 	if !cmp.Equal(iterations[0], iterations[1]) || !cmp.Equal(iterations[0], iterations[2]) {
