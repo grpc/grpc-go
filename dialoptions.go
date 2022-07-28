@@ -392,6 +392,7 @@ func WithDialer(f func(string, time.Duration) (net.Conn, error)) DialOption {
 func WithStatsHandler(h stats.Handler) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		if h == nil {
+			logger.Error("ignoring nil parameter in grpc.WithStatsHandler ClientOption")
 			// Do not allow a nil stats handler, which would otherwise cause
 			// panics.
 			return

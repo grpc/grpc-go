@@ -8045,6 +8045,7 @@ func (s) TestServerClosesConn(t *testing.T) {
 // TestNilStatsHandler ensures we do not panic as a result of a nil stats
 // handler.
 func (s) TestNilStatsHandler(t *testing.T) {
+	grpctest.TLogger.ExpectErrorN("ignoring nil parameter", 2)
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
 			return &testpb.SimpleResponse{}, nil

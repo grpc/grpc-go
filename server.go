@@ -443,6 +443,7 @@ func InTapHandle(h tap.ServerInHandle) ServerOption {
 func StatsHandler(h stats.Handler) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		if h == nil {
+			logger.Error("ignoring nil parameter in grpc.StatsHandler ServerOption")
 			// Do not allow a nil stats handler, which would otherwise cause
 			// panics.
 			return
