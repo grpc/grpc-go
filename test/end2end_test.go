@@ -8077,3 +8077,35 @@ func (s) TestUnexpectedEOF(t *testing.T) {
 		}
 	}
 }
+
+// TestRecvWhileReturningStatus performs a Recv in a service handler while the
+// handler returns its status.  A race condition could result in the server
+// sending the first headers frame without the HTTP :status header.  This can
+// happen when the failed Recv (due to the handler returning) and the handler's
+// status both attempt to write the status, which would be the first headers
+// frame sent, simultaneously.
+func (s) TestRecvWhileReturningStatus(t *testing.T) {
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			// The client never sends, so this Recv blocks until the server
+			// returns and causes stream operations to return errors.
+			go stream.Recv()
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for i := 0; i < 100; i++ {
+		stream, err := ss.Client.FullDuplexCall(ctx)
+		if err != nil {
+			t.Fatalf("Error while creating stream: %v", err)
+		}
+		if _, err := stream.Recv(); err != io.EOF {
+			t.Fatalf("stream.Recv() = %v, want io.EOF", err)
+		}
+	}
+}
