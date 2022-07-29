@@ -225,9 +225,7 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 
 	b.mu.Lock()
 	b.cfg = lbCfg
-	// When the outlier_detection LB policy receives an address update, it will
-	// create a map entry for each subchannel address in the list, and remove
-	// each map entry for a subchannel address not in the list.
+
 	addrs := make(map[string]bool, len(s.ResolverState.Addresses))
 	for _, addr := range s.ResolverState.Addresses {
 		addrs[addr.Addr] = true
@@ -241,9 +239,6 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 		}
 	}
 
-	// When a new config is provided, if the timer start timestamp is unset, set
-	// it to the current time and start the timer for the configured interval,
-	// then for each address, reset the call counters.
 	var interval time.Duration
 	if b.timerStartTime.IsZero() {
 		b.timerStartTime = time.Now()
@@ -252,10 +247,6 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 		}
 		interval = b.cfg.Interval
 	} else {
-		// If the timer start timestamp is set, instead cancel the existing
-		// timer and start the timer for the configured interval minus the
-		// difference between the current time and the previous start timestamp,
-		// or 0 if that would be negative.
 		interval = b.cfg.Interval - now().Sub(b.timerStartTime)
 		if interval < 0 {
 			interval = 0
@@ -291,7 +282,6 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 	// most updated no-op config bit and most recent state from the child.
 	b.inhibitPickerUpdates = true
 	b.mu.Unlock()
-	// then pass the address list along to the child policy.
 	b.childMu.Lock()
 	err := b.child.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  s.ResolverState,
@@ -304,7 +294,6 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 		lbCfg: lbCfg,
 		done:  done,
 	})
-	// To make sure Picker updated synchronously.
 	<-done
 	return err
 }
@@ -372,7 +361,9 @@ func (b *outlierDetectionBalancer) ExitIdle() {
 
 // wrappedPicker delegates to the child policy's picker, and when the request
 // finishes, it increments the corresponding counter in the map entry referenced
-// by the subConnWrapper that was picked.
+// by the subConnWrapper that was picked. If both the `success_rate_ejection`
+// and `failure_percentage_ejection` fields are unset in the configuration, this
+// picker will not count.
 type wrappedPicker struct {
 	childPicker balancer.Picker
 	noopPicker  bool
@@ -445,8 +436,6 @@ func (b *outlierDetectionBalancer) UpdateState(s balancer.State) {
 }
 
 func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
-	// "When the child policy asks for a subchannel, the outlier_detection will
-	// wrap the subchannel with a wrapper." - A50
 	sc, err := b.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		return nil, err
@@ -468,9 +457,6 @@ func (b *outlierDetectionBalancer) NewSubConn(addrs []resolver.Address, opts bal
 	}
 	addrInfo.sws = append(addrInfo.sws, scw)
 	atomic.StorePointer(&scw.addressInfo, unsafe.Pointer(addrInfo))
-
-	// "If that address is currently ejected, that subchannel wrapper's eject
-	// method will be called." - A50
 	if !addrInfo.latestEjectionTimestamp.IsZero() {
 		scw.eject()
 	}
@@ -538,12 +524,8 @@ func (b *outlierDetectionBalancer) UpdateAddresses(sc balancer.SubConn, addrs []
 		if scw.addresses[0].Addr == addrs[0].Addr {
 			return
 		}
-		// 1. Remove Subchannel from Addresses map entry if present in Addresses map.
 		b.removeSubConnFromAddressesMapEntry(scw)
-		// 2. Add Subchannel to Addresses map entry if new address present in map.
 		addrInfo := b.appendIfPresent(addrs[0].Addr, scw)
-		// 3. Relay state with eject() recalculated (using the corresponding
-		// map entry to see if it's currently ejected).
 		if addrInfo == nil { // uneject unconditionally because could have come from an ejected address
 			scw.uneject()
 		} else {
@@ -554,17 +536,13 @@ func (b *outlierDetectionBalancer) UpdateAddresses(sc balancer.SubConn, addrs []
 			}
 		}
 	case len(scw.addresses) == 1: // single address to multiple/no addresses
-		// 1. Remove Subchannel from Addresses map entry if present in Addresses map.
 		b.removeSubConnFromAddressesMapEntry(scw)
-		// 2. Clear the Subchannel wrapper's Call Counter entry.
 		addrInfo := (*addressInfo)(atomic.LoadPointer(&scw.addressInfo))
 		if addrInfo != nil {
 			addrInfo.callCounter.clear()
 		}
-		// 3. Uneject the Subchannel in case it was previously ejected.
 		scw.uneject()
 	case len(addrs) == 1: // multiple/no addresses to single address
-		// 1. Add Subchannel to Addresses map entry if new address present in map.
 		addrInfo := b.appendIfPresent(addrs[0].Addr, scw)
 		if addrInfo != nil && !addrInfo.latestEjectionTimestamp.IsZero() {
 			scw.eject()
@@ -615,16 +593,10 @@ func (b *outlierDetectionBalancer) handleEjectedUpdate(u *ejectionUpdate) {
 	scw.ejected = u.isEjected
 	var stateToUpdate balancer.SubConnState
 	if u.isEjected {
-		// "The wrapper will report a state update with the
-		// TRANSIENT_FAILURE state, and will stop passing along
-		// updates from the underlying subchannel."
 		stateToUpdate = balancer.SubConnState{
 			ConnectivityState: connectivity.TransientFailure,
 		}
 	} else {
-		// "The wrapper will report a state update with the latest
-		// update from the underlying subchannel, and resume passing
-		// along updates from the underlying subchannel."
 		stateToUpdate = scw.latestState // If this has never been written to will send connectivity IDLE which seems fine to me
 	}
 	b.childMu.Lock()
@@ -648,16 +620,9 @@ func (b *outlierDetectionBalancer) handleChildStateUpdate(u balancer.State) {
 	b.recentPickerNoop = noopCfg
 	b.cc.UpdateState(balancer.State{
 		ConnectivityState: b.childState.ConnectivityState,
-		// The outlier_detection LB policy will provide a picker that delegates to
-		// the child policy's picker, and when the request finishes, increment the
-		// corresponding counter in the map entry referenced by the subchannel
-		// wrapper that was picked.
 		Picker: &wrappedPicker{
 			childPicker: b.childState.Picker,
-			// If both the `success_rate_ejection` and
-			// `failure_percentage_ejection` fields are unset in the
-			// configuration, the picker should not do that counting.
-			noopPicker: noopCfg,
+			noopPicker:  noopCfg,
 		},
 	})
 }
@@ -673,16 +638,9 @@ func (b *outlierDetectionBalancer) handleLBConfigUpdate(u lbCfgUpdate) {
 		b.recentPickerNoop = noopCfg
 		b.cc.UpdateState(balancer.State{
 			ConnectivityState: b.childState.ConnectivityState,
-			// The outlier_detection LB policy will provide a picker that delegates to
-			// the child policy's picker, and when the request finishes, increment the
-			// corresponding counter in the map entry referenced by the subchannel
-			// wrapper that was picked.
 			Picker: &wrappedPicker{
 				childPicker: b.childState.Picker,
-				// If both the `success_rate_ejection` and
-				// `failure_percentage_ejection` fields are unset in the
-				// configuration, the picker should not do that counting.
-				noopPicker: noopCfg,
+				noopPicker:  noopCfg,
 			},
 		})
 	}
@@ -718,36 +676,27 @@ func (b *outlierDetectionBalancer) run() {
 	}
 }
 
-// intervalTimerAlgorithm ejects and unejects addresses based on the outlier
-// detection configuration and data about each address from the previous
+// intervalTimerAlgorithm ejects and unejects addresses based on the Outlier
+// Detection configuration and data about each address from the previous
 // interval.
 func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.timerStartTime = time.Now()
 
-	// 2. For each address, swap the call counter's buckets in that address's
-	// map entry.
 	for _, addrInfo := range b.addrs {
 		addrInfo.callCounter.swap()
 	}
 
-	// 3. If the success_rate_ejection configuration field is set, run the
-	// success rate algorithm.
 	if b.cfg.SuccessRateEjection != nil {
 		b.successRateAlgorithm()
 	}
 
-	// 4. If the failure_percentage_ejection configuration field is set, run the
-	// failure percentage algorithm.
 	if b.cfg.FailurePercentageEjection != nil {
 		b.failurePercentageAlgorithm()
 	}
 
-	// 5. For each address in the map:
 	for _, addrInfo := range b.addrs {
-		// If the address is not ejected and the multiplier is greater than 0,
-		// decrease the multiplier by 1.
 		if addrInfo.latestEjectionTimestamp.IsZero() && addrInfo.ejectionTimeMultiplier > 0 {
 			addrInfo.ejectionTimeMultiplier--
 			continue
@@ -755,10 +704,6 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 		et := b.cfg.BaseEjectionTime.Nanoseconds() * addrInfo.ejectionTimeMultiplier
 		met := max(b.cfg.BaseEjectionTime.Nanoseconds(), b.cfg.MaxEjectionTime.Nanoseconds())
 		curTimeAfterEt := now().After(addrInfo.latestEjectionTimestamp.Add(time.Duration(min(et, met))))
-		// If the address is ejected, and the current time is after
-		// ejection_timestamp + min(base_ejection_time (type: time.Time) *
-		// multiplier (type: int), max(base_ejection_time (type: time.Time),
-		// max_ejection_time (type: time.Time))), un-eject the address.
 		if !addrInfo.latestEjectionTimestamp.IsZero() && curTimeAfterEt {
 			b.unejectAddress(addrInfo)
 		}
@@ -789,13 +734,9 @@ func (b *outlierDetectionBalancer) numAddrsWithAtLeastRequestVolume() uint32 {
 // meanAndStdDevOfSuccessesAtLeastRequestVolume returns the mean and std dev of
 // the number of requests of addresses that have at least requestVolume.
 func (b *outlierDetectionBalancer) meanAndStdDevOfSuccessesAtLeastRequestVolume() (float64, float64) {
-	// 2. Calculate the mean and standard deviation of the fractions of
-	// successful requests among addresses with total request volume of at least
-	// success_rate_ejection.request_volume.
 	var totalFractionOfSuccessfulRequests float64
 	var mean float64
 	for _, addrInfo := range b.addrs {
-		// "of at least success_rate_ejection.request_volume"
 		if addrInfo.callCounter.inactiveBucket.requestVolume >= b.cfg.SuccessRateEjection.RequestVolume {
 			totalFractionOfSuccessfulRequests += float64(addrInfo.callCounter.inactiveBucket.numSuccesses) / float64(addrInfo.callCounter.inactiveBucket.requestVolume)
 		}
@@ -806,7 +747,6 @@ func (b *outlierDetectionBalancer) meanAndStdDevOfSuccessesAtLeastRequestVolume(
 		devFromMean := (float64(addrInfo.callCounter.inactiveBucket.numSuccesses) / float64(addrInfo.callCounter.inactiveBucket.requestVolume)) - mean
 		sumOfSquares += devFromMean * devFromMean
 	}
-
 	variance := sumOfSquares / float64(len(b.addrs))
 	return mean, math.Sqrt(variance)
 }
@@ -815,41 +755,21 @@ func (b *outlierDetectionBalancer) meanAndStdDevOfSuccessesAtLeastRequestVolume(
 // the other addresses according to mean and standard deviation, and if overall
 // applicable from other set heuristics.
 func (b *outlierDetectionBalancer) successRateAlgorithm() {
-	// 1. If the number of addresses with request volume of at least
-	// success_rate_ejection.request_volume is less than
-	// success_rate_ejection.minimum_hosts, stop.
 	if b.numAddrsWithAtLeastRequestVolume() < b.cfg.SuccessRateEjection.MinimumHosts {
 		return
 	}
-
-	// 2. Calculate the mean and standard deviation of the fractions of
-	// successful requests among addresses with total request volume of at least
-	// success_rate_ejection.request_volume.
 	mean, stddev := b.meanAndStdDevOfSuccessesAtLeastRequestVolume()
-
-	// 3. For each address:
 	for _, addrInfo := range b.addrs {
 		ccb := addrInfo.callCounter.inactiveBucket
 		sre := b.cfg.SuccessRateEjection
-		// i. If the percentage of ejected addresses is greater than
-		// max_ejection_percent, stop.
 		if float64(b.numAddrsEjected)/float64(len(b.addrs))*100 > float64(b.cfg.MaxEjectionPercent) {
 			return
 		}
-
-		// ii. If the address's total request volume is less than
-		// success_rate_ejection.request_volume, continue to the next address.
 		if ccb.requestVolume < sre.RequestVolume {
 			continue
 		}
-
-		//  iii. If the address's success rate is less than (mean - stdev *
-		//  (success_rate_ejection.stdev_factor / 1000))
 		successRate := float64(ccb.numSuccesses) / float64(ccb.requestVolume)
 		if successRate < (mean - stddev*(float64(sre.StdevFactor)/1000)) {
-			// then choose a random integer in [0, 100). If that number is less
-			// than success_rate_ejection.enforcement_percentage, eject that
-			// address.
 			if uint32(grpcrand.Int31n(100)) < sre.EnforcementPercentage {
 				b.ejectAddress(addrInfo)
 			}
@@ -861,34 +781,21 @@ func (b *outlierDetectionBalancer) successRateAlgorithm() {
 // rate exceeds a set enforcement percentage, if overall applicable from other
 // set heuristics.
 func (b *outlierDetectionBalancer) failurePercentageAlgorithm() {
-	// 1. If the number of addresses is less than
-	// failure_percentage_ejection.minimum_hosts, stop.
 	if uint32(len(b.addrs)) < b.cfg.FailurePercentageEjection.MinimumHosts {
 		return
 	}
 
-	// 2. For each address:
 	for _, addrInfo := range b.addrs {
 		ccb := addrInfo.callCounter.inactiveBucket
 		fpe := b.cfg.FailurePercentageEjection
-		// i. If the percentage of ejected addresses is greater than
-		// max_ejection_percent, stop.
 		if float64(b.numAddrsEjected)/float64(len(b.addrs))*100 > float64(b.cfg.MaxEjectionPercent) {
 			return
 		}
-		// ii. If the address's total request volume is less than
-		// failure_percentage_ejection.request_volume, continue to the next
-		// address.
 		if ccb.requestVolume < fpe.RequestVolume {
 			continue
 		}
-		//  2c. If the address's failure percentage is greater than
-		//  failure_percentage_ejection.threshold
 		failurePercentage := (float64(ccb.numFailures) / float64(ccb.requestVolume)) * 100
 		if failurePercentage > float64(b.cfg.FailurePercentageEjection.Threshold) {
-			// then choose a random integer in [0, 100). If that number is less
-			// than failiure_percentage_ejection.enforcement_percentage, eject
-			// that address.
 			if uint32(grpcrand.Int31n(100)) < b.cfg.FailurePercentageEjection.EnforcementPercentage {
 				b.ejectAddress(addrInfo)
 			}
@@ -898,11 +805,6 @@ func (b *outlierDetectionBalancer) failurePercentageAlgorithm() {
 
 func (b *outlierDetectionBalancer) ejectAddress(addrInfo *addressInfo) {
 	b.numAddrsEjected++
-
-	// To eject an address, set the current ejection timestamp to the timestamp
-	// that was recorded when the timer fired, increase the ejection time
-	// multiplier by 1, and call eject() on each subchannel wrapper in that
-	// address's subchannel wrapper list.
 	addrInfo.latestEjectionTimestamp = b.timerStartTime
 	addrInfo.ejectionTimeMultiplier++
 	for _, sbw := range addrInfo.sws {
@@ -912,12 +814,6 @@ func (b *outlierDetectionBalancer) ejectAddress(addrInfo *addressInfo) {
 
 func (b *outlierDetectionBalancer) unejectAddress(addrInfo *addressInfo) {
 	b.numAddrsEjected--
-
-	// To un-eject an address, set the current ejection timestamp to null
-	// (doesn't he mean latest ejection timestamp?, in Golang null for time is
-	// logically equivalent in practice to the time zero value) and call
-	// uneject() on each subchannel wrapper in that address's subchannel wrapper
-	// list.
 	addrInfo.latestEjectionTimestamp = time.Time{}
 	for _, sbw := range addrInfo.sws {
 		sbw.uneject()
