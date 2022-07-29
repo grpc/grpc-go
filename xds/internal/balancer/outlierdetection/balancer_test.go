@@ -289,6 +289,7 @@ func init() {
 	balancer.Register(errParseConfigBuilder{})
 	balancer.Register(tcibBuilder{})
 	balancer.Register(verifyBalancerBuilder{})
+	balancer.Register(twoUpdateStateBalancerBuilder{})
 }
 
 type errParseConfigBuilder struct{}
@@ -318,6 +319,7 @@ func setup(t *testing.T) (*outlierDetectionBalancer, *testutils.TestClientConn) 
 
 const tcibname = "testClusterImplBalancer"
 const verifyBalancerName = "verifyBalancer"
+const twoUpdateStateBalancerName = "twoUpdateStateBalancer"
 
 type tcibBuilder struct{}
 
@@ -2264,3 +2266,103 @@ func (vb *verifyBalancer) ExitIdle() {
 		vb.t.Fatal("ExitIdle was called after Close(), which breaks the balancer API")
 	}
 }
+
+// TestUpdateClientConnStateSinglePickerUpdate tests that on an
+// UpdateClientConnState call on the Outlier Detection Balancer, only a single
+// picker update is sent back.
+func (s) TestUpdateClientConnStateSinglePickerUpdate(t *testing.T) {
+	internal.RegisterOutlierDetectionBalancerForTesting()
+	od, tcc := setup(t)
+	defer func() {
+		od.Close()
+		internal.UnregisterOutlierDetectionBalancerForTesting()
+	}()
+	od.UpdateClientConnState(balancer.ClientConnState{
+		BalancerConfig: &LBConfig{
+			Interval: 10 * time.Second,
+			ChildPolicy: &internalserviceconfig.BalancerConfig{
+				Name:   twoUpdateStateBalancerName,
+				Config: twoUpdateStateBalancerConfig{},
+			},
+		},
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Should forward the connectivity State to Client Conn.
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for a UpdateState call on the ClientConn")
+	case state := <-tcc.NewStateCh:
+		if state != connectivity.Ready {
+			t.Fatalf("ClientConn received connectivity state %v, want %v", state, connectivity.Ready)
+		}
+	}
+
+	select {
+	case <-ctx.Done():
+		t.Fatalf("timeout while waiting for a UpdateState call on the ClientConn")
+	case <-tcc.NewPickerCh:
+	}
+
+	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+
+	// Should only send one update.
+	select {
+	case <-tcc.NewStateCh:
+		t.Fatalf("only one picker update should have gotten sent")
+	case <-sCtx.Done():
+	}
+
+	sCtx, sCancel = context.WithTimeout(context.Background(), defaultTestShortTimeout)
+	defer sCancel()
+	select {
+	case <-tcc.NewStateCh:
+		t.Fatalf("only one picker update should have gotten sent")
+	case <-sCtx.Done():
+	}
+}
+
+type twoUpdateStateBalancerBuilder struct{}
+
+func (twoUpdateStateBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	return &twoUpdateStateBalancer{
+		cc: cc,
+	}
+}
+
+func (twoUpdateStateBalancerBuilder) Name() string {
+	return "twoUpdateStateBalancer"
+}
+
+type twoUpdateStateBalancerConfig struct {
+	serviceconfig.LoadBalancingConfig
+}
+
+// twoUpdateStateBalancer sends two UpdateState calls inline in
+// UpdateClientConnState(). This helps to verify that only a single picker
+// update gets sent upward as a result of the call.
+type twoUpdateStateBalancer struct {
+	t  *testing.T
+	cc balancer.ClientConn
+}
+
+func (tusb *twoUpdateStateBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
+	tusb.cc.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Ready,
+		Picker:            &testutils.TestConstPicker{},
+	})
+	tusb.cc.UpdateState(balancer.State{
+		ConnectivityState: connectivity.Ready,
+		Picker:            &testutils.TestConstPicker{},
+	})
+	return nil
+}
+
+func (tusb *twoUpdateStateBalancer) ResolverError(err error) {}
+
+func (tusb *twoUpdateStateBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+}
+
+func (tusb *twoUpdateStateBalancer) Close() {}
