@@ -61,7 +61,7 @@ func (s) TestAddExtraDialOptions(t *testing.T) {
 func (s) TestAddExtraServerOptions(t *testing.T) {
 	const maxRecvSize = 998765
 	// Set and check the ServerOptions
-	opts := []ServerOption{StatsHandler(nil), Creds(insecure.NewCredentials()), MaxRecvMsgSize(maxRecvSize)}
+	opts := []ServerOption{Creds(insecure.NewCredentials()), MaxRecvMsgSize(maxRecvSize)}
 	internal.AddExtraServerOptions.(func(opt ...ServerOption))(opts...)
 	for i, opt := range opts {
 		if extraServerOptions[i] != opt {
