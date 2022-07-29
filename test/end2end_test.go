@@ -8042,6 +8042,27 @@ func (s) TestServerClosesConn(t *testing.T) {
 	t.Fatalf("timed out waiting for conns to be closed by server; still open: %v", atomic.LoadInt32(&wrapLis.connsOpen))
 }
 
+// TestNilStatsHandler ensures we do not panic as a result of a nil stats
+// handler.
+func (s) TestNilStatsHandler(t *testing.T) {
+	grpctest.TLogger.ExpectErrorN("ignoring nil parameter", 2)
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+	if err := ss.Start([]grpc.ServerOption{grpc.StatsHandler(nil)}, grpc.WithStatsHandler(nil)); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+}
+
 // TestUnexpectedEOF tests a scenario where a client invokes two unary RPC
 // calls. The first call receives a payload which exceeds max grpc receive
 // message length, and the second gets a large response. This second RPC should
