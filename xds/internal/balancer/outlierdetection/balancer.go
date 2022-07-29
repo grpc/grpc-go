@@ -142,9 +142,15 @@ type scUpdate struct {
 	state balancer.SubConnState
 }
 
-type ejectedUpdate struct {
-	scw     *subConnWrapper
-	ejected bool // true for ejected, false for unejected
+type ejectionUpdate struct {
+	scw       *subConnWrapper
+	isEjected bool // true for ejected, false for unejected
+}
+
+type lbCfgUpdate struct {
+	lbCfg *LBConfig
+	// to make sure picker is updated synchronously.
+	done chan struct{}
 }
 
 type outlierDetectionBalancer struct {
@@ -166,7 +172,8 @@ type outlierDetectionBalancer struct {
 	child   balancer.Balancer
 
 	// mu guards access to a lot of the core LB Policy State. It also prevents
-	// intersplicing certain operations.
+	// intersplicing certain operations. Some of the undefined behaviors this
+	// mutex protects are:
 	//
 	// ex 1: interval timer goes off, outlier detection algorithm starts running
 	// based on knobs in cfg. in the middle of running the algorithm, a
@@ -176,12 +183,13 @@ type outlierDetectionBalancer struct {
 	// ex 2: Updating the addrs map from UpdateAddresses in the middle of
 	// running the interval timer algorithm which uses addrs heavily. This will
 	// cause undefined behavior for the interval timer algorithm.
-	mu             sync.Mutex
-	addrs          map[string]*addressInfo
-	cfg            *LBConfig
-	scWrappers     map[balancer.SubConn]*subConnWrapper
-	timerStartTime time.Time
-	intervalTimer  *time.Timer
+	mu                   sync.Mutex
+	addrs                map[string]*addressInfo
+	cfg                  *LBConfig
+	scWrappers           map[balancer.SubConn]*subConnWrapper
+	timerStartTime       time.Time
+	intervalTimer        *time.Timer
+	inhibitPickerUpdates bool
 
 	scUpdateCh     *buffer.Unbounded
 	pickerUpdateCh *buffer.Unbounded
@@ -217,7 +225,6 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 
 	b.mu.Lock()
 	b.cfg = lbCfg
-
 	// When the outlier_detection LB policy receives an address update, it will
 	// create a map entry for each subchannel address in the list, and remove
 	// each map entry for a subchannel address not in the list.
@@ -277,16 +284,29 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 			addrInfo.ejectionTimeMultiplier = 0
 		}
 	}
-	b.mu.Unlock()
-	b.pickerUpdateCh.Put(lbCfg)
 
+	// Inhibit picker updates until run() processes the	lbCfgUpdate. This
+	// makes sure a single picker update gets sent out synchronously as a result
+	// of this UpdateClientConnState call, and this picker update contains the
+	// most updated no-op config bit and most recent state from the child.
+	b.inhibitPickerUpdates = true
+	b.mu.Unlock()
 	// then pass the address list along to the child policy.
 	b.childMu.Lock()
-	defer b.childMu.Unlock()
-	return b.child.UpdateClientConnState(balancer.ClientConnState{
+	err := b.child.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  s.ResolverState,
 		BalancerConfig: b.cfg.ChildPolicy.Config,
 	})
+	b.childMu.Unlock()
+
+	done := make(chan struct{})
+	b.pickerUpdateCh.Put(lbCfgUpdate{
+		lbCfg: lbCfg,
+		done:  done,
+	})
+	// To make sure Picker updated synchronously.
+	<-done
+	return err
 }
 
 func (b *outlierDetectionBalancer) ResolverError(err error) {
@@ -590,11 +610,11 @@ func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
 
 // handleEjectedUpdate handles any SubConns that get ejected/unejected, and
 // forwards the appropriate corresponding subConnState to the child policy.
-func (b *outlierDetectionBalancer) handleEjectedUpdate(u *ejectedUpdate) {
+func (b *outlierDetectionBalancer) handleEjectedUpdate(u *ejectionUpdate) {
 	scw := u.scw
-	scw.ejected = u.ejected
+	scw.ejected = u.isEjected
 	var stateToUpdate balancer.SubConnState
-	if u.ejected {
+	if u.isEjected {
 		// "The wrapper will report a state update with the
 		// TRANSIENT_FAILURE state, and will stop passing along
 		// updates from the underlying subchannel."
@@ -619,6 +639,10 @@ func (b *outlierDetectionBalancer) handleEjectedUpdate(u *ejectedUpdate) {
 func (b *outlierDetectionBalancer) handleChildStateUpdate(u balancer.State) {
 	b.childState = u
 	b.mu.Lock()
+	if b.inhibitPickerUpdates {
+		b.mu.Unlock()
+		return
+	}
 	noopCfg := b.noopConfig()
 	b.mu.Unlock()
 	b.recentPickerNoop = noopCfg
@@ -641,8 +665,10 @@ func (b *outlierDetectionBalancer) handleChildStateUpdate(u balancer.State) {
 // handleLBConfigUpdate compares whether the new config is a noop config or not,
 // to the noop bit in the picker if present. It updates the picker if this bit
 // changed compared to the picker currently in use.
-func (b *outlierDetectionBalancer) handleLBConfigUpdate(u *LBConfig) {
-	noopCfg := u.SuccessRateEjection == nil && u.FailurePercentageEjection == nil
+func (b *outlierDetectionBalancer) handleLBConfigUpdate(u lbCfgUpdate) {
+	lbCfg := u.lbCfg
+	done := u.done
+	noopCfg := lbCfg.SuccessRateEjection == nil && lbCfg.FailurePercentageEjection == nil
 	if b.childState.Picker != nil && noopCfg != b.recentPickerNoop {
 		b.recentPickerNoop = noopCfg
 		b.cc.UpdateState(balancer.State{
@@ -660,6 +686,8 @@ func (b *outlierDetectionBalancer) handleLBConfigUpdate(u *LBConfig) {
 			},
 		})
 	}
+	b.inhibitPickerUpdates = false
+	close(done)
 }
 
 func (b *outlierDetectionBalancer) run() {
@@ -670,7 +698,7 @@ func (b *outlierDetectionBalancer) run() {
 			switch u := update.(type) {
 			case *scUpdate:
 				b.handleSubConnUpdate(u)
-			case *ejectedUpdate:
+			case *ejectionUpdate:
 				b.handleEjectedUpdate(u)
 			}
 		case update := <-b.pickerUpdateCh.Get():
@@ -681,7 +709,7 @@ func (b *outlierDetectionBalancer) run() {
 			switch u := update.(type) {
 			case balancer.State:
 				b.handleChildStateUpdate(u)
-			case *LBConfig:
+			case lbCfgUpdate:
 				b.handleLBConfigUpdate(u)
 			}
 		case <-b.closed.Done():

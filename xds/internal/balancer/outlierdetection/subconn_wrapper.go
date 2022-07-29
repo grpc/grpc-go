@@ -25,11 +25,9 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-// subConnWrapper wraps every created SubConn in the Outlier Detection Balancer.
-// It is used to store whether the SubConn has been ejected or not, and also to
-// store the latest state for use when the SubConn gets unejected. It also
-// stores the addresses the SubConn was created with to support any change in
-// address(es).
+// subConnWrapper wraps every created SubConn in the Outlier Detection Balancer,
+// to help track the latest state update from the underlying SubConn, and also
+// whether or not this SubConn is ejected.
 type subConnWrapper struct {
 	balancer.SubConn
 
@@ -38,20 +36,24 @@ type subConnWrapper struct {
 	addressInfo unsafe.Pointer // *addressInfo
 	// These two pieces of state will reach eventual consistency due to sync in
 	// run(), and child will always have the correctly updated SubConnState.
+	// latestState is the latest state update from the underlying SubConn. This
+	// is used whenever a SubConn gets unejected.
 	latestState balancer.SubConnState
 	ejected     bool
 
 	scUpdateCh *buffer.Unbounded
 
+	// addresses is the list of address(es) this SubConn was created with to
+	// help support any change in address(es)
 	addresses []resolver.Address
 }
 
 // eject causes the wrapper to report a state update with the TRANSIENT_FAILURE
 // state, and to stop passing along updates from the underlying subchannel.
 func (scw *subConnWrapper) eject() {
-	scw.scUpdateCh.Put(&ejectedUpdate{
-		scw:     scw,
-		ejected: true,
+	scw.scUpdateCh.Put(&ejectionUpdate{
+		scw:       scw,
+		isEjected: true,
 	})
 }
 
@@ -59,8 +61,8 @@ func (scw *subConnWrapper) eject() {
 // from the underlying subchannel, and resume passing along updates from the
 // underlying subchannel.
 func (scw *subConnWrapper) uneject() {
-	scw.scUpdateCh.Put(&ejectedUpdate{
-		scw:     scw,
-		ejected: false,
+	scw.scUpdateCh.Put(&ejectionUpdate{
+		scw:       scw,
+		isEjected: false,
 	})
 }
