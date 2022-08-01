@@ -25,12 +25,14 @@ import (
 	"math"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"golang.org/x/net/http2"
 	"google.golang.org/grpc/backoff"
+	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -43,6 +45,17 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/testdata"
 )
+
+const (
+	defaultTestTimeout         = 10 * time.Second
+	stateRecordingBalancerName = "state_recoding_balancer"
+)
+
+var testBalancerBuilder = newStateRecordingBalancerBuilder()
+
+func init() {
+	balancer.Register(testBalancerBuilder)
+}
 
 func parseCfg(r *manual.Resolver, s string) *serviceconfig.ParseResult {
 	scpr := r.CC.ParseServiceConfig(s)
@@ -221,8 +234,10 @@ func (s) TestDialWaitsForServerSettingsAndFails(t *testing.T) {
 		lis.Addr().String(),
 		WithTransportCredentials(insecure.NewCredentials()),
 		WithReturnConnectionError(),
-		withBackoff(noBackoff{}),
-		withMinConnectDeadline(func() time.Duration { return time.Second / 4 }))
+		WithConnectParams(ConnectParams{
+			Backoff:           backoff.Config{},
+			MinConnectTimeout: 250 * time.Millisecond,
+		}))
 	lis.Close()
 	if err == nil {
 		client.Close()
@@ -453,7 +468,6 @@ func (s) TestDial_OneBackoffPerRetryGroup(t *testing.T) {
 	}})
 	client, err := DialContext(ctx, "whatever:///this-gets-overwritten",
 		WithTransportCredentials(insecure.NewCredentials()),
-		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
 		WithResolvers(rb),
 		withMinConnectDeadline(getMinConnectTimeout))
 	if err != nil {
@@ -976,9 +990,11 @@ func (s) TestUpdateAddresses_NoopIfCalledWithSameAddresses(t *testing.T) {
 	client, err := Dial("whatever:///this-gets-overwritten",
 		WithTransportCredentials(insecure.NewCredentials()),
 		WithResolvers(rb),
-		withBackoff(noBackoff{}),
-		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
-		withMinConnectDeadline(func() time.Duration { return time.Hour }))
+		WithConnectParams(ConnectParams{
+			Backoff:           backoff.Config{},
+			MinConnectTimeout: time.Hour,
+		}),
+		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1110,6 +1126,66 @@ func testDefaultServiceConfigWhenResolverReturnInvalidServiceConfig(t *testing.T
 	})
 	if !verifyWaitForReadyEqualsTrue(cc) {
 		t.Fatal("default service config failed to be applied after 1s")
+	}
+}
+
+type stateRecordingBalancer struct {
+	notifier chan<- connectivity.State
+	balancer.Balancer
+}
+
+func (b *stateRecordingBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
+	b.notifier <- s.ConnectivityState
+	b.Balancer.UpdateSubConnState(sc, s)
+}
+
+func (b *stateRecordingBalancer) ResetNotifier(r chan<- connectivity.State) {
+	b.notifier = r
+}
+
+func (b *stateRecordingBalancer) Close() {
+	b.Balancer.Close()
+}
+
+type stateRecordingBalancerBuilder struct {
+	mu       sync.Mutex
+	notifier chan connectivity.State // The notifier used in the last Balancer.
+}
+
+func newStateRecordingBalancerBuilder() *stateRecordingBalancerBuilder {
+	return &stateRecordingBalancerBuilder{}
+}
+
+func (b *stateRecordingBalancerBuilder) Name() string {
+	return stateRecordingBalancerName
+}
+
+func (b *stateRecordingBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	stateNotifications := make(chan connectivity.State, 10)
+	b.mu.Lock()
+	b.notifier = stateNotifications
+	b.mu.Unlock()
+	return &stateRecordingBalancer{
+		notifier: stateNotifications,
+		Balancer: balancer.Get("pick_first").Build(cc, opts),
+	}
+}
+
+func (b *stateRecordingBalancerBuilder) nextStateNotifier() <-chan connectivity.State {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	ret := b.notifier
+	b.notifier = nil
+	return ret
+}
+
+// Keep reading until something causes the connection to die (EOF, server
+// closed, etc). Useful as a tool for mindlessly keeping the connection
+// healthy, since the client will error if things like client prefaces are not
+// accepted in a timely fashion.
+func keepReading(conn net.Conn) {
+	buf := make([]byte, 1024)
+	for _, err := conn.Read(buf); err == nil; _, err = conn.Read(buf) {
 	}
 }
 

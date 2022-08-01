@@ -16,7 +16,7 @@
  *
  */
 
-package grpc
+package test
 
 import (
 	"context"
@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -35,10 +37,7 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 )
 
-const (
-	stateRecordingBalancerName = "state_recoding_balancer"
-	defaultTestTimeout         = 10 * time.Second
-)
+const stateRecordingBalancerName = "state_recoding_balancer"
 
 var testBalancerBuilder = newStateRecordingBalancerBuilder()
 
@@ -158,17 +157,22 @@ func testStateTransitionSingleAddress(t *testing.T, want []connectivity.State, s
 		connMu.Unlock()
 	}()
 
-	client, err := Dial("",
-		WithTransportCredentials(insecure.NewCredentials()),
-		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
-		WithDialer(pl.Dialer()),
-		withBackoff(noBackoff{}),
-		withMinConnectDeadline(func() time.Duration { return time.Millisecond * 100 }))
+	client, err := grpc.Dial("",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
+		grpc.WithDialer(pl.Dialer()),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			Backoff:           backoff.Config{},
+			MinConnectTimeout: 100 * time.Millisecond,
+		}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	go stayConnected(client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	go stayConnected(ctx, client)
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 	for i := 0; i < len(want); i++ {
@@ -225,14 +229,17 @@ func (s) TestStateTransitions_ReadyToConnecting(t *testing.T) {
 		conn.Close()
 	}()
 
-	client, err := Dial(lis.Addr().String(),
-		WithTransportCredentials(insecure.NewCredentials()),
-		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)))
+	client, err := grpc.Dial(lis.Addr().String(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	go stayConnected(client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	go stayConnected(ctx, client)
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 
@@ -310,10 +317,10 @@ func (s) TestStateTransitions_TriesAllAddrsBeforeTransientFailure(t *testing.T) 
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
-	client, err := Dial("whatever:///this-gets-overwritten",
-		WithTransportCredentials(insecure.NewCredentials()),
-		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
-		WithResolvers(rb))
+	client, err := grpc.Dial("whatever:///this-gets-overwritten",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
+		grpc.WithResolvers(rb))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -396,15 +403,18 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 		{Addr: lis1.Addr().String()},
 		{Addr: lis2.Addr().String()},
 	}})
-	client, err := Dial("whatever:///this-gets-overwritten",
-		WithTransportCredentials(insecure.NewCredentials()),
-		WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
-		WithResolvers(rb))
+	client, err := grpc.Dial("whatever:///this-gets-overwritten",
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, stateRecordingBalancerName)),
+		grpc.WithResolvers(rb))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	go stayConnected(client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	go stayConnected(ctx, client)
 
 	stateNotifications := testBalancerBuilder.nextStateNotifier()
 	want := []connectivity.State{
@@ -413,8 +423,6 @@ func (s) TestStateTransitions_MultipleAddrsEntersReady(t *testing.T) {
 		connectivity.Idle,
 		connectivity.Connecting,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	for i := 0; i < len(want); i++ {
 		select {
 		case <-ctx.Done():
@@ -473,7 +481,7 @@ func (b *stateRecordingBalancerBuilder) Build(cc balancer.ClientConn, opts balan
 	b.mu.Unlock()
 	return &stateRecordingBalancer{
 		notifier: stateNotifications,
-		Balancer: balancer.Get(PickFirstBalancerName).Build(cc, opts),
+		Balancer: balancer.Get("pick_first").Build(cc, opts),
 	}
 }
 
@@ -485,10 +493,6 @@ func (b *stateRecordingBalancerBuilder) nextStateNotifier() <-chan connectivity.
 	return ret
 }
 
-type noBackoff struct{}
-
-func (b noBackoff) Backoff(int) time.Duration { return time.Duration(0) }
-
 // Keep reading until something causes the connection to die (EOF, server
 // closed, etc). Useful as a tool for mindlessly keeping the connection
 // healthy, since the client will error if things like client prefaces are not
@@ -496,5 +500,22 @@ func (b noBackoff) Backoff(int) time.Duration { return time.Duration(0) }
 func keepReading(conn net.Conn) {
 	buf := make([]byte, 1024)
 	for _, err := conn.Read(buf); err == nil; _, err = conn.Read(buf) {
+	}
+}
+
+// stayConnected makes cc stay connected by repeatedly calling cc.Connect()
+// until the state becomes Shutdown or until 10 seconds elapses.
+func stayConnected(ctx context.Context, cc *grpc.ClientConn) {
+	for {
+		state := cc.GetState()
+		switch state {
+		case connectivity.Idle:
+			cc.Connect()
+		case connectivity.Shutdown:
+			return
+		}
+		if !cc.WaitForStateChange(ctx, state) {
+			return
+		}
 	}
 }
