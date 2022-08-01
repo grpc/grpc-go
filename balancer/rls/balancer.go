@@ -160,7 +160,7 @@ type childPolicyIDAndState struct {
 	state balancer.State
 }
 
-type connectivityStateCh struct{}
+type controlChannelReady struct{}
 
 // run is a long-running goroutine which handles all the updates that the
 // balancer wishes to handle. The appropriate updateHandler will push the update
@@ -175,7 +175,7 @@ func (b *rlsBalancer) run() {
 			switch update := u.(type) {
 			case childPolicyIDAndState:
 				b.handleChildPolicyStateUpdate(update.id, update.state)
-			case connectivityStateCh:
+			case controlChannelReady:
 				b.logger.Infof("Resetting backoff state after control channel getting back to READY")
 				b.cacheMu.Lock()
 				updatePicker := b.dataCache.resetBackoffState(&backoffState{bs: defaultBackoffStrategy})
@@ -278,7 +278,7 @@ func (b *rlsBalancer) handleControlChannelUpdate(newCfg *lbConfig) {
 	// Create a new control channel and close the existing one.
 	b.logger.Infof("Creating control channel to RLS server at: %v", newCfg.lookupService)
 	backToReadyFn := func() {
-		b.updateCh.Put(connectivityStateCh{})
+		b.updateCh.Put(controlChannelReady{})
 	}
 	ctrlCh, err := newControlChannel(newCfg.lookupService, newCfg.controlChannelServiceConfig, newCfg.lookupServiceTimeout, b.bopts, backToReadyFn)
 	if err != nil {
