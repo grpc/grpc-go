@@ -154,8 +154,6 @@ type lbCfgUpdate struct {
 }
 
 type outlierDetectionBalancer struct {
-	numAddrsEjected int // For fast calculations of percentage of addrs ejected
-
 	childState       balancer.State
 	recentPickerNoop bool
 
@@ -171,18 +169,20 @@ type outlierDetectionBalancer struct {
 	childMu sync.Mutex
 	child   balancer.Balancer
 
-	// mu guards access to a lot of the core LB Policy State. It also prevents
-	// intersplicing certain operations. Some of the undefined behaviors this
-	// mutex protects are:
+	// mu guards access to the following fields. It also helps to synchronize
+	// behaviors of the following events: config updates, firing of the interval
+	// timer, SubConn State updates, SubConn address updates, and child state
+	// updates.
 	//
-	// ex 1: interval timer goes off, outlier detection algorithm starts running
-	// based on knobs in cfg. in the middle of running the algorithm, a
-	// ClientConn update comes in and writes to cfg. This causes undefined
-	// behavior for the interval timer algorithm.
+	// For example, when we receive a config update in the middle of the
+	// interval timer algorithm, which uses knobs present in the config, the
+	// balancer will wait for the interval timer algorithm to finish before
+	// persisting the new configuration.
 	//
-	// ex 2: Updating the addrs map from UpdateAddresses in the middle of
-	// running the interval timer algorithm which uses addrs heavily. This will
-	// cause undefined behavior for the interval timer algorithm.
+	// Another example would be the updating of the addrs map, such as from a
+	// SubConn address update in the middle of the interval timer algorithm
+	// which uses addrs. This balancer waits for the interval timer algorithm to
+	// finish before making the update to the addrs map.
 	mu                   sync.Mutex
 	addrs                map[string]*addressInfo
 	cfg                  *LBConfig
@@ -190,6 +190,7 @@ type outlierDetectionBalancer struct {
 	timerStartTime       time.Time
 	intervalTimer        *time.Timer
 	inhibitPickerUpdates bool
+	numAddrsEjected      int // For fast calculations of percentage of addrs ejected
 
 	scUpdateCh     *buffer.Unbounded
 	pickerUpdateCh *buffer.Unbounded
@@ -385,6 +386,8 @@ func (wp *wrappedPicker) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 	}
 	scw, ok := pr.SubConn.(*subConnWrapper)
 	if !ok {
+		// This can never happen, but check is present for defensive
+		// programming.
 		return balancer.PickResult{
 			SubConn: pr.SubConn,
 			Done:    done,
@@ -591,13 +594,13 @@ func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
 func (b *outlierDetectionBalancer) handleEjectedUpdate(u *ejectionUpdate) {
 	scw := u.scw
 	scw.ejected = u.isEjected
-	var stateToUpdate balancer.SubConnState
+	// If scw.latestState has never been written to will default to connectivity
+	// IDLE, which is fine.
+	stateToUpdate := scw.latestState
 	if u.isEjected {
 		stateToUpdate = balancer.SubConnState{
 			ConnectivityState: connectivity.TransientFailure,
 		}
-	} else {
-		stateToUpdate = scw.latestState // If this has never been written to will send connectivity IDLE which seems fine to me
 	}
 	b.childMu.Lock()
 	if b.child != nil {
@@ -701,10 +704,15 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 			addrInfo.ejectionTimeMultiplier--
 			continue
 		}
+		if addrInfo.latestEjectionTimestamp.IsZero() {
+			// Address is already not ejected, so no need to check for whether
+			// to uneject the address below.
+			continue
+		}
 		et := b.cfg.BaseEjectionTime.Nanoseconds() * addrInfo.ejectionTimeMultiplier
 		met := max(b.cfg.BaseEjectionTime.Nanoseconds(), b.cfg.MaxEjectionTime.Nanoseconds())
 		curTimeAfterEt := now().After(addrInfo.latestEjectionTimestamp.Add(time.Duration(min(et, met))))
-		if !addrInfo.latestEjectionTimestamp.IsZero() && curTimeAfterEt {
+		if curTimeAfterEt {
 			b.unejectAddress(addrInfo)
 		}
 	}
@@ -731,23 +739,36 @@ func (b *outlierDetectionBalancer) numAddrsWithAtLeastRequestVolume() uint32 {
 	return numAddrs
 }
 
-// meanAndStdDevOfSuccessesAtLeastRequestVolume returns the mean and std dev of
-// the number of requests of addresses that have at least requestVolume.
-func (b *outlierDetectionBalancer) meanAndStdDevOfSuccessesAtLeastRequestVolume() (float64, float64) {
-	var totalFractionOfSuccessfulRequests float64
-	var mean float64
+// addrsWithAtLeastRequestVolume returns a slice of address information of all
+// addresses with at least request volume defined in the success rate ejection
+// configuration.
+func (b *outlierDetectionBalancer) addrsWithAtLeastRequestVolume() []*addressInfo {
+	var addrs []*addressInfo
 	for _, addrInfo := range b.addrs {
 		if addrInfo.callCounter.inactiveBucket.requestVolume >= b.cfg.SuccessRateEjection.RequestVolume {
-			totalFractionOfSuccessfulRequests += float64(addrInfo.callCounter.inactiveBucket.numSuccesses) / float64(addrInfo.callCounter.inactiveBucket.requestVolume)
+			addrs = append(addrs, addrInfo)
 		}
 	}
-	mean = totalFractionOfSuccessfulRequests / float64(len(b.addrs))
+	return addrs
+}
+
+// meanAndStdDev returns the mean and std dev of the fractions of successful
+// requests of the addresses passed in.
+func (b *outlierDetectionBalancer) meanAndStdDev(addrs []*addressInfo) (float64, float64) {
+	var totalFractionOfSuccessfulRequests float64
+	var mean float64
+	for _, addrInfo := range addrs {
+		ib := addrInfo.callCounter.inactiveBucket
+		totalFractionOfSuccessfulRequests += float64(ib.numSuccesses) / float64(ib.requestVolume)
+	}
+	mean = totalFractionOfSuccessfulRequests / float64(len(addrs))
 	var sumOfSquares float64
-	for _, addrInfo := range b.addrs {
-		devFromMean := (float64(addrInfo.callCounter.inactiveBucket.numSuccesses) / float64(addrInfo.callCounter.inactiveBucket.requestVolume)) - mean
+	for _, addrInfo := range addrs {
+		ib := addrInfo.callCounter.inactiveBucket
+		devFromMean := (float64(ib.numSuccesses) / float64(ib.requestVolume)) - mean
 		sumOfSquares += devFromMean * devFromMean
 	}
-	variance := sumOfSquares / float64(len(b.addrs))
+	variance := sumOfSquares / float64(len(addrs))
 	return mean, math.Sqrt(variance)
 }
 
@@ -758,19 +779,17 @@ func (b *outlierDetectionBalancer) successRateAlgorithm() {
 	if b.numAddrsWithAtLeastRequestVolume() < b.cfg.SuccessRateEjection.MinimumHosts {
 		return
 	}
-	mean, stddev := b.meanAndStdDevOfSuccessesAtLeastRequestVolume()
-	for _, addrInfo := range b.addrs {
-		ccb := addrInfo.callCounter.inactiveBucket
-		sre := b.cfg.SuccessRateEjection
+	awalrv := b.addrsWithAtLeastRequestVolume()
+	mean, stddev := b.meanAndStdDev(awalrv)
+	for _, addrInfo := range awalrv {
+		bucket := addrInfo.callCounter.inactiveBucket
+		ejectionCfg := b.cfg.SuccessRateEjection
 		if float64(b.numAddrsEjected)/float64(len(b.addrs))*100 > float64(b.cfg.MaxEjectionPercent) {
 			return
 		}
-		if ccb.requestVolume < sre.RequestVolume {
-			continue
-		}
-		successRate := float64(ccb.numSuccesses) / float64(ccb.requestVolume)
-		if successRate < (mean - stddev*(float64(sre.StdevFactor)/1000)) {
-			if uint32(grpcrand.Int31n(100)) < sre.EnforcementPercentage {
+		successRate := float64(bucket.numSuccesses) / float64(bucket.requestVolume)
+		if successRate < (mean - stddev*(float64(ejectionCfg.StdevFactor)/1000)) {
+			if uint32(grpcrand.Int31n(100)) < ejectionCfg.EnforcementPercentage {
 				b.ejectAddress(addrInfo)
 			}
 		}
@@ -786,17 +805,17 @@ func (b *outlierDetectionBalancer) failurePercentageAlgorithm() {
 	}
 
 	for _, addrInfo := range b.addrs {
-		ccb := addrInfo.callCounter.inactiveBucket
-		fpe := b.cfg.FailurePercentageEjection
+		bucket := addrInfo.callCounter.inactiveBucket
+		ejectionCfg := b.cfg.FailurePercentageEjection
 		if float64(b.numAddrsEjected)/float64(len(b.addrs))*100 > float64(b.cfg.MaxEjectionPercent) {
 			return
 		}
-		if ccb.requestVolume < fpe.RequestVolume {
+		if bucket.requestVolume < ejectionCfg.RequestVolume {
 			continue
 		}
-		failurePercentage := (float64(ccb.numFailures) / float64(ccb.requestVolume)) * 100
+		failurePercentage := (float64(bucket.numFailures) / float64(bucket.requestVolume)) * 100
 		if failurePercentage > float64(b.cfg.FailurePercentageEjection.Threshold) {
-			if uint32(grpcrand.Int31n(100)) < b.cfg.FailurePercentageEjection.EnforcementPercentage {
+			if uint32(grpcrand.Int31n(100)) < ejectionCfg.EnforcementPercentage {
 				b.ejectAddress(addrInfo)
 			}
 		}
