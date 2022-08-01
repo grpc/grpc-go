@@ -176,8 +176,6 @@ func (s) TestPriority_HighPriorityReady(t *testing.T) {
 	}
 
 	select {
-	case <-cc.NewPickerCh:
-		t.Fatalf("got unexpected new picker")
 	case <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn")
 	case <-cc.RemoveSubConnCh:
@@ -277,8 +275,6 @@ func (s) TestPriority_SwitchPriority(t *testing.T) {
 	}
 
 	select {
-	case <-cc.NewPickerCh:
-		t.Fatalf("got unexpected new picker")
 	case sc := <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn, %s", sc)
 	case <-cc.RemoveSubConnCh:
@@ -1194,8 +1190,6 @@ func (s) TestPriority_MoveReadyChildToHigherPriority(t *testing.T) {
 	// Because this was a ready child moved to a higher priority, no new subconn
 	// or picker should be updated.
 	select {
-	case <-cc.NewPickerCh:
-		t.Fatalf("got unexpected new picker")
 	case <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn")
 	case <-cc.RemoveSubConnCh:
