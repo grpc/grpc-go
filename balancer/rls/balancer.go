@@ -191,6 +191,8 @@ func (b *rlsBalancer) run() {
 				b.sendNewPickerLocked()
 				close(update.done)
 				b.stateMu.Unlock()
+			default:
+				b.logger.Errorf("Unsupported update type %T", update)
 			}
 		case <-b.done.Done():
 			return
