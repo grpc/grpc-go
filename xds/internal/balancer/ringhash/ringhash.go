@@ -286,12 +286,9 @@ func (b *ringhashBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 	b.config = newConfig
 
 	if regenerateRing {
-		ring, err := newRing(b.subConns, b.config.MinRingSize, b.config.MaxRingSize)
-		if err != nil {
-			b.ResolverError(fmt.Errorf("ringhash failed to make a new ring: %v", err))
-			return balancer.ErrBadResolverState
-		}
-		b.ring = ring
+		// Ring creation is guaranteed to not fail because we call newRing()
+		// with a non-empty subConns map.
+		b.ring = newRing(b.subConns, b.config.MinRingSize, b.config.MaxRingSize)
 		b.regeneratePicker()
 		b.cc.UpdateState(balancer.State{ConnectivityState: b.state, Picker: b.picker})
 	}
