@@ -66,22 +66,16 @@ func Register(s grpc.ServiceRegistrar, opts ServiceOptions) (*Service, error) {
 	if !ok {
 		return nil, fmt.Errorf("concrete type of provided grpc.ServiceRegistrar is %T, only supported type is %T", s, &grpc.Server{})
 	}
-	server := NewService(opts)
-	v3orcaservicegrpc.RegisterOpenRcaServiceServer(srv, server)
-	return server, nil
-}
 
-// NewService returns a new ORCA service implementation configured using the
-// provided options. This can be used to customize the registration of the
-// returned ORCA service. Most usages should prefer to use Register instead.
-func NewService(opts ServiceOptions) *Service {
 	if opts.MinReportingInterval < internal.MinORCAReportingInterval {
 		opts.MinReportingInterval = internal.MinORCAReportingInterval
 	}
-	return &Service{
+	server := &Service{
 		minReportingInterval: opts.MinReportingInterval,
 		recorder:             newMetricRecorder(),
 	}
+	v3orcaservicegrpc.RegisterOpenRcaServiceServer(srv, server)
+	return server, nil
 }
 
 func (s *Service) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadReportRequest) time.Duration {
@@ -91,6 +85,10 @@ func (s *Service) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadRepo
 	interval := req.GetReportInterval()
 	if err := interval.CheckValid(); err != nil {
 		logger.Warningf("Received reporting interval %q is invalid: %v. Using default: %s", interval, s.minReportingInterval)
+		return s.minReportingInterval
+	}
+	if interval.AsDuration() < s.minReportingInterval {
+		logger.Warningf("Received reporting interval %q is lesser than configured minimum: %v. Using default: %s", interval, s.minReportingInterval)
 		return s.minReportingInterval
 	}
 	return interval.AsDuration()
