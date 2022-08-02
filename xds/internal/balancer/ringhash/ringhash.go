@@ -273,20 +273,17 @@ func (b *ringhashBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 		return balancer.ErrBadResolverState
 	}
 
+	// If addresses were updated, whether it resulted in SubConn
+	// creation/deletion, or just weight update, we need to regenerate the ring
+	// and send a new picker.
+	regenerateRing := b.updateAddresses(s.ResolverState.Addresses)
+
 	// If the ring configuration has changed, we need to regenerate the ring and
 	// send a new picker.
-	var regenerateRing bool
 	if b.config == nil || b.config.MinRingSize != newConfig.MinRingSize || b.config.MaxRingSize != newConfig.MaxRingSize {
 		regenerateRing = true
 	}
 	b.config = newConfig
-
-	// If addresses were updated, whether it resulted in SubConn
-	// creation/deletion, or just weight update, we need to regenerate the ring
-	// and send a new picker.
-	if b.updateAddresses(s.ResolverState.Addresses) {
-		regenerateRing = true
-	}
 
 	if regenerateRing {
 		ring, err := newRing(b.subConns, b.config.MinRingSize, b.config.MaxRingSize)
