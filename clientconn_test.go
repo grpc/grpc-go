@@ -48,7 +48,7 @@ import (
 
 const (
 	defaultTestTimeout         = 10 * time.Second
-	stateRecordingBalancerName = "state_recoding_balancer"
+	stateRecordingBalancerName = "state_recording_balancer"
 )
 
 var testBalancerBuilder = newStateRecordingBalancerBuilder()

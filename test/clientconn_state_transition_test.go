@@ -37,7 +37,7 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 )
 
-const stateRecordingBalancerName = "state_recoding_balancer"
+const stateRecordingBalancerName = "state_recording_balancer"
 
 var testBalancerBuilder = newStateRecordingBalancerBuilder()
 
@@ -504,7 +504,7 @@ func keepReading(conn net.Conn) {
 }
 
 // stayConnected makes cc stay connected by repeatedly calling cc.Connect()
-// until the state becomes Shutdown or until 10 seconds elapses.
+// until the state becomes Shutdown or until ithe context expires.
 func stayConnected(ctx context.Context, cc *grpc.ClientConn) {
 	for {
 		state := cc.GetState()
