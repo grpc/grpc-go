@@ -95,8 +95,7 @@ func (s *Service) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadRepo
 }
 
 func (s *Service) sendMetricsResponse(stream v3orcaservicegrpc.OpenRcaService_StreamCoreMetricsServer) error {
-	resp := s.recorder.toLoadReportProto()
-	return stream.Send(resp)
+	return stream.Send(s.recorder.toLoadReportProto())
 }
 
 // StreamCoreMetrics streams custom backend metrics injected by the server
