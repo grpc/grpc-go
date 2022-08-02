@@ -94,8 +94,8 @@ func (m *metricRecorder) setAllUtilization(kvs map[string]float64) {
 
 // toLoadReportProto dumps the recorded measurements as an OrcaLoadReport proto.
 func (m *metricRecorder) toLoadReportProto() *v3orcapb.OrcaLoadReport {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	cost := make(map[string]float64, len(m.requestCost))
 	for k, v := range m.requestCost {
