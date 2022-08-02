@@ -41,9 +41,9 @@ import (
 // [ORCA]: https://github.com/cncf/xds/blob/main/xds/service/orca/v3/orca.proto
 type Service struct {
 	v3orcaservicegrpc.UnimplementedOpenRcaServiceServer
+	*metricRecorder
 
 	minReportingInterval time.Duration
-	recorder             *metricRecorder
 }
 
 // ServiceOptions contains options to configure the ORCA service implementation.
@@ -72,7 +72,7 @@ func Register(s grpc.ServiceRegistrar, opts ServiceOptions) (*Service, error) {
 	}
 	server := &Service{
 		minReportingInterval: opts.MinReportingInterval,
-		recorder:             newMetricRecorder(),
+		metricRecorder:       newMetricRecorder(),
 	}
 	v3orcaservicegrpc.RegisterOpenRcaServiceServer(srv, server)
 	return server, nil
@@ -95,7 +95,7 @@ func (s *Service) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadRepo
 }
 
 func (s *Service) sendMetricsResponse(stream v3orcaservicegrpc.OpenRcaService_StreamCoreMetricsServer) error {
-	return stream.Send(s.recorder.toLoadReportProto())
+	return stream.Send(s.metricRecorder.toLoadReportProto())
 }
 
 // StreamCoreMetrics streams custom backend metrics injected by the server
@@ -121,46 +121,4 @@ func (s *Service) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, 
 			}
 		}
 	}
-}
-
-// SetUtilizationMetric records a measurement for a utilization metric uniquely
-// identifiable by name.
-func (s *Service) SetUtilizationMetric(name string, val float64) {
-	s.recorder.setUtilization(name, val)
-}
-
-// DeleteUtilizationMetric deletes any previously recorded measurement for a
-// utilization metric uniquely identifiable by name.
-func (s *Service) DeleteUtilizationMetric(name string) {
-	s.recorder.deleteUtilization(name)
-}
-
-// SetAllUtilizationMetrics records a measurement for a bunch of utilization
-// metrics specified by the provided map, where keys correspond to metric names
-// and values to measurements.
-func (s *Service) SetAllUtilizationMetrics(pairs map[string]float64) {
-	s.recorder.setAllUtilization(pairs)
-}
-
-// SetCPUUtilizationMetric records a measurement for the CPU utilization metric.
-func (s *Service) SetCPUUtilizationMetric(val float64) {
-	s.recorder.setCPU(val)
-}
-
-// DeleteCPUUtilizationMetric deletes a previously recorded measurement for the
-// CPU utilization metric.
-func (s *Service) DeleteCPUUtilizationMetric() {
-	s.recorder.setCPU(0)
-}
-
-// SetMemoryUtilizationMetric records a measurement for the memory utilization
-// metric.
-func (s *Service) SetMemoryUtilizationMetric(val float64) {
-	s.recorder.setMemory(val)
-}
-
-// DeleteMemoryUtilizationMetric deletes a previously recorded measurement for
-// the memory utilization metric.
-func (s *Service) DeleteMemoryUtilizationMetric() {
-	s.recorder.setMemory(0)
 }

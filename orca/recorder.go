@@ -49,15 +49,34 @@ func newMetricRecorder() *metricRecorder {
 	}
 }
 
-func (m *metricRecorder) setCPU(val float64) {
+// SetCPUUtilizationMetric records a measurement for the CPU utilization metric.
+func (m *metricRecorder) SetCPUUtilizationMetric(val float64) {
 	m.mu.Lock()
 	m.cpu = val
 	m.mu.Unlock()
 }
 
-func (m *metricRecorder) setMemory(val float64) {
+// DeleteCPUUtilizationMetric deletes a previously recorded measurement for the
+// CPU utilization metric.
+func (m *metricRecorder) DeleteCPUUtilizationMetric() {
+	m.mu.Lock()
+	m.cpu = 0
+	m.mu.Unlock()
+}
+
+// SetMemoryUtilizationMetric records a measurement for the memory utilization
+// metric.
+func (m *metricRecorder) SetMemoryUtilizationMetric(val float64) {
 	m.mu.Lock()
 	m.memory = val
+	m.mu.Unlock()
+}
+
+// DeleteMemoryUtilizationMetric deletes a previously recorded measurement for
+// the memory utilization metric.
+func (m *metricRecorder) DeleteMemoryUtilizationMetric() {
+	m.mu.Lock()
+	m.memory = 0
 	m.mu.Unlock()
 }
 
@@ -67,22 +86,28 @@ func (m *metricRecorder) setRequestCost(name string, val float64) {
 	m.mu.Unlock()
 }
 
-func (m *metricRecorder) setUtilization(name string, val float64) {
+// SetUtilizationMetric records a measurement for a utilization metric uniquely
+// identifiable by name.
+func (m *metricRecorder) SetUtilizationMetric(name string, val float64) {
 	m.mu.Lock()
 	m.utilization[name] = val
 	m.mu.Unlock()
 }
 
-func (m *metricRecorder) deleteUtilization(name string) {
+// DeleteUtilizationMetric deletes any previously recorded measurement for a
+// utilization metric uniquely identifiable by name.
+func (m *metricRecorder) DeleteUtilizationMetric(name string) {
 	m.mu.Lock()
 	delete(m.utilization, name)
 	m.mu.Unlock()
 }
 
-func (m *metricRecorder) setAllUtilization(kvs map[string]float64) {
-	// A copy needs to be made here to ensure that any modifications to the
-	// input map by the caller does not interfere with the values stored in this
-	// metricRecorder, and vice versa.
+// SetAllUtilizationMetrics records a measurement for a utilization metric
+// uniquely identifiable by name.
+//
+// A copy of the input map is made to ensure that any modifications to it does
+// not interfere with the values stored in the recorder, and vice versa.
+func (m *metricRecorder) SetAllUtilizationMetrics(kvs map[string]float64) {
 	utils := make(map[string]float64, len(kvs))
 	for k, v := range kvs {
 		utils[k] = v

@@ -57,17 +57,17 @@ func (c *CallMetricRecorder) SetRequestCostMetric(name string, val float64) {
 // SetUtilizationMetric records a measurement for a utilization metric, uniquely
 // identifiable by name, for the RPC.
 func (c *CallMetricRecorder) SetUtilizationMetric(name string, val float64) {
-	c.recorder.setUtilization(name, val)
+	c.recorder.SetUtilizationMetric(name, val)
 }
 
 // SetCPUUtilizationMetric records a measurement for the CPU utilization metric
 // for the RPC.
 func (c *CallMetricRecorder) SetCPUUtilizationMetric(val float64) {
-	c.recorder.setCPU(val)
+	c.recorder.SetCPUUtilizationMetric(val)
 }
 
 // SetMemoryUtilizationMetric records a measurement for the memory utilization
 // metric for the RPC.
 func (c *CallMetricRecorder) SetMemoryUtilizationMetric(val float64) {
-	c.recorder.setMemory(val)
+	c.recorder.SetMemoryUtilizationMetric(val)
 }
