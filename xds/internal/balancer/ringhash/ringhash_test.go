@@ -111,31 +111,34 @@ func Test(t *testing.T) {
 // TestUpdateClientConnState_NewRingSize tests the scenario where the ringhash
 // LB policy receives new configuration which specifies new values for the ring
 // min and max sizes. The test verifies that a new ring is created and a new
-// picker is pushed on the channel.
+// picker is sent to the ClientConn.
 func (s) TestUpdateClientConnState_NewRingSize(t *testing.T) {
+	origMinRingSize, origMaxRingSize := 1, 10 // Configured from `testConfig` in `setupTest`
+	newMinRingSize, newMaxRingSize := 20, 100
+
 	addrs := []resolver.Address{{Addr: testBackendAddrStrs[0]}}
-	cc, b, p0 := setupTest(t, addrs)
-	ring0 := p0.(*picker).ring
-	if ringSize := len(ring0.items); ringSize < 1 || ringSize > 10 {
-		t.Fatalf("Ring created with size %d, want between [%d, %d]", ringSize, 1, 10)
+	cc, b, p1 := setupTest(t, addrs)
+	ring1 := p1.(*picker).ring
+	if ringSize := len(ring1.items); ringSize < origMinRingSize || ringSize > origMaxRingSize {
+		t.Fatalf("Ring created with size %d, want between [%d, %d]", ringSize, origMinRingSize, origMaxRingSize)
 	}
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{Addresses: addrs},
-		BalancerConfig: &LBConfig{MinRingSize: 20, MaxRingSize: 100},
+		BalancerConfig: &LBConfig{MinRingSize: uint64(newMinRingSize), MaxRingSize: uint64(newMaxRingSize)},
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
 	}
 
-	var ring1 *ring
+	var ring2 *ring
 	select {
 	case <-time.After(defaultTestTimeout):
 		t.Fatal("Timeout when waiting for a picker update after a configuration update")
-	case p1 := <-cc.NewPickerCh:
-		ring1 = p1.(*picker).ring
+	case p2 := <-cc.NewPickerCh:
+		ring2 = p2.(*picker).ring
 	}
-	if ringSize := len(ring1.items); ringSize < 20 || ringSize > 100 {
-		t.Fatalf("Ring created with size %d, want between [%d, %d]", ringSize, 20, 100)
+	if ringSize := len(ring2.items); ringSize < newMinRingSize || ringSize > newMaxRingSize {
+		t.Fatalf("Ring created with size %d, want between [%d, %d]", ringSize, newMinRingSize, newMaxRingSize)
 	}
 }
 
