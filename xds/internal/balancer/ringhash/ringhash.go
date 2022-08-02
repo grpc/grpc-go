@@ -259,28 +259,9 @@ func (b *ringhashBalancer) updateAddresses(addrs []resolver.Address) bool {
 
 func (b *ringhashBalancer) UpdateClientConnState(s balancer.ClientConnState) error {
 	b.logger.Infof("Received update from resolver, balancer config: %+v", pretty.ToJSON(s.BalancerConfig))
-	if b.config == nil {
-		newConfig, ok := s.BalancerConfig.(*LBConfig)
-		if !ok {
-			return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
-		}
-		b.config = newConfig
-	}
-
-	// Successful resolution; clear resolver error and ensure we return nil.
-	b.resolverErr = nil
-	if b.updateAddresses(s.ResolverState.Addresses) {
-		// If addresses were updated, no matter whether it resulted in SubConn
-		// creation/deletion, or just weight update, we will need to regenerate
-		// the ring.
-		var err error
-		b.ring, err = newRing(b.subConns, b.config.MinRingSize, b.config.MaxRingSize)
-		if err != nil {
-			b.ResolverError(fmt.Errorf("ringhash failed to make a new ring: %v", err))
-			return balancer.ErrBadResolverState
-		}
-		b.regeneratePicker()
-		b.cc.UpdateState(balancer.State{ConnectivityState: b.state, Picker: b.picker})
+	newConfig, ok := s.BalancerConfig.(*LBConfig)
+	if !ok {
+		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}
 
 	// If resolver state contains no addresses, return an error so ClientConn
@@ -291,6 +272,35 @@ func (b *ringhashBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 		b.ResolverError(errors.New("produced zero addresses"))
 		return balancer.ErrBadResolverState
 	}
+
+	// If the ring configuration has changed, we need to regenerate the ring and
+	// send a new picker.
+	var regenerateRing bool
+	if b.config == nil || b.config.MinRingSize != newConfig.MinRingSize || b.config.MaxRingSize != newConfig.MaxRingSize {
+		regenerateRing = true
+	}
+	b.config = newConfig
+
+	// If addresses were updated, whether it resulted in SubConn
+	// creation/deletion, or just weight update, we need to regenerate the ring
+	// and send a new picker.
+	if b.updateAddresses(s.ResolverState.Addresses) {
+		regenerateRing = true
+	}
+
+	if regenerateRing {
+		ring, err := newRing(b.subConns, b.config.MinRingSize, b.config.MaxRingSize)
+		if err != nil {
+			b.ResolverError(fmt.Errorf("ringhash failed to make a new ring: %v", err))
+			return balancer.ErrBadResolverState
+		}
+		b.ring = ring
+		b.regeneratePicker()
+		b.cc.UpdateState(balancer.State{ConnectivityState: b.state, Picker: b.picker})
+	}
+
+	// Successful resolution; clear resolver error and return nil.
+	b.resolverErr = nil
 	return nil
 }
 
