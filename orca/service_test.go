@@ -54,7 +54,7 @@ type testServiceImpl struct {
 	requests int64
 
 	testgrpc.TestServiceServer
-	orcaSrv *orca.Server
+	orcaSrv *orca.Service
 }
 
 func (t *testServiceImpl) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
@@ -91,7 +91,7 @@ func (s) Test_E2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 	// Register the OpenRCAService with a very short metrics reporting interval.
 	s := grpc.NewServer()
 	const shortReportingInterval = 100 * time.Millisecond
-	orcaSrv, err := orca.Register(s, orca.ServerOptions{MinReportingInterval: shortReportingInterval})
+	orcaSrv, err := orca.Register(s, orca.ServiceOptions{MinReportingInterval: shortReportingInterval})
 	if err != nil {
 		t.Fatalf("orca.EnableOutOfBandMetricsReportingForTesting() failed: %v", err)
 	}

@@ -31,7 +31,7 @@ import (
 	v3orcaservicepb "github.com/cncf/xds/go/xds/service/orca/v3"
 )
 
-// Server provides an implementation of the OpenRcaService as defined in the
+// Service provides an implementation of the OpenRcaService as defined in the
 // [ORCA] service protos.
 //
 // Server applications can use the SetXxx() methods to record measurements
@@ -39,15 +39,15 @@ import (
 // have initiated the SteamCoreMetrics streaming RPC.
 //
 // [ORCA]: https://github.com/cncf/xds/blob/main/xds/service/orca/v3/orca.proto
-type Server struct {
+type Service struct {
 	v3orcaservicegrpc.UnimplementedOpenRcaServiceServer
 
 	minReportingInterval time.Duration
 	recorder             *metricRecorder
 }
 
-// ServerOptions contains options to configure the ORCA server implementation.
-type ServerOptions struct {
+// ServiceOptions contains options to configure the ORCA service implementation.
+type ServiceOptions struct {
 	// MinReportingInterval sets the lower bound for how often out-of-band
 	// metrics are reported on the streaming RPC initiated by the client.  If
 	// unspecified or less than the default value of 30s, the default is used.
@@ -58,7 +58,7 @@ type ServerOptions struct {
 
 // Register creates a new ORCA service implementation configured using the
 // provided options and registers the same on the provided service registrar.
-func Register(s grpc.ServiceRegistrar, opts ServerOptions) (*Server, error) {
+func Register(s grpc.ServiceRegistrar, opts ServiceOptions) (*Service, error) {
 	// TODO(easwars): Once the generated pb.gos are updated, we wont need this
 	// type assertion any more, since the new versions accept a
 	// grpc.ServiceRegistrar in their registration functions.
@@ -66,25 +66,25 @@ func Register(s grpc.ServiceRegistrar, opts ServerOptions) (*Server, error) {
 	if !ok {
 		return nil, fmt.Errorf("concrete type of provided grpc.ServiceRegistrar is %T, only supported type is %T", s, &grpc.Server{})
 	}
-	server := NewServer(opts)
+	server := NewService(opts)
 	v3orcaservicegrpc.RegisterOpenRcaServiceServer(srv, server)
 	return server, nil
 }
 
-// NewServer returns a new ORCA service implementation configured using the
+// NewService returns a new ORCA service implementation configured using the
 // provided options. This can be used to customize the registration of the
-// returned ORCA server. Most usages should prefer to use Register instead.
-func NewServer(opts ServerOptions) *Server {
+// returned ORCA service. Most usages should prefer to use Register instead.
+func NewService(opts ServiceOptions) *Service {
 	if opts.MinReportingInterval < internal.MinORCAReportingInterval {
 		opts.MinReportingInterval = internal.MinORCAReportingInterval
 	}
-	return &Server{
+	return &Service{
 		minReportingInterval: opts.MinReportingInterval,
 		recorder:             newMetricRecorder(),
 	}
 }
 
-func (s *Server) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadReportRequest) time.Duration {
+func (s *Service) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadReportRequest) time.Duration {
 	if req.GetReportInterval() == nil {
 		return s.minReportingInterval
 	}
@@ -96,18 +96,14 @@ func (s *Server) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadRepor
 	return interval.AsDuration()
 }
 
-func (s *Server) sendMetricsResponse(stream v3orcaservicegrpc.OpenRcaService_StreamCoreMetricsServer) error {
-	// The oobRecorder global singleton is guaranteed to be initialized at this
-	// point because registration of this service implementation and the
-	// initialization of the former take place in the same function,
-	// EnableOutOfBandMetricsReporting().
+func (s *Service) sendMetricsResponse(stream v3orcaservicegrpc.OpenRcaService_StreamCoreMetricsServer) error {
 	resp := s.recorder.toLoadReportProto()
 	return stream.Send(resp)
 }
 
 // StreamCoreMetrics streams custom backend metrics injected by the server
 // application.
-func (s *Server) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, stream v3orcaservicepb.OpenRcaService_StreamCoreMetricsServer) error {
+func (s *Service) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, stream v3orcaservicepb.OpenRcaService_StreamCoreMetricsServer) error {
 	// Send one response immediately before creating and waiting for the timer
 	// to fire.
 	if err := s.sendMetricsResponse(stream); err != nil {
@@ -132,42 +128,42 @@ func (s *Server) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, s
 
 // SetUtilizationMetric records a measurement for a utilization metric uniquely
 // identifiable by name.
-func (s *Server) SetUtilizationMetric(name string, val float64) {
+func (s *Service) SetUtilizationMetric(name string, val float64) {
 	s.recorder.setUtilization(name, val)
 }
 
 // DeleteUtilizationMetric deletes any previously recorded measurement for a
 // utilization metric uniquely identifiable by name.
-func (s *Server) DeleteUtilizationMetric(name string) {
+func (s *Service) DeleteUtilizationMetric(name string) {
 	s.recorder.deleteUtilization(name)
 }
 
 // SetAllUtilizationMetrics records a measurement for a bunch of utilization
 // metrics specified by the provided map, where keys correspond to metric names
 // and values to measurements.
-func (s *Server) SetAllUtilizationMetrics(pairs map[string]float64) {
+func (s *Service) SetAllUtilizationMetrics(pairs map[string]float64) {
 	s.recorder.setAllUtilization(pairs)
 }
 
 // SetCPUUtilizationMetric records a measurement for the CPU utilization metric.
-func (s *Server) SetCPUUtilizationMetric(val float64) {
+func (s *Service) SetCPUUtilizationMetric(val float64) {
 	s.recorder.setCPU(val)
 }
 
 // DeleteCPUUtilizationMetric deletes a previously recorded measurement for the
 // CPU utilization metric.
-func (s *Server) DeleteCPUUtilizationMetric() {
+func (s *Service) DeleteCPUUtilizationMetric() {
 	s.recorder.setCPU(0)
 }
 
 // SetMemoryUtilizationMetric records a measurement for the memory utilization
 // metric.
-func (s *Server) SetMemoryUtilizationMetric(val float64) {
+func (s *Service) SetMemoryUtilizationMetric(val float64) {
 	s.recorder.setMemory(val)
 }
 
 // DeleteMemoryUtilizationMetric deletes a previously recorded measurement for
 // the memory utilization metric.
-func (s *Server) DeleteMemoryUtilizationMetric() {
+func (s *Service) DeleteMemoryUtilizationMetric() {
 	s.recorder.setMemory(0)
 }

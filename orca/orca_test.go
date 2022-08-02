@@ -33,7 +33,7 @@ import (
 
 func (s) Test_OOBMetrics_NonGRPCServer(t *testing.T) {
 	s := xds.NewGRPCServer()
-	if _, err := orca.Register(s, orca.ServerOptions{}); err == nil {
+	if _, err := orca.Register(s, orca.ServiceOptions{}); err == nil {
 		t.Fatal("orca.Register() succeeded with a non-grpc server, expected to fail")
 	}
 }
