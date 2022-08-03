@@ -514,7 +514,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	}
 	defer cc.Close()
 	testClient := testpb.NewTestServiceClient(cc)
-	if err := waitForTransientFailure(ctx, t, cc); err != nil {
+	if err := waitForTransientFailure(ctx, t, testClient); err != nil {
 		t.Fatal(err)
 	}
 
