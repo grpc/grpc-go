@@ -88,7 +88,7 @@ func CheckRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 	// roundrobin LB, we do the following:
 	// 1. Determine the count of RPCs that we expect each of our backends to
 	//    receive per iteration.
-	// 2. Wait until the same pattern repeates a few times, or the context
+	// 2. Wait until the same pattern repeats a few times, or the context
 	//    deadline expires.
 	wantAddrCount := make(map[string]int)
 	for _, addr := range addrs {
