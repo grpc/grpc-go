@@ -370,6 +370,7 @@ func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpoin
 						PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: port}},
 				}},
 			}},
+			LoadBalancingWeight: &wrapperspb.UInt32Value{Value: 1},
 		})
 	}
 	return &v3endpointpb.ClusterLoadAssignment{
