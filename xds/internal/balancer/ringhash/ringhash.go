@@ -264,15 +264,6 @@ func (b *ringhashBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 		return fmt.Errorf("unexpected balancer config with type: %T", s.BalancerConfig)
 	}
 
-	// If resolver state contains no addresses, return an error so ClientConn
-	// will trigger re-resolve. Also records this as an resolver error, so when
-	// the overall state turns transient failure, the error message will have
-	// the zero address information.
-	if len(s.ResolverState.Addresses) == 0 {
-		b.ResolverError(errors.New("produced zero addresses"))
-		return balancer.ErrBadResolverState
-	}
-
 	// If addresses were updated, whether it resulted in SubConn
 	// creation/deletion, or just weight update, we need to regenerate the ring
 	// and send a new picker.
@@ -284,6 +275,15 @@ func (b *ringhashBalancer) UpdateClientConnState(s balancer.ClientConnState) err
 		regenerateRing = true
 	}
 	b.config = newConfig
+
+	// If resolver state contains no addresses, return an error so ClientConn
+	// will trigger re-resolve. Also records this as an resolver error, so when
+	// the overall state turns transient failure, the error message will have
+	// the zero address information.
+	if len(s.ResolverState.Addresses) == 0 {
+		b.ResolverError(errors.New("produced zero addresses"))
+		return balancer.ErrBadResolverState
+	}
 
 	if regenerateRing {
 		// Ring creation is guaranteed to not fail because we call newRing()
