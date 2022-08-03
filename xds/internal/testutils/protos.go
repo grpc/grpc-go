@@ -118,6 +118,9 @@ func (clab *ClusterLoadAssignmentBuilder) AddLocality(subzone string, weight uin
 				lbe.LoadBalancingWeight = &wrapperspb.UInt32Value{Value: opts.Weight[i]}
 			}
 		}
+		if lbe.LoadBalancingWeight == nil {
+			lbe.LoadBalancingWeight = &wrapperspb.UInt32Value{Value: 1}
+		}
 		lbEndPoints = append(lbEndPoints, lbe)
 	}
 

@@ -90,16 +90,20 @@ func parseDropPolicy(dropPolicy *v3endpointpb.ClusterLoadAssignment_Policy_DropO
 	}
 }
 
-func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint) []Endpoint {
+func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint) ([]Endpoint, error) {
 	endpoints := make([]Endpoint, 0, len(lbEndpoints))
 	for _, lbEndpoint := range lbEndpoints {
+		weight := lbEndpoint.GetLoadBalancingWeight().GetValue()
+		if weight == 0 {
+			return nil, fmt.Errorf("EDS response contains an endpoint with zero weight: %+v", lbEndpoint)
+		}
 		endpoints = append(endpoints, Endpoint{
 			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
 			Address:      parseAddress(lbEndpoint.GetEndpoint().GetAddress().GetSocketAddress()),
-			Weight:       lbEndpoint.GetLoadBalancingWeight().GetValue(),
+			Weight:       weight,
 		})
 	}
-	return endpoints
+	return endpoints, nil
 }
 
 func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment, logger *grpclog.PrefixLogger) (EndpointsUpdate, error) {
@@ -134,9 +138,13 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment, logger *grpclog.Pr
 			return EndpointsUpdate{}, fmt.Errorf("duplicate locality %s with the same priority %v", lidStr, priority)
 		}
 		localitiesWithPriority[lidStr] = true
+		endpoints, err := parseEndpoints(locality.GetLbEndpoints())
+		if err != nil {
+			return EndpointsUpdate{}, err
+		}
 		ret.Localities = append(ret.Localities, Locality{
 			ID:        lid,
-			Endpoints: parseEndpoints(locality.GetLbEndpoints()),
+			Endpoints: endpoints,
 			Weight:    locality.GetLoadBalancingWeight().GetValue(),
 			Priority:  priority,
 		})
