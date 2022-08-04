@@ -108,6 +108,40 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+// TestUpdateClientConnState_NewRingSize tests the scenario where the ringhash
+// LB policy receives new configuration which specifies new values for the ring
+// min and max sizes. The test verifies that a new ring is created and a new
+// picker is sent to the ClientConn.
+func (s) TestUpdateClientConnState_NewRingSize(t *testing.T) {
+	origMinRingSize, origMaxRingSize := 1, 10 // Configured from `testConfig` in `setupTest`
+	newMinRingSize, newMaxRingSize := 20, 100
+
+	addrs := []resolver.Address{{Addr: testBackendAddrStrs[0]}}
+	cc, b, p1 := setupTest(t, addrs)
+	ring1 := p1.(*picker).ring
+	if ringSize := len(ring1.items); ringSize < origMinRingSize || ringSize > origMaxRingSize {
+		t.Fatalf("Ring created with size %d, want between [%d, %d]", ringSize, origMinRingSize, origMaxRingSize)
+	}
+
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{Addresses: addrs},
+		BalancerConfig: &LBConfig{MinRingSize: uint64(newMinRingSize), MaxRingSize: uint64(newMaxRingSize)},
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState returned err: %v", err)
+	}
+
+	var ring2 *ring
+	select {
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout when waiting for a picker update after a configuration update")
+	case p2 := <-cc.NewPickerCh:
+		ring2 = p2.(*picker).ring
+	}
+	if ringSize := len(ring2.items); ringSize < newMinRingSize || ringSize > newMaxRingSize {
+		t.Fatalf("Ring created with size %d, want between [%d, %d]", ringSize, newMinRingSize, newMaxRingSize)
+	}
+}
+
 func (s) TestOneSubConn(t *testing.T) {
 	wantAddr1 := resolver.Address{Addr: testBackendAddrStrs[0]}
 	cc, b, p0 := setupTest(t, []resolver.Address{wantAddr1})
@@ -320,7 +354,7 @@ func (s) TestAddrWeightChange(t *testing.T) {
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{Addresses: wantAddrs},
-		BalancerConfig: nil,
+		BalancerConfig: testConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
 	}
@@ -336,7 +370,7 @@ func (s) TestAddrWeightChange(t *testing.T) {
 			{Addr: testBackendAddrStrs[0]},
 			{Addr: testBackendAddrStrs[1]},
 		}},
-		BalancerConfig: nil,
+		BalancerConfig: testConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
 	}
@@ -359,7 +393,7 @@ func (s) TestAddrWeightChange(t *testing.T) {
 				resolver.Address{Addr: testBackendAddrStrs[1]},
 				weightedroundrobin.AddrInfo{Weight: 2}),
 		}},
-		BalancerConfig: nil,
+		BalancerConfig: testConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
 	}
@@ -505,7 +539,7 @@ func (s) TestAddrBalancerAttributesChange(t *testing.T) {
 	addrs2 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, internal.LocalityID{Region: "americas"})}
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{Addresses: addrs2},
-		BalancerConfig: nil,
+		BalancerConfig: testConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
 	}
