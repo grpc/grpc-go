@@ -38,26 +38,41 @@ var (
 	defaultMetricsReportingInterval = time.Second * 30
 )
 
+type tracingMetricsExporter interface {
+	trace.Exporter
+	view.Exporter
+}
+
+// globals to stub out in tests
+var newExporter = newStackdriverExporter
+
+func newStackdriverExporter(config *configpb.ObservabilityConfig) (tracingMetricsExporter, error) {
+	// Create the Stackdriver exporter, which is shared between tracing and stats
+	mr := monitoredresource.Autodetect()
+	logger.Infof("Detected MonitoredResource:: %+v", mr)
+	var err error
+	exporter, err := stackdriver.NewExporter(stackdriver.Options{
+		ProjectID:         config.DestinationProjectId,
+		MonitoredResource: mr,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Stackdriver exporter: %v", err)
+	}
+	return exporter, nil
+}
+
 // This method accepts config and exporter; the exporter argument is exposed to
 // assist unit testing of the OpenCensus behavior.
-func startOpenCensus(config *configpb.ObservabilityConfig, exporter interface{}) error {
+func startOpenCensus(config *configpb.ObservabilityConfig) error {
 	// If both tracing and metrics are disabled, there's no point inject default
 	// StatsHandler.
 	if config == nil || (!config.EnableCloudTrace && !config.EnableCloudMonitoring) {
 		return nil
 	}
 
-	if exporter == nil {
-		// Create the Stackdriver exporter, which is shared between tracing and stats
-		mr := monitoredresource.Autodetect()
-		logger.Infof("Detected MonitoredResource:: %+v", mr)
-		var err error
-		if exporter, err = stackdriver.NewExporter(stackdriver.Options{
-			ProjectID:         config.DestinationProjectId,
-			MonitoredResource: mr,
-		}); err != nil {
-			return fmt.Errorf("failed to create Stackdriver exporter: %v", err)
-		}
+	exporter, err := newExporter(config)
+	if err != nil {
+		return err
 	}
 
 	var so trace.StartOptions

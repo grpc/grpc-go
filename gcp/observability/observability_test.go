@@ -129,7 +129,6 @@ func (fle *fakeLoggingExporter) Close() error {
 type test struct {
 	t   *testing.T
 	fle *fakeLoggingExporter
-	fe  *fakeOpenCensusExporter
 
 	testServer testgrpc.TestServiceServer // nil means none
 	// srv and srvAddr are set once startServer is called.
@@ -229,8 +228,7 @@ func (te *test) enableOpenCensus() {
 		EnableCloudMonitoring:   true,
 		GlobalTraceSamplingRate: 1.0,
 	}
-	te.fe = &fakeOpenCensusExporter{SeenViews: make(map[string]string), t: te.t}
-	startOpenCensus(config, te.fe)
+	startOpenCensus(config)
 }
 
 func checkEventCommon(t *testing.T, seen *grpclogrecordpb.GrpcLogRecord) {
@@ -783,6 +781,16 @@ func (s) TestNoEnvSet(t *testing.T) {
 func (s) TestOpenCensusIntegration(t *testing.T) {
 	te := newTest(t)
 	defer te.tearDown()
+	fe := &fakeOpenCensusExporter{SeenViews: make(map[string]string), t: te.t}
+
+	defer func(ne func(config *configpb.ObservabilityConfig) (tracingMetricsExporter, error)) {
+		newExporter = ne
+	}(newExporter)
+
+	newExporter = func(config *configpb.ObservabilityConfig) (tracingMetricsExporter, error) {
+		return fe, nil
+	}
+
 	te.enableOpenCensus()
 	te.startServer(&testServer{})
 	tc := testgrpc.NewTestServiceClient(te.clientConn())
@@ -807,17 +815,17 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 	defer cancel()
 	for ctx.Err() == nil {
 		errs = nil
-		te.fe.mu.RLock()
-		if value := te.fe.SeenViews["grpc.io/client/completed_rpcs"]; value != TypeOpenCensusViewCount {
+		fe.mu.RLock()
+		if value := fe.SeenViews["grpc.io/client/completed_rpcs"]; value != TypeOpenCensusViewCount {
 			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/client/completed_rpcs: %s != %s", value, TypeOpenCensusViewCount))
 		}
-		if value := te.fe.SeenViews["grpc.io/server/completed_rpcs"]; value != TypeOpenCensusViewCount {
+		if value := fe.SeenViews["grpc.io/server/completed_rpcs"]; value != TypeOpenCensusViewCount {
 			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/server/completed_rpcs: %s != %s", value, TypeOpenCensusViewCount))
 		}
-		if te.fe.SeenSpans <= 0 {
-			errs = append(errs, fmt.Errorf("unexpected number of seen spans: %v <= 0", te.fe.SeenSpans))
+		if fe.SeenSpans <= 0 {
+			errs = append(errs, fmt.Errorf("unexpected number of seen spans: %v <= 0", fe.SeenSpans))
 		}
-		te.fe.mu.RUnlock()
+		fe.mu.RUnlock()
 		if len(errs) == 0 {
 			break
 		}
