@@ -98,7 +98,7 @@ type ManagementServerOptions struct {
 // resources allocated by the management server.
 func StartManagementServer(opts *ManagementServerOptions) (*ManagementServer, error) {
 	// Create a snapshot cache.
-	cache := v3cache.NewSnapshotCache(true, v3cache.IDHash{}, serverLogger{})
+	cache := v3cache.NewSnapshotCache(false, v3cache.IDHash{}, serverLogger{})
 	logger.Infof("Created new snapshot cache...")
 
 	var lis net.Listener
