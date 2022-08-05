@@ -35,16 +35,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// UnmarshalRouteConfig processes resources received in an RDS response,
-// validates them, and transforms them into a native struct which contains only
-// fields we are interested in. The provided hostname determines the route
-// configuration resources of interest.
-func UnmarshalRouteConfig(opts *UnmarshalOptions) (map[string]RouteConfigUpdateErrTuple, UpdateMetadata, error) {
-	update := make(map[string]RouteConfigUpdateErrTuple)
-	md, err := processAllResources(opts, update)
-	return update, md, err
-}
-
 func unmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, RouteConfigUpdate, error) {
 	r, err := unwrapResource(r)
 	if err != nil {

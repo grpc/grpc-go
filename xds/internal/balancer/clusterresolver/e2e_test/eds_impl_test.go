@@ -48,8 +48,7 @@ import (
 	testgrpc "google.golang.org/grpc/test/grpc_testing"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 
-	_ "google.golang.org/grpc/xds/internal/balancer/clusterresolver"        // Register the "cluster_resolver_experimental" LB policy.
-	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v3" // Register the v3 xDS API client.
+	_ "google.golang.org/grpc/xds/internal/balancer/clusterresolver" // Register the "cluster_resolver_experimental" LB policy.
 )
 
 const (

@@ -70,18 +70,17 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	updateCh1 := testutils.NewChannel()
 	updateCh2 := testutils.NewChannel()
 	updateCh3 := testutils.NewChannel()
-	var rdsCancel2, rdsCancel3 func()
 	rdsCancel1 := client.WatchRouteConfig(rdsName, func(u xdsresource.RouteConfigUpdate, err error) {
 		updateCh1.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
+
 		// Watch for the same resource name.
-		rdsCancel2 = client.WatchRouteConfig(rdsName, func(u xdsresource.RouteConfigUpdate, err error) {
+		rdsCancel2 := client.WatchRouteConfig(rdsName, func(u xdsresource.RouteConfigUpdate, err error) {
 			updateCh2.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
 		})
 		t.Cleanup(rdsCancel2)
 		// Watch for a different resource name.
-		rdsCancel3 = client.WatchRouteConfig(rdsNameNewStyle, func(u xdsresource.RouteConfigUpdate, err error) {
+		rdsCancel3 := client.WatchRouteConfig(rdsNameNewStyle, func(u xdsresource.RouteConfigUpdate, err error) {
 			updateCh3.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
-			rdsCancel3()
 		})
 		t.Cleanup(rdsCancel3)
 	})
