@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	configpb "google.golang.org/grpc/gcp/observability/internal/config"
 	grpclogrecordpb "google.golang.org/grpc/gcp/observability/internal/logging"
+	"google.golang.org/grpc/internal"
 	iblog "google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
@@ -687,7 +688,7 @@ func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
 // place in the temporary portion of the file system dependent on system. It
 // also sets the environment variable GRPC_CONFIG_OBSERVABILITY_JSON to point to
 // this created config.
-func createTmpConfigInFileSystem(rawJSON string) (*os.File, error) {
+func createTmpConfigInFileSystem(rawJSON string) (func(), error) {
 	configJSONFile, err := ioutil.TempFile(os.TempDir(), "configJSON-")
 	if err != nil {
 		return nil, fmt.Errorf("cannot create file %v: %v", configJSONFile.Name(), err)
@@ -697,7 +698,10 @@ func createTmpConfigInFileSystem(rawJSON string) (*os.File, error) {
 		return nil, fmt.Errorf("cannot write marshalled JSON: %v", err)
 	}
 	os.Setenv(envObservabilityConfigJSON, configJSONFile.Name())
-	return configJSONFile, nil
+	return func() {
+		configJSONFile.Close()
+		os.Setenv(envObservabilityConfigJSON, "")
+	}, nil
 }
 
 // TestJSONEnvVarSet tests a valid observability configuration specified by the
@@ -708,8 +712,9 @@ func (s) TestJSONEnvVarSet(t *testing.T) {
 		"destinationProjectId": "fake",
 		"logFilters":[{"pattern":"*","headerBytes":1073741824,"messageBytes":1073741824}]
 	}`
-	configJSONFile, err := createTmpConfigInFileSystem(configJSON)
-	defer configJSONFile.Close()
+	cleanup, err := createTmpConfigInFileSystem(configJSON)
+	defer cleanup()
+
 	if err != nil {
 		t.Fatalf("failed to create config in file system: %v", err)
 	}
@@ -731,8 +736,8 @@ func (s) TestBothConfigEnvVarsSet(t *testing.T) {
 		"destinationProjectId":"fake",
 		"logFilters":[{"pattern":":-)"}, {"pattern":"*"}]
 	}`
-	configJSONFile, err := createTmpConfigInFileSystem(configJSON)
-	defer configJSONFile.Close()
+	cleanup, err := createTmpConfigInFileSystem(configJSON)
+	defer cleanup()
 	if err != nil {
 		t.Fatalf("failed to create config in file system: %v", err)
 	}
@@ -764,6 +769,7 @@ func (s) TestBothConfigEnvVarsSet(t *testing.T) {
 // a file (or valid configuration).
 func (s) TestErrInFileSystemEnvVar(t *testing.T) {
 	os.Setenv(envObservabilityConfigJSON, "/this-file/does-not-exist")
+	defer os.Setenv(envObservabilityConfigJSON, "")
 	if err := Start(context.Background()); err == nil {
 		t.Fatalf("Invalid file system path not triggering error")
 	}
@@ -833,5 +839,54 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 	}
 	if len(errs) != 0 {
 		t.Fatalf("Invalid OpenCensus export data: %v", errs)
+	}
+}
+
+// TestCustomTagsTracingMetrics verifies that the custom tags defined in our
+// observability configuration and set to two hardcoded values are passed to the
+// function to create an exporter.
+func (s) TestCustomTagsTracingMetrics(t *testing.T) {
+	defer func(ne func(config *configpb.ObservabilityConfig) (tracingMetricsExporter, error)) {
+		newExporter = ne
+	}(newExporter)
+	fe := &fakeOpenCensusExporter{SeenViews: make(map[string]string), t: t}
+	newExporter = func(config *configpb.ObservabilityConfig) (tracingMetricsExporter, error) {
+		ct := config.GetCustomTags()
+		if len(ct) < 1 {
+			t.Fatalf("less than 2 custom tags sent in")
+		}
+		if val, ok := ct["customtag1"]; !ok || val != "wow" {
+			t.Fatalf("incorrect custom tag: got %v, want %v", val, "wow")
+		}
+		if val, ok := ct["customtag2"]; !ok || val != "nice" {
+			t.Fatalf("incorrect custom tag: got %v, want %v", val, "nice")
+		}
+		return fe, nil
+	}
+
+	// This configuration present in file system and it's defined custom tags should make it
+	// to the created exporter.
+	configJSON := `{
+		"destinationProjectId": "fake",
+		"enableCloudTrace": true,
+		"enableCloudMonitoring": true,
+		"globalTraceSamplingRate": 1.0,
+		"customTags":{"customtag1":"wow","customtag2":"nice"}
+	}`
+	cleanup, err := createTmpConfigInFileSystem(configJSON)
+	defer cleanup()
+
+	// To clear globally registered tracing and metrics exporters.
+	defer func() {
+		internal.ClearExtraDialOptions()
+		internal.ClearExtraServerOptions()
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	err = Start(ctx)
+	defer End()
+	if err != nil {
+		t.Fatalf("Start() failed with err: %v", err)
 	}
 }

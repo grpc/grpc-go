@@ -86,4 +86,7 @@ message ObservabilityConfig {
     // For example, 0.05 means there is a 5% chance for a RPC to be traced, 1.0
     // means trace every call, 0 means don’t start new traces.
     double global_trace_sampling_rate = 6;
+
+    // A list of custom tags that will be attached to every log entry.
+    map<string, string> custom_tags = 7;
 }

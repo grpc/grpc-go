@@ -38,12 +38,28 @@ var (
 	defaultMetricsReportingInterval = time.Second * 30
 )
 
+func convertTagsToMonitoringLabels(tags map[string]string) *stackdriver.Labels {
+	labels := &stackdriver.Labels{}
+	for k, v := range tags {
+		labels.Set(k, v, "")
+	}
+	return labels
+}
+
+func convertTagsToTraceAttributes(tags map[string]string) map[string]interface{} {
+	ta := make(map[string]interface{}, len(tags))
+	for k, v := range tags {
+		ta[k] = v
+	}
+	return ta
+}
+
 type tracingMetricsExporter interface {
 	trace.Exporter
 	view.Exporter
 }
 
-// globals to stub out in tests
+// global to stub out in tests
 var newExporter = newStackdriverExporter
 
 func newStackdriverExporter(config *configpb.ObservabilityConfig) (tracingMetricsExporter, error) {
@@ -52,8 +68,10 @@ func newStackdriverExporter(config *configpb.ObservabilityConfig) (tracingMetric
 	logger.Infof("Detected MonitoredResource:: %+v", mr)
 	var err error
 	exporter, err := stackdriver.NewExporter(stackdriver.Options{
-		ProjectID:         config.DestinationProjectId,
-		MonitoredResource: mr,
+		ProjectID:               config.DestinationProjectId,
+		MonitoredResource:       mr,
+		DefaultMonitoringLabels: convertTagsToMonitoringLabels(config.CustomTags),
+		DefaultTraceAttributes:  convertTagsToTraceAttributes(config.CustomTags),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Stackdriver exporter: %v", err)

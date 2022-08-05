@@ -325,7 +325,7 @@ func (l *binaryLogger) Start(ctx context.Context, config *configpb.Observability
 	if config.GetDestinationProjectId() == "" {
 		return fmt.Errorf("failed to enable CloudLogging: empty destination_project_id")
 	}
-	exporter, err := newCloudLoggingExporter(ctx, config.DestinationProjectId)
+	exporter, err := newCloudLoggingExporter(ctx, config)
 	if err != nil {
 		return fmt.Errorf("unable to create CloudLogging exporter: %v", err)
 	}
