@@ -93,9 +93,15 @@ func parseDropPolicy(dropPolicy *v3endpointpb.ClusterLoadAssignment_Policy_DropO
 func parseEndpoints(lbEndpoints []*v3endpointpb.LbEndpoint) ([]Endpoint, error) {
 	endpoints := make([]Endpoint, 0, len(lbEndpoints))
 	for _, lbEndpoint := range lbEndpoints {
-		weight := lbEndpoint.GetLoadBalancingWeight().GetValue()
-		if weight == 0 {
-			return nil, fmt.Errorf("EDS response contains an endpoint with zero weight: %+v", lbEndpoint)
+		// If the load_balancing_weight field is specified, it must be set to a
+		// value of at least 1.  If unspecified, each host is presumed to have
+		// equal weight in a locality.
+		weight := uint32(1)
+		if w := lbEndpoint.GetLoadBalancingWeight(); w != nil {
+			if w.GetValue() == 0 {
+				return nil, fmt.Errorf("EDS response contains an endpoint with zero weight: %+v", lbEndpoint)
+			}
+			weight = w.GetValue()
 		}
 		endpoints = append(endpoints, Endpoint{
 			HealthStatus: EndpointHealthStatus(lbEndpoint.GetHealthStatus()),
