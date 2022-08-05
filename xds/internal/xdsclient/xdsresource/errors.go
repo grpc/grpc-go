@@ -58,3 +58,14 @@ func ErrType(e error) ErrorType {
 	}
 	return ErrorTypeUnknown
 }
+
+// ErrResourceTypeUnsupported is an error used to indicate an unsupported xDS
+// resource type. The wrapped ErrStr contains the details.
+type ErrResourceTypeUnsupported struct {
+	ErrStr string
+}
+
+// Error helps implements the error interface.
+func (e ErrResourceTypeUnsupported) Error() string {
+	return e.ErrStr
+}
