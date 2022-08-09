@@ -19,7 +19,6 @@
 package ringhash
 
 import (
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -64,12 +63,12 @@ type ringEntry struct {
 //
 // To pick from a ring, a binary search will be done for the given target hash,
 // and first item with hash >= given hash will be returned.
-func newRing(subConns *resolver.AddressMap, minRingSize, maxRingSize uint64) (*ring, error) {
+//
+// Must be called with a non-empty subConns map.
+func newRing(subConns *resolver.AddressMap, minRingSize, maxRingSize uint64) *ring {
 	// https://github.com/envoyproxy/envoy/blob/765c970f06a4c962961a0e03a467e165b276d50f/source/common/upstream/ring_hash_lb.cc#L114
-	normalizedWeights, minWeight, err := normalizeWeights(subConns)
-	if err != nil {
-		return nil, err
-	}
+	normalizedWeights, minWeight := normalizeWeights(subConns)
+
 	// Normalized weights for {3,3,4} is {0.3,0.3,0.4}.
 
 	// Scale up the size of the ring such that the least-weighted host gets a
@@ -106,30 +105,29 @@ func newRing(subConns *resolver.AddressMap, minRingSize, maxRingSize uint64) (*r
 	for i, ii := range items {
 		ii.idx = i
 	}
-	return &ring{items: items}, nil
+	return &ring{items: items}
 }
 
 // normalizeWeights divides all the weights by the sum, so that the total weight
 // is 1.
-func normalizeWeights(subConns *resolver.AddressMap) ([]subConnWithWeight, float64, error) {
-	keys := subConns.Keys()
-	if len(keys) == 0 {
-		return nil, 0, fmt.Errorf("number of subconns is 0")
-	}
+//
+// Must be called with a non-empty subConns map.
+func normalizeWeights(subConns *resolver.AddressMap) ([]subConnWithWeight, float64) {
 	var weightSum uint32
+	keys := subConns.Keys()
 	for _, a := range keys {
 		weightSum += getWeightAttribute(a)
 	}
-	if weightSum == 0 {
-		return nil, 0, fmt.Errorf("total weight of all subconns is 0")
-	}
-	weightSumF := float64(weightSum)
 	ret := make([]subConnWithWeight, 0, len(keys))
 	min := float64(1.0)
 	for _, a := range keys {
 		v, _ := subConns.Get(a)
 		scInfo := v.(*subConn)
-		nw := float64(getWeightAttribute(a)) / weightSumF
+		// getWeightAttribute() returns 1 if the weight attribute is not found
+		// on the address. And since this function is guaranteed to be called
+		// with a non-empty subConns map, weightSum is guaranteed to be
+		// non-zero. So, we need not worry about divide a by zero error here.
+		nw := float64(getWeightAttribute(a)) / float64(weightSum)
 		ret = append(ret, subConnWithWeight{sc: scInfo, weight: nw})
 		if nw < min {
 			min = nw
@@ -142,7 +140,7 @@ func normalizeWeights(subConns *resolver.AddressMap) ([]subConnWithWeight, float
 	// where an address is added and then removed, the RPCs will still pick the
 	// same old SubConn.
 	sort.Slice(ret, func(i, j int) bool { return ret[i].sc.addr < ret[j].sc.addr })
-	return ret, min, nil
+	return ret, min
 }
 
 // pick does a binary search. It returns the item with smallest index i that
