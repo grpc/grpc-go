@@ -24,7 +24,6 @@ import (
 	"fmt"
 
 	gcplogging "cloud.google.com/go/logging"
-	configpb "google.golang.org/grpc/gcp/observability/internal/config"
 	grpclogrecordpb "google.golang.org/grpc/gcp/observability/internal/logging"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -45,8 +44,8 @@ type cloudLoggingExporter struct {
 	logger    *gcplogging.Logger
 }
 
-func newCloudLoggingExporter(ctx context.Context, config *configpb.ObservabilityConfig) (*cloudLoggingExporter, error) {
-	c, err := gcplogging.NewClient(ctx, fmt.Sprintf("projects/%v", config.DestinationProjectId))
+func newCloudLoggingExporter(ctx context.Context, config *ObvConfig) (*cloudLoggingExporter, error) {
+	c, err := gcplogging.NewClient(ctx, fmt.Sprintf("projects/%v", config.DestinationProjectID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cloudLoggingExporter: %v", err)
 	}
@@ -55,7 +54,7 @@ func newCloudLoggingExporter(ctx context.Context, config *configpb.Observability
 		logger.Infof("Adding custom tags: %+v", config.CustomTags)
 	}
 	return &cloudLoggingExporter{
-		projectID: config.DestinationProjectId,
+		projectID: config.DestinationProjectID,
 		client:    c,
 		logger:    c.Logger("microservices.googleapis.com/observability/grpc", gcplogging.CommonLabels(config.CustomTags)),
 	}, nil

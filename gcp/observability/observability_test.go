@@ -34,7 +34,6 @@ import (
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	configpb "google.golang.org/grpc/gcp/observability/internal/config"
 	grpclogrecordpb "google.golang.org/grpc/gcp/observability/internal/logging"
 	"google.golang.org/grpc/internal"
 	iblog "google.golang.org/grpc/internal/binarylog"
@@ -197,7 +196,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 	return te.cc
 }
 
-func (te *test) enablePluginWithConfig(config *configpb.ObservabilityConfig) {
+func (te *test) enablePluginWithConfig(config *ObvConfig) {
 	// Injects the fake exporter for testing purposes
 	te.fle = &fakeLoggingExporter{t: te.t}
 	defaultLogger = newBinaryLogger(nil)
@@ -208,10 +207,10 @@ func (te *test) enablePluginWithConfig(config *configpb.ObservabilityConfig) {
 }
 
 func (te *test) enablePluginWithCaptureAll() {
-	te.enablePluginWithConfig(&configpb.ObservabilityConfig{
+	te.enablePluginWithConfig(&ObvConfig{
 		EnableCloudLogging:   true,
-		DestinationProjectId: "fake",
-		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
+		DestinationProjectID: "fake",
+		LogFilters: []LogFilter{
 			{
 				Pattern:      "*",
 				HeaderBytes:  infinitySizeBytes,
@@ -223,7 +222,7 @@ func (te *test) enablePluginWithCaptureAll() {
 
 func (te *test) enableOpenCensus() {
 	defaultMetricsReportingInterval = time.Millisecond * 100
-	config := &configpb.ObservabilityConfig{
+	config := &ObvConfig{
 		EnableCloudLogging:      true,
 		EnableCloudTrace:        true,
 		EnableCloudMonitoring:   true,
@@ -521,7 +520,7 @@ func (s) TestLoggingForErrorCall(t *testing.T) {
 func (s) TestEmptyConfig(t *testing.T) {
 	te := newTest(t)
 	defer te.tearDown()
-	te.enablePluginWithConfig(&configpb.ObservabilityConfig{})
+	te.enablePluginWithConfig(&ObvConfig{})
 	te.startServer(&testServer{})
 	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
@@ -553,10 +552,10 @@ func (s) TestOverrideConfig(t *testing.T) {
 	// most specific one. The third filter allows message payload logging, and
 	// others disabling the message payload logging. We should observe this
 	// behavior latter.
-	te.enablePluginWithConfig(&configpb.ObservabilityConfig{
+	te.enablePluginWithConfig(&ObvConfig{
 		EnableCloudLogging:   true,
-		DestinationProjectId: "fake",
-		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
+		DestinationProjectID: "fake",
+		LogFilters: []LogFilter{
 			{
 				Pattern:      "wont/match",
 				MessageBytes: 0,
@@ -620,10 +619,10 @@ func (s) TestNoMatch(t *testing.T) {
 	// Setting 3 filters, expected to use the second filter. The second filter
 	// allows message payload logging, and others disabling the message payload
 	// logging. We should observe this behavior latter.
-	te.enablePluginWithConfig(&configpb.ObservabilityConfig{
+	te.enablePluginWithConfig(&ObvConfig{
 		EnableCloudLogging:   true,
-		DestinationProjectId: "fake",
-		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
+		DestinationProjectID: "fake",
+		LogFilters: []LogFilter{
 			{
 				Pattern:      "wont/match",
 				MessageBytes: 0,
@@ -660,10 +659,10 @@ func (s) TestNoMatch(t *testing.T) {
 }
 
 func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
-	config := &configpb.ObservabilityConfig{
+	config := &ObvConfig{
 		EnableCloudLogging:   true,
-		DestinationProjectId: "fake",
-		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
+		DestinationProjectID: "fake",
+		LogFilters: []LogFilter{
 			{
 				Pattern: ":-)",
 			},
@@ -672,7 +671,7 @@ func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
 			},
 		},
 	}
-	configJSON, err := protojson.Marshal(config)
+	configJSON, err := json.Marshal(config)
 	if err != nil {
 		t.Fatalf("failed to convert config to JSON: %v", err)
 	}
@@ -709,8 +708,8 @@ func createTmpConfigInFileSystem(rawJSON string) (func(), error) {
 // file path pointing to a JSON encoded config.
 func (s) TestJSONEnvVarSet(t *testing.T) {
 	configJSON := `{
-		"destinationProjectId": "fake",
-		"logFilters":[{"pattern":"*","headerBytes":1073741824,"messageBytes":1073741824}]
+		"destination_project_id": "fake",
+		"log_filters":[{"pattern":"*","header_bytes":1073741824,"message_bytes":1073741824}]
 	}`
 	cleanup, err := createTmpConfigInFileSystem(configJSON)
 	defer cleanup()
@@ -733,8 +732,8 @@ func (s) TestJSONEnvVarSet(t *testing.T) {
 // variable is set and valid.
 func (s) TestBothConfigEnvVarsSet(t *testing.T) {
 	configJSON := `{
-		"destinationProjectId":"fake",
-		"logFilters":[{"pattern":":-)"}, {"pattern":"*"}]
+		"destination_project_id":"fake",
+		"log_filters":[{"pattern":":-)"}, {"pattern_string":"*"}]
 	}`
 	cleanup, err := createTmpConfigInFileSystem(configJSON)
 	defer cleanup()
@@ -742,10 +741,10 @@ func (s) TestBothConfigEnvVarsSet(t *testing.T) {
 		t.Fatalf("failed to create config in file system: %v", err)
 	}
 	// This configuration should be ignored, as precedence 2.
-	validConfig := &configpb.ObservabilityConfig{
+	validConfig := &ObvConfig{
 		EnableCloudLogging:   true,
-		DestinationProjectId: "fake",
-		LogFilters: []*configpb.ObservabilityConfig_LogFilter{
+		DestinationProjectID: "fake",
+		LogFilters: []LogFilter{
 			{
 				Pattern:      "*",
 				HeaderBytes:  infinitySizeBytes,
@@ -753,7 +752,7 @@ func (s) TestBothConfigEnvVarsSet(t *testing.T) {
 			},
 		},
 	}
-	validConfigJSON, err := protojson.Marshal(validConfig)
+	validConfigJSON, err := json.Marshal(validConfig)
 	if err != nil {
 		t.Fatalf("failed to convert config to JSON: %v", err)
 	}
@@ -789,11 +788,11 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 	defer te.tearDown()
 	fe := &fakeOpenCensusExporter{SeenViews: make(map[string]string), t: te.t}
 
-	defer func(ne func(config *configpb.ObservabilityConfig) (tracingMetricsExporter, error)) {
+	defer func(ne func(config *ObvConfig) (tracingMetricsExporter, error)) {
 		newExporter = ne
 	}(newExporter)
 
-	newExporter = func(config *configpb.ObservabilityConfig) (tracingMetricsExporter, error) {
+	newExporter = func(config *ObvConfig) (tracingMetricsExporter, error) {
 		return fe, nil
 	}
 
@@ -846,12 +845,12 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 // observability configuration and set to two hardcoded values are passed to the
 // function to create an exporter.
 func (s) TestCustomTagsTracingMetrics(t *testing.T) {
-	defer func(ne func(config *configpb.ObservabilityConfig) (tracingMetricsExporter, error)) {
+	defer func(ne func(config *ObvConfig) (tracingMetricsExporter, error)) {
 		newExporter = ne
 	}(newExporter)
 	fe := &fakeOpenCensusExporter{SeenViews: make(map[string]string), t: t}
-	newExporter = func(config *configpb.ObservabilityConfig) (tracingMetricsExporter, error) {
-		ct := config.GetCustomTags()
+	newExporter = func(config *ObvConfig) (tracingMetricsExporter, error) {
+		ct := config.CustomTags
 		if len(ct) < 1 {
 			t.Fatalf("less than 2 custom tags sent in")
 		}
@@ -867,11 +866,11 @@ func (s) TestCustomTagsTracingMetrics(t *testing.T) {
 	// This configuration present in file system and it's defined custom tags should make it
 	// to the created exporter.
 	configJSON := `{
-		"destinationProjectId": "fake",
-		"enableCloudTrace": true,
-		"enableCloudMonitoring": true,
-		"globalTraceSamplingRate": 1.0,
-		"customTags":{"customtag1":"wow","customtag2":"nice"}
+		"destination_project_id": "fake",
+		"enable_cloud_trace": true,
+		"enable_cloud_monitoring": true,
+		"global_trace_sampling_rate": 1.0,
+		"custom_tags":{"customtag1":"wow","customtag2":"nice"}
 	}`
 	cleanup, err := createTmpConfigInFileSystem(configJSON)
 	defer cleanup()

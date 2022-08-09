@@ -29,7 +29,6 @@ import (
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
-	configpb "google.golang.org/grpc/gcp/observability/internal/config"
 	"google.golang.org/grpc/internal"
 )
 
@@ -62,13 +61,13 @@ type tracingMetricsExporter interface {
 // global to stub out in tests
 var newExporter = newStackdriverExporter
 
-func newStackdriverExporter(config *configpb.ObservabilityConfig) (tracingMetricsExporter, error) {
+func newStackdriverExporter(config *ObvConfig) (tracingMetricsExporter, error) {
 	// Create the Stackdriver exporter, which is shared between tracing and stats
 	mr := monitoredresource.Autodetect()
 	logger.Infof("Detected MonitoredResource:: %+v", mr)
 	var err error
 	exporter, err := stackdriver.NewExporter(stackdriver.Options{
-		ProjectID:               config.DestinationProjectId,
+		ProjectID:               config.DestinationProjectID,
 		MonitoredResource:       mr,
 		DefaultMonitoringLabels: convertTagsToMonitoringLabels(config.CustomTags),
 		DefaultTraceAttributes:  convertTagsToTraceAttributes(config.CustomTags),
@@ -81,7 +80,7 @@ func newStackdriverExporter(config *configpb.ObservabilityConfig) (tracingMetric
 
 // This method accepts config and exporter; the exporter argument is exposed to
 // assist unit testing of the OpenCensus behavior.
-func startOpenCensus(config *configpb.ObservabilityConfig) error {
+func startOpenCensus(config *ObvConfig) error {
 	// If both tracing and metrics are disabled, there's no point inject default
 	// StatsHandler.
 	if config == nil || (!config.EnableCloudTrace && !config.EnableCloudMonitoring) {
