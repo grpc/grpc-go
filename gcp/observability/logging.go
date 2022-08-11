@@ -247,7 +247,7 @@ func (l *binaryLogger) Close() {
 	}
 }
 
-func validateExistingMethodLoggerConfig(existing *iblog.MethodLoggerConfig, filter LogFilter) bool {
+func validateExistingMethodLoggerConfig(existing *iblog.MethodLoggerConfig, filter logFilter) bool {
 	// In future, we could add more validations. Currently, we only check if the
 	// new filter configs are different than the existing one, if so, we log a
 	// warning.
@@ -257,7 +257,7 @@ func validateExistingMethodLoggerConfig(existing *iblog.MethodLoggerConfig, filt
 	return existing == nil
 }
 
-func createBinaryLoggerConfig(filters []LogFilter) iblog.LoggerConfig {
+func createBinaryLoggerConfig(filters []logFilter) iblog.LoggerConfig {
 	config := iblog.LoggerConfig{
 		Services: make(map[string]*iblog.MethodLoggerConfig),
 		Methods:  make(map[string]*iblog.MethodLoggerConfig),
@@ -295,7 +295,7 @@ func createBinaryLoggerConfig(filters []LogFilter) iblog.LoggerConfig {
 
 // start is the core logic for setting up the custom binary logging logger, and
 // it's also useful for testing.
-func (l *binaryLogger) start(config *ObvConfig, exporter loggingExporter) error {
+func (l *binaryLogger) start(config *config, exporter loggingExporter) error {
 	filters := config.LogFilters
 	if len(filters) == 0 || exporter == nil {
 		// Doing nothing is allowed
@@ -317,7 +317,7 @@ func (l *binaryLogger) start(config *ObvConfig, exporter loggingExporter) error 
 	return nil
 }
 
-func (l *binaryLogger) Start(ctx context.Context, config *ObvConfig) error {
+func (l *binaryLogger) Start(ctx context.Context, config *config) error {
 	if config == nil || !config.EnableCloudLogging {
 		return nil
 	}

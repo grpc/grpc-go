@@ -37,7 +37,7 @@ var (
 	defaultMetricsReportingInterval = time.Second * 30
 )
 
-func convertTagsToMonitoringLabels(tags map[string]string) *stackdriver.Labels {
+func tagsToMonitoringLabels(tags map[string]string) *stackdriver.Labels {
 	labels := &stackdriver.Labels{}
 	for k, v := range tags {
 		labels.Set(k, v, "")
@@ -45,7 +45,7 @@ func convertTagsToMonitoringLabels(tags map[string]string) *stackdriver.Labels {
 	return labels
 }
 
-func convertTagsToTraceAttributes(tags map[string]string) map[string]interface{} {
+func tagsToTraceAttributes(tags map[string]string) map[string]interface{} {
 	ta := make(map[string]interface{}, len(tags))
 	for k, v := range tags {
 		ta[k] = v
@@ -61,7 +61,7 @@ type tracingMetricsExporter interface {
 // global to stub out in tests
 var newExporter = newStackdriverExporter
 
-func newStackdriverExporter(config *ObvConfig) (tracingMetricsExporter, error) {
+func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 	// Create the Stackdriver exporter, which is shared between tracing and stats
 	mr := monitoredresource.Autodetect()
 	logger.Infof("Detected MonitoredResource:: %+v", mr)
@@ -69,8 +69,8 @@ func newStackdriverExporter(config *ObvConfig) (tracingMetricsExporter, error) {
 	exporter, err := stackdriver.NewExporter(stackdriver.Options{
 		ProjectID:               config.DestinationProjectID,
 		MonitoredResource:       mr,
-		DefaultMonitoringLabels: convertTagsToMonitoringLabels(config.CustomTags),
-		DefaultTraceAttributes:  convertTagsToTraceAttributes(config.CustomTags),
+		DefaultMonitoringLabels: tagsToMonitoringLabels(config.CustomTags),
+		DefaultTraceAttributes:  tagsToTraceAttributes(config.CustomTags),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Stackdriver exporter: %v", err)
@@ -80,7 +80,7 @@ func newStackdriverExporter(config *ObvConfig) (tracingMetricsExporter, error) {
 
 // This method accepts config and exporter; the exporter argument is exposed to
 // assist unit testing of the OpenCensus behavior.
-func startOpenCensus(config *ObvConfig) error {
+func startOpenCensus(config *config) error {
 	// If both tracing and metrics are disabled, there's no point inject default
 	// StatsHandler.
 	if config == nil || (!config.EnableCloudTrace && !config.EnableCloudMonitoring) {

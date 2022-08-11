@@ -39,8 +39,8 @@ const (
 
 var logFilterPatternRegexp = regexp.MustCompile(logFilterPatternRegexpStr)
 
-// LogFilter represents a method logging configuration.
-type LogFilter struct {
+// logFilter represents a method logging configuration.
+type logFilter struct {
 	// Pattern is a string which can select a group of method names. By
 	// default, the Pattern is an empty string, matching no methods.
 	//
@@ -67,11 +67,11 @@ type LogFilter struct {
 	MessageBytes int32 `json:"message_bytes,omitempty"`
 }
 
-// ObvConfig is configuration for observability behaviors. By default, no
+// config is configuration for observability behaviors. By default, no
 // configuration is required for tracing/metrics/logging to function. This
 // config captures the most common knobs for gRPC users. It's always possible to
 // override with explicit config in code.
-type ObvConfig struct {
+type config struct {
 	// EnableCloudTrace represents whether the tracing data upload to
 	// CloudTrace should be enabled or not.
 	EnableCloudTrace bool `json:"enable_cloud_trace,omitempty"`
@@ -88,10 +88,10 @@ type ObvConfig struct {
 	DestinationProjectID string `json:"destination_project_id,omitempty"`
 	// LogFilters is a list of method config. The order matters here - the first
 	// Pattern which matches the current method will apply the associated config
-	// options in the LogFilter. Any other LogFilter that also matches that
-	// comes later will be ignored. So a LogFilter of "*/*" should appear last
+	// options in the logFilter. Any other logFilter that also matches that
+	// comes later will be ignored. So a logFilter of "*/*" should appear last
 	// in this list.
-	LogFilters []LogFilter `json:"log_filters,omitempty"`
+	LogFilters []logFilter `json:"log_filters,omitempty"`
 	// GlobalTraceSamplingRate is the global setting that controls the
 	// probability of a RPC being traced. For example, 0.05 means there is a 5%
 	// chance for a RPC to be traced, 1.0 means trace every call, 0 means don’t
@@ -123,7 +123,7 @@ func fetchDefaultProjectID(ctx context.Context) string {
 	return credentials.ProjectID
 }
 
-func validateFilters(config *ObvConfig) error {
+func validateFilters(config *config) error {
 	for _, filter := range config.LogFilters {
 		if filter.Pattern == "*" {
 			continue
@@ -139,8 +139,8 @@ func validateFilters(config *ObvConfig) error {
 // unmarshalAndVerifyConfig unmarshals a json string representing an
 // observability config into its internal go format, and also verifies the
 // configuration's fields for validity.
-func unmarshalAndVerifyConfig(rawJSON json.RawMessage) (*ObvConfig, error) {
-	var config ObvConfig
+func unmarshalAndVerifyConfig(rawJSON json.RawMessage) (*config, error) {
+	var config config
 	if err := json.Unmarshal(rawJSON, &config); err != nil {
 		return nil, fmt.Errorf("error parsing observability config: %v", err)
 	}
@@ -154,7 +154,7 @@ func unmarshalAndVerifyConfig(rawJSON json.RawMessage) (*ObvConfig, error) {
 	return &config, nil
 }
 
-func parseObservabilityConfig() (*ObvConfig, error) {
+func parseObservabilityConfig() (*config, error) {
 	if fileSystemPath := os.Getenv(envObservabilityConfigJSON); fileSystemPath != "" {
 		content, err := ioutil.ReadFile(fileSystemPath) // TODO: Switch to os.ReadFile once dropped support for go 1.15
 		if err != nil {
@@ -168,7 +168,7 @@ func parseObservabilityConfig() (*ObvConfig, error) {
 	return nil, nil
 }
 
-func ensureProjectIDInObservabilityConfig(ctx context.Context, config *ObvConfig) error {
+func ensureProjectIDInObservabilityConfig(ctx context.Context, config *config) error {
 	if config.DestinationProjectID == "" {
 		// Try to fetch the GCP project id
 		projectID := fetchDefaultProjectID(ctx)

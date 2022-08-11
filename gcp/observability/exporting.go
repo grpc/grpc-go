@@ -44,7 +44,7 @@ type cloudLoggingExporter struct {
 	logger    *gcplogging.Logger
 }
 
-func newCloudLoggingExporter(ctx context.Context, config *ObvConfig) (*cloudLoggingExporter, error) {
+func newCloudLoggingExporter(ctx context.Context, config *config) (*cloudLoggingExporter, error) {
 	c, err := gcplogging.NewClient(ctx, fmt.Sprintf("projects/%v", config.DestinationProjectID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cloudLoggingExporter: %v", err)

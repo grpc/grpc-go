@@ -196,7 +196,7 @@ func (te *test) clientConn() *grpc.ClientConn {
 	return te.cc
 }
 
-func (te *test) enablePluginWithConfig(config *ObvConfig) {
+func (te *test) enablePluginWithConfig(config *config) {
 	// Injects the fake exporter for testing purposes
 	te.fle = &fakeLoggingExporter{t: te.t}
 	defaultLogger = newBinaryLogger(nil)
@@ -207,10 +207,10 @@ func (te *test) enablePluginWithConfig(config *ObvConfig) {
 }
 
 func (te *test) enablePluginWithCaptureAll() {
-	te.enablePluginWithConfig(&ObvConfig{
+	te.enablePluginWithConfig(&config{
 		EnableCloudLogging:   true,
 		DestinationProjectID: "fake",
-		LogFilters: []LogFilter{
+		LogFilters: []logFilter{
 			{
 				Pattern:      "*",
 				HeaderBytes:  infinitySizeBytes,
@@ -222,7 +222,7 @@ func (te *test) enablePluginWithCaptureAll() {
 
 func (te *test) enableOpenCensus() {
 	defaultMetricsReportingInterval = time.Millisecond * 100
-	config := &ObvConfig{
+	config := &config{
 		EnableCloudLogging:      true,
 		EnableCloudTrace:        true,
 		EnableCloudMonitoring:   true,
@@ -520,7 +520,7 @@ func (s) TestLoggingForErrorCall(t *testing.T) {
 func (s) TestEmptyConfig(t *testing.T) {
 	te := newTest(t)
 	defer te.tearDown()
-	te.enablePluginWithConfig(&ObvConfig{})
+	te.enablePluginWithConfig(&config{})
 	te.startServer(&testServer{})
 	tc := testgrpc.NewTestServiceClient(te.clientConn())
 
@@ -552,10 +552,10 @@ func (s) TestOverrideConfig(t *testing.T) {
 	// most specific one. The third filter allows message payload logging, and
 	// others disabling the message payload logging. We should observe this
 	// behavior latter.
-	te.enablePluginWithConfig(&ObvConfig{
+	te.enablePluginWithConfig(&config{
 		EnableCloudLogging:   true,
 		DestinationProjectID: "fake",
-		LogFilters: []LogFilter{
+		LogFilters: []logFilter{
 			{
 				Pattern:      "wont/match",
 				MessageBytes: 0,
@@ -619,10 +619,10 @@ func (s) TestNoMatch(t *testing.T) {
 	// Setting 3 filters, expected to use the second filter. The second filter
 	// allows message payload logging, and others disabling the message payload
 	// logging. We should observe this behavior latter.
-	te.enablePluginWithConfig(&ObvConfig{
+	te.enablePluginWithConfig(&config{
 		EnableCloudLogging:   true,
 		DestinationProjectID: "fake",
-		LogFilters: []LogFilter{
+		LogFilters: []logFilter{
 			{
 				Pattern:      "wont/match",
 				MessageBytes: 0,
@@ -659,10 +659,10 @@ func (s) TestNoMatch(t *testing.T) {
 }
 
 func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
-	config := &ObvConfig{
+	config := &config{
 		EnableCloudLogging:   true,
 		DestinationProjectID: "fake",
-		LogFilters: []LogFilter{
+		LogFilters: []logFilter{
 			{
 				Pattern: ":-)",
 			},
@@ -741,10 +741,10 @@ func (s) TestBothConfigEnvVarsSet(t *testing.T) {
 		t.Fatalf("failed to create config in file system: %v", err)
 	}
 	// This configuration should be ignored, as precedence 2.
-	validConfig := &ObvConfig{
+	validConfig := &config{
 		EnableCloudLogging:   true,
 		DestinationProjectID: "fake",
-		LogFilters: []LogFilter{
+		LogFilters: []logFilter{
 			{
 				Pattern:      "*",
 				HeaderBytes:  infinitySizeBytes,
@@ -788,11 +788,11 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 	defer te.tearDown()
 	fe := &fakeOpenCensusExporter{SeenViews: make(map[string]string), t: te.t}
 
-	defer func(ne func(config *ObvConfig) (tracingMetricsExporter, error)) {
+	defer func(ne func(config *config) (tracingMetricsExporter, error)) {
 		newExporter = ne
 	}(newExporter)
 
-	newExporter = func(config *ObvConfig) (tracingMetricsExporter, error) {
+	newExporter = func(config *config) (tracingMetricsExporter, error) {
 		return fe, nil
 	}
 
@@ -845,11 +845,11 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 // observability configuration and set to two hardcoded values are passed to the
 // function to create an exporter.
 func (s) TestCustomTagsTracingMetrics(t *testing.T) {
-	defer func(ne func(config *ObvConfig) (tracingMetricsExporter, error)) {
+	defer func(ne func(config *config) (tracingMetricsExporter, error)) {
 		newExporter = ne
 	}(newExporter)
 	fe := &fakeOpenCensusExporter{SeenViews: make(map[string]string), t: t}
-	newExporter = func(config *ObvConfig) (tracingMetricsExporter, error) {
+	newExporter = func(config *config) (tracingMetricsExporter, error) {
 		ct := config.CustomTags
 		if len(ct) < 1 {
 			t.Fatalf("less than 2 custom tags sent in")
