@@ -64,7 +64,7 @@ func Start(ctx context.Context) error {
 	}
 
 	// Enabling tracing and metrics via OpenCensus
-	if err := startOpenCensus(config, nil); err != nil {
+	if err := startOpenCensus(config); err != nil {
 		return fmt.Errorf("failed to instrument OpenCensus: %v", err)
 	}
 

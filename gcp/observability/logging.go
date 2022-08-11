@@ -27,7 +27,6 @@ import (
 
 	"github.com/google/uuid"
 	binlogpb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
-	configpb "google.golang.org/grpc/gcp/observability/internal/config"
 	grpclogrecordpb "google.golang.org/grpc/gcp/observability/internal/logging"
 	iblog "google.golang.org/grpc/internal/binarylog"
 )
@@ -248,7 +247,7 @@ func (l *binaryLogger) Close() {
 	}
 }
 
-func validateExistingMethodLoggerConfig(existing *iblog.MethodLoggerConfig, filter *configpb.ObservabilityConfig_LogFilter) bool {
+func validateExistingMethodLoggerConfig(existing *iblog.MethodLoggerConfig, filter logFilter) bool {
 	// In future, we could add more validations. Currently, we only check if the
 	// new filter configs are different than the existing one, if so, we log a
 	// warning.
@@ -258,7 +257,7 @@ func validateExistingMethodLoggerConfig(existing *iblog.MethodLoggerConfig, filt
 	return existing == nil
 }
 
-func createBinaryLoggerConfig(filters []*configpb.ObservabilityConfig_LogFilter) iblog.LoggerConfig {
+func createBinaryLoggerConfig(filters []logFilter) iblog.LoggerConfig {
 	config := iblog.LoggerConfig{
 		Services: make(map[string]*iblog.MethodLoggerConfig),
 		Methods:  make(map[string]*iblog.MethodLoggerConfig),
@@ -296,8 +295,8 @@ func createBinaryLoggerConfig(filters []*configpb.ObservabilityConfig_LogFilter)
 
 // start is the core logic for setting up the custom binary logging logger, and
 // it's also useful for testing.
-func (l *binaryLogger) start(config *configpb.ObservabilityConfig, exporter loggingExporter) error {
-	filters := config.GetLogFilters()
+func (l *binaryLogger) start(config *config, exporter loggingExporter) error {
+	filters := config.LogFilters
 	if len(filters) == 0 || exporter == nil {
 		// Doing nothing is allowed
 		if exporter != nil {
@@ -318,14 +317,14 @@ func (l *binaryLogger) start(config *configpb.ObservabilityConfig, exporter logg
 	return nil
 }
 
-func (l *binaryLogger) Start(ctx context.Context, config *configpb.ObservabilityConfig) error {
-	if config == nil || !config.GetEnableCloudLogging() {
+func (l *binaryLogger) Start(ctx context.Context, config *config) error {
+	if config == nil || !config.EnableCloudLogging {
 		return nil
 	}
-	if config.GetDestinationProjectId() == "" {
+	if config.DestinationProjectID == "" {
 		return fmt.Errorf("failed to enable CloudLogging: empty destination_project_id")
 	}
-	exporter, err := newCloudLoggingExporter(ctx, config.DestinationProjectId)
+	exporter, err := newCloudLoggingExporter(ctx, config)
 	if err != nil {
 		return fmt.Errorf("unable to create CloudLogging exporter: %v", err)
 	}
