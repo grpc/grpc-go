@@ -197,12 +197,9 @@ func (l *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
 		ol = l.originalLogger.GetMethodLogger(methodName)
 	}
 
-	// If user specify a "*" pattern, binarylog will log every single call and
-	// content. This means the exporting RPC's events will be captured. Even if
-	// we batch up the uploads in the exporting RPC, the message content of that
-	// RPC will be logged. Without this exclusion, we may end up with an ever
-	// expanding message field in log entries, and crash the process with OOM.
-	if methodName == "/google.logging.v2.LoggingServiceV2/WriteLogEntries" {
+	// Prevent logging from logging, traces, and metrics API calls.
+	if strings.HasPrefix(methodName, "/google.logging.v2.LoggingServiceV2/") || strings.HasPrefix(methodName, "/google.monitoring.v3.MetricService/") ||
+		strings.HasPrefix(methodName, "/google.devtools.cloudtrace.v2.TraceService/") {
 		return ol
 	}
 
