@@ -48,9 +48,9 @@ type controlChannel struct {
 	// rpcTimeout specifies the timeout for the RouteLookup RPC call. The LB
 	// policy receives this value in its service config.
 	rpcTimeout time.Duration
-	// backToReadyCh is the channel on which an update is pushed when the
-	// connectivity state changes from READY --> TRANSIENT_FAILURE --> READY.
-	backToReadyCh chan struct{}
+	// backToReadyFunc is a callback to be invoked when the connectivity state
+	// changes from READY --> TRANSIENT_FAILURE --> READY.
+	backToReadyFunc func()
 	// throttler in an adaptive throttling implementation used to avoid
 	// hammering the RLS service while it is overloaded or down.
 	throttler adaptiveThrottler
@@ -63,11 +63,11 @@ type controlChannel struct {
 // newControlChannel creates a controlChannel to rlsServerName and uses
 // serviceConfig, if non-empty, as the default service config for the underlying
 // gRPC channel.
-func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Duration, bOpts balancer.BuildOptions, backToReadyCh chan struct{}) (*controlChannel, error) {
+func newControlChannel(rlsServerName, serviceConfig string, rpcTimeout time.Duration, bOpts balancer.BuildOptions, backToReadyFunc func()) (*controlChannel, error) {
 	ctrlCh := &controlChannel{
-		rpcTimeout:    rpcTimeout,
-		backToReadyCh: backToReadyCh,
-		throttler:     newAdaptiveThrottler(),
+		rpcTimeout:      rpcTimeout,
+		backToReadyFunc: backToReadyFunc,
+		throttler:       newAdaptiveThrottler(),
 	}
 	ctrlCh.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-control-channel %p] ", ctrlCh))
 
@@ -171,7 +171,7 @@ func (cc *controlChannel) monitorConnectivityState() {
 
 		if !first {
 			cc.logger.Infof("Control channel back to READY")
-			cc.backToReadyCh <- struct{}{}
+			cc.backToReadyFunc()
 		}
 		first = false
 

@@ -763,3 +763,59 @@ func (wb *wrappedPickFirstBalancer) UpdateState(state balancer.State) {
 	}
 	wb.ClientConn.UpdateState(state)
 }
+
+// tcc wraps a testutils.TestClientConn but stores all state transitions in a
+// slice.
+type tcc struct {
+	*testutils.TestClientConn
+	states []balancer.State
+}
+
+func (t *tcc) UpdateState(bs balancer.State) {
+	t.states = append(t.states, bs)
+	t.TestClientConn.UpdateState(bs)
+}
+
+func (s) TestUpdateStatePauses(t *testing.T) {
+	cc := &tcc{TestClientConn: testutils.NewTestClientConn(t)}
+
+	balFuncs := stub.BalancerFuncs{
+		UpdateClientConnState: func(bd *stub.BalancerData, s balancer.ClientConnState) error {
+			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: nil})
+			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: nil})
+			return nil
+		},
+	}
+	stub.Register("update_state_balancer", balFuncs)
+
+	rtb := rtBuilder.Build(cc, balancer.BuildOptions{})
+
+	configJSON1 := `{
+"children": {
+	"cds:cluster_1":{ "childPolicy": [{"update_state_balancer":""}] }
+}
+}`
+
+	config1, err := rtParser.ParseConfig([]byte(configJSON1))
+	if err != nil {
+		t.Fatalf("failed to parse balancer config: %v", err)
+	}
+
+	// Send the config, and an address with hierarchy path ["cluster_1"].
+	wantAddrs := []resolver.Address{
+		{Addr: testBackendAddrStrs[0], BalancerAttributes: nil},
+	}
+	if err := rtb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: resolver.State{Addresses: []resolver.Address{
+			hierarchy.Set(wantAddrs[0], []string{"cds:cluster_1"}),
+		}},
+		BalancerConfig: config1,
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	// Verify that the only state update is the second one called by the child.
+	if len(cc.states) != 1 || cc.states[0].ConnectivityState != connectivity.Ready {
+		t.Fatalf("cc.states = %v; want [connectivity.Ready]", cc.states)
+	}
+}

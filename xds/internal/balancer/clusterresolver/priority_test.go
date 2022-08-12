@@ -69,13 +69,23 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab2.Build()), nil)
 
 	select {
-	case <-cc.NewPickerCh:
-		t.Fatalf("got unexpected new picker")
 	case <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn")
 	case <-cc.RemoveSubConnCh:
 		t.Fatalf("got unexpected remove SubConn")
 	case <-time.After(defaultTestShortTimeout):
+	}
+
+	select {
+	case p := <-cc.NewPickerCh:
+		// If we do get a new picker, ensure it is still a p1 picker.
+		if err := testutils.IsRoundRobin([]balancer.SubConn{sc1}, subConnFromPicker(p)); err != nil {
+			t.Fatal(err.Error())
+		}
+	default:
+		// No new picker; we were previously using p1 and should still be using
+		// p1, so this is okay.  No need to wait for defaultTestShortTimeout
+		// since we just waited immediately above.
 	}
 
 	// Remove p2, no updates.
@@ -85,14 +95,25 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab3.Build()), nil)
 
 	select {
-	case <-cc.NewPickerCh:
-		t.Fatalf("got unexpected new picker")
 	case <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn")
 	case <-cc.RemoveSubConnCh:
 		t.Fatalf("got unexpected remove SubConn")
 	case <-time.After(defaultTestShortTimeout):
 	}
+
+	select {
+	case p := <-cc.NewPickerCh:
+		// If we do get a new picker, ensure it is still a p1 picker.
+		if err := testutils.IsRoundRobin([]balancer.SubConn{sc1}, subConnFromPicker(p)); err != nil {
+			t.Fatal(err.Error())
+		}
+	default:
+		// No new picker; we were previously using p1 and should still be using
+		// p1, so this is okay.  No need to wait for defaultTestShortTimeout
+		// since we just waited immediately above.
+	}
+
 }
 
 // Lower priority is used when higher priority is not ready.
@@ -147,13 +168,23 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	xdsC.InvokeWatchEDSCallback("", parseEDSRespProtoForTesting(clab2.Build()), nil)
 
 	select {
-	case <-cc.NewPickerCh:
-		t.Fatalf("got unexpected new picker")
 	case <-cc.NewSubConnCh:
 		t.Fatalf("got unexpected new SubConn")
 	case <-cc.RemoveSubConnCh:
 		t.Fatalf("got unexpected remove SubConn")
 	case <-time.After(defaultTestShortTimeout):
+	}
+
+	select {
+	case p := <-cc.NewPickerCh:
+		// If we do get a new picker, ensure it is still a p1 picker.
+		if err := testutils.IsRoundRobin([]balancer.SubConn{sc1}, subConnFromPicker(p)); err != nil {
+			t.Fatal(err.Error())
+		}
+	default:
+		// No new picker; we were previously using p1 and should still be using
+		// p1, so this is okay.  No need to wait for defaultTestShortTimeout
+		// since we just waited immediately above.
 	}
 
 	// Turn down 1, use 2
