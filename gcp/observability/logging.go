@@ -197,15 +197,10 @@ func (l *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
 		ol = l.originalLogger.GetMethodLogger(methodName)
 	}
 
-	tokens := strings.Split(methodName, "/")
-	if len(tokens) == 3 {
-		serviceName := tokens[1]
-		// Prevent logging from logging, traces, and metrics API calls.
-		if serviceName == "google.logging.v2.LoggingServiceV2" || serviceName == "google.monitoring.v3.MetricService" || "google.devtools.cloudtrace.v2.TraceService" {
-			return ol
-		}
-	} else {
-		logger.Infof("Malformed method name: %v", methodName)
+	// Prevent logging from logging, traces, and metrics API calls.
+	if strings.HasPrefix(methodName, "/google.logging.v2.LoggingServiceV2/") || strings.HasPrefix(methodName, "/google.monitoring.v3.MetricService/") ||
+		strings.HasPrefix(methodName, "/google.devtools.cloudtrace.v2.TraceService/") {
+		return ol
 	}
 
 	// If no exporter is specified, there is no point creating a method
