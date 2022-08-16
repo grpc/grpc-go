@@ -265,6 +265,9 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		czData:            new(channelzData),
 		bufferPool:        newBufferPool(),
 	}
+	// Add peer information to the http2server context.
+	t.ctx = peer.NewContext(t.ctx, t.getPeer())
+
 	t.controlBuf = newControlBuffer(t.done)
 	if dynamicWindow {
 		t.bdpEst = &bdpEstimator{
@@ -485,14 +488,10 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	} else {
 		s.ctx, s.cancel = context.WithCancel(t.ctx)
 	}
-	pr := &peer.Peer{
-		Addr: t.remoteAddr,
-	}
-	// Attach Auth info if there is any.
-	if t.authInfo != nil {
-		pr.AuthInfo = t.authInfo
-	}
-	s.ctx = peer.NewContext(s.ctx, pr)
+
+	// Add peer information to the stream context.
+	s.ctx = peer.NewContext(s.ctx, t.getPeer())
+
 	// Attach the received metadata to the context.
 	if len(mdata) > 0 {
 		s.ctx = metadata.NewIncomingContext(s.ctx, mdata)
@@ -1414,6 +1413,17 @@ func (t *http2Server) getOutFlowWindow() int64 {
 	case <-timer.C:
 		return -2
 	}
+}
+
+func (t *http2Server) getPeer() *peer.Peer {
+	pr := &peer.Peer{
+		Addr: t.remoteAddr,
+	}
+	// Attach Auth info if there is any.
+	if t.authInfo != nil {
+		pr.AuthInfo = t.authInfo
+	}
+	return pr
 }
 
 func getJitter(v time.Duration) time.Duration {
