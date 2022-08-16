@@ -90,12 +90,12 @@ func (s) TestOutlierDetection_NoopConfig(t *testing.T) {
 	}
 }
 
-// defaultClientResourcesMultipleBackendsAndOD returns xDS resources which
-// correspond to multiple upstreams, corresponding different backends listening
-// on different localhost:port combinations. The resources also configure an
+// clientResourcesMultipleBackendsAndOD returns xDS resources which correspond
+// to multiple upstreams, corresponding different backends listening on
+// different localhost:port combinations. The resources also configure an
 // Outlier Detection Balancer set up with Failure Percentage Algorithm, which
 // ejects endpoints based on failure rate.
-func defaultClientResourcesMultipleBackendsAndOD(params e2e.ResourceParams, ports []uint32) e2e.UpdateOptions {
+func clientResourcesMultipleBackendsAndOD(params e2e.ResourceParams, ports []uint32) e2e.UpdateOptions {
 	routeConfigName := "route-" + params.DialTarget
 	clusterName := "cluster-" + params.DialTarget
 	endpointsName := "endpoints-" + params.DialTarget
@@ -103,12 +103,12 @@ func defaultClientResourcesMultipleBackendsAndOD(params e2e.ResourceParams, port
 		NodeID:    params.NodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(params.DialTarget, routeConfigName)},
 		Routes:    []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(routeConfigName, params.DialTarget, clusterName)},
-		Clusters:  []*v3clusterpb.Cluster{defaultClusterWithOutlierDetection(clusterName, endpointsName, params.SecLevel)},
+		Clusters:  []*v3clusterpb.Cluster{clusterWithOutlierDetection(clusterName, endpointsName, params.SecLevel)},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointsName, params.Host, ports)},
 	}
 }
 
-func defaultClusterWithOutlierDetection(clusterName, edsServiceName string, secLevel e2e.SecurityLevel) *v3clusterpb.Cluster {
+func clusterWithOutlierDetection(clusterName, edsServiceName string, secLevel e2e.SecurityLevel) *v3clusterpb.Cluster {
 	cluster := e2e.DefaultCluster(clusterName, edsServiceName, secLevel)
 	cluster.OutlierDetection = &v3clusterpb.OutlierDetection{
 		Interval:                       &durationpb.Duration{Nanos: 50000000}, // .5 seconds
@@ -140,7 +140,7 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 	managementServer, nodeID, _, resolver, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
 
-	// counters for how many times backends got called
+	// Counters for how many times backends got called.
 	var count1, count2, count3 int
 
 	// Working backend 1.
@@ -162,6 +162,7 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 		Address: "localhost:0",
 	})
 	defer cleanup2()
+
 	// Backend 3 that will always return an error and eventually ejected.
 	port3, cleanup3 := startTestService(t, &stubserver.StubServer{
 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) {
@@ -173,13 +174,13 @@ func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
 	defer cleanup3()
 
 	const serviceName = "my-service-client-side-xds"
-	resources := defaultClientResourcesMultipleBackendsAndOD(e2e.ResourceParams{
+	resources := clientResourcesMultipleBackendsAndOD(e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",
 		SecLevel:   e2e.SecurityLevelNone,
 	}, []uint32{port1, port2, port3})
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*100)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)

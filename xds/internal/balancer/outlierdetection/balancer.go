@@ -209,7 +209,8 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 		return balancer.ErrBadResolverState
 	}
 
-	// Reject whole config if any errors, don't persist it for later
+	// Reject whole config if child policy doesn't exist, don't persist it for
+	// later.
 	bb := balancer.Get(lbCfg.ChildPolicy.Name)
 	if bb == nil {
 		return fmt.Errorf("outlier detection: child balancer %q not registered", lbCfg.ChildPolicy.Name)
