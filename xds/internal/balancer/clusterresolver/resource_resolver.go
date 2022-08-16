@@ -192,13 +192,15 @@ func (rr *resourceResolver) resolveNow() {
 
 func (rr *resourceResolver) stop() {
 	rr.mu.Lock()
-	defer rr.mu.Unlock()
-	for dm, r := range rr.childrenMap {
-		delete(rr.childrenMap, dm)
-		r.r.stop()
-	}
+	cm := rr.childrenMap
+	rr.childrenMap = make(map[discoveryMechanismKey]resolverMechanismTuple)
 	rr.mechanisms = nil
 	rr.children = nil
+	rr.mu.Unlock()
+
+	for _, r := range cm {
+		r.r.stop()
+	}
 }
 
 // generate collects all the updates from all the resolvers, and push the
