@@ -40,7 +40,10 @@ import (
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
 
-var logger = grpclog.Component("orca-backend-metrics")
+var (
+	logger            = grpclog.Component("orca-backend-metrics")
+	joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
+)
 
 // CallMetricsServerOption returns a server option which enables the reporting
 // of per-RPC custom backend metrics for unary RPCs.
@@ -58,30 +61,34 @@ var logger = grpclog.Component("orca-backend-metrics")
 // binary-encoded [ORCA LoadReport] protobuf message, with the metadata key
 // being set be "endpoint-load-metrics-bin".
 //
-// [ORCA LoadReport]: (https://github.com/cncf/xds/blob/main/xds/data/orca/v3/orca_load_report.proto#L15)
+// [ORCA LoadReport]: https://github.com/cncf/xds/blob/main/xds/data/orca/v3/orca_load_report.proto#L15
 func CallMetricsServerOption() grpc.ServerOption {
-	unaryInt := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		r := &CallMetricRecorder{recorder: newMetricRecorder()}
-		ctxWithRecorder := setCallMetricRecorder(ctx, r)
-		resp, err := handler(ctxWithRecorder, req)
-		if err2 := r.recorder.setTrailerMetadata(ctx); err2 != nil {
-			logger.Warning(err2)
-		}
-		return resp, err
+	return joinServerOptions(grpc.ChainUnaryInterceptor(unaryInt), grpc.ChainStreamInterceptor(streamInt))
+}
+
+func unaryInt(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	recorder := newMetricRecorder()
+	r := &CallMetricRecorder{MetricSetter: recorder}
+	ctxWithRecorder := setCallMetricRecorder(ctx, r)
+	resp, err := handler(ctxWithRecorder, req)
+	if err2 := recorder.setTrailerMetadata(ctx); err2 != nil {
+		logger.Warning(err2)
 	}
-	streamInt := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		r := &CallMetricRecorder{recorder: newMetricRecorder()}
-		ctxWithRecorder := setCallMetricRecorder(ss.Context(), r)
-		err := handler(srv, &wrappedStream{
-			ServerStream: ss,
-			ctx:          ctxWithRecorder,
-		})
-		if err2 := r.recorder.setTrailerMetadata(ss.Context()); err2 != nil {
-			logger.Warning(err2)
-		}
-		return err
+	return resp, err
+}
+
+func streamInt(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	recorder := newMetricRecorder()
+	r := &CallMetricRecorder{MetricSetter: recorder}
+	ctxWithRecorder := setCallMetricRecorder(ss.Context(), r)
+	err := handler(srv, &wrappedStream{
+		ServerStream: ss,
+		ctx:          ctxWithRecorder,
+	})
+	if err2 := recorder.setTrailerMetadata(ss.Context()); err2 != nil {
+		logger.Warning(err2)
 	}
-	return internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)(grpc.ChainUnaryInterceptor(unaryInt), grpc.ChainStreamInterceptor(streamInt))
+	return err
 }
 
 // wrappedStream wraps the grpc.ServerStream received by the streaming
@@ -111,4 +118,36 @@ func ToLoadReport(md metadata.MD) (*v3orcapb.OrcaLoadReport, error) {
 		return nil, fmt.Errorf("failed to unmarshal load report found in metadata: %v", err)
 	}
 	return ret, nil
+}
+
+// MetricSetter is the interface that defines methods for recording measurements
+// for metrics, useful in both per-call and out-of-band scenarios.
+type MetricSetter interface {
+	// SetRequestCostMetric records a measurement for a request cost metric,
+	// uniquely identifiable by name.
+	SetRequestCostMetric(name string, val float64)
+
+	// SetUtilizationMetric records a measurement for a utilization metric,
+	// uniquely identifiable by name.
+	SetUtilizationMetric(name string, val float64)
+
+	// SetCPUUtilizationMetric records a measurement for CPU utilization.
+	SetCPUUtilizationMetric(val float64)
+
+	// SetMemoryUtilizationMetric records a measurement for memory utilization.
+	SetMemoryUtilizationMetric(val float64)
+}
+
+// MetricEraser is the interface that defines methods for erasing previously
+// recording measurements for metrics, useful only in out-of-band scenarios.
+type MetricEraser interface {
+	// DeleteCPUUtilizationMetric deletes a previously recorded measurement for
+	// CPU utilization.
+	DeleteCPUUtilizationMetric()
+	// DeleteMemoryUtilizationMetric deletes a previously recorded measurement for
+	// memory utilization.
+	DeleteMemoryUtilizationMetric()
+	// DeleteUtilizationMetric deletes a previously recorded measurement for a
+	// utilization metric uniquely identifiable by name.
+	DeleteUtilizationMetric(name string)
 }

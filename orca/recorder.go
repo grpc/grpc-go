@@ -30,8 +30,8 @@ import (
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
 
-// metricRecorder is the base implementation of a metric recorder which is used
-// by both call and out-of-band metric recorders.
+// metricRecorder provides the functionality to record and report metrics, and
+// is used by both call and out-of-band metric recorders.
 //
 // Safe for concurrent use.
 type metricRecorder struct {
@@ -80,7 +80,7 @@ func (m *metricRecorder) DeleteMemoryUtilizationMetric() {
 	m.mu.Unlock()
 }
 
-func (m *metricRecorder) setRequestCost(name string, val float64) {
+func (m *metricRecorder) SetRequestCostMetric(name string, val float64) {
 	m.mu.Lock()
 	m.requestCost[name] = val
 	m.mu.Unlock()
@@ -99,21 +99,6 @@ func (m *metricRecorder) SetUtilizationMetric(name string, val float64) {
 func (m *metricRecorder) DeleteUtilizationMetric(name string) {
 	m.mu.Lock()
 	delete(m.utilization, name)
-	m.mu.Unlock()
-}
-
-// SetAllUtilizationMetrics records a measurement for a utilization metric
-// uniquely identifiable by name.
-//
-// A copy of the input map is made to ensure that any modifications to it does
-// not interfere with the values stored in the recorder, and vice versa.
-func (m *metricRecorder) SetAllUtilizationMetrics(kvs map[string]float64) {
-	utils := make(map[string]float64, len(kvs))
-	for k, v := range kvs {
-		utils[k] = v
-	}
-	m.mu.Lock()
-	m.utilization = utils
 	m.mu.Unlock()
 }
 

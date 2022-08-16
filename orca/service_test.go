@@ -42,10 +42,7 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-const (
-	queueSizeMetricKey = "test-service-queue-size"
-	requestsMetricKey  = "test-service-requests"
-)
+const requestsMetricKey = "test-service-requests"
 
 // An implementation of grpc_testing.TestService for the purpose of this test.
 // We cannot use the StubServer approach here because we need to register the
@@ -63,7 +60,6 @@ func (t *testServiceImpl) UnaryCall(context.Context, *testpb.SimpleRequest) (*te
 	t.requests++
 	t.mu.Unlock()
 
-	t.orcaSrv.SetAllUtilizationMetrics(map[string]float64{queueSizeMetricKey: 10.0})
 	t.orcaSrv.SetUtilizationMetric(requestsMetricKey, float64(t.requests))
 	t.orcaSrv.SetCPUUtilizationMetric(50.0)
 	t.orcaSrv.SetMemoryUtilizationMetric(99.0)
@@ -71,7 +67,6 @@ func (t *testServiceImpl) UnaryCall(context.Context, *testpb.SimpleRequest) (*te
 }
 
 func (t *testServiceImpl) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	t.orcaSrv.DeleteUtilizationMetric(queueSizeMetricKey)
 	t.orcaSrv.DeleteUtilizationMetric(requestsMetricKey)
 	t.orcaSrv.DeleteCPUUtilizationMetric()
 	t.orcaSrv.DeleteMemoryUtilizationMetric()
@@ -157,10 +152,7 @@ func (s) Test_E2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 		wantProto := &v3orcapb.OrcaLoadReport{
 			CpuUtilization: 50.0,
 			MemUtilization: 99.0,
-			Utilization: map[string]float64{
-				queueSizeMetricKey: 10.0,
-				requestsMetricKey:  100.0,
-			},
+			Utilization:    map[string]float64{requestsMetricKey: 100.0},
 		}
 		gotProto, err := stream.Recv()
 		if err != nil {

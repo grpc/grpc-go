@@ -41,8 +41,10 @@ import (
 // [ORCA]: https://github.com/cncf/xds/blob/main/xds/service/orca/v3/orca.proto
 type Service struct {
 	v3orcaservicegrpc.UnimplementedOpenRcaServiceServer
-	*metricRecorder
+	MetricSetter
+	MetricEraser
 
+	recorder             *metricRecorder
 	minReportingInterval time.Duration
 }
 
@@ -70,12 +72,15 @@ func Register(s grpc.ServiceRegistrar, opts ServiceOptions) (*Service, error) {
 	if opts.MinReportingInterval < internal.MinORCAReportingInterval {
 		opts.MinReportingInterval = internal.MinORCAReportingInterval
 	}
-	server := &Service{
+	recorder := newMetricRecorder()
+	service := &Service{
+		MetricSetter:         recorder,
+		MetricEraser:         recorder,
+		recorder:             recorder,
 		minReportingInterval: opts.MinReportingInterval,
-		metricRecorder:       newMetricRecorder(),
 	}
-	v3orcaservicegrpc.RegisterOpenRcaServiceServer(srv, server)
-	return server, nil
+	v3orcaservicegrpc.RegisterOpenRcaServiceServer(srv, service)
+	return service, nil
 }
 
 func (s *Service) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadReportRequest) time.Duration {
@@ -88,14 +93,14 @@ func (s *Service) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadRepo
 		return s.minReportingInterval
 	}
 	if interval.AsDuration() < s.minReportingInterval {
-		logger.Warningf("Received reporting interval %q is lesser than configured minimum: %v. Using default: %s", interval, s.minReportingInterval)
+		logger.Warningf("Received reporting interval %q is less than configured minimum: %v. Using default: %s", interval, s.minReportingInterval)
 		return s.minReportingInterval
 	}
 	return interval.AsDuration()
 }
 
 func (s *Service) sendMetricsResponse(stream v3orcaservicegrpc.OpenRcaService_StreamCoreMetricsServer) error {
-	return stream.Send(s.metricRecorder.toLoadReportProto())
+	return stream.Send(s.recorder.toLoadReportProto())
 }
 
 // StreamCoreMetrics streams custom backend metrics injected by the server
@@ -121,4 +126,11 @@ func (s *Service) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, 
 			}
 		}
 	}
+}
+
+// SetRequestCostMetric method of the MetricSetter interface is overridden here,
+// and changed to be a no-op since request cost metrics are supported only for
+// per-call metrics.
+func (s *Service) SetRequestCostMetric(name string, val float64) {
+	logger.Warning("Request cost metrics are supported only for per-call metrics")
 }

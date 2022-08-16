@@ -35,39 +35,13 @@ func setCallMetricRecorder(ctx context.Context, r *CallMetricRecorder) context.C
 // the server application.
 //
 // An instance of this type is created for every RPC when custom backend metrics
-// reporting is enabled by the installation of a server interceptor returned by
-// EnableReportingForUnaryRPCs() or EnableReportingForStreamingRPCs(). A
-// reference to the created instance can be retrieved by the server application
-// using a call to GetCallMetricRecorder().
+// reporting is enabled. A reference to the created instance can be retrieved
+// by the server application using a call to GetCallMetricRecorder().
 //
 // Recording the same metric multiple times overrides the previously recorded
 // values. The methods can be called at any time during an RPC lifecycle.
 //
 // Safe for concurrent use.
 type CallMetricRecorder struct {
-	recorder *metricRecorder
-}
-
-// SetRequestCostMetric records a measurement for a request cost metric,
-// uniquely identifiable by name, for the RPC.
-func (c *CallMetricRecorder) SetRequestCostMetric(name string, val float64) {
-	c.recorder.setRequestCost(name, val)
-}
-
-// SetUtilizationMetric records a measurement for a utilization metric, uniquely
-// identifiable by name, for the RPC.
-func (c *CallMetricRecorder) SetUtilizationMetric(name string, val float64) {
-	c.recorder.SetUtilizationMetric(name, val)
-}
-
-// SetCPUUtilizationMetric records a measurement for the CPU utilization metric
-// for the RPC.
-func (c *CallMetricRecorder) SetCPUUtilizationMetric(val float64) {
-	c.recorder.SetCPUUtilizationMetric(val)
-}
-
-// SetMemoryUtilizationMetric records a measurement for the memory utilization
-// metric for the RPC.
-func (c *CallMetricRecorder) SetMemoryUtilizationMetric(val float64) {
-	c.recorder.SetMemoryUtilizationMetric(val)
+	MetricSetter
 }
