@@ -23,9 +23,8 @@ import (
 )
 
 type bucket struct {
-	numSuccesses  uint32
-	numFailures   uint32
-	requestVolume uint32 // numSuccesses + numFailures, needed because this number will be used in interval timer algorithm
+	numSuccesses uint32
+	numFailures  uint32
 }
 
 func newCallCounter() *callCounter {
@@ -43,7 +42,7 @@ type callCounter struct {
 	// activeBucket updates every time a call finishes (from picker passed to
 	// Client Conn), so protect pointer read with atomic load of unsafe.Pointer
 	// so picker does not have to grab a mutex per RPC, the critical path.
-	activeBucket   unsafe.Pointer
+	activeBucket   unsafe.Pointer // bucket
 	inactiveBucket *bucket
 }
 
@@ -57,23 +56,11 @@ func (cc *callCounter) clear() {
 // failures since the last time the timer triggered. Those numbers are used to
 // evaluate the ejection criteria." - A50
 func (cc *callCounter) swap() {
-	ab := (*bucket)(atomic.LoadPointer(&cc.activeBucket))
-	// Don't do it exactly like defined but the same logically, as picker reads
-	// ref to active bucket so instead of swapping the pointers (inducing race
-	// conditions where picker writes to inactive bucket which is being used for
-	// outlier detection algorithm, copy active bucket to new memory on heap,
-	// picker updates which race simply write to deprecated heap memory
-	// activeBucket used to point to). The other options is to do this as
-	// defined, swap the pointers and have atomic reads of the Inactive Bucket
-	// in interval timer algorithm, but I think this is cleaner in regards to
-	// dealing with picker race condition. See the wrappedPicker explanation for
-	// the write to activeBucket for a more in depth explanation.
+	ib := cc.inactiveBucket
+	*ib = bucket{}
+	ab := (*bucket)(atomic.SwapPointer(&cc.activeBucket, unsafe.Pointer(ib)))
 	cc.inactiveBucket = &bucket{
-		numSuccesses:  atomic.LoadUint32(&ab.numSuccesses),
-		numFailures:   atomic.LoadUint32(&ab.numFailures),
-		requestVolume: atomic.LoadUint32(&ab.requestVolume),
+		numSuccesses: atomic.LoadUint32(&ab.numSuccesses),
+		numFailures:  atomic.LoadUint32(&ab.numFailures),
 	}
-	atomic.StorePointer(&cc.activeBucket, unsafe.Pointer(&bucket{}))
-	// end result, same as in gRFC: the inactive bucket contains the number of
-	// successes and failures since the last time the timer triggered.
 }

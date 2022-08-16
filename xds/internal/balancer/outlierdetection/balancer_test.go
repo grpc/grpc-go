@@ -976,9 +976,8 @@ func (s) TestPicker(t *testing.T) {
 			t.Fatal("map entry for address: address1 not present in map")
 		}
 		bucketWant := &bucket{
-			numSuccesses:  1,
-			numFailures:   1,
-			requestVolume: 2,
+			numSuccesses: 1,
+			numFailures:  1,
 		}
 		if diff := cmp.Diff((*bucket)(addrInfo.callCounter.activeBucket), bucketWant); diff != "" { // no need for atomic read because not concurrent with Done() call from picker
 			t.Fatalf("callCounter is different than expected, diff (-got +want): %v", diff)
@@ -1051,9 +1050,8 @@ func (s) TestPicker(t *testing.T) {
 		// in between ClientConn updates and the picker should not count, as the
 		// outlier detection balancer is configured with a no-op configuration.
 		bucketWant := &bucket{
-			numSuccesses:  1,
-			numFailures:   1,
-			requestVolume: 2,
+			numSuccesses: 1,
+			numFailures:  1,
 		}
 		if diff := cmp.Diff((*bucket)(addrInfo.callCounter.activeBucket), bucketWant); diff != "" { // no need for atomic read because not concurrent with Done() call
 			od.mu.Unlock()
@@ -1105,9 +1103,8 @@ func (s) TestPicker(t *testing.T) {
 		// in between ClientConn updates and the picker should not count, as the
 		// outlier detection balancer is configured with a no-op configuration.
 		bucketWant := &bucket{
-			numSuccesses:  1,
-			numFailures:   1,
-			requestVolume: 2,
+			numSuccesses: 1,
+			numFailures:  1,
 		}
 		if diff := cmp.Diff((*bucket)(addrInfo.callCounter.activeBucket), bucketWant); diff != "" { // no need for atomic read because not concurrent with Done() call
 			t.Fatalf("callCounter is different than expected, diff (-got +want): %v", diff)

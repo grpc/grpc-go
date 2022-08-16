@@ -431,7 +431,6 @@ func incrementCounter(sc balancer.SubConn, info balancer.DoneInfo) {
 	} else {
 		atomic.AddUint32(&ab.numFailures, 1)
 	}
-	atomic.AddUint32(&ab.requestVolume, 1)
 }
 
 func (b *outlierDetectionBalancer) UpdateState(s balancer.State) {
@@ -732,7 +731,9 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 func (b *outlierDetectionBalancer) numAddrsWithAtLeastRequestVolume() uint32 {
 	var numAddrs uint32
 	for _, addrInfo := range b.addrs {
-		if addrInfo.callCounter.inactiveBucket.requestVolume >= b.cfg.SuccessRateEjection.RequestVolume {
+		bucket := addrInfo.callCounter.inactiveBucket
+		rv := bucket.numSuccesses + bucket.numFailures
+		if rv >= b.cfg.SuccessRateEjection.RequestVolume {
 			numAddrs++
 		}
 	}
@@ -745,7 +746,9 @@ func (b *outlierDetectionBalancer) numAddrsWithAtLeastRequestVolume() uint32 {
 func (b *outlierDetectionBalancer) addrsWithAtLeastRequestVolume() []*addressInfo {
 	var addrs []*addressInfo
 	for _, addrInfo := range b.addrs {
-		if addrInfo.callCounter.inactiveBucket.requestVolume >= b.cfg.SuccessRateEjection.RequestVolume {
+		bucket := addrInfo.callCounter.inactiveBucket
+		rv := bucket.numSuccesses + bucket.numFailures
+		if rv >= b.cfg.SuccessRateEjection.RequestVolume {
 			addrs = append(addrs, addrInfo)
 		}
 	}
@@ -758,14 +761,16 @@ func (b *outlierDetectionBalancer) meanAndStdDev(addrs []*addressInfo) (float64,
 	var totalFractionOfSuccessfulRequests float64
 	var mean float64
 	for _, addrInfo := range addrs {
-		ib := addrInfo.callCounter.inactiveBucket
-		totalFractionOfSuccessfulRequests += float64(ib.numSuccesses) / float64(ib.requestVolume)
+		bucket := addrInfo.callCounter.inactiveBucket
+		rv := bucket.numSuccesses + bucket.numFailures
+		totalFractionOfSuccessfulRequests += float64(bucket.numSuccesses) / float64(rv)
 	}
 	mean = totalFractionOfSuccessfulRequests / float64(len(addrs))
 	var sumOfSquares float64
 	for _, addrInfo := range addrs {
-		ib := addrInfo.callCounter.inactiveBucket
-		devFromMean := (float64(ib.numSuccesses) / float64(ib.requestVolume)) - mean
+		bucket := addrInfo.callCounter.inactiveBucket
+		rv := bucket.numSuccesses + bucket.numFailures
+		devFromMean := (float64(bucket.numSuccesses) / float64(rv)) - mean
 		sumOfSquares += devFromMean * devFromMean
 	}
 	variance := sumOfSquares / float64(len(addrs))
@@ -787,7 +792,7 @@ func (b *outlierDetectionBalancer) successRateAlgorithm() {
 		if float64(b.numAddrsEjected)/float64(len(b.addrs))*100 > float64(b.cfg.MaxEjectionPercent) {
 			return
 		}
-		successRate := float64(bucket.numSuccesses) / float64(bucket.requestVolume)
+		successRate := float64(bucket.numSuccesses) / float64(bucket.numSuccesses+bucket.numFailures)
 		if successRate < (mean - stddev*(float64(ejectionCfg.StdevFactor)/1000)) {
 			if uint32(grpcrand.Int31n(100)) < ejectionCfg.EnforcementPercentage {
 				b.ejectAddress(addrInfo)
@@ -810,10 +815,11 @@ func (b *outlierDetectionBalancer) failurePercentageAlgorithm() {
 		if float64(b.numAddrsEjected)/float64(len(b.addrs))*100 > float64(b.cfg.MaxEjectionPercent) {
 			return
 		}
-		if bucket.requestVolume < ejectionCfg.RequestVolume {
+		rv := bucket.numSuccesses + bucket.numFailures
+		if rv < ejectionCfg.RequestVolume {
 			continue
 		}
-		failurePercentage := (float64(bucket.numFailures) / float64(bucket.requestVolume)) * 100
+		failurePercentage := (float64(bucket.numFailures) / float64(rv)) * 100
 		if failurePercentage > float64(b.cfg.FailurePercentageEjection.Threshold) {
 			if uint32(grpcrand.Int31n(100)) < ejectionCfg.EnforcementPercentage {
 				b.ejectAddress(addrInfo)
