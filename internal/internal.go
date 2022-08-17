@@ -80,10 +80,6 @@ var (
 	// JoinServerOptions combines the server options passed as arguments into a
 	// single server option.
 	JoinServerOptions interface{} // func(...grpc.ServerOption) grpc.ServerOption
-	// MinORCAReportingInterval is the absolute minimum value supported for
-	// out-of-band metrics reporting from the ORCA service implementation
-	// provided by the orca package.
-	MinORCAReportingInterval = 30 * time.Second
 
 	// NewXDSResolverWithConfigForTesting creates a new xds resolver builder using
 	// the provided xds bootstrap config instead of the global configuration from

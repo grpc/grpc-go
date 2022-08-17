@@ -45,16 +45,18 @@ var (
 	joinServerOptions = internal.JoinServerOptions.(func(...grpc.ServerOption) grpc.ServerOption)
 )
 
+const trailerMetadataKey = "endpoint-load-metrics-bin"
+
 // CallMetricsServerOption returns a server option which enables the reporting
-// of per-RPC custom backend metrics for unary RPCs.
+// of per-RPC custom backend metrics for unary and streaming RPCs.
 //
 // Server applications interested in injecting custom backend metrics should
 // pass the server option returned from this function as the first argument to
 // grpc.NewServer().
 //
 // Subsequently, server RPC handlers can retrieve a reference to the RPC
-// specific custom metrics recorder [CallMetricRecorder] to be used, via a call
-// to GetCallMetricRecorder(), and inject custom metrics at any time during the
+// specific custom metrics recorder [MetricSetter] to be used, via a call to
+// MetricSetterFromContext(), and inject custom metrics at any time during the
 // RPC lifecycle.
 //
 // The injected custom metrics will be sent as part of trailer metadata, as a
@@ -68,27 +70,40 @@ func CallMetricsServerOption() grpc.ServerOption {
 
 func unaryInt(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	recorder := newMetricRecorder()
-	r := &CallMetricRecorder{MetricSetter: recorder}
-	ctxWithRecorder := setCallMetricRecorder(ctx, r)
+	ctxWithRecorder := newContextWithMetricSetter(ctx, recorder)
 	resp, err := handler(ctxWithRecorder, req)
-	if err2 := recorder.setTrailerMetadata(ctx); err2 != nil {
-		logger.Warning(err2)
-	}
+	setTrailerMetadata(ctx, recorder.toLoadReportProto())
 	return resp, err
 }
 
 func streamInt(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	recorder := newMetricRecorder()
-	r := &CallMetricRecorder{MetricSetter: recorder}
-	ctxWithRecorder := setCallMetricRecorder(ss.Context(), r)
+	ctxWithRecorder := newContextWithMetricSetter(ss.Context(), recorder)
 	err := handler(srv, &wrappedStream{
 		ServerStream: ss,
 		ctx:          ctxWithRecorder,
 	})
-	if err2 := recorder.setTrailerMetadata(ss.Context()); err2 != nil {
-		logger.Warning(err2)
-	}
+	setTrailerMetadata(ss.Context(), recorder.toLoadReportProto())
 	return err
+}
+
+// setTrailerMetadata adds a trailer metadata entry with key being set to
+// `trailerMetadataKey` and value being set to the binary-encoded
+// orca.OrcaLoadReport protobuf message.
+//
+// This function is called from the unary and streaming interceptors defined
+// above. Any errors encountered here are not propagated to the caller because
+// they are ignored there. Hence we simply log any errors encountered here at
+// warning level, and return nothing.
+func setTrailerMetadata(ctx context.Context, loadReport *v3orcapb.OrcaLoadReport) {
+	b, err := proto.Marshal(loadReport)
+	if err != nil {
+		logger.Warningf("failed to marshal load report: %v", err)
+		return
+	}
+	if err := grpc.SetTrailer(ctx, metadata.Pairs(trailerMetadataKey, string(b))); err != nil {
+		logger.Warningf("failed to set trailer metadata: %v", err)
+	}
 }
 
 // wrappedStream wraps the grpc.ServerStream received by the streaming
@@ -136,6 +151,22 @@ type MetricSetter interface {
 
 	// SetMemoryUtilizationMetric records a measurement for memory utilization.
 	SetMemoryUtilizationMetric(val float64)
+}
+
+type metricSetterCtxKey struct{}
+
+// MetricSetterFromContext returns the RPC specific custom metrics recorder
+// [MetricSetter] embedded in the provided RPC context.
+//
+// Returns nil if no custom metrics recorder is found in the provided context,
+// which will be the case when custom metrics reporting is not enabled.
+func MetricSetterFromContext(ctx context.Context) MetricSetter {
+	r, _ := ctx.Value(metricSetterCtxKey{}).(MetricSetter)
+	return r
+}
+
+func newContextWithMetricSetter(ctx context.Context, s MetricSetter) context.Context {
+	return context.WithValue(ctx, metricSetterCtxKey{}, s)
 }
 
 // MetricEraser is the interface that defines methods for erasing previously

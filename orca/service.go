@@ -24,12 +24,17 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/orca/internal"
 	"google.golang.org/grpc/status"
 
 	v3orcaservicegrpc "github.com/cncf/xds/go/xds/service/orca/v3"
 	v3orcaservicepb "github.com/cncf/xds/go/xds/service/orca/v3"
 )
+
+// minReportingInterval is the absolute minimum value supported for
+// out-of-band metrics reporting from the ORCA service implementation
+// provided by the orca package.
+const minReportingInterval = 30 * time.Second
 
 // Service provides an implementation of the OpenRcaService as defined in the
 // [ORCA] service protos.
@@ -69,8 +74,14 @@ func Register(s grpc.ServiceRegistrar, opts ServiceOptions) (*Service, error) {
 		return nil, fmt.Errorf("concrete type of provided grpc.ServiceRegistrar is %T, only supported type is %T", s, &grpc.Server{})
 	}
 
-	if opts.MinReportingInterval < internal.MinORCAReportingInterval {
-		opts.MinReportingInterval = internal.MinORCAReportingInterval
+	// The default minimum supported reporting interval value can be overridden
+	// for testing purposes through the orca internal package.
+	defaultMin := minReportingInterval
+	if internal.MinReportingIntervalForTesting != nil {
+		defaultMin = internal.MinReportingIntervalForTesting()
+	}
+	if opts.MinReportingInterval < defaultMin {
+		opts.MinReportingInterval = defaultMin
 	}
 	recorder := newMetricRecorder()
 	service := &Service{

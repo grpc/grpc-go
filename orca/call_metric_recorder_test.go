@@ -59,8 +59,8 @@ func (s) Test_E2E_CustomBackendMetrics_PerRPC_Unary(t *testing.T) {
 
 	// An interceptor which injects custom backend metrics.
 	injectingInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		recorder, ok := orca.GetCallMetricRecorder(ctx)
-		if !ok {
+		recorder := orca.MetricSetterFromContext(ctx)
+		if recorder == nil {
 			err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 			t.Error(err)
 			return nil, err
@@ -77,8 +77,8 @@ func (s) Test_E2E_CustomBackendMetrics_PerRPC_Unary(t *testing.T) {
 	// one of the values injected above, by the interceptor.
 	srv := stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			recorder, ok := orca.GetCallMetricRecorder(ctx)
-			if !ok {
+			recorder := orca.MetricSetterFromContext(ctx)
+			if recorder == nil {
 				err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 				t.Error(err)
 				return nil, err
@@ -137,8 +137,8 @@ func (s) Test_E2E_CustomBackendMetrics_PerRPC_Streaming(t *testing.T) {
 
 	// An interceptor which injects custom backend metrics.
 	injectingInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		recorder, ok := orca.GetCallMetricRecorder(ss.Context())
-		if !ok {
+		recorder := orca.MetricSetterFromContext(ss.Context())
+		if recorder == nil {
 			err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 			t.Error(err)
 			return err
@@ -155,8 +155,8 @@ func (s) Test_E2E_CustomBackendMetrics_PerRPC_Streaming(t *testing.T) {
 	// one of the values injected above, by the interceptor.
 	srv := stubserver.StubServer{
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			recorder, ok := orca.GetCallMetricRecorder(stream.Context())
-			if !ok {
+			recorder := orca.MetricSetterFromContext(stream.Context())
+			if recorder == nil {
 				err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 				t.Error(err)
 				return err

@@ -29,10 +29,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/orca"
+	"google.golang.org/grpc/orca/internal"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
@@ -87,9 +87,9 @@ func (s) Test_E2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 
 	// Override the min reporting interval in the internal package.
 	const shortReportingInterval = 100 * time.Millisecond
-	origMinReportingInterval := internal.MinORCAReportingInterval
-	internal.MinORCAReportingInterval = shortReportingInterval
-	defer func() { internal.MinORCAReportingInterval = origMinReportingInterval }()
+	origMinReportingInterval := internal.MinReportingIntervalForTesting
+	internal.MinReportingIntervalForTesting = func() time.Duration { return shortReportingInterval }
+	defer func() { internal.MinReportingIntervalForTesting = origMinReportingInterval }()
 
 	// Register the OpenRCAService with a very short metrics reporting interval.
 	s := grpc.NewServer()

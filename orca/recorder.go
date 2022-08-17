@@ -19,13 +19,7 @@
 package orca
 
 import (
-	"context"
-	"fmt"
 	"sync"
-
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/protobuf/proto"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
@@ -121,20 +115,4 @@ func (m *metricRecorder) toLoadReportProto() *v3orcapb.OrcaLoadReport {
 		RequestCost:    cost,
 		Utilization:    util,
 	}
-}
-
-const trailerMetadataKey = "endpoint-load-metrics-bin"
-
-// setTrailerMetadata adds a trailer metadata entry with key being set to
-// `trailerMetadataKey` and value being set to the binary-encoded
-// orca.OrcaLoadReport protobuf message.
-func (m *metricRecorder) setTrailerMetadata(ctx context.Context) error {
-	b, err := proto.Marshal(m.toLoadReportProto())
-	if err != nil {
-		return fmt.Errorf("failed to marshal load report: %v", err)
-	}
-	if err := grpc.SetTrailer(ctx, metadata.Pairs(trailerMetadataKey, string(b))); err != nil {
-		return fmt.Errorf("failed to set trailer metadata: %v", err)
-	}
-	return nil
 }
