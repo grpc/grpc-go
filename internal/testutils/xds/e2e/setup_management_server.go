@@ -90,15 +90,14 @@ func SetupManagementServer(t *testing.T, opts *ManagementServerOptions) (*Manage
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 
-	var r resolver.Builder
-	if newResolverFunc := internal.NewXDSResolverWithConfigForTesting; newResolverFunc != nil {
-		r, err = newResolverFunc.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+	var rb resolver.Builder
+	if newResolver := internal.NewXDSResolverWithConfigForTesting; newResolver != nil {
+		rb, err = newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)
 		if err != nil {
 			server.Stop()
 			t.Fatalf("Failed to create xDS resolver for testing: %v", err)
 		}
-
 	}
 
-	return server, nodeID, bootstrapContents, r, func() { server.Stop() }
+	return server, nodeID, bootstrapContents, rb, func() { server.Stop() }
 }

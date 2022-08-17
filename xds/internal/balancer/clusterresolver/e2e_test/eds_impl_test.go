@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 gRPC authors.
+ * Copyright 2022 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,12 +108,12 @@ func startTestServiceBackends(t *testing.T, numBackends int) ([]*stubserver.Stub
 	}
 }
 
-// endpointResource returns an EDS resouce for the given cluster name and
+// endpointResource returns an EDS resource for the given cluster name and
 // localities. Backends within a locality are all assumed to be on the same
 // machine (localhost).
-func endpointResource(clusterName string, info []localityInfo) *v3endpointpb.ClusterLoadAssignment {
-	var localities []*v3endpointpb.LocalityLbEndpoints
-	for _, locality := range info {
+func endpointResource(clusterName string, localities []localityInfo) *v3endpointpb.ClusterLoadAssignment {
+	var localityEndpoints []*v3endpointpb.LocalityLbEndpoints
+	for _, locality := range localities {
 		var endpoints []*v3endpointpb.LbEndpoint
 		for i, port := range locality.ports {
 			endpoint := &v3endpointpb.LbEndpoint{
@@ -134,7 +134,7 @@ func endpointResource(clusterName string, info []localityInfo) *v3endpointpb.Clu
 			}
 			endpoints = append(endpoints, endpoint)
 		}
-		localities = append(localities, &v3endpointpb.LocalityLbEndpoints{
+		localityEndpoints = append(localityEndpoints, &v3endpointpb.LocalityLbEndpoints{
 			Locality:            &v3corepb.Locality{SubZone: locality.name},
 			LbEndpoints:         endpoints,
 			LoadBalancingWeight: &wrapperspb.UInt32Value{Value: locality.weight},
@@ -142,7 +142,7 @@ func endpointResource(clusterName string, info []localityInfo) *v3endpointpb.Clu
 	}
 	return &v3endpointpb.ClusterLoadAssignment{
 		ClusterName: clusterName,
-		Endpoints:   localities,
+		Endpoints:   localityEndpoints,
 	}
 }
 
@@ -153,9 +153,9 @@ type localityInfo struct {
 	healthStatus []v3corepb.HealthStatus
 }
 
-// clientResources returns an EDS resource corresponding to the list of locality
-// information specified.
-func clientResources(nodeID, edsServiceName string, localities []localityInfo) e2e.UpdateOptions {
+// clientEndpointsResource returns an EDS resource for the specified nodeID,
+// service name and localities.
+func clientEndpointsResource(nodeID, edsServiceName string, localities []localityInfo) e2e.UpdateOptions {
 	return e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Endpoints:      []*v3endpointpb.ClusterLoadAssignment{endpointResource(edsServiceName, localities)},
@@ -163,10 +163,10 @@ func clientResources(nodeID, edsServiceName string, localities []localityInfo) e
 	}
 }
 
-// TestEDS_OneLocality tests the EDS flow with one locality. The following
-// scenarios are tested:
+// TestEDS_OneLocality tests the cluster_resolver LB policy using an EDS
+// resource with one locality. The following scenarios are tested:
 // 1. Single backend. Test verifies that RPCs reach this backend.
-// 2. Add a backend. Test verifies that RPCs are roundrobin-ed across the two
+// 2. Add a backend. Test verifies that RPCs are roundrobined across the two
 //    backends.
 // 3. Remove one backend. Test verifies that all RPCs reach the other backend.
 // 4. Replace the backend. Test verifies that all RPCs reach the new backend.
@@ -182,7 +182,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 
 	// Create xDS resources for consumption by the test. We start off with a
 	// single backend in a single EDS locality.
-	resources := clientResources(nodeID, edsServiceName, []localityInfo{{name: localityName1, weight: 1, ports: ports[:1]}})
+	resources := clientEndpointsResource(nodeID, edsServiceName, []localityInfo{{name: localityName1, weight: 1, ports: ports[:1]}})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
@@ -221,14 +221,15 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	}
 	defer cc.Close()
 
-	// Ensure RPCs are being roundrobin-ed across the single backend.
+	// Ensure RPCs are being roundrobined across the single backend.
 	testClient := testpb.NewTestServiceClient(cc)
 	if err := rrutil.CheckRoundRobinRPCs(ctx, testClient, addrs[:1]); err != nil {
 		t.Fatal(err)
 	}
 
-	// Add one more backend to the same locality, and ensure roundrobin.
-	resources = clientResources(nodeID, edsServiceName, []localityInfo{{name: localityName1, weight: 1, ports: ports[:2]}})
+	// Add a backend to the same locality, and ensure RPCs are sent in a
+	// roundrobin fashion across the two backends.
+	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{{name: localityName1, weight: 1, ports: ports[:2]}})
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -236,8 +237,9 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Delete the first backend, and ensure roundrobin.
-	resources = clientResources(nodeID, edsServiceName, []localityInfo{{name: localityName1, weight: 1, ports: ports[1:2]}})
+	// Remove the first backend, and ensure all RPCs are sent to the second
+	// backend.
+	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{{name: localityName1, weight: 1, ports: ports[1:2]}})
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -245,8 +247,8 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Replace the backend, and ensure roundrobin.
-	resources = clientResources(nodeID, edsServiceName, []localityInfo{{name: localityName1, weight: 1, ports: ports[2:3]}})
+	// Replace the backend, and ensure all RPCs are sent to the new backend.
+	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{{name: localityName1, weight: 1, ports: ports[2:3]}})
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -255,18 +257,18 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 	}
 }
 
-// TestEDS_MultipleLocalities tests the EDS flow with multiple localities. The
-// following scenarios are tested:
+// TestEDS_MultipleLocalities tests the cluster_resolver LB policy using an EDS
+// resource with multiple localities. The following scenarios are tested:
 // 1. Two localities, each with a single backend. Test verifies that RPCs are
-//    roundrobin-ed across these two backends.
+//    roundrobined across these two backends.
 // 2. Add another locality, with a single backend. Test verifies that RPCs are
-//    roundrobin-ed across all the backends.
-// 3. Remove one locality. Test verifies that RPCs are roundrobin-ed across
+//    roundrobined across all the backends.
+// 3. Remove one locality. Test verifies that RPCs are roundrobined across
 //    backends from the remaining localities.
 // 4. Add a backend to one locality. Test verifies that RPCs are weighted
-//    roundrobin-ed across localities.
+//    roundrobined across localities.
 // 5. Change the weight of one of the localities. Test verifies that RPCs are
-//    weighted roundrobin-ed across the localities.
+//    weighted roundrobined across the localities.
 func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
 	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, nil)
@@ -279,7 +281,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 
 	// Create xDS resources for consumption by the test. We start off with a
 	// two localities, and single backend in each of them.
-	resources := clientResources(nodeID, edsServiceName, []localityInfo{
+	resources := clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName1, weight: 1, ports: ports[:1]},
 		{name: localityName2, weight: 1, ports: ports[1:2]},
 	})
@@ -326,7 +328,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	}
 
 	// Add another locality with a single backend, and ensure roundrobin.
-	resources = clientResources(nodeID, edsServiceName, []localityInfo{
+	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName1, weight: 1, ports: ports[:1]},
 		{name: localityName2, weight: 1, ports: ports[1:2]},
 		{name: localityName3, weight: 1, ports: ports[2:3]},
@@ -339,7 +341,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	}
 
 	// Remove the first locality, and ensure roundrobin.
-	resources = clientResources(nodeID, edsServiceName, []localityInfo{
+	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName2, weight: 1, ports: ports[1:2]},
 		{name: localityName3, weight: 1, ports: ports[2:3]},
 	})
@@ -350,10 +352,10 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Add a backend to one locality, and ensure roundrobin. Since RPCs are
-	// roundrobin-ed across localities, locality2's backend will receive twice
-	// the traffic.
-	resources = clientResources(nodeID, edsServiceName, []localityInfo{
+	// Add a backend to one locality, and ensure weighted roundrobin. Since RPCs
+	// are roundrobined across localities, locality2's backend will receive
+	// twice the traffic.
+	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName2, weight: 1, ports: ports[1:2]},
 		{name: localityName3, weight: 1, ports: ports[2:4]},
 	})
@@ -365,8 +367,11 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Change the weight of one locality and ensure weighted roundrobin.
-	resources = clientResources(nodeID, edsServiceName, []localityInfo{
+	// Change the weight of one locality and ensure weighted roundrobin.  Since
+	// RPCs are weighted roundrobined across localities, and locality2 has two
+	// times the weight of locality1, locality2's backend will receive four
+	// times the traffic of locality1's backend.
+	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName2, weight: 2, ports: ports[1:2]},
 		{name: localityName3, weight: 1, ports: ports[2:4]},
 	})
@@ -379,9 +384,9 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	}
 }
 
-// TestEDS_EndpointsHealth tests the EDS flow when endpoints specify health
-// information and verifies that traffic is routed only to backends deemed
-// capable of receiving traffic.
+// TestEDS_EndpointsHealth tests the cluster_resolver LB policy using an EDS
+// resource which specifies endpoint health information and verifies that
+// traffic is routed only to backends deemed capable of receiving traffic.
 func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
 	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, nil)
@@ -393,9 +398,9 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	addrs, ports := backendAddressesAndPorts(t, servers)
 
 	// Create xDS resources for consumption by the test.  Two localities with 6
-	// backends each, only two of them are healthy in each locality though. Only
-	// UNKNOWN and HEALTHY are used by gRPC for load balancing.
-	resources := clientResources(nodeID, edsServiceName, []localityInfo{
+	// backends each, with two of the 6 backends being healthy. Both UNKNOWN and
+	// HEALTHY are considered by gRPC for load balancing.
+	resources := clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName1, weight: 1, ports: ports[:6], healthStatus: []v3corepb.HealthStatus{
 			v3corepb.HealthStatus_UNKNOWN,
 			v3corepb.HealthStatus_HEALTHY,
@@ -456,8 +461,9 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	}
 }
 
-// TestEDS_EmptyUpdate covers the case when an EDS update with no localities is
-// received and verifies that RPCs fail with the expected error.
+// TestEDS_EmptyUpdate tests the cluster_resolver LB policy using an EDS
+// resource with no localities and verifies that RPCs fail with the expected
+// error.
 func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
 	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, nil)
@@ -475,7 +481,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 
 	// Create xDS resources for consumption by the test. The first update is an
 	// empty update. This should put the channel in TRANSIENT_FAILURE.
-	resources := clientResources(nodeID, edsServiceName, nil)
+	resources := clientEndpointsResource(nodeID, edsServiceName, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := managementServer.Update(ctx, resources); err != nil {
@@ -514,12 +520,12 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	}
 	defer cc.Close()
 	testClient := testpb.NewTestServiceClient(cc)
-	if err := waitForTransientFailure(ctx, t, testClient); err != nil {
+	if err := waitForAllPrioritiesRemovedError(ctx, t, testClient); err != nil {
 		t.Fatal(err)
 	}
 
 	// Add a locality with one backend and ensure RPCs are successful.
-	resources = clientResources(nodeID, edsServiceName, []localityInfo{{name: localityName1, weight: 1, ports: ports[:1]}})
+	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{{name: localityName1, weight: 1, ports: ports[:1]}})
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
@@ -528,16 +534,20 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	}
 
 	// Push another empty update and ensure TRANSIENT_FAILURE.
-	resources = clientResources(nodeID, edsServiceName, nil)
+	resources = clientEndpointsResource(nodeID, edsServiceName, nil)
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
 	}
-	if err := waitForTransientFailure(ctx, t, testClient); err != nil {
+	if err := waitForAllPrioritiesRemovedError(ctx, t, testClient); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func waitForTransientFailure(ctx context.Context, t *testing.T, client testgrpc.TestServiceClient) error {
+// waitForAllPrioritiesRemovedError repeatedly makes RPCs using the
+// TestServiceClient until they fail with an error which indicates that all
+// priorities have been removed. A non-nil error is returned if the context
+// expires before RPCs fail with the expected error.
+func waitForAllPrioritiesRemovedError(ctx context.Context, t *testing.T, client testgrpc.TestServiceClient) error {
 	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
 		_, err := client.EmptyCall(ctx, &testpb.Empty{})
 		if err == nil {
@@ -554,5 +564,5 @@ func waitForTransientFailure(ctx context.Context, t *testing.T, client testgrpc.
 		}
 		return nil
 	}
-	return errors.New("Timeout when waiting for RPCs to fail with UNAVAILABLE status")
+	return errors.New("Timeout when waiting for RPCs to fail with UNAVAILABLE status and priority.ErrAllPrioritiesRemoved error")
 }

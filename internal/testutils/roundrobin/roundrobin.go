@@ -38,6 +38,9 @@ import (
 
 var logger = grpclog.Component("testutils-roundrobin")
 
+// waitForTrafficToReachBackends repeatedly makes RPCs using the provided
+// TestServiceClient until RPCs reach all backends specified in addrs, or the
+// context expires, in which case a non-nil error is returned.
 func waitForTrafficToReachBackends(ctx context.Context, client testgrpc.TestServiceClient, addrs []resolver.Address) error {
 	// Make sure connections to all backends are up. We need to do this two
 	// times (to be sure that round_robin has kicked in) because the channel
