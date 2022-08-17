@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -71,6 +72,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		closed:         grpcsync.NewEvent(),
 		updateCh:       make(chan suWithError, 1),
 		activeClusters: make(map[string]*clusterInfo),
+		clientID:       grpcrand.Uint64(),
 	}
 	defer func() {
 		if retErr != nil {
@@ -184,6 +186,9 @@ type xdsResolver struct {
 	activeClusters map[string]*clusterInfo
 
 	curConfigSelector *configSelector
+
+	// A random number which uniquely identifies this client.
+	clientID uint64
 }
 
 // sendNewServiceConfig prunes active clusters, generates a new service config

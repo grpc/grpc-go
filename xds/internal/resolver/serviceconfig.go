@@ -245,9 +245,7 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 			generatedHash = true
 			generatedPolicyHash = true
 		case xdsresource.HashPolicyTypeChannelID:
-			// Hash the ClientConn pointer which logically uniquely
-			// identifies the client.
-			policyHash = xxhash.Sum64String(fmt.Sprintf("%p", &cs.r.cc))
+			policyHash = cs.r.clientID
 			generatedHash = true
 			generatedPolicyHash = true
 		}
