@@ -192,6 +192,12 @@ func (rr *resourceResolver) resolveNow() {
 
 func (rr *resourceResolver) stop() {
 	rr.mu.Lock()
+	// Save the previous childrenMap to stop the children outside the mutex,
+	// and reinitialize the map.  We only need to reinitialize to allow for the
+	// policy to be reused if the resource comes back.  In practice, this does
+	// not happen as the parent LB policy will also be closed, causing this to
+	// be removed entirely, but a future use case might want to reuse the
+	// policy instead.
 	cm := rr.childrenMap
 	rr.childrenMap = make(map[discoveryMechanismKey]resolverMechanismTuple)
 	rr.mechanisms = nil
