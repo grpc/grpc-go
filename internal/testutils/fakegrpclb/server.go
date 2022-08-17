@@ -100,7 +100,7 @@ func NewServer(params ServerParams) (*Server, error) {
 		})
 	}
 
-	lis, err := net.Listen("tcp", ":"+strconv.Itoa(params.ListenPort))
+	lis, err := net.Listen("tcp", "localhost:"+strconv.Itoa(params.ListenPort))
 	if err != nil {
 		return nil, fmt.Errorf("failed to listen on port %q: %v", params.ListenPort, err)
 	}
