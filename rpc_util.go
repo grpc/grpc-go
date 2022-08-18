@@ -739,13 +739,13 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 			// will read more data if available.
 			// +MinRead so ReadFrom will not reallocate if size is correct.
 			buf := bytes.NewBuffer(make([]byte, 0, size+bytes.MinRead))
-			bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+			bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)))
 			return buf.Bytes(), int(bytesRead), err
 		}
 	}
 	// Read from LimitReader with limit max+1. So if the underlying
 	// reader is over limit, the result will be bigger than max.
-	d, err = ioutil.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+	d, err = ioutil.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)))
 	return d, len(d), err
 }
 
