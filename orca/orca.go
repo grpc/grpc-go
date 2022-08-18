@@ -71,20 +71,18 @@ func CallMetricsServerOption() grpc.ServerOption {
 func unaryInt(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	recorder := newMetricRecorder()
 	ctxWithRecorder := newContextWithMetricSetter(ctx, recorder)
-	resp, err := handler(ctxWithRecorder, req)
-	setTrailerMetadata(ctx, recorder.toLoadReportProto())
-	return resp, err
+	defer setTrailerMetadata(ctx, recorder)
+	return handler(ctxWithRecorder, req)
 }
 
 func streamInt(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	recorder := newMetricRecorder()
-	ctxWithRecorder := newContextWithMetricSetter(ss.Context(), recorder)
-	err := handler(srv, &wrappedStream{
+	ws := &wrappedStream{
 		ServerStream: ss,
-		ctx:          ctxWithRecorder,
-	})
-	setTrailerMetadata(ss.Context(), recorder.toLoadReportProto())
-	return err
+		ctx:          newContextWithMetricSetter(ss.Context(), recorder),
+	}
+	defer setTrailerMetadata(ws.Context(), recorder)
+	return handler(srv, ws)
 }
 
 // setTrailerMetadata adds a trailer metadata entry with key being set to
@@ -95,8 +93,8 @@ func streamInt(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInf
 // above. Any errors encountered here are not propagated to the caller because
 // they are ignored there. Hence we simply log any errors encountered here at
 // warning level, and return nothing.
-func setTrailerMetadata(ctx context.Context, loadReport *v3orcapb.OrcaLoadReport) {
-	b, err := proto.Marshal(loadReport)
+func setTrailerMetadata(ctx context.Context, r *metricRecorder) {
+	b, err := proto.Marshal(r.toLoadReportProto())
 	if err != nil {
 		logger.Warningf("failed to marshal load report: %v", err)
 		return
