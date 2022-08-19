@@ -198,6 +198,31 @@ func (s) TestDelete(t *testing.T) {
 	}
 }
 
+func (s) TestValueFromIncomingContext(t *testing.T) {
+	md := Pairs(
+		"X-My-Header-1", "42",
+		"X-My-Header-2", "43-1",
+		"X-My-Header-2", "43-2",
+	)
+	ctx := NewIncomingContext(context.Background(), md)
+
+	var v []string
+	v = ValueFromIncomingContext(ctx, "X-My-Header-1")
+	if !reflect.DeepEqual(v, []string{"42"}) {
+		t.Errorf("value from context is %v", v)
+	}
+
+	v = ValueFromIncomingContext(ctx, "x-my-header-1")
+	if !reflect.DeepEqual(v, []string{"42"}) {
+		t.Errorf("value from context is %v", v)
+	}
+
+	v = ValueFromIncomingContext(ctx, "x-my-header-2")
+	if !reflect.DeepEqual(v, []string{"43-1", "43-2"}) {
+		t.Errorf("value from context is %v", v)
+	}
+}
+
 func (s) TestAppendToOutgoingContext(t *testing.T) {
 	// Pre-existing metadata
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)

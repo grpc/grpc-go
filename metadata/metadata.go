@@ -50,7 +50,7 @@ type MD map[string][]string
 // Keys beginning with "grpc-" are reserved for grpc-internal use only and may
 // result in errors if set in metadata.
 func New(m map[string]string) MD {
-	md := MD{}
+	md := make(MD, len(m))
 	for k, val := range m {
 		key := strings.ToLower(k)
 		md[key] = append(md[key], val)
@@ -74,7 +74,7 @@ func Pairs(kv ...string) MD {
 	if len(kv)%2 == 1 {
 		panic(fmt.Sprintf("metadata: Pairs got the odd number of input pairs for metadata: %d", len(kv)))
 	}
-	md := MD{}
+	md := make(MD, len(kv)/2)
 	for i := 0; i < len(kv); i += 2 {
 		key := strings.ToLower(kv[i])
 		md[key] = append(md[key], kv[i+1])
@@ -182,7 +182,7 @@ func FromIncomingContext(ctx context.Context) (MD, bool) {
 	if !ok {
 		return nil, false
 	}
-	out := MD{}
+	out := make(MD, len(md))
 	for k, v := range md {
 		// We need to manually convert all keys to lower case, because MD is a
 		// map, and there's no guarantee that the MD attached to the context is
@@ -193,6 +193,36 @@ func FromIncomingContext(ctx context.Context) (MD, bool) {
 		out[key] = s
 	}
 	return out, true
+}
+
+// ValueFromIncomingContext returns value from the incoming metadata if exists.
+//
+// This is intended for using as fast access to context value with string constant.
+func ValueFromIncomingContext(ctx context.Context, key string) []string {
+	md, ok := ctx.Value(mdIncomingKey{}).(MD)
+	if !ok {
+		return nil
+	}
+	// fastpath
+	if v, ok := md[key]; ok {
+		res := make([]string, len(v))
+		copy(res, v)
+		return res
+	}
+
+	// slowpath
+	key = strings.ToLower(key)
+	for k, v := range md {
+		// We need to manually convert all keys to lower case, because MD is a
+		// map, and there's no guarantee that the MD attached to the context is
+		// created using our helper functions.
+		if strings.ToLower(k) == key {
+			s := make([]string, len(v))
+			copy(s, v)
+			return s
+		}
+	}
+	return nil
 }
 
 // FromOutgoingContextRaw returns the un-merged, intermediary contents of rawMD.
@@ -222,7 +252,7 @@ func FromOutgoingContext(ctx context.Context) (MD, bool) {
 		return nil, false
 	}
 
-	out := MD{}
+	out := make(MD, len(raw.md)+len(raw.added))
 	for k, v := range raw.md {
 		// We need to manually convert all keys to lower case, because MD is a
 		// map, and there's no guarantee that the MD attached to the context is
