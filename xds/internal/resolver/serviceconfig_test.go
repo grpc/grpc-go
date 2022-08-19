@@ -52,8 +52,8 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 	const channelID = 12378921
 	cs := &configSelector{
 		r: &xdsResolver{
-			cc:       &testClientConn{},
-			clientID: channelID,
+			cc:        &testClientConn{},
+			channelID: channelID,
 		},
 	}
 	tests := []struct {

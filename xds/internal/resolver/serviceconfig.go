@@ -245,7 +245,8 @@ func (cs *configSelector) generateHash(rpcInfo iresolver.RPCInfo, hashPolicies [
 			generatedHash = true
 			generatedPolicyHash = true
 		case xdsresource.HashPolicyTypeChannelID:
-			policyHash = cs.r.clientID
+			// Use the static channel ID as the hash for this policy.
+			policyHash = cs.r.channelID
 			generatedHash = true
 			generatedPolicyHash = true
 		}

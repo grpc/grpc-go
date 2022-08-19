@@ -72,7 +72,7 @@ func (b *xdsResolverBuilder) Build(target resolver.Target, cc resolver.ClientCon
 		closed:         grpcsync.NewEvent(),
 		updateCh:       make(chan suWithError, 1),
 		activeClusters: make(map[string]*clusterInfo),
-		clientID:       grpcrand.Uint64(),
+		channelID:      grpcrand.Uint64(),
 	}
 	defer func() {
 		if retErr != nil {
@@ -187,8 +187,9 @@ type xdsResolver struct {
 
 	curConfigSelector *configSelector
 
-	// A random number which uniquely identifies this client.
-	clientID uint64
+	// A random number which uniquely identifies the channel which owns this
+	// resolver.
+	channelID uint64
 }
 
 // sendNewServiceConfig prunes active clusters, generates a new service config
