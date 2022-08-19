@@ -31,6 +31,12 @@ import (
 	v3orcaservicepb "github.com/cncf/xds/go/xds/service/orca/v3"
 )
 
+func init() {
+	internal.AllowAnyMinReportingInterval = func(so *ServiceOptions) {
+		so.allowAnyMinReportingInterval = true
+	}
+}
+
 // minReportingInterval is the absolute minimum value supported for
 // out-of-band metrics reporting from the ORCA service implementation
 // provided by the orca package.
@@ -61,6 +67,8 @@ type ServiceOptions struct {
 	// Clients may request a higher value as part of the StreamCoreMetrics
 	// streaming RPC.
 	MinReportingInterval time.Duration
+
+	allowAnyMinReportingInterval bool
 }
 
 // Register creates a new ORCA service implementation configured using the
@@ -76,12 +84,10 @@ func Register(s grpc.ServiceRegistrar, opts ServiceOptions) (*Service, error) {
 
 	// The default minimum supported reporting interval value can be overridden
 	// for testing purposes through the orca internal package.
-	defaultMin := minReportingInterval
-	if internal.MinReportingIntervalForTesting != nil {
-		defaultMin = internal.MinReportingIntervalForTesting()
-	}
-	if opts.MinReportingInterval < defaultMin {
-		opts.MinReportingInterval = defaultMin
+	if !opts.allowAnyMinReportingInterval {
+		if opts.MinReportingInterval < minReportingInterval {
+			opts.MinReportingInterval = minReportingInterval
+		}
 	}
 	recorder := newMetricRecorder()
 	service := &Service{

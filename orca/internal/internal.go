@@ -20,11 +20,8 @@
 // avoid polluting the godoc of the top-level orca package.
 package internal
 
-import "time"
-
-// MinReportingIntervalForTesting returns the absolute minimum value supported
-// for out-of-band metrics reporting from the ORCA service implementation
-// provided by the orca package.
+// AllowAnyMinReportingInterval prevents clamping of the MinReportingInterval
+// configured via ServiceOptions, to a minimum of 30s.
 //
 // For testing purposes only.
-var MinReportingIntervalForTesting func() time.Duration
+var AllowAnyMinReportingInterval interface{} // func(*ServiceOptions)

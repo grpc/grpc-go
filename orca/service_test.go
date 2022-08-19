@@ -87,13 +87,12 @@ func (s) Test_E2E_CustomBackendMetrics_OutOfBand(t *testing.T) {
 
 	// Override the min reporting interval in the internal package.
 	const shortReportingInterval = 100 * time.Millisecond
-	origMinReportingInterval := internal.MinReportingIntervalForTesting
-	internal.MinReportingIntervalForTesting = func() time.Duration { return shortReportingInterval }
-	defer func() { internal.MinReportingIntervalForTesting = origMinReportingInterval }()
+	opts := orca.ServiceOptions{MinReportingInterval: shortReportingInterval}
+	internal.AllowAnyMinReportingInterval.(func(*orca.ServiceOptions))(&opts)
 
 	// Register the OpenRCAService with a very short metrics reporting interval.
 	s := grpc.NewServer()
-	orcaSrv, err := orca.Register(s, orca.ServiceOptions{MinReportingInterval: shortReportingInterval})
+	orcaSrv, err := orca.Register(s, opts)
 	if err != nil {
 		t.Fatalf("orca.EnableOutOfBandMetricsReportingForTesting() failed: %v", err)
 	}
