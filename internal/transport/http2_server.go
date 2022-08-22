@@ -489,9 +489,6 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		s.ctx, s.cancel = context.WithCancel(t.ctx)
 	}
 
-	// Add peer information to the stream context.
-	s.ctx = peer.NewContext(s.ctx, t.getPeer())
-
 	// Attach the received metadata to the context.
 	if len(mdata) > 0 {
 		s.ctx = metadata.NewIncomingContext(s.ctx, mdata)

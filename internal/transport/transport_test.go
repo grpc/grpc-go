@@ -35,6 +35,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/peer"
+
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
@@ -2448,5 +2450,22 @@ func TestConnectionError_Unwrap(t *testing.T) {
 	err := connectionErrorf(false, os.ErrNotExist, "unwrap me")
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Error("ConnectionError does not unwrap")
+	}
+}
+
+// Verify Peer is set in server context.
+func TestPeerSetInServerContext(t *testing.T) {
+	server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
+	defer server.stop()
+
+	for k := range server.conns {
+		sc, ok := k.(*http2Server)
+		if !ok {
+			t.Fatalf("Failed to convert %v to *http2Server", k)
+		}
+		_, ok = peer.FromContext(sc.ctx)
+		if !ok {
+			t.Fatalf("peer expected in server context, but actually not found.")
+		}
 	}
 }
