@@ -2463,10 +2463,7 @@ func (s) TestPeerSetInServerContext(t *testing.T) {
 	// create a stream with client transport.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	stream, err := client.NewStream(ctx, &CallHdr{
-		Host:   "localhost",
-		Method: "foo.Small",
-	})
+	stream, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
 		t.Fatalf("failed to create a stream: %v", err)
 	}
