@@ -53,7 +53,7 @@ func (s) TestClientSideFederation(t *testing.T) {
 	defer func() { envconfig.XDSFederation = oldXDSFederation }()
 
 	// Start a management server as the default authority.
-	serverDefaultAuth, err := e2e.StartManagementServer()
+	serverDefaultAuth, err := e2e.StartManagementServer(nil)
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
 	}
@@ -61,7 +61,7 @@ func (s) TestClientSideFederation(t *testing.T) {
 
 	// Start another management server as the other authority.
 	const nonDefaultAuth = "non-default-auth"
-	serverAnotherAuth, err := e2e.StartManagementServer()
+	serverAnotherAuth, err := e2e.StartManagementServer(nil)
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
 	}

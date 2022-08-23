@@ -22,7 +22,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	gcplogging "cloud.google.com/go/logging"
 	grpclogrecordpb "google.golang.org/grpc/gcp/observability/internal/logging"
@@ -45,20 +44,19 @@ type cloudLoggingExporter struct {
 	logger    *gcplogging.Logger
 }
 
-func newCloudLoggingExporter(ctx context.Context, projectID string) (*cloudLoggingExporter, error) {
-	c, err := gcplogging.NewClient(ctx, fmt.Sprintf("projects/%v", projectID))
+func newCloudLoggingExporter(ctx context.Context, config *config) (*cloudLoggingExporter, error) {
+	c, err := gcplogging.NewClient(ctx, fmt.Sprintf("projects/%v", config.DestinationProjectID))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cloudLoggingExporter: %v", err)
 	}
 	defer logger.Infof("Successfully created cloudLoggingExporter")
-	customTags := getCustomTags(os.Environ())
-	if len(customTags) != 0 {
-		logger.Infof("Adding custom tags: %+v", customTags)
+	if len(config.CustomTags) != 0 {
+		logger.Infof("Adding custom tags: %+v", config.CustomTags)
 	}
 	return &cloudLoggingExporter{
-		projectID: projectID,
+		projectID: config.DestinationProjectID,
 		client:    c,
-		logger:    c.Logger("microservices.googleapis.com/observability/grpc", gcplogging.CommonLabels(customTags)),
+		logger:    c.Logger("microservices.googleapis.com/observability/grpc", gcplogging.CommonLabels(config.CustomTags)),
 	}, nil
 }
 

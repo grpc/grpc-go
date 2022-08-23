@@ -1917,8 +1917,6 @@ func (s) TestCZTraceOverwriteChannelDeletion(t *testing.T) {
 	czCleanup := channelz.NewChannelzStorageForTesting()
 	defer czCleanupWrapper(czCleanup, t)
 	e := tcpClearRREnv
-	// avoid newTest using WithBalancerName, which would override service
-	// config's change of balancer below.
 	e.balancer = ""
 	te := newTest(t, e)
 	channelz.SetMaxTraceEntry(1)

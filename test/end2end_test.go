@@ -470,7 +470,7 @@ type test struct {
 	// expose the server's health using the default health service
 	// implementation. This should only be used when a non-default health service
 	// implementation is required.
-	healthServer            healthpb.HealthServer
+	healthServer            healthgrpc.HealthServer
 	maxStream               uint32
 	tapHandle               tap.ServerInHandle
 	maxServerMsgSize        *int
@@ -512,12 +512,12 @@ type test struct {
 	// These are are set once startServer is called. The common case is to have
 	// only one testServer.
 	srv     stopper
-	hSrv    healthpb.HealthServer
+	hSrv    healthgrpc.HealthServer
 	srvAddr string
 
 	// These are are set once startServers is called.
 	srvs     []stopper
-	hSrvs    []healthpb.HealthServer
+	hSrvs    []healthgrpc.HealthServer
 	srvAddrs []string
 
 	cc          *grpc.ClientConn // nil until requested via clientConn
@@ -8040,4 +8040,93 @@ func (s) TestServerClosesConn(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 	}
 	t.Fatalf("timed out waiting for conns to be closed by server; still open: %v", atomic.LoadInt32(&wrapLis.connsOpen))
+}
+
+// TestNilStatsHandler ensures we do not panic as a result of a nil stats
+// handler.
+func (s) TestNilStatsHandler(t *testing.T) {
+	grpctest.TLogger.ExpectErrorN("ignoring nil parameter", 2)
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+	}
+	if err := ss.Start([]grpc.ServerOption{grpc.StatsHandler(nil)}, grpc.WithStatsHandler(nil)); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+}
+
+// TestUnexpectedEOF tests a scenario where a client invokes two unary RPC
+// calls. The first call receives a payload which exceeds max grpc receive
+// message length, and the second gets a large response. This second RPC should
+// not fail with unexpected.EOF.
+func (s) TestUnexpectedEOF(t *testing.T) {
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{
+				Payload: &testpb.Payload{
+					Body: bytes.Repeat([]byte("a"), int(in.ResponseSize)),
+				},
+			}, nil
+		},
+	}
+	if err := ss.Start([]grpc.ServerOption{}); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	for i := 0; i < 10; i++ {
+		// exceeds grpc.DefaultMaxRecvMessageSize, this should error with
+		// RESOURCE_EXHAUSTED error.
+		_, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{ResponseSize: 4194304})
+		if code := status.Code(err); code != codes.ResourceExhausted {
+			t.Fatalf("UnaryCall RPC returned error: %v, want status code %v", err, codes.ResourceExhausted)
+		}
+		// Larger response that doesn't exceed DefaultMaxRecvMessageSize, this
+		// should work normally.
+		if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{ResponseSize: 275075}); err != nil {
+			t.Fatalf("UnaryCall RPC failed: %v", err)
+		}
+	}
+}
+
+// TestRecvWhileReturningStatus performs a Recv in a service handler while the
+// handler returns its status.  A race condition could result in the server
+// sending the first headers frame without the HTTP :status header.  This can
+// happen when the failed Recv (due to the handler returning) and the handler's
+// status both attempt to write the status, which would be the first headers
+// frame sent, simultaneously.
+func (s) TestRecvWhileReturningStatus(t *testing.T) {
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			// The client never sends, so this Recv blocks until the server
+			// returns and causes stream operations to return errors.
+			go stream.Recv()
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for i := 0; i < 100; i++ {
+		stream, err := ss.Client.FullDuplexCall(ctx)
+		if err != nil {
+			t.Fatalf("Error while creating stream: %v", err)
+		}
+		if _, err := stream.Recv(); err != io.EOF {
+			t.Fatalf("stream.Recv() = %v, want io.EOF", err)
+		}
+	}
 }

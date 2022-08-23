@@ -43,7 +43,7 @@ import (
 // change callback is not invoked and client connections to the server are not
 // recycled.
 func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t)
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
 
 	creds, err := xdscreds.NewServerCredentials(xdscreds.ServerOptions{FallbackCreds: insecure.NewCredentials()})
@@ -112,9 +112,18 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 	// suppressed, server will recycle client connections.
 	errCh := make(chan error, 1)
 	go func() {
-		if cc.WaitForStateChange(ctx, connectivity.Ready) {
-			errCh <- fmt.Errorf("unexpected connectivity state change {%s --> %s} on the client connection", connectivity.Ready, cc.GetState())
-			return
+		prev := connectivity.Ready // We know we are READY since we just did an RPC.
+		for {
+			curr := cc.GetState()
+			if !(curr == connectivity.Ready || curr == connectivity.Idle) {
+				errCh <- fmt.Errorf("unexpected connectivity state change {%s --> %s} on the client connection", prev, curr)
+				return
+			}
+			if !cc.WaitForStateChange(ctx, curr) {
+				// Break out of the for loop when the context has been cancelled.
+				break
+			}
+			prev = curr
 		}
 		errCh <- nil
 	}()
@@ -154,7 +163,7 @@ func (s) TestServerSideXDS_RedundantUpdateSuppression(t *testing.T) {
 // xDS enabled gRPC servers. It verifies that appropriate mode changes happen in
 // the server, and also verifies behavior of clientConns under these modes.
 func (s) TestServerSideXDS_ServingModeChanges(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t)
+	managementServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
 
 	// Configure xDS credentials to be used on the server-side.

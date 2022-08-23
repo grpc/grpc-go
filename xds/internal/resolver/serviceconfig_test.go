@@ -20,7 +20,6 @@ package resolver
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"testing"
 
@@ -50,9 +49,11 @@ func (s) TestPruneActiveClusters(t *testing.T) {
 }
 
 func (s) TestGenerateRequestHash(t *testing.T) {
+	const channelID = 12378921
 	cs := &configSelector{
 		r: &xdsResolver{
-			cc: &testClientConn{},
+			cc:        &testClientConn{},
+			channelID: channelID,
 		},
 	}
 	tests := []struct {
@@ -85,7 +86,7 @@ func (s) TestGenerateRequestHash(t *testing.T) {
 			hashPolicies: []*xdsresource.HashPolicy{{
 				HashPolicyType: xdsresource.HashPolicyTypeChannelID,
 			}},
-			requestHashWant: xxhash.Sum64String(fmt.Sprintf("%p", &cs.r.cc)),
+			requestHashWant: channelID,
 			rpcInfo:         iresolver.RPCInfo{},
 		},
 		// TestGenerateRequestHashEmptyString tests generating request hashes

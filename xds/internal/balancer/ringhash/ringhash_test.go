@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/xds/internal"
 )
 
 var (
@@ -105,6 +106,40 @@ type s struct {
 
 func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
+}
+
+// TestUpdateClientConnState_NewRingSize tests the scenario where the ringhash
+// LB policy receives new configuration which specifies new values for the ring
+// min and max sizes. The test verifies that a new ring is created and a new
+// picker is sent to the ClientConn.
+func (s) TestUpdateClientConnState_NewRingSize(t *testing.T) {
+	origMinRingSize, origMaxRingSize := 1, 10 // Configured from `testConfig` in `setupTest`
+	newMinRingSize, newMaxRingSize := 20, 100
+
+	addrs := []resolver.Address{{Addr: testBackendAddrStrs[0]}}
+	cc, b, p1 := setupTest(t, addrs)
+	ring1 := p1.(*picker).ring
+	if ringSize := len(ring1.items); ringSize < origMinRingSize || ringSize > origMaxRingSize {
+		t.Fatalf("Ring created with size %d, want between [%d, %d]", ringSize, origMinRingSize, origMaxRingSize)
+	}
+
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{Addresses: addrs},
+		BalancerConfig: &LBConfig{MinRingSize: uint64(newMinRingSize), MaxRingSize: uint64(newMaxRingSize)},
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState returned err: %v", err)
+	}
+
+	var ring2 *ring
+	select {
+	case <-time.After(defaultTestTimeout):
+		t.Fatal("Timeout when waiting for a picker update after a configuration update")
+	case p2 := <-cc.NewPickerCh:
+		ring2 = p2.(*picker).ring
+	}
+	if ringSize := len(ring2.items); ringSize < newMinRingSize || ringSize > newMaxRingSize {
+		t.Fatalf("Ring created with size %d, want between [%d, %d]", ringSize, newMinRingSize, newMaxRingSize)
+	}
 }
 
 func (s) TestOneSubConn(t *testing.T) {
@@ -319,7 +354,7 @@ func (s) TestAddrWeightChange(t *testing.T) {
 
 	if err := b.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState:  resolver.State{Addresses: wantAddrs},
-		BalancerConfig: nil,
+		BalancerConfig: testConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
 	}
@@ -335,7 +370,7 @@ func (s) TestAddrWeightChange(t *testing.T) {
 			{Addr: testBackendAddrStrs[0]},
 			{Addr: testBackendAddrStrs[1]},
 		}},
-		BalancerConfig: nil,
+		BalancerConfig: testConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
 	}
@@ -358,7 +393,7 @@ func (s) TestAddrWeightChange(t *testing.T) {
 				resolver.Address{Addr: testBackendAddrStrs[1]},
 				weightedroundrobin.AddrInfo{Weight: 2}),
 		}},
-		BalancerConfig: nil,
+		BalancerConfig: testConfig,
 	}); err != nil {
 		t.Fatalf("UpdateClientConnState returned err: %v", err)
 	}
@@ -489,5 +524,28 @@ func (s) TestConnectivityStateEvaluatorRecordTransition(t *testing.T) {
 				t.Errorf("recordTransition() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// TestAddrBalancerAttributesChange tests the case where the ringhash balancer
+// receives a ClientConnUpdate with the same config and addresses as received in
+// the previous update. Although the `BalancerAttributes` contents are the same,
+// the pointer is different. This test verifies that subConns are not recreated
+// in this scenario.
+func (s) TestAddrBalancerAttributesChange(t *testing.T) {
+	addrs1 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, internal.LocalityID{Region: "americas"})}
+	cc, b, _ := setupTest(t, addrs1)
+
+	addrs2 := []resolver.Address{internal.SetLocalityID(resolver.Address{Addr: testBackendAddrStrs[0]}, internal.LocalityID{Region: "americas"})}
+	if err := b.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{Addresses: addrs2},
+		BalancerConfig: testConfig,
+	}); err != nil {
+		t.Fatalf("UpdateClientConnState returned err: %v", err)
+	}
+	select {
+	case <-cc.NewSubConnCh:
+		t.Fatal("new subConn created for an update with the same addresses")
+	case <-time.After(defaultTestShortTimeout):
 	}
 }
