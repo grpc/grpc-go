@@ -2453,7 +2453,6 @@ func TestConnectionError_Unwrap(t *testing.T) {
 	}
 }
 
-// Verify Peer is set in server context.
 func (s) TestPeerSetInServerContext(t *testing.T) {
 	// create client and server transports.
 	server, client, cancel := setUp(t, 0, math.MaxUint32, normal)
@@ -2472,17 +2471,17 @@ func (s) TestPeerSetInServerContext(t *testing.T) {
 		t.Fatalf("failed to create a stream: %v", err)
 	}
 
-	// verify if peer is set in client transport context.
+	// verify peer is set in client transport context.
 	if _, ok := peer.FromContext(client.ctx); !ok {
 		t.Fatalf("Peer expected in client transport's context, but actually not found.")
 	}
 
-	// verify of peer is set in stream context.
+	// verify peer is set in stream context.
 	if _, ok := peer.FromContext(stream.ctx); !ok {
 		t.Fatalf("Peer expected in stream context, but actually not found.")
 	}
 
-	// verify if peer is set in server transport context.
+	// verify peer is set in server transport context.
 	count := 0
 	for {
 		server.mu.Lock()
