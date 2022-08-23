@@ -1413,14 +1413,10 @@ func (t *http2Server) getOutFlowWindow() int64 {
 }
 
 func (t *http2Server) getPeer() *peer.Peer {
-	pr := &peer.Peer{
-		Addr: t.remoteAddr,
+	return &peer.Peer{
+		Addr:     t.remoteAddr,
+		AuthInfo: t.authInfo, // Can be nil
 	}
-	// Attach Auth info if there is any.
-	if t.authInfo != nil {
-		pr.AuthInfo = t.authInfo
-	}
-	return pr
 }
 
 func getJitter(v time.Duration) time.Duration {
