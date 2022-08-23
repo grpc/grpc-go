@@ -326,6 +326,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		keepaliveEnabled:      keepaliveEnabled,
 		bufferPool:            newBufferPool(),
 	}
+	// Add peer information to the http2client context.
+	t.ctx = peer.NewContext(t.ctx, t.getPeer())
 
 	if md, ok := addr.Metadata.(*metadata.MD); ok {
 		t.md = *md
@@ -469,7 +471,7 @@ func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
 func (t *http2Client) getPeer() *peer.Peer {
 	return &peer.Peer{
 		Addr:     t.remoteAddr,
-		AuthInfo: t.authInfo,
+		AuthInfo: t.authInfo, // Can be nil
 	}
 }
 

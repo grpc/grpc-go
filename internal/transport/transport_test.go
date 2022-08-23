@@ -2454,18 +2454,58 @@ func TestConnectionError_Unwrap(t *testing.T) {
 }
 
 // Verify Peer is set in server context.
-func TestPeerSetInServerContext(t *testing.T) {
-	server := setUpServerOnly(t, 0, &ServerConfig{}, suspended)
+func (s) TestPeerSetInServerContext(t *testing.T) {
+	// create client and server transports.
+	server, client, cancel := setUp(t, 0, math.MaxUint32, normal)
+	defer cancel()
 	defer server.stop()
+	defer client.Close(fmt.Errorf("closed manually by test"))
 
-	for k := range server.conns {
-		sc, ok := k.(*http2Server)
-		if !ok {
-			t.Fatalf("Failed to convert %v to *http2Server", k)
+	// create a stream with client transport.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := client.NewStream(ctx, &CallHdr{
+		Host:   "localhost",
+		Method: "foo.Small",
+	})
+	if err != nil {
+		t.Fatalf("failed to create a stream: %v", err)
+	}
+
+	// verify if peer is set in client transport context.
+	if _, ok := peer.FromContext(client.ctx); !ok {
+		t.Fatalf("Peer expected in client transport's context, but actually not found.")
+	}
+
+	// verify of peer is set in stream context.
+	if _, ok := peer.FromContext(stream.ctx); !ok {
+		t.Fatalf("Peer expected in stream context, but actually not found.")
+	}
+
+	// verify if peer is set in server transport context.
+	count := 0
+	for {
+		server.mu.Lock()
+		if len(server.conns) == 0 {
+			server.mu.Unlock()
+			time.Sleep(time.Millisecond)
+			count += 1
+			// wait for server transport setup for apprximately 1 second.
+			if count >= 1000 {
+				t.Fatalf("timed out waiting for server transport setup.")
+			}
+			continue
 		}
-		_, ok = peer.FromContext(sc.ctx)
-		if !ok {
-			t.Fatalf("peer expected in server context, but actually not found.")
+		for k := range server.conns {
+			sc, ok := k.(*http2Server)
+			if !ok {
+				t.Fatalf("ServerTransport is of type %T, want %T", k, &http2Server{})
+			}
+			if _, ok = peer.FromContext(sc.ctx); !ok {
+				t.Fatalf("Peer expected in server transport's context, but actually not found.")
+			}
 		}
+		server.mu.Unlock()
+		break
 	}
 }
