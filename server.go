@@ -79,7 +79,7 @@ func init() {
 	internal.ClearExtraServerOptions = func() {
 		extraServerOptions = nil
 	}
-	internal.JoinServerOptions = newMultiServerOption
+	internal.JoinServerOptions = newJoinServerOption
 }
 
 var statusOK = status.New(codes.OK, "")
@@ -215,20 +215,20 @@ func newFuncServerOption(f func(*serverOptions)) *funcServerOption {
 	}
 }
 
-// multiServerOption provides a way to combine arbitrary number of server
+// joinServerOption provides a way to combine arbitrary number of server
 // options into one.
-type multiServerOption struct {
+type joinServerOption struct {
 	opts []ServerOption
 }
 
-func (mdo *multiServerOption) apply(do *serverOptions) {
+func (mdo *joinServerOption) apply(do *serverOptions) {
 	for _, opt := range mdo.opts {
 		opt.apply(do)
 	}
 }
 
-func newMultiServerOption(opts ...ServerOption) ServerOption {
-	return &multiServerOption{opts: opts}
+func newJoinServerOption(opts ...ServerOption) ServerOption {
+	return &joinServerOption{opts: opts}
 }
 
 // WriteBufferSize determines how much data can be batched before doing a write on the wire.
