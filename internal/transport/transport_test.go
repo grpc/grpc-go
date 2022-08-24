@@ -35,6 +35,8 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/grpc/peer"
+
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
@@ -2449,4 +2451,53 @@ func TestConnectionError_Unwrap(t *testing.T) {
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Error("ConnectionError does not unwrap")
 	}
+}
+
+func (s) TestPeerSetInServerContext(t *testing.T) {
+	// create client and server transports.
+	server, client, cancel := setUp(t, 0, math.MaxUint32, normal)
+	defer cancel()
+	defer server.stop()
+	defer client.Close(fmt.Errorf("closed manually by test"))
+
+	// create a stream with client transport.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := client.NewStream(ctx, &CallHdr{})
+	if err != nil {
+		t.Fatalf("failed to create a stream: %v", err)
+	}
+
+	waitWhileTrue(t, func() (bool, error) {
+		server.mu.Lock()
+		defer server.mu.Unlock()
+
+		if len(server.conns) == 0 {
+			return true, fmt.Errorf("timed-out while waiting for connection to be created on the server")
+		}
+		return false, nil
+	})
+
+	// verify peer is set in client transport context.
+	if _, ok := peer.FromContext(client.ctx); !ok {
+		t.Fatalf("Peer expected in client transport's context, but actually not found.")
+	}
+
+	// verify peer is set in stream context.
+	if _, ok := peer.FromContext(stream.ctx); !ok {
+		t.Fatalf("Peer expected in stream context, but actually not found.")
+	}
+
+	// verify peer is set in server transport context.
+	server.mu.Lock()
+	for k := range server.conns {
+		sc, ok := k.(*http2Server)
+		if !ok {
+			t.Fatalf("ServerTransport is of type %T, want %T", k, &http2Server{})
+		}
+		if _, ok = peer.FromContext(sc.ctx); !ok {
+			t.Fatalf("Peer expected in server transport's context, but actually not found.")
+		}
+	}
+	server.mu.Unlock()
 }
