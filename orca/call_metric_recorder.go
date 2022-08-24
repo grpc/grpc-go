@@ -101,10 +101,20 @@ type callMetricRecorderCtxKey struct{}
 // Returns nil if no custom metrics recorder is found in the provided context,
 // which will be the case when custom metrics reporting is not enabled.
 func CallMetricRecorderFromContext(ctx context.Context) *CallMetricRecorder {
-	r, _ := ctx.Value(callMetricRecorderCtxKey{}).(*CallMetricRecorder)
-	return r
+	// The actual value stored in the context is the address of the pointer to a
+	// CallMetricRecorder. This is required for the lazy allocation of the
+	// metric recorder, happening in here, which modifies the pointer stored in
+	// the address value found in the context.
+	addr, ok := ctx.Value(callMetricRecorderCtxKey{}).(**CallMetricRecorder)
+	if !ok {
+		return nil
+	}
+	if *addr == nil {
+		*addr = newCallMetricRecorder()
+	}
+	return *addr
 }
 
 func newContextWithCallMetricRecorder(ctx context.Context, r *CallMetricRecorder) context.Context {
-	return context.WithValue(ctx, callMetricRecorderCtxKey{}, r)
+	return context.WithValue(ctx, callMetricRecorderCtxKey{}, &r)
 }

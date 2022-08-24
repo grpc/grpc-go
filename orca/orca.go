@@ -69,20 +69,46 @@ func CallMetricsServerOption() grpc.ServerOption {
 }
 
 func unaryInt(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	recorder := newCallMetricRecorder()
-	ctxWithRecorder := newContextWithCallMetricRecorder(ctx, recorder)
-	defer setTrailerMetadata(ctx, recorder)
-	return handler(ctxWithRecorder, req)
+	// We don't allocate the metric recorder here. It will be allocated the
+	// first time the user calls CallMetricRecorderFromContext().
+	ctxWithRecorder := newContextWithCallMetricRecorder(ctx, nil)
+
+	resp, err := handler(ctxWithRecorder, req)
+
+	// If the user never called CallMetricRecorderFromContext() from their RPC
+	// handler, a metric recorder would not have been allocated at this point.
+	// We cannot call CallMetricRecorderFromContext() here to get the recorder
+	// from the context because that would lead to the allocation of a metric
+	// recorder if one wasn't allocated already.
+	recorderPointer, ok := ctxWithRecorder.Value(callMetricRecorderCtxKey{}).(**CallMetricRecorder)
+	if !ok || (*recorderPointer == nil) {
+		return resp, err
+	}
+	setTrailerMetadata(ctx, *recorderPointer)
+	return resp, err
 }
 
 func streamInt(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	recorder := newCallMetricRecorder()
 	ws := &wrappedStream{
 		ServerStream: ss,
-		ctx:          newContextWithCallMetricRecorder(ss.Context(), recorder),
+		// We don't allocate the metric recorder here. It will be allocated the
+		// first time the user calls CallMetricRecorderFromContext().
+		ctx: newContextWithCallMetricRecorder(ss.Context(), nil),
 	}
-	defer setTrailerMetadata(ws.Context(), recorder)
-	return handler(srv, ws)
+
+	err := handler(srv, ws)
+
+	// If the user never called CallMetricRecorderFromContext() from their RPC
+	// handler, a metric recorder would not have been allocated at this point.
+	// We cannot call CallMetricRecorderFromContext() here to get the recorder
+	// from the context because that would lead to the allocation of a metric
+	// recorder if one wasn't allocated already.
+	recorderPointer, ok := ws.Context().Value(callMetricRecorderCtxKey{}).(**CallMetricRecorder)
+	if !ok || (*recorderPointer == nil) {
+		return err
+	}
+	setTrailerMetadata(ss.Context(), *recorderPointer)
+	return err
 }
 
 // setTrailerMetadata adds a trailer metadata entry with key being set to
@@ -116,15 +142,21 @@ func (w *wrappedStream) Context() context.Context {
 	return w.ctx
 }
 
+// ErrLoadReportMissing indicates no ORCA load report was found in trailers.
+var ErrLoadReportMissing = errors.New("orca load report missing in provided metadata")
+
 // ToLoadReport unmarshals a binary encoded [ORCA LoadReport] protobuf message
 // from md and returns the corresponding struct. The load report is expected to
 // be stored as the value for key "endpoint-load-metrics-bin".
+//
+// If no load report was found in the provided metadata, ErrLoadReportMissing is
+// returned.
 //
 // [ORCA LoadReport]: (https://github.com/cncf/xds/blob/main/xds/data/orca/v3/orca_load_report.proto#L15)
 func ToLoadReport(md metadata.MD) (*v3orcapb.OrcaLoadReport, error) {
 	vs := md.Get(trailerMetadataKey)
 	if len(vs) == 0 {
-		return nil, errors.New("orca load report missing in provided metadata")
+		return nil, ErrLoadReportMissing
 	}
 	ret := new(v3orcapb.OrcaLoadReport)
 	if err := proto.Unmarshal([]byte(vs[0]), ret); err != nil {
