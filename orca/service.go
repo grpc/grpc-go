@@ -45,17 +45,18 @@ const minReportingInterval = 30 * time.Second
 // Service provides an implementation of the OpenRcaService as defined in the
 // [ORCA] service protos.
 //
-// Server applications can use the SetXxx() methods to record measurements
-// corresponding to backend metrics, which eventually get pushed to clients who
-// have initiated the SteamCoreMetrics streaming RPC.
+// Server applications can use the SetXxx() methods on the exported Recorder
+// field to record measurements corresponding to backend metrics, which
+// eventually get pushed to clients who have initiated the SteamCoreMetrics
+// streaming RPC.
 //
 // [ORCA]: https://github.com/cncf/xds/blob/main/xds/service/orca/v3/orca.proto
 type Service struct {
 	v3orcaservicegrpc.UnimplementedOpenRcaServiceServer
-	MetricSetter
-	MetricEraser
 
-	recorder             *metricRecorder
+	// Recorder provides the functionality to record and report custom metrics.
+	Recorder *OutOfBandMetricRecorder
+	// Minimum reporting interval, as configured by the user, or the default.
 	minReportingInterval time.Duration
 }
 
@@ -91,11 +92,8 @@ func Register(s grpc.ServiceRegistrar, opts ServiceOptions) (*Service, error) {
 			opts.MinReportingInterval = minReportingInterval
 		}
 	}
-	recorder := newMetricRecorder()
 	service := &Service{
-		MetricSetter:         recorder,
-		MetricEraser:         recorder,
-		recorder:             recorder,
+		Recorder:             NewOutOfBandMetricRecorder(),
 		minReportingInterval: opts.MinReportingInterval,
 	}
 	v3orcaservicegrpc.RegisterOpenRcaServiceServer(srv, service)
@@ -120,7 +118,7 @@ func (s *Service) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadRepo
 }
 
 func (s *Service) sendMetricsResponse(stream v3orcaservicegrpc.OpenRcaService_StreamCoreMetricsServer) error {
-	return stream.Send(s.recorder.toLoadReportProto())
+	return stream.Send(s.Recorder.toLoadReportProto())
 }
 
 // StreamCoreMetrics streams custom backend metrics injected by the server

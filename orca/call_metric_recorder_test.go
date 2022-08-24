@@ -59,17 +59,17 @@ func (s) Test_E2E_CustomBackendMetrics_PerRPC_Unary(t *testing.T) {
 
 	// An interceptor which injects custom backend metrics.
 	injectingInterceptor := func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-		recorder := orca.MetricSetterFromContext(ctx)
+		recorder := orca.CallMetricRecorderFromContext(ctx)
 		if recorder == nil {
 			err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 			t.Error(err)
 			return nil, err
 		}
-		recorder.SetCPUUtilizationMetric(1.0)
-		recorder.SetMemoryUtilizationMetric(50.0)
+		recorder.SetCPUUtilization(1.0)
+		recorder.SetMemoryUtilization(50.0)
 		// This value will be overwritten by a write to the same metric from the
 		// server handler.
-		recorder.SetUtilizationMetric("queueSize", 1.0)
+		recorder.SetUtilization("queueSize", 1.0)
 		return handler(ctx, req)
 	}
 
@@ -77,14 +77,14 @@ func (s) Test_E2E_CustomBackendMetrics_PerRPC_Unary(t *testing.T) {
 	// one of the values injected above, by the interceptor.
 	srv := stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			recorder := orca.MetricSetterFromContext(ctx)
+			recorder := orca.CallMetricRecorderFromContext(ctx)
 			if recorder == nil {
 				err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 				t.Error(err)
 				return nil, err
 			}
-			recorder.SetRequestCostMetric("queryCost", 25.0)
-			recorder.SetUtilizationMetric("queueSize", 75.0)
+			recorder.SetRequestCost("queryCost", 25.0)
+			recorder.SetUtilization("queueSize", 75.0)
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -137,17 +137,17 @@ func (s) Test_E2E_CustomBackendMetrics_PerRPC_Streaming(t *testing.T) {
 
 	// An interceptor which injects custom backend metrics.
 	injectingInterceptor := func(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		recorder := orca.MetricSetterFromContext(ss.Context())
+		recorder := orca.CallMetricRecorderFromContext(ss.Context())
 		if recorder == nil {
 			err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 			t.Error(err)
 			return err
 		}
-		recorder.SetCPUUtilizationMetric(1.0)
-		recorder.SetMemoryUtilizationMetric(50.0)
+		recorder.SetCPUUtilization(1.0)
+		recorder.SetMemoryUtilization(50.0)
 		// This value will be overwritten by a write to the same metric from the
 		// server handler.
-		recorder.SetUtilizationMetric("queueSize", 1.0)
+		recorder.SetUtilization("queueSize", 1.0)
 		return handler(srv, ss)
 	}
 
@@ -155,14 +155,14 @@ func (s) Test_E2E_CustomBackendMetrics_PerRPC_Streaming(t *testing.T) {
 	// one of the values injected above, by the interceptor.
 	srv := stubserver.StubServer{
 		FullDuplexCallF: func(stream testgrpc.TestService_FullDuplexCallServer) error {
-			recorder := orca.MetricSetterFromContext(stream.Context())
+			recorder := orca.CallMetricRecorderFromContext(stream.Context())
 			if recorder == nil {
 				err := errors.New("Failed to retrieve per-RPC custom metrics recorder from the RPC context")
 				t.Error(err)
 				return err
 			}
-			recorder.SetRequestCostMetric("queryCost", 25.0)
-			recorder.SetUtilizationMetric("queueSize", 75.0)
+			recorder.SetRequestCost("queryCost", 25.0)
+			recorder.SetUtilization("queueSize", 75.0)
 			// Streaming implementation replies with a dummy response until the
 			// client closes the stream (in which case it will see an io.EOF),
 			// or an error occurs while reading/writing messages.

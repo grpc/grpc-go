@@ -55,9 +55,9 @@ const trailerMetadataKey = "endpoint-load-metrics-bin"
 // grpc.NewServer().
 //
 // Subsequently, server RPC handlers can retrieve a reference to the RPC
-// specific custom metrics recorder [MetricSetter] to be used, via a call to
-// MetricSetterFromContext(), and inject custom metrics at any time during the
-// RPC lifecycle.
+// specific custom metrics recorder [CallMetricRecorder] to be used, via a call
+// to CallMetricRecorderFromContext(), and inject custom metrics at any time
+// during the RPC lifecycle.
 //
 // The injected custom metrics will be sent as part of trailer metadata, as a
 // binary-encoded [ORCA LoadReport] protobuf message, with the metadata key
@@ -69,17 +69,17 @@ func CallMetricsServerOption() grpc.ServerOption {
 }
 
 func unaryInt(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	recorder := newMetricRecorder()
-	ctxWithRecorder := newContextWithMetricSetter(ctx, recorder)
+	recorder := newCallMetricRecorder()
+	ctxWithRecorder := newContextWithCallMetricRecorder(ctx, recorder)
 	defer setTrailerMetadata(ctx, recorder)
 	return handler(ctxWithRecorder, req)
 }
 
 func streamInt(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	recorder := newMetricRecorder()
+	recorder := newCallMetricRecorder()
 	ws := &wrappedStream{
 		ServerStream: ss,
-		ctx:          newContextWithMetricSetter(ss.Context(), recorder),
+		ctx:          newContextWithCallMetricRecorder(ss.Context(), recorder),
 	}
 	defer setTrailerMetadata(ws.Context(), recorder)
 	return handler(srv, ws)
@@ -93,7 +93,7 @@ func streamInt(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInf
 // above. Any errors encountered here are not propagated to the caller because
 // they are ignored there. Hence we simply log any errors encountered here at
 // warning level, and return nothing.
-func setTrailerMetadata(ctx context.Context, r *metricRecorder) {
+func setTrailerMetadata(ctx context.Context, r *CallMetricRecorder) {
 	b, err := proto.Marshal(r.toLoadReportProto())
 	if err != nil {
 		logger.Warningf("failed to marshal load report: %v", err)
@@ -131,52 +131,4 @@ func ToLoadReport(md metadata.MD) (*v3orcapb.OrcaLoadReport, error) {
 		return nil, fmt.Errorf("failed to unmarshal load report found in metadata: %v", err)
 	}
 	return ret, nil
-}
-
-// MetricSetter is the interface that defines methods for recording measurements
-// for metrics, useful in both per-call and out-of-band scenarios.
-type MetricSetter interface {
-	// SetRequestCostMetric records a measurement for a request cost metric,
-	// uniquely identifiable by name.
-	SetRequestCostMetric(name string, val float64)
-
-	// SetUtilizationMetric records a measurement for a utilization metric,
-	// uniquely identifiable by name.
-	SetUtilizationMetric(name string, val float64)
-
-	// SetCPUUtilizationMetric records a measurement for CPU utilization.
-	SetCPUUtilizationMetric(val float64)
-
-	// SetMemoryUtilizationMetric records a measurement for memory utilization.
-	SetMemoryUtilizationMetric(val float64)
-}
-
-type metricSetterCtxKey struct{}
-
-// MetricSetterFromContext returns the RPC specific custom metrics recorder
-// [MetricSetter] embedded in the provided RPC context.
-//
-// Returns nil if no custom metrics recorder is found in the provided context,
-// which will be the case when custom metrics reporting is not enabled.
-func MetricSetterFromContext(ctx context.Context) MetricSetter {
-	r, _ := ctx.Value(metricSetterCtxKey{}).(MetricSetter)
-	return r
-}
-
-func newContextWithMetricSetter(ctx context.Context, s MetricSetter) context.Context {
-	return context.WithValue(ctx, metricSetterCtxKey{}, s)
-}
-
-// MetricEraser is the interface that defines methods for erasing previously
-// recording measurements for metrics, useful only in out-of-band scenarios.
-type MetricEraser interface {
-	// DeleteCPUUtilizationMetric deletes a previously recorded measurement for
-	// CPU utilization.
-	DeleteCPUUtilizationMetric()
-	// DeleteMemoryUtilizationMetric deletes a previously recorded measurement for
-	// memory utilization.
-	DeleteMemoryUtilizationMetric()
-	// DeleteUtilizationMetric deletes a previously recorded measurement for a
-	// utilization metric uniquely identifiable by name.
-	DeleteUtilizationMetric(name string)
 }
