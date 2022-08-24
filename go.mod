@@ -1,6 +1,6 @@
 module google.golang.org/grpc
 
-go 1.14
+go 1.17
 
 require (
 	github.com/cespare/xxhash/v2 v2.1.1
@@ -16,4 +16,13 @@ require (
 	golang.org/x/sys v0.0.0-20210119212857-b64e53b001e4
 	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013
 	google.golang.org/protobuf v1.27.1
+)
+
+require (
+	cloud.google.com/go v0.34.0 // indirect
+	github.com/census-instrumentation/opencensus-proto v0.2.1 // indirect
+	github.com/envoyproxy/protoc-gen-validate v0.1.0 // indirect
+	golang.org/x/text v0.3.3 // indirect
+	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
+	google.golang.org/appengine v1.4.0 // indirect
 )

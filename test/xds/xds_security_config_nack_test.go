@@ -41,7 +41,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 		missingIdentityProviderInstance = "missing-identity-provider-instance"
 		missingRootProviderInstance     = "missing-root-provider-instance"
 	)
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t)
+	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
 	defer cleanup1()
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
@@ -324,7 +324,7 @@ func (s) TestUnmarshalCluster_WithUpdateValidatorFunc(t *testing.T) {
 			// SetupManagementServer() sets up a bootstrap file with certificate
 			// provider instance names: `e2e.ServerSideCertProviderInstance` and
 			// `e2e.ClientSideCertProviderInstance`.
-			managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t)
+			managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
 			defer cleanup1()
 
 			port, cleanup2 := startTestService(t, nil)

@@ -100,7 +100,7 @@ func (*testService) FullDuplexCall(stream testpb.TestService_FullDuplexCallServe
 func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
-	fs, err := e2e.StartManagementServer()
+	fs, err := e2e.StartManagementServer(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

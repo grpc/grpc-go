@@ -125,7 +125,7 @@ func hostPortFromListener(lis net.Listener) (string, uint32, error) {
 //   the client and the server. This results in both of them using the
 //   configured fallback credentials (which is insecure creds in this case).
 func (s) TestServerSideXDS_Fallback(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t)
+	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
 	defer cleanup1()
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
@@ -207,7 +207,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t)
+			managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
 			defer cleanup1()
 
 			lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
@@ -277,7 +277,7 @@ func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 // configuration pointing to the use of the file_watcher plugin and we verify
 // that the same client is now able to successfully make an RPC.
 func (s) TestServerSideXDS_SecurityConfigChange(t *testing.T) {
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t)
+	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
 	defer cleanup1()
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)

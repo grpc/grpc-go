@@ -26,42 +26,18 @@ import (
 	"reflect"
 	"strconv"
 
-	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
-
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	v3cache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	v3resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	v3server "github.com/envoyproxy/go-control-plane/pkg/server/v3"
+	"google.golang.org/grpc"
 )
-
-var logger = grpclog.Component("xds-e2e")
-
-// serverLogger implements the Logger interface defined at
-// envoyproxy/go-control-plane/pkg/log. This is passed to the Snapshot cache.
-type serverLogger struct{}
-
-func (l serverLogger) Debugf(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	logger.InfoDepth(1, msg)
-}
-func (l serverLogger) Infof(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	logger.InfoDepth(1, msg)
-}
-func (l serverLogger) Warnf(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	logger.WarningDepth(1, msg)
-}
-func (l serverLogger) Errorf(format string, args ...interface{}) {
-	msg := fmt.Sprintf(format, args...)
-	logger.ErrorDepth(1, msg)
-}
 
 // ManagementServer is a thin wrapper around the xDS control plane
 // implementation provided by envoyproxy/go-control-plane.
@@ -77,27 +53,81 @@ type ManagementServer struct {
 	version int                   // Version of resource snapshot.
 }
 
+// ManagementServerOptions contains options to be passed to the management
+// server during creation.
+type ManagementServerOptions struct {
+	// Listener to accept connections on. If nil, a TPC listener on a local port
+	// will be created and used.
+	Listener net.Listener
+
+	// The callbacks defined below correspond to the state of the world (sotw)
+	// version of the xDS API on the management server.
+
+	// OnStreamOpen is called when an xDS stream is opened. The callback is
+	// invoked with the assigned stream ID and the type URL from the incoming
+	// request (or "" for ADS).
+	//
+	// Returning an error from this callback will end processing and close the
+	// stream. OnStreamClosed will still be called.
+	OnStreamOpen func(context.Context, int64, string) error
+
+	// OnStreamClosed is called immediately prior to closing an xDS stream. The
+	// callback is invoked with the stream ID of the stream being closed.
+	OnStreamClosed func(int64)
+
+	// OnStreamRequest is called when a request is received on the stream. The
+	// callback is invoked with the stream ID of the stream on which the request
+	// was received and the received request.
+	//
+	// Returning an error from this callback will end processing and close the
+	// stream. OnStreamClosed will still be called.
+	OnStreamRequest func(int64, *v3discoverypb.DiscoveryRequest) error
+
+	// OnStreamResponse is called immediately prior to sending a response on the
+	// stream. The callback is invoked with the stream ID of the stream on which
+	// the response is being sent along with the incoming request and the outgoing
+	// response.
+	OnStreamResponse func(context.Context, int64, *v3discoverypb.DiscoveryRequest, *v3discoverypb.DiscoveryResponse)
+}
+
 // StartManagementServer initializes a management server which implements the
 // AggregatedDiscoveryService endpoint. The management server is initialized
 // with no resources. Tests should call the Update() method to change the
 // resource snapshot held by the management server, as required by the test
 // logic. When the test is done, it should call the Stop() method to cleanup
 // resources allocated by the management server.
-func StartManagementServer() (*ManagementServer, error) {
+func StartManagementServer(opts *ManagementServerOptions) (*ManagementServer, error) {
 	// Create a snapshot cache.
 	cache := v3cache.NewSnapshotCache(true, v3cache.IDHash{}, serverLogger{})
 	logger.Infof("Created new snapshot cache...")
 
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		return nil, fmt.Errorf("failed to start xDS management server: %v", err)
+	var lis net.Listener
+	if opts != nil && opts.Listener != nil {
+		lis = opts.Listener
+	} else {
+		var err error
+		lis, err = net.Listen("tcp", "localhost:0")
+		if err != nil {
+			return nil, fmt.Errorf("failed to start xDS management server: %v", err)
+		}
+	}
+
+	// Cancelling the context passed to the server is the only way of stopping it
+	// at the end of the test.
+	ctx, cancel := context.WithCancel(context.Background())
+	callbacks := v3server.CallbackFuncs{}
+	if opts != nil {
+		callbacks = v3server.CallbackFuncs{
+			StreamOpenFunc:     opts.OnStreamOpen,
+			StreamClosedFunc:   opts.OnStreamClosed,
+			StreamRequestFunc:  opts.OnStreamRequest,
+			StreamResponseFunc: opts.OnStreamResponse,
+		}
 	}
 
 	// Create an xDS management server and register the ADS implementation
-	// provided by it on a gRPC server. Cancelling the context passed to the
-	// server is the only way of stopping it at the end of the test.
-	ctx, cancel := context.WithCancel(context.Background())
-	xs := v3server.NewServer(ctx, cache, v3server.CallbackFuncs{})
+	// provided by it on a gRPC server.
+	xs := v3server.NewServer(ctx, cache, callbacks)
 	gs := grpc.NewServer()
 	v3discoverygrpc.RegisterAggregatedDiscoveryServiceServer(gs, xs)
 	logger.Infof("Registered Aggregated Discovery Service (ADS)...")

@@ -74,7 +74,7 @@ func startTestService(t *testing.T, server *stubserver.StubServer) (uint32, func
 }
 
 func (s) TestClientSideXDS(t *testing.T) {
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t)
+	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
 	defer cleanup1()
 
 	port, cleanup2 := startTestService(t, nil)
