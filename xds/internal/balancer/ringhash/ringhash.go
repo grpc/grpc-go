@@ -345,14 +345,27 @@ func (b *ringhashBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 	scs.setState(s)
 	newSCState := scs.effectiveState()
 	b.logger.Infof("SubConn's effective old state was: %v, new state is %v", oldSCState, newSCState)
+
+	var sendUpdate bool
+	oldBalancerState := b.state
 	b.state = b.csEvltr.recordTransition(oldSCState, newSCState)
+	if oldBalancerState != b.state {
+		sendUpdate = true
+	}
 
 	switch s {
+	case connectivity.Idle:
+		// No need to send an update. No queued RPC can be unblocked. If the
+		// overall state changed because of this, sendUpdate is already true.
+	case connectivity.Connecting:
+		// No need to send an update. No queued RPC can be unblocked. If the
+		// overall state changed because of this, sendUpdate is already true.
 	case connectivity.Ready:
 		// We need to regenerate the picker even if the ring has not changed
 		// because we could be moving from TRANSIENT_FAILURE to READY, in which
 		// case, we need to update the error picker returned earlier.
 		b.regeneratePicker()
+		sendUpdate = true
 	case connectivity.TransientFailure:
 		// Save error to be reported via picker.
 		b.connErr = state.ConnectionError
@@ -363,9 +376,10 @@ func (b *ringhashBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 		delete(b.scStates, sc)
 	}
 
-	// Send a picker update unconditionally.
-	b.logger.Infof("Pushing new state %v and picker %p", b.state, b.picker)
-	b.cc.UpdateState(balancer.State{ConnectivityState: b.state, Picker: b.picker})
+	if sendUpdate {
+		b.logger.Infof("Pushing new state %v and picker %p", b.state, b.picker)
+		b.cc.UpdateState(balancer.State{ConnectivityState: b.state, Picker: b.picker})
+	}
 
 	switch b.state {
 	case connectivity.Connecting, connectivity.TransientFailure:
