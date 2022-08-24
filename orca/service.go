@@ -145,10 +145,3 @@ func (s *Service) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, 
 		}
 	}
 }
-
-// SetRequestCostMetric method of the MetricSetter interface is overridden here,
-// and changed to be a no-op since request cost metrics are supported only for
-// per-call metrics.
-func (s *Service) SetRequestCostMetric(name string, val float64) {
-	logger.Warning("Request cost metrics are supported only for per-call metrics")
-}
