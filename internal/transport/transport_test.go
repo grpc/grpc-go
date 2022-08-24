@@ -2468,6 +2468,16 @@ func (s) TestPeerSetInServerContext(t *testing.T) {
 		t.Fatalf("failed to create a stream: %v", err)
 	}
 
+	waitWhileTrue(t, func() (bool, error) {
+		server.mu.Lock()
+		defer server.mu.Unlock()
+
+		if len(server.conns) == 0 {
+			return true, fmt.Errorf("timed-out while waiting for connection to be created on the server")
+		}
+		return false, nil
+	})
+
 	// verify peer is set in client transport context.
 	if _, ok := peer.FromContext(client.ctx); !ok {
 		t.Fatalf("Peer expected in client transport's context, but actually not found.")
@@ -2479,29 +2489,15 @@ func (s) TestPeerSetInServerContext(t *testing.T) {
 	}
 
 	// verify peer is set in server transport context.
-	count := 0
-	for {
-		server.mu.Lock()
-		if len(server.conns) == 0 {
-			server.mu.Unlock()
-			time.Sleep(time.Millisecond)
-			count += 1
-			// wait for server transport setup for apprximately 1 second.
-			if count >= 1000 {
-				t.Fatalf("timed out waiting for server transport setup.")
-			}
-			continue
+	server.mu.Lock()
+	for k := range server.conns {
+		sc, ok := k.(*http2Server)
+		if !ok {
+			t.Fatalf("ServerTransport is of type %T, want %T", k, &http2Server{})
 		}
-		for k := range server.conns {
-			sc, ok := k.(*http2Server)
-			if !ok {
-				t.Fatalf("ServerTransport is of type %T, want %T", k, &http2Server{})
-			}
-			if _, ok = peer.FromContext(sc.ctx); !ok {
-				t.Fatalf("Peer expected in server transport's context, but actually not found.")
-			}
+		if _, ok = peer.FromContext(sc.ctx); !ok {
+			t.Fatalf("Peer expected in server transport's context, but actually not found.")
 		}
-		server.mu.Unlock()
-		break
 	}
+	server.mu.Unlock()
 }
