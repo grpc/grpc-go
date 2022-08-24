@@ -735,14 +735,13 @@ func (b *outlierDetectionBalancer) intervalTimerAlgorithm() {
 }
 
 // addrsWithAtLeastRequestVolume returns a slice of address information of all
-// addresses with at least request volume defined in the success rate ejection
-// configuration. Caller must hold b.mu.
-func (b *outlierDetectionBalancer) addrsWithAtLeastRequestVolume() []*addressInfo {
+// addresses with at least request volume passed in. Caller must hold b.mu.
+func (b *outlierDetectionBalancer) addrsWithAtLeastRequestVolume(requestVolume uint32) []*addressInfo {
 	var addrs []*addressInfo
 	for _, addrInfo := range b.addrs {
 		bucket := addrInfo.callCounter.inactiveBucket
 		rv := bucket.numSuccesses + bucket.numFailures
-		if rv >= b.cfg.SuccessRateEjection.RequestVolume {
+		if rv >= requestVolume {
 			addrs = append(addrs, addrInfo)
 		}
 	}
@@ -775,7 +774,7 @@ func (b *outlierDetectionBalancer) meanAndStdDev(addrs []*addressInfo) (float64,
 // the other addresses according to mean and standard deviation, and if overall
 // applicable from other set heuristics. Caller must hold b.mu.
 func (b *outlierDetectionBalancer) successRateAlgorithm() {
-	addrsToConsider := b.addrsWithAtLeastRequestVolume()
+	addrsToConsider := b.addrsWithAtLeastRequestVolume(b.cfg.SuccessRateEjection.RequestVolume)
 	if len(addrsToConsider) < int(b.cfg.SuccessRateEjection.MinimumHosts) {
 		return
 	}
@@ -799,21 +798,18 @@ func (b *outlierDetectionBalancer) successRateAlgorithm() {
 // rate exceeds a set enforcement percentage, if overall applicable from other
 // set heuristics. Caller must hold b.mu.
 func (b *outlierDetectionBalancer) failurePercentageAlgorithm() {
-	if uint32(len(b.addrs)) < b.cfg.FailurePercentageEjection.MinimumHosts {
+	addrsToConsider := b.addrsWithAtLeastRequestVolume(b.cfg.FailurePercentageEjection.RequestVolume)
+	if len(addrsToConsider) < int(b.cfg.FailurePercentageEjection.MinimumHosts) {
 		return
 	}
 
-	for _, addrInfo := range b.addrs {
+	for _, addrInfo := range addrsToConsider {
 		bucket := addrInfo.callCounter.inactiveBucket
 		ejectionCfg := b.cfg.FailurePercentageEjection
 		if float64(b.numAddrsEjected)/float64(len(b.addrs))*100 > float64(b.cfg.MaxEjectionPercent) {
 			return
 		}
-		rv := bucket.numSuccesses + bucket.numFailures
-		if rv < ejectionCfg.RequestVolume {
-			continue
-		}
-		failurePercentage := (float64(bucket.numFailures) / float64(rv)) * 100
+		failurePercentage := (float64(bucket.numFailures) / float64(bucket.numSuccesses+bucket.numFailures)) * 100
 		if failurePercentage > float64(b.cfg.FailurePercentageEjection.Threshold) {
 			if uint32(grpcrand.Int31n(100)) < ejectionCfg.EnforcementPercentage {
 				b.ejectAddress(addrInfo)
