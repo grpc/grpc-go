@@ -70,6 +70,9 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+// "backendAddressesAndPorts extracts the address and port of each of the
+// StubServers passed in and returns them. Fails the test if any of the
+// StubServers passed have an invalid address.
 func backendAddressesAndPorts(t *testing.T, servers []*stubserver.StubServer) ([]resolver.Address, []uint32) {
 	addrs := make([]resolver.Address, len(servers))
 	ports := make([]uint32, len(servers))
@@ -102,8 +105,8 @@ func startTestServiceBackends(t *testing.T, numBackends int) ([]*stubserver.Stub
 	}
 
 	return servers, func() {
-		for i := 0; i < numBackends; i++ {
-			servers[i].Stop()
+		for _, server := range servers {
+			server.Stop()
 		}
 	}
 }
@@ -189,14 +192,14 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the clusterresolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
 	defer client.Close()
 
-	// Create a manual resolver and push service config specifying the use of
+	// Create a manual resolver and push a service config specifying the use of
 	// the cluster_resolver LB policy with a single discovery mechanism.
 	r := manual.NewBuilderWithScheme("whatever")
 	jsonSC := fmt.Sprintf(`{
@@ -260,15 +263,21 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 // TestEDS_MultipleLocalities tests the cluster_resolver LB policy using an EDS
 // resource with multiple localities. The following scenarios are tested:
 // 1. Two localities, each with a single backend. Test verifies that RPCs are
-//    roundrobined across these two backends.
+//    weighted roundrobined across these two backends.
 // 2. Add another locality, with a single backend. Test verifies that RPCs are
-//    roundrobined across all the backends.
-// 3. Remove one locality. Test verifies that RPCs are roundrobined across
-//    backends from the remaining localities.
+//    weighted roundrobined across all the backends.
+// 3. Remove one locality. Test verifies that RPCs are weighted roundrobined
+//    across backends from the remaining localities.
 // 4. Add a backend to one locality. Test verifies that RPCs are weighted
 //    roundrobined across localities.
 // 5. Change the weight of one of the localities. Test verifies that RPCs are
 //    weighted roundrobined across the localities.
+//
+// In our LB policy tree, one of the descendents of the "cluster_resolver" LB
+// policy is the "weighted_target" LB policy which performs weighted roundrobin
+// across localities (and this has a randomness component associated with it).
+// Therefore, the moment we have backends from more than one locality, RPCs are
+// weighted roundrobined across them.
 func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
 	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, nil)
@@ -279,8 +288,8 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	defer cleanup2()
 	addrs, ports := backendAddressesAndPorts(t, servers)
 
-	// Create xDS resources for consumption by the test. We start off with a
-	// two localities, and single backend in each of them.
+	// Create xDS resources for consumption by the test. We start off with two
+	// localities, and single backend in each of them.
 	resources := clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName1, weight: 1, ports: ports[:1]},
 		{name: localityName2, weight: 1, ports: ports[1:2]},
@@ -291,7 +300,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the clusterresolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -322,12 +331,15 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
+
+	// Ensure RPCs are being weighted roundrobined across the two backends.
 	testClient := testpb.NewTestServiceClient(cc)
 	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, addrs[0:2]); err != nil {
 		t.Fatal(err)
 	}
 
-	// Add another locality with a single backend, and ensure roundrobin.
+	// Add another locality with a single backend, and ensure RPCs are being
+	// weighted roundrobined across the three backends.
 	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName1, weight: 1, ports: ports[:1]},
 		{name: localityName2, weight: 1, ports: ports[1:2]},
@@ -340,7 +352,8 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Remove the first locality, and ensure roundrobin.
+	// Remove the first locality, and ensure RPCs are being weighted
+	// roundrobined across the last two backends.
 	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName2, weight: 1, ports: ports[1:2]},
 		{name: localityName3, weight: 1, ports: ports[2:3]},
@@ -367,10 +380,11 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Change the weight of one locality and ensure weighted roundrobin.  Since
-	// RPCs are weighted roundrobined across localities, and locality2 has two
-	// times the weight of locality1, locality2's backend will receive four
-	// times the traffic of locality1's backend.
+	// Change the weight of locality2 and ensure weighted roundrobin.  Since
+	// locality2 has twice the weight of locality3, it will be picked twice as
+	// frequently as locality3 for RPCs. And since locality2 has half the number
+	// of backends as locality3, its backends will receive four times the
+	// traffic of locality3's backend.
 	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName2, weight: 2, ports: ports[1:2]},
 		{name: localityName3, weight: 1, ports: ports[2:4]},
@@ -397,9 +411,9 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	defer cleanup2()
 	addrs, ports := backendAddressesAndPorts(t, servers)
 
-	// Create xDS resources for consumption by the test.  Two localities with 6
-	// backends each, with two of the 6 backends being healthy. Both UNKNOWN and
-	// HEALTHY are considered by gRPC for load balancing.
+	// Create xDS resources for consumption by the test.  Two localities with
+	// six backends each, with two of the six backends being healthy. Both
+	// UNKNOWN and HEALTHY are considered by gRPC for load balancing.
 	resources := clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName1, weight: 1, ports: ports[:6], healthStatus: []v3corepb.HealthStatus{
 			v3corepb.HealthStatus_UNKNOWN,
@@ -424,7 +438,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the clusterresolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -455,6 +469,9 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 		t.Fatalf("failed to dial local test server: %v", err)
 	}
 	defer cc.Close()
+
+	// Ensure RPCs are being weighted roundrobined across healthy backends from
+	// both localities.
 	testClient := testpb.NewTestServiceClient(cc)
 	if err := rrutil.CheckWeightedRoundRobinRPCs(ctx, testClient, append(addrs[0:2], addrs[6:8]...)); err != nil {
 		t.Fatal(err)
@@ -462,8 +479,8 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 }
 
 // TestEDS_EmptyUpdate tests the cluster_resolver LB policy using an EDS
-// resource with no localities and verifies that RPCs fail with the expected
-// error.
+// resource with no localities and verifies that RPCs fail with "all priorities
+// removed" error.
 func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
 	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, nil)
@@ -474,9 +491,8 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	defer cleanup2()
 	addrs, ports := backendAddressesAndPorts(t, servers)
 
-	const cacheTimeout = 100 * time.Microsecond
 	oldCacheTimeout := balancergroup.DefaultSubBalancerCloseTimeout
-	balancergroup.DefaultSubBalancerCloseTimeout = cacheTimeout
+	balancergroup.DefaultSubBalancerCloseTimeout = 100 * time.Microsecond
 	defer func() { balancergroup.DefaultSubBalancerCloseTimeout = oldCacheTimeout }()
 
 	// Create xDS resources for consumption by the test. The first update is an
@@ -488,7 +504,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Create an xDS client for use by the clusterresolver LB policy.
+	// Create an xDS client for use by the cluster_resolver LB policy.
 	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
@@ -513,7 +529,9 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	scpr := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(jsonSC)
 	r.InitialState(xdsclient.SetClient(resolver.State{ServiceConfig: scpr}, client))
 
-	// Create a ClientConn and ensure TRANSIENT_FAILURE.
+	// Create a ClientConn and ensure that RPCs fail with "all priorities
+	// removed" error. This is the expected error when the cluster_resolver LB
+	// policy receives an EDS update with no localities.
 	cc, err := grpc.Dial(r.Scheme()+":///test.service", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(r))
 	if err != nil {
 		t.Fatalf("failed to dial local test server: %v", err)
@@ -533,7 +551,8 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Push another empty update and ensure TRANSIENT_FAILURE.
+	// Push another empty update and ensure that RPCs fails with "all priorities
+	// removed" error again.
 	resources = clientEndpointsResource(nodeID, edsServiceName, nil)
 	if err := managementServer.Update(ctx, resources); err != nil {
 		t.Fatal(err)
@@ -564,5 +583,5 @@ func waitForAllPrioritiesRemovedError(ctx context.Context, t *testing.T, client 
 		}
 		return nil
 	}
-	return errors.New("Timeout when waiting for RPCs to fail with UNAVAILABLE status and priority.ErrAllPrioritiesRemoved error")
+	return errors.New("timeout when waiting for RPCs to fail with UNAVAILABLE status and priority.ErrAllPrioritiesRemoved error")
 }

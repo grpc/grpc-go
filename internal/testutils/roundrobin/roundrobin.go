@@ -16,8 +16,8 @@
  *
  */
 
-// Package roundrobin contains helper functions to check for roundrobin
-// loadbalancing of RPCs in tests.
+// Package roundrobin contains helper functions to check for roundrobin and
+// weighted-roundrobin load balancing of RPCs in tests.
 package roundrobin
 
 import (
@@ -76,10 +76,10 @@ func waitForTrafficToReachBackends(ctx context.Context, client testgrpc.TestServ
 
 // CheckRoundRobinRPCs verifies that EmptyCall RPCs on the given ClientConn,
 // connected to a server exposing the test.grpc_testing.TestService, are
-// roundrobin-ed across the given backend addresses.
+// roundrobined across the given backend addresses.
 //
 // Returns a non-nil error if context deadline expires before RPCs start to get
-// roundrobin-ed across the given backends.
+// roundrobined across the given backends.
 func CheckRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient, addrs []resolver.Address) error {
 	if err := waitForTrafficToReachBackends(ctx, client, addrs); err != nil {
 		return err
@@ -132,11 +132,11 @@ func CheckRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 
 // CheckWeightedRoundRobinRPCs verifies that EmptyCall RPCs on the given
 // ClientConn, connected to a server exposing the test.grpc_testing.TestService,
-// are weighted roundrobin-ed (with randomness) across the given backend
+// are weighted roundrobined (with randomness) across the given backend
 // addresses.
 //
 // Returns a non-nil error if context deadline expires before RPCs start to get
-// roundrobin-ed across the given backends.
+// roundrobined across the given backends.
 func CheckWeightedRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient, addrs []resolver.Address) error {
 	if err := waitForTrafficToReachBackends(ctx, client, addrs); err != nil {
 		return err
@@ -154,15 +154,24 @@ func CheckWeightedRoundRobinRPCs(ctx context.Context, client testgrpc.TestServic
 		wantRatio[addr] = float64(count) / float64(len(addrs))
 	}
 
-	// There is a small possibility that RPCs are still getting routed to a
-	// backend which was recently removed from the list of addresses passed to
-	// the round_robin policy. This is usually a transitory state and will
-	// eventually fix itself, and RPCs will start getting routed to only
-	// backends that we care about. We work around this situation by using two
-	// loops. The inner loop contains the meat of the calculations. If we ever
-	// see an RPCs getting routed to a backend that we dont expect it to get
-	// routed to, we break from the inner loop thereby resetting all the
-	// internal state and start afresh.
+	// There is a small possibility that RPCs are reaching backends that we
+	// don't expect them to reach here. The can happen because:
+	// - at time T0, the list of backends [A, B, C, D].
+	// - at time T1, the test updates the list of backends to [A, B, C], and
+	//   immediately starts attempting to check the distribution of RPCs to the
+	//   new backends.
+	// - there is no way for the test to wait for a new picker to be pushed on
+	//   to the channel (which contains the updated list of backends) before
+	//   starting to attempt the RPC distribution checks.
+	// - This is usually a transitory state and will eventually fix itself when
+	//   the new picker is pushed on the channel, and RPCs will start getting
+	//   routed to only backends that we care about.
+	//
+	// We work around this situation by using two loops. The inner loop contains
+	// the meat of the calculations, and includes the logic which factors out
+	// the randomness in weighted roundrobin. If we ever see an RPCs getting
+	// routed to a backend that we dont expect it to get routed to, we break
+	// from the inner loop thereby resetting all state and start afresh.
 OuterLoop:
 	for {
 		results := make(map[string]float64)
@@ -195,7 +204,7 @@ OuterLoop:
 		}
 		<-time.After(time.Millisecond)
 	}
-	return fmt.Errorf("Timeout when waiting for roundrobin distribution of RPCs across addresses: %v", addrs)
+	return fmt.Errorf("timeout when waiting for roundrobin distribution of RPCs across addresses: %v", addrs)
 }
 
 func equalApproximate(got, want map[string]float64) bool {
