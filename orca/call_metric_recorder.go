@@ -28,6 +28,8 @@ import (
 
 // CallMetricRecorder provides functionality to record per-RPC custom backend
 // metrics. See CallMetricsServerOption() for more details.
+//
+// Safe for concurrent use.
 type CallMetricRecorder struct {
 	cpu    atomic.Value // float64
 	memory atomic.Value // float64
