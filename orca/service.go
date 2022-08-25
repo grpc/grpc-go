@@ -20,6 +20,7 @@ package orca
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -27,6 +28,7 @@ import (
 	"google.golang.org/grpc/orca/internal"
 	"google.golang.org/grpc/status"
 
+	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 	v3orcaservicegrpc "github.com/cncf/xds/go/xds/service/orca/v3"
 	v3orcaservicepb "github.com/cncf/xds/go/xds/service/orca/v3"
 )
@@ -45,19 +47,22 @@ const minReportingInterval = 30 * time.Second
 // Service provides an implementation of the OpenRcaService as defined in the
 // [ORCA] service protos.
 //
-// Server applications can use the SetXxx() methods on the exported Recorder
-// field to record measurements corresponding to backend metrics, which
-// eventually get pushed to clients who have initiated the SteamCoreMetrics
-// streaming RPC.
+// Server applications can use the SetXxx() and DeleteXxx() methods to record
+// measurements corresponding to backend metrics, which eventually get pushed to
+// clients who have initiated the SteamCoreMetrics streaming RPC.
 //
 // [ORCA]: https://github.com/cncf/xds/blob/main/xds/service/orca/v3/orca.proto
 type Service struct {
 	v3orcaservicegrpc.UnimplementedOpenRcaServiceServer
 
-	// Recorder provides the functionality to record and report custom metrics.
-	Recorder *OutOfBandMetricRecorder
 	// Minimum reporting interval, as configured by the user, or the default.
 	minReportingInterval time.Duration
+
+	// mu guards the custom metrics injected by the server application.
+	mu          sync.RWMutex
+	cpu         float64
+	memory      float64
+	utilization map[string]float64
 }
 
 // ServiceOptions contains options to configure the ORCA service implementation.
@@ -93,8 +98,8 @@ func Register(s grpc.ServiceRegistrar, opts ServiceOptions) (*Service, error) {
 		}
 	}
 	service := &Service{
-		Recorder:             NewOutOfBandMetricRecorder(),
 		minReportingInterval: opts.MinReportingInterval,
+		utilization:          make(map[string]float64),
 	}
 	v3orcaservicegrpc.RegisterOpenRcaServiceServer(srv, service)
 	return service, nil
@@ -118,7 +123,7 @@ func (s *Service) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadRepo
 }
 
 func (s *Service) sendMetricsResponse(stream v3orcaservicegrpc.OpenRcaService_StreamCoreMetricsServer) error {
-	return stream.Send(s.Recorder.toLoadReportProto())
+	return stream.Send(s.toLoadReportProto())
 }
 
 // StreamCoreMetrics streams custom backend metrics injected by the server
@@ -143,5 +148,67 @@ func (s *Service) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, 
 				return err
 			}
 		}
+	}
+}
+
+// SetCPUUtilization records a measurement for the CPU utilization metric.
+func (s *Service) SetCPUUtilization(val float64) {
+	s.mu.Lock()
+	s.cpu = val
+	s.mu.Unlock()
+}
+
+// DeleteCPUUtilization deletes a previously recorded measurement for the CPU
+// utilization metric.
+func (s *Service) DeleteCPUUtilization() {
+	s.mu.Lock()
+	s.cpu = 0
+	s.mu.Unlock()
+}
+
+// SetMemoryUtilization records a measurement for the memory utilization metric.
+func (s *Service) SetMemoryUtilization(val float64) {
+	s.mu.Lock()
+	s.memory = val
+	s.mu.Unlock()
+}
+
+// DeleteMemoryUtilization deletes a previously recorded measurement for the
+// memory utilization metric.
+func (s *Service) DeleteMemoryUtilization() {
+	s.mu.Lock()
+	s.memory = 0
+	s.mu.Unlock()
+}
+
+// SetUtilization records a measurement for a utilization metric uniquely
+// identifiable by name.
+func (s *Service) SetUtilization(name string, val float64) {
+	s.mu.Lock()
+	s.utilization[name] = val
+	s.mu.Unlock()
+}
+
+// DeleteUtilization deletes any previously recorded measurement for a
+// utilization metric uniquely identifiable by name.
+func (s *Service) DeleteUtilization(name string) {
+	s.mu.Lock()
+	delete(s.utilization, name)
+	s.mu.Unlock()
+}
+
+// toLoadReportProto dumps the recorded measurements as an OrcaLoadReport proto.
+func (s *Service) toLoadReportProto() *v3orcapb.OrcaLoadReport {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	util := make(map[string]float64, len(s.utilization))
+	for k, v := range s.utilization {
+		util[k] = v
+	}
+	return &v3orcapb.OrcaLoadReport{
+		CpuUtilization: s.cpu,
+		MemUtilization: s.memory,
+		Utilization:    util,
 	}
 }

@@ -60,16 +60,16 @@ func (t *testServiceImpl) UnaryCall(context.Context, *testpb.SimpleRequest) (*te
 	t.requests++
 	t.mu.Unlock()
 
-	t.orcaSrv.Recorder.SetUtilization(requestsMetricKey, float64(t.requests))
-	t.orcaSrv.Recorder.SetCPUUtilization(50.0)
-	t.orcaSrv.Recorder.SetMemoryUtilization(99.0)
+	t.orcaSrv.SetUtilization(requestsMetricKey, float64(t.requests))
+	t.orcaSrv.SetCPUUtilization(50.0)
+	t.orcaSrv.SetMemoryUtilization(99.0)
 	return &testpb.SimpleResponse{}, nil
 }
 
 func (t *testServiceImpl) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
-	t.orcaSrv.Recorder.DeleteUtilization(requestsMetricKey)
-	t.orcaSrv.Recorder.DeleteCPUUtilization()
-	t.orcaSrv.Recorder.DeleteMemoryUtilization()
+	t.orcaSrv.DeleteUtilization(requestsMetricKey)
+	t.orcaSrv.DeleteCPUUtilization()
+	t.orcaSrv.DeleteMemoryUtilization()
 	return &testpb.Empty{}, nil
 }
 
