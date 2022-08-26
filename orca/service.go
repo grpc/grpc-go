@@ -45,7 +45,8 @@ func init() {
 const minReportingInterval = 30 * time.Second
 
 // Service provides an implementation of the OpenRcaService as defined in the
-// [ORCA] service protos.
+// [ORCA] service protos. Instances of this type must be created via calls to
+// Register() or NewService().
 //
 // Server applications can use the SetXxx() and DeleteXxx() methods to record
 // measurements corresponding to backend metrics, which eventually get pushed to
@@ -79,6 +80,23 @@ type ServiceOptions struct {
 	allowAnyMinReportingInterval bool
 }
 
+// NewService creates a new ORCA service implementation configured using the
+// provided options.
+func NewService(opts ServiceOptions) (*Service, error) {
+	// The default minimum supported reporting interval value can be overridden
+	// for testing purposes through the orca internal package.
+	if !opts.allowAnyMinReportingInterval {
+		if opts.MinReportingInterval < 0 || opts.MinReportingInterval < minReportingInterval {
+			opts.MinReportingInterval = minReportingInterval
+		}
+	}
+	service := &Service{
+		minReportingInterval: opts.MinReportingInterval,
+		utilization:          make(map[string]float64),
+	}
+	return service, nil
+}
+
 // Register creates a new ORCA service implementation configured using the
 // provided options and registers the same on the provided service registrar.
 func Register(s grpc.ServiceRegistrar, opts ServiceOptions) (*Service, error) {
@@ -90,16 +108,9 @@ func Register(s grpc.ServiceRegistrar, opts ServiceOptions) (*Service, error) {
 		return nil, fmt.Errorf("concrete type of provided grpc.ServiceRegistrar is %T, only supported type is %T", s, &grpc.Server{})
 	}
 
-	// The default minimum supported reporting interval value can be overridden
-	// for testing purposes through the orca internal package.
-	if !opts.allowAnyMinReportingInterval {
-		if opts.MinReportingInterval < 0 || opts.MinReportingInterval < minReportingInterval {
-			opts.MinReportingInterval = minReportingInterval
-		}
-	}
-	service := &Service{
-		minReportingInterval: opts.MinReportingInterval,
-		utilization:          make(map[string]float64),
+	service, err := NewService(opts)
+	if err != nil {
+		return nil, err
 	}
 	v3orcaservicegrpc.RegisterOpenRcaServiceServer(srv, service)
 	return service, nil
@@ -115,7 +126,7 @@ func (s *Service) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadRepo
 		return s.minReportingInterval
 	}
 	dur := req.GetReportInterval().AsDuration()
-	if dur < 0 || dur < s.minReportingInterval {
+	if dur < s.minReportingInterval {
 		logger.Warningf("Received reporting interval %q is less than configured minimum: %v. Using default: %s", dur, s.minReportingInterval)
 		return s.minReportingInterval
 	}
@@ -129,24 +140,18 @@ func (s *Service) sendMetricsResponse(stream v3orcaservicegrpc.OpenRcaService_St
 // StreamCoreMetrics streams custom backend metrics injected by the server
 // application.
 func (s *Service) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, stream v3orcaservicepb.OpenRcaService_StreamCoreMetricsServer) error {
-	// Send one response immediately before creating and waiting for the timer
-	// to fire.
-	if err := s.sendMetricsResponse(stream); err != nil {
-		return err
-	}
-
 	ticker := time.NewTicker(s.determineReportingInterval(req))
 	defer ticker.Stop()
 
 	for {
+		if err := s.sendMetricsResponse(stream); err != nil {
+			return err
+		}
 		// Send a response containing the currently recorded metrics
 		select {
 		case <-stream.Context().Done():
 			return status.Error(codes.Canceled, "Stream has ended.")
 		case <-ticker.C:
-			if err := s.sendMetricsResponse(stream); err != nil {
-				return err
-			}
 		}
 	}
 }

@@ -103,20 +103,28 @@ type callMetricRecorderCtxKey struct{}
 // Returns nil if no custom metrics recorder is found in the provided context,
 // which will be the case when custom metrics reporting is not enabled.
 func CallMetricRecorderFromContext(ctx context.Context) *CallMetricRecorder {
-	// The actual value stored in the context is the address of the pointer to a
-	// CallMetricRecorder. This is required for the lazy allocation of the
-	// metric recorder, happening in here, which modifies the pointer stored in
-	// the address value found in the context.
-	addr, ok := ctx.Value(callMetricRecorderCtxKey{}).(**CallMetricRecorder)
+	rw, ok := ctx.Value(callMetricRecorderCtxKey{}).(*recorderWrapper)
 	if !ok {
 		return nil
 	}
-	if *addr == nil {
-		*addr = newCallMetricRecorder()
-	}
-	return *addr
+	return rw.recorder()
 }
 
-func newContextWithCallMetricRecorder(ctx context.Context, r *CallMetricRecorder) context.Context {
-	return context.WithValue(ctx, callMetricRecorderCtxKey{}, &r)
+func newContextWithCallMetricRecorder(ctx context.Context) context.Context {
+	return context.WithValue(ctx, callMetricRecorderCtxKey{}, &recorderWrapper{})
+}
+
+// recorderWrapper is a wrapper around a CallMetricRecorder to ensures that
+// concurrent calls to CallMetricRecorderFromContext() results in only one
+// allocation of the underlying metric recorder.
+type recorderWrapper struct {
+	once sync.Once
+	r    *CallMetricRecorder
+}
+
+func (rw *recorderWrapper) recorder() *CallMetricRecorder {
+	rw.once.Do(func() {
+		rw.r = newCallMetricRecorder()
+	})
+	return rw.r
 }

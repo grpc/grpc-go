@@ -71,7 +71,7 @@ func CallMetricsServerOption() grpc.ServerOption {
 func unaryInt(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	// We don't allocate the metric recorder here. It will be allocated the
 	// first time the user calls CallMetricRecorderFromContext().
-	ctxWithRecorder := newContextWithCallMetricRecorder(ctx, nil)
+	ctxWithRecorder := newContextWithCallMetricRecorder(ctx)
 
 	resp, err := handler(ctxWithRecorder, req)
 
@@ -80,11 +80,15 @@ func unaryInt(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, han
 	// We cannot call CallMetricRecorderFromContext() here to get the recorder
 	// from the context because that would lead to the allocation of a metric
 	// recorder if one wasn't allocated already.
-	recorderPointer, ok := ctxWithRecorder.Value(callMetricRecorderCtxKey{}).(**CallMetricRecorder)
-	if !ok || (*recorderPointer == nil) {
+	//
+	// It is safe to access the underlying metric recorder inside the wrapper at
+	// this point, as the user's RPC handler is done executing, and therefore
+	// there will be no more calls to CallMetricRecorderFromContext().
+	rw, ok := ctxWithRecorder.Value(callMetricRecorderCtxKey{}).(*recorderWrapper)
+	if !ok || rw.r == nil {
 		return resp, err
 	}
-	setTrailerMetadata(ctx, *recorderPointer)
+	setTrailerMetadata(ctx, rw.r)
 	return resp, err
 }
 
@@ -93,7 +97,7 @@ func streamInt(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInf
 		ServerStream: ss,
 		// We don't allocate the metric recorder here. It will be allocated the
 		// first time the user calls CallMetricRecorderFromContext().
-		ctx: newContextWithCallMetricRecorder(ss.Context(), nil),
+		ctx: newContextWithCallMetricRecorder(ss.Context()),
 	}
 
 	err := handler(srv, ws)
@@ -103,11 +107,15 @@ func streamInt(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInf
 	// We cannot call CallMetricRecorderFromContext() here to get the recorder
 	// from the context because that would lead to the allocation of a metric
 	// recorder if one wasn't allocated already.
-	recorderPointer, ok := ws.Context().Value(callMetricRecorderCtxKey{}).(**CallMetricRecorder)
-	if !ok || (*recorderPointer == nil) {
+	//
+	// It is safe to access the underlying metric recorder inside the wrapper at
+	// this point, as the user's RPC handler is done executing, and therefore
+	// there will be no more calls to CallMetricRecorderFromContext().
+	rw, ok := ws.Context().Value(callMetricRecorderCtxKey{}).(*recorderWrapper)
+	if !ok || rw.r == nil {
 		return err
 	}
-	setTrailerMetadata(ss.Context(), *recorderPointer)
+	setTrailerMetadata(ss.Context(), rw.r)
 	return err
 }
 
