@@ -68,8 +68,8 @@ func (t *testServiceImpl) UnaryCall(context.Context, *testpb.SimpleRequest) (*te
 
 func (t *testServiceImpl) EmptyCall(context.Context, *testpb.Empty) (*testpb.Empty, error) {
 	t.orcaSrv.DeleteUtilization(requestsMetricKey)
-	t.orcaSrv.DeleteCPUUtilization()
-	t.orcaSrv.DeleteMemoryUtilization()
+	t.orcaSrv.SetCPUUtilization(0)
+	t.orcaSrv.SetMemoryUtilization(0)
 	return &testpb.Empty{}, nil
 }
 

@@ -163,26 +163,10 @@ func (s *Service) SetCPUUtilization(val float64) {
 	s.mu.Unlock()
 }
 
-// DeleteCPUUtilization deletes a previously recorded measurement for the CPU
-// utilization metric.
-func (s *Service) DeleteCPUUtilization() {
-	s.mu.Lock()
-	s.cpu = 0
-	s.mu.Unlock()
-}
-
 // SetMemoryUtilization records a measurement for the memory utilization metric.
 func (s *Service) SetMemoryUtilization(val float64) {
 	s.mu.Lock()
 	s.memory = val
-	s.mu.Unlock()
-}
-
-// DeleteMemoryUtilization deletes a previously recorded measurement for the
-// memory utilization metric.
-func (s *Service) DeleteMemoryUtilization() {
-	s.mu.Lock()
-	s.memory = 0
 	s.mu.Unlock()
 }
 
