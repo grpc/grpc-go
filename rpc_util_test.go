@@ -23,7 +23,6 @@ import (
 	"compress/gzip"
 	"io"
 	"math"
-	"reflect"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -46,6 +45,17 @@ func (f fullReader) Read(p []byte) (int, error) {
 
 var _ CallOption = EmptyCallOption{} // ensure EmptyCallOption implements the interface
 
+func bytesEqual(buf *bytes.Buffer, b []byte) bool {
+	switch {
+	case buf != nil && b != nil:
+		return bytes.Equal(buf.Bytes(), b)
+	case buf == nil && b == nil:
+		return true
+	default:
+		return false
+	}
+}
+
 func (s) TestSimpleParsing(t *testing.T) {
 	bigMsg := bytes.Repeat([]byte{'x'}, 1<<24)
 	for _, test := range []struct {
@@ -67,7 +77,7 @@ func (s) TestSimpleParsing(t *testing.T) {
 		buf := fullReader{bytes.NewReader(test.p)}
 		parser := &parser{r: buf}
 		pt, b, err := parser.recvMsg(math.MaxInt32)
-		if err != test.err || !bytes.Equal(b, test.b) || pt != test.pt {
+		if err != test.err || !bytesEqual(b, test.b) || pt != test.pt {
 			t.Fatalf("parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, %v", test.p, pt, b, err, test.pt, test.b, test.err)
 		}
 	}
@@ -89,7 +99,7 @@ func (s) TestMultipleParsing(t *testing.T) {
 	}
 	for i, want := range wantRecvs {
 		pt, data, err := parser.recvMsg(math.MaxInt32)
-		if err != nil || pt != want.pt || !reflect.DeepEqual(data, want.data) {
+		if err != nil || pt != want.pt || !bytesEqual(data, want.data) {
 			t.Fatalf("after %d calls, parser{%v}.recvMsg(_) = %v, %v, %v\nwant %v, %v, <nil>",
 				i, p, pt, data, err, want.pt, want.data)
 		}

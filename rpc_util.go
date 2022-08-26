@@ -27,6 +27,7 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -41,6 +42,18 @@ import (
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
+
+var bufpool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
+
+func bufFromPool() *bytes.Buffer {
+	buf := bufpool.Get().(*bytes.Buffer)
+	buf.Reset()
+	return buf
+}
 
 // Compressor defines the interface gRPC uses to compress a message.
 //
@@ -555,7 +568,7 @@ type parser struct {
 // No other error values or types must be returned, which also means
 // that the underlying io.Reader must not return an incompatible
 // error.
-func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byte, err error) {
+func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg *bytes.Buffer, err error) {
 	if _, err := p.r.Read(p.header[:]); err != nil {
 		return 0, nil, err
 	}
@@ -572,10 +585,10 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 	if int(length) > maxReceiveMessageSize {
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
-	// TODO(bradfitz,zhaoq): garbage. reuse buffer after proto decoding instead
-	// of making it for each message:
-	msg = make([]byte, int(length))
-	if _, err := p.r.Read(msg); err != nil {
+
+	msg = bufFromPool()
+	msg.Grow(int(length))
+	if _, err := io.CopyN(msg, p.r, int64(length)); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
 		}
@@ -686,67 +699,78 @@ type payloadInfo struct {
 	uncompressedBytes []byte
 }
 
-func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor) ([]byte, error) {
+// This function returns a buffer that can be returned to the pool.
+func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxReceiveMessageSize int, payInfo *payloadInfo, compressor encoding.Compressor) (*bytes.Buffer, error) {
 	pf, d, err := p.recvMsg(maxReceiveMessageSize)
 	if err != nil {
 		return nil, err
 	}
 	if payInfo != nil {
-		payInfo.wireLength = len(d)
+		payInfo.wireLength = d.Len()
 	}
 
 	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil); st != nil {
 		return nil, st.Err()
 	}
 
-	var size int
-	if pf == compressionMade {
-		// To match legacy behavior, if the decompressor is set by WithDecompressor or RPCDecompressor,
-		// use this decompressor as the default.
-		if dc != nil {
-			d, err = dc.Do(bytes.NewReader(d))
-			size = len(d)
-		} else {
-			d, size, err = decompress(compressor, d, maxReceiveMessageSize)
-		}
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
-		}
-		if size > maxReceiveMessageSize {
-			// TODO: Revisit the error code. Currently keep it consistent with java
-			// implementation.
-			return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max (%d vs. %d)", size, maxReceiveMessageSize)
-		}
+	if pf != compressionMade {
+		return d, nil
 	}
-	return d, nil
+	defer bufpool.Put(d)
+
+	size := 0
+	var dd *bytes.Buffer
+	if dc != nil {
+		// To match legacy behavior, if the decompressor is set by
+		// WithDecompressor or RPCDecompressor, use this decompressor as the
+		// default.
+		var b []byte
+		b, err = dc.Do(d)
+		dd = bytes.NewBuffer(b)
+		size = len(b)
+	} else {
+		dd, size, err = decompress(compressor, d, maxReceiveMessageSize)
+	}
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "grpc: failed to decompress the received message %v", err)
+	}
+	if size > maxReceiveMessageSize {
+		// TODO: Revisit the error code. Currently keep it consistent with java
+		// implementation.
+		return nil, status.Errorf(codes.ResourceExhausted, "grpc: received message after decompression larger than max (%d vs. %d)", size, maxReceiveMessageSize)
+	}
+	return dd, nil
 }
 
 // Using compressor, decompress d, returning data and size.
 // Optionally, if data will be over maxReceiveMessageSize, just return the size.
-func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize int) ([]byte, int, error) {
-	dcReader, err := compressor.Decompress(bytes.NewReader(d))
+// This function returns a buffer that can be returned to the pool.
+func decompress(compressor encoding.Compressor, d *bytes.Buffer, maxReceiveMessageSize int) (*bytes.Buffer, int, error) {
+	dcReader, err := compressor.Decompress(d)
 	if err != nil {
 		return nil, 0, err
 	}
 	if sizer, ok := compressor.(interface {
 		DecompressedSize(compressedBytes []byte) int
 	}); ok {
-		if size := sizer.DecompressedSize(d); size >= 0 {
+		if size := sizer.DecompressedSize(d.Bytes()); size >= 0 {
 			if size > maxReceiveMessageSize {
 				return nil, size, nil
 			}
 			// size is used as an estimate to size the buffer, but we
 			// will read more data if available.
 			// +MinRead so ReadFrom will not reallocate if size is correct.
-			buf := bytes.NewBuffer(make([]byte, 0, size+bytes.MinRead))
-			bytesRead, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
-			return buf.Bytes(), int(bytesRead), err
+			buf := bufFromPool()
+			buf.Grow(size + bytes.MinRead)
+			_, err := buf.ReadFrom(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
+			return buf, buf.Len(), err
 		}
 	}
 	// Read from LimitReader with limit max+1. So if the underlying
 	// reader is over limit, the result will be bigger than max.
-	d, err = ioutil.ReadAll(io.LimitReader(dcReader, int64(maxReceiveMessageSize)+1))
-	return d, len(d), err
+	buf := bufFromPool()
+	_, err = io.Copy(buf, io.LimitReader(dcReader, int64(maxReceiveMessageSize+1)))
+	return buf, buf.Len(), err
 }
 
 // For the two compressor parameters, both should not be set, but if they are,
@@ -757,11 +781,18 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 	if err != nil {
 		return err
 	}
-	if err := c.Unmarshal(d, m); err != nil {
-		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
-	}
+
 	if payInfo != nil {
-		payInfo.uncompressedBytes = d
+		payInfo.uncompressedBytes = d.Bytes()
+		runtime.SetFinalizer(payInfo, func(p *payloadInfo) {
+			bufpool.Put(d)
+		})
+	} else {
+		defer bufpool.Put(d)
+	}
+
+	if err := c.Unmarshal(d.Bytes(), m); err != nil {
+		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message %v", err)
 	}
 	return nil
 }

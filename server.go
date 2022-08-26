@@ -82,8 +82,10 @@ func init() {
 	internal.JoinServerOptions = newJoinServerOption
 }
 
-var statusOK = status.New(codes.OK, "")
-var logger = grpclog.Component("core")
+var (
+	statusOK = status.New(codes.OK, "")
+	logger   = grpclog.Component("core")
+)
 
 type methodHandler func(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor UnaryServerInterceptor) (interface{}, error)
 
@@ -1288,11 +1290,13 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		return err
 	}
+
 	if channelz.IsOn() {
 		t.IncrMsgRecv()
 	}
 	df := func(v interface{}) error {
-		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d, v); err != nil {
+		// defer bufpool.Put(d)
+		if err := s.getCodec(stream.ContentSubtype()).Unmarshal(d.Bytes(), v); err != nil {
 			return status.Errorf(codes.Internal, "grpc: error unmarshalling request: %v", err)
 		}
 		for _, sh := range shs {
@@ -1300,8 +1304,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				RecvTime:   time.Now(),
 				Payload:    v,
 				WireLength: payInfo.wireLength + headerLen,
-				Data:       d,
-				Length:     len(d),
+				Data:       d.Bytes(),
+				Length:     d.Len(),
 			})
 		}
 		if binlog != nil {
