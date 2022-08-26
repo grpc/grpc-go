@@ -110,10 +110,7 @@ func (s) TestRingHash_ReconnectToMoveOutOfTransientFailure(t *testing.T) {
 	// which will lead to the channel eventually moving to IDLE. The ring_hash
 	// LB policy is not expected to reconnect by itself at this point.
 	lis.Stop()
-	for ; ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
-		if cc.GetState() == connectivity.Idle {
-			break
-		}
+	for state := cc.GetState(); state != connectivity.Idle && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
 	}
 	if err := ctx.Err(); err != nil {
 		t.Fatalf("Timeout waiting for channel to reach %q after server shutdown: %v", connectivity.Idle, err)
