@@ -172,14 +172,13 @@ func CheckWeightedRoundRobinRPCs(ctx context.Context, client testgrpc.TestServic
 	// the randomness in weighted roundrobin. If we ever see an RPCs getting
 	// routed to a backend that we dont expect it to get routed to, we break
 	// from the inner loop thereby resetting all state and start afresh.
-OuterLoop:
 	for {
 		results := make(map[string]float64)
 		totalCount := float64(0)
 	InnerLoop:
 		for {
 			if ctx.Err() != nil {
-				break OuterLoop
+				return fmt.Errorf("timeout when waiting for roundrobin distribution of RPCs across addresses: %v", addrs)
 			}
 			for i := 0; i < len(addrs); i++ {
 				var peer peer.Peer
@@ -204,7 +203,6 @@ OuterLoop:
 		}
 		<-time.After(time.Millisecond)
 	}
-	return fmt.Errorf("timeout when waiting for roundrobin distribution of RPCs across addresses: %v", addrs)
 }
 
 func equalApproximate(got, want map[string]float64) bool {

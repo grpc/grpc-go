@@ -70,7 +70,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-// "backendAddressesAndPorts extracts the address and port of each of the
+// backendAddressesAndPorts extracts the address and port of each of the
 // StubServers passed in and returns them. Fails the test if any of the
 // StubServers passed have an invalid address.
 func backendAddressesAndPorts(t *testing.T, servers []*stubserver.StubServer) ([]resolver.Address, []uint32) {
@@ -353,7 +353,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	}
 
 	// Remove the first locality, and ensure RPCs are being weighted
-	// roundrobined across the last two backends.
+	// roundrobined across the remaining two backends.
 	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName2, weight: 1, ports: ports[1:2]},
 		{name: localityName3, weight: 1, ports: ports[2:3]},
@@ -382,9 +382,9 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 
 	// Change the weight of locality2 and ensure weighted roundrobin.  Since
 	// locality2 has twice the weight of locality3, it will be picked twice as
-	// frequently as locality3 for RPCs. And since locality2 has half the number
-	// of backends as locality3, its backends will receive four times the
-	// traffic of locality3's backend.
+	// frequently as locality3 for RPCs. And since locality2 has a single
+	// backend and locality3 has two backends, the backend in locality2 will
+	// receive four times the traffic of each of locality3's backends.
 	resources = clientEndpointsResource(nodeID, edsServiceName, []localityInfo{
 		{name: localityName2, weight: 2, ports: ports[1:2]},
 		{name: localityName3, weight: 1, ports: ports[2:4]},
@@ -551,7 +551,7 @@ func (s) TestEDS_EmptyUpdate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Push another empty update and ensure that RPCs fails with "all priorities
+	// Push another empty update and ensure that RPCs fail with "all priorities
 	// removed" error again.
 	resources = clientEndpointsResource(nodeID, edsServiceName, nil)
 	if err := managementServer.Update(ctx, resources); err != nil {
