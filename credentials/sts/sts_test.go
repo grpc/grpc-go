@@ -21,19 +21,25 @@ package sts
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/http/httptest"
 	"net/http/httputil"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/interop/grpc_testing"
 
+	"google.golang.org/grpc/testdata"
+
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	icredentials "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/internal/grpctest"
@@ -42,6 +48,7 @@ import (
 
 const (
 	requestedTokenType      = "urn:ietf:params:oauth:token-type:access-token"
+	issuedTokenType         = "urn:ietf:params:oauth:token-type:access_token"
 	actorTokenPath          = "/var/run/secrets/token.jwt"
 	actorTokenType          = "urn:ietf:params:oauth:token-type:refresh_token"
 	actorTokenContents      = "actorToken.jwt.contents"
@@ -77,6 +84,23 @@ var (
 		"Authorization": fmt.Sprintf("Bearer %s", accessTokenContents),
 	}
 )
+
+// configure a simple gRPC server to test an actual Unary response
+type testServer struct {
+	grpc_testing.TestServiceServer
+}
+
+func newTestServer() *testServer {
+	return &testServer{}
+}
+
+func (s *testServer) UnaryCall(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
+	resp := &grpc_testing.SimpleResponse{}
+	if in.FillUsername {
+		resp.Username = "foo"
+	}
+	return resp, nil
+}
 
 type s struct {
 	grpctest.Tester
@@ -140,14 +164,15 @@ func overrideHTTPClientGood() (*testutils.FakeHTTPClient, func()) {
 	fc.RespChan.Send(makeGoodResponse())
 
 	origMakeHTTPDoer := makeHTTPDoer
-	makeHTTPDoer = func(_ *x509.CertPool) httpDoer { return fc }
+
+	makeHTTPDoer = func(_ *http.Client) httpDoer { return fc }
 	return fc, func() { makeHTTPDoer = origMakeHTTPDoer }
 }
 
 // Overrides the http.Client with the provided fakeClient.
 func overrideHTTPClient(fc *testutils.FakeHTTPClient) func() {
 	origMakeHTTPDoer := makeHTTPDoer
-	makeHTTPDoer = func(_ *x509.CertPool) httpDoer { return fc }
+	makeHTTPDoer = func(_ *http.Client) httpDoer { return fc }
 	return func() { makeHTTPDoer = origMakeHTTPDoer }
 }
 
@@ -458,12 +483,6 @@ func (s) TestNewCredentials(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name:           "invalid system root certs",
-			opts:           goodOptions,
-			errSystemRoots: true,
-			wantErr:        true,
-		},
-		{
 			name: "good case",
 			opts: goodOptions,
 		},
@@ -471,15 +490,6 @@ func (s) TestNewCredentials(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if test.errSystemRoots {
-				oldSystemRoots := loadSystemCertPool
-				loadSystemCertPool = func() (*x509.CertPool, error) {
-					return nil, errors.New("failed to load system cert pool")
-				}
-				defer func() {
-					loadSystemCertPool = oldSystemRoots
-				}()
-			}
 
 			creds, err := NewCredentials(test.opts)
 			if (err != nil) != test.wantErr {
@@ -706,7 +716,7 @@ func (s) TestSendRequest(t *testing.T) {
 
 func (s) TestTokenInfoFromResponse(t *testing.T) {
 	noAccessToken, _ := json.Marshal(responseParameters{
-		IssuedTokenType: "urn:ietf:params:oauth:token-type:access_token",
+		IssuedTokenType: issuedTokenType,
 		TokenType:       "Bearer",
 		ExpiresIn:       3600,
 	})
@@ -762,6 +772,181 @@ func (s) TestTokenInfoFromResponse(t *testing.T) {
 			if gotTokenInfo.tokenType != test.wantTokenInfo.tokenType || gotTokenInfo.token != test.wantTokenInfo.token {
 				t.Errorf("tokenInfoFromResponse(%+v) = %+v, want: %+v", test.respBody, gotTokenInfo, test.wantTokenInfo)
 			}
+		})
+	}
+}
+
+func (s) TestTLS(t *testing.T) {
+
+	// start STS HTTPS server
+	stsServer := httptest.NewUnstartedServer(
+		http.HandlerFunc(
+			func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/token" {
+					// validate the inbound request
+					reqParams := &requestParameters{}
+					err := json.NewDecoder(r.Body).Decode(reqParams)
+					if err != nil {
+						fmt.Printf("Could Not parse STS Request application/json payload: (%+v)", err)
+						http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+						return
+					}
+
+					// generate a static response
+					respParams := &responseParameters{
+						AccessToken:     accessTokenContents,
+						IssuedTokenType: requestedTokenType,
+						TokenType:       "Bearer",
+						ExpiresIn:       int64(60),
+					}
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusOK)
+					json.NewEncoder(w).Encode(respParams)
+				} else {
+					w.WriteHeader(http.StatusNotFound)
+				}
+			},
+		),
+	)
+
+	// load server cert used by the test STS and gRPC server
+	// certificates use SAN wildcard   DNS:*.test.example.com
+	cer, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
+	if err != nil {
+		t.Fatalf("error loading server certificate: (%+v)", err)
+	}
+	tlsConfig := &tls.Config{
+		Certificates: []tls.Certificate{cer},
+	}
+
+	stsListener, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("error creating listener for STS Server (%+v)", err)
+	}
+
+	stsServer.Listener = stsListener
+	stsServer.TLS = tlsConfig
+	stsServer.StartTLS()
+	defer stsServer.Close()
+
+	// setup grpcServer
+	creds := credentials.NewTLS(tlsConfig)
+	grpcListener, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("error creating listener for gRPC Test Server (%+v)", err)
+	}
+
+	grpcServer := grpc.NewServer(grpc.Creds(creds))
+	grpc_testing.RegisterTestServiceServer(grpcServer, newTestServer())
+
+	go func() {
+		if err := grpcServer.Serve(grpcListener); err != nil {
+			t.Errorf("gRPC Server Serve() failed: (%+v)", err)
+		}
+	}()
+	defer grpcServer.GracefulStop()
+
+	/// run tests
+
+	serverCA, err := ioutil.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
+	if err != nil {
+		t.Fatalf("did not read tlsCA: %v", err)
+	}
+	caCertPool := x509.NewCertPool()
+	caCertPool.AppendCertsFromPEM(serverCA)
+
+	validServerTLSConfig := &tls.Config{
+		ServerName: "grpc.test.example.com",
+		RootCAs:    caCertPool,
+	}
+
+	validSTSClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				ServerName: "sts.test.example.com",
+				RootCAs:    caCertPool,
+			},
+		}}
+
+	invalidSTSClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				ServerName: "bar.example.com",
+				RootCAs:    caCertPool,
+			},
+		}}
+
+	defaultSTSClient := http.DefaultClient
+
+	tests := []struct {
+		name          string
+		grpcTLSConfig *tls.Config
+		stsClient     http.Client
+		wantErr       bool
+	}{
+		{
+			name:          "Test STS Server with custom RootCAs",
+			grpcTLSConfig: validServerTLSConfig,
+			stsClient:     *validSTSClient,
+			wantErr:       false,
+		},
+		{
+			name:          "Test STS Server with default",
+			grpcTLSConfig: validServerTLSConfig,
+			stsClient:     *defaultSTSClient,
+			wantErr:       true,
+		},
+		{
+			name:          "Test STS Server with incorrect SNI",
+			grpcTLSConfig: validServerTLSConfig,
+			stsClient:     *invalidSTSClient,
+			wantErr:       true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+
+			stsCreds, err := NewCredentials(Options{
+				TokenExchangeServiceURI: fmt.Sprintf("%s/token", stsServer.URL),
+				Resource:                exampleResource,
+				Audience:                exampleAudience,
+				Scope:                   testScope,
+				SubjectTokenPath:        testdata.Path("x509/server_ca_cert.pem"), // just read any file data and pretend its the token
+				SubjectTokenType:        subjectTokenType,
+				RequestedTokenType:      requestedTokenType,
+				HttpClient:              test.stsClient,
+			})
+			if err != nil {
+				t.Fatalf("error creating STS Credentials: (%+v)", err)
+			}
+
+			creds := credentials.NewTLS(test.grpcTLSConfig)
+			conn, err := grpc.Dial(grpcListener.Addr().String(), grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(stsCreds))
+			if err != nil {
+				t.Fatalf("unexpected error on Dial (%+v) for test %s", err, test.name)
+			}
+			defer conn.Close()
+
+			c := grpc_testing.NewTestServiceClient(conn)
+			ctx := context.Background()
+
+			rpcResp, err := c.UnaryCall(ctx, &grpc_testing.SimpleRequest{
+				FillUsername: true,
+			})
+			// got error but did not expect one
+			if (err != nil) && !test.wantErr {
+				t.Fatalf("unexpected Error (%+v) for test %s", err, test.name)
+			}
+			// did not get error but expected one
+			if err == nil && test.wantErr {
+				t.Fatalf("expected Error for test %s but got nil", test.name)
+			}
+			// got an error and expected one
+			if err != nil && test.wantErr {
+				return
+			}
+			t.Logf("SimpleResponse Username %s", rpcResp.Username)
 		})
 	}
 }

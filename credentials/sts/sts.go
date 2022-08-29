@@ -19,7 +19,7 @@
 // Package sts implements call credentials using STS (Security Token Service) as
 // defined in https://tools.ietf.org/html/rfc8693.
 //
-// Experimental
+// # Experimental
 //
 // Notice: All APIs in this package are experimental and may be changed or
 // removed in a later release.
@@ -28,8 +28,6 @@ package sts
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,7 +54,6 @@ const (
 
 // For overriding in tests.
 var (
-	loadSystemCertPool   = x509.SystemCertPool
 	makeHTTPDoer         = makeHTTPClient
 	readSubjectTokenFrom = ioutil.ReadFile
 	readActorTokenFrom   = ioutil.ReadFile
@@ -107,6 +104,10 @@ type Options struct {
 	// https://tools.ietf.org/html/rfc8693#section-3, that indicates the type of
 	// the the security token in the "actor_token_path" parameter.
 	ActorTokenType string // Optional.
+
+	// Custom http.Client for the STS endpoint connection.
+	// If left unset, http.DefaultClient is used
+	HttpClient http.Client // Optional
 }
 
 func (o Options) String() string {
@@ -119,17 +120,16 @@ func NewCredentials(opts Options) (credentials.PerRPCCredentials, error) {
 	if err := validateOptions(opts); err != nil {
 		return nil, err
 	}
-
-	// Load the system roots to validate the certificate presented by the STS
-	// endpoint during the TLS handshake.
-	roots, err := loadSystemCertPool()
-	if err != nil {
-		return nil, err
+	// set a default timeout value
+	// DefaultClient.Timeout=0 is no timeout at all.
+	// Note: this code is added in only because prior implementation of sts.go
+	//  statically set Timeout value of stsRequestTimeout=5s
+	if opts.HttpClient.Timeout == http.DefaultClient.Timeout {
+		opts.HttpClient.Timeout = stsRequestTimeout
 	}
-
 	return &callCreds{
 		opts:   opts,
-		client: makeHTTPDoer(roots),
+		client: makeHTTPDoer(&opts.HttpClient),
 	}, nil
 }
 
@@ -192,15 +192,8 @@ type httpDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-func makeHTTPClient(roots *x509.CertPool) httpDoer {
-	return &http.Client{
-		Timeout: stsRequestTimeout,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				RootCAs: roots,
-			},
-		},
-	}
+func makeHTTPClient(client *http.Client) httpDoer {
+	return client
 }
 
 // validateOptions performs the following validation checks on opts:
@@ -245,12 +238,12 @@ func (c *callCreds) cachedMetadata() map[string]string {
 
 // constructRequest creates the STS request body in JSON based on the provided
 // options.
-// - Contents of the subjectToken are read from the file specified in
-//   options. If we encounter an error here, we bail out.
-// - Contents of the actorToken are read from the file specified in options.
-//   If we encounter an error here, we ignore this field because this is
-//   optional.
-// - Most of the other fields in the request come directly from options.
+//   - Contents of the subjectToken are read from the file specified in
+//     options. If we encounter an error here, we bail out.
+//   - Contents of the actorToken are read from the file specified in options.
+//     If we encounter an error here, we ignore this field because this is
+//     optional.
+//   - Most of the other fields in the request come directly from options.
 //
 // A new HTTP request is created by calling http.NewRequestWithContext() and
 // passing the provided context, thereby enforcing any timeouts specified in
