@@ -1504,6 +1504,41 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "cluster resource with non-self lrs_server field",
+			resources: []*anypb.Any{
+				testutils.MarshalAny(&v3clusterpb.Cluster{
+					Name:                 "test",
+					ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
+					EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
+						EdsConfig: &v3corepb.ConfigSource{
+							ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+								Ads: &v3corepb.AggregatedConfigSource{},
+							},
+						},
+						ServiceName: v3Service,
+					},
+					LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+					LrsServer: &v3corepb.ConfigSource{
+						ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{
+							Ads: &v3corepb.AggregatedConfigSource{},
+						},
+					},
+				}),
+			},
+			wantUpdate: map[string]ClusterUpdateErrTuple{
+				"test": {Err: cmpopts.AnyError},
+			},
+			wantMD: UpdateMetadata{
+				Status:  ServiceStatusNACKed,
+				Version: testVersion,
+				ErrState: &UpdateErrorMetadata{
+					Version: testVersion,
+					Err:     cmpopts.AnyError,
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name:      "v2 cluster",
 			resources: []*anypb.Any{v2ClusterAny},
 			wantUpdate: map[string]ClusterUpdateErrTuple{
