@@ -48,7 +48,7 @@ import (
 )
 
 const (
-	defaultTestTimeout      = 1 * time.Second
+	defaultTestTimeout      = 5 * time.Second
 	defaultTestShortTimeout = 10 * time.Millisecond
 	testEDSServcie          = "test-eds-service-name"
 	testClusterName         = "test-cluster-name"

@@ -19,18 +19,77 @@ package clusterresolver
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/weightedtarget"
 	"google.golang.org/grpc/connectivity"
+	"google.golang.org/grpc/internal/balancergroup"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/xds/internal/balancer/clusterimpl"
 	"google.golang.org/grpc/xds/internal/balancer/priority"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
+	"google.golang.org/grpc/xds/internal/xdsclient"
 )
+
+var (
+	testClusterNames  = []string{"test-cluster-1", "test-cluster-2"}
+	testSubZones      = []string{"I", "II", "III", "IV"}
+	testEndpointAddrs []string
+)
+
+const testBackendAddrsCount = 12
+
+func init() {
+	for i := 0; i < testBackendAddrsCount; i++ {
+		testEndpointAddrs = append(testEndpointAddrs, fmt.Sprintf("%d.%d.%d.%d:%d", i, i, i, i, i))
+	}
+	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond
+	clusterimpl.NewRandomWRR = testutils.NewTestWRR
+	weightedtarget.NewRandomWRR = testutils.NewTestWRR
+	balancergroup.DefaultSubBalancerCloseTimeout = time.Millisecond * 100
+}
+
+func setupTestEDS(t *testing.T, initChild *internalserviceconfig.BalancerConfig) (balancer.Balancer, *testutils.TestClientConn, *fakeclient.Client, func()) {
+	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
+	cc := testutils.NewTestClientConn(t)
+	builder := balancer.Get(Name)
+	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
+	if edsb == nil {
+		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := edsb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState: xdsclient.SetClient(resolver.State{}, xdsC),
+		BalancerConfig: &LBConfig{
+			DiscoveryMechanisms: []DiscoveryMechanism{{
+				Cluster: testClusterName,
+				Type:    DiscoveryMechanismTypeEDS,
+			}},
+		},
+	}); err != nil {
+		edsb.Close()
+		xdsC.Close()
+		t.Fatal(err)
+	}
+	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
+		edsb.Close()
+		xdsC.Close()
+		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
+	}
+	return edsb, cc, xdsC, func() {
+		edsb.Close()
+		xdsC.Close()
+	}
+}
 
 // When a high priority is ready, adding/removing lower locality doesn't cause
 // changes.
