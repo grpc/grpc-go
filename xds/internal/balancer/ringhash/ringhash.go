@@ -443,6 +443,11 @@ func (b *ringhashBalancer) regeneratePicker() {
 
 func (b *ringhashBalancer) Close() {}
 
+func (b *ringhashBalancer) ExitIdle() {
+	// ExitIdle implementation is a no-op because connections are either
+	// triggers from picks or from subConn state changes.
+}
+
 // connectivityStateEvaluator takes the connectivity states of multiple SubConns
 // and returns one aggregated connectivity state.
 //
