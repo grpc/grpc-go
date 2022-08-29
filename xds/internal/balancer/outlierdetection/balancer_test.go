@@ -88,7 +88,7 @@ func (s) TestParseConfig(t *testing.T) {
 				]
 			}`,
 			wantCfg: &LBConfig{
-				Interval: 1<<63 - 1,
+				Interval: math.MaxInt64,
 				ChildPolicy: &internalserviceconfig.BalancerConfig{
 					Name: "xds_cluster_impl_experimental",
 					Config: &clusterimpl.LBConfig{
@@ -363,26 +363,11 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	od, tcc, _ := setup(t)
 	defer internal.UnregisterOutlierDetectionBalancerForTesting()
 
-	// This first config update should a child to be built and forwarded it's
-	// first update.
+	// This first config update should cause a child to be built and forwarded
+	// it's first update.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval:           10 * time.Second,
-			BaseEjectionTime:   30 * time.Second,
-			MaxEjectionTime:    300 * time.Second,
-			MaxEjectionPercent: 10,
-			SuccessRateEjection: &SuccessRateEjection{
-				StdevFactor:           1900,
-				EnforcementPercentage: 100,
-				MinimumHosts:          5,
-				RequestVolume:         100,
-			},
-			FailurePercentageEjection: &FailurePercentageEjection{
-				Threshold:             85,
-				EnforcementPercentage: 5,
-				MinimumHosts:          5,
-				RequestVolume:         50,
-			},
+			Interval: math.MaxInt64,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name:   t.Name() + "child1",
 				Config: bc,
@@ -405,22 +390,7 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	// config update.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval:           10 * time.Second,
-			BaseEjectionTime:   30 * time.Second,
-			MaxEjectionTime:    300 * time.Second,
-			MaxEjectionPercent: 10,
-			SuccessRateEjection: &SuccessRateEjection{
-				StdevFactor:           1900,
-				EnforcementPercentage: 100,
-				MinimumHosts:          5,
-				RequestVolume:         100,
-			},
-			FailurePercentageEjection: &FailurePercentageEjection{
-				Threshold:             85,
-				EnforcementPercentage: 5,
-				MinimumHosts:          5,
-				RequestVolume:         50,
-			},
+			Interval: math.MaxInt64,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name:   t.Name() + "child2",
 				Config: emptyChildConfig{},
@@ -478,14 +448,11 @@ func (s) TestUpdateAddresses(t *testing.T) {
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
 			scw1, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{})
 			if err != nil {
-				t.Fatalf("error in od.NewSubConn call: %v", err)
+				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
 			scw2, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address2"}}, balancer.NewSubConnOptions{})
 			if err != nil {
-				t.Fatalf("error in od.NewSubConn call: %v", err)
-			}
-			if err != nil {
-				t.Fatalf("error in od.NewSubConn call: %v", err)
+				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
 			bd.ClientConn.UpdateState(balancer.State{
 				ConnectivityState: connectivity.Ready,
@@ -689,21 +656,12 @@ func (s) TestDurationOfInterval(t *testing.T) {
 
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval:           8 * time.Second,
-			BaseEjectionTime:   30 * time.Second,
-			MaxEjectionTime:    300 * time.Second,
-			MaxEjectionPercent: 10,
+			Interval: 8 * time.Second,
 			SuccessRateEjection: &SuccessRateEjection{
 				StdevFactor:           1900,
 				EnforcementPercentage: 100,
 				MinimumHosts:          5,
 				RequestVolume:         100,
-			},
-			FailurePercentageEjection: &FailurePercentageEjection{
-				Threshold:             85,
-				EnforcementPercentage: 5,
-				MinimumHosts:          5,
-				RequestVolume:         50,
 			},
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name:   t.Name(),
@@ -738,21 +696,12 @@ func (s) TestDurationOfInterval(t *testing.T) {
 	// interval timer of ~4 seconds.
 	od.UpdateClientConnState(balancer.ClientConnState{
 		BalancerConfig: &LBConfig{
-			Interval:           9 * time.Second,
-			BaseEjectionTime:   30 * time.Second,
-			MaxEjectionTime:    300 * time.Second,
-			MaxEjectionPercent: 10,
+			Interval: 9 * time.Second,
 			SuccessRateEjection: &SuccessRateEjection{
 				StdevFactor:           1900,
 				EnforcementPercentage: 100,
 				MinimumHosts:          5,
 				RequestVolume:         100,
-			},
-			FailurePercentageEjection: &FailurePercentageEjection{
-				Threshold:             85,
-				EnforcementPercentage: 5,
-				MinimumHosts:          5,
-				RequestVolume:         50,
 			},
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name:   t.Name(),
@@ -810,15 +759,15 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 		UpdateClientConnState: func(bd *stub.BalancerData, _ balancer.ClientConnState) error {
 			scw1, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{})
 			if err != nil {
-				t.Fatalf("error in od.NewSubConn call: %v", err)
+				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
 			scw2, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address2"}}, balancer.NewSubConnOptions{})
 			if err != nil {
-				t.Fatalf("error in od.NewSubConn call: %v", err)
+				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
 			scw3, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address3"}}, balancer.NewSubConnOptions{})
 			if err != nil {
-				t.Fatalf("error in od.NewSubConn call: %v", err)
+				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
 			bd.ClientConn.UpdateState(balancer.State{
 				ConnectivityState: connectivity.Ready,
@@ -850,7 +799,7 @@ func (s) TestEjectUnejectSuccessRate(t *testing.T) {
 			},
 		},
 		BalancerConfig: &LBConfig{
-			Interval:           1<<63 - 1, // so the interval will never run unless called manually in test.
+			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
 			BaseEjectionTime:   30 * time.Second,
 			MaxEjectionTime:    300 * time.Second,
 			MaxEjectionPercent: 10,
@@ -1020,15 +969,15 @@ func (s) TestEjectFailureRate(t *testing.T) {
 			}
 			scw1, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address1"}}, balancer.NewSubConnOptions{})
 			if err != nil {
-				t.Fatalf("error in od.NewSubConn call: %v", err)
+				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
 			scw2, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address2"}}, balancer.NewSubConnOptions{})
 			if err != nil {
-				t.Fatalf("error in od.NewSubConn call: %v", err)
+				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
 			scw3, err = bd.ClientConn.NewSubConn([]resolver.Address{{Addr: "address3"}}, balancer.NewSubConnOptions{})
 			if err != nil {
-				t.Fatalf("error in od.NewSubConn call: %v", err)
+				t.Errorf("error in od.NewSubConn call: %v", err)
 			}
 			return nil
 		},
@@ -1054,7 +1003,7 @@ func (s) TestEjectFailureRate(t *testing.T) {
 			},
 		},
 		BalancerConfig: &LBConfig{
-			Interval:           1<<63 - 1, // so the interval will never run unless called manually in test.
+			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
 			BaseEjectionTime:   30 * time.Second,
 			MaxEjectionTime:    300 * time.Second,
 			MaxEjectionPercent: 10,
@@ -1160,7 +1109,7 @@ func (s) TestEjectFailureRate(t *testing.T) {
 				},
 			},
 			BalancerConfig: &LBConfig{
-				Interval:           1<<63 - 1,
+				Interval:           math.MaxInt64,
 				BaseEjectionTime:   30 * time.Second,
 				MaxEjectionTime:    300 * time.Second,
 				MaxEjectionPercent: 10,
@@ -1192,18 +1141,18 @@ func (s) TestConcurrentOperations(t *testing.T) {
 	stub.Register(t.Name(), stub.BalancerFuncs{
 		UpdateClientConnState: func(*stub.BalancerData, balancer.ClientConnState) error {
 			if closed.HasFired() {
-				t.Fatal("UpdateClientConnState was called after Close(), which breaks the balancer API")
+				t.Error("UpdateClientConnState was called after Close(), which breaks the balancer API")
 			}
 			return nil
 		},
 		ResolverError: func(*stub.BalancerData, error) {
 			if closed.HasFired() {
-				t.Fatal("ResolverError was called after Close(), which breaks the balancer API")
+				t.Error("ResolverError was called after Close(), which breaks the balancer API")
 			}
 		},
 		UpdateSubConnState: func(*stub.BalancerData, balancer.SubConn, balancer.SubConnState) {
 			if closed.HasFired() {
-				t.Fatal("UpdateSubConnState was called after Close(), which breaks the balancer API")
+				t.Error("UpdateSubConnState was called after Close(), which breaks the balancer API")
 			}
 		},
 		Close: func(*stub.BalancerData) {
@@ -1211,7 +1160,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 		},
 		ExitIdle: func(*stub.BalancerData) {
 			if closed.HasFired() {
-				t.Fatal("ExitIdle was called after Close(), which breaks the balancer API")
+				t.Error("ExitIdle was called after Close(), which breaks the balancer API")
 			}
 		},
 	})
@@ -1230,7 +1179,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 			},
 		},
 		BalancerConfig: &LBConfig{
-			Interval:           1<<63 - 1, // so the interval will never run unless called manually in test.
+			Interval:           math.MaxInt64, // so the interval will never run unless called manually in test.
 			BaseEjectionTime:   30 * time.Second,
 			MaxEjectionTime:    300 * time.Second,
 			MaxEjectionPercent: 10,
@@ -1368,7 +1317,7 @@ func (s) TestConcurrentOperations(t *testing.T) {
 			Addresses: []resolver.Address{{Addr: "address1"}},
 		},
 		BalancerConfig: &LBConfig{
-			Interval: 1<<63 - 1,
+			Interval: math.MaxInt64,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name:   t.Name(),
 				Config: emptyChildConfig{},

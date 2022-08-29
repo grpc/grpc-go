@@ -53,7 +53,7 @@ func Test(t *testing.T) {
 // Setup spins up three test backends, each listening on a port on localhost.
 // Two of the backends are configured to always reply with an empty response and
 // no error and one is configured to always return an error.
-func setupBackends(t *testing.T) ([]string, []*stubserver.StubServer) {
+func setupBackends(t *testing.T) ([]string, func()) {
 	t.Helper()
 
 	backends := make([]*stubserver.StubServer, 3)
@@ -82,11 +82,15 @@ func setupBackends(t *testing.T) ([]string, []*stubserver.StubServer) {
 	if err := backend.StartServer(); err != nil {
 		t.Fatalf("Failed to start backend: %v", err)
 	}
-	t.Logf("Started good TestService backend at: %q", backend.Address)
+	t.Logf("Started bad TestService backend at: %q", backend.Address)
 	backends[2] = backend
 	addresses[2] = backend.Address
-
-	return addresses, backends
+	cancel := func() {
+		for _, backend := range backends {
+			backend.Stop()
+		}
+	}
+	return addresses, cancel
 }
 
 // checkRoundRobinRPCs verifies that EmptyCall RPCs on the given ClientConn,
@@ -162,11 +166,7 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 			"minimumHosts": 3,
 			"requestVolume": 5
 		},
-        "childPolicy": [
-		{
-			"round_robin": {}
-		}
-		]
+        "childPolicy": [{"round_robin": {}}]
       }
     }
   ]
@@ -189,10 +189,7 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 			"minimumHosts": 3,
 			"requestVolume": 5
 		},
-        "childPolicy": [
-		{
-			"round_robin": {}
-		}
+        "childPolicy": [{"round_robin": {}}
 		]
       }
     }
@@ -204,31 +201,19 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			internal.RegisterOutlierDetectionBalancerForTesting()
 			defer internal.UnregisterOutlierDetectionBalancerForTesting()
-			addresses, backends := setupBackends(t)
-			defer func() {
-				for _, backend := range backends {
-					backend.Stop()
-				}
-			}()
+			addresses, cancel := setupBackends(t)
+			defer cancel()
 
-			// The addresses which don't return errors.
-			okAddresses := []resolver.Address{
-				{Addr: addresses[0]},
-				{Addr: addresses[1]},
-			}
+			mr := manual.NewBuilderWithScheme("od-e2e")
+			defer mr.Close()
 
+			sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(test.odscJSON)
 			// The full list of addresses.
 			fullAddresses := []resolver.Address{
 				{Addr: addresses[0]},
 				{Addr: addresses[1]},
 				{Addr: addresses[2]},
 			}
-
-			mr := manual.NewBuilderWithScheme("od-e2e")
-			defer mr.Close()
-
-			sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(test.odscJSON)
-
 			mr.InitialState(resolver.State{
 				Addresses:     fullAddresses,
 				ServiceConfig: sc,
@@ -249,6 +234,11 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 				t.Fatalf("error in expected round robin: %v", err)
 			}
 
+			// The addresses which don't return errors.
+			okAddresses := []resolver.Address{
+				{Addr: addresses[0]},
+				{Addr: addresses[1]},
+			}
 			// After calling the three upstreams, one of them constantly error
 			// and should eventually be ejected for a period of time. This
 			// period of time should cause the RPC's to be round robined only
@@ -277,28 +267,11 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 func (s) TestNoopConfiguration(t *testing.T) {
 	internal.RegisterOutlierDetectionBalancerForTesting()
 	defer internal.UnregisterOutlierDetectionBalancerForTesting()
-	addresses, backends := setupBackends(t)
-	defer func() {
-		for _, backend := range backends {
-			backend.Stop()
-		}
-	}()
+	addresses, cancel := setupBackends(t)
+	defer cancel()
 
 	mr := manual.NewBuilderWithScheme("od-e2e")
 	defer mr.Close()
-
-	// The addresses which don't return errors.
-	okAddresses := []resolver.Address{
-		{Addr: addresses[0]},
-		{Addr: addresses[1]},
-	}
-
-	// The full list of addresses.
-	fullAddresses := []resolver.Address{
-		{Addr: addresses[0]},
-		{Addr: addresses[1]},
-		{Addr: addresses[2]},
-	}
 
 	noopODServiceConfigJSON := `
 {
@@ -309,17 +282,18 @@ func (s) TestNoopConfiguration(t *testing.T) {
 		"baseEjectionTime": 100000000,
 		"maxEjectionTime": 300000000000,
 		"maxEjectionPercent": 33,
-        "childPolicy": [
-		{
-			"round_robin": {}
-		}
-		]
+        "childPolicy": [{"round_robin": {}}]
       }
     }
   ]
 }`
 	sc := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(noopODServiceConfigJSON)
-
+	// The full list of addresses.
+	fullAddresses := []resolver.Address{
+		{Addr: addresses[0]},
+		{Addr: addresses[1]},
+		{Addr: addresses[2]},
+	}
 	mr.InitialState(resolver.State{
 		Addresses:     fullAddresses,
 		ServiceConfig: sc,
@@ -362,11 +336,7 @@ func (s) TestNoopConfiguration(t *testing.T) {
 			"minimumHosts": 3,
 			"requestVolume": 5
 		},
-        "childPolicy": [
-		{
-			"round_robin": {}
-		}
-		]
+        "childPolicy": [{"round_robin": {}}]
       }
     }
   ]
@@ -385,6 +355,11 @@ func (s) TestNoopConfiguration(t *testing.T) {
 		t.Fatalf("error in expected round robin: %v", err)
 	}
 
+	// The addresses which don't return errors.
+	okAddresses := []resolver.Address{
+		{Addr: addresses[0]},
+		{Addr: addresses[1]},
+	}
 	// Now that the reconfigured balancer has data about the failing upstream,
 	// it should eject the upstream and only route across the two healthy
 	// upstreams.
