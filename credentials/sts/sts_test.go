@@ -915,7 +915,7 @@ func (s) TestTLS(t *testing.T) {
 				SubjectTokenPath:        testdata.Path("x509/server_ca_cert.pem"), // just read any file data and pretend its the token
 				SubjectTokenType:        subjectTokenType,
 				RequestedTokenType:      requestedTokenType,
-				HttpClient:              test.stsClient,
+				HTTPClient:              test.stsClient,
 			})
 			if err != nil {
 				t.Fatalf("error creating STS Credentials: (%+v)", err)

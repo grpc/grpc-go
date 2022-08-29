@@ -107,7 +107,7 @@ type Options struct {
 
 	// Custom http.Client for the STS endpoint connection.
 	// If left unset, http.DefaultClient is used
-	HttpClient http.Client // Optional
+	HTTPClient http.Client // Optional
 }
 
 func (o Options) String() string {
@@ -124,12 +124,12 @@ func NewCredentials(opts Options) (credentials.PerRPCCredentials, error) {
 	// DefaultClient.Timeout=0 is no timeout at all.
 	// Note: this code is added in only because prior implementation of sts.go
 	//  statically set Timeout value of stsRequestTimeout=5s
-	if opts.HttpClient.Timeout == http.DefaultClient.Timeout {
-		opts.HttpClient.Timeout = stsRequestTimeout
+	if opts.HTTPClient.Timeout == http.DefaultClient.Timeout {
+		opts.HTTPClient.Timeout = stsRequestTimeout
 	}
 	return &callCreds{
 		opts:   opts,
-		client: makeHTTPDoer(&opts.HttpClient),
+		client: makeHTTPDoer(&opts.HTTPClient),
 	}, nil
 }
 
