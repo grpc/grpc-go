@@ -308,7 +308,7 @@ func (s) TestEnd2End(t *testing.T) {
 		// The mutual authentication works at the beginning, since ClientCert1
 		// trusted by ServerTrust1, ServerCert1 by ClientTrust1, and also the
 		// custom verification check on server side allows all connections.
-		// At stage 1, server disallows the the connections by setting custom
+		// At stage 1, server disallows the connections by setting custom
 		// verification check. The following calls should fail. Previous
 		// connections should not be affected.
 		// At stage 2, server allows all the connections again and the
@@ -555,7 +555,7 @@ func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovid
 // Next, we change the identity certs that IdentityProvider is watching. Since
 // the identity key is not changed, the IdentityProvider should ignore the
 // update, and the connection should still be good.
-// Then the the identity key is changed. This time IdentityProvider should pick
+// Then the identity key is changed. This time IdentityProvider should pick
 // up the update, and the connection should fail, due to the trust certs on the
 // other side is not changed.
 // Finally, the trust certs that other-side's RootProvider is watching get

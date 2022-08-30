@@ -694,7 +694,7 @@ func (s) TestCircuitBreaking(t *testing.T) {
 	counter.EndRequest()
 }
 
-// TestClose verifies the Close() method in the the CDS balancer.
+// TestClose verifies the Close() method in the CDS balancer.
 func (s) TestClose(t *testing.T) {
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the

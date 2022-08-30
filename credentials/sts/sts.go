@@ -105,7 +105,7 @@ type Options struct {
 
 	// ActorTokenType is an identifier, as described in
 	// https://tools.ietf.org/html/rfc8693#section-3, that indicates the type of
-	// the the security token in the "actor_token_path" parameter.
+	// the security token in the "actor_token_path" parameter.
 	ActorTokenType string // Optional.
 }
 
