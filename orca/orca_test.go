@@ -26,17 +26,9 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/orca"
-	"google.golang.org/grpc/xds"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
 )
-
-func (s) Test_OOBMetrics_NonGRPCServer(t *testing.T) {
-	s := xds.NewGRPCServer()
-	if _, err := orca.Register(s, orca.ServiceOptions{}); err == nil {
-		t.Fatal("orca.Register() succeeded with a non-grpc server, expected to fail")
-	}
-}
 
 func TestToLoadReport(t *testing.T) {
 	tests := []struct {

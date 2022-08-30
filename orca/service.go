@@ -19,7 +19,6 @@
 package orca
 
 import (
-	"fmt"
 	"sync"
 	"time"
 
@@ -99,20 +98,12 @@ func NewService(opts ServiceOptions) (*Service, error) {
 
 // Register creates a new ORCA service implementation configured using the
 // provided options and registers the same on the provided service registrar.
-func Register(s grpc.ServiceRegistrar, opts ServiceOptions) (*Service, error) {
-	// TODO(easwars): Once the generated pb.gos are updated, we wont need this
-	// type assertion any more, since the new versions accept a
-	// grpc.ServiceRegistrar in their registration functions.
-	srv, ok := s.(*grpc.Server)
-	if !ok {
-		return nil, fmt.Errorf("concrete type of provided grpc.ServiceRegistrar is %T, only supported type is %T", s, &grpc.Server{})
-	}
-
+func Register(s *grpc.Server, opts ServiceOptions) (*Service, error) {
 	service, err := NewService(opts)
 	if err != nil {
 		return nil, err
 	}
-	v3orcaservicegrpc.RegisterOpenRcaServiceServer(srv, service)
+	v3orcaservicegrpc.RegisterOpenRcaServiceServer(s, service)
 	return service, nil
 }
 
