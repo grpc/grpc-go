@@ -35,8 +35,8 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/interop/grpc_testing"
-
+	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testpb "google.golang.org/grpc/interop/grpc_testing"
 	"google.golang.org/grpc/testdata"
 
 	"google.golang.org/grpc"
@@ -85,17 +85,12 @@ var (
 	}
 )
 
-// configure a simple gRPC server to test an actual Unary response
 type testServer struct {
-	grpc_testing.TestServiceServer
+	testgrpc.UnimplementedTestServiceServer
 }
 
-func newTestServer() *testServer {
-	return &testServer{}
-}
-
-func (s *testServer) UnaryCall(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-	resp := &grpc_testing.SimpleResponse{}
+func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+	resp := &testpb.SimpleResponse{}
 	if in.FillUsername {
 		resp.Username = "foo"
 	}
@@ -777,34 +772,31 @@ func (s) TestTokenInfoFromResponse(t *testing.T) {
 }
 
 func (s) TestTLS(t *testing.T) {
-
 	// start STS HTTPS server
 	stsServer := httptest.NewUnstartedServer(
 		http.HandlerFunc(
 			func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/token" {
-					// validate the inbound request
-					reqParams := &requestParameters{}
-					err := json.NewDecoder(r.Body).Decode(reqParams)
-					if err != nil {
-						fmt.Printf("Could Not parse STS Request application/json payload: (%+v)", err)
-						http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-						return
-					}
-
-					// generate a static response
-					respParams := &responseParameters{
-						AccessToken:     accessTokenContents,
-						IssuedTokenType: issuedTokenType,
-						TokenType:       "Bearer",
-						ExpiresIn:       int64(60),
-					}
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusOK)
-					json.NewEncoder(w).Encode(respParams)
-				} else {
+				if r.URL.Path != "/token" {
 					w.WriteHeader(http.StatusNotFound)
 				}
+				// validate the inbound request
+				reqParams := &requestParameters{}
+				err := json.NewDecoder(r.Body).Decode(reqParams)
+				if err != nil {
+					fmt.Printf("Could Not parse STS Request application/json payload: (%+v)", err)
+					http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+					return
+				}
+				// generate a static response
+				respParams := &responseParameters{
+					AccessToken:     accessTokenContents,
+					IssuedTokenType: issuedTokenType,
+					TokenType:       "Bearer",
+					ExpiresIn:       int64(60),
+				}
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode(respParams)
 			},
 		),
 	)
@@ -837,7 +829,7 @@ func (s) TestTLS(t *testing.T) {
 	}
 
 	grpcServer := grpc.NewServer(grpc.Creds(creds))
-	grpc_testing.RegisterTestServiceServer(grpcServer, newTestServer())
+	testgrpc.RegisterTestServiceServer(grpcServer, &testServer{})
 
 	go func() {
 		if err := grpcServer.Serve(grpcListener); err != nil {
@@ -912,7 +904,6 @@ func (s) TestTLS(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-
 			stsCreds, err := NewCredentials(Options{
 				TokenExchangeServiceURI: fmt.Sprintf("%s/token", stsServer.URL),
 				Resource:                exampleResource,
@@ -934,19 +925,14 @@ func (s) TestTLS(t *testing.T) {
 			}
 			defer conn.Close()
 
-			c := grpc_testing.NewTestServiceClient(conn)
-			ctx := context.Background()
-
-			rpcResp, err := c.UnaryCall(ctx, &grpc_testing.SimpleRequest{
+			c := testgrpc.NewTestServiceClient(conn)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			rpcResp, err := c.UnaryCall(ctx, &testpb.SimpleRequest{
 				FillUsername: true,
 			})
-			// got error but did not expect one
-			if (err != nil) && !test.wantErr {
-				t.Fatalf("unexpected Error (%+v) for test %s", err, test.name)
-			}
-			// did not get error but expected one
-			if err == nil && test.wantErr {
-				t.Fatalf("expected Error for test %s but got nil", test.name)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("UnaryCall() returned error: %v, wantErr: %v", err, test.wantErr)
 			}
 			// got an error and expected one
 			if err != nil && test.wantErr {
