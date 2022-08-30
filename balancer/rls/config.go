@@ -127,7 +127,7 @@ type lbConfigJSON struct {
 //       - across all `headers`, `constant_keys` and `extra_keys` fields:
 //         - must not have the same `key` specified twice
 //         - no `key` must be the empty string
-//   - `lookup_service` field must be set and and must parse as a target URI
+//   - `lookup_service` field must be set and must parse as a target URI
 //   - if `max_age` > 5m, it should be set to 5 minutes
 //   - if `stale_age` > `max_age`, ignore it
 //   - if `stale_age` is set, then `max_age` must also be set
@@ -185,7 +185,7 @@ func parseRLSProto(rlsProto *rlspb.RouteLookupConfig) (*lbConfig, error) {
 		return nil, err
 	}
 
-	// `lookup_service` field must be set and and must parse as a target URI.
+	// `lookup_service` field must be set and must parse as a target URI.
 	lookupService := rlsProto.GetLookupService()
 	if lookupService == "" {
 		return nil, fmt.Errorf("rls: empty lookup_service in route lookup config %+v", rlsProto)

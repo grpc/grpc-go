@@ -342,7 +342,7 @@ func (s) TestStoreSingleProviderDifferentConfigs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Push new key material into only one of the fake providers and and verify
+	// Push new key material into only one of the fake providers and verify
 	// that the providers returned by the store return the appropriate key
 	// material.
 	km2 := loadKeyMaterials(t, "x509/server2_cert.pem", "x509/server2_key.pem", "x509/client_ca_cert.pem")

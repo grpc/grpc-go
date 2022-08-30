@@ -114,7 +114,7 @@ func (r errReader) Read(b []byte) (n int, err error) {
 }
 
 // We need a function to construct the response instead of simply declaring it
-// as a variable since the the response body will be consumed by the
+// as a variable since the response body will be consumed by the
 // credentials, and therefore we will need a new one everytime.
 func makeGoodResponse() *http.Response {
 	respJSON, _ := json.Marshal(responseParameters{
