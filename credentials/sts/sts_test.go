@@ -795,7 +795,7 @@ func (s) TestTLS(t *testing.T) {
 					// generate a static response
 					respParams := &responseParameters{
 						AccessToken:     accessTokenContents,
-						IssuedTokenType: requestedTokenType,
+						IssuedTokenType: issuedTokenType,
 						TokenType:       "Bearer",
 						ExpiresIn:       int64(60),
 					}
@@ -881,25 +881,31 @@ func (s) TestTLS(t *testing.T) {
 	tests := []struct {
 		name          string
 		grpcTLSConfig *tls.Config
-		stsClient     http.Client
+		stsClient     *http.Client
 		wantErr       bool
 	}{
 		{
 			name:          "Test STS Server with custom RootCAs",
 			grpcTLSConfig: validServerTLSConfig,
-			stsClient:     *validSTSClient,
+			stsClient:     validSTSClient,
 			wantErr:       false,
 		},
 		{
-			name:          "Test STS Server with default",
+			name:          "Test STS Server with defaultClient",
 			grpcTLSConfig: validServerTLSConfig,
-			stsClient:     *defaultSTSClient,
+			stsClient:     defaultSTSClient,
+			wantErr:       true,
+		},
+		{
+			name:          "Test STS Server with nil client",
+			grpcTLSConfig: validServerTLSConfig,
+			stsClient:     nil,
 			wantErr:       true,
 		},
 		{
 			name:          "Test STS Server with incorrect SNI",
 			grpcTLSConfig: validServerTLSConfig,
-			stsClient:     *invalidSTSClient,
+			stsClient:     invalidSTSClient,
 			wantErr:       true,
 		},
 	}

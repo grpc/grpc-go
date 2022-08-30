@@ -106,8 +106,8 @@ type Options struct {
 	ActorTokenType string // Optional.
 
 	// Custom http.Client for the STS endpoint connection.
-	// If left unset, http.DefaultClient is used
-	HTTPClient http.Client // Optional
+	// If left unset, http.DefaultClient with Timeout=5s is used
+	HTTPClient *http.Client // Optional
 }
 
 func (o Options) String() string {
@@ -120,16 +120,14 @@ func NewCredentials(opts Options) (credentials.PerRPCCredentials, error) {
 	if err := validateOptions(opts); err != nil {
 		return nil, err
 	}
-	// set a default timeout value
-	// DefaultClient.Timeout=0 is no timeout at all.
-	// Note: this code is added in only because prior implementation of sts.go
-	//  statically set Timeout value of stsRequestTimeout=5s
-	if opts.HTTPClient.Timeout == http.DefaultClient.Timeout {
-		opts.HTTPClient.Timeout = stsRequestTimeout
+	client := opts.HTTPClient
+	if opts.HTTPClient == nil {
+		client = http.DefaultClient
+		client.Timeout = stsRequestTimeout
 	}
 	return &callCreds{
 		opts:   opts,
-		client: makeHTTPDoer(&opts.HTTPClient),
+		client: makeHTTPDoer(client),
 	}, nil
 }
 
