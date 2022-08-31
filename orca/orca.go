@@ -71,21 +71,16 @@ func CallMetricsServerOption() grpc.ServerOption {
 func unaryInt(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	// We don't allocate the metric recorder here. It will be allocated the
 	// first time the user calls CallMetricRecorderFromContext().
-	ctxWithRecorder := newContextWithCallMetricRecorder(ctx)
+	rw := &recorderWrapper{}
+	ctxWithRecorder := newContextWithRecorderWrapper(ctx, rw)
 
 	resp, err := handler(ctxWithRecorder, req)
 
-	// If the user never called CallMetricRecorderFromContext() from their RPC
-	// handler, a metric recorder would not have been allocated at this point.
-	// We cannot call CallMetricRecorderFromContext() here to get the recorder
-	// from the context because that would lead to the allocation of a metric
-	// recorder if one wasn't allocated already.
-	//
 	// It is safe to access the underlying metric recorder inside the wrapper at
 	// this point, as the user's RPC handler is done executing, and therefore
-	// there will be no more calls to CallMetricRecorderFromContext().
-	rw, ok := ctxWithRecorder.Value(callMetricRecorderCtxKey{}).(*recorderWrapper)
-	if !ok || rw.r == nil {
+	// there will be no more calls to CallMetricRecorderFromContext(), which is
+	// where the metric recorder is lazy allocated.
+	if rw.r == nil {
 		return resp, err
 	}
 	setTrailerMetadata(ctx, rw.r)
@@ -93,26 +88,21 @@ func unaryInt(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, han
 }
 
 func streamInt(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	// We don't allocate the metric recorder here. It will be allocated the
+	// first time the user calls CallMetricRecorderFromContext().
+	rw := &recorderWrapper{}
 	ws := &wrappedStream{
 		ServerStream: ss,
-		// We don't allocate the metric recorder here. It will be allocated the
-		// first time the user calls CallMetricRecorderFromContext().
-		ctx: newContextWithCallMetricRecorder(ss.Context()),
+		ctx:          newContextWithRecorderWrapper(ss.Context(), rw),
 	}
 
 	err := handler(srv, ws)
 
-	// If the user never called CallMetricRecorderFromContext() from their RPC
-	// handler, a metric recorder would not have been allocated at this point.
-	// We cannot call CallMetricRecorderFromContext() here to get the recorder
-	// from the context because that would lead to the allocation of a metric
-	// recorder if one wasn't allocated already.
-	//
 	// It is safe to access the underlying metric recorder inside the wrapper at
 	// this point, as the user's RPC handler is done executing, and therefore
-	// there will be no more calls to CallMetricRecorderFromContext().
-	rw, ok := ws.Context().Value(callMetricRecorderCtxKey{}).(*recorderWrapper)
-	if !ok || rw.r == nil {
+	// there will be no more calls to CallMetricRecorderFromContext(), which is
+	// where the metric recorder is lazy allocated.
+	if rw.r == nil {
 		return err
 	}
 	setTrailerMetadata(ss.Context(), rw.r)

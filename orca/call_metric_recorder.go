@@ -110,8 +110,8 @@ func CallMetricRecorderFromContext(ctx context.Context) *CallMetricRecorder {
 	return rw.recorder()
 }
 
-func newContextWithCallMetricRecorder(ctx context.Context) context.Context {
-	return context.WithValue(ctx, callMetricRecorderCtxKey{}, &recorderWrapper{})
+func newContextWithRecorderWrapper(ctx context.Context, r *recorderWrapper) context.Context {
+	return context.WithValue(ctx, callMetricRecorderCtxKey{}, r)
 }
 
 // recorderWrapper is a wrapper around a CallMetricRecorder to ensures that
