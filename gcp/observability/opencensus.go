@@ -58,6 +58,8 @@ type tracingMetricsExporter interface {
 	view.Exporter
 }
 
+var exporter tracingMetricsExporter
+
 // global to stub out in tests
 var newExporter = newStackdriverExporter
 
@@ -87,7 +89,8 @@ func startOpenCensus(config *config) error {
 		return nil
 	}
 
-	exporter, err := newExporter(config)
+	var err error
+	exporter, err = newExporter(config)
 	if err != nil {
 		return err
 	}

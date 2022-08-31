@@ -29,7 +29,12 @@ import (
 	"context"
 	"fmt"
 
+	"contrib.go.opencensus.io/exporter/stackdriver"
+
+	"go.opencensus.io/stats/view"
+	"go.opencensus.io/trace"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 )
 
 var logger = grpclog.Component("observability")
@@ -80,4 +85,18 @@ func Start(ctx context.Context) error {
 // Note: this method should only be invoked once.
 func End() {
 	defaultLogger.Close()
+	if exporter != nil {
+		if sdExporter, ok := exporter.(*stackdriver.Exporter); ok {
+			sdExporter.Flush()
+			sdExporter.Close()
+		}
+
+		// Call these unconditionally, doesn't matter if not registered, will be
+		// a noop if not registered.
+		trace.UnregisterExporter(exporter)
+		view.UnregisterExporter(exporter)
+
+		internal.ClearExtraDialOptions()
+		internal.ClearExtraServerOptions()
+	}
 }
