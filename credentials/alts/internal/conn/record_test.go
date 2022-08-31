@@ -220,7 +220,7 @@ func testFrameTooLarge(t *testing.T, rp string) {
 	payload := make([]byte, payloadLen)
 	c, err := clientConn.crypto.Encrypt(nil, payload)
 	if err != nil {
-		t.Fatalf(fmt.Sprintf("Error encrypting message: %v", err))
+		t.Fatalf("Error encrypting message: %v", err)
 	}
 	msgLen := msgTypeFieldSize + len(c)
 	framedMsg := make([]byte, MsgLenFieldSize+msgLen)
@@ -229,7 +229,7 @@ func testFrameTooLarge(t *testing.T, rp string) {
 	binary.LittleEndian.PutUint32(msg[:msgTypeFieldSize], altsRecordMsgType)
 	copy(msg[msgTypeFieldSize:], c)
 	if _, err = buf.Write(framedMsg); err != nil {
-		t.Fatal(fmt.Sprintf("Unexpected error writing to buffer: %v", err))
+		t.Fatalf("Unexpected error writing to buffer: %v", err)
 	}
 	b := make([]byte, 1)
 	if n, err := serverConn.Read(b); n != 0 || err == nil {

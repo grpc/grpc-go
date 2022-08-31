@@ -886,9 +886,7 @@ func (w *wrappingTopLevelBalancer) getStates() []balancer.State {
 	defer w.mu.Unlock()
 
 	states := make([]balancer.State, len(w.states))
-	for i, s := range w.states {
-		states[i] = s
-	}
+	copy(states, w.states)
 	return states
 }
 
