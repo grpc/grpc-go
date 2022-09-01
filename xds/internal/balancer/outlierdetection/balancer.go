@@ -80,6 +80,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
 	b.child = gracefulswitch.NewBalancer(b, bOpts)
+	b.done.Add(1)
 	go b.run()
 	return b
 }
@@ -167,17 +168,12 @@ type outlierDetectionBalancer struct {
 	recentPickerNoop bool
 
 	closed *grpcsync.Event
+	done   sync.WaitGroup
 	cc     balancer.ClientConn
 	logger *grpclog.PrefixLogger
 
-	// childMu protects the closing of the child and also guarantees updates to
-	// the child are sent synchronously (to uphold the balancer.Balancer API
+	// childMu guards calls into child (to uphold the balancer.Balancer API
 	// guarantee of synchronous calls).
-	//
-	// For example, run() could read that the child is not nil while processing
-	// SubConn updates, and then Close() could write to the the child, clearing
-	// the child, making it nil, then you try and update a cleared and already
-	// closed child, which breaks the balancer.Balancer API.
 	childMu sync.Mutex
 	child   *gracefulswitch.Balancer
 
@@ -372,6 +368,7 @@ func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state
 
 func (b *outlierDetectionBalancer) Close() {
 	b.closed.Fire()
+	b.done.Wait()
 	if b.child != nil {
 		b.childMu.Lock()
 		b.child.Close()
@@ -619,11 +616,11 @@ func min(x, y int64) int64 {
 func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
 	scw := u.scw
 	scw.latestState = u.state
-	b.childMu.Lock()
 	if !scw.ejected && b.child != nil {
+		b.childMu.Lock()
 		b.child.UpdateSubConnState(scw, u.state)
+		b.childMu.Unlock()
 	}
-	b.childMu.Unlock()
 }
 
 // handleEjectedUpdate handles any SubConns that get ejected/unejected, and
@@ -639,11 +636,11 @@ func (b *outlierDetectionBalancer) handleEjectedUpdate(u *ejectionUpdate) {
 			ConnectivityState: connectivity.TransientFailure,
 		}
 	}
-	b.childMu.Lock()
 	if b.child != nil {
+		b.childMu.Lock()
 		b.child.UpdateSubConnState(scw, stateToUpdate)
+		b.childMu.Unlock()
 	}
-	b.childMu.Unlock()
 }
 
 // handleChildStateUpdate forwards the picker update wrapped in a wrapped picker
@@ -700,6 +697,7 @@ func (b *outlierDetectionBalancer) handleLBConfigUpdate(u lbCfgUpdate) {
 }
 
 func (b *outlierDetectionBalancer) run() {
+	defer b.done.Done()
 	for {
 		select {
 		case update := <-b.scUpdateCh.Get():
