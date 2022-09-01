@@ -38,8 +38,6 @@ func newCallCounter() *callCounter {
 // The activeBucket is used to actively count any finished RPC's, and the
 // inactiveBucket is populated with this activeBucket's data every interval for
 // use by the Outlier Detection algorithm.
-//
-// Caller must hold b.mu.
 type callCounter struct {
 	// activeBucket updates every time a call finishes (from picker passed to
 	// Client Conn), so protect pointer read with atomic load of unsafe.Pointer
@@ -57,8 +55,6 @@ func (cc *callCounter) clear() {
 // active bucket. Then the inactive bucket contains the number of successes and
 // failures since the last time the timer triggered. Those numbers are used to
 // evaluate the ejection criteria." - A50.
-//
-// Caller must hold b.mu.
 func (cc *callCounter) swap() {
 	ib := cc.inactiveBucket
 	*ib = bucket{}

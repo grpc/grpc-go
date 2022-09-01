@@ -71,7 +71,6 @@ type bb struct{}
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &outlierDetectionBalancer{
 		cc:             cc,
-		bOpts:          bOpts,
 		closed:         grpcsync.NewEvent(),
 		addrs:          make(map[string]*addressInfo),
 		scWrappers:     make(map[balancer.SubConn]*subConnWrapper),
@@ -169,12 +168,11 @@ type outlierDetectionBalancer struct {
 
 	closed *grpcsync.Event
 	cc     balancer.ClientConn
-	bOpts  balancer.BuildOptions
 	logger *grpclog.PrefixLogger
 
-	// childMu protects child and also guarantees updates to the child are sent
-	// synchronously (to uphold the balancer.Balancer API guarantee of
-	// synchronous calls).
+	// childMu protects the closing of the child and also guarantees updates to
+	// the child are sent synchronously (to uphold the balancer.Balancer API
+	// guarantee of synchronous calls).
 	//
 	// For example, run() could read that the child is not nil while processing
 	// SubConn updates, and then Close() could write to the the child, clearing
@@ -288,7 +286,7 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 		err := b.child.SwitchTo(bb)
 		if err != nil {
 			b.childMu.Unlock()
-			return err
+			return fmt.Errorf("outlier detection: error switching to child of type %q: %v", lbCfg.ChildPolicy.Name, err)
 		}
 		b.childMu.Unlock()
 	}
@@ -425,6 +423,7 @@ func (wp *wrappedPicker) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 	if !ok {
 		// This can never happen, but check is present for defensive
 		// programming.
+		logger.Errorf("Picked SubConn from child picker is not a SubConnWrapper")
 		return balancer.PickResult{
 			SubConn: pr.SubConn,
 			Done:    done,
