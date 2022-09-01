@@ -838,8 +838,6 @@ func (s) TestTLS(t *testing.T) {
 	}()
 	defer grpcServer.GracefulStop()
 
-	/// run tests
-
 	serverCA, err := ioutil.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
 	if err != nil {
 		t.Fatalf("did not read tlsCA: %v", err)
@@ -915,30 +913,25 @@ func (s) TestTLS(t *testing.T) {
 				HTTPClient:              test.stsClient,
 			})
 			if err != nil {
-				t.Fatalf("error creating STS Credentials: (%+v)", err)
+				t.Fatalf("NewCredentials(...) failed: %v", err)
 			}
 
 			creds := credentials.NewTLS(test.grpcTLSConfig)
 			conn, err := grpc.Dial(grpcListener.Addr().String(), grpc.WithTransportCredentials(creds), grpc.WithPerRPCCredentials(stsCreds))
 			if err != nil {
-				t.Fatalf("unexpected error on Dial (%+v) for test %s", err, test.name)
+				t.Fatalf("grpc.Dial(%s) failed: %v", grpcListener.Addr().String(), err)
 			}
 			defer conn.Close()
 
 			c := testgrpc.NewTestServiceClient(conn)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			rpcResp, err := c.UnaryCall(ctx, &testpb.SimpleRequest{
+			_, err = c.UnaryCall(ctx, &testpb.SimpleRequest{
 				FillUsername: true,
 			})
 			if (err != nil) != test.wantErr {
 				t.Fatalf("UnaryCall() returned error: %v, wantErr: %v", err, test.wantErr)
 			}
-			// got an error and expected one
-			if err != nil && test.wantErr {
-				return
-			}
-			t.Logf("SimpleResponse Username %s", rpcResp.Username)
 		})
 	}
 }
