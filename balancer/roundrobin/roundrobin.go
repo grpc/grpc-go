@@ -74,8 +74,8 @@ type rrPicker struct {
 
 func (p *rrPicker) Pick(balancer.PickInfo) (balancer.PickResult, error) {
 	subConnsLen := uint32(len(p.subConns))
-	consumed := atomic.AddUint32(&p.next, 1)
+	nextIndex := atomic.AddUint32(&p.next, 1)
 
-	sc := p.subConns[consumed%subConnsLen]
+	sc := p.subConns[nextIndex%subConnsLen]
 	return balancer.PickResult{SubConn: sc}, nil
 }
