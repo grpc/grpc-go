@@ -339,9 +339,6 @@ func (b *outlierDetectionBalancer) UpdateClientConnState(s balancer.ClientConnSt
 }
 
 func (b *outlierDetectionBalancer) ResolverError(err error) {
-	if b.child == nil {
-		return
-	}
 	b.childMu.Lock()
 	defer b.childMu.Unlock()
 	b.child.ResolverError(err)
@@ -369,12 +366,9 @@ func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state
 func (b *outlierDetectionBalancer) Close() {
 	b.closed.Fire()
 	b.done.Wait()
-	if b.child != nil {
-		b.childMu.Lock()
-		b.child.Close()
-		b.child = nil
-		b.childMu.Unlock()
-	}
+	b.childMu.Lock()
+	b.child.Close()
+	b.childMu.Unlock()
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -384,9 +378,6 @@ func (b *outlierDetectionBalancer) Close() {
 }
 
 func (b *outlierDetectionBalancer) ExitIdle() {
-	if b.child == nil {
-		return
-	}
 	b.childMu.Lock()
 	defer b.childMu.Unlock()
 	b.child.ExitIdle()
@@ -616,7 +607,7 @@ func min(x, y int64) int64 {
 func (b *outlierDetectionBalancer) handleSubConnUpdate(u *scUpdate) {
 	scw := u.scw
 	scw.latestState = u.state
-	if !scw.ejected && b.child != nil {
+	if !scw.ejected {
 		b.childMu.Lock()
 		b.child.UpdateSubConnState(scw, u.state)
 		b.childMu.Unlock()
@@ -636,11 +627,9 @@ func (b *outlierDetectionBalancer) handleEjectedUpdate(u *ejectionUpdate) {
 			ConnectivityState: connectivity.TransientFailure,
 		}
 	}
-	if b.child != nil {
-		b.childMu.Lock()
-		b.child.UpdateSubConnState(scw, stateToUpdate)
-		b.childMu.Unlock()
-	}
+	b.childMu.Lock()
+	b.child.UpdateSubConnState(scw, stateToUpdate)
+	b.childMu.Unlock()
 }
 
 // handleChildStateUpdate forwards the picker update wrapped in a wrapped picker
