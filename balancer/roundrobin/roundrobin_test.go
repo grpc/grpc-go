@@ -35,31 +35,3 @@ func Test_Pick(t *testing.T) {
 	result, _ = p.Pick(pickInfo)
 	assert.Equal(t, result.SubConn.(*testSubConn).index, 0)
 }
-
-func BenchmarkPickConn10(b *testing.B) {
-	p := &rrPicker{
-		subConns: make([]balancer.SubConn, 10),
-		next:     0,
-	}
-
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			var pickInfo balancer.PickInfo
-			p.Pick(pickInfo)
-		}
-	})
-}
-
-func BenchmarkPickConn100(b *testing.B) {
-	p := &rrPicker{
-		subConns: make([]balancer.SubConn, 100),
-		next:     0,
-	}
-
-	b.RunParallel(func(pb *testing.PB) {
-		for pb.Next() {
-			var pickInfo balancer.PickInfo
-			p.Pick(pickInfo)
-		}
-	})
-}
