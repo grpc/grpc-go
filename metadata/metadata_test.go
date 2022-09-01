@@ -206,20 +206,31 @@ func (s) TestValueFromIncomingContext(t *testing.T) {
 	)
 	ctx := NewIncomingContext(context.Background(), md)
 
-	var v []string
-	v = ValueFromIncomingContext(ctx, "X-My-Header-1")
-	if !reflect.DeepEqual(v, []string{"42"}) {
-		t.Errorf("value from context is %v", v)
-	}
-
-	v = ValueFromIncomingContext(ctx, "x-my-header-1")
-	if !reflect.DeepEqual(v, []string{"42"}) {
-		t.Errorf("value from context is %v", v)
-	}
-
-	v = ValueFromIncomingContext(ctx, "x-my-header-2")
-	if !reflect.DeepEqual(v, []string{"43-1", "43-2"}) {
-		t.Errorf("value from context is %v", v)
+	for _, test := range []struct {
+		key  string
+		want []string
+	}{
+		{
+			key:  "X-My-Header-1",
+			want: []string{"42"},
+		},
+		{
+			key:  "x-my-header-1",
+			want: []string{"42"},
+		},
+		{
+			key:  "x-my-header-2",
+			want: []string{"43-1", "43-2"},
+		},
+		{
+			key:  "x-unknown",
+			want: nil,
+		},
+	} {
+		v := ValueFromIncomingContext(ctx, test.key)
+		if !reflect.DeepEqual(v, test.want) {
+			t.Errorf("value of metadata is %v, want %v", v, test.want)
+		}
 	}
 }
 

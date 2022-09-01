@@ -197,20 +197,19 @@ func FromIncomingContext(ctx context.Context) (MD, bool) {
 
 // ValueFromIncomingContext returns value from the incoming metadata if exists.
 //
-// This is intended for using as fast access to context value with string constant.
+// ValueFromIncomingContext returns the metadata value corresponding to the metadata
+// key from the incoming metadata if it exists.
 func ValueFromIncomingContext(ctx context.Context, key string) []string {
 	md, ok := ctx.Value(mdIncomingKey{}).(MD)
 	if !ok {
 		return nil
 	}
-	// fastpath
+
 	if v, ok := md[key]; ok {
 		res := make([]string, len(v))
 		copy(res, v)
 		return res
 	}
-
-	// slowpath
 	key = strings.ToLower(key)
 	for k, v := range md {
 		// We need to manually convert all keys to lower case, because MD is a
