@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/balancerload"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 
@@ -161,4 +162,22 @@ func ToLoadReport(md metadata.MD) (*v3orcapb.OrcaLoadReport, error) {
 		return nil, fmt.Errorf("failed to unmarshal load report found in metadata: %v", err)
 	}
 	return ret, nil
+}
+
+// loadParser implements the Parser interface defined in `internal/balancerload`
+// package. This interface is used by the client stream to parse load reports
+// sent by the server in trailer metadata. The parsed loads are then sent to
+// balancers via balancer.DoneInfo.
+//
+// The grpc package cannot directly call orca.ToLoadReport() as that would cause
+// an import cycle. Hence this roundabout method is used.
+type loadParser struct{}
+
+func (*loadParser) Parse(md metadata.MD) interface{} {
+	lr, _ := ToLoadReport(md)
+	return lr
+}
+
+func init() {
+	balancerload.SetParser(&loadParser{})
 }
