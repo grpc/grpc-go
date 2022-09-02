@@ -127,7 +127,7 @@ func CheckRoundRobinRPCs(ctx context.Context, client testgrpc.TestServiceClient,
 		}
 		return nil
 	}
-	return fmt.Errorf("Timeout when waiting for roundrobin distribution of RPCs across addresses: %v", addrs)
+	return fmt.Errorf("timeout when waiting for roundrobin distribution of RPCs across addresses: %v", addrs)
 }
 
 // CheckWeightedRoundRobinRPCs verifies that EmptyCall RPCs on the given

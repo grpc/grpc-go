@@ -70,16 +70,6 @@ func init() {
 	balancer.Register(&anotherRR{Builder: balancer.Get(roundrobin.Name)})
 }
 
-func subConnFromPicker(t *testing.T, p balancer.Picker) func() balancer.SubConn {
-	return func() balancer.SubConn {
-		scst, err := p.Pick(balancer.PickInfo{})
-		if err != nil {
-			t.Fatalf("unexpected error from picker.Pick: %v", err)
-		}
-		return scst.SubConn
-	}
-}
-
 // When a high priority is ready, adding/removing lower locality doesn't cause
 // changes.
 //

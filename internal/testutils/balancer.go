@@ -198,10 +198,7 @@ func (tcc *TestClientConn) WaitForPickerWithErr(ctx context.Context, want error)
 		case <-ctx.Done():
 			return fmt.Errorf("timeout when waiting for an error picker with %v; last picker error: %v", want, lastErr)
 		case picker := <-tcc.NewPickerCh:
-			for i := 0; i < 5; i++ {
-				if _, lastErr = picker.Pick(balancer.PickInfo{}); lastErr == nil || lastErr.Error() != want.Error() {
-					break
-				}
+			if _, lastErr = picker.Pick(balancer.PickInfo{}); lastErr != nil && lastErr.Error() == want.Error() {
 				return nil
 			}
 		}
