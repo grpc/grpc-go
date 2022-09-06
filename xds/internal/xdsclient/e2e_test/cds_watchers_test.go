@@ -25,15 +25,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcsync"
-	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -41,113 +38,63 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
-	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-
-	_ "google.golang.org/grpc/xds"                            // To ensure internal.NewXDSResolverWithConfigForTesting is set.
-	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
 
-func overrideFedEnvVar(t *testing.T) {
-	oldFed := envconfig.XDSFederation
-	envconfig.XDSFederation = true
-	t.Cleanup(func() { envconfig.XDSFederation = oldFed })
-}
-
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
-
-const (
-	defaultTestWatchExpiryTimeout   = 500 * time.Millisecond
-	defaultTestIdleAuthorityTimeout = 50 * time.Millisecond
-	defaultTestTimeout              = 5 * time.Second
-	defaultTestShortTimeout         = 10 * time.Millisecond // For events expected to *not* happen.
-
-	ldsName         = "xdsclient-test-lds-resource"
-	rdsName         = "xdsclient-test-rds-resource"
-	cdsName         = "xdsclient-test-cds-resource"
-	edsName         = "xdsclient-test-eds-resource"
-	ldsNameNewStyle = "xdstp:///envoy.config.listener.v3.Listener/xdsclient-test-lds-resource"
-	rdsNameNewStyle = "xdstp:///envoy.config.route.v3.RouteConfiguration/xdsclient-test-rds-resource"
-	cdsNameNewStyle = "xdstp:///envoy.config.cluster.v3.Cluster/xdsclient-test-cds-resource"
-	edsNameNewStyle = "xdstp:///envoy.config.endpoint.v3.ClusterLoadAssignment/xdsclient-test-eds-resource"
-)
-
-// badListenerResource returns a listener resource for the given name which does
-// not contain the `RouteSpecifier` field in the HTTPConnectionManager, and
-// hence is expected to be NACKed by the client.
-func badListenerResource(name string) *v3listenerpb.Listener {
-	hcm := testutils.MarshalAny(&v3httppb.HttpConnectionManager{
-		HttpFilters: []*v3httppb.HttpFilter{e2e.HTTPFilter("router", &v3routerpb.Router{})},
-	})
-	return &v3listenerpb.Listener{
-		Name:        name,
-		ApiListener: &v3listenerpb.ApiListener{ApiListener: hcm},
-		FilterChains: []*v3listenerpb.FilterChain{{
-			Name: "filter-chain-name",
-			Filters: []*v3listenerpb.Filter{{
-				Name:       wellknown.HTTPConnectionManager,
-				ConfigType: &v3listenerpb.Filter_TypedConfig{TypedConfig: hcm},
-			}},
-		}},
-	}
+// badClusterResource returns a cluster resource for the given name contains a
+// config_source specifier for the `lrs_server` field which is not set to
+// `self`, and hence is expected to be NACKed by the client.
+func badClusterResource(clusterName, edsServiceName string, secLevel e2e.SecurityLevel) *v3clusterpb.Cluster {
+	cluster := e2e.DefaultCluster(clusterName, edsServiceName, secLevel)
+	cluster.LrsServer = &v3corepb.ConfigSource{ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{}}
+	return cluster
 }
 
 // xdsClient is expected to produce an error containing this string when an
-// update is received containing a listener created using `badListenerResource`.
-const wantListenerNACKErr = "no RouteSpecifier"
+// update is received containing a cluster created using `badClusterResource`.
+const wantClusterNACKErr = "unsupported config_source_specifier"
 
-// verifyNoListenerUpdate verifies that no listener update is received on the
-// provided update channel, and returns an error if an update is received.
-//
-// A very short deadline is used while waiting for the update, as this function
-// is intended to be used when an update is not expected.
-func verifyNoListenerUpdate(ctx context.Context, updateCh *testutils.Channel) error {
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	if u, err := updateCh.Receive(sCtx); err != context.DeadlineExceeded {
-		return fmt.Errorf("unexpected ListenerUpdate: %v", u)
-	}
-	return nil
-}
-
-// verifyListenerUpdate waits for an update to be received on the provided
-// update channel and verifies that it matches the expected update.
+// verifyClusterUpdate waits for an update to be received on the provided update
+// channel and verifies that it matches the expected update.
 //
 // Returns an error if no update is received before the context deadline expires
 // or the received update does not match the expected one.
-func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.ListenerUpdateErrTuple) error {
+func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.ClusterUpdateErrTuple) error {
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
-		return fmt.Errorf("timeout when waiting for a listener resource from the management server: %v", err)
+		return fmt.Errorf("timeout when waiting for a cluster resource from the management server: %v", err)
 	}
-	got := u.(xdsresource.ListenerUpdateErrTuple)
+	got := u.(xdsresource.ClusterUpdateErrTuple)
 	if wantUpdate.Err != nil {
 		if gotType, wantType := xdsresource.ErrType(got.Err), xdsresource.ErrType(wantUpdate.Err); gotType != wantType {
 			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
 		}
 	}
-	cmpOpts := []cmp.Option{
-		cmpopts.EquateEmpty(),
-		cmpopts.IgnoreFields(xdsresource.HTTPFilter{}, "Filter", "Config"),
-		cmpopts.IgnoreFields(xdsresource.ListenerUpdate{}, "Raw"),
-	}
+	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw")}
 	if diff := cmp.Diff(wantUpdate.Update, got.Update, cmpOpts...); diff != "" {
-		return fmt.Errorf("received unepected diff in the listener resource update: (-want, got):\n%s", diff)
+		return fmt.Errorf("received unepected diff in the cluster resource update: (-want, got):\n%s", diff)
 	}
 	return nil
 }
 
-// TestLDSWatch covers the case where a single watcher exists for a single
-// listener resource. The test verifies the following scenarios:
+// verifyNoClusterUpdate verifies that no cluster update is received on the
+// provided update channel, and returns an error if an update is received.
+//
+// A very short deadline is used while waiting for the update, as this function
+// is intended to be used when an update is not expected.
+func verifyNoClusterUpdate(ctx context.Context, updateCh *testutils.Channel) error {
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if u, err := updateCh.Receive(sCtx); err != context.DeadlineExceeded {
+		return fmt.Errorf("unexpected ClusterUpdate: %v", u)
+	}
+	return nil
+}
+
+// TestCDSWatch covers the case where a single watcher exists for a single
+// cluster resource. The test verifies the following scenarios:
 // 1. An update from the management server containing the resource being
 //    watched should result in the invocation of the watch callback.
 // 2. An update from the management server containing a resource *not* being
@@ -157,38 +104,38 @@ func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, want
 //    invocation of the watch callback.
 //
 // The test is run for old and new style names.
-func (s) TestLDSWatch(t *testing.T) {
+func (s) TestCDSWatch(t *testing.T) {
 	tests := []struct {
 		desc                   string
 		resourceName           string
-		watchedResource        *v3listenerpb.Listener // The resource being watched.
-		updatedWatchedResource *v3listenerpb.Listener // The watched resource after an update.
-		notWatchedResource     *v3listenerpb.Listener // A resource which is not being watched.
-		wantUpdate             xdsresource.ListenerUpdateErrTuple
+		watchedResource        *v3clusterpb.Cluster // The resource being watched.
+		updatedWatchedResource *v3clusterpb.Cluster // The watched resource after an update.
+		notWatchedResource     *v3clusterpb.Cluster // A resource which is not being watched.
+		wantUpdate             xdsresource.ClusterUpdateErrTuple
 	}{
 		{
 			desc:                   "old style resource",
-			resourceName:           ldsName,
-			watchedResource:        e2e.DefaultClientListener(ldsName, rdsName),
-			updatedWatchedResource: e2e.DefaultClientListener(ldsName, "new-rds-resource"),
-			notWatchedResource:     e2e.DefaultClientListener("unsubscribed-lds-resource", rdsName),
-			wantUpdate: xdsresource.ListenerUpdateErrTuple{
-				Update: xdsresource.ListenerUpdate{
-					RouteConfigName: rdsName,
-					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			resourceName:           cdsName,
+			watchedResource:        e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone),
+			updatedWatchedResource: e2e.DefaultCluster(cdsName, "new-eds-resource", e2e.SecurityLevelNone),
+			notWatchedResource:     e2e.DefaultCluster("unsubscribed-cds-resource", edsName, e2e.SecurityLevelNone),
+			wantUpdate: xdsresource.ClusterUpdateErrTuple{
+				Update: xdsresource.ClusterUpdate{
+					ClusterName:    cdsName,
+					EDSServiceName: edsName,
 				},
 			},
 		},
 		{
 			desc:                   "new style resource",
-			resourceName:           ldsNameNewStyle,
-			watchedResource:        e2e.DefaultClientListener(ldsNameNewStyle, rdsNameNewStyle),
-			updatedWatchedResource: e2e.DefaultClientListener(ldsNameNewStyle, "new-rds-resource"),
-			notWatchedResource:     e2e.DefaultClientListener("unsubscribed-lds-resource", rdsNameNewStyle),
-			wantUpdate: xdsresource.ListenerUpdateErrTuple{
-				Update: xdsresource.ListenerUpdate{
-					RouteConfigName: rdsNameNewStyle,
-					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			resourceName:           cdsNameNewStyle,
+			watchedResource:        e2e.DefaultCluster(cdsNameNewStyle, edsNameNewStyle, e2e.SecurityLevelNone),
+			updatedWatchedResource: e2e.DefaultCluster(cdsNameNewStyle, "new-eds-resource", e2e.SecurityLevelNone),
+			notWatchedResource:     e2e.DefaultCluster("unsubscribed-cds-resource", edsNameNewStyle, e2e.SecurityLevelNone),
+			wantUpdate: xdsresource.ClusterUpdateErrTuple{
+				Update: xdsresource.ClusterUpdate{
+					ClusterName:    cdsNameNewStyle,
+					EDSServiceName: edsNameNewStyle,
 				},
 			},
 		},
@@ -207,18 +154,18 @@ func (s) TestLDSWatch(t *testing.T) {
 			}
 			defer client.Close()
 
-			// Register a watch for a listener resource and have the watch
+			// Register a watch for a cluster resource and have the watch
 			// callback push the received update on to a channel.
 			updateCh := testutils.NewChannel()
-			ldsCancel := client.WatchListener(test.resourceName, func(u xdsresource.ListenerUpdate, err error) {
-				updateCh.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+			cdsCancel := client.WatchCluster(test.resourceName, func(u xdsresource.ClusterUpdate, err error) {
+				updateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 			})
 
-			// Configure the management server to return a single listener
+			// Configure the management server to return a single cluster
 			// resource, corresponding to the one we registered a watch for.
 			resources := e2e.UpdateOptions{
 				NodeID:         nodeID,
-				Listeners:      []*v3listenerpb.Listener{test.watchedResource},
+				Clusters:       []*v3clusterpb.Cluster{test.watchedResource},
 				SkipValidation: true,
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -228,44 +175,44 @@ func (s) TestLDSWatch(t *testing.T) {
 			}
 
 			// Verify the contents of the received update.
-			if err := verifyListenerUpdate(ctx, updateCh, test.wantUpdate); err != nil {
+			if err := verifyClusterUpdate(ctx, updateCh, test.wantUpdate); err != nil {
 				t.Fatal(err)
 			}
 
-			// Configure the management server to return an additional listener
+			// Configure the management server to return an additional cluster
 			// resource, one that we are not interested in.
 			resources = e2e.UpdateOptions{
 				NodeID:         nodeID,
-				Listeners:      []*v3listenerpb.Listener{test.watchedResource, test.notWatchedResource},
+				Clusters:       []*v3clusterpb.Cluster{test.watchedResource, test.notWatchedResource},
 				SkipValidation: true,
 			}
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyNoListenerUpdate(ctx, updateCh); err != nil {
+			if err := verifyNoClusterUpdate(ctx, updateCh); err != nil {
 				t.Fatal(err)
 			}
 
 			// Cancel the watch and update the resource corresponding to the original
 			// watch.  Ensure that the cancelled watch callback is not invoked.
-			ldsCancel()
+			cdsCancel()
 			resources = e2e.UpdateOptions{
 				NodeID:         nodeID,
-				Listeners:      []*v3listenerpb.Listener{test.updatedWatchedResource, test.notWatchedResource},
+				Clusters:       []*v3clusterpb.Cluster{test.updatedWatchedResource, test.notWatchedResource},
 				SkipValidation: true,
 			}
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyNoListenerUpdate(ctx, updateCh); err != nil {
+			if err := verifyNoClusterUpdate(ctx, updateCh); err != nil {
 				t.Fatal(err)
 			}
 		})
 	}
 }
 
-// TestLDSWatch_TwoWatchesForSameResourceName covers the case where two watchers
-// exist for a single listener resource.  The test verifies the following
+// TestCDSWatch_TwoWatchesForSameResourceName covers the case where two watchers
+// exist for a single cluster resource.  The test verifies the following
 // scenarios:
 // 1. An update from the management server containing the resource being
 //    watched should result in the invocation of both watch callbacks.
@@ -277,48 +224,48 @@ func (s) TestLDSWatch(t *testing.T) {
 //    callback.
 //
 // The test is run for old and new style names.
-func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
+func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 	tests := []struct {
 		desc                   string
 		resourceName           string
-		watchedResource        *v3listenerpb.Listener // The resource being watched.
-		updatedWatchedResource *v3listenerpb.Listener // The watched resource after an update.
-		wantUpdateV1           xdsresource.ListenerUpdateErrTuple
-		wantUpdateV2           xdsresource.ListenerUpdateErrTuple
+		watchedResource        *v3clusterpb.Cluster // The resource being watched.
+		updatedWatchedResource *v3clusterpb.Cluster // The watched resource after an update.
+		wantUpdateV1           xdsresource.ClusterUpdateErrTuple
+		wantUpdateV2           xdsresource.ClusterUpdateErrTuple
 	}{
 		{
 			desc:                   "old style resource",
-			resourceName:           ldsName,
-			watchedResource:        e2e.DefaultClientListener(ldsName, rdsName),
-			updatedWatchedResource: e2e.DefaultClientListener(ldsName, "new-rds-resource"),
-			wantUpdateV1: xdsresource.ListenerUpdateErrTuple{
-				Update: xdsresource.ListenerUpdate{
-					RouteConfigName: rdsName,
-					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			resourceName:           cdsName,
+			watchedResource:        e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone),
+			updatedWatchedResource: e2e.DefaultCluster(cdsName, "new-eds-resource", e2e.SecurityLevelNone),
+			wantUpdateV1: xdsresource.ClusterUpdateErrTuple{
+				Update: xdsresource.ClusterUpdate{
+					ClusterName:    cdsName,
+					EDSServiceName: edsName,
 				},
 			},
-			wantUpdateV2: xdsresource.ListenerUpdateErrTuple{
-				Update: xdsresource.ListenerUpdate{
-					RouteConfigName: "new-rds-resource",
-					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			wantUpdateV2: xdsresource.ClusterUpdateErrTuple{
+				Update: xdsresource.ClusterUpdate{
+					ClusterName:    cdsName,
+					EDSServiceName: "new-eds-resource",
 				},
 			},
 		},
 		{
 			desc:                   "new style resource",
-			resourceName:           ldsNameNewStyle,
-			watchedResource:        e2e.DefaultClientListener(ldsNameNewStyle, rdsNameNewStyle),
-			updatedWatchedResource: e2e.DefaultClientListener(ldsNameNewStyle, "new-rds-resource"),
-			wantUpdateV1: xdsresource.ListenerUpdateErrTuple{
-				Update: xdsresource.ListenerUpdate{
-					RouteConfigName: rdsNameNewStyle,
-					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			resourceName:           cdsNameNewStyle,
+			watchedResource:        e2e.DefaultCluster(cdsNameNewStyle, edsNameNewStyle, e2e.SecurityLevelNone),
+			updatedWatchedResource: e2e.DefaultCluster(cdsNameNewStyle, "new-eds-resource", e2e.SecurityLevelNone),
+			wantUpdateV1: xdsresource.ClusterUpdateErrTuple{
+				Update: xdsresource.ClusterUpdate{
+					ClusterName:    cdsNameNewStyle,
+					EDSServiceName: edsNameNewStyle,
 				},
 			},
-			wantUpdateV2: xdsresource.ListenerUpdateErrTuple{
-				Update: xdsresource.ListenerUpdate{
-					RouteConfigName: "new-rds-resource",
-					HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+			wantUpdateV2: xdsresource.ClusterUpdateErrTuple{
+				Update: xdsresource.ClusterUpdate{
+					ClusterName:    cdsNameNewStyle,
+					EDSServiceName: "new-eds-resource",
 				},
 			},
 		},
@@ -337,23 +284,23 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			}
 			defer client.Close()
 
-			// Register two watches for the same listener resource and have the
+			// Register two watches for the same cluster resource and have the
 			// callbacks push the received updates on to a channel.
 			updateCh1 := testutils.NewChannel()
-			ldsCancel1 := client.WatchListener(test.resourceName, func(u xdsresource.ListenerUpdate, err error) {
-				updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+			cdsCancel1 := client.WatchCluster(test.resourceName, func(u xdsresource.ClusterUpdate, err error) {
+				updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 			})
-			defer ldsCancel1()
+			defer cdsCancel1()
 			updateCh2 := testutils.NewChannel()
-			ldsCancel2 := client.WatchListener(test.resourceName, func(u xdsresource.ListenerUpdate, err error) {
-				updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+			cdsCancel2 := client.WatchCluster(test.resourceName, func(u xdsresource.ClusterUpdate, err error) {
+				updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 			})
 
-			// Configure the management server to return a single listener
+			// Configure the management server to return a single cluster
 			// resource, corresponding to the one we registered watches for.
 			resources := e2e.UpdateOptions{
 				NodeID:         nodeID,
-				Listeners:      []*v3listenerpb.Listener{test.watchedResource},
+				Clusters:       []*v3clusterpb.Cluster{test.watchedResource},
 				SkipValidation: true,
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -363,24 +310,24 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			}
 
 			// Verify the contents of the received update.
-			if err := verifyListenerUpdate(ctx, updateCh1, test.wantUpdateV1); err != nil {
+			if err := verifyClusterUpdate(ctx, updateCh1, test.wantUpdateV1); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyListenerUpdate(ctx, updateCh2, test.wantUpdateV1); err != nil {
+			if err := verifyClusterUpdate(ctx, updateCh2, test.wantUpdateV1); err != nil {
 				t.Fatal(err)
 			}
 
 			// Cancel the second watch and force the management server to push a
 			// redundant update for the resource being watched. Neither of the
 			// two watch callbacks should be invoked.
-			ldsCancel2()
+			cdsCancel2()
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyNoListenerUpdate(ctx, updateCh1); err != nil {
+			if err := verifyNoClusterUpdate(ctx, updateCh1); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyNoListenerUpdate(ctx, updateCh2); err != nil {
+			if err := verifyNoClusterUpdate(ctx, updateCh2); err != nil {
 				t.Fatal(err)
 			}
 
@@ -388,30 +335,30 @@ func (s) TestLDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			// should be invoked while the cancelled one should not be.
 			resources = e2e.UpdateOptions{
 				NodeID:         nodeID,
-				Listeners:      []*v3listenerpb.Listener{test.updatedWatchedResource},
+				Clusters:       []*v3clusterpb.Cluster{test.updatedWatchedResource},
 				SkipValidation: true,
 			}
 			if err := mgmtServer.Update(ctx, resources); err != nil {
 				t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 			}
-			if err := verifyListenerUpdate(ctx, updateCh1, test.wantUpdateV2); err != nil {
+			if err := verifyClusterUpdate(ctx, updateCh1, test.wantUpdateV2); err != nil {
 				t.Fatal(err)
 			}
-			if err := verifyNoListenerUpdate(ctx, updateCh2); err != nil {
+			if err := verifyNoClusterUpdate(ctx, updateCh2); err != nil {
 				t.Fatal(err)
 			}
 		})
 	}
 }
 
-// TestLDSWatch_ThreeWatchesForDifferentResourceNames covers the case with three
+// TestCDSWatch_ThreeWatchesForDifferentResourceNames covers the case with three
 // watchers (two watchers for one resource, and the third watcher for another
-// resource), exist across two listener resources.  The test verifies that an
+// resource), exist across two cluster resources.  The test verifies that an
 // update from the management server containing both resources results in the
 // invocation of all watch callbacks.
 //
 // The test is run with both old and new style names.
-func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
+func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
@@ -423,33 +370,33 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Register two watches for the same listener resource and have the
+	// Register two watches for the same cluster resource and have the
 	// callbacks push the received updates on to a channel.
 	updateCh1 := testutils.NewChannel()
-	ldsCancel1 := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	cdsCancel1 := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	defer ldsCancel1()
+	defer cdsCancel1()
 	updateCh2 := testutils.NewChannel()
-	ldsCancel2 := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	cdsCancel2 := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	defer ldsCancel2()
+	defer cdsCancel2()
 
-	// Register the third watch for a different listener resource.
+	// Register the third watch for a different cluster resource.
 	updateCh3 := testutils.NewChannel()
-	ldsCancel3 := client.WatchListener(ldsNameNewStyle, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh3.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	cdsCancel3 := client.WatchCluster(cdsNameNewStyle, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh3.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	defer ldsCancel3()
+	defer cdsCancel3()
 
-	// Configure the management server to return two listener resources,
+	// Configure the management server to return two cluster resources,
 	// corresponding to the registered watches.
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
-		Listeners: []*v3listenerpb.Listener{
-			e2e.DefaultClientListener(ldsName, rdsName),
-			e2e.DefaultClientListener(ldsNameNewStyle, rdsName),
+		Clusters: []*v3clusterpb.Cluster{
+			e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone),
+			e2e.DefaultCluster(cdsNameNewStyle, edsNameNewStyle, e2e.SecurityLevelNone),
 		},
 		SkipValidation: true,
 	}
@@ -459,31 +406,35 @@ func (s) TestLDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	// Verify the contents of the received update for the all watchers. The two
-	// resources returned differ only in the resource name. Therefore the
-	// expected update is the same for all the watchers.
-	wantUpdate := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+	// Verify the contents of the received update for the all watchers.
+	wantUpdate12 := xdsresource.ClusterUpdateErrTuple{
+		Update: xdsresource.ClusterUpdate{
+			ClusterName:    cdsName,
+			EDSServiceName: edsName,
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh1, wantUpdate); err != nil {
+	wantUpdate3 := xdsresource.ClusterUpdateErrTuple{
+		Update: xdsresource.ClusterUpdate{
+			ClusterName:    cdsNameNewStyle,
+			EDSServiceName: edsNameNewStyle,
+		},
+	}
+	if err := verifyClusterUpdate(ctx, updateCh1, wantUpdate12); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate12); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyListenerUpdate(ctx, updateCh3, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, updateCh3, wantUpdate3); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// TestLDSWatch_ResourceCaching covers the case where a watch is registered for
+// TestCDSWatch_ResourceCaching covers the case where a watch is registered for
 // a resource which is already present in the cache.  The test verifies that the
 // watch callback is invoked with the contents from the cache, instead of a
 // request being sent to the management server.
-func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
+func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
 	overrideFedEnvVar(t)
 	firstRequestReceived := false
 	firstAckReceived := grpcsync.NewEvent()
@@ -515,19 +466,19 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Register a watch for a listener resource and have the watch
+	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
 	updateCh1 := testutils.NewChannel()
-	ldsCancel1 := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	cdsCancel1 := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	defer ldsCancel1()
+	defer cdsCancel1()
 
-	// Configure the management server to return a single listener
+	// Configure the management server to return a single cluster
 	// resource, corresponding to the one we registered a watch for.
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone)},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -537,13 +488,13 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	}
 
 	// Verify the contents of the received update.
-	wantUpdate := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+	wantUpdate := xdsresource.ClusterUpdateErrTuple{
+		Update: xdsresource.ClusterUpdate{
+			ClusterName:    cdsName,
+			EDSServiceName: edsName,
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh1, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, updateCh1, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -555,11 +506,11 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	// Register another watch for the same resource. This should get the update
 	// from the cache.
 	updateCh2 := testutils.NewChannel()
-	ldsCancel2 := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	cdsCancel2 := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	defer ldsCancel2()
-	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	defer cdsCancel2()
+	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 	// No request should get sent out as part of this watch.
@@ -572,10 +523,10 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 	}
 }
 
-// TestLDSWatch_ExpiryTimerFiresBeforeResponse tests the case where the client
-// does not receive an LDS response for the request that it sends. We want the
+// TestCDSWatch_ExpiryTimerFiresBeforeResponse tests the case where the client
+// does not receive an CDS response for the request that it sends. We want the
 // watch callback to be invoked with an error once the watchExpiryTimer fires.
-func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
+func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// No need to spin up a management server since we don't want the client to
 	// receive a response for the watch being registered by the test.
 
@@ -596,10 +547,10 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// Register a watch for a resource which is expected to fail with an error
 	// after the watch expiry timer fires.
 	updateCh := testutils.NewChannel()
-	ldsCancel := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	cdsCancel := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	defer ldsCancel()
+	defer cdsCancel()
 
 	// Wait for the watch expiry timer to fire.
 	<-time.After(defaultTestWatchExpiryTimeout)
@@ -607,17 +558,17 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// Verify that an empty update with the expected error is received.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	wantErr := fmt.Errorf("watch for resource %q of type Listener timed out", ldsName)
-	if err := verifyListenerUpdate(ctx, updateCh, xdsresource.ListenerUpdateErrTuple{Err: wantErr}); err != nil {
+	wantErr := fmt.Errorf("watch for resource %q of type Cluster timed out", cdsName)
+	if err := verifyClusterUpdate(ctx, updateCh, xdsresource.ClusterUpdateErrTuple{Err: wantErr}); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// TestLDSWatch_ExpiryTimerFiresAfterResponse tests the case where the client
-// receives an LDS response for the request that it sends. The test verifies
+// TestCDSWatch_ExpiryTimerFiresAfterResponse tests the case where the client
+// receives an CDS response for the request that it sends. The test verifies
 // that the timer is canceled and therefore no callback is invoked when the
 // expiry timer's duration elapses.
-func (s) TestLDSWatch_ExpiryTimerFiresAfterResponse(t *testing.T) {
+func (s) TestCDSWatch_ExpiryTimerFiresAfterResponse(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, err := e2e.StartManagementServer(nil)
 	if err != nil {
@@ -640,19 +591,19 @@ func (s) TestLDSWatch_ExpiryTimerFiresAfterResponse(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Register a watch for a listener resource and have the watch
+	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
 	updateCh := testutils.NewChannel()
-	ldsCancel := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	cdsCancel := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	defer ldsCancel()
+	defer cdsCancel()
 
-	// Configure the management server to return a single listener
-	// resource, corresponding to the one we registered a watch for.
+	// Configure the management server to return a single cluster resource,
+	// corresponding to the one we registered a watch for.
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(cdsName, edsName, e2e.SecurityLevelNone)},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -662,25 +613,25 @@ func (s) TestLDSWatch_ExpiryTimerFiresAfterResponse(t *testing.T) {
 	}
 
 	// Verify the contents of the received update.
-	wantUpdate := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+	wantUpdate := xdsresource.ClusterUpdateErrTuple{
+		Update: xdsresource.ClusterUpdate{
+			ClusterName:    cdsName,
+			EDSServiceName: edsName,
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, updateCh, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 
 	// Wait for the watch expiry timer to fire, and verify that the callback is
 	// not invoked.
 	<-time.After(defaultTestWatchExpiryTimeout)
-	if err := verifyNoListenerUpdate(ctx, updateCh); err != nil {
+	if err := verifyNoClusterUpdate(ctx, updateCh); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// TestLDSWatch_ResourceRemoved covers the cases where a resource being watched
+// TestCDSWatch_ResourceRemoved covers the cases where a resource being watched
 // is removed from the management server. The test verifies the following
 // scenarios:
 // 1. Removing a resource should trigger the watch callback with a resource
@@ -691,7 +642,7 @@ func (s) TestLDSWatch_ExpiryTimerFiresAfterResponse(t *testing.T) {
 //    invocation of the watch callback associated with the deleted resource.
 //
 // The test is run with both old and new style names.
-func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
+func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
@@ -703,29 +654,28 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Register two watches for two listener resources and have the
+	// Register two watches for two cluster resources and have the
 	// callbacks push the received updates on to a channel.
-	resourceName1 := ldsName
+	resourceName1 := cdsName
 	updateCh1 := testutils.NewChannel()
-	ldsCancel1 := client.WatchListener(resourceName1, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	cdsCancel1 := client.WatchCluster(resourceName1, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	defer ldsCancel1()
-
-	resourceName2 := ldsNameNewStyle
+	defer cdsCancel1()
+	resourceName2 := cdsNameNewStyle
 	updateCh2 := testutils.NewChannel()
-	ldsCancel2 := client.WatchListener(resourceName2, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	cdsCancel2 := client.WatchCluster(resourceName2, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	defer ldsCancel2()
+	defer cdsCancel2()
 
-	// Configure the management server to return two listener resources,
+	// Configure the management server to return two cluster resources,
 	// corresponding to the registered watches.
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
-		Listeners: []*v3listenerpb.Listener{
-			e2e.DefaultClientListener(resourceName1, rdsName),
-			e2e.DefaultClientListener(resourceName2, rdsName),
+		Clusters: []*v3clusterpb.Cluster{
+			e2e.DefaultCluster(resourceName1, edsName, e2e.SecurityLevelNone),
+			e2e.DefaultCluster(resourceName2, edsNameNewStyle, e2e.SecurityLevelNone),
 		},
 		SkipValidation: true,
 	}
@@ -735,26 +685,30 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	// Verify the contents of the received update for both watchers. The two
-	// resources returned differ only in the resource name. Therefore the
-	// expected update is the same for both watchers.
-	wantUpdate := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+	// Verify the contents of the received update for both watchers.
+	wantUpdate1 := xdsresource.ClusterUpdateErrTuple{
+		Update: xdsresource.ClusterUpdate{
+			ClusterName:    resourceName1,
+			EDSServiceName: edsName,
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh1, wantUpdate); err != nil {
+	wantUpdate2 := xdsresource.ClusterUpdateErrTuple{
+		Update: xdsresource.ClusterUpdate{
+			ClusterName:    resourceName2,
+			EDSServiceName: edsNameNewStyle,
+		},
+	}
+	if err := verifyClusterUpdate(ctx, updateCh1, wantUpdate1); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate2); err != nil {
 		t.Fatal(err)
 	}
 
-	// Remove the first listener resource on the management server.
+	// Remove the first cluster resource on the management server.
 	resources = e2e.UpdateOptions{
 		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(resourceName2, rdsName)},
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(resourceName2, edsNameNewStyle, e2e.SecurityLevelNone)},
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -763,43 +717,41 @@ func (s) TestLDSWatch_ResourceRemoved(t *testing.T) {
 
 	// The first watcher should receive a resource removed error, while the
 	// second watcher should not see an update.
-	if err := verifyListenerUpdate(ctx, updateCh1, xdsresource.ListenerUpdateErrTuple{
-		Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, ""),
-	}); err != nil {
+	if err := verifyClusterUpdate(ctx, updateCh1, xdsresource.ClusterUpdateErrTuple{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")}); err != nil {
 		t.Fatal(err)
 	}
-	if err := verifyNoListenerUpdate(ctx, updateCh2); err != nil {
+	if err := verifyNoClusterUpdate(ctx, updateCh2); err != nil {
 		t.Fatal(err)
 	}
 
-	// Update the second listener resource on the management server. The first
+	// Update the second cluster resource on the management server. The first
 	// watcher should not see an update, while the second watcher should.
 	resources = e2e.UpdateOptions{
 		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(resourceName2, "new-rds-resource")},
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(resourceName2, "new-eds-resource", e2e.SecurityLevelNone)},
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
-	if err := verifyNoListenerUpdate(ctx, updateCh1); err != nil {
+	if err := verifyNoClusterUpdate(ctx, updateCh1); err != nil {
 		t.Fatal(err)
 	}
-	wantUpdate = xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
-			RouteConfigName: "new-rds-resource",
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+	wantUpdate := xdsresource.ClusterUpdateErrTuple{
+		Update: xdsresource.ClusterUpdate{
+			ClusterName:    resourceName2,
+			EDSServiceName: "new-eds-resource",
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// TestLDSWatch_NACKError covers the case where an update from the management
+// TestCDSWatch_NACKError covers the case where an update from the management
 // server is NACK'ed by the xdsclient. The test verifies that the error is
 // propagated to the watcher.
-func (s) TestLDSWatch_NACKError(t *testing.T) {
+func (s) TestCDSWatch_NACKError(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
@@ -811,23 +763,23 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Register a watch for a listener resource and have the watch
+	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	updateCh := testutils.NewChannel()
-	ldsCancel := client.WatchListener(ldsName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh.SendContext(ctx, xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	cdsCancel := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	defer ldsCancel()
+	defer cdsCancel()
 
-	// Configure the management server to return a single listener resource
+	// Configure the management server to return a single cluster resource
 	// which is expected to be NACKed by the client.
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
-		Listeners:      []*v3listenerpb.Listener{badListenerResource(ldsName)},
+		Clusters:       []*v3clusterpb.Cluster{badClusterResource(cdsName, edsName, e2e.SecurityLevelNone)},
 		SkipValidation: true,
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
@@ -835,20 +787,20 @@ func (s) TestLDSWatch_NACKError(t *testing.T) {
 	// Verify that the expected error is propagated to the watcher.
 	u, err := updateCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout when waiting for a listener resource from the management server: %v", err)
+		t.Fatalf("timeout when waiting for a cluster resource from the management server: %v", err)
 	}
-	gotErr := u.(xdsresource.ListenerUpdateErrTuple).Err
-	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+	gotErr := u.(xdsresource.ClusterUpdateErrTuple).Err
+	if gotErr == nil || !strings.Contains(gotErr.Error(), wantClusterNACKErr) {
+		t.Fatalf("update received with error: %v, want %q", gotErr, wantClusterNACKErr)
 	}
 }
 
-// TestLDSWatch_PartialValid covers the case where a response from the
+// TestCDSWatch_PartialValid covers the case where a response from the
 // management server contains both valid and invalid resources and is expected
 // to be NACK'ed by the xdsclient. The test verifies that watchers corresponding
 // to the valid resource receive the update, while watchers corresponding to the
 // invalid resource receive an error.
-func (s) TestLDSWatch_PartialValid(t *testing.T) {
+func (s) TestCDSWatch_PartialValid(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
@@ -860,32 +812,31 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Register two watches for listener resources. The first watch is expected
+	// Register two watches for cluster resources. The first watch is expected
 	// to receive an error because the received resource is NACKed. The second
 	// watch is expected to get a good update.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	badResourceName := ldsName
+	badResourceName := cdsName
 	updateCh1 := testutils.NewChannel()
-	ldsCancel1 := client.WatchListener(badResourceName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh1.SendContext(ctx, xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	cdsCancel1 := client.WatchCluster(badResourceName, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	defer ldsCancel1()
-	goodResourceName := ldsNameNewStyle
+	defer cdsCancel1()
+	goodResourceName := cdsNameNewStyle
 	updateCh2 := testutils.NewChannel()
-	ldsCancel2 := client.WatchListener(goodResourceName, func(u xdsresource.ListenerUpdate, err error) {
-		updateCh2.SendContext(ctx, xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	cdsCancel2 := client.WatchCluster(goodResourceName, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
-	defer ldsCancel2()
+	defer cdsCancel2()
 
-	// Configure the management server with two listener resources. One of these
+	// Configure the management server with two cluster resources. One of these
 	// is a bad resource causing the update to be NACKed.
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
-		Listeners: []*v3listenerpb.Listener{
-			badListenerResource(badResourceName),
-			e2e.DefaultClientListener(goodResourceName, rdsName),
-		},
+		Clusters: []*v3clusterpb.Cluster{
+			badClusterResource(badResourceName, edsName, e2e.SecurityLevelNone),
+			e2e.DefaultCluster(goodResourceName, edsName, e2e.SecurityLevelNone)},
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
@@ -896,22 +847,22 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 	// requested for the bad resource.
 	u, err := updateCh1.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout when waiting for a listener resource from the management server: %v", err)
+		t.Fatalf("timeout when waiting for a cluster resource from the management server: %v", err)
 	}
-	gotErr := u.(xdsresource.ListenerUpdateErrTuple).Err
-	if gotErr == nil || !strings.Contains(gotErr.Error(), wantListenerNACKErr) {
-		t.Fatalf("update received with error: %v, want %q", gotErr, wantListenerNACKErr)
+	gotErr := u.(xdsresource.ClusterUpdateErrTuple).Err
+	if gotErr == nil || !strings.Contains(gotErr.Error(), wantClusterNACKErr) {
+		t.Fatalf("update received with error: %v, want %q", gotErr, wantClusterNACKErr)
 	}
 
 	// Verify that the watcher watching the good resource receives a good
 	// update.
-	wantUpdate := xdsresource.ListenerUpdateErrTuple{
-		Update: xdsresource.ListenerUpdate{
-			RouteConfigName: rdsName,
-			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+	wantUpdate := xdsresource.ClusterUpdateErrTuple{
+		Update: xdsresource.ClusterUpdate{
+			ClusterName:    goodResourceName,
+			EDSServiceName: edsName,
 		},
 	}
-	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate); err != nil {
+	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate); err != nil {
 		t.Fatal(err)
 	}
 }

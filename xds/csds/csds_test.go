@@ -16,7 +16,7 @@
  *
  */
 
-package csds
+package csds_test
 
 import (
 	"context"
@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds"
+	"google.golang.org/grpc/xds/csds"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -42,9 +43,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -52,7 +51,7 @@ import (
 	v3statuspbgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
 
-const defaultTestTimeout = 10 * time.Second
+const defaultTestTimeout = 5 * time.Second
 
 var cmpOpts = cmp.Options{
 	cmp.Transformer("sort", func(in []*v3statuspb.ClientConfig_GenericXdsConfig) []*v3statuspb.ClientConfig_GenericXdsConfig {
@@ -86,32 +85,12 @@ func filterFields(ms []*v3statuspb.ClientConfig_GenericXdsConfig) []*v3statuspb.
 		}
 		m.LastUpdated = nil
 		if m.ErrorState != nil {
-			m.ErrorState.Details = "blahblah"
+			m.ErrorState.Details = ""
 			m.ErrorState.LastUpdateAttempt = nil
 		}
 	}
 	return out
 }
-
-var (
-	ldsTargets   = []string{"lds.target.good:0000", "lds.target.good:1111"}
-	listeners    = make([]*v3listenerpb.Listener, len(ldsTargets))
-	listenerAnys = make([]*anypb.Any, len(ldsTargets))
-
-	rdsTargets = []string{"route-config-0", "route-config-1"}
-	routes     = make([]*v3routepb.RouteConfiguration, len(rdsTargets))
-	routeAnys  = make([]*anypb.Any, len(rdsTargets))
-
-	cdsTargets  = []string{"cluster-0", "cluster-1"}
-	clusters    = make([]*v3clusterpb.Cluster, len(cdsTargets))
-	clusterAnys = make([]*anypb.Any, len(cdsTargets))
-
-	edsTargets   = []string{"endpoints-0", "endpoints-1"}
-	endpoints    = make([]*v3endpointpb.ClusterLoadAssignment, len(edsTargets))
-	endpointAnys = make([]*anypb.Any, len(edsTargets))
-	ips          = []string{"0.0.0.0", "1.1.1.1"}
-	ports        = []uint32{123, 456}
-)
 
 type s struct {
 	grpctest.Tester
@@ -121,33 +100,104 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func init() {
+func (s) TestCSDS(t *testing.T) {
+	// Spin up a xDS management server on a local port.
+	nodeID := uuid.New().String()
+	mgmtServer, err := e2e.StartManagementServer(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { mgmtServer.Stop() })
+
+	// Create a bootstrap file in a temporary directory.
+	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{
+		Version:   xds.TransportV3,
+		NodeID:    nodeID,
+		ServerURI: mgmtServer.Address,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { bootstrapCleanup() })
+
+	// Create an xDS client. This will end up using the same singleton as used
+	// by the CSDS service.
+	xdsC, err := xdsclient.New()
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	t.Cleanup(func() { xdsC.Close() })
+
+	// Initialize an gRPC server and register CSDS on it.
+	server := grpc.NewServer()
+	csdss, err := csds.NewClientStatusDiscoveryServer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	v3statuspbgrpc.RegisterClientStatusDiscoveryServiceServer(server, csdss)
+	t.Cleanup(func() {
+		server.Stop()
+		csdss.Close()
+	})
+
+	// Create a local listener and pass it to Serve().
+	lis, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	go func() {
+		if err := server.Serve(lis); err != nil {
+			t.Errorf("Serve() failed: %v", err)
+		}
+	}()
+
+	// Create a client to the CSDS server.
+	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("Failed to dial CSDS server %q: %v", lis.Addr().String(), err)
+	}
+	c := v3statuspbgrpc.NewClientStatusDiscoveryServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	stream, err := c.StreamClientStatus(ctx, grpc.WaitForReady(true))
+	if err != nil {
+		t.Fatalf("Failed to create a stream for CSDS: %v", err)
+	}
+	defer conn.Close()
+
+	// Initialize the xDS resources to be used in this test.
+	ldsTargets := []string{"lds.target.good:0000", "lds.target.good:1111"}
+	rdsTargets := []string{"route-config-0", "route-config-1"}
+	cdsTargets := []string{"cluster-0", "cluster-1"}
+	edsTargets := []string{"endpoints-0", "endpoints-1"}
+	listeners := make([]*v3listenerpb.Listener, len(ldsTargets))
+	listenerAnys := make([]*anypb.Any, len(ldsTargets))
 	for i := range ldsTargets {
 		listeners[i] = e2e.DefaultClientListener(ldsTargets[i], rdsTargets[i])
 		listenerAnys[i] = testutils.MarshalAny(listeners[i])
 	}
+	routes := make([]*v3routepb.RouteConfiguration, len(rdsTargets))
+	routeAnys := make([]*anypb.Any, len(rdsTargets))
 	for i := range rdsTargets {
 		routes[i] = e2e.DefaultRouteConfig(rdsTargets[i], ldsTargets[i], cdsTargets[i])
 		routeAnys[i] = testutils.MarshalAny(routes[i])
 	}
+	clusters := make([]*v3clusterpb.Cluster, len(cdsTargets))
+	clusterAnys := make([]*anypb.Any, len(cdsTargets))
 	for i := range cdsTargets {
 		clusters[i] = e2e.DefaultCluster(cdsTargets[i], edsTargets[i], e2e.SecurityLevelNone)
 		clusterAnys[i] = testutils.MarshalAny(clusters[i])
 	}
+	endpoints := make([]*v3endpointpb.ClusterLoadAssignment, len(edsTargets))
+	endpointAnys := make([]*anypb.Any, len(edsTargets))
+	ips := []string{"0.0.0.0", "1.1.1.1"}
+	ports := []uint32{123, 456}
 	for i := range edsTargets {
 		endpoints[i] = e2e.DefaultEndpoint(edsTargets[i], ips[i], ports[i:i+1])
 		endpointAnys[i] = testutils.MarshalAny(endpoints[i])
 	}
-}
 
-func (s) TestCSDS(t *testing.T) {
-	const retryCount = 10
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	xdsC, mgmServer, nodeID, stream, cleanup := commonSetup(ctx, t)
-	defer cleanup()
-
+	// Register watches on the xDS client for two resources of each type.
 	for _, target := range ldsTargets {
 		xdsC.WatchListener(target, func(xdsresource.ListenerUpdate, error) {})
 	}
@@ -161,18 +211,34 @@ func (s) TestCSDS(t *testing.T) {
 		xdsC.WatchEndpoints(target, func(xdsresource.EndpointsUpdate, error) {})
 	}
 
-	for i := 0; i < retryCount; i++ {
-		err := checkForRequested(stream)
-		if err == nil {
-			break
+	// Verify that the xDS client reports the resources as being in "Requested"
+	// state.
+	want := []*v3statuspb.ClientConfig_GenericXdsConfig{}
+	for i := range ldsTargets {
+		want = append(want, makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[i], "", v3adminpb.ClientResourceStatus_REQUESTED, nil))
+	}
+	for i := range rdsTargets {
+		want = append(want, makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[i], "", v3adminpb.ClientResourceStatus_REQUESTED, nil))
+	}
+	for i := range cdsTargets {
+		want = append(want, makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[i], "", v3adminpb.ClientResourceStatus_REQUESTED, nil))
+	}
+	for i := range edsTargets {
+		want = append(want, makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[i], "", v3adminpb.ClientResourceStatus_REQUESTED, nil))
+	}
+	for {
+		if err := ctx.Err(); err != nil {
+			t.Fatalf("Timeout when waiting for resources in \"Requested\" state: %v", err)
 		}
-		if i == retryCount-1 {
-			t.Fatalf("%v", err)
+		if err := checkClientStatusResponse(stream, want); err == nil {
+			break
 		}
 		time.Sleep(time.Millisecond * 100)
 	}
 
-	if err := mgmServer.Update(ctx, e2e.UpdateOptions{
+	// Configure the management server with two resources of each type,
+	// corresponding to the watches registered above.
+	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: listeners,
 		Routes:    routes,
@@ -181,338 +247,152 @@ func (s) TestCSDS(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < retryCount; i++ {
-		err := checkForACKed(stream)
+
+	// Verify that the xDS client reports the resources as being in "ACKed"
+	// state, and in version "1".
+	want = nil
+	for i := range ldsTargets {
+		want = append(want, makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[i], "1", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[i]))
+	}
+	for i := range rdsTargets {
+		want = append(want, makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[i], "1", v3adminpb.ClientResourceStatus_ACKED, routeAnys[i]))
+	}
+	for i := range cdsTargets {
+		want = append(want, makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[i], "1", v3adminpb.ClientResourceStatus_ACKED, clusterAnys[i]))
+	}
+	for i := range edsTargets {
+		want = append(want, makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[i], "1", v3adminpb.ClientResourceStatus_ACKED, endpointAnys[i]))
+	}
+	for {
+		if err := ctx.Err(); err != nil {
+			t.Fatalf("Timeout when waiting for resources in \"ACKed\" state: %v", err)
+		}
+		err := checkClientStatusResponse(stream, want)
 		if err == nil {
 			break
-		}
-		if i == retryCount-1 {
-			t.Fatalf("%v", err)
 		}
 		time.Sleep(time.Millisecond * 100)
 	}
 
+	// Update the first resource of each type in the management server to a
+	// value which is expected to be NACK'ed by the xDS client.
 	const nackResourceIdx = 0
-	var (
-		nackListeners = append([]*v3listenerpb.Listener{}, listeners...)
-		nackRoutes    = append([]*v3routepb.RouteConfiguration{}, routes...)
-		nackClusters  = append([]*v3clusterpb.Cluster{}, clusters...)
-		nackEndpoints = append([]*v3endpointpb.ClusterLoadAssignment{}, endpoints...)
-	)
-	nackListeners[0] = &v3listenerpb.Listener{Name: ldsTargets[nackResourceIdx], ApiListener: &v3listenerpb.ApiListener{}} // 0 will be nacked. 1 will stay the same.
-	nackRoutes[0] = &v3routepb.RouteConfiguration{
-		Name: rdsTargets[nackResourceIdx], VirtualHosts: []*v3routepb.VirtualHost{{Routes: []*v3routepb.Route{{}}}},
-	}
-	nackClusters[0] = &v3clusterpb.Cluster{
-		Name: cdsTargets[nackResourceIdx], ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC},
-	}
-	nackEndpoints[0] = &v3endpointpb.ClusterLoadAssignment{
-		ClusterName: edsTargets[nackResourceIdx], Endpoints: []*v3endpointpb.LocalityLbEndpoints{{}},
-	}
-	if err := mgmServer.Update(ctx, e2e.UpdateOptions{
+	listeners[nackResourceIdx].ApiListener = &v3listenerpb.ApiListener{}
+	routes[nackResourceIdx].VirtualHosts = []*v3routepb.VirtualHost{{Routes: []*v3routepb.Route{{}}}}
+	clusters[nackResourceIdx].ClusterDiscoveryType = &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_STATIC}
+	endpoints[nackResourceIdx].Endpoints = []*v3endpointpb.LocalityLbEndpoints{{}}
+	if err := mgmtServer.Update(ctx, e2e.UpdateOptions{
 		NodeID:         nodeID,
-		Listeners:      nackListeners,
-		Routes:         nackRoutes,
-		Clusters:       nackClusters,
-		Endpoints:      nackEndpoints,
+		Listeners:      listeners,
+		Routes:         routes,
+		Clusters:       clusters,
+		Endpoints:      endpoints,
 		SkipValidation: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < retryCount; i++ {
-		err := checkForNACKed(nackResourceIdx, stream)
+
+	// Verify that the xDS client reports the first resource of each type as
+	// being in "NACKed" state, and the second resource of each type to be in
+	// "ACKed" state. The version for the ACKed resource would be "2", while
+	// that for the NACKed resource would be "1". In the NACKed resource, the
+	// version which is NACKed is stored in the ErrorState field.
+	want = nil
+	for i := range ldsTargets {
+		config := makeGenericXdsConfig("type.googleapis.com/envoy.config.listener.v3.Listener", ldsTargets[i], "2", v3adminpb.ClientResourceStatus_ACKED, listenerAnys[i])
+		if i == nackResourceIdx {
+			config.VersionInfo = "1"
+			config.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
+			config.ErrorState = &v3adminpb.UpdateFailureState{VersionInfo: "2"}
+		}
+		want = append(want, config)
+	}
+	for i := range rdsTargets {
+		config := makeGenericXdsConfig("type.googleapis.com/envoy.config.route.v3.RouteConfiguration", rdsTargets[i], "2", v3adminpb.ClientResourceStatus_ACKED, routeAnys[i])
+		if i == nackResourceIdx {
+			config.VersionInfo = "1"
+			config.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
+			config.ErrorState = &v3adminpb.UpdateFailureState{VersionInfo: "2"}
+		}
+		want = append(want, config)
+	}
+	for i := range cdsTargets {
+		config := makeGenericXdsConfig("type.googleapis.com/envoy.config.cluster.v3.Cluster", cdsTargets[i], "2", v3adminpb.ClientResourceStatus_ACKED, clusterAnys[i])
+		if i == nackResourceIdx {
+			config.VersionInfo = "1"
+			config.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
+			config.ErrorState = &v3adminpb.UpdateFailureState{VersionInfo: "2"}
+		}
+		want = append(want, config)
+	}
+	for i := range edsTargets {
+		config := makeGenericXdsConfig("type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment", edsTargets[i], "2", v3adminpb.ClientResourceStatus_ACKED, endpointAnys[i])
+		if i == nackResourceIdx {
+			config.VersionInfo = "1"
+			config.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
+			config.ErrorState = &v3adminpb.UpdateFailureState{VersionInfo: "2"}
+		}
+		want = append(want, config)
+	}
+	for {
+		if err := ctx.Err(); err != nil {
+			t.Fatalf("Timeout when waiting for resources in \"NACKed\" state: %v", err)
+		}
+		err := checkClientStatusResponse(stream, want)
 		if err == nil {
 			break
-		}
-		if i == retryCount-1 {
-			t.Fatalf("%v", err)
 		}
 		time.Sleep(time.Millisecond * 100)
 	}
 }
 
-func commonSetup(ctx context.Context, t *testing.T) (xdsclient.XDSClient, *e2e.ManagementServer, string, v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient, func()) {
-	t.Helper()
-
-	// Spin up a xDS management server on a local port.
-	nodeID := uuid.New().String()
-	fs, err := e2e.StartManagementServer(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{
-		Version:   xds.TransportV3,
-		NodeID:    nodeID,
-		ServerURI: fs.Address,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Create xds_client.
-	xdsC, err := xdsclient.New()
-	if err != nil {
-		t.Fatalf("failed to create xds client: %v", err)
-	}
-	origNewXDSClient := newXDSClient
-	newXDSClient = func() xdsclient.XDSClient { return xdsC }
-
-	// Initialize an gRPC server and register CSDS on it.
-	server := grpc.NewServer()
-	csdss, err := NewClientStatusDiscoveryServer()
-	if err != nil {
-		t.Fatal(err)
-	}
-	v3statuspbgrpc.RegisterClientStatusDiscoveryServiceServer(server, csdss)
-
-	// Create a local listener and pass it to Serve().
-	lis, err := testutils.LocalTCPListener()
-	if err != nil {
-		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
-	}
-	go func() {
-		if err := server.Serve(lis); err != nil {
-			t.Errorf("Serve() failed: %v", err)
-		}
-	}()
-
-	// Create CSDS client.
-	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("cannot connect to server: %v", err)
-	}
-	c := v3statuspbgrpc.NewClientStatusDiscoveryServiceClient(conn)
-	stream, err := c.StreamClientStatus(ctx, grpc.WaitForReady(true))
-	if err != nil {
-		t.Fatalf("cannot get ServerReflectionInfo: %v", err)
-	}
-
-	return xdsC, fs, nodeID, stream, func() {
-		fs.Stop()
-		conn.Close()
-		server.Stop()
-		csdss.Close()
-		newXDSClient = origNewXDSClient
-		xdsC.Close()
-		bootstrapCleanup()
+func makeGenericXdsConfig(typeURL, name, version string, status v3adminpb.ClientResourceStatus, config *anypb.Any) *v3statuspb.ClientConfig_GenericXdsConfig {
+	return &v3statuspb.ClientConfig_GenericXdsConfig{
+		TypeUrl:      typeURL,
+		Name:         name,
+		VersionInfo:  version,
+		ClientStatus: status,
+		XdsConfig:    config,
 	}
 }
 
-func checkForRequested(stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient) error {
+func checkClientStatusResponse(stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient, want []*v3statuspb.ClientConfig_GenericXdsConfig) error {
 	if err := stream.Send(&v3statuspb.ClientStatusRequest{Node: nil}); err != nil {
-		return fmt.Errorf("failed to send request: %v", err)
+		return fmt.Errorf("failed to send ClientStatusRequest: %v", err)
 	}
-	r, err := stream.Recv()
+	resp, err := stream.Recv()
 	if err != nil {
-		// io.EOF is not ok.
-		return fmt.Errorf("failed to recv response: %v", err)
+		return fmt.Errorf("failed to recv ClientStatusResponse: %v", err)
 	}
 
-	if n := len(r.Config); n != 1 {
-		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(r))
+	if n := len(resp.Config); n != 1 {
+		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(resp))
 	}
-
-	var want []*v3statuspb.ClientConfig_GenericXdsConfig
-	// Status is Requested, but version and xds config are all unset.
-	for i := range ldsTargets {
-		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl: listenerTypeURL, Name: ldsTargets[i], ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
-		})
-	}
-	for i := range rdsTargets {
-		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl: routeConfigTypeURL, Name: rdsTargets[i], ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
-		})
-	}
-	for i := range cdsTargets {
-		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl: clusterTypeURL, Name: cdsTargets[i], ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
-		})
-	}
-	for i := range edsTargets {
-		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl: endpointsTypeURL, Name: edsTargets[i], ClientStatus: v3adminpb.ClientResourceStatus_REQUESTED,
-		})
-	}
-	if diff := cmp.Diff(filterFields(r.Config[0].GenericXdsConfigs), want, cmpOpts); diff != "" {
-		return fmt.Errorf(diff)
-	}
-	return nil
-}
-
-func checkForACKed(stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient) error {
-	const wantVersion = "1"
-
-	if err := stream.Send(&v3statuspb.ClientStatusRequest{Node: nil}); err != nil {
-		return fmt.Errorf("failed to send: %v", err)
-	}
-	r, err := stream.Recv()
-	if err != nil {
-		// io.EOF is not ok.
-		return fmt.Errorf("failed to recv response: %v", err)
-	}
-
-	if n := len(r.Config); n != 1 {
-		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(r))
-	}
-
-	var want []*v3statuspb.ClientConfig_GenericXdsConfig
-	// Status is Acked, config is filled with the prebuilt Anys.
-	for i := range ldsTargets {
-		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl:      listenerTypeURL,
-			Name:         ldsTargets[i],
-			VersionInfo:  wantVersion,
-			XdsConfig:    listenerAnys[i],
-			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-		})
-	}
-	for i := range rdsTargets {
-		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl:      routeConfigTypeURL,
-			Name:         rdsTargets[i],
-			VersionInfo:  wantVersion,
-			XdsConfig:    routeAnys[i],
-			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-		})
-	}
-	for i := range cdsTargets {
-		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl:      clusterTypeURL,
-			Name:         cdsTargets[i],
-			VersionInfo:  wantVersion,
-			XdsConfig:    clusterAnys[i],
-			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-		})
-	}
-	for i := range edsTargets {
-		want = append(want, &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl:      endpointsTypeURL,
-			Name:         edsTargets[i],
-			VersionInfo:  wantVersion,
-			XdsConfig:    endpointAnys[i],
-			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-		})
-	}
-	if diff := cmp.Diff(filterFields(r.Config[0].GenericXdsConfigs), want, cmpOpts); diff != "" {
-		return fmt.Errorf(diff)
-	}
-	return nil
-}
-
-func checkForNACKed(nackResourceIdx int, stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient) error {
-	const (
-		ackVersion  = "1"
-		nackVersion = "2"
-	)
-	if err := stream.Send(&v3statuspb.ClientStatusRequest{Node: nil}); err != nil {
-		return fmt.Errorf("failed to send: %v", err)
-	}
-	r, err := stream.Recv()
-	if err != nil {
-		// io.EOF is not ok.
-		return fmt.Errorf("failed to recv response: %v", err)
-	}
-
-	if n := len(r.Config); n != 1 {
-		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(r))
-	}
-
-	var want []*v3statuspb.ClientConfig_GenericXdsConfig
-	// Resources with the nackIdx are NACKed.
-	for i := range ldsTargets {
-		config := &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl:      listenerTypeURL,
-			Name:         ldsTargets[i],
-			VersionInfo:  nackVersion,
-			XdsConfig:    listenerAnys[i],
-			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-		}
-		if i == nackResourceIdx {
-			config.VersionInfo = ackVersion
-			config.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
-			config.ErrorState = &v3adminpb.UpdateFailureState{
-				Details:     "blahblah",
-				VersionInfo: nackVersion,
-			}
-		}
-		want = append(want, config)
-	}
-	for i := range rdsTargets {
-		config := &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl:      routeConfigTypeURL,
-			Name:         rdsTargets[i],
-			VersionInfo:  nackVersion,
-			XdsConfig:    routeAnys[i],
-			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-		}
-		if i == nackResourceIdx {
-			config.VersionInfo = ackVersion
-			config.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
-			config.ErrorState = &v3adminpb.UpdateFailureState{
-				Details:     "blahblah",
-				VersionInfo: nackVersion,
-			}
-		}
-		want = append(want, config)
-	}
-	for i := range cdsTargets {
-		config := &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl:      clusterTypeURL,
-			Name:         cdsTargets[i],
-			VersionInfo:  nackVersion,
-			XdsConfig:    clusterAnys[i],
-			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-		}
-		if i == nackResourceIdx {
-			config.VersionInfo = ackVersion
-			config.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
-			config.ErrorState = &v3adminpb.UpdateFailureState{
-				Details:     "blahblah",
-				VersionInfo: nackVersion,
-			}
-		}
-		want = append(want, config)
-	}
-	for i := range edsTargets {
-		config := &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl:      endpointsTypeURL,
-			Name:         edsTargets[i],
-			VersionInfo:  nackVersion,
-			XdsConfig:    endpointAnys[i],
-			ClientStatus: v3adminpb.ClientResourceStatus_ACKED,
-		}
-		if i == nackResourceIdx {
-			config.VersionInfo = ackVersion
-			config.ClientStatus = v3adminpb.ClientResourceStatus_NACKED
-			config.ErrorState = &v3adminpb.UpdateFailureState{
-				Details:     "blahblah",
-				VersionInfo: nackVersion,
-			}
-		}
-		want = append(want, config)
-	}
-	if diff := cmp.Diff(filterFields(r.Config[0].GenericXdsConfigs), want, cmpOpts); diff != "" {
+	if diff := cmp.Diff(filterFields(resp.Config[0].GenericXdsConfigs), want, cmpOpts); diff != "" {
 		return fmt.Errorf(diff)
 	}
 	return nil
 }
 
 func (s) TestCSDSNoXDSClient(t *testing.T) {
-	oldNewXDSClient := newXDSClient
-	newXDSClient = func() xdsclient.XDSClient { return nil }
-	defer func() { newXDSClient = oldNewXDSClient }()
+	// Create a bootstrap file in a temporary directory. Since we pass empty
+	// options, it would end up creating a bootstrap file with an empty
+	// serverURI which will fail xDS client creation.
+	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { bootstrapCleanup() })
 
 	// Initialize an gRPC server and register CSDS on it.
 	server := grpc.NewServer()
-	csdss, err := NewClientStatusDiscoveryServer()
+	csdss, err := csds.NewClientStatusDiscoveryServer()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer csdss.Close()
 	v3statuspbgrpc.RegisterClientStatusDiscoveryServiceServer(server, csdss)
+
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()
 	if err != nil {
@@ -525,10 +405,10 @@ func (s) TestCSDSNoXDSClient(t *testing.T) {
 	}()
 	defer server.Stop()
 
-	// Create CSDS client.
+	// Create a client to the CSDS server.
 	conn, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("cannot connect to server: %v", err)
+		t.Fatalf("Failed to dial CSDS server %q: %v", lis.Addr().String(), err)
 	}
 	defer conn.Close()
 	c := v3statuspbgrpc.NewClientStatusDiscoveryServiceClient(conn)
@@ -536,22 +416,23 @@ func (s) TestCSDSNoXDSClient(t *testing.T) {
 	defer cancel()
 	stream, err := c.StreamClientStatus(ctx, grpc.WaitForReady(true))
 	if err != nil {
-		t.Fatalf("cannot get ServerReflectionInfo: %v", err)
+		t.Fatalf("Failed to create a stream for CSDS: %v", err)
 	}
 
 	if err := stream.Send(&v3statuspb.ClientStatusRequest{Node: nil}); err != nil {
-		t.Fatalf("failed to send: %v", err)
+		t.Fatalf("Failed to send ClientStatusRequest: %v", err)
 	}
 	r, err := stream.Recv()
 	if err != nil {
 		// io.EOF is not ok.
-		t.Fatalf("failed to recv response: %v", err)
+		t.Fatalf("Failed to recv ClientStatusResponse: %v", err)
 	}
 	if n := len(r.Config); n != 0 {
 		t.Fatalf("got %d configs, want 0: %v", n, proto.MarshalTextString(r))
 	}
 }
 
+/*
 func Test_nodeProtoToV3(t *testing.T) {
 	const (
 		testID      = "test-id"
@@ -604,3 +485,4 @@ func Test_nodeProtoToV3(t *testing.T) {
 		})
 	}
 }
+*/

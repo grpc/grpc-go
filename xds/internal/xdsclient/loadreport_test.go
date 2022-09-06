@@ -56,7 +56,7 @@ func (s) TestLRSClient(t *testing.T) {
 			TransportAPI: version.TransportV2,
 			NodeProto:    &v2corepb.Node{},
 		},
-	}, defaultClientWatchExpiryTimeout)
+	}, defaultClientWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}

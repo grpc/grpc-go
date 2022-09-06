@@ -78,7 +78,7 @@ func (s) TestLDSConfigDump(t *testing.T) {
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 			NodeProto: xdstestutils.EmptyNodeProtoV2,
 		},
-	}, defaultTestWatchExpiryTimeout)
+	}, defaultTestWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -194,7 +194,7 @@ func (s) TestRDSConfigDump(t *testing.T) {
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 			NodeProto: xdstestutils.EmptyNodeProtoV2,
 		},
-	}, defaultTestWatchExpiryTimeout)
+	}, defaultTestWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -310,7 +310,7 @@ func (s) TestCDSConfigDump(t *testing.T) {
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 			NodeProto: xdstestutils.EmptyNodeProtoV2,
 		},
-	}, defaultTestWatchExpiryTimeout)
+	}, defaultTestWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
@@ -412,7 +412,7 @@ func (s) TestEDSConfigDump(t *testing.T) {
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 			NodeProto: xdstestutils.EmptyNodeProtoV2,
 		},
-	}, defaultTestWatchExpiryTimeout)
+	}, defaultTestWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}

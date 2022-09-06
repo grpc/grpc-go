@@ -401,7 +401,7 @@ func ClusterResourceWithOptions(opts *ClusterOptions) *v3clusterpb.Cluster {
 }
 
 // DefaultEndpoint returns a basic xds Endpoint resource.
-func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpointpb.ClusterLoadAssignment {
+func DefaultEndpoint(edsServiceName string, host string, ports []uint32) *v3endpointpb.ClusterLoadAssignment {
 	var lbEndpoints []*v3endpointpb.LbEndpoint
 	for _, port := range ports {
 		lbEndpoints = append(lbEndpoints, &v3endpointpb.LbEndpoint{
@@ -416,7 +416,7 @@ func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpoin
 		})
 	}
 	return &v3endpointpb.ClusterLoadAssignment{
-		ClusterName: clusterName,
+		ClusterName: edsServiceName,
 		Endpoints: []*v3endpointpb.LocalityLbEndpoints{{
 			Locality:            &v3corepb.Locality{SubZone: "subzone"},
 			LbEndpoints:         lbEndpoints,

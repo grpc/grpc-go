@@ -59,13 +59,14 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration, i
 		done:               grpcsync.NewEvent(),
 		config:             config,
 		watchExpiryTimeout: watchExpiryTimeout,
+		serializer:         NewCallbackSerializer(),
+		resourceTypes:      newResourceTypeRegistry(),
 		authorities:        make(map[string]*authority),
 		idleAuthorities:    cache.NewTimeoutCache(idleAuthorityDeleteTimeout),
 	}
 
 	c.logger = prefixLogger(c)
-	c.logger.Infof("Created ClientConn to xDS management server: %s", config.XDSServer)
-	c.logger.Infof("Created")
+	c.logger.Infof("Created client to xDS management server: %s", config.XDSServer)
 	return c, nil
 }
 
@@ -75,8 +76,12 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration, i
 // Testing Only
 //
 // This function should ONLY be used for testing purposes.
-func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout time.Duration) (XDSClient, error) {
-	cl, err := newWithConfig(config, watchExpiryTimeout, defaultIdleAuthorityDeleteTimeout)
+func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout, authorityIdleTimeout time.Duration) (XDSClient, error) {
+	idleTimeout := defaultIdleAuthorityDeleteTimeout
+	if authorityIdleTimeout != time.Duration(0) {
+		idleTimeout = authorityIdleTimeout
+	}
+	cl, err := newWithConfig(config, watchExpiryTimeout, idleTimeout)
 	if err != nil {
 		return nil, err
 	}

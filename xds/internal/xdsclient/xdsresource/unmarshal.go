@@ -63,7 +63,7 @@ func processAllResources(opts *UnmarshalOptions, ret interface{}) (UpdateMetadat
 	for _, r := range opts.Resources {
 		switch ret2 := ret.(type) {
 		case map[string]ListenerUpdateErrTuple:
-			name, update, err := unmarshalListenerResource(r, opts.UpdateValidator, opts.Logger)
+			name, update, err := UnmarshalListenerResource(r, opts.UpdateValidator, opts.Logger)
 			name = ParseName(name).String()
 			if err == nil {
 				ret2[name] = ListenerUpdateErrTuple{Update: update}
@@ -78,7 +78,7 @@ func processAllResources(opts *UnmarshalOptions, ret interface{}) (UpdateMetadat
 			// the response.
 			ret2[name] = ListenerUpdateErrTuple{Err: err}
 		case map[string]RouteConfigUpdateErrTuple:
-			name, update, err := unmarshalRouteConfigResource(r, opts.Logger)
+			name, update, err := UnmarshalRouteConfigResource(r, opts.Logger)
 			name = ParseName(name).String()
 			if err == nil {
 				ret2[name] = RouteConfigUpdateErrTuple{Update: update}
@@ -93,7 +93,7 @@ func processAllResources(opts *UnmarshalOptions, ret interface{}) (UpdateMetadat
 			// the response.
 			ret2[name] = RouteConfigUpdateErrTuple{Err: err}
 		case map[string]ClusterUpdateErrTuple:
-			name, update, err := unmarshalClusterResource(r, opts.UpdateValidator, opts.Logger)
+			name, update, err := UnmarshalClusterResource(r, opts.UpdateValidator, opts.Logger)
 			name = ParseName(name).String()
 			if err == nil {
 				ret2[name] = ClusterUpdateErrTuple{Update: update}
@@ -108,7 +108,7 @@ func processAllResources(opts *UnmarshalOptions, ret interface{}) (UpdateMetadat
 			// the response.
 			ret2[name] = ClusterUpdateErrTuple{Err: err}
 		case map[string]EndpointsUpdateErrTuple:
-			name, update, err := unmarshalEndpointsResource(r, opts.Logger)
+			name, update, err := UnmarshalEndpointsResource(r, opts.Logger)
 			name = ParseName(name).String()
 			if err == nil {
 				ret2[name] = EndpointsUpdateErrTuple{Update: update}
@@ -143,7 +143,7 @@ func processAllResources(opts *UnmarshalOptions, ret interface{}) (UpdateMetadat
 	}
 
 	md.Status = ServiceStatusNACKed
-	errRet := combineErrors(typeStr, topLevelErrors, perResourceErrors)
+	errRet := CombineErrors(typeStr, topLevelErrors, perResourceErrors)
 	md.ErrState = &UpdateErrorMetadata{
 		Version:   opts.Version,
 		Err:       errRet,
@@ -152,7 +152,8 @@ func processAllResources(opts *UnmarshalOptions, ret interface{}) (UpdateMetadat
 	return md, errRet
 }
 
-func combineErrors(rType string, topLevelErrors []error, perResourceErrors map[string]error) error {
+// CombineErrors TBD.
+func CombineErrors(rType string, topLevelErrors []error, perResourceErrors map[string]error) error {
 	var errStrB strings.Builder
 	errStrB.WriteString(fmt.Sprintf("error parsing %q response: ", rType))
 	if len(topLevelErrors) > 0 {

@@ -27,11 +27,6 @@ import (
 	"context"
 	"io"
 
-	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
-	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
@@ -39,38 +34,34 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
+	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 )
 
-var (
-	logger       = grpclog.Component("xds")
-	newXDSClient = func() xdsclient.XDSClient {
-		c, err := xdsclient.New()
-		if err != nil {
-			logger.Warningf("failed to create xds client: %v", err)
-			return nil
-		}
-		return c
-	}
-)
+var logger = grpclog.Component("xds")
 
-const (
-	listenerTypeURL    = "envoy.config.listener.v3.Listener"
-	routeConfigTypeURL = "envoy.config.route.v3.RouteConfiguration"
-	clusterTypeURL     = "envoy.config.cluster.v3.Cluster"
-	endpointsTypeURL   = "envoy.config.endpoint.v3.ClusterLoadAssignment"
-)
-
-// ClientStatusDiscoveryServer implementations interface ClientStatusDiscoveryServiceServer.
+// ClientStatusDiscoveryServer provides an implementation of the Client Status
+// Discovery Service (CSDS) for exposing the xDS config of a given client. See
+// https://github.com/envoyproxy/envoy/blob/main/api/envoy/service/status/v3/csds.proto.
+//
+// For more details about the gRPC implementation of CSDS, refer to gRPC A40 at:
+// https://github.com/grpc/proposal/blob/master/A40-csds-support.md.
 type ClientStatusDiscoveryServer struct {
-	// xdsClient will always be the same in practice. But we keep a copy in each
-	// server instance for testing.
 	xdsClient xdsclient.XDSClient
 }
 
-// NewClientStatusDiscoveryServer returns an implementation of the CSDS server that can be
-// registered on a gRPC server.
+// NewClientStatusDiscoveryServer returns an implementation of the CSDS server
+// that can be registered on a gRPC server.
 func NewClientStatusDiscoveryServer() (*ClientStatusDiscoveryServer, error) {
-	return &ClientStatusDiscoveryServer{xdsClient: newXDSClient()}, nil
+	c, err := xdsclient.New()
+	if err != nil {
+		logger.Warningf("Failed to create xDS client: %v", err)
+	}
+	return &ClientStatusDiscoveryServer{xdsClient: c}, nil
 }
 
 // StreamClientStatus implementations interface ClientStatusDiscoveryServiceServer.
@@ -112,21 +103,12 @@ func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statusp
 		return nil, status.Errorf(codes.InvalidArgument, "node_matchers are not supported, request contains node_matchers: %v", req.NodeMatchers)
 	}
 
-	lds := dumpToGenericXdsConfig(listenerTypeURL, s.xdsClient.DumpLDS)
-	rds := dumpToGenericXdsConfig(routeConfigTypeURL, s.xdsClient.DumpRDS)
-	cds := dumpToGenericXdsConfig(clusterTypeURL, s.xdsClient.DumpCDS)
-	eds := dumpToGenericXdsConfig(endpointsTypeURL, s.xdsClient.DumpEDS)
-	configs := make([]*v3statuspb.ClientConfig_GenericXdsConfig, 0, len(lds)+len(rds)+len(cds)+len(eds))
-	configs = append(configs, lds...)
-	configs = append(configs, rds...)
-	configs = append(configs, cds...)
-	configs = append(configs, eds...)
-
+	dump := s.xdsClient.DumpResources()
 	ret := &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
 				Node:              nodeProtoToV3(s.xdsClient.BootstrapConfig().XDSServer.NodeProto),
-				GenericXdsConfigs: configs,
+				GenericXdsConfigs: dumpToGenericXdsConfig(dump),
 			},
 		},
 	}
@@ -171,26 +153,27 @@ func nodeProtoToV3(n proto.Message) *v3corepb.Node {
 	return node
 }
 
-func dumpToGenericXdsConfig(typeURL string, dumpF func() map[string]xdsresource.UpdateWithMD) []*v3statuspb.ClientConfig_GenericXdsConfig {
-	dump := dumpF()
-	ret := make([]*v3statuspb.ClientConfig_GenericXdsConfig, 0, len(dump))
-	for name, d := range dump {
-		config := &v3statuspb.ClientConfig_GenericXdsConfig{
-			TypeUrl:      typeURL,
-			Name:         name,
-			VersionInfo:  d.MD.Version,
-			XdsConfig:    d.Raw,
-			LastUpdated:  timestamppb.New(d.MD.Timestamp),
-			ClientStatus: serviceStatusToProto(d.MD.Status),
-		}
-		if errState := d.MD.ErrState; errState != nil {
-			config.ErrorState = &v3adminpb.UpdateFailureState{
-				LastUpdateAttempt: timestamppb.New(errState.Timestamp),
-				Details:           errState.Err.Error(),
-				VersionInfo:       errState.Version,
+func dumpToGenericXdsConfig(dump map[xdsresource.Type]map[string]xdsresource.UpdateWithMD) []*v3statuspb.ClientConfig_GenericXdsConfig {
+	var ret []*v3statuspb.ClientConfig_GenericXdsConfig
+	for rType, updates := range dump {
+		for name, update := range updates {
+			config := &v3statuspb.ClientConfig_GenericXdsConfig{
+				TypeUrl:      rType.V3TypeURL(),
+				Name:         name,
+				VersionInfo:  update.MD.Version,
+				XdsConfig:    update.Raw,
+				LastUpdated:  timestamppb.New(update.MD.Timestamp),
+				ClientStatus: serviceStatusToProto(update.MD.Status),
 			}
+			if errState := update.MD.ErrState; errState != nil {
+				config.ErrorState = &v3adminpb.UpdateFailureState{
+					LastUpdateAttempt: timestamppb.New(errState.Timestamp),
+					Details:           errState.Err.Error(),
+					VersionInfo:       errState.Version,
+				}
+			}
+			ret = append(ret, config)
 		}
-		ret = append(ret, config)
 	}
 	return ret
 }

@@ -27,10 +27,8 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/controller"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 	"google.golang.org/grpc/xds/internal/xdsclient/pubsub"
+	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 type controllerInterface interface {
@@ -121,25 +119,37 @@ func (c *clientImpl) newAuthorityLocked(config *bootstrap.ServerConfig) (_ *auth
 	}
 
 	// Make a new authority since there's no existing authority for this config.
-	nodeID := ""
-	if v3, ok := c.config.XDSServer.NodeProto.(*v3corepb.Node); ok {
-		nodeID = v3.GetId()
-	} else if v2, ok := c.config.XDSServer.NodeProto.(*v2corepb.Node); ok {
-		nodeID = v2.GetId()
-	}
-	ret := &authority{config: config, pubsub: pubsub.New(c.watchExpiryTimeout, nodeID, c.logger)}
-	defer func() {
-		if retErr != nil {
-			ret.close()
-		}
-	}()
-	ctr, err := newController(config, ret.pubsub, c.updateValidator, c.logger, nil)
+	ret, err := c.newAuthority(config)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create new authority for config %q: %v", config.String(), err)
 	}
-	ret.controller = ctr
 	// Add it to the cache, so it will be reused.
 	c.authorities[configStr] = ret
+	return ret, nil
+}
+
+// TODO: make an options struct. too many arguments already.
+func (c *clientImpl) newAuthority(config *bootstrap.ServerConfig) (*authority, error) {
+	ret := &authority{
+		config:             config,
+		bootstrapCfg:       c.config,
+		serializer:         c.serializer,
+		resourceTypeGetter: c.resourceTypes.get,
+		watchExpiryTimeout: c.watchExpiryTimeout,
+		logger:             c.logger,
+		resources:          make(map[xdsresource.Type]map[string]*resourceState),
+	}
+	tr, err := transport.New(&transport.Options{
+		ServerCfg:          config,
+		UpdateHandler:      ret.handleResourceUpdate,
+		StreamErrorHandler: ret.newConnectionError,
+		Logger:             c.logger,
+	})
+	if err != nil {
+		ret.close()
+		return nil, fmt.Errorf("failed to create a new transport : %v", err)
+	}
+	ret.transport = tr
 	return ret, nil
 }
 
