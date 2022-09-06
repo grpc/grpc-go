@@ -105,10 +105,10 @@ func (serviceGenerateHelper) formatHandlerFuncName(service *protogen.Service, hn
 
 var helper serviceGenerateHelperInterface = serviceGenerateHelper{}
 
-// Matches the FileDescriptorProto.package field number.
+// FileDescriptorProto.package field number
 const fileDescriptorProtoPackageFieldNumber = 2
 
-// Matches the FileDescriptorProto.syntax field number.
+// FileDescriptorProto.syntax field number
 const fileDescriptorProtoSyntaxFieldNumber = 12
 
 // generateFile generates a _grpc.pb.go file containing gRPC service definitions.
