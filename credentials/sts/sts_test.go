@@ -34,16 +34,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
 	testpb "google.golang.org/grpc/interop/grpc_testing"
-	"google.golang.org/grpc/testdata"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	icredentials "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/testdata"
 )
 
 const (
@@ -89,12 +89,8 @@ type testServer struct {
 	testgrpc.UnimplementedTestServiceServer
 }
 
-func (s *testServer) UnaryCall(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-	resp := &testpb.SimpleResponse{}
-	if in.FillUsername {
-		resp.Username = "foo"
-	}
-	return resp, nil
+func (s *testServer) EmptyCall(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+	return &testpb.Empty{}, nil
 }
 
 type s struct {
@@ -772,7 +768,7 @@ func (s) TestTokenInfoFromResponse(t *testing.T) {
 }
 
 func (s) TestTLS(t *testing.T) {
-	// start STS HTTPS server
+	// Start an STS HTTPS server which validates the inbound request and generates a static response.
 	stsServer := httptest.NewUnstartedServer(
 		http.HandlerFunc(
 			func(w http.ResponseWriter, r *http.Request) {
@@ -780,7 +776,6 @@ func (s) TestTLS(t *testing.T) {
 					w.WriteHeader(http.StatusNotFound)
 					return
 				}
-				// validate the inbound request
 				reqParams := &requestParameters{}
 				err := json.NewDecoder(r.Body).Decode(reqParams)
 				if err != nil {
@@ -788,7 +783,6 @@ func (s) TestTLS(t *testing.T) {
 					http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 					return
 				}
-				// generate a static response
 				respParams := &responseParameters{
 					AccessToken:     accessTokenContents,
 					IssuedTokenType: issuedTokenType,
@@ -802,8 +796,8 @@ func (s) TestTLS(t *testing.T) {
 		),
 	)
 
-	// load server cert used by the test STS and gRPC server
-	// certificates use SAN wildcard   DNS:*.test.example.com
+	// Load server cert used by the test STS and gRPC server.
+	// These certificates use SAN wildcard "DNS:*.test.example.com".
 	cer, err := tls.LoadX509KeyPair(testdata.Path("x509/server1_cert.pem"), testdata.Path("x509/server1_key.pem"))
 	if err != nil {
 		t.Fatalf("error loading server certificate: (%+v)", err)
@@ -927,11 +921,9 @@ func (s) TestTLS(t *testing.T) {
 			c := testgrpc.NewTestServiceClient(conn)
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			_, err = c.UnaryCall(ctx, &testpb.SimpleRequest{
-				FillUsername: true,
-			})
+			_, err = c.EmptyCall(ctx, &testpb.Empty{})
 			if (err != nil) != test.wantErr {
-				t.Fatalf("UnaryCall() returned error: %v, wantErr: %v", err, test.wantErr)
+				t.Fatalf("EmptyCall() returned error: %v, wantErr: %v", err, test.wantErr)
 			}
 		})
 	}
