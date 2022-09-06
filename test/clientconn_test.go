@@ -31,7 +31,8 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
+
+	testgrpc "google.golang.org/grpc/test/grpc_testing" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 

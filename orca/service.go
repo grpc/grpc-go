@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
-	v3orcaservicegrpc "github.com/cncf/xds/go/xds/service/orca/v3"
+	v3orcaservicegrpc "github.com/cncf/xds/go/xds/service/orca/v3" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	v3orcaservicepb "github.com/cncf/xds/go/xds/service/orca/v3"
 )
 

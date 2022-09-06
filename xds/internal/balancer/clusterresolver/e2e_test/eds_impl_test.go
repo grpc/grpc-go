@@ -45,7 +45,7 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/test/grpc_testing" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	testpb "google.golang.org/grpc/test/grpc_testing"
 
 	_ "google.golang.org/grpc/xds/internal/balancer/clusterresolver"        // Register the "cluster_resolver_experimental" LB policy.

@@ -29,12 +29,13 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	lbgrpc "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
-	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/status"
+
+	lbgrpc "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1" //lint:ignore ST1019 message and service definitions are in separate packages in google3
+	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 )
 
 var logger = grpclog.Component("fake_grpclb")

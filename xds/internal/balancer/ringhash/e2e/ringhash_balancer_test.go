@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/test/grpc_testing" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	testpb "google.golang.org/grpc/test/grpc_testing"
 
 	_ "google.golang.org/grpc/xds/internal/balancer/ringhash" // Register the ring_hash_experimental LB policy.

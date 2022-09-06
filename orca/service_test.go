@@ -36,9 +36,9 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
-	v3orcaservicegrpc "github.com/cncf/xds/go/xds/service/orca/v3"
+	v3orcaservicegrpc "github.com/cncf/xds/go/xds/service/orca/v3" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	v3orcaservicepb "github.com/cncf/xds/go/xds/service/orca/v3"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/test/grpc_testing" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 

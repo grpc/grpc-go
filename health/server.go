@@ -25,9 +25,10 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/codes"
-	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
+
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1" //lint:ignore ST1019 message and service definitions are in separate packages in google3
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 // Server implements `service Health`.

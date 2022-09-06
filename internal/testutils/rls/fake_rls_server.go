@@ -27,10 +27,11 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	rlsgrpc "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
-	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
+
+	rlsgrpc "google.golang.org/grpc/internal/proto/grpc_lookup_v1" //lint:ignore ST1019 message and service definitions are in separate packages in google3
+	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 )
 
 // RouteLookupResponse wraps an RLS response and the associated error to be sent

@@ -31,7 +31,7 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/test/grpc_testing" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 

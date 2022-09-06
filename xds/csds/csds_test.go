@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/xds"
-	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -48,8 +47,10 @@ import (
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	v3statuspbgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
 
 const defaultTestTimeout = 10 * time.Second

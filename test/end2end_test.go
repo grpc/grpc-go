@@ -42,10 +42,8 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
-	anypb "github.com/golang/protobuf/ptypes/any"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/hpack"
-	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -54,8 +52,6 @@ import (
 	"google.golang.org/grpc/encoding"
 	_ "google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/health"
-	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
@@ -72,8 +68,13 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/tap"
 	"google.golang.org/grpc/test/bufconn"
-	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/grpc/testdata"
+
+	anypb "github.com/golang/protobuf/ptypes/any"
+	spb "google.golang.org/genproto/googleapis/rpc/status"
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1" //lint:ignore ST1019 message and service definitions are in separate packages in google3
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
 const defaultHealthService = "grpc.health.v1.Health"

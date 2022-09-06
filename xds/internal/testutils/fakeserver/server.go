@@ -33,7 +33,7 @@ import (
 
 	discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
-	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
+	lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 )
 

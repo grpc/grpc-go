@@ -26,10 +26,11 @@ import (
 	"os/exec"
 
 	"google.golang.org/grpc"
-	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
-	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/credentials/insecure"
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+
+	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1" //lint:ignore ST1019 message and service definitions are in separate packages in google3
+	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 

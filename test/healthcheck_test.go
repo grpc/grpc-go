@@ -31,16 +31,18 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
-	_ "google.golang.org/grpc/health"
-	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
-	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
+
+	healthgrpc "google.golang.org/grpc/health/grpc_health_v1" //lint:ignore ST1019 message and service definitions are in separate packages in google3
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	testpb "google.golang.org/grpc/test/grpc_testing"
+
+	_ "google.golang.org/grpc/health" // Enable transparent client side health checking.
 )
 
 var testHealthCheckFunc = internal.HealthCheckFunc

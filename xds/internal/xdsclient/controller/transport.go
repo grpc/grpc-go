@@ -25,7 +25,6 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
-	controllerversion "google.golang.org/grpc/xds/internal/xdsclient/controller/version"
 	xdsresourceversion "google.golang.org/grpc/xds/internal/xdsclient/controller/version"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -371,7 +370,7 @@ func (t *Controller) processAckInfo(ack *ackAction, stream grpc.ClientStream) (t
 
 // reportLoad starts an LRS stream to report load data to the management server.
 // It blocks until the context is cancelled.
-func (t *Controller) reportLoad(ctx context.Context, cc *grpc.ClientConn, opts controllerversion.LoadReportingOptions) {
+func (t *Controller) reportLoad(ctx context.Context, cc *grpc.ClientConn, opts xdsresourceversion.LoadReportingOptions) {
 	retries := 0
 	lastStreamStartTime := time.Time{}
 	for ctx.Err() == nil {

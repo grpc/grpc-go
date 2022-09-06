@@ -27,11 +27,6 @@ import (
 	"context"
 	"io"
 
-	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
-	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
@@ -39,6 +34,12 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
+	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3" //lint:ignore ST1019 message and service definitions are in separate packages in google3
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 
 	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2" // Register v2 xds_client.
 	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v3" // Register v3 xds_client.

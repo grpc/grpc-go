@@ -31,16 +31,17 @@ import (
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancergroup"
 	"google.golang.org/grpc/internal/grpctest"
-	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
-	testpb "google.golang.org/grpc/test/grpc_testing"
 	"google.golang.org/protobuf/types/known/durationpb"
+
+	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
+	testgrpc "google.golang.org/grpc/test/grpc_testing" //lint:ignore ST1019 message and service definitions are in separate packages in google3
+	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
 const (

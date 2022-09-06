@@ -31,7 +31,7 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
-	testgrpc "google.golang.org/grpc/test/grpc_testing"
+	testgrpc "google.golang.org/grpc/test/grpc_testing" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 

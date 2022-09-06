@@ -27,13 +27,14 @@ import (
 	"net"
 	"sync"
 
-	grpc "google.golang.org/grpc"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	core "google.golang.org/grpc/credentials/alts/internal"
 	"google.golang.org/grpc/credentials/alts/internal/authinfo"
 	"google.golang.org/grpc/credentials/alts/internal/conn"
-	altsgrpc "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
+
+	altsgrpc "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	altspb "google.golang.org/grpc/credentials/alts/internal/proto/grpc_gcp"
 )
 

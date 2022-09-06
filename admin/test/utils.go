@@ -26,16 +26,17 @@ import (
 	"testing"
 	"time"
 
-	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
-	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/admin"
-	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/status"
+
+	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3" //lint:ignore ST1019 message and service definitions are in separate packages in google3
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 )
 
 const (

@@ -26,17 +26,18 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
+	"google.golang.org/grpc"
+
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
-	v3discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	v3discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	v3cache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	v3resource "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	v3server "github.com/envoyproxy/go-control-plane/pkg/server/v3"
-	"google.golang.org/grpc"
 )
 
 // ManagementServer is a thin wrapper around the xDS control plane

@@ -117,14 +117,10 @@ done
 
 # - Collection of static analysis checks
 #
-# Ignore ST1019 (Importing the same package multiple times) since we do this all
-# the time for pb/grpc packages. Without this, other valid warnings from
-# staticcheck get lost in the sea of warnings for ST1019.
-#
 # TODO(dfawley): don't use deprecated functions in examples or first-party
 # plugins.
 SC_OUT="$(mktemp)"
-staticcheck -go 1.17 -checks 'inherit,-ST1019' ./... > "${SC_OUT}" || true
+staticcheck -go 1.17 -checks 'inherit' ./... > "${SC_OUT}" || true
 # Error if anything other than deprecation warnings are printed.
 not grep -v "is deprecated:.*SA1019" "${SC_OUT}"
 # Only ignore the following deprecated types/fields/functions.

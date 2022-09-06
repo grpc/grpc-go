@@ -24,7 +24,6 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
-	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpclog"
@@ -35,8 +34,9 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	v3adsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 )
 
 func init() {

@@ -59,7 +59,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/benchmark"
-	bm "google.golang.org/grpc/benchmark"
 	"google.golang.org/grpc/benchmark/flags"
 	"google.golang.org/grpc/benchmark/latency"
 	"google.golang.org/grpc/benchmark/stats"
@@ -70,7 +69,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"
 
-	testgrpc "google.golang.org/grpc/interop/grpc_testing"
+	testgrpc "google.golang.org/grpc/interop/grpc_testing" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	testpb "google.golang.org/grpc/interop/grpc_testing"
 )
 
@@ -328,8 +327,8 @@ func makeClient(bf stats.Features) (testgrpc.BenchmarkServiceClient, func()) {
 		}))
 	}
 	lis = nw.Listener(lis)
-	stopper := bm.StartServer(bm.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
-	conn := bm.NewClientConn("" /* target not used */, opts...)
+	stopper := benchmark.StartServer(benchmark.ServerInfo{Type: "protobuf", Listener: lis}, sopts...)
+	conn := benchmark.NewClientConn("" /* target not used */, opts...)
 	return testgrpc.NewBenchmarkServiceClient(conn), func() {
 		conn.Close()
 		stopper()
@@ -419,7 +418,7 @@ func setupUnconstrainedStream(bf stats.Features) ([]testgrpc.BenchmarkService_St
 		streams[i] = stream
 	}
 
-	pl := bm.NewPayload(testpb.PayloadType_COMPRESSABLE, bf.ReqSizeBytes)
+	pl := benchmark.NewPayload(testpb.PayloadType_COMPRESSABLE, bf.ReqSizeBytes)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
 		ResponseSize: int32(bf.RespSizeBytes),
@@ -432,13 +431,13 @@ func setupUnconstrainedStream(bf stats.Features) ([]testgrpc.BenchmarkService_St
 // Makes a UnaryCall gRPC request using the given BenchmarkServiceClient and
 // request and response sizes.
 func unaryCaller(client testgrpc.BenchmarkServiceClient, reqSize, respSize int) {
-	if err := bm.DoUnaryCall(client, reqSize, respSize); err != nil {
+	if err := benchmark.DoUnaryCall(client, reqSize, respSize); err != nil {
 		logger.Fatalf("DoUnaryCall failed: %v", err)
 	}
 }
 
 func streamCaller(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
-	if err := bm.DoStreamingRoundTrip(stream, reqSize, respSize); err != nil {
+	if err := benchmark.DoStreamingRoundTrip(stream, reqSize, respSize); err != nil {
 		logger.Fatalf("DoStreamingRoundTrip failed: %v", err)
 	}
 }

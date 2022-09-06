@@ -48,7 +48,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	durationpb "github.com/golang/protobuf/ptypes/duration"
-	lbgrpc "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
+	lbgrpc "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	lbpb "google.golang.org/grpc/balancer/grpclb/grpc_lb_v1"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )

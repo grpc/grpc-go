@@ -31,7 +31,8 @@ import (
 	"google.golang.org/grpc/internal"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/pretty"
-	rlsgrpc "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
+
+	rlsgrpc "google.golang.org/grpc/internal/proto/grpc_lookup_v1" //lint:ignore ST1019 message and service definitions are in separate packages in google3
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 )
 
