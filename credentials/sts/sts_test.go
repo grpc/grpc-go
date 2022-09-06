@@ -778,6 +778,7 @@ func (s) TestTLS(t *testing.T) {
 			func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path != "/token" {
 					w.WriteHeader(http.StatusNotFound)
+					return
 				}
 				// validate the inbound request
 				reqParams := &requestParameters{}
