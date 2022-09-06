@@ -72,6 +72,7 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 	b := &outlierDetectionBalancer{
 		cc:             cc,
 		closed:         grpcsync.NewEvent(),
+		done:           grpcsync.NewEvent(),
 		addrs:          make(map[string]*addressInfo),
 		scWrappers:     make(map[balancer.SubConn]*subConnWrapper),
 		scUpdateCh:     buffer.NewUnbounded(),
@@ -80,7 +81,6 @@ func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Ba
 	b.logger = prefixLogger(b)
 	b.logger.Infof("Created")
 	b.child = gracefulswitch.NewBalancer(b, bOpts)
-	b.done.Add(1)
 	go b.run()
 	return b
 }
@@ -168,7 +168,7 @@ type outlierDetectionBalancer struct {
 	recentPickerNoop bool
 
 	closed *grpcsync.Event
-	done   sync.WaitGroup
+	done   *grpcsync.Event
 	cc     balancer.ClientConn
 	logger *grpclog.PrefixLogger
 
@@ -365,7 +365,7 @@ func (b *outlierDetectionBalancer) UpdateSubConnState(sc balancer.SubConn, state
 
 func (b *outlierDetectionBalancer) Close() {
 	b.closed.Fire()
-	b.done.Wait()
+	<-b.done.Done()
 	b.childMu.Lock()
 	b.child.Close()
 	b.childMu.Unlock()
@@ -686,11 +686,14 @@ func (b *outlierDetectionBalancer) handleLBConfigUpdate(u lbCfgUpdate) {
 }
 
 func (b *outlierDetectionBalancer) run() {
-	defer b.done.Done()
+	defer b.done.Fire()
 	for {
 		select {
 		case update := <-b.scUpdateCh.Get():
 			b.scUpdateCh.Load()
+			if b.closed.HasFired() { // don't send SubConn updates to child after the balancer has been closed
+				return
+			}
 			switch u := update.(type) {
 			case *scUpdate:
 				b.handleSubConnUpdate(u)
