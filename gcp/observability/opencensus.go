@@ -126,17 +126,17 @@ func startOpenCensus(config *config) error {
 // packages if exporter was created.
 func stopOpenCensus() {
 	if exporter != nil {
-		if sdExporter, ok := exporter.(*stackdriver.Exporter); ok {
-			sdExporter.Flush()
-			sdExporter.Close()
-		}
+		internal.ClearExtraDialOptions()
+		internal.ClearExtraServerOptions()
 
 		// Call these unconditionally, doesn't matter if not registered, will be
 		// a noop if not registered.
 		trace.UnregisterExporter(exporter)
 		view.UnregisterExporter(exporter)
 
-		internal.ClearExtraDialOptions()
-		internal.ClearExtraServerOptions()
+		if sdExporter, ok := exporter.(*stackdriver.Exporter); ok {
+			sdExporter.Flush()
+			sdExporter.Close()
+		}
 	}
 }
