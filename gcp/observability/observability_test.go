@@ -386,6 +386,12 @@ func (fe *fakeOpenCensusExporter) ExportSpan(vd *trace.SpanData) {
 	fe.t.Logf("Span[%v]", vd.Name)
 }
 
+func (fe *fakeOpenCensusExporter) Flush() {}
+
+func (fe *fakeOpenCensusExporter) Close() error {
+	return nil
+}
+
 func (s) TestLoggingForOkCall(t *testing.T) {
 	te := newTest(t)
 	defer te.tearDown()

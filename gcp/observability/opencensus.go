@@ -56,6 +56,8 @@ func tagsToTraceAttributes(tags map[string]string) map[string]interface{} {
 type tracingMetricsExporter interface {
 	trace.Exporter
 	view.Exporter
+	Flush()
+	Close() error
 }
 
 var exporter tracingMetricsExporter
@@ -134,9 +136,7 @@ func stopOpenCensus() {
 		trace.UnregisterExporter(exporter)
 		view.UnregisterExporter(exporter)
 
-		if sdExporter, ok := exporter.(*stackdriver.Exporter); ok {
-			sdExporter.Flush()
-			sdExporter.Close()
-		}
+		exporter.Flush()
+		exporter.Close()
 	}
 }
