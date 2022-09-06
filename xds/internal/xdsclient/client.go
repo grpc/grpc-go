@@ -34,13 +34,53 @@ type XDSClient interface {
 	WatchRouteConfig(string, func(xdsresource.RouteConfigUpdate, error)) func()
 	WatchCluster(string, func(xdsresource.ClusterUpdate, error)) func()
 	WatchEndpoints(string, func(xdsresource.EndpointsUpdate, error)) func()
+
+	// WatchResource uses xDS to discover the provided resource name. The
+	// ResourceType implementation determines how the xDS request is sent out
+	// and how a response is deserialized and validated. Upon receipt of a
+	// response from the management server, appropriate callback on the watcher
+	// is invoked.
+	//
+	// Most callers will not use this API directly but rather via a
+	// resource-type-specific wrapper API provided by the relevant ResourceType
+	// implementation.
+	//
+	// TODO: Once this generic client API is fully implemented and integrated,
+	// delete the resource type specific watch APIs on this interface.
+	WatchResource(rType xdsresource.Type, resourceName string, watcher ResourceWatcher) (cancel func())
+
+	// DumpResources returns the status of the xDS resources. Returns a map of
+	// resource type URLs to a map of resource names to resource state.
+	DumpResources() map[string]map[string]xdsresource.UpdateWithMD
+
 	ReportLoad(*bootstrap.ServerConfig) (*load.Store, func())
 
-	DumpLDS() map[string]xdsresource.UpdateWithMD
-	DumpRDS() map[string]xdsresource.UpdateWithMD
-	DumpCDS() map[string]xdsresource.UpdateWithMD
-	DumpEDS() map[string]xdsresource.UpdateWithMD
-
 	BootstrapConfig() *bootstrap.Config
+
 	Close()
+}
+
+// ResourceWatcher wraps the callbacks invoked by the GenericClient for
+// different events corresponding to the resource being watched. This is to be
+// implemented by the entity watching the xDS resource. Examples of such
+// entities include resolvers and balancers which consume configuration sent by
+// the xDS management server.
+type ResourceWatcher interface {
+	// OnResourceChanged is invoked when an update for the resource being
+	// watched is received from the management server. The ResourceData
+	// parameter needs to be type asserted to the appropriate type for the
+	// resource being watched.
+	OnResourceChanged(xdsresource.ResourceData)
+
+	// OnError is invoked under different error conditions including but not
+	// limited to the following:
+	// - authority mentioned in the resource is not found
+	// - resource name parsing error
+	// - resource deserialization error
+	// - resource validation error
+	OnError(error)
+
+	// OnResourceDoesNotExist is invoked for a specific error condition where
+	// the requested resource is not found on the xDS management server.
+	OnResourceDoesNotExist()
 }

@@ -111,6 +111,7 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 			ApiListener: apiListener,
 		}
 	)
+
 	tests := []struct {
 		desc                     string
 		resourceNamesToRequest   []string
@@ -118,7 +119,6 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 		wantURL                  string
 		wantResources            []*anypb.Any
 	}{
-		// Badly marshaled LDS response.
 		{
 			desc:                   "badly marshaled response",
 			resourceNamesToRequest: []string{resourceName1},

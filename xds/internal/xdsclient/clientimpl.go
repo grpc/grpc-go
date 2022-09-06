@@ -32,14 +32,13 @@ var _ XDSClient = &clientImpl{}
 
 // clientImpl is the real implementation of the xds client. The exported Client
 // is a wrapper of this struct with a ref count.
-//
-// Implements UpdateHandler interface.
-// TODO(easwars): Make a wrapper struct which implements this interface in the
-// style of ccBalancerWrapper so that the Client type does not implement these
-// exported methods.
 type clientImpl struct {
-	done   *grpcsync.Event
-	config *bootstrap.Config
+	done               *grpcsync.Event
+	config             *bootstrap.Config
+	logger             *grpclog.PrefixLogger
+	watchExpiryTimeout time.Duration
+	serializer         *CallbackSerializer
+	resourceTypes      *resourceTypeRegistry
 
 	// authorityMu protects the authority fields. It's necessary because an
 	// authority is created when it's used.
@@ -60,9 +59,6 @@ type clientImpl struct {
 	// An authority is either in authorities, or idleAuthorities,
 	// never both.
 	idleAuthorities *cache.TimeoutCache
-
-	logger             *grpclog.PrefixLogger
-	watchExpiryTimeout time.Duration
 }
 
 // BootstrapConfig returns the configuration read from the bootstrap file.
@@ -90,6 +86,7 @@ func (c *clientImpl) Close() {
 	}
 	c.idleAuthorities.Clear(true)
 	c.authorityMu.Unlock()
+	c.serializer.Close()
 
 	c.logger.Infof("Shutdown")
 }

@@ -48,7 +48,10 @@ import (
 )
 
 var (
-	nackErr            = errors.New("unsupported field 'use_original_dst' is present and set to true")
+	nackErr = errors.New("unsupported field 'use_original_dst' is present and set to true")
+
+	// A simple update handler for listener resources which validates only the
+	// `use_original_dst` field.
 	dataModelValidator = func(update transport.ResourceUpdate) error {
 		for _, r := range update.Resources {
 			inner := &v3discoverypb.Resource{}
@@ -502,6 +505,21 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 		t.Fatalf("Timeout waiting for discovery request on the stream")
 	}
 	wantReq.ResourceNames = nil
+	if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform(), cmpopts.SortSlices(strSort)); diff != "" {
+		t.Fatalf("Unexpected diff in received discovery request, diff (-got, +want):\n%s", diff)
+	}
+
+	// Send a discovery request for the same resource requested earlier.
+	tr.SendRequest(xdsresource.ListenerResource, []string{resourceName})
+
+	// Verify that the discovery request contains the version from the
+	// previously received response.
+	select {
+	case gotReq = <-streamRequestCh:
+	case <-ctx.Done():
+		t.Fatalf("Timeout waiting for discovery request on the stream")
+	}
+	wantReq.ResourceNames = []string{resourceName}
 	if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform(), cmpopts.SortSlices(strSort)); diff != "" {
 		t.Fatalf("Unexpected diff in received discovery request, diff (-got, +want):\n%s", diff)
 	}

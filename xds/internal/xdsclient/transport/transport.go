@@ -224,11 +224,11 @@ func New(opts *Options) (*Transport, error) {
 	return ret, nil
 }
 
-// resourceRequest wraps the resource type and the resource names requested by
-// the user of this transport.
+// resourceRequest wraps the resource type url and the resource names requested
+// by the user of this transport.
 type resourceRequest struct {
 	resources []string
-	rType     xdsresource.ResourceType
+	url       string
 }
 
 // SendRequest sends out an ADS request for the provided resources of the
@@ -243,7 +243,7 @@ type resourceRequest struct {
 // handler callback provided at creation time is invoked.
 func (t *Transport) SendRequest(rType xdsresource.ResourceType, resources []string) {
 	t.adsResourcesCh.Put(&resourceRequest{
-		rType:     rType,
+		url:       rType.URL(t.apiVersion),
 		resources: resources,
 	})
 }
@@ -315,16 +315,15 @@ func (t *Transport) send(ctx context.Context) {
 			t.adsResourcesCh.Load()
 
 			var (
-				targets                []string
-				rType                  xdsresource.ResourceType
-				version, nonce, errMsg string
-				send                   bool
+				resources                   []string
+				url, version, nonce, errMsg string
+				send                        bool
 			)
 			switch update := u.(type) {
 			case *resourceRequest:
-				targets, rType, version, nonce = t.processResourceRequest(update)
+				resources, url, version, nonce = t.processResourceRequest(update)
 			case *ackRequest:
-				targets, rType, version, nonce, send = t.processAckRequest(update, stream)
+				resources, url, version, nonce, send = t.processAckRequest(update, stream)
 				if !send {
 					continue
 				}
@@ -337,8 +336,8 @@ func (t *Transport) send(ctx context.Context) {
 				// sending response back).
 				continue
 			}
-			if err := t.vTransport.SendAggregatedDiscoveryServiceRequest(stream, targets, rType.URL(t.apiVersion), version, nonce, errMsg); err != nil {
-				t.logger.Warningf("ADS request for {target: %q, type: %v, version: %q, nonce: %q} failed: %v", targets, rType, version, nonce, err)
+			if err := t.vTransport.SendAggregatedDiscoveryServiceRequest(stream, resources, url, version, nonce, errMsg); err != nil {
+				t.logger.Warningf("ADS request for {resources: %q, url: %v, version: %q, nonce: %q} failed: %v", resources, url, version, nonce, err)
 				// Send failed, clear the current stream.
 				stream = nil
 			}
@@ -404,22 +403,22 @@ func (t *Transport) recv(stream grpc.ClientStream) bool {
 		rType := xdsresource.ResourceTypeFromURL(url)
 		if err != nil {
 			t.adsResourcesCh.Put(&ackRequest{
-				rType:   rType,
+				url:     url,
 				version: "",
 				nonce:   nonce,
 				errMsg:  err.Error(),
 				stream:  stream,
 			})
-			t.logger.Warningf("Sending NACK for response type: %v, version: %v, nonce: %v, reason: %v", rType, rVersion, nonce, err)
+			t.logger.Warningf("Sending NACK for resource type: %v, version: %v, nonce: %v, reason: %v", rType, rVersion, nonce, err)
 			continue
 		}
 		t.adsResourcesCh.Put(&ackRequest{
-			rType:   rType,
+			url:     url,
 			version: rVersion,
 			nonce:   nonce,
 			stream:  stream,
 		})
-		t.logger.Infof("Sending ACK for response type: %v, version: %v, nonce: %v", rType, rVersion, nonce)
+		t.logger.Infof("Sending ACK for resource type: %v, version: %v, nonce: %v", rType, rVersion, nonce)
 	}
 }
 
@@ -447,19 +446,19 @@ func sliceToMap(ss []string) map[string]bool {
 // updated here. Any subsequent stream failure will re-request resources stored
 // in this map.
 //
-// Returns the list of resources, resource type, version and nonce.
-func (t *Transport) processResourceRequest(req *resourceRequest) ([]string, xdsresource.ResourceType, string, string) {
+// Returns the list of resources, resource type url, version and nonce.
+func (t *Transport) processResourceRequest(req *resourceRequest) ([]string, string, string, string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	resources := sliceToMap(req.resources)
-	rType := req.rType
+	rType := xdsresource.ResourceTypeFromURL(req.url)
 	t.resources[rType] = resources
-	return req.resources, rType, t.versions[rType], t.nonces[rType]
+	return req.resources, req.url, t.versions[rType], t.nonces[rType]
 }
 
 type ackRequest struct {
-	rType   xdsresource.ResourceType
+	url     string // Resource type URL.
 	version string // NACK if version is an empty string.
 	nonce   string
 	errMsg  string // Empty unless it's a NACK.
@@ -472,17 +471,17 @@ type ackRequest struct {
 // processAckRequest pulls the fields needed to send out an ADS ACK. The nonces
 // and versions map is updated.
 //
-// Returns the list of resources, resource type, version, nonce, and an
+// Returns the list of resources, resource type url, version, nonce, and an
 // indication of whether an ACK should be sent on the wire or not.
-func (t *Transport) processAckRequest(ack *ackRequest, stream grpc.ClientStream) ([]string, xdsresource.ResourceType, string, string, bool) {
+func (t *Transport) processAckRequest(ack *ackRequest, stream grpc.ClientStream) ([]string, string, string, string, bool) {
 	if ack.stream != stream {
 		// If ACK's stream isn't the current sending stream, this means the ACK
 		// was pushed to queue before the old stream broke, and a new stream has
 		// been started since. Return immediately here so we don't update the
 		// nonce for the new stream.
-		return nil, xdsresource.UnknownResource, "", "", false
+		return nil, "", "", "", false
 	}
-	rType := ack.rType
+	rType := xdsresource.ResourceTypeFromURL(ack.url)
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -500,7 +499,7 @@ func (t *Transport) processAckRequest(ack *ackRequest, stream grpc.ClientStream)
 		// ackRequest was in queue). If we send a request with an empty
 		// resource name list, the server may treat it as a wild card and send
 		// us everything.
-		return nil, xdsresource.UnknownResource, "", "", false
+		return nil, "", "", "", false
 	}
 	resources := mapToSlice(s)
 
@@ -513,7 +512,7 @@ func (t *Transport) processAckRequest(ack *ackRequest, stream grpc.ClientStream)
 		// This is an ACK. Update the versions map.
 		t.versions[rType] = version
 	}
-	return resources, rType, version, nonce, true
+	return resources, ack.url, version, nonce, true
 }
 
 // Close closes the Transport and frees any associated resources.
