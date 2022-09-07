@@ -140,7 +140,7 @@ func (c *testController) RemoveWatch(resourceType xdsresource.ResourceType, reso
 	c.removeWatches[resourceType].Send(resourceName)
 }
 
-func (c *testController) ReportLoad(server string) (*load.Store, func()) {
+func (c *testController) ReportLoad() (*load.Store, func()) {
 	panic("ReportLoad is not implemented")
 }
 

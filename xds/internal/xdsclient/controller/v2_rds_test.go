@@ -24,9 +24,12 @@ import (
 	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
+	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 // doLDS makes a LDS watch, and waits for the response and ack to finish.
@@ -193,11 +196,17 @@ func (s) TestRDSHandleResponseWithoutRDSWatch(t *testing.T) {
 	defer cancel()
 	doLDS(ctx, t, v2c, fakeServer)
 
-	if _, _, _, err := v2c.handleResponse(badResourceTypeInRDSResponse); err == nil {
-		t.Fatal("v2c.handleRDSResponse() succeeded, should have failed")
+	if err := v2c.handleResourceUpdate(transport.ResourceUpdate{
+		Resources: []*anypb.Any{marshaledConnMgr1},
+		URL:       version.V2RouteConfigURL,
+	}); err == nil {
+		t.Fatal("v2c.handleCDSResponse() succeeded, should have failed")
 	}
 
-	if _, _, _, err := v2c.handleResponse(goodRDSResponse1); err != nil {
-		t.Fatal("v2c.handleRDSResponse() succeeded, should have failed")
+	if err := v2c.handleResourceUpdate(transport.ResourceUpdate{
+		Resources: []*anypb.Any{marshaledGoodRouteConfig1},
+		URL:       version.V2RouteConfigURL,
+	}); err != nil {
+		t.Fatal("v2c.handleCDSResponse() succeeded, should have failed")
 	}
 }

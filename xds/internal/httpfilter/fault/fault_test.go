@@ -52,9 +52,8 @@ import (
 	tpb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 
-	_ "google.golang.org/grpc/xds/internal/balancer"                        // Register the balancers.
-	_ "google.golang.org/grpc/xds/internal/resolver"                        // Register the xds_resolver.
-	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v3" // Register the v3 xDS API client.
+	_ "google.golang.org/grpc/xds/internal/balancer" // Register the balancers.
+	_ "google.golang.org/grpc/xds/internal/resolver" // Register the xds_resolver.
 )
 
 const defaultTestTimeout = 10 * time.Second

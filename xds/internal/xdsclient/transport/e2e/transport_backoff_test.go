@@ -112,8 +112,8 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 	// Create a new transport. Since we are only testing backoff behavior here,
 	// we can pass a no-op data model layer implementation.
 	tr, err := transport.New(&transport.Options{
-		ServerCfg: serverCfg,
-		Validator: func([]*anypb.Any, string) error { return nil }, // No data model layer validation.
+		ServerCfg:     serverCfg,
+		UpdateHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
 		StreamErrorHandler: func(err error) {
 			select {
 			case streamErrCh <- err:
@@ -280,8 +280,8 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 	// Create a new transport. Since we are only testing backoff behavior here,
 	// we can pass a no-op data model layer implementation.
 	tr, err := transport.New(&transport.Options{
-		ServerCfg: serverCfg,
-		Validator: func([]*anypb.Any, string) error { return nil }, // No data model layer validation.
+		ServerCfg:     serverCfg,
+		UpdateHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
 		StreamErrorHandler: func(err error) {
 			select {
 			case streamErrCh <- err:
@@ -420,7 +420,7 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	// we can pass a no-op data model layer implementation.
 	tr, err := transport.New(&transport.Options{
 		ServerCfg:          serverCfg,
-		Validator:          func([]*anypb.Any, string) error { return nil },     // No data model layer validation.
+		UpdateHandler:      func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
 		StreamErrorHandler: func(error) {},                                      // No stream error handling.
 		Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.
 	})
