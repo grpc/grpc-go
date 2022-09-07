@@ -194,7 +194,7 @@ func FromIncomingContext(ctx context.Context) (MD, bool) {
 }
 
 // ValueFromIncomingContext returns the metadata value corresponding to the metadata
-// key from the incoming metadata if it exists.
+// key from the incoming metadata if it exists. Key must be lower-case.
 func ValueFromIncomingContext(ctx context.Context, key string) []string {
 	md, ok := ctx.Value(mdIncomingKey{}).(MD)
 	if !ok {
@@ -204,7 +204,6 @@ func ValueFromIncomingContext(ctx context.Context, key string) []string {
 	if v, ok := md[key]; ok {
 		return copyOf(v)
 	}
-	key = strings.ToLower(key)
 	for k, v := range md {
 		// We need to manually convert all keys to lower case, because MD is a
 		// map, and there's no guarantee that the MD attached to the context is

@@ -203,6 +203,7 @@ func (s) TestValueFromIncomingContext(t *testing.T) {
 		"X-My-Header-1", "42",
 		"X-My-Header-2", "43-1",
 		"X-My-Header-2", "43-2",
+		"x-my-header-3", "44",
 	)
 	ctx := NewIncomingContext(context.Background(), md)
 
@@ -211,16 +212,16 @@ func (s) TestValueFromIncomingContext(t *testing.T) {
 		want []string
 	}{
 		{
-			key:  "X-My-Header-1",
-			want: []string{"42"},
-		},
-		{
 			key:  "x-my-header-1",
 			want: []string{"42"},
 		},
 		{
 			key:  "x-my-header-2",
 			want: []string{"43-1", "43-2"},
+		},
+		{
+			key:  "x-my-header-3",
+			want: []string{"44"},
 		},
 		{
 			key:  "x-unknown",
