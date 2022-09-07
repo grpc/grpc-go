@@ -261,18 +261,16 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 	// the test goroutine to verify ack version and nonce.
 	streamRequestCh := make(chan *v3discoverypb.DiscoveryRequest, 1)
 	streamResponseCh := make(chan *v3discoverypb.DiscoveryResponse, 1)
-	var prevResp *v3discoverypb.DiscoveryResponse
 	mgmtServer, err := e2e.StartManagementServer(&e2e.ManagementServerOptions{
 		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
 			streamRequestCh <- req
 			return nil
 		},
 		OnStreamResponse: func(_ context.Context, _ int64, _ *v3discoverypb.DiscoveryRequest, resp *v3discoverypb.DiscoveryResponse) {
-			if cmp.Equal(resp, prevResp, protocmp.Transform()) {
-				return
+			select {
+			case streamResponseCh <- resp:
+			default:
 			}
-			prevResp = resp
-			streamResponseCh <- resp
 		},
 	})
 	if err != nil {
