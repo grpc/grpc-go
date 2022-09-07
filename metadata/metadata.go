@@ -195,8 +195,6 @@ func FromIncomingContext(ctx context.Context) (MD, bool) {
 	return out, true
 }
 
-// ValueFromIncomingContext returns value from the incoming metadata if exists.
-//
 // ValueFromIncomingContext returns the metadata value corresponding to the metadata
 // key from the incoming metadata if it exists.
 func ValueFromIncomingContext(ctx context.Context, key string) []string {
@@ -206,9 +204,9 @@ func ValueFromIncomingContext(ctx context.Context, key string) []string {
 	}
 
 	if v, ok := md[key]; ok {
-		res := make([]string, len(v))
-		copy(res, v)
-		return res
+		vals := make([]string, len(v))
+		copy(vals, v)
+		return vals
 	}
 	key = strings.ToLower(key)
 	for k, v := range md {
@@ -216,9 +214,9 @@ func ValueFromIncomingContext(ctx context.Context, key string) []string {
 		// map, and there's no guarantee that the MD attached to the context is
 		// created using our helper functions.
 		if strings.ToLower(k) == key {
-			s := make([]string, len(v))
-			copy(s, v)
-			return s
+			vals := make([]string, len(v))
+			copy(vals, v)
+			return vals
 		}
 	}
 	return nil
