@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -58,7 +57,7 @@ func (s) TestReportLoad(t *testing.T) {
 	// Create a transport to the fake server.
 	tr, err := transport.New(&transport.Options{
 		ServerCfg:          serverCfg,
-		Validator:          func([]*anypb.Any, string) error { return nil },     // No ADS validation.
+		UpdateHandler:      func(transport.ResourceUpdate) error { return nil }, // No ADS validation.
 		StreamErrorHandler: func(error) {},                                      // No ADS stream error handling.
 		Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.
 	})

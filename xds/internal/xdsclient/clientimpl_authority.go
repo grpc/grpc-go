@@ -36,7 +36,7 @@ import (
 type controllerInterface interface {
 	AddWatch(resourceType xdsresource.ResourceType, resourceName string)
 	RemoveWatch(resourceType xdsresource.ResourceType, resourceName string)
-	ReportLoad(server string) (*load.Store, func())
+	ReportLoad() (*load.Store, func())
 	Close()
 }
 

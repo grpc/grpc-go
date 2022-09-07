@@ -23,8 +23,11 @@ import (
 	"time"
 
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
+	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 // TestLDSHandleResponse starts a fake xDS server, makes a ClientConn to it,
@@ -188,11 +191,17 @@ func (s) TestLDSHandleResponseWithoutWatch(t *testing.T) {
 	}
 	defer v2c.Close()
 
-	if _, _, _, err := v2c.handleResponse(badResourceTypeInLDSResponse); err == nil {
-		t.Fatal("v2c.handleLDSResponse() succeeded, should have failed")
+	if err := v2c.handleResourceUpdate(transport.ResourceUpdate{
+		Resources: []*anypb.Any{marshaledConnMgr1},
+		URL:       version.V2ListenerURL,
+	}); err == nil {
+		t.Fatal("v2c.handleCDSResponse() succeeded, should have failed")
 	}
 
-	if _, _, _, err := v2c.handleResponse(goodLDSResponse1); err != nil {
-		t.Fatal("v2c.handleLDSResponse() succeeded, should have failed")
+	if err := v2c.handleResourceUpdate(transport.ResourceUpdate{
+		Resources: []*anypb.Any{marshaledListener1},
+		URL:       version.V2ListenerURL,
+	}); err != nil {
+		t.Fatal("v2c.handleCDSResponse() succeeded, should have failed")
 	}
 }

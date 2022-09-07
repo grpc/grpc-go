@@ -29,8 +29,6 @@ import (
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-
-	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2" // Register the v2 xDS API client.
 )
 
 // TestV2ClientBackoffAfterRecvError verifies if the v2Client backs off when it
