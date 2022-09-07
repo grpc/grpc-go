@@ -198,6 +198,43 @@ func (s) TestDelete(t *testing.T) {
 	}
 }
 
+func (s) TestValueFromIncomingContext(t *testing.T) {
+	md := Pairs(
+		"X-My-Header-1", "42",
+		"X-My-Header-2", "43-1",
+		"X-My-Header-2", "43-2",
+		"x-my-header-3", "44",
+	)
+	ctx := NewIncomingContext(context.Background(), md)
+
+	for _, test := range []struct {
+		key  string
+		want []string
+	}{
+		{
+			key:  "x-my-header-1",
+			want: []string{"42"},
+		},
+		{
+			key:  "x-my-header-2",
+			want: []string{"43-1", "43-2"},
+		},
+		{
+			key:  "x-my-header-3",
+			want: []string{"44"},
+		},
+		{
+			key:  "x-unknown",
+			want: nil,
+		},
+	} {
+		v := ValueFromIncomingContext(ctx, test.key)
+		if !reflect.DeepEqual(v, test.want) {
+			t.Errorf("value of metadata is %v, want %v", v, test.want)
+		}
+	}
+}
+
 func (s) TestAppendToOutgoingContext(t *testing.T) {
 	// Pre-existing metadata
 	tCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
