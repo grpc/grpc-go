@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
-	"google.golang.org/protobuf/types/known/anypb"
 
 	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -69,13 +68,13 @@ func (s) TestNew(t *testing.T) {
 			wantErrStr: "missing node proto when creating a new transport",
 		},
 		{
-			name: "missing data model layer",
+			name: "missing update handler",
 			opts: &transport.Options{ServerCfg: &bootstrap.ServerConfig{
 				ServerURI: "server-address",
 				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 				NodeProto: &v3corepb.Node{},
 			}},
-			wantErrStr: "missing data model layer when creating a new transport",
+			wantErrStr: "missing update handler when creating a new transport",
 		},
 		{
 			name: "missing stream error handler",
@@ -85,7 +84,7 @@ func (s) TestNew(t *testing.T) {
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 					NodeProto: &v3corepb.Node{},
 				},
-				Validator: func([]*anypb.Any, string) error { return nil },
+				UpdateHandler: func(transport.ResourceUpdate) error { return nil },
 			},
 			wantErrStr: "missing stream error handler when creating a new transport",
 		},
@@ -98,7 +97,7 @@ func (s) TestNew(t *testing.T) {
 					NodeProto:    &v3corepb.Node{},
 					TransportAPI: version.TransportV2,
 				},
-				Validator:          func([]*anypb.Any, string) error { return nil },
+				UpdateHandler:      func(transport.ResourceUpdate) error { return nil },
 				StreamErrorHandler: func(error) {},
 			},
 			wantErrStr: "unexpected type *corev3.Node for NodeProto, want *core.Node",
@@ -112,7 +111,7 @@ func (s) TestNew(t *testing.T) {
 					NodeProto:    &v2corepb.Node{},
 					TransportAPI: version.TransportV3,
 				},
-				Validator:          func([]*anypb.Any, string) error { return nil },
+				UpdateHandler:      func(transport.ResourceUpdate) error { return nil },
 				StreamErrorHandler: func(error) {},
 			},
 			wantErrStr: "unexpected type *core.Node for NodeProto, want *corev3.Node",
@@ -126,7 +125,7 @@ func (s) TestNew(t *testing.T) {
 					NodeProto:    &v3corepb.Node{},
 					TransportAPI: version.TransportV3,
 				},
-				Validator:          func([]*anypb.Any, string) error { return nil },
+				UpdateHandler:      func(transport.ResourceUpdate) error { return nil },
 				StreamErrorHandler: func(error) {},
 			},
 		},

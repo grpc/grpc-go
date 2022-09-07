@@ -50,16 +50,16 @@ import (
 type Transport struct {
 	// The following fields are initialized in the constructor and never
 	// modified after that.
-	cc                  *grpc.ClientConn                 // ClientConn to the mangement server.
-	serverURI           string                           // URI of the management server.
-	apiVersion          version.TransportAPI             // xDS transport protocol in use.
-	vTransport          versionedTransport               // Underlying version specific transport.
-	stopRunGoroutine    context.CancelFunc               // CancelFunc for the run() goroutine.
-	validator           func([]*anypb.Any, string) error // Data model layer resource validator.
-	adsStreamErrHandler func(error)                      // To report underlying stream errors.
-	lrsStore            *load.Store                      // Store returned to user for pushing loads.
-	backoff             func(int) time.Duration          // Backoff after stream failures.
-	logger              *grpclog.PrefixLogger            // Prefix logger for transport logs.
+	cc                  *grpc.ClientConn        // ClientConn to the mangement server.
+	serverURI           string                  // URI of the management server.
+	apiVersion          version.TransportAPI    // xDS transport protocol in use.
+	vTransport          versionedTransport      // Underlying version specific transport.
+	stopRunGoroutine    context.CancelFunc      // CancelFunc for the run() goroutine.
+	updateHandler       UpdateHandlerFunc       // Resource update handler.
+	adsStreamErrHandler func(error)             // To report underlying stream errors.
+	lrsStore            *load.Store             // Store returned to user for pushing loads.
+	backoff             func(int) time.Duration // Backoff after stream failures.
+	logger              *grpclog.PrefixLogger   // Prefix logger for transport logs.
 
 	adsStreamCh    chan grpc.ClientStream // New ADS streams are pushed here.
 	adsResourcesCh *buffer.Unbounded      // Requested xDS resource names are pushed here.
@@ -84,24 +84,39 @@ type Transport struct {
 	lrsRefCount     int                // Reference count on the load store.
 }
 
+// UpdateHandlerFunc is the implementation at the upper layer, which determines
+// if the configuration received from the management server can be applied
+// locally or not.
+//
+// A nil error is returned from this function when the upper layer thinks
+// that the received configuration is good and can be applied locally. This
+// will cause the transport layer to send an ACK to the management server. A
+// non-nil error is returned from this function when the upper layer thinks
+// otherwise, and this will cause the transport layer to send a NACK.
+//
+// This is invoked inline and therefore the implementation must not block.
+type UpdateHandlerFunc func(update ResourceUpdate) error
+
+// ResourceUpdate is a representation of configuration update received from the
+// management server. It only contains fields which are useful to upper layers.
+type ResourceUpdate struct {
+	// Resources is the list of resources received from the management server.
+	Resources []*anypb.Any
+	// URL is the resource type URL for the above resources.
+	URL string
+	// Version is the resource version, for the above resources, as specified by
+	// the management server.
+	Version string
+}
+
 // Options specifies configuration knobs required when creating a new Transport.
 type Options struct {
 	// ServerCfg contains all the configuration required to connect to the xDS
 	// management server.
 	ServerCfg *bootstrap.ServerConfig
-	// Validator is the data model layer implementation, which contains logic to
-	// determine if the configuration received from the management server can be
-	// applied locally or not.
-	//
-	// A nil error is returned from this function when the data model layer
-	// thinks that the received configuration is good and can be applied
-	// locally. This will cause the transport layer to send an ACK to the
-	// management server. A non-nil error is returned from this function when
-	// the data model layer thinks otherwise, and this will cause the transport
-	// layer to send a NACK.
-	//
-	// This is invoked inline and therefore the implementation must not block.
-	Validator func(resources []*anypb.Any, resourceURL string) error
+	// UpdateHandler is the component which makes ACK/NACK decisions based on
+	// the received resources.
+	UpdateHandler UpdateHandlerFunc
 	// StreamErrorHandler provides a way for the transport layer to report
 	// underlying stream errors. These can be bubbled all the way up to the user
 	// of the xdsClient.
@@ -133,8 +148,8 @@ func New(opts *Options) (*Transport, error) {
 		return nil, errors.New("missing credentials when creating a new transport")
 	case opts.ServerCfg.NodeProto == nil:
 		return nil, errors.New("missing node proto when creating a new transport")
-	case opts.Validator == nil:
-		return nil, errors.New("missing data model layer when creating a new transport")
+	case opts.UpdateHandler == nil:
+		return nil, errors.New("missing update handler when creating a new transport")
 	case opts.StreamErrorHandler == nil:
 		return nil, errors.New("missing stream error handler when creating a new transport")
 	}
@@ -183,7 +198,7 @@ func New(opts *Options) (*Transport, error) {
 		serverURI:           opts.ServerCfg.ServerURI,
 		apiVersion:          opts.ServerCfg.TransportAPI,
 		vTransport:          vTransport,
-		validator:           opts.Validator,
+		updateHandler:       opts.UpdateHandler,
 		adsStreamErrHandler: opts.StreamErrorHandler,
 		lrsStore:            load.NewStore(),
 		backoff:             boff,
@@ -223,9 +238,9 @@ type resourceRequest struct {
 // of processing this request, it is queued and will be sent out once a valid
 // stream exists.
 //
-// If a successful response is received, the data model validator callback
-// provided at creation time is invoked. If an error is encountered, the stream
-// error handler callback provided at creation time is invoked.
+// If a successful response is received, the update handler callback provided at
+// creation time is invoked. If an error is encountered, the stream error
+// handler callback provided at creation time is invoked.
 func (t *Transport) SendRequest(rType xdsresource.ResourceType, resources []string) {
 	t.adsResourcesCh.Put(&resourceRequest{
 		rType:     rType,
@@ -377,7 +392,11 @@ func (t *Transport) recv(stream grpc.ClientStream) bool {
 		}
 		msgReceived = true
 
-		err = t.validator(resources, url)
+		err = t.updateHandler(ResourceUpdate{
+			Resources: resources,
+			URL:       url,
+			Version:   rVersion,
+		})
 		if e, ok := err.(xdsresource.ErrResourceTypeUnsupported); ok {
 			t.logger.Warningf("%s", e.ErrStr)
 			continue

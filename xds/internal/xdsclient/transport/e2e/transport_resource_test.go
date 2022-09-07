@@ -191,10 +191,11 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 			tr, err := transport.New(&transport.Options{
 				ServerCfg: serverCfg,
 				// No validation. Simply push received resources on a channel.
-				Validator: func(resources []*anypb.Any, url string) error {
+				UpdateHandler: func(update transport.ResourceUpdate) error {
 					resourcesCh.Send(&resourcesWithTypeURL{
-						resources: resources,
-						url:       url,
+						resources: update.Resources,
+						url:       update.URL,
+						// Ignore resource version here.
 					})
 					return nil
 				},

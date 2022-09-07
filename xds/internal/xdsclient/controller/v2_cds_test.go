@@ -27,6 +27,7 @@ import (
 	anypb "github.com/golang/protobuf/ptypes/any"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
@@ -176,11 +177,17 @@ func (s) TestCDSHandleResponseWithoutWatch(t *testing.T) {
 	}
 	defer v2c.Close()
 
-	if _, _, _, err := v2c.handleResponse(badResourceTypeInLDSResponse); err == nil {
+	if err := v2c.handleResourceUpdate(transport.ResourceUpdate{
+		Resources: []*anypb.Any{marshaledConnMgr1},
+		URL:       version.V2ClusterURL,
+	}); err == nil {
 		t.Fatal("v2c.handleCDSResponse() succeeded, should have failed")
 	}
 
-	if _, _, _, err := v2c.handleResponse(goodCDSResponse1); err != nil {
+	if err := v2c.handleResourceUpdate(transport.ResourceUpdate{
+		Resources: []*anypb.Any{marshaledCluster1},
+		URL:       version.V2ClusterURL,
+	}); err != nil {
 		t.Fatal("v2c.handleCDSResponse() succeeded, should have failed")
 	}
 }

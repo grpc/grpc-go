@@ -49,8 +49,8 @@ import (
 
 var (
 	nackErr            = errors.New("unsupported field 'use_original_dst' is present and set to true")
-	dataModelValidator = func(resources []*anypb.Any, _ string) error {
-		for _, r := range resources {
+	dataModelValidator = func(update transport.ResourceUpdate) error {
+		for _, r := range update.Resources {
 			inner := &v3discoverypb.Resource{}
 			if err := proto.Unmarshal(r.GetValue(), inner); err != nil {
 				return fmt.Errorf("failed to unmarshal DiscoveryResponse: %v", err)
@@ -138,7 +138,7 @@ func (s) TestSimpleAckAndNack(t *testing.T) {
 	// Create a new transport.
 	tr, err := transport.New(&transport.Options{
 		ServerCfg:          serverCfg,
-		Validator:          dataModelValidator,
+		UpdateHandler:      dataModelValidator,
 		StreamErrorHandler: func(err error) {},
 	})
 	if err != nil {
@@ -323,7 +323,7 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 	// Create a new transport.
 	tr, err := transport.New(&transport.Options{
 		ServerCfg:          serverCfg,
-		Validator:          dataModelValidator,
+		UpdateHandler:      dataModelValidator,
 		StreamErrorHandler: func(err error) {},
 	})
 	if err != nil {
@@ -445,7 +445,7 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 	// Create a new transport.
 	tr, err := transport.New(&transport.Options{
 		ServerCfg:          serverCfg,
-		Validator:          dataModelValidator,
+		UpdateHandler:      dataModelValidator,
 		StreamErrorHandler: func(err error) {},
 	})
 	if err != nil {

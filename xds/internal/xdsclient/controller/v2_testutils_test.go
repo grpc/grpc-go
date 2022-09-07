@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/pubsub"
+	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -412,7 +413,10 @@ func testWatchHandle(t *testing.T, test *watchHandleTestcase) {
 	//
 	// Also note that this won't trigger ACK, so there's no need to clear the
 	// request channel afterwards.
-	if _, _, _, err := v2c.handleResponse(test.responseToHandle); (err != nil) != test.wantHandleErr {
+	if err := v2c.handleResourceUpdate(transport.ResourceUpdate{
+		Resources: test.responseToHandle.Resources,
+		URL:       test.responseToHandle.TypeUrl,
+	}); (err != nil) != test.wantHandleErr {
 		t.Fatalf("v2c.handleRDSResponse() returned err: %v, wantErr: %v", err, test.wantHandleErr)
 	}
 

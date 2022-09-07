@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/internal/grpctest"
-	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2" // Register the v2 API client.
 )
 
 type s struct {

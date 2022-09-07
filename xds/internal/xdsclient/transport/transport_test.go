@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type s struct {
@@ -56,7 +55,7 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 			NodeProto:    &v3corepb.Node{},
 			TransportAPI: version.TransportV3,
 		},
-		Validator:          func([]*anypb.Any, string) error { return nil },
+		UpdateHandler:      func(ResourceUpdate) error { return nil },
 		StreamErrorHandler: func(error) {},
 	}
 	c, err := New(opts)

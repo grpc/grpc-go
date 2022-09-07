@@ -41,9 +41,8 @@ import (
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 
-	_ "google.golang.org/grpc/xds"                                          // To ensure internal.NewXDSResolverWithConfigForTesting is set.
-	_ "google.golang.org/grpc/xds/internal/httpfilter/router"               // Register the router filter.
-	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v3" // Register the v3 xDS API client.
+	_ "google.golang.org/grpc/xds"                            // To ensure internal.NewXDSResolverWithConfigForTesting is set.
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
 
 func overrideFedEnvVar(t *testing.T) {

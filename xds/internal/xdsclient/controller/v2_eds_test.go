@@ -28,6 +28,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
 	xtestutils "google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
@@ -190,11 +191,17 @@ func (s) TestEDSHandleResponseWithoutWatch(t *testing.T) {
 	}
 	defer v2c.Close()
 
-	if _, _, _, err := v2c.handleResponse(badResourceTypeInEDSResponse); err == nil {
-		t.Fatal("v2c.handleEDSResponse() succeeded, should have failed")
+	if err := v2c.handleResourceUpdate(transport.ResourceUpdate{
+		Resources: []*anypb.Any{marshaledConnMgr1},
+		URL:       version.V2EndpointsURL,
+	}); err == nil {
+		t.Fatal("v2c.handleCDSResponse() succeeded, should have failed")
 	}
 
-	if _, _, _, err := v2c.handleResponse(goodEDSResponse1); err != nil {
-		t.Fatal("v2c.handleEDSResponse() succeeded, should have failed")
+	if err := v2c.handleResourceUpdate(transport.ResourceUpdate{
+		Resources: []*anypb.Any{marshaledGoodCLA1},
+		URL:       version.V2EndpointsURL,
+	}); err != nil {
+		t.Fatal("v2c.handleCDSResponse() succeeded, should have failed")
 	}
 }

@@ -107,11 +107,7 @@ func (a *authority) watchEndpoints(clusterName string, cb func(xdsresource.Endpo
 }
 
 func (a *authority) reportLoad() (*load.Store, func()) {
-	// An empty string means to report load to the same same used for ADS. There
-	// should never be a need to specify a string other than an empty string. If
-	// a different server is to be used, a different authority (controller) will
-	// be created.
-	return a.controller.ReportLoad("")
+	return a.controller.ReportLoad()
 }
 
 func (a *authority) dump(t xdsresource.ResourceType) map[string]xdsresource.UpdateWithMD {
