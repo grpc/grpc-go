@@ -195,6 +195,11 @@ func FromIncomingContext(ctx context.Context) (MD, bool) {
 
 // ValueFromIncomingContext returns the metadata value corresponding to the metadata
 // key from the incoming metadata if it exists. Key must be lower-case.
+//
+// Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func ValueFromIncomingContext(ctx context.Context, key string) []string {
 	md, ok := ctx.Value(mdIncomingKey{}).(MD)
 	if !ok {
@@ -216,10 +221,10 @@ func ValueFromIncomingContext(ctx context.Context, key string) []string {
 }
 
 // the returned slice must not be modified in place
-func copyOf(v []string) (vals []string) {
-	vals = make([]string, len(v))
+func copyOf(v []string) []string {
+	vals := make([]string, len(v))
 	copy(vals, v)
-	return
+	return vals
 }
 
 // FromOutgoingContextRaw returns the un-merged, intermediary contents of rawMD.
