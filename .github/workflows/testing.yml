@@ -109,7 +109,7 @@ jobs:
           cd "${GITHUB_WORKSPACE}"
           for MOD_FILE in $(find . -name 'go.mod' | grep -Ev '^\./go\.mod'); do
             pushd "$(dirname ${MOD_FILE})"
-            go test ${{ matrix.testflags }} -timeout 2m ./...
+            go test ${{ matrix.testflags }} -cpu 1,4 -timeout 2m ./...
             popd
           done
 

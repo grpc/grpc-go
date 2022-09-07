@@ -35,7 +35,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	grpclogrecordpb "google.golang.org/grpc/gcp/observability/internal/logging"
-	"google.golang.org/grpc/internal"
 	iblog "google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
@@ -385,6 +384,12 @@ func (fe *fakeOpenCensusExporter) ExportSpan(vd *trace.SpanData) {
 	defer fe.mu.Unlock()
 	fe.SeenSpans++
 	fe.t.Logf("Span[%v]", vd.Name)
+}
+
+func (fe *fakeOpenCensusExporter) Flush() {}
+
+func (fe *fakeOpenCensusExporter) Close() error {
+	return nil
 }
 
 func (s) TestLoggingForOkCall(t *testing.T) {
@@ -874,12 +879,6 @@ func (s) TestCustomTagsTracingMetrics(t *testing.T) {
 	}`
 	cleanup, err := createTmpConfigInFileSystem(configJSON)
 	defer cleanup()
-
-	// To clear globally registered tracing and metrics exporters.
-	defer func() {
-		internal.ClearExtraDialOptions()
-		internal.ClearExtraServerOptions()
-	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

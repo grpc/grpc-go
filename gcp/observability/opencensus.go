@@ -56,7 +56,11 @@ func tagsToTraceAttributes(tags map[string]string) map[string]interface{} {
 type tracingMetricsExporter interface {
 	trace.Exporter
 	view.Exporter
+	Flush()
+	Close() error
 }
+
+var exporter tracingMetricsExporter
 
 // global to stub out in tests
 var newExporter = newStackdriverExporter
@@ -87,7 +91,8 @@ func startOpenCensus(config *config) error {
 		return nil
 	}
 
-	exporter, err := newExporter(config)
+	var err error
+	exporter, err = newExporter(config)
 	if err != nil {
 		return err
 	}
@@ -117,4 +122,21 @@ func startOpenCensus(config *config) error {
 	logger.Infof("Enabled OpenCensus StatsHandlers for clients and servers")
 
 	return nil
+}
+
+// stopOpenCensus flushes the exporter's and cleans up globals across all
+// packages if exporter was created.
+func stopOpenCensus() {
+	if exporter != nil {
+		internal.ClearExtraDialOptions()
+		internal.ClearExtraServerOptions()
+
+		// Call these unconditionally, doesn't matter if not registered, will be
+		// a noop if not registered.
+		trace.UnregisterExporter(exporter)
+		view.UnregisterExporter(exporter)
+
+		exporter.Flush()
+		exporter.Close()
+	}
 }
