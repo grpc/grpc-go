@@ -188,9 +188,7 @@ func FromIncomingContext(ctx context.Context) (MD, bool) {
 		// map, and there's no guarantee that the MD attached to the context is
 		// created using our helper functions.
 		key := strings.ToLower(k)
-		s := make([]string, len(v))
-		copy(s, v)
-		out[key] = s
+		out[key] = copyOf(v)
 	}
 	return out, true
 }
@@ -204,9 +202,7 @@ func ValueFromIncomingContext(ctx context.Context, key string) []string {
 	}
 
 	if v, ok := md[key]; ok {
-		vals := make([]string, len(v))
-		copy(vals, v)
-		return vals
+		return copyOf(v)
 	}
 	key = strings.ToLower(key)
 	for k, v := range md {
@@ -214,12 +210,17 @@ func ValueFromIncomingContext(ctx context.Context, key string) []string {
 		// map, and there's no guarantee that the MD attached to the context is
 		// created using our helper functions.
 		if strings.ToLower(k) == key {
-			vals := make([]string, len(v))
-			copy(vals, v)
-			return vals
+			return copyOf(v)
 		}
 	}
 	return nil
+}
+
+// the returned slice must not be modified in place
+func copyOf(v []string) (vals []string) {
+	vals = make([]string, len(v))
+	copy(vals, v)
+	return
 }
 
 // FromOutgoingContextRaw returns the un-merged, intermediary contents of rawMD.
@@ -249,15 +250,18 @@ func FromOutgoingContext(ctx context.Context) (MD, bool) {
 		return nil, false
 	}
 
-	out := make(MD, len(raw.md)+len(raw.added))
+	mdSize := len(raw.md)
+	for i := range raw.added {
+		mdSize += len(raw.added[i]) / 2
+	}
+
+	out := make(MD, mdSize)
 	for k, v := range raw.md {
 		// We need to manually convert all keys to lower case, because MD is a
 		// map, and there's no guarantee that the MD attached to the context is
 		// created using our helper functions.
 		key := strings.ToLower(k)
-		s := make([]string, len(v))
-		copy(s, v)
-		out[key] = s
+		out[key] = copyOf(v)
 	}
 	for _, added := range raw.added {
 		if len(added)%2 == 1 {
