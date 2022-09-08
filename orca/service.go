@@ -130,7 +130,7 @@ func (s *Service) sendMetricsResponse(stream v3orcaservicegrpc.OpenRcaService_St
 
 // StreamCoreMetrics streams custom backend metrics injected by the server
 // application.
-func (s *Service) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, stream v3orcaservicepb.OpenRcaService_StreamCoreMetricsServer) error {
+func (s *Service) StreamCoreMetrics(req *v3orcaservicepb.OrcaLoadReportRequest, stream v3orcaservicegrpc.OpenRcaService_StreamCoreMetricsServer) error {
 	ticker := time.NewTicker(s.determineReportingInterval(req))
 	defer ticker.Stop()
 
