@@ -112,7 +112,7 @@ func Register(s *grpc.Server, opts ServiceOptions) (*Service, error) {
 // negative or is less than the configured minimum (via
 // ServiceOptions.MinReportingInterval), the latter is used. Else the value from
 // the incoming request is used.
-func (s *Service) determineReportingInterval(req *v3orcaservicegrpc.OrcaLoadReportRequest) time.Duration {
+func (s *Service) determineReportingInterval(req *v3orcaservicepb.OrcaLoadReportRequest) time.Duration {
 	if req.GetReportInterval() == nil {
 		return s.minReportingInterval
 	}
