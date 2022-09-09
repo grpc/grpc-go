@@ -285,6 +285,25 @@ func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (
 		m = internalmatcher.NewHeaderSuffixMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetSuffixMatch(), headerMatcherConfig.InvertMatch)
 	case *v3route_componentspb.HeaderMatcher_ContainsMatch:
 		m = internalmatcher.NewHeaderContainsMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetContainsMatch(), headerMatcherConfig.InvertMatch)
+	case *v3route_componentspb.HeaderMatcher_StringMatch:
+		switch headerMatcherConfig.GetStringMatch().MatchPattern.(type) {
+		case *v3matcherpb.StringMatcher_Exact:
+			m = internalmatcher.NewHeaderExactMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetStringMatch().GetExact(), headerMatcherConfig.InvertMatch)
+		case *v3matcherpb.StringMatcher_SafeRegex:
+			regex, err := regexp.Compile(headerMatcherConfig.GetStringMatch().GetSafeRegex().Regex)
+			if err != nil {
+				return nil, err
+			}
+			m = internalmatcher.NewHeaderRegexMatcher(headerMatcherConfig.Name, regex, headerMatcherConfig.InvertMatch)
+		case *v3matcherpb.StringMatcher_Prefix:
+			m = internalmatcher.NewHeaderPrefixMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetStringMatch().GetPrefix(), headerMatcherConfig.InvertMatch)
+		case *v3matcherpb.StringMatcher_Suffix:
+			m = internalmatcher.NewHeaderSuffixMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetStringMatch().GetSuffix(), headerMatcherConfig.InvertMatch)
+		case *v3matcherpb.StringMatcher_Contains:
+			m = internalmatcher.NewHeaderContainsMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetStringMatch().GetContains(), headerMatcherConfig.InvertMatch)
+		default:
+			return nil, errors.New("unknown header matcher type")
+		}
 	default:
 		return nil, errors.New("unknown header matcher type")
 	}
