@@ -68,7 +68,7 @@ func (c *testCredsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
 	if c.mode == bundleTLSOnly {
 		return nil
 	}
-	return testPerRPCCredentials{}
+	return testPerRPCCredentials{authdata: authdata}
 }
 
 func (c *testCredsBundle) NewWithMode(mode string) (credentials.Bundle, error) {
@@ -284,10 +284,17 @@ var (
 	}
 )
 
-type testPerRPCCredentials struct{}
+type testPerRPCCredentials struct {
+	authdata map[string]string
+	errChan  chan error
+}
 
 func (cr testPerRPCCredentials) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	return authdata, nil
+	var err error
+	if cr.errChan != nil {
+		err = <-cr.errChan
+	}
+	return cr.authdata, err
 }
 
 func (cr testPerRPCCredentials) RequireTransportSecurity() bool {
@@ -320,7 +327,7 @@ func (s) TestPerRPCCredentialsViaDialOptions(t *testing.T) {
 func testPerRPCCredentialsViaDialOptions(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.tapHandle = authHandle
-	te.perRPCCreds = testPerRPCCredentials{}
+	te.perRPCCreds = testPerRPCCredentials{authdata: authdata}
 	te.startServer(&testServer{security: e.security})
 	defer te.tearDown()
 
@@ -349,7 +356,7 @@ func testPerRPCCredentialsViaCallOptions(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{})); err != nil {
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{authdata: authdata})); err != nil {
 		t.Fatalf("Test failed. Reason: %v", err)
 	}
 }
@@ -362,7 +369,7 @@ func (s) TestPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T) {
 
 func testPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T, e env) {
 	te := newTest(t, e)
-	te.perRPCCreds = testPerRPCCredentials{}
+	te.perRPCCreds = testPerRPCCredentials{authdata: authdata}
 	// When credentials are provided via both dial options and call options,
 	// we apply both sets.
 	te.tapHandle = func(ctx context.Context, _ *tap.Info) (context.Context, error) {
@@ -391,7 +398,7 @@ func testPerRPCCredentialsViaDialOptionsAndCallOptions(t *testing.T, e env) {
 	tc := testpb.NewTestServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{})); err != nil {
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.PerRPCCredentials(testPerRPCCredentials{authdata: authdata})); err != nil {
 		t.Fatalf("Test failed. Reason: %v", err)
 	}
 }
