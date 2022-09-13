@@ -1232,16 +1232,23 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	if upperLimit == 0 { // This is the first GoAway Frame.
 		upperLimit = math.MaxUint32 // Kill all streams after the GoAway ID.
 	}
+
+	activeStreams := make(map[uint32]*Stream)
 	for streamID, stream := range t.activeStreams {
+		activeStreams[streamID] = stream
+	}
+
+	t.prevGoAwayID = id
+	t.mu.Unlock()
+	for streamID, stream := range activeStreams {
 		if streamID > id && streamID <= upperLimit {
 			// The stream was unprocessed by the server.
 			atomic.StoreUint32(&stream.unprocessed, 1)
 			t.closeStream(stream, errStreamDrain, false, http2.ErrCodeNo, statusGoAway, nil, false)
 		}
 	}
-	t.prevGoAwayID = id
-	active := len(t.activeStreams)
-	t.mu.Unlock()
+
+	active := len(activeStreams)
 	if active == 0 {
 		t.Close(connectionErrorf(true, nil, "received goaway and there are no active streams"))
 	}
