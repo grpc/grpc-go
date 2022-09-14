@@ -162,16 +162,17 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 
 // delegateToChildPolicies is a helper function which iterates through the list
 // of child policy wrappers in a cache entry and attempts to find a child policy
-// to which this RPC can be routed to. If there is no child policy in READY
-// state, we delegate to the first child policy arbitrarily.
+// to which this RPC can be routed to. If all child policies are in
+// TRANSIENT_FAILURE, we delegate to the first child policy arbitrarily.
 //
 // Caller must hold at least a read-lock on p.lb.cacheMu.
 func (p *rlsPicker) delegateToChildPolicies(dcEntry *cacheEntry, info balancer.PickInfo) (balancer.PickResult, error) {
 	for _, cpw := range dcEntry.childPolicyWrappers {
-		ok, res, err := p.pickIfFeasible(cpw, info)
-		if ok {
-			return res, err
+		state := (*balancer.State)(atomic.LoadPointer(&cpw.state))
+		if state.ConnectivityState == connectivity.TransientFailure {
+			continue
 		}
+		return state.Picker.Pick(info)
 	}
 	if len(dcEntry.childPolicyWrappers) != 0 {
 		state := (*balancer.State)(atomic.LoadPointer(&dcEntry.childPolicyWrappers[0].state))
@@ -249,8 +250,8 @@ func (p *rlsPicker) sendRequestAndReturnPick(cacheKey cacheKey, bs *backoffState
 // target if one is configured, or fails the pick with the given error.
 func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefault error) (balancer.PickResult, error) {
 	if p.defaultPolicy != nil {
-		_, res, err := p.pickIfFeasible(p.defaultPolicy, info)
-		return res, err
+		state := (*balancer.State)(atomic.LoadPointer(&p.defaultPolicy.state))
+		return state.Picker.Pick(info)
 	}
 	return balancer.PickResult{}, errOnNoDefault
 }
@@ -273,27 +274,6 @@ func (p *rlsPicker) sendRouteLookupRequest(cacheKey cacheKey, bs *backoffState, 
 		delete(p.lb.pendingMap, cacheKey)
 	}
 	return throttled
-}
-
-// pickIfFeasible determines if a pick can be delegated to child policy based on
-// its connectivity state.
-// - If state is CONNECTING, the pick is to be queued
-// - If state is IDLE, the child policy is instructed to exit idle, and the pick
-//   is to be queued
-// - If state is READY, pick it delegated to the child policy's picker
-func (p *rlsPicker) pickIfFeasible(cpw *childPolicyWrapper, info balancer.PickInfo) (bool, balancer.PickResult, error) {
-	state := (*balancer.State)(atomic.LoadPointer(&cpw.state))
-	switch state.ConnectivityState {
-	case connectivity.Connecting:
-		return true, balancer.PickResult{}, balancer.ErrNoSubConnAvailable
-	case connectivity.Idle:
-		p.bg.ExitIdleOne(cpw.target)
-		return true, balancer.PickResult{}, balancer.ErrNoSubConnAvailable
-	case connectivity.Ready:
-		r, e := state.Picker.Pick(info)
-		return true, r, e
-	}
-	return false, balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 }
 
 // handleRouteLookupResponse is the callback invoked by the control channel upon
