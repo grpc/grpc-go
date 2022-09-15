@@ -46,7 +46,7 @@ import (
 
 // defaultClientResourcesWithRLSCSP returns a set of resources (LDS, RDS, CDS, EDS) for a
 // client to connect to a server with a RLS Load Balancer as a child of Cluster Manager.
-func defaultClientResourcesWithRLSCSP(params e2e.ResourceParams, rlsProto *rlspb.RouteLookupConfig) e2e.UpdateOptions {
+func defaultClientResourcesWithRLSCSP(lb e2e.LoadBalancingPolicy, params e2e.ResourceParams, rlsProto *rlspb.RouteLookupConfig) e2e.UpdateOptions {
 	routeConfigName := "route-" + params.DialTarget
 	clusterName := "cluster-" + params.DialTarget
 	endpointsName := "endpoints-" + params.DialTarget
@@ -54,7 +54,12 @@ func defaultClientResourcesWithRLSCSP(params e2e.ResourceParams, rlsProto *rlspb
 		NodeID:    params.NodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(params.DialTarget, routeConfigName)},
 		Routes:    []*v3routepb.RouteConfiguration{defaultRouteConfigWithRLSCSP(routeConfigName, params.DialTarget, rlsProto)},
-		Clusters:  []*v3clusterpb.Cluster{e2e.DefaultCluster(clusterName, endpointsName, params.SecLevel)},
+		Clusters: []*v3clusterpb.Cluster{e2e.ClusterResourceWithOptions(&e2e.ClusterOptions{
+			ClusterName:   clusterName,
+			ServiceName:   endpointsName,
+			Policy:        lb,
+			SecurityLevel: params.SecLevel,
+		})},
 		Endpoints: []*v3endpointpb.ClusterLoadAssignment{e2e.DefaultEndpoint(endpointsName, params.Host, []uint32{params.Port})},
 	}
 }
@@ -93,6 +98,27 @@ func defaultRouteConfigWithRLSCSP(routeName, ldsTarget string, rlsProto *rlspb.R
 // target corresponding to this test service. This test asserts an RPC proceeds
 // as normal with the RLS Balancer as part of system.
 func (s) TestRLSinxDS(t *testing.T) {
+	tests := []struct {
+		name     string
+		lbPolicy e2e.LoadBalancingPolicy
+	}{
+		{
+			name:     "roundrobin",
+			lbPolicy: e2e.LoadBalancingPolicyRoundRobin,
+		},
+		{
+			name:     "ringhash",
+			lbPolicy: e2e.LoadBalancingPolicyRingHash,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testRLSinxDS(t, test.lbPolicy)
+		})
+	}
+}
+
+func testRLSinxDS(t *testing.T, lbPolicy e2e.LoadBalancingPolicy) {
 	oldRLS := envconfig.XDSRLS
 	envconfig.XDSRLS = true
 	internal.RegisterRLSClusterSpecifierPluginForTesting()
@@ -119,7 +145,7 @@ func (s) TestRLSinxDS(t *testing.T) {
 	}
 
 	const serviceName = "my-service-client-side-xds"
-	resources := defaultClientResourcesWithRLSCSP(e2e.ResourceParams{
+	resources := defaultClientResourcesWithRLSCSP(lbPolicy, e2e.ResourceParams{
 		DialTarget: serviceName,
 		NodeID:     nodeID,
 		Host:       "localhost",

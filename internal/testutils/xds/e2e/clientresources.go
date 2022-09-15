@@ -305,8 +305,44 @@ func DefaultRouteConfig(routeName, ldsTarget, clusterName string) *v3routepb.Rou
 
 // DefaultCluster returns a basic xds Cluster resource.
 func DefaultCluster(clusterName, edsServiceName string, secLevel SecurityLevel) *v3clusterpb.Cluster {
+	return ClusterResourceWithOptions(&ClusterOptions{
+		ClusterName:   clusterName,
+		ServiceName:   edsServiceName,
+		Policy:        LoadBalancingPolicyRoundRobin,
+		SecurityLevel: secLevel,
+	})
+}
+
+// LoadBalancingPolicy determines the policy used for balancing load across
+// endpoints in the Cluster.
+type LoadBalancingPolicy int
+
+const (
+	// LoadBalancingPolicyRoundRobin results in the use of the weighted_target
+	// LB policy to balance load across localities and endpoints in the cluster.
+	LoadBalancingPolicyRoundRobin LoadBalancingPolicy = iota
+	// LoadBalancingPolicyRingHash results in the use of the ring_hash LB policy
+	// as the leaf policy.
+	LoadBalancingPolicyRingHash
+)
+
+// ClusterOptions contains options to configure a Cluster resource.
+type ClusterOptions struct {
+	// ClusterName is the name of the Cluster resource.
+	ClusterName string
+	// ServiceName is the EDS service name of the Cluster.
+	ServiceName string
+	// Policy is the LB policy to be used.
+	Policy LoadBalancingPolicy
+	// SecurityLevel determines the security configuration for the Cluster.
+	SecurityLevel SecurityLevel
+}
+
+// ClusterResourceWithOptions returns an xDS Cluster resource configured with
+// the provided options.
+func ClusterResourceWithOptions(opts *ClusterOptions) *v3clusterpb.Cluster {
 	var tlsContext *v3tlspb.UpstreamTlsContext
-	switch secLevel {
+	switch opts.SecurityLevel {
 	case SecurityLevelNone:
 	case SecurityLevelTLS:
 		tlsContext = &v3tlspb.UpstreamTlsContext{
@@ -333,8 +369,15 @@ func DefaultCluster(clusterName, edsServiceName string, secLevel SecurityLevel) 
 		}
 	}
 
+	var lbPolicy v3clusterpb.Cluster_LbPolicy
+	switch opts.Policy {
+	case LoadBalancingPolicyRoundRobin:
+		lbPolicy = v3clusterpb.Cluster_ROUND_ROBIN
+	case LoadBalancingPolicyRingHash:
+		lbPolicy = v3clusterpb.Cluster_RING_HASH
+	}
 	cluster := &v3clusterpb.Cluster{
-		Name:                 clusterName,
+		Name:                 opts.ClusterName,
 		ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
 		EdsClusterConfig: &v3clusterpb.Cluster_EdsClusterConfig{
 			EdsConfig: &v3corepb.ConfigSource{
@@ -342,9 +385,9 @@ func DefaultCluster(clusterName, edsServiceName string, secLevel SecurityLevel) 
 					Ads: &v3corepb.AggregatedConfigSource{},
 				},
 			},
-			ServiceName: edsServiceName,
+			ServiceName: opts.ServiceName,
 		},
-		LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+		LbPolicy: lbPolicy,
 	}
 	if tlsContext != nil {
 		cluster.TransportSocket = &v3corepb.TransportSocket{
