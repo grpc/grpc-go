@@ -7407,7 +7407,6 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 			return
 		}
 		writer.Flush() // necessary since client is expecting preface before declaring connection fully setup.
-
 		var sid uint32
 		// Loop until conn is closed and framer returns io.EOF
 		for requestNum := 0; ; requestNum = (requestNum + 1) % len(s.responses) {
@@ -8129,4 +8128,63 @@ func (s) TestRecvWhileReturningStatus(t *testing.T) {
 			t.Fatalf("stream.Recv() = %v, want io.EOF", err)
 		}
 	}
+}
+
+// TestGoAwayStreamIDSmallerThanCreatedStreams tests the scenario where a server
+// sends a goaway with a stream id that is smaller than some created streams on
+// the client, while the client is simultaneously creating new streams. This
+// should not induce a deadlock.
+func (s) TestGoAwayStreamIDSmallerThanCreatedStreams(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("error listening: %v", err)
+	}
+
+	ctCh := testutils.NewChannel()
+	go func() {
+		conn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("error in lis.Accept(): %v", err)
+		}
+		ct := newClientTester(t, conn)
+		ct.greet()
+		ctCh.Send(ct)
+	}()
+
+	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("error dialing: %v", err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	val, err := ctCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout waiting for client transport (should be given after http2 creation)")
+	}
+	ct, ok := val.(*clientTester)
+	if !ok {
+		t.Fatalf("value received not a clientTester")
+	}
+
+	tc := testpb.NewTestServiceClient(cc)
+	someStreamsCreated := grpcsync.NewEvent()
+	goAwayWritten := grpcsync.NewEvent()
+	go func() {
+		for i := 0; i < 20; i++ {
+			if i == 10 {
+				<-goAwayWritten.Done()
+			}
+			tc.FullDuplexCall(ctx)
+			if i == 4 {
+				someStreamsCreated.Fire()
+			}
+		}
+	}()
+
+	<-someStreamsCreated.Done()
+	ct.writeGoAway(1, http2.ErrCodeNo, []byte{})
+	goAwayWritten.Fire()
 }
