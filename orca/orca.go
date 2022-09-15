@@ -173,11 +173,14 @@ func ToLoadReport(md metadata.MD) (*v3orcapb.OrcaLoadReport, error) {
 // an import cycle. Hence this roundabout method is used.
 type loadParser struct{}
 
-func (*loadParser) Parse(md metadata.MD) interface{} {
-	lr, _ := ToLoadReport(md)
+func (loadParser) Parse(md metadata.MD) interface{} {
+	lr, err := ToLoadReport(md)
+	if err != nil {
+		logger.Errorf("Parse(%v) failed: %v", err)
+	}
 	return lr
 }
 
 func init() {
-	balancerload.SetParser(&loadParser{})
+	balancerload.SetParser(loadParser{})
 }
