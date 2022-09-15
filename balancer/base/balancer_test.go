@@ -44,6 +44,10 @@ func (sc *testSubConn) UpdateAddresses(addresses []resolver.Address) {}
 
 func (sc *testSubConn) Connect() {}
 
+func (sc *testSubConn) GetOrBuildProducer(balancer.ProducerBuilder) (balancer.Producer, func()) {
+	return nil, nil
+}
+
 // testPickBuilder creates balancer.Picker for test.
 type testPickBuilder struct {
 	validate func(info PickerBuildInfo)

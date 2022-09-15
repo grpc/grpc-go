@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -359,8 +360,9 @@ func (ccb *ccBalancerWrapper) Target() string {
 // acBalancerWrapper is a wrapper on top of ac for balancers.
 // It implements balancer.SubConn interface.
 type acBalancerWrapper struct {
-	mu sync.Mutex
-	ac *addrConn
+	mu        sync.Mutex
+	ac        *addrConn
+	producers map[balancer.ProducerBuilder]*producerData
 }
 
 func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
@@ -413,4 +415,35 @@ func (acbw *acBalancerWrapper) getAddrConn() *addrConn {
 	acbw.mu.Lock()
 	defer acbw.mu.Unlock()
 	return acbw.ac
+}
+
+// NewStream begins a streaming RPC.
+func (acbw *acBalancerWrapper) NewStream(ctx context.Context, desc *StreamDesc, method string, opts ...CallOption) (ClientStream, error) {
+	return newNonRetryClientStream(ctx, desc, method, acbw.ac.transport, acbw.ac, opts...)
+}
+
+type producerData struct {
+	producer balancer.Producer
+	close    func()
+	refs     int
+}
+
+func (acbw *acBalancerWrapper) GetOrBuildProducer(pb balancer.ProducerBuilder) (balancer.Producer, func()) {
+	acbw.mu.Lock()
+	defer acbw.mu.Unlock()
+	pData := acbw.producers[pb]
+	if pData == nil {
+		p, close := pb.Build(acbw)
+		pData = &producerData{producer: p, close: close}
+	}
+	pData.refs++
+	return pData.producer, func() {
+		acbw.mu.Lock()
+		defer acbw.mu.Unlock()
+		pData.refs--
+		if pData.refs == 0 {
+			pData.close()
+			delete(acbw.producers, pb)
+		}
+	}
 }
