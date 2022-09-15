@@ -163,20 +163,18 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 // delegateToChildPolicies is a helper function which iterates through the list
 // of child policy wrappers in a cache entry and attempts to find a child policy
 // to which this RPC can be routed to. If all child policies are in
-// TRANSIENT_FAILURE, we delegate to the first child policy arbitrarily.
+// TRANSIENT_FAILURE, we delegate to the last child policy arbitrarily.
 //
 // Caller must hold at least a read-lock on p.lb.cacheMu.
 func (p *rlsPicker) delegateToChildPolicies(dcEntry *cacheEntry, info balancer.PickInfo) (balancer.PickResult, error) {
-	for _, cpw := range dcEntry.childPolicyWrappers {
+	for i, cpw := range dcEntry.childPolicyWrappers {
 		state := (*balancer.State)(atomic.LoadPointer(&cpw.state))
-		if state.ConnectivityState == connectivity.TransientFailure {
-			continue
+		// Delegate to the child policy if it is not in TRANSIENT_FAILURE, or if
+		// it the last one (which handles the case of delegating to the last
+		// child picker if all child polcies are in TRANSIENT_FAILURE).
+		if state.ConnectivityState != connectivity.TransientFailure || i == len(dcEntry.childPolicyWrappers)-1 {
+			return state.Picker.Pick(info)
 		}
-		return state.Picker.Pick(info)
-	}
-	if len(dcEntry.childPolicyWrappers) != 0 {
-		state := (*balancer.State)(atomic.LoadPointer(&dcEntry.childPolicyWrappers[0].state))
-		return state.Picker.Pick(info)
 	}
 	// In the unlikely event that we have a cache entry with no targets, we end up
 	// queueing the RPC.
