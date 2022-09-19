@@ -20,8 +20,15 @@
 // avoid polluting the godoc of the top-level orca package.
 package internal
 
+import ibackoff "google.golang.org/grpc/internal/backoff"
+
 // AllowAnyMinReportingInterval prevents clamping of the MinReportingInterval
 // configured via ServiceOptions, to a minimum of 30s.
 //
 // For testing purposes only.
 var AllowAnyMinReportingInterval interface{} // func(*ServiceOptions)
+
+// DefaultBackoffFunc is used by the producer to control its backoff behavior.
+//
+// For testing purposes only.
+var DefaultBackoffFunc = ibackoff.DefaultExponential.Backoff

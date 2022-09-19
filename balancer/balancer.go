@@ -111,9 +111,9 @@ type SubConn interface {
 	// Connect starts the connecting for this SubConn.
 	Connect()
 	// GetOrBuildProducer returns a reference to the existing Producer for this
-	// ProducerBuilder+SubConn, or, if one does not currently exist, creates a
-	// new one and returns it.  Returns a close function which must be called
-	// when the Producer is no longer needed.
+	// ProducerBuilder in this SubConn, or, if one does not currently exist,
+	// creates a new one and returns it.  Returns a close function which must
+	// be called when the Producer is no longer needed.
 	GetOrBuildProducer(ProducerBuilder) (p Producer, close func())
 }
 
