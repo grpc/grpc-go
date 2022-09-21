@@ -35,6 +35,7 @@ func newClientTester(t *testing.T, conn net.Conn) *clientTester {
 		conn: conn,
 	}
 	ct.fr = http2.NewFramer(conn, conn)
+	ct.greet()
 	return ct
 }
 

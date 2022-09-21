@@ -1251,6 +1251,8 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		}
 	}
 	t.mu.Unlock()
+	// Called outside t.mu because closeStream can take controlBuf's mu, which
+	// could induce deadlock and is not allowed.
 	for _, stream := range streamsToClose {
 		t.closeStream(stream, errStreamDrain, false, http2.ErrCodeNo, statusGoAway, nil, false)
 	}

@@ -8147,7 +8147,6 @@ func (s) TestGoAwayStreamIDSmallerThanCreatedStreams(t *testing.T) {
 			t.Errorf("error in lis.Accept(): %v", err)
 		}
 		ct := newClientTester(t, conn)
-		ct.greet()
 		ctCh.Send(ct)
 	}()
 
@@ -8164,10 +8163,7 @@ func (s) TestGoAwayStreamIDSmallerThanCreatedStreams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("timeout waiting for client transport (should be given after http2 creation)")
 	}
-	ct, ok := val.(*clientTester)
-	if !ok {
-		t.Fatalf("value received not a clientTester")
-	}
+	ct := val.(*clientTester)
 
 	tc := testpb.NewTestServiceClient(cc)
 	someStreamsCreated := grpcsync.NewEvent()
