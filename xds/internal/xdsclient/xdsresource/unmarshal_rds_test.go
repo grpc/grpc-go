@@ -738,7 +738,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			rlsEnabled: true,
 		},
 		{
-			name: "ignore-error-in-cluster-specifier-plugin",
+			name: "ignore-error-in-cluster-specifier-plugin-env-var-off",
 			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
 				clusterSpecifierPlugin("cspA", configOfClusterSpecifierDoesntExist, false),
 			}, []string{}),
@@ -749,7 +749,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			rc: goodRouteConfigWithClusterSpecifierPlugins([]*v3routepb.ClusterSpecifierPlugin{
 				clusterSpecifierPlugin("cspA", mockClusterSpecifierConfig, false),
 			}, []string{"cspA"}),
-			wantError: true,
+			wantUpdate: goodUpdate,
 		},
 		// This tests a scenario where a cluster specifier plugin is not found
 		// and is optional. Any routes referencing that not found optional
@@ -1545,7 +1545,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 							ClusterSpecifier: &v3routepb.RouteAction_ClusterSpecifierPlugin{}}},
 				},
 			},
-			wantErr: true,
+			wantRoutes: []*Route{},
 		},
 		{
 			name: "default totalWeight is 100 in weighted clusters action",
