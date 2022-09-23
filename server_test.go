@@ -130,6 +130,34 @@ func (s) TestGetServiceInfo(t *testing.T) {
 	}
 }
 
+func (s) TestRetryChainedInterceptor(t *testing.T) {
+	var records []int
+	i1 := func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error) {
+		records = append(records, 1)
+		// call handler twice to simulate a retry here.
+		handler(ctx, req)
+		return handler(ctx, req)
+	}
+	i2 := func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error) {
+		records = append(records, 2)
+		return handler(ctx, req)
+	}
+	i3 := func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (resp interface{}, err error) {
+		records = append(records, 3)
+		return handler(ctx, req)
+	}
+
+	ii := chainUnaryInterceptors([]UnaryServerInterceptor{i1, i2, i3})
+
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return nil, nil
+	}
+	ii(context.Background(), nil, nil, handler)
+	if !reflect.DeepEqual(records, []int{1, 2, 3, 2, 3}) {
+		t.Fatalf("retry failed on chained interceptors: %v", records)
+	}
+}
+
 func (s) TestStreamContext(t *testing.T) {
 	expectedStream := &transport.Stream{}
 	ctx := NewContextWithServerTransportStream(context.Background(), expectedStream)

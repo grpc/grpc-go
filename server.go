@@ -1162,6 +1162,7 @@ func chainUnaryInterceptors(interceptors []UnaryServerInterceptor) UnaryServerIn
 				return interceptors[state.i](ctx, req, info, handler)
 			}
 			state.i++
+			defer func() { state.i-- }()
 			return interceptors[state.i-1](ctx, req, info, state.next)
 		}
 		return state.next(ctx, req)
