@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/balancer/base"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
-	_ "google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/internal/balancer/stub"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/stubserver"
