@@ -1690,9 +1690,6 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 }
 
 func (s) TestValidateClusterWithOutlierDetection(t *testing.T) {
-	oldOutlierDetectionSupportEnv := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
-	defer func() { envconfig.XDSOutlierDetection = oldOutlierDetectionSupportEnv }()
 	odToClusterProto := func(od *v3clusterpb.OutlierDetection) *v3clusterpb.Cluster {
 		// Cluster parsing doesn't fail with respect to fields orthogonal to
 		// outlier detection.

@@ -33,7 +33,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/stub"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
@@ -300,17 +299,13 @@ type subConnWithState struct {
 
 func setup(t *testing.T) (*outlierDetectionBalancer, *testutils.TestClientConn, func()) {
 	t.Helper()
-	internal.RegisterOutlierDetectionBalancerForTesting()
 	builder := balancer.Get(Name)
 	if builder == nil {
 		t.Fatalf("balancer.Get(%q) returned nil", Name)
 	}
 	tcc := testutils.NewTestClientConn(t)
 	odB := builder.Build(tcc, balancer.BuildOptions{})
-	return odB.(*outlierDetectionBalancer), tcc, func() {
-		odB.Close()
-		internal.UnregisterOutlierDetectionBalancerForTesting()
-	}
+	return odB.(*outlierDetectionBalancer), tcc, odB.Close
 }
 
 type emptyChildConfig struct {
@@ -361,7 +356,6 @@ func (s) TestChildBasicOperations(t *testing.T) {
 	})
 
 	od, tcc, _ := setup(t)
-	defer internal.UnregisterOutlierDetectionBalancerForTesting()
 
 	// This first config update should cause a child to be built and forwarded
 	// it's first update.
