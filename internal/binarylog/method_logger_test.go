@@ -34,7 +34,7 @@ import (
 
 func (s) TestLog(t *testing.T) {
 	idGen.reset()
-	ml := newMethodLogger(10, 10)
+	ml := NewBinMethodLogger(10, 10)
 	// Set sink to testing buffer.
 	buf := bytes.NewBuffer(nil)
 	ml.sink = newWriterSink(buf)
@@ -350,11 +350,11 @@ func (s) TestLog(t *testing.T) {
 
 func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 	testCases := []struct {
-		ml   *methodLogger
+		ml   *BinMethodLogger
 		mpPb *pb.Metadata
 	}{
 		{
-			ml: newMethodLogger(maxUInt, maxUInt),
+			ml: NewBinMethodLogger(maxUInt, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
@@ -362,7 +362,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 			},
 		},
 		{
-			ml: newMethodLogger(2, maxUInt),
+			ml: NewBinMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
@@ -370,7 +370,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 			},
 		},
 		{
-			ml: newMethodLogger(1, maxUInt),
+			ml: NewBinMethodLogger(1, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: nil},
@@ -378,7 +378,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 			},
 		},
 		{
-			ml: newMethodLogger(2, maxUInt),
+			ml: NewBinMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1, 1}},
@@ -386,7 +386,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 			},
 		},
 		{
-			ml: newMethodLogger(2, maxUInt),
+			ml: NewBinMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
@@ -397,7 +397,7 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 		// "grpc-trace-bin" is kept in log but not counted towards the size
 		// limit.
 		{
-			ml: newMethodLogger(1, maxUInt),
+			ml: NewBinMethodLogger(1, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
@@ -417,13 +417,13 @@ func (s) TestTruncateMetadataNotTruncated(t *testing.T) {
 
 func (s) TestTruncateMetadataTruncated(t *testing.T) {
 	testCases := []struct {
-		ml   *methodLogger
+		ml   *BinMethodLogger
 		mpPb *pb.Metadata
 
 		entryLen int
 	}{
 		{
-			ml: newMethodLogger(2, maxUInt),
+			ml: NewBinMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1, 1, 1}},
@@ -432,7 +432,7 @@ func (s) TestTruncateMetadataTruncated(t *testing.T) {
 			entryLen: 0,
 		},
 		{
-			ml: newMethodLogger(2, maxUInt),
+			ml: NewBinMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
@@ -443,7 +443,7 @@ func (s) TestTruncateMetadataTruncated(t *testing.T) {
 			entryLen: 2,
 		},
 		{
-			ml: newMethodLogger(2, maxUInt),
+			ml: NewBinMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1, 1}},
@@ -453,7 +453,7 @@ func (s) TestTruncateMetadataTruncated(t *testing.T) {
 			entryLen: 1,
 		},
 		{
-			ml: newMethodLogger(2, maxUInt),
+			ml: NewBinMethodLogger(2, maxUInt),
 			mpPb: &pb.Metadata{
 				Entry: []*pb.MetadataEntry{
 					{Key: "", Value: []byte{1}},
@@ -478,23 +478,23 @@ func (s) TestTruncateMetadataTruncated(t *testing.T) {
 
 func (s) TestTruncateMessageNotTruncated(t *testing.T) {
 	testCases := []struct {
-		ml    *methodLogger
+		ml    *BinMethodLogger
 		msgPb *pb.Message
 	}{
 		{
-			ml: newMethodLogger(maxUInt, maxUInt),
+			ml: NewBinMethodLogger(maxUInt, maxUInt),
 			msgPb: &pb.Message{
 				Data: []byte{1},
 			},
 		},
 		{
-			ml: newMethodLogger(maxUInt, 3),
+			ml: NewBinMethodLogger(maxUInt, 3),
 			msgPb: &pb.Message{
 				Data: []byte{1, 1},
 			},
 		},
 		{
-			ml: newMethodLogger(maxUInt, 2),
+			ml: NewBinMethodLogger(maxUInt, 2),
 			msgPb: &pb.Message{
 				Data: []byte{1, 1},
 			},
@@ -511,13 +511,13 @@ func (s) TestTruncateMessageNotTruncated(t *testing.T) {
 
 func (s) TestTruncateMessageTruncated(t *testing.T) {
 	testCases := []struct {
-		ml    *methodLogger
+		ml    *BinMethodLogger
 		msgPb *pb.Message
 
 		oldLength uint32
 	}{
 		{
-			ml: newMethodLogger(maxUInt, 2),
+			ml: NewBinMethodLogger(maxUInt, 2),
 			msgPb: &pb.Message{
 				Length: 3,
 				Data:   []byte{1, 1, 1},

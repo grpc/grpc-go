@@ -52,7 +52,9 @@ type MethodLogger interface {
 	Log(LogEntryConfig)
 }
 
-type methodLogger struct {
+// BinMethodLogger is a method logger that truncates headers and messages based
+// on configured fields.
+type BinMethodLogger struct {
 	headerMaxLen, messageMaxLen uint64
 
 	callID          uint64
@@ -61,8 +63,9 @@ type methodLogger struct {
 	sink Sink // TODO(blog): make this plugable.
 }
 
-func newMethodLogger(h, m uint64) *methodLogger {
-	return &methodLogger{
+// NewBinMethodLogger returns a new binary method logger.
+func NewBinMethodLogger(h, m uint64) *BinMethodLogger {
+	return &BinMethodLogger{
 		headerMaxLen:  h,
 		messageMaxLen: m,
 
@@ -75,8 +78,8 @@ func newMethodLogger(h, m uint64) *methodLogger {
 
 // Build is an internal only method for building the proto message out of the
 // input event. It's made public to enable other library to reuse as much logic
-// in methodLogger as possible.
-func (ml *methodLogger) Build(c LogEntryConfig) *pb.GrpcLogEntry {
+// in BinMethodLogger as possible.
+func (ml *BinMethodLogger) Build(c LogEntryConfig) *pb.GrpcLogEntry {
 	m := c.toProto()
 	timestamp, _ := ptypes.TimestampProto(time.Now())
 	m.Timestamp = timestamp
@@ -95,11 +98,11 @@ func (ml *methodLogger) Build(c LogEntryConfig) *pb.GrpcLogEntry {
 }
 
 // Log creates a proto binary log entry, and logs it to the sink.
-func (ml *methodLogger) Log(c LogEntryConfig) {
+func (ml *BinMethodLogger) Log(c LogEntryConfig) {
 	ml.sink.Write(ml.Build(c))
 }
 
-func (ml *methodLogger) truncateMetadata(mdPb *pb.Metadata) (truncated bool) {
+func (ml *BinMethodLogger) truncateMetadata(mdPb *pb.Metadata) (truncated bool) {
 	if ml.headerMaxLen == maxUInt {
 		return false
 	}
@@ -129,7 +132,7 @@ func (ml *methodLogger) truncateMetadata(mdPb *pb.Metadata) (truncated bool) {
 	return truncated
 }
 
-func (ml *methodLogger) truncateMessage(msgPb *pb.Message) (truncated bool) {
+func (ml *BinMethodLogger) truncateMessage(msgPb *pb.Message) (truncated bool) {
 	if ml.messageMaxLen == maxUInt {
 		return false
 	}
