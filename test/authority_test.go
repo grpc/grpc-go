@@ -125,10 +125,10 @@ var authorityTests = []authorityTest{
 	},
 	{
 		name:           "UnixAbstract",
-		address:        "\x00abc efg",
+		address:        "@abc efg",
 		target:         "unix-abstract:abc efg",
 		authority:      "localhost",
-		dialTargetWant: "\x00abc efg",
+		dialTargetWant: "unix:@abc efg",
 	},
 }
 
@@ -155,9 +155,7 @@ func (s) TestUnixCustomDialer(t *testing.T) {
 				if address != test.dialTargetWant {
 					return nil, fmt.Errorf("expected target %v in custom dialer, instead got %v", test.dialTargetWant, address)
 				}
-				if !strings.HasPrefix(test.target, "unix-abstract:") {
-					address = address[len("unix:"):]
-				}
+				address = address[len("unix:"):]
 				return (&net.Dialer{}).DialContext(ctx, "unix", address)
 			}
 			runUnixTest(t, test.address, test.target, test.authority, dialer)
