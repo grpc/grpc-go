@@ -63,20 +63,20 @@ var (
 	// xDS-enabled server invokes this method on a grpc.Server when a particular
 	// listener moves to "not-serving" mode.
 	DrainServerTransports interface{} // func(*grpc.Server, string)
-	// AddExtraServerOptions adds an array of ServerOption that will be
+	// AddGlobalServerOptions adds an array of ServerOption that will be
 	// effective globally for newly created servers. The priority will be: 1.
 	// user-provided; 2. this method; 3. default values.
-	AddExtraServerOptions interface{} // func(opt ...ServerOption)
-	// ClearExtraServerOptions clears the array of extra ServerOption. This
+	AddGlobalServerOptions interface{} // func(opt ...ServerOption)
+	// ClearGlobalServerOptions clears the array of extra ServerOption. This
 	// method is useful in testing and benchmarking.
-	ClearExtraServerOptions func()
-	// AddExtraDialOptions adds an array of DialOption that will be effective
+	ClearGlobalServerOptions func()
+	// AddGlobalDialOptions adds an array of DialOption that will be effective
 	// globally for newly created client channels. The priority will be: 1.
 	// user-provided; 2. this method; 3. default values.
-	AddExtraDialOptions interface{} // func(opt ...DialOption)
-	// ClearExtraDialOptions clears the array of extra DialOption. This
+	AddGlobalDialOptions interface{} // func(opt ...DialOption)
+	// ClearGlobalDialOptions clears the array of extra DialOption. This
 	// method is useful in testing and benchmarking.
-	ClearExtraDialOptions func()
+	ClearGlobalDialOptions func()
 	// JoinServerOptions combines the server options passed as arguments into a
 	// single server option.
 	JoinServerOptions interface{} // func(...grpc.ServerOption) grpc.ServerOption
