@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedroundrobin"
 	"google.golang.org/grpc/balancer/weightedtarget"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/hierarchy"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/resolver"
@@ -179,156 +178,10 @@ func TestBuildPriorityConfigJSON(t *testing.T) {
 	}
 }
 
+// TestBuildPriorityConfig tests the priority config generation. Each top level
+// balancer per priority should be an Outlier Detection balancer, with a Cluster
+// Impl Balancer as a child.
 func TestBuildPriorityConfig(t *testing.T) {
-	gotConfig, gotAddrs, _ := buildPriorityConfig([]priorityConfig{
-		{
-			mechanism: DiscoveryMechanism{
-				Cluster:               testClusterName,
-				LoadReportingServer:   testLRSServerConfig,
-				MaxConcurrentRequests: newUint32(testMaxRequests),
-				Type:                  DiscoveryMechanismTypeEDS,
-				EDSServiceName:        testEDSServiceName,
-			},
-			edsResp: xdsresource.EndpointsUpdate{
-				Drops: []xdsresource.OverloadDropConfig{
-					{
-						Category:    testDropCategory,
-						Numerator:   testDropOverMillion,
-						Denominator: million,
-					},
-				},
-				Localities: []xdsresource.Locality{
-					testLocalitiesP0[0],
-					testLocalitiesP0[1],
-					testLocalitiesP1[0],
-					testLocalitiesP1[1],
-				},
-			},
-			childNameGen: newNameGenerator(0),
-		},
-		{
-			mechanism: DiscoveryMechanism{
-				Cluster: testClusterName2,
-				Type:    DiscoveryMechanismTypeLogicalDNS,
-			},
-			addresses:    testAddressStrs[4],
-			childNameGen: newNameGenerator(1),
-		},
-	}, nil)
-
-	wantConfig := &priority.LBConfig{
-		Children: map[string]*priority.Child{
-			"priority-0-0": {
-				Config: &internalserviceconfig.BalancerConfig{
-					Name: clusterimpl.Name,
-					Config: &clusterimpl.LBConfig{
-						Cluster:               testClusterName,
-						EDSServiceName:        testEDSServiceName,
-						LoadReportingServer:   testLRSServerConfig,
-						MaxConcurrentRequests: newUint32(testMaxRequests),
-						DropCategories: []clusterimpl.DropConfig{
-							{
-								Category:           testDropCategory,
-								RequestsPerMillion: testDropOverMillion,
-							},
-						},
-						ChildPolicy: &internalserviceconfig.BalancerConfig{
-							Name: weightedtarget.Name,
-							Config: &weightedtarget.LBConfig{
-								Targets: map[string]weightedtarget.Target{
-									assertString(testLocalityIDs[0].ToString): {
-										Weight:      20,
-										ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-									},
-									assertString(testLocalityIDs[1].ToString): {
-										Weight:      80,
-										ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-									},
-								},
-							},
-						},
-					},
-				},
-				IgnoreReresolutionRequests: true,
-			},
-			"priority-0-1": {
-				Config: &internalserviceconfig.BalancerConfig{
-					Name: clusterimpl.Name,
-					Config: &clusterimpl.LBConfig{
-						Cluster:               testClusterName,
-						EDSServiceName:        testEDSServiceName,
-						LoadReportingServer:   testLRSServerConfig,
-						MaxConcurrentRequests: newUint32(testMaxRequests),
-						DropCategories: []clusterimpl.DropConfig{
-							{
-								Category:           testDropCategory,
-								RequestsPerMillion: testDropOverMillion,
-							},
-						},
-						ChildPolicy: &internalserviceconfig.BalancerConfig{
-							Name: weightedtarget.Name,
-							Config: &weightedtarget.LBConfig{
-								Targets: map[string]weightedtarget.Target{
-									assertString(testLocalityIDs[2].ToString): {
-										Weight:      20,
-										ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-									},
-									assertString(testLocalityIDs[3].ToString): {
-										Weight:      80,
-										ChildPolicy: &internalserviceconfig.BalancerConfig{Name: roundrobin.Name},
-									},
-								},
-							},
-						},
-					},
-				},
-				IgnoreReresolutionRequests: true,
-			},
-			"priority-1": {
-				Config: &internalserviceconfig.BalancerConfig{
-					Name: clusterimpl.Name,
-					Config: &clusterimpl.LBConfig{
-						Cluster:     testClusterName2,
-						ChildPolicy: &internalserviceconfig.BalancerConfig{Name: "pick_first"},
-					},
-				},
-				IgnoreReresolutionRequests: false,
-			},
-		},
-		Priorities: []string{"priority-0-0", "priority-0-1", "priority-1"},
-	}
-	wantAddrs := []resolver.Address{
-		testAddrWithAttrs(testAddressStrs[0][0], nil, "priority-0-0", &testLocalityIDs[0]),
-		testAddrWithAttrs(testAddressStrs[0][1], nil, "priority-0-0", &testLocalityIDs[0]),
-		testAddrWithAttrs(testAddressStrs[1][0], nil, "priority-0-0", &testLocalityIDs[1]),
-		testAddrWithAttrs(testAddressStrs[1][1], nil, "priority-0-0", &testLocalityIDs[1]),
-		testAddrWithAttrs(testAddressStrs[2][0], nil, "priority-0-1", &testLocalityIDs[2]),
-		testAddrWithAttrs(testAddressStrs[2][1], nil, "priority-0-1", &testLocalityIDs[2]),
-		testAddrWithAttrs(testAddressStrs[3][0], nil, "priority-0-1", &testLocalityIDs[3]),
-		testAddrWithAttrs(testAddressStrs[3][1], nil, "priority-0-1", &testLocalityIDs[3]),
-		testAddrWithAttrs(testAddressStrs[4][0], nil, "priority-1", nil),
-		testAddrWithAttrs(testAddressStrs[4][1], nil, "priority-1", nil),
-	}
-
-	if diff := cmp.Diff(gotConfig, wantConfig); diff != "" {
-		t.Errorf("buildPriorityConfig() diff (-got +want) %v", diff)
-	}
-	if diff := cmp.Diff(gotAddrs, wantAddrs, addrCmpOpts); diff != "" {
-		t.Errorf("buildPriorityConfig() diff (-got +want) %v", diff)
-	}
-}
-
-// TestBuildPriorityConfigWithOutlierDetection tests the priority config
-// generation with Outlier Detection toggled on. Each top level balancer per
-// priority should be an Outlier Detection balancer, with a Cluster Impl
-// Balancer as a child.
-func TestBuildPriorityConfigWithOutlierDetection(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
-	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
-	}()
-
 	gotConfig, _, _ := buildPriorityConfig([]priorityConfig{
 		{
 			// EDS - OD config should be the top level for both of the EDS

@@ -120,22 +120,6 @@ var (
 	//
 	// TODO: Remove this function once the RBAC env var is removed.
 	UnregisterRBACHTTPFilterForTesting func()
-
-	// RegisterOutlierDetectionBalancerForTesting registers the Outlier
-	// Detection Balancer for testing purposes, regardless of the Outlier
-	// Detection environment variable.
-	//
-	// TODO: Remove this function once the Outlier Detection env var is removed.
-	RegisterOutlierDetectionBalancerForTesting func()
-
-	// UnregisterOutlierDetectionBalancerForTesting unregisters the Outlier
-	// Detection Balancer for testing purposes. This is needed because there is
-	// no way to unregister the Outlier Detection Balancer after registering it
-	// solely for testing purposes using
-	// RegisterOutlierDetectionBalancerForTesting().
-	//
-	// TODO: Remove this function once the Outlier Detection env var is removed.
-	UnregisterOutlierDetectionBalancerForTesting func()
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

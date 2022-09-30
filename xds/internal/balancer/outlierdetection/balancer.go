@@ -33,7 +33,6 @@ import (
 
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancer/gracefulswitch"
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/envconfig"
@@ -56,13 +55,6 @@ const Name = "outlier_detection_experimental"
 func init() {
 	if envconfig.XDSOutlierDetection {
 		balancer.Register(bb{})
-	}
-	// TODO: Remove these once the Outlier Detection env var is removed.
-	internal.RegisterOutlierDetectionBalancerForTesting = func() {
-		balancer.Register(bb{})
-	}
-	internal.UnregisterOutlierDetectionBalancerForTesting = func() {
-		internal.BalancerUnregister(Name)
 	}
 }
 

@@ -199,8 +199,6 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			internal.RegisterOutlierDetectionBalancerForTesting()
-			defer internal.UnregisterOutlierDetectionBalancerForTesting()
 			addresses, cancel := setupBackends(t)
 			defer cancel()
 
@@ -265,8 +263,6 @@ func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 // requiring counting RPC's, the Outlier Detection Balancer should start
 // ejecting any upstreams as specified in the configuration.
 func (s) TestNoopConfiguration(t *testing.T) {
-	internal.RegisterOutlierDetectionBalancerForTesting()
-	defer internal.UnregisterOutlierDetectionBalancerForTesting()
 	addresses, cancel := setupBackends(t)
 	defer cancel()
 

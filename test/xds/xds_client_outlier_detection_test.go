@@ -32,8 +32,6 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	testgrpc "google.golang.org/grpc/test/grpc_testing"
@@ -49,14 +47,6 @@ import (
 // Detection balancer. This test verifies that an RPC is able to proceed
 // normally with this configuration.
 func (s) TestOutlierDetection_NoopConfig(t *testing.T) {
-	oldOD := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
-	internal.RegisterOutlierDetectionBalancerForTesting()
-	defer func() {
-		envconfig.XDSOutlierDetection = oldOD
-		internal.UnregisterOutlierDetectionBalancerForTesting()
-	}()
-
 	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
 	defer cleanup1()
 
@@ -129,14 +119,6 @@ func clusterWithOutlierDetection(clusterName, edsServiceName string, secLevel e2
 // Detection Balancer should eject the connection to the backend which
 // constantly errors, and thus RPC's should mainly go to backend 1 and 2.
 func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
-	oldOD := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
-	internal.RegisterOutlierDetectionBalancerForTesting()
-	defer func() {
-		envconfig.XDSOutlierDetection = oldOD
-		internal.UnregisterOutlierDetectionBalancerForTesting()
-	}()
-
 	managementServer, nodeID, _, resolver, cleanup := e2e.SetupManagementServer(t, nil)
 	defer cleanup()
 
