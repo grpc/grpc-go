@@ -51,7 +51,7 @@ func (s *ecServer) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.Echo
 func main() {
 	flag.Parse()
 	netw := "unix"
-	socketAddr := fmt.Sprintf("\x00%v", *addr)
+	socketAddr := fmt.Sprintf("@%v", *addr)
 	lis, err := net.Listen(netw, socketAddr)
 	if err != nil {
 		log.Fatalf("net.Listen(%q, %q) failed: %v", netw, socketAddr, err)
