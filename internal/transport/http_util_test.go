@@ -214,3 +214,27 @@ func (s) TestParseDialTarget(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkDecodeGrpcMessage(b *testing.B) {
+	input := "Hello, %E4%B8%96%E7%95%8C"
+	want := "Hello, 世界"
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		got := decodeGrpcMessage(input)
+		if got != want {
+			b.Fatalf("decodeGrpcMessage(%q) = %s, want %s", input, got, want)
+		}
+	}
+}
+
+func BenchmarkEncodeGrpcMessage(b *testing.B) {
+	input := "Hello, 世界"
+	want := "Hello, %E4%B8%96%E7%95%8C"
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		got := encodeGrpcMessage(input)
+		if got != want {
+			b.Fatalf("encodeGrpcMessage(%q) = %s, want %s", input, got, want)
+		}
+	}
+}
