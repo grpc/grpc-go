@@ -39,6 +39,7 @@ import (
 	imetadata "google.golang.org/grpc/internal/metadata"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/serviceconfig"
+	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -195,6 +196,13 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 	rpcInfo := iresolver.RPCInfo{Context: ctx, Method: method}
 	rpcConfig, err := cc.safeConfigSelector.SelectConfig(rpcInfo)
 	if err != nil {
+		if st, ok := status.FromError(err); ok {
+			// Restrict the code to the list allowed by gRFC A54.
+			if istatus.IsRestrictedControlPlaneCode(st) {
+				err = status.Errorf(codes.Internal, "config selector returned illegal status: %v", err)
+			}
+			return nil, err
+		}
 		return nil, toRPCErr(err)
 	}
 
