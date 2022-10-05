@@ -43,6 +43,7 @@ func init() {
 	internal.ClearGlobalDialOptions = func() {
 		extraDialOptions = nil
 	}
+	internal.WithBinaryLogger = withBinaryLogger
 }
 
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
@@ -403,9 +404,9 @@ func WithStatsHandler(h stats.Handler) DialOption {
 	})
 }
 
-// WithBinaryLogger returns a DialOption that specifies the binary logger for
+// withBinaryLogger returns a DialOption that specifies the binary logger for
 // this ClientConn.
-func WithBinaryLogger(bl binarylog.Logger) DialOption {
+func withBinaryLogger(bl binarylog.Logger) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.binaryLogger = bl
 	})

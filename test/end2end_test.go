@@ -8217,8 +8217,8 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 	csbl := newMockBinaryLogger()
 	ssbl := newMockBinaryLogger()
 
-	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(grpc.WithBinaryLogger(csbl))
-	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(grpc.BinaryLogger(ssbl))
+	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.Logger) grpc.DialOption)(csbl))
+	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.Logger) grpc.ServerOption)(ssbl))
 	defer func() {
 		internal.ClearGlobalDialOptions()
 		internal.ClearGlobalServerOptions()
@@ -8262,18 +8262,12 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ss.Client.FullDuplexCall failed: %f", err)
 	}
-	rpcDone := make(chan struct{})
-	go func() {
-		for {
-			_, err := stream.Recv()
-			if err == io.EOF {
-				close(rpcDone)
-				return
-			}
-		}
-	}()
+
 	stream.CloseSend()
-	<-rpcDone
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("unexpected error: %v, expected an EOF error", err)
+	}
+
 	if csbl.mml.events != 9 {
 		t.Fatalf("want 9 client side binary logging events, got %v", csbl.mml.events)
 	}

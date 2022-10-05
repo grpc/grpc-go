@@ -79,6 +79,7 @@ func init() {
 	internal.ClearGlobalServerOptions = func() {
 		extraServerOptions = nil
 	}
+	internal.BinaryLogger = binaryLogger
 	internal.JoinServerOptions = newJoinServerOption
 }
 
@@ -470,9 +471,9 @@ func StatsHandler(h stats.Handler) ServerOption {
 	})
 }
 
-// BinaryLogger returns a ServerOption that can set the binary logger for the
+// binaryLogger returns a ServerOption that can set the binary logger for the
 // server.
-func BinaryLogger(bl binarylog.Logger) ServerOption {
+func binaryLogger(bl binarylog.Logger) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.binaryLogger = bl
 	})

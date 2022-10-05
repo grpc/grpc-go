@@ -1523,16 +1523,6 @@ func (ss *serverStream) SendHeader(md metadata.MD) error {
 			binlog.Log(sh)
 		}
 	}
-	if len(ss.binlogs) != 0 && !ss.serverHeaderBinlogged {
-		h, _ := ss.s.Header()
-		sh := &binarylog.ServerHeader{
-			Header: h,
-		}
-		ss.serverHeaderBinlogged = true
-		for _, binlog := range ss.binlogs {
-			binlog.Log(sh)
-		}
-	}
 	return err
 }
 
@@ -1648,9 +1638,11 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 	}
 	if err := recv(ss.p, ss.codec, ss.s, ss.dc, m, ss.maxReceiveMessageSize, payInfo, ss.decomp); err != nil {
 		if err == io.EOF {
-			chc := &binarylog.ClientHalfClose{}
-			for _, binlog := range ss.binlogs {
-				binlog.Log(chc)
+			if len(ss.binlogs) != 0 {
+				chc := &binarylog.ClientHalfClose{}
+				for _, binlog := range ss.binlogs {
+					binlog.Log(chc)
+				}
 			}
 			return err
 		}
