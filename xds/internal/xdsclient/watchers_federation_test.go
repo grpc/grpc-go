@@ -22,8 +22,26 @@ import (
 	"testing"
 
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+)
+
+var (
+	testLocalities = []xdsresource.Locality{
+		{
+			Endpoints: []xdsresource.Endpoint{{Address: "addr1:314"}},
+			ID:        internal.LocalityID{SubZone: "locality-1"},
+			Priority:  1,
+			Weight:    1,
+		},
+		{
+			Endpoints: []xdsresource.Endpoint{{Address: "addr2:159"}},
+			ID:        internal.LocalityID{SubZone: "locality-2"},
+			Priority:  0,
+			Weight:    1,
+		},
+	}
 )
 
 func overrideFedEnvVar(t *testing.T) {
