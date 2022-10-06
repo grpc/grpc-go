@@ -163,6 +163,7 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.S
 		return
 	}
 	if !child.started {
+		b.logger.Warningf("priority: ignoring update from child %q which is not in started state: %+v", childName, s)
 		return
 	}
 	child.state = s
