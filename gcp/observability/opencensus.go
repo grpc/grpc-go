@@ -117,8 +117,8 @@ func startOpenCensus(config *config) error {
 	}
 
 	// Only register default StatsHandlers if other things are setup correctly.
-	internal.AddExtraServerOptions.(func(opt ...grpc.ServerOption))(grpc.StatsHandler(&ocgrpc.ServerHandler{StartOptions: so}))
-	internal.AddExtraDialOptions.(func(opt ...grpc.DialOption))(grpc.WithStatsHandler(&ocgrpc.ClientHandler{StartOptions: so}))
+	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(grpc.StatsHandler(&ocgrpc.ServerHandler{StartOptions: so}))
+	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(grpc.WithStatsHandler(&ocgrpc.ClientHandler{StartOptions: so}))
 	logger.Infof("Enabled OpenCensus StatsHandlers for clients and servers")
 
 	return nil
@@ -128,8 +128,8 @@ func startOpenCensus(config *config) error {
 // packages if exporter was created.
 func stopOpenCensus() {
 	if exporter != nil {
-		internal.ClearExtraDialOptions()
-		internal.ClearExtraServerOptions()
+		internal.ClearGlobalDialOptions()
+		internal.ClearGlobalServerOptions()
 
 		// Call these unconditionally, doesn't matter if not registered, will be
 		// a noop if not registered.
