@@ -320,7 +320,7 @@ func (bg *BalancerGroup) AddWithClientConn(id, balancerName string, cc balancer.
 	if bg.outgoingStarted {
 		if old, ok := bg.balancerCache.Remove(id); ok {
 			sbc, _ = old.(*subBalancerWrapper)
-			if sbc != nil && sbc.builder.Name() != builder.Name() {
+			if sbc != nil && sbc.builder != builder {
 				// If the sub-balancer in cache was built with a different
 				// balancer builder, don't use it, cleanup this old-balancer,
 				// and behave as sub-balancer is not found in cache.
