@@ -25,6 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -63,6 +64,12 @@ var (
 		protocmp.Transform(),
 	}
 )
+
+func overrideFedEnvVar(t *testing.T) {
+	oldFed := envconfig.XDSFederation
+	envconfig.XDSFederation = true
+	t.Cleanup(func() { envconfig.XDSFederation = oldFed })
+}
 
 // watchAndFetchNewController starts a CDS watch on the client for the given
 // resourceName, and tries to receive a new controller from the ctrlCh.
