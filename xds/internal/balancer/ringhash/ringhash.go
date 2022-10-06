@@ -441,7 +441,9 @@ func (b *ringhashBalancer) regeneratePicker() {
 	b.picker = newPicker(b.ring, b.logger)
 }
 
-func (b *ringhashBalancer) Close() {}
+func (b *ringhashBalancer) Close() {
+	b.logger.Infof("Shutdown")
+}
 
 func (b *ringhashBalancer) ExitIdle() {
 	// ExitIdle implementation is a no-op because connections are either
