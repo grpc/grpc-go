@@ -106,8 +106,8 @@ type ManagementServerOptions struct {
 // resources allocated by the management server.
 func StartManagementServer(opts *ManagementServerOptions) (*ManagementServer, error) {
 	// Create a snapshot cache. The first parameter controls whether the server
-	// will wait for all resources to explicitly named in the request before
-	// responding to any of them.
+	// should wait for all resources to be explicitly named in the request
+	// before responding to any of them.
 	wait := true
 	if opts != nil {
 		wait = !opts.AllowResourceSubset
