@@ -620,7 +620,7 @@ func (s) TestRDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// No need to spin up a management server since we don't want the client to
 	// receive a response for the watch being registered by the test.
 
-	// Create an xDS client talking to a non-existant management server.
+	// Create an xDS client talking to a non-existent management server.
 	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI:    "dummy management server address",
