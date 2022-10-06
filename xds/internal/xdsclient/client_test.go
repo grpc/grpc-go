@@ -31,7 +31,6 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 	"google.golang.org/grpc/xds/internal/xdsclient/pubsub"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-	"google.golang.org/protobuf/types/known/anypb"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -146,49 +145,6 @@ func (c *testController) ReportLoad(server string) (*load.Store, func()) {
 
 func (c *testController) Close() {
 	c.done.Fire()
-}
-
-// TestWatchCallAnotherWatch covers the case where watch() is called inline by a
-// callback. It makes sure it doesn't cause a deadlock.
-func (s) TestWatchCallAnotherWatch(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	// Start a watch for some resource, so that the controller and update
-	// handlers are built for this authority. The test needs these to make an
-	// inline watch in a callback.
-	client, ctrlCh := testClientSetup(t, false)
-	newWatch(t, client, xdsresource.ClusterResource, "doesnot-matter")
-	controller, updateHandler := getControllerAndPubsub(ctx, t, client, ctrlCh, xdsresource.ClusterResource, "doesnot-matter")
-
-	clusterUpdateCh := testutils.NewChannel()
-	firstTime := true
-	client.WatchCluster(testCDSName, func(update xdsresource.ClusterUpdate, err error) {
-		clusterUpdateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: update, Err: err})
-		// Calls another watch inline, to ensure there's deadlock.
-		client.WatchCluster("another-random-name", func(xdsresource.ClusterUpdate, error) {})
-
-		if _, err := controller.addWatches[xdsresource.ClusterResource].Receive(ctx); firstTime && err != nil {
-			t.Fatalf("want new watch to start, got error %v", err)
-		}
-		firstTime = false
-	})
-	if _, err := controller.addWatches[xdsresource.ClusterResource].Receive(ctx); err != nil {
-		t.Fatalf("want new watch to start, got error %v", err)
-	}
-
-	wantUpdate := xdsresource.ClusterUpdate{ClusterName: testEDSName}
-	updateHandler.NewClusters(map[string]xdsresource.ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate}}, xdsresource.UpdateMetadata{})
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	// The second update needs to be different in the underlying resource proto
-	// for the watch callback to be invoked.
-	wantUpdate2 := xdsresource.ClusterUpdate{ClusterName: testEDSName + "2", Raw: &anypb.Any{}}
-	updateHandler.NewClusters(map[string]xdsresource.ClusterUpdateErrTuple{testCDSName: {Update: wantUpdate2}}, xdsresource.UpdateMetadata{})
-	if err := verifyClusterUpdate(ctx, clusterUpdateCh, wantUpdate2, nil); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func verifyListenerUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.ListenerUpdate, wantErr error) error {
