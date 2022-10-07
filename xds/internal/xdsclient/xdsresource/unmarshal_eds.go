@@ -19,6 +19,7 @@ package xdsresource
 
 import (
 	"fmt"
+	"math"
 	"net"
 	"strconv"
 
@@ -118,6 +119,7 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment, logger *grpclog.Pr
 		ret.Drops = append(ret.Drops, parseDropPolicy(dropPolicy))
 	}
 	priorities := make(map[uint32]map[string]bool)
+	sumOfWeights := make(map[uint32]uint64)
 	for _, locality := range m.Endpoints {
 		l := locality.GetLocality()
 		if l == nil {
@@ -128,16 +130,20 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment, logger *grpclog.Pr
 			logger.Warningf("Ignoring locality %s with weight 0", pretty.ToJSON(l))
 			continue
 		}
-		lid := internal.LocalityID{
-			Region:  l.Region,
-			Zone:    l.Zone,
-			SubZone: l.SubZone,
-		}
 		priority := locality.GetPriority()
+		sumOfWeights[priority] += uint64(weight)
+		if sumOfWeights[priority] > math.MaxUint32 {
+			return EndpointsUpdate{}, fmt.Errorf("sum of weights of localities at the same priority %d exceeded maximal value", priority)
+		}
 		localitiesWithPriority := priorities[priority]
 		if localitiesWithPriority == nil {
 			localitiesWithPriority = make(map[string]bool)
 			priorities[priority] = localitiesWithPriority
+		}
+		lid := internal.LocalityID{
+			Region:  l.Region,
+			Zone:    l.Zone,
+			SubZone: l.SubZone,
 		}
 		lidStr, _ := lid.ToString()
 		if localitiesWithPriority[lidStr] {
