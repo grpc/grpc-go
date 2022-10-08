@@ -30,8 +30,6 @@ import (
 	"google.golang.org/grpc/balancer/roundrobin"
 	"google.golang.org/grpc/balancer/weightedtarget"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal"
-	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/testutils"
@@ -533,13 +531,6 @@ func newLBConfigWithOneEDSAndOutlierDetection(edsServiceName string, odCfg outli
 // Configuration sent downward should have a top level Outlier Detection Policy
 // for each priority.
 func (s) TestOutlierDetection(t *testing.T) {
-	oldOutlierDetection := envconfig.XDSOutlierDetection
-	envconfig.XDSOutlierDetection = true
-	internal.RegisterOutlierDetectionBalancerForTesting()
-	defer func() {
-		envconfig.XDSOutlierDetection = oldOutlierDetection
-	}()
-
 	edsLBCh := testutils.NewChannel()
 	xdsC, cleanup := setup(edsLBCh)
 	defer cleanup()

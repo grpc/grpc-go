@@ -374,9 +374,17 @@ func (s) TestBalancerGroup_locality_caching_not_readd_within_timeout(t *testing.
 	}
 }
 
-// Wrap the rr builder, so it behaves the same, but has a different pointer.
+// Wrap the rr builder, so it behaves the same, but has a different name.
 type noopBalancerBuilderWrapper struct {
 	balancer.Builder
+}
+
+func init() {
+	balancer.Register(&noopBalancerBuilderWrapper{Builder: rrBuilder})
+}
+
+func (*noopBalancerBuilderWrapper) Name() string {
+	return "noopBalancerBuilderWrapper"
 }
 
 // After removing a sub-balancer, re-add with same ID, but different balancer

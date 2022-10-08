@@ -37,7 +37,10 @@ import (
 	"google.golang.org/grpc/resolver"
 )
 
-const defaultTestTimeout = 5 * time.Second
+const (
+	defaultTestTimeout      = 5 * time.Second
+	defaultTestShortTimeout = 100 * time.Millisecond
+)
 
 type s struct {
 	grpctest.Tester
@@ -1525,11 +1528,21 @@ func (s) TestPriority_ChildPolicyUpdatePickerInline(t *testing.T) {
 	}
 }
 
-// When the child policy's configured to ignore reresolution requests, the
-// ResolveNow() calls from this child should be all ignored.
+// TestPriority_IgnoreReresolutionRequest tests the case where the priority
+// policy has a single child policy. The test verifies that ResolveNow() calls
+// from the child policy are ignored based on the value of the
+// IgnoreReresolutionRequests field in the configuration.
 func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+	// Register a stub balancer to act the child policy of the priority policy.
+	// Provide an init function to the stub balancer to capture the ClientConn
+	// passed to the child policy.
+	ccCh := testutils.NewChannel()
+	childPolicyName := t.Name()
+	stub.Register(childPolicyName, stub.BalancerFuncs{
+		Init: func(data *stub.BalancerData) {
+			ccCh.Send(data.ClientConn)
+		},
+	})
 
 	cc := testutils.NewTestClientConn(t)
 	bb := balancer.Get(Name)
@@ -1547,7 +1560,7 @@ func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
 		BalancerConfig: &LBConfig{
 			Children: map[string]*Child{
 				"child-0": {
-					Config:                     &internalserviceconfig.BalancerConfig{Name: resolveNowBalancerName},
+					Config:                     &internalserviceconfig.BalancerConfig{Name: childPolicyName},
 					IgnoreReresolutionRequests: true,
 				},
 			},
@@ -1557,13 +1570,14 @@ func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// This is the balancer.ClientConn that the inner resolverNowBalancer is
-	// built with.
-	balancerCCI, err := resolveNowBalancerCCCh.Receive(ctx)
+	// Retrieve the ClientConn passed to the child policy.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	val, err := ccCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout waiting for ClientConn from balancer builder")
+		t.Fatalf("timeout waiting for ClientConn from the child policy")
 	}
-	balancerCC := balancerCCI.(balancer.ClientConn)
+	balancerCC := val.(balancer.ClientConn)
 
 	// Since IgnoreReresolutionRequests was set to true, all ResolveNow() calls
 	// should be ignored.
@@ -1573,7 +1587,7 @@ func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
 	select {
 	case <-cc.ResolveNowCh:
 		t.Fatalf("got unexpected ResolveNow() call")
-	case <-time.After(time.Millisecond * 100):
+	case <-time.After(defaultTestShortTimeout):
 	}
 
 	// Send another update to set IgnoreReresolutionRequests to false.
@@ -1586,7 +1600,7 @@ func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
 		BalancerConfig: &LBConfig{
 			Children: map[string]*Child{
 				"child-0": {
-					Config:                     &internalserviceconfig.BalancerConfig{Name: resolveNowBalancerName},
+					Config:                     &internalserviceconfig.BalancerConfig{Name: childPolicyName},
 					IgnoreReresolutionRequests: false,
 				},
 			},
@@ -1606,12 +1620,38 @@ func (s) TestPriority_IgnoreReresolutionRequest(t *testing.T) {
 
 }
 
-// When the child policy's configured to ignore reresolution requests, the
-// ResolveNow() calls from this child should be all ignored, from the other
-// children are forwarded.
+type wrappedRoundRobinBalancerBuilder struct {
+	name string
+	ccCh *testutils.Channel
+}
+
+func (w *wrappedRoundRobinBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	w.ccCh.Send(cc)
+	rrBuilder := balancer.Get(roundrobin.Name)
+	return &wrappedRoundRobinBalancer{Balancer: rrBuilder.Build(cc, opts)}
+}
+
+func (w *wrappedRoundRobinBalancerBuilder) Name() string {
+	return w.name
+}
+
+type wrappedRoundRobinBalancer struct {
+	balancer.Balancer
+}
+
+// TestPriority_IgnoreReresolutionRequestTwoChildren tests the case where the
+// priority policy has two child policies, one of them has the
+// IgnoreReresolutionRequests field set to true while the other one has it set
+// to false. The test verifies that ResolveNow() calls from the child which is
+// set to ignore reresolution requests are ignored, while calls from the other
+// child are processed.
 func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+	// Register a wrapping balancer to act the child policy of the priority
+	// policy. The wrapping balancer builder's Build() method pushes the
+	// balancer.ClientConn on a channel for this test to use.
+	ccCh := testutils.NewChannel()
+	childPolicyName := t.Name()
+	balancer.Register(&wrappedRoundRobinBalancerBuilder{name: childPolicyName, ccCh: ccCh})
 
 	cc := testutils.NewTestClientConn(t)
 	bb := balancer.Get(Name)
@@ -1630,11 +1670,11 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 		BalancerConfig: &LBConfig{
 			Children: map[string]*Child{
 				"child-0": {
-					Config:                     &internalserviceconfig.BalancerConfig{Name: resolveNowBalancerName},
+					Config:                     &internalserviceconfig.BalancerConfig{Name: childPolicyName},
 					IgnoreReresolutionRequests: true,
 				},
 				"child-1": {
-					Config: &internalserviceconfig.BalancerConfig{Name: resolveNowBalancerName},
+					Config: &internalserviceconfig.BalancerConfig{Name: childPolicyName},
 				},
 			},
 			Priorities: []string{"child-0", "child-1"},
@@ -1643,12 +1683,14 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// This is the balancer.ClientConn from p0.
-	balancerCCI0, err := resolveNowBalancerCCCh.Receive(ctx)
+	// Retrieve the ClientConn passed to the child policy from p0.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	val, err := ccCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout waiting for ClientConn from balancer builder 0")
+		t.Fatalf("timeout waiting for ClientConn from the child policy")
 	}
-	balancerCC0 := balancerCCI0.(balancer.ClientConn)
+	balancerCC0 := val.(balancer.ClientConn)
 
 	// Set p0 to transient failure, p1 will be started.
 	addrs0 := <-cc.NewSubConnAddrsCh
@@ -1658,14 +1700,12 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 	sc0 := <-cc.NewSubConnCh
 	pb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 
-	// This is the balancer.ClientConn from p1.
-	ctx1, cancel1 := context.WithTimeout(context.Background(), time.Second)
-	defer cancel1()
-	balancerCCI1, err := resolveNowBalancerCCCh.Receive(ctx1)
+	// Retrieve the ClientConn passed to the child policy from p1.
+	val, err = ccCh.Receive(ctx)
 	if err != nil {
-		t.Fatalf("timeout waiting for ClientConn from balancer builder 1")
+		t.Fatalf("timeout waiting for ClientConn from the child policy")
 	}
-	balancerCC1 := balancerCCI1.(balancer.ClientConn)
+	balancerCC1 := val.(balancer.ClientConn)
 
 	// Since IgnoreReresolutionRequests was set to true for p0, ResolveNow()
 	// from p0 should all be ignored.
@@ -1675,7 +1715,7 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 	select {
 	case <-cc.ResolveNowCh:
 		t.Fatalf("got unexpected ResolveNow() call")
-	case <-time.After(time.Millisecond * 100):
+	case <-time.After(defaultTestShortTimeout):
 	}
 
 	// But IgnoreReresolutionRequests was false for p1, ResolveNow() from p1
@@ -1683,7 +1723,7 @@ func (s) TestPriority_IgnoreReresolutionRequestTwoChildren(t *testing.T) {
 	balancerCC1.ResolveNow(resolver.ResolveNowOptions{})
 	select {
 	case <-cc.ResolveNowCh:
-	case <-time.After(time.Second):
+	case <-time.After(defaultTestShortTimeout):
 		t.Fatalf("timeout waiting for ResolveNow()")
 	}
 }

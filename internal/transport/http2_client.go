@@ -40,6 +40,7 @@ import (
 	icredentials "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/internal/grpcutil"
 	imetadata "google.golang.org/grpc/internal/metadata"
+	istatus "google.golang.org/grpc/internal/status"
 	"google.golang.org/grpc/internal/syscall"
 	"google.golang.org/grpc/internal/transport/networktype"
 	"google.golang.org/grpc/keepalive"
@@ -589,7 +590,11 @@ func (t *http2Client) getTrAuthData(ctx context.Context, audience string) (map[s
 	for _, c := range t.perRPCCreds {
 		data, err := c.GetRequestMetadata(ctx, audience)
 		if err != nil {
-			if _, ok := status.FromError(err); ok {
+			if st, ok := status.FromError(err); ok {
+				// Restrict the code to the list allowed by gRFC A54.
+				if istatus.IsRestrictedControlPlaneCode(st) {
+					err = status.Errorf(codes.Internal, "transport: received per-RPC creds error with illegal status: %v", err)
+				}
 				return nil, err
 			}
 
@@ -618,7 +623,14 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 		}
 		data, err := callCreds.GetRequestMetadata(ctx, audience)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "transport: %v", err)
+			if st, ok := status.FromError(err); ok {
+				// Restrict the code to the list allowed by gRFC A54.
+				if istatus.IsRestrictedControlPlaneCode(st) {
+					err = status.Errorf(codes.Internal, "transport: received per-RPC creds error with illegal status: %v", err)
+				}
+				return nil, err
+			}
+			return nil, status.Errorf(codes.Internal, "transport: per-RPC creds failed due to error: %v", err)
 		}
 		callAuthData = make(map[string]string, len(data))
 		for k, v := range data {

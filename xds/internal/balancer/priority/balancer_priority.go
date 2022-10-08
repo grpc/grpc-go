@@ -162,6 +162,10 @@ func (b *priorityBalancer) handleChildStateUpdate(childName string, s balancer.S
 		b.logger.Warningf("priority: child balancer not found for child %v", childName)
 		return
 	}
+	if !child.started {
+		b.logger.Warningf("priority: ignoring update from child %q which is not in started state: %+v", childName, s)
+		return
+	}
 	child.state = s
 
 	// We start/stop the init timer of this child based on the new connectivity
