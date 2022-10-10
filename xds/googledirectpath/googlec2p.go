@@ -140,7 +140,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	}, nil
 }
 
-func (b *c2pResolverBuilder) Scheme() string {
+func (b c2pResolverBuilder) Scheme() string {
 	return b.scheme
 }
 
