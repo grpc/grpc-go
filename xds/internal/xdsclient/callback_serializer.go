@@ -23,7 +23,7 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 )
 
-// CallbackSerializer provides a mechanism to schedule callbacks in a
+// callbackSerializer provides a mechanism to schedule callbacks in a
 // synchronized manner. It provides a FIFO guarantee on the order of execution
 // of scheduled callbacks.
 //
@@ -32,15 +32,15 @@ import (
 // Close() method needs to be called.
 //
 // This type is safe for concurrent access.
-type CallbackSerializer struct {
+type callbackSerializer struct {
 	closed    *grpcsync.Event
 	done      *grpcsync.Event
 	callbacks *buffer.Unbounded
 }
 
-// NewCallbackSerializer returns a new CallbackSerializer instance.
-func NewCallbackSerializer() *CallbackSerializer {
-	t := &CallbackSerializer{
+// newCallbackSerializer returns a new CallbackSerializer instance.
+func newCallbackSerializer() *callbackSerializer {
+	t := &callbackSerializer{
 		closed:    grpcsync.NewEvent(),
 		done:      grpcsync.NewEvent(),
 		callbacks: buffer.NewUnbounded(),
@@ -53,7 +53,7 @@ func NewCallbackSerializer() *CallbackSerializer {
 // will be scheduled once this function returns. If a callback is currently
 // being executed, this functions blocks until execution of that callback
 // finishes before returning.
-func (t *CallbackSerializer) Close() {
+func (t *callbackSerializer) Close() {
 	if t.closed.HasFired() {
 		return
 	}
@@ -62,14 +62,14 @@ func (t *CallbackSerializer) Close() {
 }
 
 // Schedule adds a callback to be scheduled after existing callbacks are run.
-func (t *CallbackSerializer) Schedule(f func()) {
+func (t *callbackSerializer) Schedule(f func()) {
 	if t.closed.HasFired() {
 		return
 	}
 	t.callbacks.Put(f)
 }
 
-func (t *CallbackSerializer) run() {
+func (t *callbackSerializer) run() {
 	defer func() {
 		t.done.Fire()
 	}()

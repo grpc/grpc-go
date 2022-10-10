@@ -33,7 +33,7 @@ import (
 // TestCallbackSerializer_Schedule_FIFO verifies that callbacks are executed in
 // the same order in which they were scheduled.
 func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
-	cs := NewCallbackSerializer()
+	cs := newCallbackSerializer()
 	defer cs.Close()
 
 	// We have two channels, one to record the order of scheduling, and the
@@ -96,7 +96,7 @@ func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 // TestCallbackSerializer_Schedule_RunToCompletion verifies that all scheduled
 // callbacks are run to completion.
 func (s) TestCallbackSerializer_Schedule_RunToCompletion(t *testing.T) {
-	cs := NewCallbackSerializer()
+	cs := newCallbackSerializer()
 	defer cs.Close()
 
 	// We have two channels, one to record the order of scheduling, and the
@@ -158,7 +158,7 @@ func (s) TestCallbackSerializer_Schedule_RunToCompletion(t *testing.T) {
 // TestCallbackSerializer_Schedule_Close verifies that callbacks in the queue
 // are not executed once Close() returns.
 func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
-	cs := NewCallbackSerializer()
+	cs := newCallbackSerializer()
 
 	// Schedule a callback which blocks until signalled by the test to finish.
 	firstCallbackStartedCh := make(chan struct{})
