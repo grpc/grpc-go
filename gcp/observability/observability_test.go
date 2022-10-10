@@ -121,7 +121,7 @@ func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
 		CloudLogging: &cloudLogging{
 			ClientRPCEvents: []clientRPCEvents{
 				{
-					Method:           []string{":-)"},
+					Methods:          []string{":-)"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
@@ -150,7 +150,7 @@ func (s) TestRefuseStartWithExcludeAndWildCardAll(t *testing.T) {
 		CloudLogging: &cloudLogging{
 			ClientRPCEvents: []clientRPCEvents{
 				{
-					Method:           []string{"*"},
+					Methods:          []string{"*"},
 					Exclude:          true,
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
@@ -222,7 +222,7 @@ func (s) TestBothConfigEnvVarsSet(t *testing.T) {
 		CloudLogging: &cloudLogging{
 			ClientRPCEvents: []clientRPCEvents{
 				{
-					Method:           []string{":-)"},
+					Methods:          []string{":-)"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
@@ -244,7 +244,7 @@ func (s) TestBothConfigEnvVarsSet(t *testing.T) {
 		CloudLogging: &cloudLogging{
 			ClientRPCEvents: []clientRPCEvents{
 				{
-					Method:           []string{"*"},
+					Methods:          []string{"*"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
@@ -421,7 +421,7 @@ func (s) TestStartErrorsThenEnd(t *testing.T) {
 		CloudLogging: &cloudLogging{
 			ClientRPCEvents: []clientRPCEvents{
 				{
-					Method:           []string{":-)"},
+					Methods:          []string{":-)"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},

@@ -61,7 +61,7 @@ func fetchDefaultProjectID(ctx context.Context) string {
 	return credentials.ProjectID
 }
 
-func validateMethods(methods []string, exclude bool) error {
+func validateLogEventMethod(methods []string, exclude bool) error {
 	for _, method := range methods {
 		if method == "*" {
 			if exclude {
@@ -77,17 +77,17 @@ func validateMethods(methods []string, exclude bool) error {
 	return nil
 }
 
-func validateFilters(config *config) error {
+func validateLoggingEvents(config *config) error {
 	if config.CloudLogging == nil {
 		return nil
 	}
 	for _, clientRPCEvent := range config.CloudLogging.ClientRPCEvents {
-		if err := validateMethods(clientRPCEvent.Method, clientRPCEvent.Exclude); err != nil {
+		if err := validateLogEventMethod(clientRPCEvent.Methods, clientRPCEvent.Exclude); err != nil {
 			return fmt.Errorf("error in clientRPCEvent method: %v", err)
 		}
 	}
 	for _, serverRPCEvent := range config.CloudLogging.ServerRPCEvents {
-		if err := validateMethods(serverRPCEvent.Method, serverRPCEvent.Exclude); err != nil {
+		if err := validateLogEventMethod(serverRPCEvent.Methods, serverRPCEvent.Exclude); err != nil {
 			return fmt.Errorf("error in serverRPCEvent method: %v", err)
 		}
 	}
@@ -102,7 +102,7 @@ func unmarshalAndVerifyConfig(rawJSON json.RawMessage) (*config, error) {
 	if err := json.Unmarshal(rawJSON, &config); err != nil {
 		return nil, fmt.Errorf("error parsing observability config: %v", err)
 	}
-	if err := validateFilters(&config); err != nil {
+	if err := validateLoggingEvents(&config); err != nil {
 		return nil, fmt.Errorf("error parsing observability config: %v", err)
 	}
 	if config.CloudTrace != nil && (config.CloudTrace.SamplingRate > 1 || config.CloudTrace.SamplingRate < 0) {
@@ -139,7 +139,7 @@ func ensureProjectIDInObservabilityConfig(ctx context.Context, config *config) e
 }
 
 type clientRPCEvents struct {
-	// Method is a list of strings which can select a group of methods. By
+	// Methods is a list of strings which can select a group of methods. By
 	// default, the list is empty, matching no methods.
 	//
 	// The value of the method is in the form of <service>/<method>.
@@ -160,11 +160,11 @@ type clientRPCEvents struct {
 	//    here “goo” is the package name.
 	//    2."goo.Foo/*" selects all methods from service "goo.Foo"
 	//    3. "*" selects all methods from all services.
-	Method []string `json:"method,omitempty"`
-	// Exclude represents whether the methods denoted by Method should be
+	Methods []string `json:"method,omitempty"`
+	// Exclude represents whether the methods denoted by Methods should be
 	// excluded from logging. The default value is false, meaning the methods
-	// denoted by Method are included in the logging. If Exclude is true, the
-	// wildcard `*` cannot be used as value of an entry in Method.
+	// denoted by Methods are included in the logging. If Exclude is true, the
+	// wildcard `*` cannot be used as value of an entry in Methods.
 	Exclude bool `json:"exclude,omitempty"`
 	// MaxMetadataBytes is the maximum number of bytes of each header to log. If
 	// the size of the metadata is greater than the defined limit, content past
@@ -177,7 +177,7 @@ type clientRPCEvents struct {
 }
 
 type serverRPCEvents struct {
-	// Method is a list of strings which can select a group of methods. By
+	// Methods is a list of strings which can select a group of methods. By
 	// default, the list is empty, matching no methods.
 	//
 	// The value of the method is in the form of <service>/<method>.
@@ -198,11 +198,11 @@ type serverRPCEvents struct {
 	//    here “goo” is the package name.
 	//    2."goo.Foo/*" selects all methods from service "goo.Foo"
 	//    3. "*" selects all methods from all services.
-	Method []string `json:"method,omitempty"`
-	// Exclude represents whether the methods denoted by Method should be
+	Methods []string `json:"method,omitempty"`
+	// Exclude represents whether the methods denoted by Methods should be
 	// excluded from logging. The default value is false, meaning the methods
-	// denoted by Method are included in the logging. If Exclude is true, the
-	// wildcard `*` cannot be used as value of an entry in Method.
+	// denoted by Methods are included in the logging. If Exclude is true, the
+	// wildcard `*` cannot be used as value of an entry in Methods.
 	Exclude bool `json:"exclude,omitempty"`
 	// MaxMetadataBytes is the maximum number of bytes of each header to log. If
 	// the size of the metadata is greater than the defined limit, content past

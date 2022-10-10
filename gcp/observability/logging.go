@@ -74,8 +74,8 @@ func setPeerIfPresent(binlogEntry *binlogpb.GrpcLogEntry, grpcLogEntry *grpcLogE
 
 var loggerTypeToEventLogger = map[binlogpb.GrpcLogEntry_Logger]loggerType{
 	binlogpb.GrpcLogEntry_LOGGER_UNKNOWN: loggerUnknown,
-	binlogpb.GrpcLogEntry_LOGGER_CLIENT:  client,
-	binlogpb.GrpcLogEntry_LOGGER_SERVER:  server,
+	binlogpb.GrpcLogEntry_LOGGER_CLIENT:  loggerClient,
+	binlogpb.GrpcLogEntry_LOGGER_SERVER:  loggerServer,
 }
 
 type eventType int
@@ -83,20 +83,20 @@ type eventType int
 const (
 	// eventTypeUnknown is an unknown event type.
 	eventTypeUnknown eventType = iota
-	// clientHeader is a header sent from client to server.
-	clientHeader
-	// serverHeader is a header sent from server to client.
-	serverHeader
-	// clientMessage is a message sent from client to server.
-	clientMessage
-	// serverMessage is a message sent from server to client.
-	serverMessage
-	// clientHalfClose is a signal that the client is done sending.
-	clientHalfClose
-	// serverTrailer indicated the end of a gRPC call.
-	serverTrailer
-	// cancel is a signal that the rpc is canceled.
-	cancel
+	// eventTypeClientHeader is a header sent from client to server.
+	eventTypeClientHeader
+	// eventTypeServerHeader is a header sent from server to client.
+	eventTypeServerHeader
+	// eventTypeClientMessage is a message sent from client to server.
+	eventTypeClientMessage
+	// eventTypeServerMessage is a message sent from server to client.
+	eventTypeServerMessage
+	// eventTypeClientHalfClose is a signal that the loggerClient is done sending.
+	eventTypeClientHalfClose
+	// eventTypeServerTrailer indicated the end of a gRPC call.
+	eventTypeServerTrailer
+	// eventTypeCancel is a signal that the rpc is canceled.
+	eventTypeCancel
 )
 
 func (t eventType) MarshalJSON() ([]byte, error) {
@@ -104,19 +104,19 @@ func (t eventType) MarshalJSON() ([]byte, error) {
 	switch t {
 	case eventTypeUnknown:
 		buffer.WriteString("EVENT_TYPE_UNKNOWN")
-	case clientHeader:
+	case eventTypeClientHeader:
 		buffer.WriteString("CLIENT_HEADER")
-	case serverHeader:
+	case eventTypeServerHeader:
 		buffer.WriteString("SERVER_HEADER")
-	case clientMessage:
+	case eventTypeClientMessage:
 		buffer.WriteString("CLIENT_MESSAGE")
-	case serverMessage:
+	case eventTypeServerMessage:
 		buffer.WriteString("SERVER_MESSAGE")
-	case clientHalfClose:
+	case eventTypeClientHalfClose:
 		buffer.WriteString("CLIENT_HALF_CLOSE")
-	case serverTrailer:
+	case eventTypeServerTrailer:
 		buffer.WriteString("SERVER_TRAILER")
-	case cancel:
+	case eventTypeCancel:
 		buffer.WriteString("CANCEL")
 	}
 	buffer.WriteString(`"`)
@@ -127,8 +127,8 @@ type loggerType int
 
 const (
 	loggerUnknown loggerType = iota
-	client
-	server
+	loggerClient
+	loggerServer
 )
 
 func (t loggerType) MarshalJSON() ([]byte, error) {
@@ -136,9 +136,9 @@ func (t loggerType) MarshalJSON() ([]byte, error) {
 	switch t {
 	case loggerUnknown:
 		buffer.WriteString("LOGGER_UNKNOWN")
-	case client:
+	case loggerClient:
 		buffer.WriteString("CLIENT")
-	case server:
+	case loggerServer:
 		buffer.WriteString("SERVER")
 	}
 	buffer.WriteString(`"`)
@@ -167,9 +167,9 @@ type addrType int
 
 const (
 	typeUnknown addrType = iota // `json:"TYPE_UNKNOWN"`
-	ipv4                        // `json:"TYPE_IPV4"`
-	ipv6                        // `json:"TYPE_IPV6"`
-	unix                        // `json:"TYPE_UNIX"`
+	typeIPv4                    // `json:"TYPE_IPV4"`
+	typeIPv6                    // `json:"TYPE_IPV6"`
+	typeUnix                    // `json:"TYPE_UNIX"`
 )
 
 func (at addrType) MarshalJSON() ([]byte, error) {
@@ -177,11 +177,11 @@ func (at addrType) MarshalJSON() ([]byte, error) {
 	switch at {
 	case typeUnknown:
 		buffer.WriteString("TYPE_UNKNOWN")
-	case ipv4:
+	case typeIPv4:
 		buffer.WriteString("TYPE_IPV4")
-	case ipv6:
+	case typeIPv6:
 		buffer.WriteString("TYPE_IPV6")
-	case unix:
+	case typeUnix:
 		buffer.WriteString("TYPE_UNIX")
 	}
 	buffer.WriteString(`"`)
@@ -194,7 +194,7 @@ type address struct {
 	// Address is the address of the peer of the RPC.
 	Address string `json:"address,omitempty"`
 	// IPPort is the ip and port in string form. It is used only for addrType
-	// ipv4 and ipv6.
+	// typeIPv4 and typeIPv6.
 	IPPort uint32 `json:"ipPort,omitempty"`
 }
 
@@ -255,7 +255,7 @@ func (bml *binaryMethodLogger) Log(c iblog.LogEntryConfig) {
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_UNKNOWN:
 		grpcLogEntry.Type = eventTypeUnknown
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CLIENT_HEADER:
-		grpcLogEntry.Type = clientHeader
+		grpcLogEntry.Type = eventTypeClientHeader
 		if binLogEntry.GetClientHeader() != nil {
 			methodName := binLogEntry.GetClientHeader().MethodName
 			// Example method name: /grpc.testing.TestService/UnaryCall
@@ -276,26 +276,26 @@ func (bml *binaryMethodLogger) Log(c iblog.LogEntryConfig) {
 		grpcLogEntry.PayloadTruncated = binLogEntry.GetPayloadTruncated()
 		setPeerIfPresent(binLogEntry, grpcLogEntry)
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_SERVER_HEADER:
-		grpcLogEntry.Type = serverHeader
+		grpcLogEntry.Type = eventTypeServerHeader
 		if binLogEntry.GetServerHeader() != nil {
 			grpcLogEntry.Payload.Metadata = translateMetadata(binLogEntry.GetServerHeader().GetMetadata())
 		}
 		grpcLogEntry.PayloadTruncated = binLogEntry.GetPayloadTruncated()
 		setPeerIfPresent(binLogEntry, grpcLogEntry)
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CLIENT_MESSAGE:
-		grpcLogEntry.Type = clientMessage
+		grpcLogEntry.Type = eventTypeClientMessage
 		grpcLogEntry.Payload.Message = binLogEntry.GetMessage().GetData()
 		grpcLogEntry.Payload.MessageLength = binLogEntry.GetMessage().GetLength()
 		grpcLogEntry.PayloadTruncated = binLogEntry.GetPayloadTruncated()
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_SERVER_MESSAGE:
-		grpcLogEntry.Type = serverMessage
+		grpcLogEntry.Type = eventTypeServerMessage
 		grpcLogEntry.Payload.Message = binLogEntry.GetMessage().GetData()
 		grpcLogEntry.Payload.MessageLength = binLogEntry.GetMessage().GetLength()
 		grpcLogEntry.PayloadTruncated = binLogEntry.GetPayloadTruncated()
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CLIENT_HALF_CLOSE:
-		grpcLogEntry.Type = clientHalfClose
+		grpcLogEntry.Type = eventTypeClientHalfClose
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_SERVER_TRAILER:
-		grpcLogEntry.Type = serverTrailer
+		grpcLogEntry.Type = eventTypeServerTrailer
 		grpcLogEntry.Payload.Metadata = translateMetadata(binLogEntry.GetTrailer().Metadata)
 		grpcLogEntry.Payload.StatusCode = binLogEntry.GetTrailer().GetStatusCode()
 		grpcLogEntry.Payload.StatusMessage = binLogEntry.GetTrailer().GetStatusMessage()
@@ -303,7 +303,7 @@ func (bml *binaryMethodLogger) Log(c iblog.LogEntryConfig) {
 		grpcLogEntry.PayloadTruncated = binLogEntry.GetPayloadTruncated()
 		setPeerIfPresent(binLogEntry, grpcLogEntry)
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CANCEL:
-		grpcLogEntry.Type = cancel
+		grpcLogEntry.Type = eventTypeCancel
 	default:
 		logger.Infof("Unknown event type: %v", binLogEntry.Type)
 		return
@@ -351,7 +351,7 @@ func (bl *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
 
 			return &binaryMethodLogger{
 				exporter: bl.exporter,
-				mlb:      iblog.NewBinMethodLogger(eventConfig.HeaderBytes, eventConfig.MessageBytes),
+				mlb:      iblog.NewTruncatingMethodLogger(eventConfig.HeaderBytes, eventConfig.MessageBytes),
 				callID:   uuid.NewString(),
 			}
 		}
@@ -370,7 +370,7 @@ func registerClientRPCEvents(clientRPCEvents []clientRPCEvents, exporter logging
 			HeaderBytes:  uint64(clientRPCEvent.MaxMetadataBytes),
 			MessageBytes: uint64(clientRPCEvent.MaxMessageBytes),
 		}
-		for _, method := range clientRPCEvent.Method {
+		for _, method := range clientRPCEvent.Methods {
 			eventConfig.ServiceMethod = make(map[string]bool)
 			eventConfig.Services = make(map[string]bool)
 			if method == "*" {
@@ -407,7 +407,7 @@ func registerServerRPCEvents(serverRPCEvents []serverRPCEvents, exporter logging
 			HeaderBytes:  uint64(serverRPCEvent.MaxMetadataBytes),
 			MessageBytes: uint64(serverRPCEvent.MaxMessageBytes),
 		}
-		for _, method := range serverRPCEvent.Method {
+		for _, method := range serverRPCEvent.Methods {
 			eventConfig.ServiceMethod = make(map[string]bool)
 			eventConfig.Services = make(map[string]bool)
 			if method == "*" {

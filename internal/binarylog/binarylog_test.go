@@ -93,7 +93,7 @@ func (s) TestGetMethodLogger(t *testing.T) {
 			t.Errorf("in: %q, failed to create logger from config string", tc.in)
 			continue
 		}
-		ml := l.GetMethodLogger(tc.method).(*BinMethodLogger)
+		ml := l.GetMethodLogger(tc.method).(*TruncatingMethodLogger)
 		if ml == nil {
 			t.Errorf("in: %q, method logger is nil, want non-nil", tc.in)
 			continue

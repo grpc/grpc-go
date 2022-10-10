@@ -112,7 +112,7 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 		CloudLogging: &cloudLogging{
 			ClientRPCEvents: []clientRPCEvents{
 				{
-					Method:           []string{"*"},
+					Methods:          []string{"*"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
@@ -150,8 +150,8 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 	}
 	grpcLogEntriesWant := make([]*grpcLogEntry, 5)
 	grpcLogEntriesWant[0] = &grpcLogEntry{
-		Type:        clientHeader,
-		Logger:      client,
+		Type:        eventTypeClientHeader,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		Authority:   ss.Address,
@@ -161,8 +161,8 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[1] = &grpcLogEntry{
-		Type:        clientMessage,
-		Logger:      client,
+		Type:        eventTypeClientMessage,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		SequenceID:  2,
@@ -172,8 +172,8 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[2] = &grpcLogEntry{
-		Type:        serverHeader,
-		Logger:      client,
+		Type:        eventTypeServerHeader,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		SequenceID:  3,
@@ -183,16 +183,16 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[3] = &grpcLogEntry{
-		Type:        serverMessage,
-		Logger:      client,
+		Type:        eventTypeServerMessage,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		Authority:   ss.Address,
 		SequenceID:  4,
 	}
 	grpcLogEntriesWant[4] = &grpcLogEntry{
-		Type:        serverTrailer,
-		Logger:      client,
+		Type:        eventTypeServerTrailer,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		SequenceID:  5,
@@ -222,8 +222,8 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 	}
 	grpcLogEntriesWant = make([]*grpcLogEntry, 4)
 	grpcLogEntriesWant[0] = &grpcLogEntry{
-		Type:        clientHeader,
-		Logger:      client,
+		Type:        eventTypeClientHeader,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "FullDuplexCall",
 		Authority:   ss.Address,
@@ -233,16 +233,16 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[1] = &grpcLogEntry{
-		Type:        clientHalfClose,
-		Logger:      client,
+		Type:        eventTypeClientHalfClose,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "FullDuplexCall",
 		SequenceID:  2,
 		Authority:   ss.Address,
 	}
 	grpcLogEntriesWant[2] = &grpcLogEntry{
-		Type:        serverHeader,
-		Logger:      client,
+		Type:        eventTypeServerHeader,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "FullDuplexCall",
 		SequenceID:  3,
@@ -252,8 +252,8 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[3] = &grpcLogEntry{
-		Type:        serverTrailer,
-		Logger:      client,
+		Type:        eventTypeServerTrailer,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "FullDuplexCall",
 		Authority:   ss.Address,
@@ -287,7 +287,7 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 		CloudLogging: &cloudLogging{
 			ServerRPCEvents: []serverRPCEvents{
 				{
-					Method:           []string{"*"},
+					Methods:          []string{"*"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
@@ -325,8 +325,8 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 	}
 	grpcLogEntriesWant := make([]*grpcLogEntry, 5)
 	grpcLogEntriesWant[0] = &grpcLogEntry{
-		Type:        clientHeader,
-		Logger:      server,
+		Type:        eventTypeClientHeader,
+		Logger:      loggerServer,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		Authority:   ss.Address,
@@ -336,16 +336,16 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[1] = &grpcLogEntry{
-		Type:        clientMessage,
-		Logger:      server,
+		Type:        eventTypeClientMessage,
+		Logger:      loggerServer,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		SequenceID:  2,
 		Authority:   ss.Address,
 	}
 	grpcLogEntriesWant[2] = &grpcLogEntry{
-		Type:        serverHeader,
-		Logger:      server,
+		Type:        eventTypeServerHeader,
+		Logger:      loggerServer,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		SequenceID:  3,
@@ -355,8 +355,8 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[3] = &grpcLogEntry{
-		Type:        serverMessage,
-		Logger:      server,
+		Type:        eventTypeServerMessage,
+		Logger:      loggerServer,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		Authority:   ss.Address,
@@ -366,8 +366,8 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[4] = &grpcLogEntry{
-		Type:        serverTrailer,
-		Logger:      server,
+		Type:        eventTypeServerTrailer,
+		Logger:      loggerServer,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		SequenceID:  5,
@@ -396,8 +396,8 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 
 	grpcLogEntriesWant = make([]*grpcLogEntry, 3)
 	grpcLogEntriesWant[0] = &grpcLogEntry{
-		Type:        clientHeader,
-		Logger:      server,
+		Type:        eventTypeClientHeader,
+		Logger:      loggerServer,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "FullDuplexCall",
 		Authority:   ss.Address,
@@ -407,16 +407,16 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[1] = &grpcLogEntry{
-		Type:        clientHalfClose,
-		Logger:      server,
+		Type:        eventTypeClientHalfClose,
+		Logger:      loggerServer,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "FullDuplexCall",
 		SequenceID:  2,
 		Authority:   ss.Address,
 	}
 	grpcLogEntriesWant[2] = &grpcLogEntry{
-		Type:        serverTrailer,
-		Logger:      server,
+		Type:        eventTypeServerTrailer,
+		Logger:      loggerServer,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "FullDuplexCall",
 		Authority:   ss.Address,
@@ -456,14 +456,14 @@ func (s) TestBothClientAndServerRPCEvents(t *testing.T) {
 		CloudLogging: &cloudLogging{
 			ClientRPCEvents: []clientRPCEvents{
 				{
-					Method:           []string{"*"},
+					Methods:          []string{"*"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
 			},
 			ServerRPCEvents: []serverRPCEvents{
 				{
-					Method:           []string{"*"},
+					Methods:          []string{"*"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
@@ -553,18 +553,18 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 		CloudLogging: &cloudLogging{
 			ClientRPCEvents: []clientRPCEvents{
 				{
-					Method:           []string{"/grpc.testing.TestService/UnaryCall"},
+					Methods:          []string{"/grpc.testing.TestService/UnaryCall"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
 				{
-					Method:           []string{"/grpc.testing.TestService/EmptyCall"},
+					Methods:          []string{"/grpc.testing.TestService/EmptyCall"},
 					Exclude:          true,
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
 				{
-					Method:           []string{"/grpc.testing.TestService/*"},
+					Methods:          []string{"/grpc.testing.TestService/*"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
@@ -610,8 +610,8 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 	}
 	grpcLogEntriesWant := make([]*grpcLogEntry, 5)
 	grpcLogEntriesWant[0] = &grpcLogEntry{
-		Type:        clientHeader,
-		Logger:      client,
+		Type:        eventTypeClientHeader,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		Authority:   ss.Address,
@@ -621,8 +621,8 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[1] = &grpcLogEntry{
-		Type:        clientMessage,
-		Logger:      client,
+		Type:        eventTypeClientMessage,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		SequenceID:  2,
@@ -632,8 +632,8 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[2] = &grpcLogEntry{
-		Type:        serverHeader,
-		Logger:      client,
+		Type:        eventTypeServerHeader,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		SequenceID:  3,
@@ -643,16 +643,16 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[3] = &grpcLogEntry{
-		Type:        serverMessage,
-		Logger:      client,
+		Type:        eventTypeServerMessage,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		Authority:   ss.Address,
 		SequenceID:  4,
 	}
 	grpcLogEntriesWant[4] = &grpcLogEntry{
-		Type:        serverTrailer,
-		Logger:      client,
+		Type:        eventTypeServerTrailer,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "UnaryCall",
 		SequenceID:  5,
@@ -698,8 +698,8 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 
 	grpcLogEntriesWant = make([]*grpcLogEntry, 4)
 	grpcLogEntriesWant[0] = &grpcLogEntry{
-		Type:        clientHeader,
-		Logger:      client,
+		Type:        eventTypeClientHeader,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "FullDuplexCall",
 		Authority:   ss.Address,
@@ -709,16 +709,16 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[1] = &grpcLogEntry{
-		Type:        clientHalfClose,
-		Logger:      client,
+		Type:        eventTypeClientHalfClose,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "FullDuplexCall",
 		SequenceID:  2,
 		Authority:   ss.Address,
 	}
 	grpcLogEntriesWant[2] = &grpcLogEntry{
-		Type:        serverHeader,
-		Logger:      client,
+		Type:        eventTypeServerHeader,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "FullDuplexCall",
 		SequenceID:  3,
@@ -728,8 +728,8 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 		},
 	}
 	grpcLogEntriesWant[3] = &grpcLogEntry{
-		Type:        serverTrailer,
-		Logger:      client,
+		Type:        eventTypeServerTrailer,
+		Logger:      loggerClient,
 		ServiceName: "grpc.testing.TestService",
 		MethodName:  "FullDuplexCall",
 		Authority:   ss.Address,
@@ -851,7 +851,7 @@ func (s) TestMarshalJSON(t *testing.T) {
 		CallID:     "300-300-300",
 		SequenceID: 3,
 		Type:       eventTypeUnknown,
-		Logger:     client,
+		Logger:     loggerClient,
 		Payload: payload{
 			Metadata:      map[string]string{"header1": "value1"},
 			Timeout:       20,
@@ -862,7 +862,7 @@ func (s) TestMarshalJSON(t *testing.T) {
 			Message:       []byte("wow"),
 		},
 		Peer: address{
-			Type:    ipv4,
+			Type:    typeIPv4,
 			Address: "localhost",
 			IPPort:  16000,
 		},
