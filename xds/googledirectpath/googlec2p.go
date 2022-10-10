@@ -47,7 +47,8 @@ import (
 )
 
 const (
-	c2pScheme = "google-c2p-experimental"
+	c2pScheme             = "google-c2p"
+	c2pExperimentalScheme = "google-c2p-experimental"
 
 	tdURL          = "dns:///directpath-pa.googleapis.com"
 	httpReqTimeout = 10 * time.Second
@@ -75,10 +76,18 @@ var (
 )
 
 func init() {
-	resolver.Register(c2pResolverBuilder{})
+	resolver.Register(c2pResolverBuilder{
+		scheme: c2pScheme,
+	})
+	// TODO(apolcyn): remove this experimental scheme before the 1.52 release
+	resolver.Register(c2pResolverBuilder{
+		scheme: c2pExperimentalScheme,
+	})
 }
 
-type c2pResolverBuilder struct{}
+type c2pResolverBuilder struct {
+	scheme string
+}
 
 func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	if !runDirectPath() {
@@ -131,8 +140,8 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	}, nil
 }
 
-func (c2pResolverBuilder) Scheme() string {
-	return c2pScheme
+func (b *c2pResolverBuilder) Scheme() string {
+	return b.scheme
 }
 
 type c2pResolver struct {
