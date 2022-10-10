@@ -19,6 +19,9 @@
 package xdsclient
 
 import (
+	"context"
+	"sync"
+
 	"google.golang.org/grpc/internal/buffer"
 	"google.golang.org/grpc/internal/grpcsync"
 )
@@ -33,19 +36,23 @@ import (
 //
 // This type is safe for concurrent access.
 type callbackSerializer struct {
-	closed    *grpcsync.Event
+	closedMu sync.Mutex
+	closed   bool
+
+	cancel    context.CancelFunc
 	done      *grpcsync.Event
 	callbacks *buffer.Unbounded
 }
 
 // newCallbackSerializer returns a new CallbackSerializer instance.
 func newCallbackSerializer() *callbackSerializer {
+	ctx, cancel := context.WithCancel(context.Background())
 	t := &callbackSerializer{
-		closed:    grpcsync.NewEvent(),
+		cancel:    cancel,
 		done:      grpcsync.NewEvent(),
 		callbacks: buffer.NewUnbounded(),
 	}
-	go t.run()
+	go t.run(ctx)
 	return t
 }
 
@@ -54,33 +61,42 @@ func newCallbackSerializer() *callbackSerializer {
 // being executed, this functions blocks until execution of that callback
 // finishes before returning.
 func (t *callbackSerializer) Close() {
-	if t.closed.HasFired() {
+	t.closedMu.Lock()
+	if t.closed {
+		t.closedMu.Unlock()
 		return
 	}
-	t.closed.Fire()
+	t.closed = true
+	t.closedMu.Unlock()
+
+	t.cancel()
 	<-t.done.Done()
 }
 
 // Schedule adds a callback to be scheduled after existing callbacks are run.
 func (t *callbackSerializer) Schedule(f func()) {
-	if t.closed.HasFired() {
+	t.closedMu.Lock()
+	defer t.closedMu.Unlock()
+	if t.closed {
 		return
 	}
 	t.callbacks.Put(f)
 }
 
-func (t *callbackSerializer) run() {
-	defer func() {
-		t.done.Fire()
-	}()
+func (t *callbackSerializer) run(ctx context.Context) {
+	defer t.done.Fire()
 	for {
 		select {
-		case <-t.closed.Done():
+		case <-ctx.Done():
 			return
 		case callback := <-t.callbacks.Get():
-			if t.closed.HasFired() {
+			t.closedMu.Lock()
+			if t.closed {
+				t.closedMu.Unlock()
 				return
 			}
+			t.closedMu.Unlock()
+
 			t.callbacks.Load()
 			callback.(func())()
 		}
