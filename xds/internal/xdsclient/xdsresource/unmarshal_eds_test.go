@@ -100,6 +100,18 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 			want: EndpointsUpdate{},
 		},
 		{
+			name: "max sum of weights at the same priority exceeded",
+			m: func() *v3endpointpb.ClusterLoadAssignment {
+				clab0 := newClaBuilder("test", nil)
+				clab0.addLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
+				clab0.addLocality("locality-2", 4294967295, 1, []string{"addr2:159"}, nil)
+				clab0.addLocality("locality-3", 1, 1, []string{"addr2:88"}, nil)
+				return clab0.Build()
+			}(),
+			want:    EndpointsUpdate{},
+			wantErr: true,
+		},
+		{
 			name: "good",
 			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
