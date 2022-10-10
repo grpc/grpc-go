@@ -103,22 +103,9 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 			name: "max sum of weights at the same priority exceeded",
 			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)
-				clab0.addLocality("locality-1", 1, 0, []string{"addr1:314"}, &addLocalityOptions{
-					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
-					Weight: []uint32{271},
-				})
-				clab0.addLocality("locality-2", 1431655765, 1, []string{"addr2:159"}, &addLocalityOptions{
-					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_DRAINING},
-					Weight: []uint32{828},
-				})
-				clab0.addLocality("locality-3", 1431655765, 1, []string{"addr2:73"}, &addLocalityOptions{
-					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_HEALTHY},
-					Weight: []uint32{997},
-				})
-				clab0.addLocality("locality-4", 1431655766, 1, []string{"addr2:44"}, &addLocalityOptions{
-					Health: []v3corepb.HealthStatus{v3corepb.HealthStatus_UNHEALTHY},
-					Weight: []uint32{1143},
-				})
+				clab0.addLocality("locality-1", 1, 0, []string{"addr1:314"}, nil)
+				clab0.addLocality("locality-2", 4294967295, 1, []string{"addr2:159"}, nil)
+				clab0.addLocality("locality-3", 1, 1, []string{"addr2:88"}, nil)
 				return clab0.Build()
 			}(),
 			want:    EndpointsUpdate{},
