@@ -127,6 +127,8 @@ func startOpenCensus(config *config) error {
 // packages if exporter was created.
 func stopOpenCensus() {
 	if exporter != nil {
+		internal.ClearGlobalDialOptions()
+		internal.ClearGlobalServerOptions()
 		// Call these unconditionally, doesn't matter if not registered, will be
 		// a noop if not registered.
 		trace.UnregisterExporter(exporter)

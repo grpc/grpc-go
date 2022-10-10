@@ -450,6 +450,8 @@ func startLogging(ctx context.Context, config *config) error {
 }
 
 func stopLogging() {
+	internal.ClearGlobalDialOptions()
+	internal.ClearGlobalServerOptions()
 	if lExporter != nil {
 		// This Close() call handles the flushing of the logging buffer.
 		lExporter.Close()
