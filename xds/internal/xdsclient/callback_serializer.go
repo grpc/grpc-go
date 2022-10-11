@@ -75,11 +75,9 @@ func (t *callbackSerializer) Close() {
 
 // Schedule adds a callback to be scheduled after existing callbacks are run.
 func (t *callbackSerializer) Schedule(f func()) {
-	t.closedMu.Lock()
-	defer t.closedMu.Unlock()
-	if t.closed {
-		return
-	}
+	// We don't check for closed here because if the serializer is closed, the
+	// run() goroutine would have exited and therefore this callback will never
+	// be processed.
 	t.callbacks.Put(f)
 }
 
