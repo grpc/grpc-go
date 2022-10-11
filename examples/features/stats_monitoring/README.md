@@ -1,7 +1,7 @@
 # Stats Monitoring Handler
 
-This example demonstrates the use of [stats package](https://pkg.go.dev/google.golang.org/grpc/stats) for reporting various network and RPC stats.   
-_Note that all fields are READ-ONLY and the APIs of `stats package` are experimental_.
+This example demonstrates the use of [stats](https://pkg.go.dev/google.golang.org/grpc/stats) package for reporting various network and RPC stats.   
+_Note that all fields are READ-ONLY and the APIs of `stats` package are experimental_.
 
 ## Try it
 
@@ -21,4 +21,4 @@ The `HandleRPC(context.Context, RPCStats)` method on `stats.Handler` is called m
 
 Similarly, the `HandleConn(context.Context, ConnStats)` method on `stats.Handler` is called twice, once at the beginning of the connection with `*stats.ConnBegin` and once at the end with `*stats.ConnEnd`.
 
-NOTE: The [stats package](https://pkg.go.dev/google.golang.org/grpc/stats) should only be used for network monitoring purposes, and not as an alternative to [interceptors](https://github.com/grpc/grpc-go/blob/master/examples/features/metadata).
+NOTE: The [stats](https://pkg.go.dev/google.golang.org/grpc/stats) package should only be used for network monitoring purposes, and not as an alternative to [interceptors](https://github.com/grpc/grpc-go/blob/master/examples/features/metadata).
