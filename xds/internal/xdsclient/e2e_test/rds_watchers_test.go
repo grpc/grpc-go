@@ -614,8 +614,9 @@ func (s) TestRDSWatch_ResourceCaching(t *testing.T) {
 }
 
 // TestRDSWatch_ExpiryTimerFiresBeforeResponse tests the case where the client
-// does not receive an RDS response for the request that it sends. We want the
-// watch callback to be invoked with an error once the watchExpiryTimer fires.
+// does not receive an RDS response for the request that it sends. The test
+// verifies that the watch callback is invoked with an error once the
+// watchExpiryTimer fires.
 func (s) TestRDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// No need to spin up a management server since we don't want the client to
 	// receive a response for the watch being registered by the test.
@@ -654,11 +655,11 @@ func (s) TestRDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	}
 }
 
-// TestRDSWatch_ExpiryTimerFiresAfterResponse tests the case where the client
-// receives an RDS response for the request that it sends. The test verifies
-// that the timer is canceled and therefore no callback is invoked when the
-// expiry timer's duration elapses.
-func (s) TestRDSWatch_ExpiryTimerFiresAfterResponse(t *testing.T) {
+// TestRDSWatch_ValidResponseCancelsExpiryTimerBehavior tests the case where the
+// client receives a valid RDS response for the request that it sends. The test
+// verifies that the behavior associated with the expiry timer (i.e, callback
+// invocation with error) does not take place.
+func (s) TestRDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, err := e2e.StartManagementServer(nil)
 	if err != nil {
@@ -806,7 +807,7 @@ func (s) TestRDSWatch_PartialValid(t *testing.T) {
 		updateCh1.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
 	})
 	defer rdsCancel1()
-	goodResourceName := ldsNameNewStyle
+	goodResourceName := rdsNameNewStyle
 	updateCh2 := testutils.NewChannel()
 	rdsCancel2 := client.WatchRouteConfig(goodResourceName, func(u xdsresource.RouteConfigUpdate, err error) {
 		updateCh2.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
