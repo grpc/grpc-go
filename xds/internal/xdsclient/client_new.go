@@ -76,11 +76,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration, i
 //
 // This function should ONLY be used for testing purposes.
 func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout, authorityIdleTimeout time.Duration) (XDSClient, error) {
-	idleTimeout := defaultIdleAuthorityDeleteTimeout
-	if authorityIdleTimeout != time.Duration(0) {
-		idleTimeout = authorityIdleTimeout
-	}
-	cl, err := newWithConfig(config, watchExpiryTimeout, idleTimeout)
+	cl, err := newWithConfig(config, watchExpiryTimeout, authorityIdleTimeout)
 	if err != nil {
 		return nil, err
 	}

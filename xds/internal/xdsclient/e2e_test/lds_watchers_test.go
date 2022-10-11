@@ -569,8 +569,9 @@ func (s) TestLDSWatch_ResourceCaching(t *testing.T) {
 }
 
 // TestLDSWatch_ExpiryTimerFiresBeforeResponse tests the case where the client
-// does not receive an LDS response for the request that it sends. We want the
-// watch callback to be invoked with an error once the watchExpiryTimer fires.
+// does not receive an LDS response for the request that it sends. The test
+// verifies that the watch callback is invoked with an error once the
+// watchExpiryTimer fires.
 func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// No need to spin up a management server since we don't want the client to
 	// receive a response for the watch being registered by the test.
@@ -609,11 +610,11 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	}
 }
 
-// TestLDSWatch_ExpiryTimerFiresAfterResponse tests the case where the client
-// receives an LDS response for the request that it sends. The test verifies
-// that the timer is canceled and therefore no callback is invoked when the
-// expiry timer's duration elapses.
-func (s) TestLDSWatch_ExpiryTimerFiresAfterResponse(t *testing.T) {
+// TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior tests the case where the
+// client receives a valid LDS response for the request that it sends. The test
+// verifies that the behavior associated with the expiry timer (i.e, callback
+// invocation with error) does not take place.
+func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, err := e2e.StartManagementServer(nil)
 	if err != nil {
