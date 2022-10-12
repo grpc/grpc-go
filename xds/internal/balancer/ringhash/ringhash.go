@@ -324,14 +324,14 @@ func (b *ringhashBalancer) ResolverError(err error) {
 // UpdateSubConnState updates the per-SubConn state stored in the ring, and also
 // the aggregated state.
 //
-// It triggers an update to cc when:
-// - the new state is TransientFailure, to update the error message
-//   - it's possible that this is a noop, but sending an extra update is easier
-//     than comparing errors
+//	It triggers an update to cc when:
+//	- the new state is TransientFailure, to update the error message
+//	  - it's possible that this is a noop, but sending an extra update is easier
+//	    than comparing errors
 //
-// - the aggregated state is changed
-//   - the same picker will be sent again, but this update may trigger a re-pick
-//     for some RPCs.
+//	- the aggregated state is changed
+//	  - the same picker will be sent again, but this update may trigger a re-pick
+//	    for some RPCs.
 func (b *ringhashBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
 	s := state.ConnectivityState
 	if logger.V(2) {

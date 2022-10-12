@@ -292,14 +292,14 @@ func (lb *lbBalancer) regeneratePicker(resetDrop bool) {
 // fallback and grpclb). lb.scState contains states for all SubConns, including
 // those in cache (SubConns are cached for 10 seconds after remove).
 //
-// The aggregated state is:
-//   - If at least one SubConn in Ready, the aggregated state is Ready;
-//   - Else if at least one SubConn in Connecting or IDLE, the aggregated state is Connecting;
-//   - It's OK to consider IDLE as Connecting. SubConns never stay in IDLE,
-//     they start to connect immediately. But there's a race between the overall
-//     state is reported, and when the new SubConn state arrives. And SubConns
-//     never go back to IDLE.
-//   - Else the aggregated state is TransientFailure.
+//	The aggregated state is:
+//	- If at least one SubConn in Ready, the aggregated state is Ready;
+//	- Else if at least one SubConn in Connecting or IDLE, the aggregated state is Connecting;
+//	  - It's OK to consider IDLE as Connecting. SubConns never stay in IDLE,
+//	    they start to connect immediately. But there's a race between the overall
+//	    state is reported, and when the new SubConn state arrives. And SubConns
+//	    never go back to IDLE.
+//	- Else the aggregated state is TransientFailure.
 func (lb *lbBalancer) aggregateSubConnStates() connectivity.State {
 	var numConnecting uint64
 
