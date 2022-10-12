@@ -253,18 +253,16 @@ func getDecision(engine *policyEngine, match bool) Decision {
 	return DecisionDeny
 }
 
-// Returns the authorization decision of a single policy engine based on activation.
-// If any policy matches, the decision matches the engine's action, and the first
+// Returns the authorization decision of a single policy engine based on
+// activation.  If any policy matches, the decision matches the engine's
+// action, and the first matching policy name will be returned.
 //
-//	matching policy name will be returned.
+// Else if any policy is missing attributes, the decision is unknown, and the
+// list of policy names that can't be evaluated due to missing attributes will
+// be returned.
 //
-// Else if any policy is missing attributes, the decision is unknown, and the list of
-//
-//	policy names that can't be evaluated due to missing attributes will be returned.
-//
-// Else, the decision is the opposite of the engine's action, i.e. an ALLOW engine
-//
-//	will return DecisionDeny, and vice versa.
+// Else, the decision is the opposite of the engine's action, i.e. an ALLOW
+// engine will return DecisionDeny, and vice versa.
 func (engine *policyEngine) evaluate(activation interpreter.Activation) (Decision, []string) {
 	unknownPolicyNames := []string{}
 	for policyName, program := range engine.programs {

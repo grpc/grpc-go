@@ -79,7 +79,7 @@ func FromProto(s *spb.Status) *Status {
 //   - If err was produced by this package or implements the method `GRPCStatus()
 //     *Status`, the appropriate Status is returned.
 //
-// - If err is nil, a Status is returned with codes.OK and no message.
+//   - If err is nil, a Status is returned with codes.OK and no message.
 //
 //   - Otherwise, err is an error not compatible with this package.  In this
 //     case, a Status is returned with codes.Unknown and err's Error() message,
