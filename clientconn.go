@@ -1325,9 +1325,15 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		return nil
 	case <-connClosed.Done():
 		// The transport has already closed.  If we received the preface, too,
-		// this is not an error.
+		// this is not an error and go idle.
 		select {
 		case <-prefaceReceived.Done():
+			ac.mu.Lock()
+			defer ac.mu.Unlock()
+
+			if ac.state != connectivity.Shutdown {
+				ac.updateConnectivityState(connectivity.Idle, nil)
+			}
 			return nil
 		default:
 			return errors.New("connection closed before server preface received")
