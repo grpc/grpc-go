@@ -39,9 +39,21 @@ import (
 
 func cmpLoggingEntryList(got []*grpcLogEntry, want []*grpcLogEntry) error {
 	if diff := cmp.Diff(got, want,
+		// For nondeterministic metadata iteration.
+		cmp.Comparer(func(a map[string]string, b map[string]string) bool {
+			if len(a) > len(b) {
+				a, b = b, a
+			}
+			for k, v := range a {
+				if b[k] != v {
+					return false
+				}
+			}
+			return true
+		}),
 		cmpopts.IgnoreFields(grpcLogEntry{}, "CallID", "Peer"),
 		cmpopts.IgnoreFields(address{}, "IPPort", "Type"),
-		cmpopts.IgnoreFields(payload{}, "Timeout", "Metadata")); diff != "" {
+		cmpopts.IgnoreFields(payload{}, "Timeout")); diff != "" {
 		return fmt.Errorf("got unexpected grpcLogEntry list, diff (-got, +want): %v", diff)
 	}
 	return nil
@@ -668,7 +680,10 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 			Authority:   ss.Address,
 			SequenceID:  1,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata: map[string]string{
+					"key1": "value1",
+					"key2": "value2",
+				},
 			},
 			PayloadTruncated: true,
 		},
@@ -723,15 +738,6 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 	if err := cmpLoggingEntryList(fle.entries, grpcLogEntriesWant); err != nil {
 		fle.mu.Unlock()
 		t.Fatalf("error in logging entry list comparison %v", err)
-	}
-	// One of the metadata entries should have been logged.
-	gotMD := fle.entries[0].Payload.Metadata
-	wantMD1 := map[string]string{"key1": "value1"}
-	wantMD2 := map[string]string{"key2": "value2"}
-	diff1 := cmp.Diff(gotMD, wantMD1)
-	diff2 := cmp.Diff(gotMD, wantMD2)
-	if diff1 != "" && diff2 != "" {
-		t.Fatalf("gotMD: %v, want either %v or %v", gotMD, wantMD1, wantMD2)
 	}
 	fle.mu.Unlock()
 }
