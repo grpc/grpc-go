@@ -739,6 +739,11 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 		fle.mu.Unlock()
 		t.Fatalf("error in logging entry list comparison %v", err)
 	}
+	// Only one metadata entry should have been present in logging due to
+	// truncation.
+	if mdLen := len(fle.entries[0].Payload.Metadata); mdLen != 1 {
+		t.Fatalf("Metadata should have only 1 entry due to truncation, got %v", mdLen)
+	}
 	fle.mu.Unlock()
 }
 
