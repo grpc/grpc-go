@@ -19,325 +19,441 @@
 package observability
 
 import (
+	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
-	"sync/atomic"
-	"unsafe"
+	"time"
 
+	gcplogging "cloud.google.com/go/logging"
 	"github.com/google/uuid"
+
+	"google.golang.org/grpc"
 	binlogpb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
-	grpclogrecordpb "google.golang.org/grpc/gcp/observability/internal/logging"
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/binarylog"
 	iblog "google.golang.org/grpc/internal/binarylog"
+	"google.golang.org/grpc/internal/grpcutil"
 )
 
+var lExporter loggingExporter
+
+var newLoggingExporter = newCloudLoggingExporter
+
 // translateMetadata translates the metadata from Binary Logging format to
-// its GrpcLogRecord equivalent.
-func translateMetadata(m *binlogpb.Metadata) *grpclogrecordpb.GrpcLogRecord_Metadata {
-	var res grpclogrecordpb.GrpcLogRecord_Metadata
-	res.Entry = make([]*grpclogrecordpb.GrpcLogRecord_MetadataEntry, len(m.Entry))
-	for i, e := range m.Entry {
-		res.Entry[i] = &grpclogrecordpb.GrpcLogRecord_MetadataEntry{
-			Key:   e.Key,
-			Value: e.Value,
+// its GrpcLogEntry equivalent.
+func translateMetadata(m *binlogpb.Metadata) map[string]string {
+	metadata := make(map[string]string)
+	for _, entry := range m.GetEntry() {
+		entryKey := entry.GetKey()
+		var newVal string
+		if strings.HasSuffix(entryKey, "-bin") { // bin header
+			newVal = base64.StdEncoding.EncodeToString(entry.GetValue())
+		} else { // normal header
+			newVal = string(entry.GetValue())
 		}
+		var oldVal string
+		var ok bool
+		if oldVal, ok = metadata[entryKey]; !ok {
+			metadata[entryKey] = newVal
+			continue
+		}
+		metadata[entryKey] = oldVal + "," + newVal
 	}
-	return &res
+	return metadata
 }
 
-func setPeerIfPresent(binlogEntry *binlogpb.GrpcLogEntry, grpcLogRecord *grpclogrecordpb.GrpcLogRecord) {
+func setPeerIfPresent(binlogEntry *binlogpb.GrpcLogEntry, grpcLogEntry *grpcLogEntry) {
 	if binlogEntry.GetPeer() != nil {
-		grpcLogRecord.PeerAddress = &grpclogrecordpb.GrpcLogRecord_Address{
-			Type:    grpclogrecordpb.GrpcLogRecord_Address_Type(binlogEntry.Peer.Type),
-			Address: binlogEntry.Peer.Address,
-			IpPort:  binlogEntry.Peer.IpPort,
-		}
+		grpcLogEntry.Peer.Type = addrType(binlogEntry.GetPeer().GetType())
+		grpcLogEntry.Peer.Address = binlogEntry.GetPeer().GetAddress()
+		grpcLogEntry.Peer.IPPort = binlogEntry.GetPeer().GetIpPort()
 	}
 }
 
-var loggerTypeToEventLogger = map[binlogpb.GrpcLogEntry_Logger]grpclogrecordpb.GrpcLogRecord_EventLogger{
-	binlogpb.GrpcLogEntry_LOGGER_UNKNOWN: grpclogrecordpb.GrpcLogRecord_LOGGER_UNKNOWN,
-	binlogpb.GrpcLogEntry_LOGGER_CLIENT:  grpclogrecordpb.GrpcLogRecord_LOGGER_CLIENT,
-	binlogpb.GrpcLogEntry_LOGGER_SERVER:  grpclogrecordpb.GrpcLogRecord_LOGGER_SERVER,
+var loggerTypeToEventLogger = map[binlogpb.GrpcLogEntry_Logger]loggerType{
+	binlogpb.GrpcLogEntry_LOGGER_UNKNOWN: loggerUnknown,
+	binlogpb.GrpcLogEntry_LOGGER_CLIENT:  loggerClient,
+	binlogpb.GrpcLogEntry_LOGGER_SERVER:  loggerServer,
+}
+
+type eventType int
+
+const (
+	// eventTypeUnknown is an unknown event type.
+	eventTypeUnknown eventType = iota
+	// eventTypeClientHeader is a header sent from client to server.
+	eventTypeClientHeader
+	// eventTypeServerHeader is a header sent from server to client.
+	eventTypeServerHeader
+	// eventTypeClientMessage is a message sent from client to server.
+	eventTypeClientMessage
+	// eventTypeServerMessage is a message sent from server to client.
+	eventTypeServerMessage
+	// eventTypeClientHalfClose is a signal that the loggerClient is done sending.
+	eventTypeClientHalfClose
+	// eventTypeServerTrailer indicated the end of a gRPC call.
+	eventTypeServerTrailer
+	// eventTypeCancel is a signal that the rpc is canceled.
+	eventTypeCancel
+)
+
+func (t eventType) MarshalJSON() ([]byte, error) {
+	buffer := bytes.NewBufferString(`"`)
+	switch t {
+	case eventTypeUnknown:
+		buffer.WriteString("EVENT_TYPE_UNKNOWN")
+	case eventTypeClientHeader:
+		buffer.WriteString("CLIENT_HEADER")
+	case eventTypeServerHeader:
+		buffer.WriteString("SERVER_HEADER")
+	case eventTypeClientMessage:
+		buffer.WriteString("CLIENT_MESSAGE")
+	case eventTypeServerMessage:
+		buffer.WriteString("SERVER_MESSAGE")
+	case eventTypeClientHalfClose:
+		buffer.WriteString("CLIENT_HALF_CLOSE")
+	case eventTypeServerTrailer:
+		buffer.WriteString("SERVER_TRAILER")
+	case eventTypeCancel:
+		buffer.WriteString("CANCEL")
+	}
+	buffer.WriteString(`"`)
+	return buffer.Bytes(), nil
+}
+
+type loggerType int
+
+const (
+	loggerUnknown loggerType = iota
+	loggerClient
+	loggerServer
+)
+
+func (t loggerType) MarshalJSON() ([]byte, error) {
+	buffer := bytes.NewBufferString(`"`)
+	switch t {
+	case loggerUnknown:
+		buffer.WriteString("LOGGER_UNKNOWN")
+	case loggerClient:
+		buffer.WriteString("CLIENT")
+	case loggerServer:
+		buffer.WriteString("SERVER")
+	}
+	buffer.WriteString(`"`)
+	return buffer.Bytes(), nil
+}
+
+type payload struct {
+	Metadata map[string]string `json:"metadata,omitempty"`
+	// Timeout is the RPC timeout value.
+	Timeout time.Duration `json:"timeout,omitempty"`
+	// StatusCode is the gRPC status code.
+	StatusCode uint32 `json:"statusCode,omitempty"`
+	// StatusMessage is the gRPC status message.
+	StatusMessage string `json:"statusMessage,omitempty"`
+	// StatusDetails is the value of the grpc-status-details-bin metadata key,
+	// if any. This is always an encoded google.rpc.Status message.
+	StatusDetails []byte `json:"statusDetails,omitempty"`
+	// MessageLength is the length of the message.
+	MessageLength uint32 `json:"messageLength,omitempty"`
+	// Message is the message of this entry. This is populated in the case of a
+	// message event.
+	Message []byte `json:"message,omitempty"`
+}
+
+type addrType int
+
+const (
+	typeUnknown addrType = iota // `json:"TYPE_UNKNOWN"`
+	typeIPv4                    // `json:"TYPE_IPV4"`
+	typeIPv6                    // `json:"TYPE_IPV6"`
+	typeUnix                    // `json:"TYPE_UNIX"`
+)
+
+func (at addrType) MarshalJSON() ([]byte, error) {
+	buffer := bytes.NewBufferString(`"`)
+	switch at {
+	case typeUnknown:
+		buffer.WriteString("TYPE_UNKNOWN")
+	case typeIPv4:
+		buffer.WriteString("TYPE_IPV4")
+	case typeIPv6:
+		buffer.WriteString("TYPE_IPV6")
+	case typeUnix:
+		buffer.WriteString("TYPE_UNIX")
+	}
+	buffer.WriteString(`"`)
+	return buffer.Bytes(), nil
+}
+
+type address struct {
+	// Type is the address type of the address of the peer of the RPC.
+	Type addrType `json:"type,omitempty"`
+	// Address is the address of the peer of the RPC.
+	Address string `json:"address,omitempty"`
+	// IPPort is the ip and port in string form. It is used only for addrType
+	// typeIPv4 and typeIPv6.
+	IPPort uint32 `json:"ipPort,omitempty"`
+}
+
+type grpcLogEntry struct {
+	// CallID is a uuid which uniquely identifies a call. Each call may have
+	// several log entries. They will all have the same CallID. Nothing is
+	// guaranteed about their value other than they are unique across different
+	// RPCs in the same gRPC process.
+	CallID string `json:"callId,omitempty"`
+	// SequenceID is the entry sequence ID for this call. The first message has
+	// a value of 1, to disambiguate from an unset value. The purpose of this
+	// field is to detect missing entries in environments where durability or
+	// ordering is not guaranteed.
+	SequenceID uint64 `json:"sequenceId,omitempty"`
+	// Type is the type of binary logging event being logged.
+	Type eventType `json:"type,omitempty"`
+	// Logger is the entity that generates the log entry.
+	Logger loggerType `json:"logger,omitempty"`
+	// Payload is the payload of this log entry.
+	Payload payload `json:"payload,omitempty"`
+	// PayloadTruncated is whether the message or metadata field is either
+	// truncated or emitted due to options specified in the configuration.
+	PayloadTruncated bool `json:"payloadTruncated,omitempty"`
+	// Peer is information about the Peer of the RPC.
+	Peer address `json:"peer,omitempty"`
+	// A single process may be used to run multiple virtual servers with
+	// different identities.
+	// Authority is the name of such a server identify. It is typically a
+	// portion of the URI in the form of <host> or <host>:<port>.
+	Authority string `json:"authority,omitempty"`
+	// ServiceName is the name of the service.
+	ServiceName string `json:"serviceName,omitempty"`
+	// MethodName is the name of the RPC method.
+	MethodName string `json:"methodName,omitempty"`
+}
+
+type methodLoggerBuilder interface {
+	Build(iblog.LogEntryConfig) *binlogpb.GrpcLogEntry
 }
 
 type binaryMethodLogger struct {
-	rpcID, serviceName, methodName string
-	originalMethodLogger           iblog.MethodLogger
-	childMethodLogger              iblog.MethodLogger
-	exporter                       loggingExporter
+	callID, serviceName, methodName, authority string
+
+	mlb      methodLoggerBuilder
+	exporter loggingExporter
 }
 
-func (ml *binaryMethodLogger) Log(c iblog.LogEntryConfig) {
-	// Invoke the original MethodLogger to maintain backward compatibility
-	if ml.originalMethodLogger != nil {
-		ml.originalMethodLogger.Log(c)
+func (bml *binaryMethodLogger) Log(c iblog.LogEntryConfig) {
+	binLogEntry := bml.mlb.Build(c)
+
+	grpcLogEntry := &grpcLogEntry{
+		CallID:     bml.callID,
+		SequenceID: binLogEntry.GetSequenceIdWithinCall(),
+		Logger:     loggerTypeToEventLogger[binLogEntry.Logger],
 	}
 
-	// Fetch the compiled binary logging log entry
-	if ml.childMethodLogger == nil {
-		logger.Info("No wrapped method logger found")
-		return
-	}
-	var binlogEntry *binlogpb.GrpcLogEntry
-	o, ok := ml.childMethodLogger.(interface {
-		Build(iblog.LogEntryConfig) *binlogpb.GrpcLogEntry
-	})
-	if !ok {
-		logger.Error("Failed to locate the Build method in wrapped method logger")
-		return
-	}
-	binlogEntry = o.Build(c)
-
-	// Translate to GrpcLogRecord
-	grpcLogRecord := &grpclogrecordpb.GrpcLogRecord{
-		Timestamp:   binlogEntry.GetTimestamp(),
-		RpcId:       ml.rpcID,
-		SequenceId:  binlogEntry.GetSequenceIdWithinCall(),
-		EventLogger: loggerTypeToEventLogger[binlogEntry.Logger],
-		// Making DEBUG the default LogLevel
-		LogLevel: grpclogrecordpb.GrpcLogRecord_LOG_LEVEL_DEBUG,
-	}
-
-	switch binlogEntry.GetType() {
+	switch binLogEntry.GetType() {
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_UNKNOWN:
-		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_UNKNOWN
+		grpcLogEntry.Type = eventTypeUnknown
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CLIENT_HEADER:
-		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_REQUEST_HEADER
-		if binlogEntry.GetClientHeader() != nil {
-			methodName := binlogEntry.GetClientHeader().MethodName
+		grpcLogEntry.Type = eventTypeClientHeader
+		if binLogEntry.GetClientHeader() != nil {
+			methodName := binLogEntry.GetClientHeader().MethodName
 			// Example method name: /grpc.testing.TestService/UnaryCall
 			if strings.Contains(methodName, "/") {
 				tokens := strings.Split(methodName, "/")
 				if len(tokens) == 3 {
-					// Record service name and method name for all events
-					ml.serviceName = tokens[1]
-					ml.methodName = tokens[2]
+					// Record service name and method name for all events.
+					bml.serviceName = tokens[1]
+					bml.methodName = tokens[2]
 				} else {
 					logger.Infof("Malformed method name: %v", methodName)
 				}
 			}
-			grpcLogRecord.Timeout = binlogEntry.GetClientHeader().Timeout
-			grpcLogRecord.Authority = binlogEntry.GetClientHeader().Authority
-			grpcLogRecord.Metadata = translateMetadata(binlogEntry.GetClientHeader().Metadata)
+			bml.authority = binLogEntry.GetClientHeader().GetAuthority()
+			grpcLogEntry.Payload.Timeout = binLogEntry.GetClientHeader().GetTimeout().AsDuration()
+			grpcLogEntry.Payload.Metadata = translateMetadata(binLogEntry.GetClientHeader().GetMetadata())
 		}
-		grpcLogRecord.PayloadTruncated = binlogEntry.GetPayloadTruncated()
-		setPeerIfPresent(binlogEntry, grpcLogRecord)
+		grpcLogEntry.PayloadTruncated = binLogEntry.GetPayloadTruncated()
+		setPeerIfPresent(binLogEntry, grpcLogEntry)
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_SERVER_HEADER:
-		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_RESPONSE_HEADER
-		grpcLogRecord.Metadata = translateMetadata(binlogEntry.GetServerHeader().Metadata)
-		grpcLogRecord.PayloadTruncated = binlogEntry.GetPayloadTruncated()
-		setPeerIfPresent(binlogEntry, grpcLogRecord)
+		grpcLogEntry.Type = eventTypeServerHeader
+		if binLogEntry.GetServerHeader() != nil {
+			grpcLogEntry.Payload.Metadata = translateMetadata(binLogEntry.GetServerHeader().GetMetadata())
+		}
+		grpcLogEntry.PayloadTruncated = binLogEntry.GetPayloadTruncated()
+		setPeerIfPresent(binLogEntry, grpcLogEntry)
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CLIENT_MESSAGE:
-		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_REQUEST_MESSAGE
-		grpcLogRecord.Message = binlogEntry.GetMessage().GetData()
-		grpcLogRecord.PayloadSize = binlogEntry.GetMessage().GetLength()
-		grpcLogRecord.PayloadTruncated = binlogEntry.GetPayloadTruncated()
+		grpcLogEntry.Type = eventTypeClientMessage
+		grpcLogEntry.Payload.Message = binLogEntry.GetMessage().GetData()
+		grpcLogEntry.Payload.MessageLength = binLogEntry.GetMessage().GetLength()
+		grpcLogEntry.PayloadTruncated = binLogEntry.GetPayloadTruncated()
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_SERVER_MESSAGE:
-		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_RESPONSE_MESSAGE
-		grpcLogRecord.Message = binlogEntry.GetMessage().GetData()
-		grpcLogRecord.PayloadSize = binlogEntry.GetMessage().GetLength()
-		grpcLogRecord.PayloadTruncated = binlogEntry.GetPayloadTruncated()
+		grpcLogEntry.Type = eventTypeServerMessage
+		grpcLogEntry.Payload.Message = binLogEntry.GetMessage().GetData()
+		grpcLogEntry.Payload.MessageLength = binLogEntry.GetMessage().GetLength()
+		grpcLogEntry.PayloadTruncated = binLogEntry.GetPayloadTruncated()
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CLIENT_HALF_CLOSE:
-		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_HALF_CLOSE
+		grpcLogEntry.Type = eventTypeClientHalfClose
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_SERVER_TRAILER:
-		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_TRAILER
-		grpcLogRecord.Metadata = translateMetadata(binlogEntry.GetTrailer().Metadata)
-		grpcLogRecord.StatusCode = binlogEntry.GetTrailer().GetStatusCode()
-		grpcLogRecord.StatusMessage = binlogEntry.GetTrailer().GetStatusMessage()
-		grpcLogRecord.StatusDetails = binlogEntry.GetTrailer().GetStatusDetails()
-		grpcLogRecord.PayloadTruncated = binlogEntry.GetPayloadTruncated()
-		setPeerIfPresent(binlogEntry, grpcLogRecord)
+		grpcLogEntry.Type = eventTypeServerTrailer
+		grpcLogEntry.Payload.Metadata = translateMetadata(binLogEntry.GetTrailer().Metadata)
+		grpcLogEntry.Payload.StatusCode = binLogEntry.GetTrailer().GetStatusCode()
+		grpcLogEntry.Payload.StatusMessage = binLogEntry.GetTrailer().GetStatusMessage()
+		grpcLogEntry.Payload.StatusDetails = binLogEntry.GetTrailer().GetStatusDetails()
+		grpcLogEntry.PayloadTruncated = binLogEntry.GetPayloadTruncated()
+		setPeerIfPresent(binLogEntry, grpcLogEntry)
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CANCEL:
-		grpcLogRecord.EventType = grpclogrecordpb.GrpcLogRecord_GRPC_CALL_CANCEL
+		grpcLogEntry.Type = eventTypeCancel
 	default:
-		logger.Infof("Unknown event type: %v", binlogEntry.Type)
+		logger.Infof("Unknown event type: %v", binLogEntry.Type)
 		return
 	}
-	grpcLogRecord.ServiceName = ml.serviceName
-	grpcLogRecord.MethodName = ml.methodName
-	ml.exporter.EmitGrpcLogRecord(grpcLogRecord)
+	grpcLogEntry.ServiceName = bml.serviceName
+	grpcLogEntry.MethodName = bml.methodName
+	grpcLogEntry.Authority = bml.authority
+
+	gcploggingEntry := gcplogging.Entry{
+		Timestamp: binLogEntry.GetTimestamp().AsTime(),
+		Severity:  100,
+		Payload:   grpcLogEntry,
+	}
+
+	bml.exporter.EmitGcpLoggingEntry(gcploggingEntry)
+}
+
+type eventConfig struct {
+	ServiceMethod map[string]bool
+	Services      map[string]bool
+	MatchAll      bool
+
+	// If true, won't log anything.
+	Exclude      bool
+	HeaderBytes  uint64
+	MessageBytes uint64
 }
 
 type binaryLogger struct {
-	// originalLogger is needed to ensure binary logging users won't be impacted
-	// by this plugin. Users are allowed to subscribe to a completely different
-	// set of methods.
-	originalLogger iblog.Logger
-	// exporter is a loggingExporter and the handle for uploading collected data
-	// to backends.
-	exporter unsafe.Pointer // loggingExporter
-	// logger is a iblog.Logger wrapped for reusing the pattern matching logic
-	// and the method logger creating logic.
-	logger unsafe.Pointer // iblog.Logger
+	EventConfigs []eventConfig
+	exporter     loggingExporter
 }
 
-func (l *binaryLogger) loadExporter() loggingExporter {
-	ptrPtr := atomic.LoadPointer(&l.exporter)
-	if ptrPtr == nil {
+func (bl *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
+	s, _, err := grpcutil.ParseMethod(methodName)
+	if err != nil {
+		logger.Infof("binarylogging: failed to parse %q: %v", methodName, err)
 		return nil
 	}
-	exporterPtr := (*loggingExporter)(ptrPtr)
-	return *exporterPtr
-}
-
-func (l *binaryLogger) loadLogger() iblog.Logger {
-	ptrPtr := atomic.LoadPointer(&l.logger)
-	if ptrPtr == nil {
-		return nil
-	}
-	loggerPtr := (*iblog.Logger)(ptrPtr)
-	return *loggerPtr
-}
-
-func (l *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
-	var ol iblog.MethodLogger
-
-	if l.originalLogger != nil {
-		ol = l.originalLogger.GetMethodLogger(methodName)
-	}
-
-	// Prevent logging from logging, traces, and metrics API calls.
-	if strings.HasPrefix(methodName, "/google.logging.v2.LoggingServiceV2/") || strings.HasPrefix(methodName, "/google.monitoring.v3.MetricService/") ||
-		strings.HasPrefix(methodName, "/google.devtools.cloudtrace.v2.TraceService/") {
-		return ol
-	}
-
-	// If no exporter is specified, there is no point creating a method
-	// logger. We don't have any chance to inject exporter after its
-	// creation.
-	exporter := l.loadExporter()
-	if exporter == nil {
-		return ol
-	}
-
-	// If no logger is specified, e.g., during init period, do nothing.
-	binLogger := l.loadLogger()
-	if binLogger == nil {
-		return ol
-	}
-
-	// If this method is not picked by LoggerConfig, do nothing.
-	ml := binLogger.GetMethodLogger(methodName)
-	if ml == nil {
-		return ol
-	}
-
-	return &binaryMethodLogger{
-		originalMethodLogger: ol,
-		childMethodLogger:    ml,
-		rpcID:                uuid.NewString(),
-		exporter:             exporter,
-	}
-}
-
-func (l *binaryLogger) Close() {
-	if l == nil {
-		return
-	}
-	ePtr := atomic.LoadPointer(&l.exporter)
-	if ePtr != nil {
-		exporter := (*loggingExporter)(ePtr)
-		if err := (*exporter).Close(); err != nil {
-			logger.Infof("Failed to close logging exporter: %v", err)
-		}
-	}
-}
-
-func validateExistingMethodLoggerConfig(existing *iblog.MethodLoggerConfig, filter logFilter) bool {
-	// In future, we could add more validations. Currently, we only check if the
-	// new filter configs are different than the existing one, if so, we log a
-	// warning.
-	if existing != nil && (existing.Header != uint64(filter.HeaderBytes) || existing.Message != uint64(filter.MessageBytes)) {
-		logger.Warningf("Ignored log_filter config: %+v", filter)
-	}
-	return existing == nil
-}
-
-func createBinaryLoggerConfig(filters []logFilter) iblog.LoggerConfig {
-	config := iblog.LoggerConfig{
-		Services: make(map[string]*iblog.MethodLoggerConfig),
-		Methods:  make(map[string]*iblog.MethodLoggerConfig),
-	}
-	// Try matching the filters one by one, pick the first match. The
-	// correctness of the log filter pattern is ensured by config.go.
-	for _, filter := range filters {
-		if filter.Pattern == "*" {
-			// Match a "*"
-			if !validateExistingMethodLoggerConfig(config.All, filter) {
-				continue
+	for _, eventConfig := range bl.EventConfigs {
+		if eventConfig.MatchAll || eventConfig.ServiceMethod[methodName] || eventConfig.Services[s] {
+			if eventConfig.Exclude {
+				return nil
 			}
-			config.All = &iblog.MethodLoggerConfig{Header: uint64(filter.HeaderBytes), Message: uint64(filter.MessageBytes)}
-			continue
-		}
-		tokens := strings.SplitN(filter.Pattern, "/", 2)
-		filterService := tokens[0]
-		filterMethod := tokens[1]
-		if filterMethod == "*" {
-			// Handle "p.s/*" case
-			if !validateExistingMethodLoggerConfig(config.Services[filterService], filter) {
-				continue
+
+			return &binaryMethodLogger{
+				exporter: bl.exporter,
+				mlb:      iblog.NewTruncatingMethodLogger(eventConfig.HeaderBytes, eventConfig.MessageBytes),
+				callID:   uuid.NewString(),
 			}
-			config.Services[filterService] = &iblog.MethodLoggerConfig{Header: uint64(filter.HeaderBytes), Message: uint64(filter.MessageBytes)}
-			continue
 		}
-		// Exact match like "p.s/m"
-		if !validateExistingMethodLoggerConfig(config.Methods[filter.Pattern], filter) {
-			continue
-		}
-		config.Methods[filter.Pattern] = &iblog.MethodLoggerConfig{Header: uint64(filter.HeaderBytes), Message: uint64(filter.MessageBytes)}
 	}
-	return config
-}
-
-// start is the core logic for setting up the custom binary logging logger, and
-// it's also useful for testing.
-func (l *binaryLogger) start(config *config, exporter loggingExporter) error {
-	filters := config.LogFilters
-	if len(filters) == 0 || exporter == nil {
-		// Doing nothing is allowed
-		if exporter != nil {
-			// The exporter is owned by binaryLogger, so we should close it if
-			// we are not planning to use it.
-			exporter.Close()
-		}
-		logger.Info("Skipping gRPC Observability logger: no config")
-		return nil
-	}
-
-	binLogger := iblog.NewLoggerFromConfig(createBinaryLoggerConfig(filters))
-	if binLogger != nil {
-		atomic.StorePointer(&l.logger, unsafe.Pointer(&binLogger))
-	}
-	atomic.StorePointer(&l.exporter, unsafe.Pointer(&exporter))
-	logger.Info("Start gRPC Observability logger")
 	return nil
 }
 
-func (l *binaryLogger) Start(ctx context.Context, config *config) error {
-	if config == nil || !config.EnableCloudLogging {
+func registerClientRPCEvents(clientRPCEvents []clientRPCEvents, exporter loggingExporter) {
+	if len(clientRPCEvents) == 0 {
+		return
+	}
+	var eventConfigs []eventConfig
+	for _, clientRPCEvent := range clientRPCEvents {
+		eventConfig := eventConfig{
+			Exclude:      clientRPCEvent.Exclude,
+			HeaderBytes:  uint64(clientRPCEvent.MaxMetadataBytes),
+			MessageBytes: uint64(clientRPCEvent.MaxMessageBytes),
+		}
+		for _, method := range clientRPCEvent.Methods {
+			eventConfig.ServiceMethod = make(map[string]bool)
+			eventConfig.Services = make(map[string]bool)
+			if method == "*" {
+				eventConfig.MatchAll = true
+				continue
+			}
+			s, m, err := grpcutil.ParseMethod(method)
+			if err != nil {
+				continue
+			}
+			if m == "*" {
+				eventConfig.Services[s] = true
+				continue
+			}
+			eventConfig.ServiceMethod[method] = true
+		}
+		eventConfigs = append(eventConfigs, eventConfig)
+	}
+	clientSideLogger := &binaryLogger{
+		EventConfigs: eventConfigs,
+		exporter:     exporter,
+	}
+	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.Logger) grpc.DialOption)(clientSideLogger))
+}
+
+func registerServerRPCEvents(serverRPCEvents []serverRPCEvents, exporter loggingExporter) {
+	if len(serverRPCEvents) == 0 {
+		return
+	}
+	var eventConfigs []eventConfig
+	for _, serverRPCEvent := range serverRPCEvents {
+		eventConfig := eventConfig{
+			Exclude:      serverRPCEvent.Exclude,
+			HeaderBytes:  uint64(serverRPCEvent.MaxMetadataBytes),
+			MessageBytes: uint64(serverRPCEvent.MaxMessageBytes),
+		}
+		for _, method := range serverRPCEvent.Methods {
+			eventConfig.ServiceMethod = make(map[string]bool)
+			eventConfig.Services = make(map[string]bool)
+			if method == "*" {
+				eventConfig.MatchAll = true
+				continue
+			}
+			s, m, err := grpcutil.ParseMethod(method)
+			if err != nil { // Shouldn't happen, already validated at this point.
+				continue
+			}
+			if m == "*" {
+				eventConfig.Services[s] = true
+				continue
+			}
+			eventConfig.ServiceMethod[method] = true
+		}
+		eventConfigs = append(eventConfigs, eventConfig)
+	}
+	serverSideLogger := &binaryLogger{
+		EventConfigs: eventConfigs,
+		exporter:     exporter,
+	}
+	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.Logger) grpc.ServerOption)(serverSideLogger))
+}
+
+func startLogging(ctx context.Context, config *config) error {
+	if config == nil || config.CloudLogging == nil {
 		return nil
 	}
-	if config.DestinationProjectID == "" {
-		return fmt.Errorf("failed to enable CloudLogging: empty destination_project_id")
-	}
-	exporter, err := newCloudLoggingExporter(ctx, config)
+	var err error
+	lExporter, err = newLoggingExporter(ctx, config)
 	if err != nil {
 		return fmt.Errorf("unable to create CloudLogging exporter: %v", err)
 	}
-	l.start(config, exporter)
+
+	cl := config.CloudLogging
+	registerClientRPCEvents(cl.ClientRPCEvents, lExporter)
+	registerServerRPCEvents(cl.ServerRPCEvents, lExporter)
 	return nil
 }
 
-func newBinaryLogger(iblogger iblog.Logger) *binaryLogger {
-	return &binaryLogger{
-		originalLogger: iblogger,
+func stopLogging() {
+	internal.ClearGlobalDialOptions()
+	internal.ClearGlobalServerOptions()
+	if lExporter != nil {
+		// This Close() call handles the flushing of the logging buffer.
+		lExporter.Close()
 	}
-}
-
-var defaultLogger *binaryLogger
-
-func prepareLogging() {
-	defaultLogger = newBinaryLogger(iblog.GetLogger())
-	iblog.SetLogger(defaultLogger)
 }
