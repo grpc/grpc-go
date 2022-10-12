@@ -247,7 +247,9 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	}
 
 	// Turn down 1, use 2
-	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	edsb.UpdateSubConnState(sc1, balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   fmt.Errorf("this is definitely a connection issue")})
 	addrs2 := <-cc.NewSubConnAddrsCh
 	if got, want := addrs2[0].Addr, testEndpointAddrs[2]; got != want {
 		t.Fatalf("sc is created with addr %v, want %v", got, want)
@@ -274,7 +276,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	}
 
 	// Should get an update with 1's old picker, to override 2's old picker.
-	if err := testErrPickerFromCh(cc.NewPickerCh, balancer.ErrTransientFailure); err != nil {
+	if err := testErrPickerFromCh(cc.NewPickerCh, fmt.Errorf("last connection error: this is definitely a connection issue")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -305,10 +307,12 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	}
 	sc1 := <-cc.NewSubConnCh
 	// Turn down 1, pick should error.
-	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	edsb.UpdateSubConnState(sc1, balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   fmt.Errorf("this is definitely a connection issue")})
 
 	// Test pick failure.
-	if err := testErrPickerFromCh(cc.NewPickerCh, balancer.ErrTransientFailure); err != nil {
+	if err := testErrPickerFromCh(cc.NewPickerCh, fmt.Errorf("last connection error: this is definitely a connection issue")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -463,8 +467,8 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 
 // Add localities to existing priorities.
 //
-//  - start with 2 locality with p0 and p1
-//  - add localities to existing p0 and p1
+//   - start with 2 locality with p0 and p1
+//   - add localities to existing p0 and p1
 func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	edsb, cc, xdsC, cleanup := setupTestEDS(t, nil)
 	defer cleanup()
