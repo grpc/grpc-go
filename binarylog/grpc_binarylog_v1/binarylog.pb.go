@@ -261,6 +261,7 @@ type GrpcLogEntry struct {
 	// according to the type of the log entry.
 	//
 	// Types that are assignable to Payload:
+	//
 	//	*GrpcLogEntry_ClientHeader
 	//	*GrpcLogEntry_ServerHeader
 	//	*GrpcLogEntry_Message

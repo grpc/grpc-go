@@ -300,6 +300,7 @@ type LoadParams struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Load:
+	//
 	//	*LoadParams_ClosedLoop
 	//	*LoadParams_Poisson
 	Load isLoadParams_Load `protobuf_oneof:"load"`
@@ -445,6 +446,7 @@ type ChannelArg struct {
 
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// Types that are assignable to Value:
+	//
 	//	*ChannelArg_StrValue
 	//	*ChannelArg_IntValue
 	Value isChannelArg_Value `protobuf_oneof:"value"`
@@ -834,6 +836,7 @@ type ClientArgs struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Argtype:
+	//
 	//	*ClientArgs_Setup
 	//	*ClientArgs_Mark
 	Argtype isClientArgs_Argtype `protobuf_oneof:"argtype"`
@@ -1061,6 +1064,7 @@ type ServerArgs struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Argtype:
+	//
 	//	*ServerArgs_Setup
 	//	*ServerArgs_Mark
 	Argtype isServerArgs_Argtype `protobuf_oneof:"argtype"`
