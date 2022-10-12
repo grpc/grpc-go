@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"sync"
 	"testing"
 
@@ -32,12 +31,14 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	binlogpb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/grpc_testing"
 )
 
-func cmpLoggingEntryList(entryList1 []*grpcLogEntry, entryList2 []*grpcLogEntry) error {
-	if diff := cmp.Diff(entryList1, entryList2,
+func cmpLoggingEntryList(got []*grpcLogEntry, want []*grpcLogEntry) error {
+	if diff := cmp.Diff(got, want,
 		cmpopts.IgnoreFields(grpcLogEntry{}, "CallID", "Peer"),
 		cmpopts.IgnoreFields(address{}, "IPPort", "Type"),
 		cmpopts.IgnoreFields(payload{}, "Timeout")); diff != "" {
@@ -78,7 +79,8 @@ func setupObservabilitySystemWithConfig(cfg *config) (func(), error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert config to JSON: %v", err)
 	}
-	os.Setenv(envObservabilityConfig, string(validConfigJSON))
+	oldObservabilityConfig := envconfig.ObservabilityConfig
+	envconfig.ObservabilityConfig = string(validConfigJSON)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	err = Start(ctx)
@@ -87,7 +89,7 @@ func setupObservabilitySystemWithConfig(cfg *config) (func(), error) {
 	}
 	return func() {
 		End()
-		os.Setenv(envObservabilityConfig, "")
+		envconfig.ObservabilityConfig = oldObservabilityConfig
 	}, nil
 }
 
@@ -131,8 +133,13 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 		},
 		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
 			for {
-				_, err := stream.Recv()
-				if err == io.EOF {
+				if _, err := stream.Recv(); err != nil {
+					return err
+				}
+				if err := stream.Send(&grpc_testing.StreamingOutputCallResponse{}); err != nil {
+					return err
+				}
+				if _, err := stream.Recv(); err == io.EOF {
 					return nil
 				}
 			}
@@ -148,57 +155,58 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
-	grpcLogEntriesWant := make([]*grpcLogEntry, 5)
-	grpcLogEntriesWant[0] = &grpcLogEntry{
-		Type:        eventTypeClientHeader,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		Authority:   ss.Address,
-		SequenceID:  1,
-		Payload: payload{
-			Metadata: map[string]string{},
+	grpcLogEntriesWant := []*grpcLogEntry{
+		{
+			Type:        eventTypeClientHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			Authority:   ss.Address,
+			SequenceID:  1,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
-	}
-	grpcLogEntriesWant[1] = &grpcLogEntry{
-		Type:        eventTypeClientMessage,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		SequenceID:  2,
-		Authority:   ss.Address,
-		Payload: payload{
-			Message: []uint8{},
+		{
+			Type:        eventTypeClientMessage,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  2,
+			Authority:   ss.Address,
+			Payload: payload{
+				Message: []uint8{},
+			},
 		},
-	}
-	grpcLogEntriesWant[2] = &grpcLogEntry{
-		Type:        eventTypeServerHeader,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		SequenceID:  3,
-		Authority:   ss.Address,
-		Payload: payload{
-			Metadata: map[string]string{},
+		{
+			Type:        eventTypeServerHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  3,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
-	}
-	grpcLogEntriesWant[3] = &grpcLogEntry{
-		Type:        eventTypeServerMessage,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		Authority:   ss.Address,
-		SequenceID:  4,
-	}
-	grpcLogEntriesWant[4] = &grpcLogEntry{
-		Type:        eventTypeServerTrailer,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		SequenceID:  5,
-		Authority:   ss.Address,
-		Payload: payload{
-			Metadata: map[string]string{},
+		{
+			Type:        eventTypeServerMessage,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			Authority:   ss.Address,
+			SequenceID:  4,
+		},
+		{
+			Type:        eventTypeServerTrailer,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  5,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
 	}
 	fle.mu.Lock()
@@ -215,51 +223,78 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ss.Client.FullDuplexCall failed: %f", err)
 	}
-
-	stream.CloseSend()
+	if err := stream.Send(&grpc_testing.StreamingOutputCallRequest{}); err != nil {
+		t.Fatalf("stream.Send() failed: %v", err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("stream.Recv() failed: %v", err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend()() failed: %v", err)
+	}
 	if _, err = stream.Recv(); err != io.EOF {
 		t.Fatalf("unexpected error: %v, expected an EOF error", err)
 	}
-	grpcLogEntriesWant = make([]*grpcLogEntry, 4)
-	grpcLogEntriesWant[0] = &grpcLogEntry{
-		Type:        eventTypeClientHeader,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "FullDuplexCall",
-		Authority:   ss.Address,
-		SequenceID:  1,
-		Payload: payload{
-			Metadata: map[string]string{},
+	grpcLogEntriesWant = []*grpcLogEntry{
+		{
+			Type:        eventTypeClientHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			Authority:   ss.Address,
+			SequenceID:  1,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
-	}
-	grpcLogEntriesWant[1] = &grpcLogEntry{
-		Type:        eventTypeClientHalfClose,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "FullDuplexCall",
-		SequenceID:  2,
-		Authority:   ss.Address,
-	}
-	grpcLogEntriesWant[2] = &grpcLogEntry{
-		Type:        eventTypeServerHeader,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "FullDuplexCall",
-		SequenceID:  3,
-		Authority:   ss.Address,
-		Payload: payload{
-			Metadata: map[string]string{},
+		{
+			Type:        eventTypeClientMessage,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			SequenceID:  2,
+			Authority:   ss.Address,
+			Payload: payload{
+				Message: []uint8{},
+			},
 		},
-	}
-	grpcLogEntriesWant[3] = &grpcLogEntry{
-		Type:        eventTypeServerTrailer,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "FullDuplexCall",
-		Authority:   ss.Address,
-		SequenceID:  4,
-		Payload: payload{
-			Metadata: map[string]string{},
+		{
+			Type:        eventTypeServerHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			SequenceID:  3,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
+		},
+		{
+			Type:        eventTypeServerMessage,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			SequenceID:  4,
+			Authority:   ss.Address,
+		},
+		{
+			Type:        eventTypeClientHalfClose,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			SequenceID:  5,
+			Authority:   ss.Address,
+		},
+		{
+			Type:        eventTypeServerTrailer,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			Authority:   ss.Address,
+			SequenceID:  6,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
 	}
 	fle.mu.Lock()
@@ -306,8 +341,13 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 		},
 		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
 			for {
-				_, err := stream.Recv()
-				if err == io.EOF {
+				if _, err := stream.Recv(); err != nil {
+					return err
+				}
+				if err := stream.Send(&grpc_testing.StreamingOutputCallResponse{}); err != nil {
+					return err
+				}
+				if _, err := stream.Recv(); err == io.EOF {
 					return nil
 				}
 			}
@@ -323,57 +363,58 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
-	grpcLogEntriesWant := make([]*grpcLogEntry, 5)
-	grpcLogEntriesWant[0] = &grpcLogEntry{
-		Type:        eventTypeClientHeader,
-		Logger:      loggerServer,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		Authority:   ss.Address,
-		SequenceID:  1,
-		Payload: payload{
-			Metadata: map[string]string{},
+	grpcLogEntriesWant := []*grpcLogEntry{
+		{
+			Type:        eventTypeClientHeader,
+			Logger:      loggerServer,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			Authority:   ss.Address,
+			SequenceID:  1,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
-	}
-	grpcLogEntriesWant[1] = &grpcLogEntry{
-		Type:        eventTypeClientMessage,
-		Logger:      loggerServer,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		SequenceID:  2,
-		Authority:   ss.Address,
-	}
-	grpcLogEntriesWant[2] = &grpcLogEntry{
-		Type:        eventTypeServerHeader,
-		Logger:      loggerServer,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		SequenceID:  3,
-		Authority:   ss.Address,
-		Payload: payload{
-			Metadata: map[string]string{},
+		{
+			Type:        eventTypeClientMessage,
+			Logger:      loggerServer,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  2,
+			Authority:   ss.Address,
 		},
-	}
-	grpcLogEntriesWant[3] = &grpcLogEntry{
-		Type:        eventTypeServerMessage,
-		Logger:      loggerServer,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		Authority:   ss.Address,
-		SequenceID:  4,
-		Payload: payload{
-			Message: []uint8{},
+		{
+			Type:        eventTypeServerHeader,
+			Logger:      loggerServer,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  3,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
-	}
-	grpcLogEntriesWant[4] = &grpcLogEntry{
-		Type:        eventTypeServerTrailer,
-		Logger:      loggerServer,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		SequenceID:  5,
-		Authority:   ss.Address,
-		Payload: payload{
-			Metadata: map[string]string{},
+		{
+			Type:        eventTypeServerMessage,
+			Logger:      loggerServer,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			Authority:   ss.Address,
+			SequenceID:  4,
+			Payload: payload{
+				Message: []uint8{},
+			},
+		},
+		{
+			Type:        eventTypeServerTrailer,
+			Logger:      loggerServer,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  5,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
 	}
 	fle.mu.Lock()
@@ -388,41 +429,79 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ss.Client.FullDuplexCall failed: %f", err)
 	}
-
-	stream.CloseSend()
+	if err := stream.Send(&grpc_testing.StreamingOutputCallRequest{}); err != nil {
+		t.Fatalf("stream.Send() failed: %v", err)
+	}
+	if _, err := stream.Recv(); err != nil {
+		t.Fatalf("stream.Recv() failed: %v", err)
+	}
+	if err := stream.CloseSend(); err != nil {
+		t.Fatalf("stream.CloseSend()() failed: %v", err)
+	}
 	if _, err = stream.Recv(); err != io.EOF {
 		t.Fatalf("unexpected error: %v, expected an EOF error", err)
 	}
 
-	grpcLogEntriesWant = make([]*grpcLogEntry, 3)
-	grpcLogEntriesWant[0] = &grpcLogEntry{
-		Type:        eventTypeClientHeader,
-		Logger:      loggerServer,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "FullDuplexCall",
-		Authority:   ss.Address,
-		SequenceID:  1,
-		Payload: payload{
-			Metadata: map[string]string{},
+	grpcLogEntriesWant = []*grpcLogEntry{
+		{
+			Type:        eventTypeClientHeader,
+			Logger:      loggerServer,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			Authority:   ss.Address,
+			SequenceID:  1,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
-	}
-	grpcLogEntriesWant[1] = &grpcLogEntry{
-		Type:        eventTypeClientHalfClose,
-		Logger:      loggerServer,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "FullDuplexCall",
-		SequenceID:  2,
-		Authority:   ss.Address,
-	}
-	grpcLogEntriesWant[2] = &grpcLogEntry{
-		Type:        eventTypeServerTrailer,
-		Logger:      loggerServer,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "FullDuplexCall",
-		Authority:   ss.Address,
-		SequenceID:  3,
-		Payload: payload{
-			Metadata: map[string]string{},
+		{
+			Type:        eventTypeClientMessage,
+			Logger:      loggerServer,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			SequenceID:  2,
+			Authority:   ss.Address,
+		},
+		{
+			Type:        eventTypeServerHeader,
+			Logger:      loggerServer,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			SequenceID:  3,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
+		},
+		{
+			Type:        eventTypeServerMessage,
+			Logger:      loggerServer,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			SequenceID:  4,
+			Authority:   ss.Address,
+			Payload: payload{
+				Message: []uint8{},
+			},
+		},
+		{
+			Type:        eventTypeClientHalfClose,
+			Logger:      loggerServer,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			SequenceID:  5,
+			Authority:   ss.Address,
+		},
+		{
+			Type:        eventTypeServerTrailer,
+			Logger:      loggerServer,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			Authority:   ss.Address,
+			SequenceID:  6,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
 	}
 	fle.mu.Lock()
@@ -527,6 +606,130 @@ func (s) TestBothClientAndServerRPCEvents(t *testing.T) {
 	fle.mu.Unlock()
 }
 
+// TestClientRPCEventsLogAll tests the observability system configured with a
+// client RPC event that logs every call and that truncates headers and
+// messages. It performs a Unary RPC, and expects events with truncated payloads
+// and payloadTruncated set to true, signifying the system properly truncated
+// headers and messages logged.
+func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
+	fle := &fakeLoggingExporter{
+		t: t,
+	}
+	defer func(ne func(ctx context.Context, config *config) (loggingExporter, error)) {
+		newLoggingExporter = ne
+	}(newLoggingExporter)
+
+	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+		return fle, nil
+	}
+
+	clientRPCEventLogAllConfig := &config{
+		ProjectID: "fake",
+		CloudLogging: &cloudLogging{
+			ClientRPCEvents: []clientRPCEvents{
+				{
+					Methods:          []string{"*"},
+					MaxMetadataBytes: 10,
+					MaxMessageBytes:  2,
+				},
+			},
+		},
+	}
+	cleanup, err := setupObservabilitySystemWithConfig(clientRPCEventLogAllConfig)
+	if err != nil {
+		t.Fatalf("error setting up observability: %v", err)
+	}
+	defer cleanup()
+
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
+			return &grpc_testing.SimpleResponse{}, nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	md := metadata.MD{
+		"key1": []string{"value1"},
+		"key2": []string{"value2"},
+	}
+	ctx = metadata.NewOutgoingContext(ctx, md)
+	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: []byte("00000")}}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+	grpcLogEntriesWant := []*grpcLogEntry{
+		{
+			Type:        eventTypeClientHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			Authority:   ss.Address,
+			SequenceID:  1,
+			Payload: payload{
+				Metadata: map[string]string{"key1": "value1"},
+			},
+			PayloadTruncated: true,
+		},
+		{
+			Type:        eventTypeClientMessage,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  2,
+			Authority:   ss.Address,
+			Payload: payload{
+				MessageLength: 9,
+				Message: []uint8{
+					0x1a,
+					0x07,
+				},
+			},
+			PayloadTruncated: true,
+		},
+		{
+			Type:        eventTypeServerHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  3,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
+		},
+		{
+			Type:        eventTypeServerMessage,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			Authority:   ss.Address,
+			SequenceID:  4,
+		},
+		{
+			Type:        eventTypeServerTrailer,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  5,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
+		},
+	}
+	fle.mu.Lock()
+	if err := cmpLoggingEntryList(fle.entries, grpcLogEntriesWant); err != nil {
+		fle.mu.Unlock()
+		t.Fatalf("error in logging entry list comparison %v", err)
+	}
+	fle.mu.Unlock()
+}
+
 // TestPrecedenceOrderingInConfiguration tests the scenario where the logging
 // part of observability is configured with three client RPC events, the first
 // two on specific methods in the service, the last one for any method within
@@ -608,57 +811,58 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
-	grpcLogEntriesWant := make([]*grpcLogEntry, 5)
-	grpcLogEntriesWant[0] = &grpcLogEntry{
-		Type:        eventTypeClientHeader,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		Authority:   ss.Address,
-		SequenceID:  1,
-		Payload: payload{
-			Metadata: map[string]string{},
+	grpcLogEntriesWant := []*grpcLogEntry{
+		{
+			Type:        eventTypeClientHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			Authority:   ss.Address,
+			SequenceID:  1,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
-	}
-	grpcLogEntriesWant[1] = &grpcLogEntry{
-		Type:        eventTypeClientMessage,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		SequenceID:  2,
-		Authority:   ss.Address,
-		Payload: payload{
-			Message: []uint8{},
+		{
+			Type:        eventTypeClientMessage,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  2,
+			Authority:   ss.Address,
+			Payload: payload{
+				Message: []uint8{},
+			},
 		},
-	}
-	grpcLogEntriesWant[2] = &grpcLogEntry{
-		Type:        eventTypeServerHeader,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		SequenceID:  3,
-		Authority:   ss.Address,
-		Payload: payload{
-			Metadata: map[string]string{},
+		{
+			Type:        eventTypeServerHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  3,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
-	}
-	grpcLogEntriesWant[3] = &grpcLogEntry{
-		Type:        eventTypeServerMessage,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		Authority:   ss.Address,
-		SequenceID:  4,
-	}
-	grpcLogEntriesWant[4] = &grpcLogEntry{
-		Type:        eventTypeServerTrailer,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "UnaryCall",
-		SequenceID:  5,
-		Authority:   ss.Address,
-		Payload: payload{
-			Metadata: map[string]string{},
+		{
+			Type:        eventTypeServerMessage,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			Authority:   ss.Address,
+			SequenceID:  4,
+		},
+		{
+			Type:        eventTypeServerTrailer,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  5,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
 	}
 
@@ -696,46 +900,47 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 		t.Fatalf("unexpected error: %v, expected an EOF error", err)
 	}
 
-	grpcLogEntriesWant = make([]*grpcLogEntry, 4)
-	grpcLogEntriesWant[0] = &grpcLogEntry{
-		Type:        eventTypeClientHeader,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "FullDuplexCall",
-		Authority:   ss.Address,
-		SequenceID:  1,
-		Payload: payload{
-			Metadata: map[string]string{},
+	grpcLogEntriesWant = []*grpcLogEntry{
+		{
+			Type:        eventTypeClientHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			Authority:   ss.Address,
+			SequenceID:  1,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
-	}
-	grpcLogEntriesWant[1] = &grpcLogEntry{
-		Type:        eventTypeClientHalfClose,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "FullDuplexCall",
-		SequenceID:  2,
-		Authority:   ss.Address,
-	}
-	grpcLogEntriesWant[2] = &grpcLogEntry{
-		Type:        eventTypeServerHeader,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "FullDuplexCall",
-		SequenceID:  3,
-		Authority:   ss.Address,
-		Payload: payload{
-			Metadata: map[string]string{},
+		{
+			Type:        eventTypeClientHalfClose,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			SequenceID:  2,
+			Authority:   ss.Address,
 		},
-	}
-	grpcLogEntriesWant[3] = &grpcLogEntry{
-		Type:        eventTypeServerTrailer,
-		Logger:      loggerClient,
-		ServiceName: "grpc.testing.TestService",
-		MethodName:  "FullDuplexCall",
-		Authority:   ss.Address,
-		SequenceID:  4,
-		Payload: payload{
-			Metadata: map[string]string{},
+		{
+			Type:        eventTypeServerHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			SequenceID:  3,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
+		},
+		{
+			Type:        eventTypeServerTrailer,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "FullDuplexCall",
+			Authority:   ss.Address,
+			SequenceID:  4,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
 		},
 	}
 	fle.mu.Lock()

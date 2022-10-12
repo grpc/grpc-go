@@ -29,13 +29,12 @@ import (
 
 	gcplogging "cloud.google.com/go/logging"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/grpc/internal/envconfig"
 )
 
 const (
-	envObservabilityConfig     = "GRPC_CONFIG_OBSERVABILITY"
-	envObservabilityConfigJSON = "GRPC_CONFIG_OBSERVABILITY_JSON"
-	envProjectID               = "GOOGLE_CLOUD_PROJECT"
-	methodStringRegexpStr      = `^([\w./]+)/((?:\w+)|[*])$`
+	envProjectID          = "GOOGLE_CLOUD_PROJECT"
+	methodStringRegexpStr = `^([\w./]+)/((?:\w+)|[*])$`
 )
 
 var methodStringRegexp = regexp.MustCompile(methodStringRegexpStr)
@@ -113,14 +112,14 @@ func unmarshalAndVerifyConfig(rawJSON json.RawMessage) (*config, error) {
 }
 
 func parseObservabilityConfig() (*config, error) {
-	if fileSystemPath := os.Getenv(envObservabilityConfigJSON); fileSystemPath != "" {
-		content, err := ioutil.ReadFile(fileSystemPath) // TODO: Switch to os.ReadFile once dropped support for go 1.15
+	if envconfig.ObservabilityConfigFile != "" {
+		content, err := ioutil.ReadFile(envconfig.ObservabilityConfigFile) // TODO: Switch to os.ReadFile once dropped support for go 1.15
 		if err != nil {
-			return nil, fmt.Errorf("error reading observability configuration file %q: %v", fileSystemPath, err)
+			return nil, fmt.Errorf("error reading observability configuration file %q: %v", envconfig.ObservabilityConfigFile, err)
 		}
 		return unmarshalAndVerifyConfig(content)
-	} else if content := os.Getenv(envObservabilityConfig); content != "" {
-		return unmarshalAndVerifyConfig([]byte(content))
+	} else if envconfig.ObservabilityConfig != "" {
+		return unmarshalAndVerifyConfig([]byte(envconfig.ObservabilityConfig))
 	}
 	// If the ENV var doesn't exist, do nothing
 	return nil, nil

@@ -51,7 +51,7 @@ func Start(ctx context.Context) error {
 		return err
 	}
 	if config == nil {
-		return fmt.Errorf("no ObservabilityConfig found, it can be set via env %s", envObservabilityConfig)
+		return fmt.Errorf("no ObservabilityConfig found")
 	}
 
 	// Set the project ID if it isn't configured manually.

@@ -31,6 +31,7 @@ import (
 
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/stubserver"
@@ -132,8 +133,14 @@ func (s) TestRefuseStartWithInvalidPatterns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to convert config to JSON: %v", err)
 	}
-	os.Setenv(envObservabilityConfigJSON, "")
-	os.Setenv(envObservabilityConfig, string(invalidConfigJSON))
+	oldObservabilityConfig := envconfig.ObservabilityConfig
+	oldObservabilityConfigFile := envconfig.ObservabilityConfigFile
+	envconfig.ObservabilityConfig = string(invalidConfigJSON)
+	envconfig.ObservabilityConfigFile = ""
+	defer func() {
+		envconfig.ObservabilityConfig = oldObservabilityConfig
+		envconfig.ObservabilityConfigFile = oldObservabilityConfigFile
+	}()
 	// If there is at least one invalid pattern, which should not be silently tolerated.
 	if err := Start(context.Background()); err == nil {
 		t.Fatalf("Invalid patterns not triggering error")
@@ -162,8 +169,14 @@ func (s) TestRefuseStartWithExcludeAndWildCardAll(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to convert config to JSON: %v", err)
 	}
-	os.Setenv(envObservabilityConfigJSON, "")
-	os.Setenv(envObservabilityConfig, string(invalidConfigJSON))
+	oldObservabilityConfig := envconfig.ObservabilityConfig
+	oldObservabilityConfigFile := envconfig.ObservabilityConfigFile
+	envconfig.ObservabilityConfig = string(invalidConfigJSON)
+	envconfig.ObservabilityConfigFile = ""
+	defer func() {
+		envconfig.ObservabilityConfig = oldObservabilityConfig
+		envconfig.ObservabilityConfigFile = oldObservabilityConfigFile
+	}()
 	// If there is at least one invalid pattern, which should not be silently tolerated.
 	if err := Start(context.Background()); err == nil {
 		t.Fatalf("Invalid patterns not triggering error")
@@ -183,10 +196,11 @@ func createTmpConfigInFileSystem(rawJSON string) (func(), error) {
 	if err != nil {
 		return nil, fmt.Errorf("cannot write marshalled JSON: %v", err)
 	}
-	os.Setenv(envObservabilityConfigJSON, configJSONFile.Name())
+	oldObservabilityConfigFile := envconfig.ObservabilityConfigFile
+	envconfig.ObservabilityConfigFile = configJSONFile.Name()
 	return func() {
 		configJSONFile.Close()
-		os.Setenv(envObservabilityConfigJSON, "")
+		envconfig.ObservabilityConfigFile = oldObservabilityConfigFile
 	}, nil
 }
 
@@ -255,7 +269,11 @@ func (s) TestBothConfigEnvVarsSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to convert config to JSON: %v", err)
 	}
-	os.Setenv(envObservabilityConfig, string(validConfigJSON))
+	oldObservabilityConfig := envconfig.ObservabilityConfig
+	envconfig.ObservabilityConfig = string(validConfigJSON)
+	defer func() {
+		envconfig.ObservabilityConfig = oldObservabilityConfig
+	}()
 	if err := Start(context.Background()); err == nil {
 		t.Fatalf("Invalid patterns not triggering error")
 	}
@@ -266,16 +284,25 @@ func (s) TestBothConfigEnvVarsSet(t *testing.T) {
 // location in the file system for configuration, and this location doesn't have
 // a file (or valid configuration).
 func (s) TestErrInFileSystemEnvVar(t *testing.T) {
-	os.Setenv(envObservabilityConfigJSON, "/this-file/does-not-exist")
-	defer os.Setenv(envObservabilityConfigJSON, "")
+	oldObservabilityConfigFile := envconfig.ObservabilityConfigFile
+	envconfig.ObservabilityConfigFile = "/this-file/does-not-exist"
+	defer func() {
+		envconfig.ObservabilityConfigFile = oldObservabilityConfigFile
+	}()
 	if err := Start(context.Background()); err == nil {
 		t.Fatalf("Invalid file system path not triggering error")
 	}
 }
 
 func (s) TestNoEnvSet(t *testing.T) {
-	os.Setenv(envObservabilityConfigJSON, "")
-	os.Setenv(envObservabilityConfig, "")
+	oldObservabilityConfig := envconfig.ObservabilityConfig
+	oldObservabilityConfigFile := envconfig.ObservabilityConfigFile
+	envconfig.ObservabilityConfig = ""
+	envconfig.ObservabilityConfigFile = ""
+	defer func() {
+		envconfig.ObservabilityConfig = oldObservabilityConfig
+		envconfig.ObservabilityConfigFile = oldObservabilityConfigFile
+	}()
 	// If there is no observability config set at all, the Start should return an error.
 	if err := Start(context.Background()); err == nil {
 		t.Fatalf("Invalid patterns not triggering error")
@@ -432,8 +459,14 @@ func (s) TestStartErrorsThenEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to convert config to JSON: %v", err)
 	}
-	os.Setenv(envObservabilityConfigJSON, "")
-	os.Setenv(envObservabilityConfig, string(invalidConfigJSON))
+	oldObservabilityConfig := envconfig.ObservabilityConfig
+	oldObservabilityConfigFile := envconfig.ObservabilityConfigFile
+	envconfig.ObservabilityConfig = string(invalidConfigJSON)
+	envconfig.ObservabilityConfigFile = ""
+	defer func() {
+		envconfig.ObservabilityConfig = oldObservabilityConfig
+		envconfig.ObservabilityConfigFile = oldObservabilityConfigFile
+	}()
 	if err := Start(context.Background()); err == nil {
 		t.Fatalf("Invalid patterns not triggering error")
 	}
