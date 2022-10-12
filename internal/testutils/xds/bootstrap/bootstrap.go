@@ -16,9 +16,8 @@
  *
  */
 
-// Package xds contains types that need to be shared between code under
-// google.golang.org/grpc/xds/... and the rest of gRPC.
-package xds
+// Package bootstrap provides functionality to generate bootstrap configuration.
+package bootstrap
 
 import (
 	"encoding/json"
@@ -42,8 +41,8 @@ const (
 	TransportV3
 )
 
-// BootstrapOptions wraps the parameters passed to SetupBootstrapFile.
-type BootstrapOptions struct {
+// Options wraps the parameters used to generate bootstrap configuration.
+type Options struct {
 	// Version is the xDS transport protocol version.
 	Version TransportAPI
 	// NodeID is the node identifier of the gRPC client/server node in the
@@ -70,15 +69,15 @@ type BootstrapOptions struct {
 	Authorities map[string]string
 }
 
-// SetupBootstrapFile creates a temporary file with bootstrap contents, based on
-// the passed in options, and updates the bootstrap environment variable to
-// point to this file.
+// CreateFile creates a temporary file with bootstrap contents, based on the
+// passed in options, and updates the bootstrap environment variable to point to
+// this file.
 //
 // Returns a cleanup function which will be non-nil if the setup process was
 // completed successfully. It is the responsibility of the caller to invoke the
 // cleanup function at the end of the test.
-func SetupBootstrapFile(opts BootstrapOptions) (func(), error) {
-	bootstrapContents, err := BootstrapContents(opts)
+func CreateFile(opts Options) (func(), error) {
+	bootstrapContents, err := Contents(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -100,10 +99,9 @@ func SetupBootstrapFile(opts BootstrapOptions) (func(), error) {
 	}, nil
 }
 
-// BootstrapContents returns the contents to go into a bootstrap file,
-// environment, or configuration passed to
-// xds.NewXDSResolverWithConfigForTesting.
-func BootstrapContents(opts BootstrapOptions) ([]byte, error) {
+// Contents returns the contents to go into a bootstrap file, environment, or
+// configuration passed to xds.NewXDSResolverWithConfigForTesting.
+func Contents(opts Options) ([]byte, error) {
 	cfg := &bootstrapConfig{
 		XdsServers: []server{
 			{
