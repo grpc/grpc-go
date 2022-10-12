@@ -114,26 +114,27 @@ type lbConfigJSON struct {
 // internal form or returns an error if the config is invalid.
 //
 // When parsing a config update, the following validations are performed:
-// - routeLookupConfig:
-//   - grpc_keybuilders field:
-//   - must have at least one entry
-//   - must not have two entries with the same `Name`
-//   - within each entry:
-//   - must have at least one `Name`
-//   - must not have a `Name` with the `service` field unset or empty
-//   - within each `headers` entry:
-//   - must not have `required_match` set
-//   - must not have `key` unset or empty
-//   - across all `headers`, `constant_keys` and `extra_keys` fields:
-//   - must not have the same `key` specified twice
-//   - no `key` must be the empty string
-//   - `lookup_service` field must be set and must parse as a target URI
-//   - if `max_age` > 5m, it should be set to 5 minutes
-//   - if `stale_age` > `max_age`, ignore it
-//   - if `stale_age` is set, then `max_age` must also be set
-//   - ignore `valid_targets` field
-//   - `cache_size_bytes` field must have a value greater than 0, and if its
-//     value is greater than 5M, we cap it at 5M
+//
+//	 / routeLookupConfig:
+//	   / grpc_keybuilders field:
+//	     / must have at least one entry
+//	     / must not have two entries with the same `Name`
+//	     / within each entry:
+//	       / must have at least one `Name`
+//	       / must not have a `Name` with the `service` field unset or empty
+//	       / within each `headers` entry:
+//	         / must not have `required_match` set
+//	         / must not have `key` unset or empty
+//	       / across all `headers`, `constant_keys` and `extra_keys` fields:
+//	         / must not have the same `key` specified twice
+//	         / no `key` must be the empty string
+//	/ `lookup_service` field must be set and must parse as a target URI
+//	/ if `max_age` > 5m, it should be set to 5 minutes
+//	/ if `stale_age` > `max_age`, ignore it
+//	/ if `stale_age` is set, then `max_age` must also be set
+//	/ ignore `valid_targets` field
+//	/ `cache_size_bytes` field must have a value greater than 0, and if its
+//	  value is greater than 5M, we cap it at 5M
 //
 // - routeLookupChannelServiceConfig:
 //   - if specified, must parse as valid service config
