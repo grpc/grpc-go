@@ -163,9 +163,9 @@ func (s) TestAuthorityNoneDefaultAuthority(t *testing.T) {
 }
 
 // TestAuthorityShare covers that
-// - watch with the same authority name doesn't create new authority
-// - watch with different authority name but same authority config doesn't
-//   create new authority
+//   - watch with the same authority name doesn't create new authority
+//   - watch with different authority name but same authority config doesn't
+//     create new authority
 func (s) TestAuthorityShare(t *testing.T) {
 	overrideFedEnvVar(t)
 	ctrlCh := overrideNewController(t)
@@ -210,9 +210,9 @@ func (s) TestAuthorityShare(t *testing.T) {
 }
 
 // TestAuthorityIdle covers that
-// - authorities are put in a timeout cache when the last watch is canceled
-// - idle authorities are not immediately closed. They will be closed after a
-//   timeout.
+//   - authorities are put in a timeout cache when the last watch is canceled
+//   - idle authorities are not immediately closed. They will be closed after a
+//     timeout.
 func (s) TestAuthorityIdleTimeout(t *testing.T) {
 	overrideFedEnvVar(t)
 	ctrlCh := overrideNewController(t)

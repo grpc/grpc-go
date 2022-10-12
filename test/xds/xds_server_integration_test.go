@@ -51,9 +51,9 @@ func (*testService) UnaryCall(context.Context, *testpb.SimpleRequest) (*testpb.S
 }
 
 // setupGRPCServer performs the following:
-// - spin up an xDS-enabled gRPC server, configure it with xdsCredentials and
-//   register the test service on it
-// - create a local TCP listener and start serving on it
+//   - spin up an xDS-enabled gRPC server, configure it with xdsCredentials and
+//     register the test service on it
+//   - create a local TCP listener and start serving on it
 //
 // Returns the following:
 // - local listener on which the xDS-enabled gRPC server is serving on
@@ -118,12 +118,12 @@ func hostPortFromListener(lis net.Listener) (string, uint32, error) {
 // fallback functionality.
 //
 // The following sequence of events happen as part of this test:
-// - An xDS-enabled gRPC server is created and xDS credentials are configured.
-// - xDS is enabled on the client by the use of the xds:/// scheme, and xDS
-//   credentials are configured.
-// - Control plane is configured to not send any security configuration to both
-//   the client and the server. This results in both of them using the
-//   configured fallback credentials (which is insecure creds in this case).
+//   - An xDS-enabled gRPC server is created and xDS credentials are configured.
+//   - xDS is enabled on the client by the use of the xds:/// scheme, and xDS
+//     credentials are configured.
+//   - Control plane is configured to not send any security configuration to both
+//     the client and the server. This results in both of them using the
+//     configured fallback credentials (which is insecure creds in this case).
 func (s) TestServerSideXDS_Fallback(t *testing.T) {
 	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
 	defer cleanup1()
@@ -185,12 +185,12 @@ func (s) TestServerSideXDS_Fallback(t *testing.T) {
 // credentials with file watcher certificate provider.
 //
 // The following sequence of events happen as part of this test:
-// - An xDS-enabled gRPC server is created and xDS credentials are configured.
-// - xDS is enabled on the client by the use of the xds:/// scheme, and xDS
-//   credentials are configured.
-// - Control plane is configured to send security configuration to both the
-//   client and the server, pointing to the file watcher certificate provider.
-//   We verify both TLS and mTLS scenarios.
+//   - An xDS-enabled gRPC server is created and xDS credentials are configured.
+//   - xDS is enabled on the client by the use of the xds:/// scheme, and xDS
+//     credentials are configured.
+//   - Control plane is configured to send security configuration to both the
+//     client and the server, pointing to the file watcher certificate provider.
+//     We verify both TLS and mTLS scenarios.
 func (s) TestServerSideXDS_FileWatcherCerts(t *testing.T) {
 	tests := []struct {
 		name     string

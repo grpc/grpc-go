@@ -105,6 +105,7 @@ func (s) TestClusterWatchExpiryTimerStop(t *testing.T) {
 // - an update is received after a watch()
 // - another update is received, with one resource removed
 //   - this should trigger callback with resource removed error
+//
 // - one more update without the removed resource
 //   - the callback (above) shouldn't receive any update
 func (s) TestClusterResourceRemoved(t *testing.T) {

@@ -426,7 +426,6 @@ func (b *rlsBalancer) ExitIdle() {
 
 // sendNewPickerLocked pushes a new picker on to the channel.
 //
-//
 // Note that regardless of what connectivity state is reported, the policy will
 // return its own picker, and not a picker that unconditionally queues
 // (typically used for IDLE or CONNECTING) or a picker that unconditionally
@@ -485,14 +484,14 @@ func (b *rlsBalancer) sendNewPicker() {
 }
 
 // The aggregated connectivity state reported is determined as follows:
-// - If there is at least one child policy in state READY, the connectivity
-//   state is READY.
-// - Otherwise, if there is at least one child policy in state CONNECTING, the
-//   connectivity state is CONNECTING.
-// - Otherwise, if there is at least one child policy in state IDLE, the
-//   connectivity state is IDLE.
-// - Otherwise, all child policies are in TRANSIENT_FAILURE, and the
-//   connectivity state is TRANSIENT_FAILURE.
+//   - If there is at least one child policy in state READY, the connectivity
+//     state is READY.
+//   - Otherwise, if there is at least one child policy in state CONNECTING, the
+//     connectivity state is CONNECTING.
+//   - Otherwise, if there is at least one child policy in state IDLE, the
+//     connectivity state is IDLE.
+//   - Otherwise, all child policies are in TRANSIENT_FAILURE, and the
+//     connectivity state is TRANSIENT_FAILURE.
 //
 // If the RLS policy has no child policies and no configured default target,
 // then we will report connectivity state IDLE.
@@ -542,9 +541,9 @@ func (b *rlsBalancer) UpdateState(id string, state balancer.State) {
 // This method is invoked by the BalancerGroup whenever a child policy sends a
 // state update. We cache the child policy's connectivity state and picker for
 // two reasons:
-// - to suppress connectivity state transitions from TRANSIENT_FAILURE to states
-//   other than READY
-// - to delegate picks to child policies
+//   - to suppress connectivity state transitions from TRANSIENT_FAILURE to states
+//     other than READY
+//   - to delegate picks to child policies
 func (b *rlsBalancer) handleChildPolicyStateUpdate(id string, newState balancer.State) {
 	b.stateMu.Lock()
 	defer b.stateMu.Unlock()

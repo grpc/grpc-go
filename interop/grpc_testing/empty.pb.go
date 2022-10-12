@@ -43,10 +43,9 @@ const _ = proto.ProtoPackageIsVersion4
 // messages in your project. A typical example is to use it as argument or the
 // return value of a service API. For instance:
 //
-//   service Foo {
-//     rpc Bar (grpc.testing.Empty) returns (grpc.testing.Empty) { };
-//   };
-//
+//	service Foo {
+//	  rpc Bar (grpc.testing.Empty) returns (grpc.testing.Empty) { };
+//	};
 type Empty struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache

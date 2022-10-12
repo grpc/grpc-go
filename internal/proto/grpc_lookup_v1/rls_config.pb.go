@@ -204,8 +204,10 @@ func (x *GrpcKeyBuilder) GetConstantKeys() map[string]string {
 //
 // For a service where the project id can be expressed either as a subdomain or
 // in the path, separate HttpKeyBuilders must be used:
-//     host_pattern: 'example.com' path_pattern: '/{id}/{object}/**'
-//     host_pattern: '{id}.example.com' path_pattern: '/{object}/**'
+//
+//	host_pattern: 'example.com' path_pattern: '/{id}/{object}/**'
+//	host_pattern: '{id}.example.com' path_pattern: '/{object}/**'
+//
 // If the host is exactly 'example.com', the first path segment will be used as
 // the id and the second segment as the object. If the host has a subdomain, the
 // subdomain will be used as the id and the first segment as the object. If

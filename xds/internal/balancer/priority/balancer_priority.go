@@ -53,18 +53,18 @@ var (
 // set parent ClientConn to TransientFailure
 // - Otherwise, Scan all children from p0, and check balancer stats:
 //   - For any of the following cases:
-//     - If balancer is not started (not built), this is either a new child with
-//       high priority, or a new builder for an existing child.
-//     - If balancer is Connecting and has non-nil initTimer (meaning it
-//       transitioned from Ready or Idle to connecting, not from TF, so we
-//       should give it init-time to connect).
-//     - If balancer is READY or IDLE
-//     - If this is the lowest priority
+//   - If balancer is not started (not built), this is either a new child with
+//     high priority, or a new builder for an existing child.
+//   - If balancer is Connecting and has non-nil initTimer (meaning it
+//     transitioned from Ready or Idle to connecting, not from TF, so we
+//     should give it init-time to connect).
+//   - If balancer is READY or IDLE
+//   - If this is the lowest priority
 //   - do the following:
-//     - if this is not the old childInUse, override picker so old picker is no
-//       longer used.
-//     - switch to it (because all higher priorities are neither new or Ready)
-//     - forward the new addresses and config
+//   - if this is not the old childInUse, override picker so old picker is no
+//     longer used.
+//   - switch to it (because all higher priorities are neither new or Ready)
+//   - forward the new addresses and config
 //
 // Caller must hold b.mu.
 func (b *priorityBalancer) syncPriority(childUpdating string) {

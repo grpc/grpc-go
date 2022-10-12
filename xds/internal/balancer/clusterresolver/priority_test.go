@@ -463,8 +463,8 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 
 // Add localities to existing priorities.
 //
-//  - start with 2 locality with p0 and p1
-//  - add localities to existing p0 and p1
+//   - start with 2 locality with p0 and p1
+//   - add localities to existing p0 and p1
 func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	edsb, cc, xdsC, cleanup := setupTestEDS(t, nil)
 	defer cleanup()

@@ -19,7 +19,7 @@
 // Package sts implements call credentials using STS (Security Token Service) as
 // defined in https://tools.ietf.org/html/rfc8693.
 //
-// Experimental
+// # Experimental
 //
 // Notice: All APIs in this package are experimental and may be changed or
 // removed in a later release.
@@ -245,12 +245,12 @@ func (c *callCreds) cachedMetadata() map[string]string {
 
 // constructRequest creates the STS request body in JSON based on the provided
 // options.
-// - Contents of the subjectToken are read from the file specified in
-//   options. If we encounter an error here, we bail out.
-// - Contents of the actorToken are read from the file specified in options.
-//   If we encounter an error here, we ignore this field because this is
-//   optional.
-// - Most of the other fields in the request come directly from options.
+//   - Contents of the subjectToken are read from the file specified in
+//     options. If we encounter an error here, we bail out.
+//   - Contents of the actorToken are read from the file specified in options.
+//     If we encounter an error here, we ignore this field because this is
+//     optional.
+//   - Most of the other fields in the request come directly from options.
 //
 // A new HTTP request is created by calling http.NewRequestWithContext() and
 // passing the provided context, thereby enforcing any timeouts specified in

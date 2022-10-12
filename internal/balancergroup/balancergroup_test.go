@@ -167,8 +167,9 @@ func (s) TestBalancerGroup_start_close(t *testing.T) {
 // into balancer group inline when it gets an update.
 //
 // The potential deadlock can happen if we
-//  - hold a lock and send updates to balancer (e.g. update resolved addresses)
-//  - the balancer calls back (NewSubConn or update picker) in line
+//   - hold a lock and send updates to balancer (e.g. update resolved addresses)
+//   - the balancer calls back (NewSubConn or update picker) in line
+//
 // The callback will try to hold hte same lock again, which will cause a
 // deadlock.
 //

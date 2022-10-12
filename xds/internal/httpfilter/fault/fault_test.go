@@ -92,11 +92,11 @@ func (*testService) FullDuplexCall(stream testpb.TestService_FullDuplexCallServe
 // - create a local TCP listener and start serving on it
 //
 // Returns the following:
-// - the management server: tests use this to configure resources
-// - nodeID expected by the management server: this is set in the Node proto
-//   sent by the xdsClient for queries.
-// - the port the server is listening on
-// - cleanup function to be invoked by the tests when done
+//   - the management server: tests use this to configure resources
+//   - nodeID expected by the management server: this is set in the Node proto
+//     sent by the xdsClient for queries.
+//   - the port the server is listening on
+//   - cleanup function to be invoked by the tests when done
 func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
