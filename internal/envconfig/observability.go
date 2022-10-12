@@ -21,8 +21,8 @@ package envconfig
 import "os"
 
 const (
-	envObservabilityConfig     = "GRPC_OBSERVABILITY_CONFIG"
-	envObservabilityConfigFile = "GRPC_OBSERVABILITY_CONFIG_FILE"
+	envObservabilityConfig     = "GRPC_GCP_OBSERVABILITY_CONFIG"
+	envObservabilityConfigFile = "GRPC_GCP_OBSERVABILITY_CONFIG_FILE"
 )
 
 var (

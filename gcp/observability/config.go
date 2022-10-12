@@ -112,10 +112,11 @@ func unmarshalAndVerifyConfig(rawJSON json.RawMessage) (*config, error) {
 }
 
 func parseObservabilityConfig() (*config, error) {
-	if envconfig.ObservabilityConfigFile != "" {
-		content, err := ioutil.ReadFile(envconfig.ObservabilityConfigFile) // TODO: Switch to os.ReadFile once dropped support for go 1.15
+	if f := envconfig.ObservabilityConfigFile; f != "" {
+		logger.Warning("Ignoring GRPC_GCP_OBSERVABILITY_CONFIG and using GRPC_GCP_OBSERVABILITY_CONFIG_FILE contents.")
+		content, err := ioutil.ReadFile(f) // TODO: Switch to os.ReadFile once dropped support for go 1.15
 		if err != nil {
-			return nil, fmt.Errorf("error reading observability configuration file %q: %v", envconfig.ObservabilityConfigFile, err)
+			return nil, fmt.Errorf("error reading observability configuration file %q: %v", f, err)
 		}
 		return unmarshalAndVerifyConfig(content)
 	} else if envconfig.ObservabilityConfig != "" {

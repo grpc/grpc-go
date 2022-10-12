@@ -41,7 +41,7 @@ func cmpLoggingEntryList(got []*grpcLogEntry, want []*grpcLogEntry) error {
 	if diff := cmp.Diff(got, want,
 		cmpopts.IgnoreFields(grpcLogEntry{}, "CallID", "Peer"),
 		cmpopts.IgnoreFields(address{}, "IPPort", "Type"),
-		cmpopts.IgnoreFields(payload{}, "Timeout")); diff != "" {
+		cmpopts.IgnoreFields(payload{}, "Timeout", "Metadata")); diff != "" {
 		return fmt.Errorf("got unexpected grpcLogEntry list, diff (-got, +want): %v", diff)
 	}
 	return nil
@@ -132,17 +132,16 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 			return &grpc_testing.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
-			for {
-				if _, err := stream.Recv(); err != nil {
-					return err
-				}
-				if err := stream.Send(&grpc_testing.StreamingOutputCallResponse{}); err != nil {
-					return err
-				}
-				if _, err := stream.Recv(); err == io.EOF {
-					return nil
-				}
+			if _, err := stream.Recv(); err != nil {
+				return err
 			}
+			if err := stream.Send(&grpc_testing.StreamingOutputCallResponse{}); err != nil {
+				return err
+			}
+			if _, err := stream.Recv(); err != io.EOF {
+				return err
+			}
+			return nil
 		},
 	}
 	if err := ss.Start(nil); err != nil {
@@ -340,17 +339,16 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 			return &grpc_testing.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
-			for {
-				if _, err := stream.Recv(); err != nil {
-					return err
-				}
-				if err := stream.Send(&grpc_testing.StreamingOutputCallResponse{}); err != nil {
-					return err
-				}
-				if _, err := stream.Recv(); err == io.EOF {
-					return nil
-				}
+			if _, err := stream.Recv(); err != nil {
+				return err
 			}
+			if err := stream.Send(&grpc_testing.StreamingOutputCallResponse{}); err != nil {
+				return err
+			}
+			if _, err := stream.Recv(); err != io.EOF {
+				return err
+			}
+			return nil
 		},
 	}
 	if err := ss.Start(nil); err != nil {
@@ -561,12 +559,11 @@ func (s) TestBothClientAndServerRPCEvents(t *testing.T) {
 			return &grpc_testing.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
-			for {
-				_, err := stream.Recv()
-				if err == io.EOF {
-					return nil
-				}
+			_, err := stream.Recv()
+			if err != io.EOF {
+				return err
 			}
+			return nil
 		},
 	}
 	if err := ss.Start(nil); err != nil {
@@ -629,7 +626,7 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 			ClientRPCEvents: []clientRPCEvents{
 				{
 					Methods:          []string{"*"},
-					MaxMetadataBytes: 2,
+					MaxMetadataBytes: 10,
 					MaxMessageBytes:  2,
 				},
 			},
@@ -727,6 +724,15 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 		fle.mu.Unlock()
 		t.Fatalf("error in logging entry list comparison %v", err)
 	}
+	// One of the metadata entries should have been logged.
+	gotMD := fle.entries[0].Payload.Metadata
+	wantMD1 := map[string]string{"key1": "value1"}
+	wantMD2 := map[string]string{"key2": "value2"}
+	diff1 := cmp.Diff(gotMD, wantMD1)
+	diff2 := cmp.Diff(gotMD, wantMD2)
+	if diff1 != "" && diff2 != "" {
+		t.Fatalf("gotMD: %v, want either %v or %v", gotMD, wantMD1, wantMD2)
+	}
 	fle.mu.Unlock()
 }
 
@@ -789,12 +795,11 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 			return &grpc_testing.SimpleResponse{}, nil
 		},
 		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
-			for {
-				_, err := stream.Recv()
-				if err == io.EOF {
-					return nil
-				}
+			_, err := stream.Recv()
+			if err != io.EOF {
+				return err
 			}
+			return nil
 		},
 	}
 	if err := ss.Start(nil); err != nil {
