@@ -629,7 +629,7 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 			ClientRPCEvents: []clientRPCEvents{
 				{
 					Methods:          []string{"*"},
-					MaxMetadataBytes: 10,
+					MaxMetadataBytes: 2,
 					MaxMessageBytes:  2,
 				},
 			},
@@ -671,7 +671,7 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 			Authority:   ss.Address,
 			SequenceID:  1,
 			Payload: payload{
-				Metadata: map[string]string{"key1": "value1"},
+				Metadata: map[string]string{},
 			},
 			PayloadTruncated: true,
 		},
