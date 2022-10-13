@@ -162,7 +162,7 @@ type clientRPCEvents struct {
 	//    here “goo” is the package name.
 	//    2."goo.Foo/*" selects all methods from service "goo.Foo"
 	//    3. "*" selects all methods from all services.
-	Methods []string `json:"method,omitempty"`
+	Methods []string `json:"methods,omitempty"`
 	// Exclude represents whether the methods denoted by Methods should be
 	// excluded from logging. The default value is false, meaning the methods
 	// denoted by Methods are included in the logging. If Exclude is true, the
@@ -200,7 +200,7 @@ type serverRPCEvents struct {
 	//    here “goo” is the package name.
 	//    2."goo.Foo/*" selects all methods from service "goo.Foo"
 	//    3. "*" selects all methods from all services.
-	Methods []string `json:"method,omitempty"`
+	Methods []string `json:"methods,omitempty"`
 	// Exclude represents whether the methods denoted by Methods should be
 	// excluded from logging. The default value is false, meaning the methods
 	// denoted by Methods are included in the logging. If Exclude is true, the
