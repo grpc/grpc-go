@@ -35,6 +35,7 @@ import (
 	"strings"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/cryptobyte"
 	cbasn1 "golang.org/x/crypto/cryptobyte/asn1"
 	"google.golang.org/grpc/grpclog"
@@ -150,12 +151,12 @@ func x509NameHash(r pkix.RDNSequence) string {
 
 // CheckRevocation checks the connection for revoked certificates based on RFC5280.
 // This implementation has the following major limitations:
-// 	* Indirect CRL files are not supported.
-// 	* CRL loading is only supported from directories in the X509_LOOKUP_hash_dir format.
-// 	* OnlySomeReasons is not supported.
-// 	* Delta CRL files are not supported.
-// 	* Certificate CRLDistributionPoint must be URLs, but are then ignored and converted into a file path.
-// 	* CRL checks are done after path building, which goes against RFC4158.
+//   - Indirect CRL files are not supported.
+//   - CRL loading is only supported from directories in the X509_LOOKUP_hash_dir format.
+//   - OnlySomeReasons is not supported.
+//   - Delta CRL files are not supported.
+//   - Certificate CRLDistributionPoint must be URLs, but are then ignored and converted into a file path.
+//   - CRL checks are done after path building, which goes against RFC4158.
 func CheckRevocation(conn tls.ConnectionState, cfg RevocationConfig) error {
 	return CheckChainRevocation(conn.VerifiedChains, cfg)
 }
@@ -359,8 +360,8 @@ type authKeyID struct {
 // 		indirectCRL                [4] BOOLEAN DEFAULT FALSE,
 // 		onlyContainsAttributeCerts [5] BOOLEAN DEFAULT FALSE }
 
-// 		-- at most one of onlyContainsUserCerts, onlyContainsCACerts,
-// 		-- and onlyContainsAttributeCerts may be set to TRUE.
+// -- at most one of onlyContainsUserCerts, onlyContainsCACerts,
+// -- and onlyContainsAttributeCerts may be set to TRUE.
 type issuingDistributionPoint struct {
 	DistributionPoint          asn1.RawValue  `asn1:"optional,tag:0"`
 	OnlyContainsUserCerts      bool           `asn1:"optional,tag:1"`
@@ -515,4 +516,40 @@ func extractCRLIssuer(crlBytes []byte) ([]byte, error) {
 		return nil, errors.New("extractCRLIssuer: invalid ASN.1 encoding")
 	}
 	return issuer, nil
+}
+
+type CRLCache struct {
+	cache lru.Cache
+}
+
+type cRLCacheEntry struct {
+	value     interface{}
+	updatedAt time.Time
+}
+
+func (c CRLCache) Add(key, value interface{}) bool {
+	evicted := c.cache.Add(key, cRLCacheEntry{value, time.Now()})
+	return evicted
+}
+
+func (c CRLCache) Get(key interface{}) (value interface{}, ok bool) {
+	val, ok := c.cache.Get(key)
+	if !ok {
+		grpclogLogger.Infof("Retrieving crl issuer hash %v from cache failed", key)
+		return nil, false
+	}
+
+	cacheEntry, ok := val.(cRLCacheEntry)
+	if !ok {
+		grpclogLogger.Warningf("Couldn't convert cache entry to cRLCacheEntry key=%v value=%v", key, val)
+		return nil, false
+	}
+	crl := cacheEntry.value
+	// TODO make this value configurable
+	if cacheEntry.updatedAt.Add(time.Hour).After(time.Now()) {
+		// Need to refresh
+		grpclogLogger.Infof("CRLCache entry for key=%v more than 1 hour old, refreshing", key)
+		return nil, false
+	}
+	return crl, true
 }
