@@ -1577,6 +1577,10 @@ func (cc *ClientConn) connectionError() error {
 func (cc *ClientConn) parseTargetAndFindResolver() (resolver.Builder, error) {
 	channelz.Infof(logger, cc.channelzID, "original dial target is: %q", cc.target)
 
+	if cc.target == "" && cc.dopts.copts.Dialer == nil {
+		return nil, errors.New("grpc: empty dial target")
+	}
+
 	var rb resolver.Builder
 	parsedTarget, err := parseTarget(cc.target)
 	if err != nil {
