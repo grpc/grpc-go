@@ -74,7 +74,7 @@ func init() {
 		srv.drainServerTransports(addr)
 	}
 	internal.AddGlobalServerOptions = func(opt ...ServerOption) {
-		extraServerOptions = opt
+		extraServerOptions = append(extraServerOptions, opt...)
 	}
 	internal.ClearGlobalServerOptions = func() {
 		extraServerOptions = nil
