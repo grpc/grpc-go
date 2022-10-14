@@ -38,7 +38,7 @@ func (s) TestAddExtraDialOptions(t *testing.T) {
 
 	// Set and check the DialOptions
 	opts := []DialOption{WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials())}
-	internal.AddExtraDialOptions.(func(opt ...DialOption))(opts...)
+	internal.AddGlobalDialOptions.(func(opt ...DialOption))(opts...)
 	for i, opt := range opts {
 		if extraDialOptions[i] != opt {
 			t.Fatalf("Unexpected extra dial option at index %d: %v != %v", i, extraDialOptions[i], opt)
@@ -52,7 +52,7 @@ func (s) TestAddExtraDialOptions(t *testing.T) {
 		cc.Close()
 	}
 
-	internal.ClearExtraDialOptions()
+	internal.ClearGlobalDialOptions()
 	if len(extraDialOptions) != 0 {
 		t.Fatalf("Unexpected len of extraDialOptions: %d != 0", len(extraDialOptions))
 	}
@@ -62,7 +62,7 @@ func (s) TestAddExtraServerOptions(t *testing.T) {
 	const maxRecvSize = 998765
 	// Set and check the ServerOptions
 	opts := []ServerOption{Creds(insecure.NewCredentials()), MaxRecvMsgSize(maxRecvSize)}
-	internal.AddExtraServerOptions.(func(opt ...ServerOption))(opts...)
+	internal.AddGlobalServerOptions.(func(opt ...ServerOption))(opts...)
 	for i, opt := range opts {
 		if extraServerOptions[i] != opt {
 			t.Fatalf("Unexpected extra server option at index %d: %v != %v", i, extraServerOptions[i], opt)
@@ -75,7 +75,7 @@ func (s) TestAddExtraServerOptions(t *testing.T) {
 		t.Fatalf("Unexpected s.opts.maxReceiveMessageSize: %d != %d", s.opts.maxReceiveMessageSize, maxRecvSize)
 	}
 
-	internal.ClearExtraServerOptions()
+	internal.ClearGlobalServerOptions()
 	if len(extraServerOptions) != 0 {
 		t.Fatalf("Unexpected len of extraServerOptions: %d != 0", len(extraServerOptions))
 	}

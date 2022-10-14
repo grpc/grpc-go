@@ -57,6 +57,7 @@ import (
 	healthgrpc "google.golang.org/grpc/health/grpc_health_v1"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
@@ -8183,4 +8184,94 @@ func (s) TestGoAwayStreamIDSmallerThanCreatedStreams(t *testing.T) {
 	<-someStreamsCreated.Done()
 	ct.writeGoAway(1, http2.ErrCodeNo, []byte{})
 	goAwayWritten.Fire()
+}
+
+type mockBinaryLogger struct {
+	mml *mockMethodLogger
+}
+
+func newMockBinaryLogger() *mockBinaryLogger {
+	return &mockBinaryLogger{
+		mml: &mockMethodLogger{},
+	}
+}
+
+func (mbl *mockBinaryLogger) GetMethodLogger(string) binarylog.MethodLogger {
+	return mbl.mml
+}
+
+type mockMethodLogger struct {
+	events uint64
+}
+
+func (mml *mockMethodLogger) Log(binarylog.LogEntryConfig) {
+	atomic.AddUint64(&mml.events, 1)
+}
+
+// TestGlobalBinaryLoggingOptions tests the binary logging options for client
+// and server side. The test configures a binary logger to be plumbed into every
+// created ClientConn and server. It then makes a unary RPC call, and a
+// streaming RPC call. A certain amount of logging calls should happen as a
+// result of the stream operations on each of these calls.
+func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
+	csbl := newMockBinaryLogger()
+	ssbl := newMockBinaryLogger()
+
+	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.Logger) grpc.DialOption)(csbl))
+	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.Logger) grpc.ServerOption)(ssbl))
+	defer func() {
+		internal.ClearGlobalDialOptions()
+		internal.ClearGlobalServerOptions()
+	}()
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
+			return &testpb.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			for {
+				_, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+			}
+		},
+	}
+
+	// No client or server options specified, because should pick up configured
+	// global options.
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Make a Unary RPC. This should cause Log calls on the MethodLogger.
+	if _, err := ss.Client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+	if csbl.mml.events != 5 {
+		t.Fatalf("want 5 client side binary logging events, got %v", csbl.mml.events)
+	}
+	if ssbl.mml.events != 5 {
+		t.Fatalf("want 5 server side binary logging events, got %v", ssbl.mml.events)
+	}
+
+	// Make a streaming RPC. This should cause Log calls on the MethodLogger.
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("ss.Client.FullDuplexCall failed: %f", err)
+	}
+
+	stream.CloseSend()
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("unexpected error: %v, expected an EOF error", err)
+	}
+
+	if csbl.mml.events != 9 {
+		t.Fatalf("want 9 client side binary logging events, got %v", csbl.mml.events)
+	}
+	if ssbl.mml.events != 8 {
+		t.Fatalf("want 8 server side binary logging events, got %v", ssbl.mml.events)
+	}
 }
