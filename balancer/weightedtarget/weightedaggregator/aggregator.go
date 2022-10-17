@@ -240,20 +240,23 @@ func (wbsa *Aggregator) BuildAndUpdate() {
 // Caller must hold wbsa.mu.
 func (wbsa *Aggregator) build() balancer.State {
 	wbsa.logger.Infof("Child pickers with config: %+v", wbsa.idToPickerState)
-	m := wbsa.idToPickerState
 	// TODO: use balancer.ConnectivityStateEvaluator to calculate the aggregated
 	// state.
 	var readyN, connectingN, idleN int
-	readyPickerWithWeights := make([]weightedPickerState, 0, len(m))
-	for _, ps := range m {
+	pickerN := len(wbsa.idToPickerState)
+	readyPickers := make([]weightedPickerState, 0, pickerN)
+	errorPickers := make([]weightedPickerState, 0, pickerN)
+	for _, ps := range wbsa.idToPickerState {
 		switch ps.stateToAggregate {
 		case connectivity.Ready:
 			readyN++
-			readyPickerWithWeights = append(readyPickerWithWeights, *ps)
+			readyPickers = append(readyPickers, *ps)
 		case connectivity.Connecting:
 			connectingN++
 		case connectivity.Idle:
 			idleN++
+		case connectivity.TransientFailure:
+			errorPickers = append(errorPickers, *ps)
 		}
 	}
 	var aggregatedState connectivity.State
@@ -272,11 +275,11 @@ func (wbsa *Aggregator) build() balancer.State {
 	var picker balancer.Picker
 	switch aggregatedState {
 	case connectivity.TransientFailure:
-		picker = base.NewErrPicker(balancer.ErrTransientFailure)
+		picker = newWeightedPickerGroup(errorPickers, wbsa.newWRR)
 	case connectivity.Connecting:
 		picker = base.NewErrPicker(balancer.ErrNoSubConnAvailable)
 	default:
-		picker = newWeightedPickerGroup(readyPickerWithWeights, wbsa.newWRR)
+		picker = newWeightedPickerGroup(readyPickers, wbsa.newWRR)
 	}
 	return balancer.State{ConnectivityState: aggregatedState, Picker: picker}
 }

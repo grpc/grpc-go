@@ -20,7 +20,9 @@ package weightedtarget
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -569,7 +571,11 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	}
 
 	// Turn sc1's connection down.
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	scConnErr := errors.New("subConn connection error")
+	wtb.UpdateSubConnState(sc1, balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   scConnErr,
+	})
 	p = <-cc.NewPickerCh
 	want = []balancer.SubConn{sc4}
 	if err := testutils.IsRoundRobin(want, subConnFromPicker(p)); err != nil {
@@ -586,11 +592,14 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	}
 
 	// Turn all connections down.
-	wtb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	wtb.UpdateSubConnState(sc4, balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   scConnErr,
+	})
 	p = <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		if _, err := p.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
+		if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), scConnErr.Error()) {
+			t.Fatalf("want pick error %q, got error %q", scConnErr, err)
 		}
 	}
 }
@@ -793,7 +802,11 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 	}
 
 	// Move balancer 3 into transient failure.
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	scConnErr := errors.New("subConn connection error")
+	wtb.UpdateSubConnState(sc3, balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   scConnErr,
+	})
 	<-cc.NewPickerCh
 
 	// Remove the first balancer, while the third is transient failure.
@@ -827,8 +840,8 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scRemoved)
 	}
 	for i := 0; i < 5; i++ {
-		if _, err := p.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
+		if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), scConnErr.Error()) {
+			t.Fatalf("want pick error %q, got error %q", scConnErr, err)
 		}
 	}
 }
@@ -1064,15 +1077,21 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 
 	// Set both subconn to TransientFailure, this will put both sub-balancers in
 	// transient failure.
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	scConnErr := errors.New("subConn connection error")
+	wtb.UpdateSubConnState(sc1, balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   scConnErr,
+	})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	wtb.UpdateSubConnState(sc2, balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   scConnErr,
+	})
 	p := <-cc.NewPickerCh
 
 	for i := 0; i < 5; i++ {
-		r, err := p.Pick(balancer.PickInfo{})
-		if err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick to fail with %v, got result %v, err %v", balancer.ErrTransientFailure, r, err)
+		if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), scConnErr.Error()) {
+			t.Fatalf("want pick error %q, got error %q", scConnErr, err)
 		}
 	}
 
@@ -1086,8 +1105,8 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 
 	for i := 0; i < 5; i++ {
 		r, err := p.Pick(balancer.PickInfo{})
-		if err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick to fail with %v, got result %v, err %v", balancer.ErrTransientFailure, r, err)
+		if err == nil || !strings.Contains(err.Error(), scConnErr.Error()) {
+			t.Fatalf("want pick error %q, got result %v, err %q", scConnErr, r, err)
 		}
 	}
 }
