@@ -43,7 +43,8 @@ const testNonDefaultAuthority = "non-default-authority"
 // setupForFederationWatchersTest spins up two management servers, one for the
 // default (empty) authority and another for a non-default authority.
 //
-// Returns the management server, the nodeID to use, and the xDS client.
+// Returns the management server associated with the non-default authority, the
+// nodeID to use, and the xDS client.
 func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string, xdsclient.XDSClient) {
 	overrideFedEnvVar(t)
 
@@ -55,13 +56,13 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 	t.Cleanup(serverDefaultAuthority.Stop)
 
 	// Start another management server as the other authority.
-	serverTestAuthority, err := e2e.StartManagementServer(nil)
+	serverNonDefaultAuthority, err := e2e.StartManagementServer(nil)
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
 	}
-	t.Cleanup(serverTestAuthority.Stop)
+	t.Cleanup(serverNonDefaultAuthority.Stop)
 
-	// Create a bootstrap file in a temporary directory.
+	// Create the bootstrap
 	nodeID := uuid.New().String()
 	bootstrapContents, err := xdsinternal.BootstrapContents(xdsinternal.BootstrapOptions{
 		Version:                            xdsinternal.TransportV3,
@@ -69,7 +70,7 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 		ServerURI:                          serverDefaultAuthority.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
 		// Specify the address of the non-default authority.
-		Authorities: map[string]string{testNonDefaultAuthority: serverTestAuthority.Address},
+		Authorities: map[string]string{testNonDefaultAuthority: serverNonDefaultAuthority.Address},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create bootstrap file: %v", err)
@@ -79,28 +80,27 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	return serverTestAuthority, nodeID, client
+	return serverNonDefaultAuthority, nodeID, client
 }
 
 // TestFederation_ListenerResourceContextParamOrder covers the case of watching
 // a Listener resource with the new style resource name and context parameters.
-// The test verifies the following:
-// - Two watches with the same query string, but in different order results in
-//   the two watches watching the same resource.
-// - Response with the same query string, but in different order results in both
-//   watches being notified.
+// The test registers watches for two resources which differ only in the order
+// of context parameters in their URI. The server is configured to respond with
+// a single resource with canonicalized context parameters. The test verifies
+// that both watchers are notified.
 func (s) TestFederation_ListenerResourceContextParamOrder(t *testing.T) {
-	serverTestAuthority, nodeID, client := setupForFederationWatchersTest(t)
+	serverNonDefaultAuthority, nodeID, client := setupForFederationWatchersTest(t)
 	defer client.Close()
 
 	var (
-		// Two resource names only differ in context parameter __order__.
+		// Two resource names only differ in context parameter order.
 		resourceName1 = fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/xdsclient-test-lds-resource?a=1&b=2", testNonDefaultAuthority)
 		resourceName2 = fmt.Sprintf("xdstp://%s/envoy.config.listener.v3.Listener/xdsclient-test-lds-resource?b=2&a=1", testNonDefaultAuthority)
 	)
 
-	// Register two watches for the listener resource names with the same query
-	// string, but in different order.
+	// Register two watches for listener resources with the same query string,
+	// but context parameters in different order.
 	updateCh1 := testutils.NewChannel()
 	ldsCancel1 := client.WatchListener(resourceName1, func(u xdsresource.ListenerUpdate, err error) {
 		updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
@@ -121,7 +121,7 @@ func (s) TestFederation_ListenerResourceContextParamOrder(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := serverTestAuthority.Update(ctx, resources); err != nil {
+	if err := serverNonDefaultAuthority.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
@@ -142,23 +142,22 @@ func (s) TestFederation_ListenerResourceContextParamOrder(t *testing.T) {
 
 // TestFederation_RouteConfigResourceContextParamOrder covers the case of
 // watching a RouteConfiguration resource with the new style resource name and
-// context parameters.  The test verifies the following:
-// - Two watches with the same query string, but in different order results in
-//   the two watches watching the same resource.
-// - Response with the same query string, but in different order results in both
-//   watches being notified.
+// context parameters. The test registers watches for two resources which
+// differ only in the order of context parameters in their URI. The server is
+// configured to respond with a single resource with canonicalized context
+// parameters. The test verifies that both watchers are notified.
 func (s) TestFederation_RouteConfigResourceContextParamOrder(t *testing.T) {
-	serverTestAuthority, nodeID, client := setupForFederationWatchersTest(t)
+	serverNonDefaultAuthority, nodeID, client := setupForFederationWatchersTest(t)
 	defer client.Close()
 
 	var (
-		// Two resource names only differ in context parameter __order__.
+		// Two resource names only differ in context parameter order.
 		resourceName1 = fmt.Sprintf("xdstp://%s/envoy.config.route.v3.RouteConfiguration/xdsclient-test-rds-resource?a=1&b=2", testNonDefaultAuthority)
 		resourceName2 = fmt.Sprintf("xdstp://%s/envoy.config.route.v3.RouteConfiguration/xdsclient-test-rds-resource?b=2&a=1", testNonDefaultAuthority)
 	)
 
-	// Register two watches for the route configuration resource names with the
-	// same query string, but in different order.
+	// Register two watches for route configuration resources with the same
+	// query string, but context parameters in different order.
 	updateCh1 := testutils.NewChannel()
 	rdsCancel1 := client.WatchRouteConfig(resourceName1, func(u xdsresource.RouteConfigUpdate, err error) {
 		updateCh1.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
@@ -179,7 +178,7 @@ func (s) TestFederation_RouteConfigResourceContextParamOrder(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := serverTestAuthority.Update(ctx, resources); err != nil {
+	if err := serverNonDefaultAuthority.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
@@ -210,23 +209,22 @@ func (s) TestFederation_RouteConfigResourceContextParamOrder(t *testing.T) {
 
 // TestFederation_ClusterResourceContextParamOrder covers the case of watching a
 // Cluster resource with the new style resource name and context parameters.
-// The test verifies the following:
-// - Two watches with the same query string, but in different order results in
-//   the two watches watching the same resource.
-// - Response with the same query string, but in different order results in both
-//   watches being notified.
+// The test registers watches for two resources which differ only in the order
+// of context parameters in their URI. The server is configured to respond with
+// a single resource with canonicalized context parameters. The test verifies
+// that both watchers are notified.
 func (s) TestFederation_ClusterResourceContextParamOrder(t *testing.T) {
-	serverTestAuthority, nodeID, client := setupForFederationWatchersTest(t)
+	serverNonDefaultAuthority, nodeID, client := setupForFederationWatchersTest(t)
 	defer client.Close()
 
 	var (
-		// Two resource names only differ in context parameter __order__.
+		// Two resource names only differ in context parameter order.
 		resourceName1 = fmt.Sprintf("xdstp://%s/envoy.config.cluster.v3.Cluster/xdsclient-test-cds-resource?a=1&b=2", testNonDefaultAuthority)
 		resourceName2 = fmt.Sprintf("xdstp://%s/envoy.config.cluster.v3.Cluster/xdsclient-test-cds-resource?b=2&a=1", testNonDefaultAuthority)
 	)
 
-	// Register two watches for the route configuration resource names with the
-	// same query string, but in different order.
+	// Register two watches for cluster resources with the same query string,
+	// but context parameters in different order.
 	updateCh1 := testutils.NewChannel()
 	cdsCancel1 := client.WatchCluster(resourceName1, func(u xdsresource.ClusterUpdate, err error) {
 		updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
@@ -247,7 +245,7 @@ func (s) TestFederation_ClusterResourceContextParamOrder(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := serverTestAuthority.Update(ctx, resources); err != nil {
+	if err := serverNonDefaultAuthority.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
@@ -267,24 +265,23 @@ func (s) TestFederation_ClusterResourceContextParamOrder(t *testing.T) {
 }
 
 // TestFederation_EndpointsResourceContextParamOrder covers the case of watching
-// an Endpoints resource with the new style resource name and context
-// parameters.  The test verifies the following:
-// - Two watches with the same query string, but in different order results in
-//   the two watches watching the same resource.
-// - Response with the same query string, but in different order results in both
-//   watches being notified.
+// an Endpoints resource with the new style resource name and context parameters.
+// The test registers watches for two resources which differ only in the order
+// of context parameters in their URI. The server is configured to respond with
+// a single resource with canonicalized context parameters. The test verifies
+// that both watchers are notified.
 func (s) TestFederation_EndpointsResourceContextParamOrder(t *testing.T) {
-	serverTestAuthority, nodeID, client := setupForFederationWatchersTest(t)
+	serverNonDefaultAuthority, nodeID, client := setupForFederationWatchersTest(t)
 	defer client.Close()
 
 	var (
-		// Two resource names only differ in context parameter __order__.
+		// Two resource names only differ in context parameter order.
 		resourceName1 = fmt.Sprintf("xdstp://%s/envoy.config.endpoint.v3.ClusterLoadAssignment/xdsclient-test-eds-resource?a=1&b=2", testNonDefaultAuthority)
 		resourceName2 = fmt.Sprintf("xdstp://%s/envoy.config.endpoint.v3.ClusterLoadAssignment/xdsclient-test-eds-resource?b=2&a=1", testNonDefaultAuthority)
 	)
 
-	// Register two watches for the route configuration resource names with the
-	// same query string, but in different order.
+	// Register two watches for endpoint resources with the same query string,
+	// but context parameters in different order.
 	updateCh1 := testutils.NewChannel()
 	cdsCancel1 := client.WatchEndpoints(resourceName1, func(u xdsresource.EndpointsUpdate, err error) {
 		updateCh1.Send(xdsresource.EndpointsUpdateErrTuple{Update: u, Err: err})
@@ -305,7 +302,7 @@ func (s) TestFederation_EndpointsResourceContextParamOrder(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := serverTestAuthority.Update(ctx, resources); err != nil {
+	if err := serverNonDefaultAuthority.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
