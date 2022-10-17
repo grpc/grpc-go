@@ -598,7 +598,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	})
 	p = <-cc.NewPickerCh
 	for i := 0; i < 5; i++ {
-		if _, err := p.Pick(balancer.PickInfo{}); !strings.Contains(err.Error(), scConnErr.Error()) {
+		if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), scConnErr.Error()) {
 			t.Fatalf("want pick error %q, got error %q", scConnErr, err)
 		}
 	}
@@ -840,7 +840,7 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scRemoved)
 	}
 	for i := 0; i < 5; i++ {
-		if _, err := p.Pick(balancer.PickInfo{}); !strings.Contains(err.Error(), scConnErr.Error()) {
+		if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), scConnErr.Error()) {
 			t.Fatalf("want pick error %q, got error %q", scConnErr, err)
 		}
 	}
@@ -1090,7 +1090,7 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 	p := <-cc.NewPickerCh
 
 	for i := 0; i < 5; i++ {
-		if _, err := p.Pick(balancer.PickInfo{}); !strings.Contains(err.Error(), scConnErr.Error()) {
+		if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), scConnErr.Error()) {
 			t.Fatalf("want pick error %q, got error %q", scConnErr, err)
 		}
 	}
@@ -1105,7 +1105,7 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 
 	for i := 0; i < 5; i++ {
 		r, err := p.Pick(balancer.PickInfo{})
-		if !strings.Contains(err.Error(), scConnErr.Error()) {
+		if err == nil || !strings.Contains(err.Error(), scConnErr.Error()) {
 			t.Fatalf("want pick error %q, got result %v, err %q", scConnErr, r, err)
 		}
 	}
