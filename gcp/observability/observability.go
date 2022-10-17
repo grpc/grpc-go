@@ -19,7 +19,7 @@
 // Package observability implements the tracing, metrics, and logging data
 // collection, and provides controlling knobs via a config file.
 //
-// Experimental
+// # Experimental
 //
 // Notice: This package is EXPERIMENTAL and may be changed or removed in a
 // later release.

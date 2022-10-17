@@ -2005,7 +2005,7 @@ func (s) TestPingPong1MB(t *testing.T) {
 	runPingPongTest(t, 1048576)
 }
 
-//This is a stress-test of flow control logic.
+// This is a stress-test of flow control logic.
 func runPingPongTest(t *testing.T, msgSize int) {
 	server, client, cancel := setUp(t, 0, 0, pingpong)
 	defer cancel()

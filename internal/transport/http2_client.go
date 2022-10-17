@@ -661,13 +661,13 @@ func (t *http2Client) getCallAuthData(ctx context.Context, audience string, call
 // NewStream errors result in transparent retry, as they mean nothing went onto
 // the wire.  However, there are two notable exceptions:
 //
-// 1. If the stream headers violate the max header list size allowed by the
-//    server.  It's possible this could succeed on another transport, even if
-//    it's unlikely, but do not transparently retry.
-// 2. If the credentials errored when requesting their headers.  In this case,
-//    it's possible a retry can fix the problem, but indefinitely transparently
-//    retrying is not appropriate as it is likely the credentials, if they can
-//    eventually succeed, would need I/O to do so.
+//  1. If the stream headers violate the max header list size allowed by the
+//     server.  It's possible this could succeed on another transport, even if
+//     it's unlikely, but do not transparently retry.
+//  2. If the credentials errored when requesting their headers.  In this case,
+//     it's possible a retry can fix the problem, but indefinitely transparently
+//     retrying is not appropriate as it is likely the credentials, if they can
+//     eventually succeed, would need I/O to do so.
 type NewStreamError struct {
 	Err error
 

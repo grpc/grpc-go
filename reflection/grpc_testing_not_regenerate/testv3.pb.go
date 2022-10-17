@@ -23,9 +23,11 @@
 Package grpc_testing_not_regenerate is a generated protocol buffer package.
 
 It is generated from these files:
+
 	testv3.proto
 
 It has these top-level messages:
+
 	SearchResponseV3
 	SearchRequestV3
 */

@@ -148,6 +148,7 @@ type Metric struct {
 
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// Types that are assignable to Value:
+	//
 	//	*Metric_Count
 	//	*Metric_Histogram
 	Value isMetric_Value `protobuf_oneof:"value"`

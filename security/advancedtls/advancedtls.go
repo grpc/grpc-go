@@ -449,9 +449,9 @@ func (c *advancedTLSCreds) OverrideServerName(serverNameOverride string) error {
 // and possibly custom verification check.
 // We have to build our own verification function here because current
 // tls module:
-//   1. does not have a good support on root cert reloading.
-//   2. will ignore basic certificate check when setting InsecureSkipVerify
-//   to true.
+//  1. does not have a good support on root cert reloading.
+//  2. will ignore basic certificate check when setting InsecureSkipVerify
+//     to true.
 func buildVerifyFunc(c *advancedTLSCreds,
 	serverName string,
 	rawConn net.Conn) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {

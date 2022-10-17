@@ -57,19 +57,19 @@ func testFedTwoWatchDifferentContextParameterOrder(t *testing.T, typ xdsresource
 }
 
 // TestLDSFedTwoWatchDifferentContextParameterOrder covers the case with new style resource name
-// - Two watches with the same query string, but in different order. The two
-//   watches should watch the same resource.
-// - The response has the same query string, but in different order. The watch
-//   should still be notified.
+//   - Two watches with the same query string, but in different order. The two
+//     watches should watch the same resource.
+//   - The response has the same query string, but in different order. The watch
+//     should still be notified.
 func (s) TestLDSFedTwoWatchDifferentContextParameterOrder(t *testing.T) {
 	testFedTwoWatchDifferentContextParameterOrder(t, xdsresource.ListenerResource, xdsresource.ListenerUpdate{RouteConfigName: testRDSName})
 }
 
 // TestRDSFedTwoWatchDifferentContextParameterOrder covers the case with new style resource name
-// - Two watches with the same query string, but in different order. The two
-//   watches should watch the same resource.
-// - The response has the same query string, but in different order. The watch
-//   should still be notified.
+//   - Two watches with the same query string, but in different order. The two
+//     watches should watch the same resource.
+//   - The response has the same query string, but in different order. The watch
+//     should still be notified.
 func (s) TestRDSFedTwoWatchDifferentContextParameterOrder(t *testing.T) {
 	testFedTwoWatchDifferentContextParameterOrder(t, xdsresource.RouteConfigResource, xdsresource.RouteConfigUpdate{
 		VirtualHosts: []*xdsresource.VirtualHost{
@@ -82,19 +82,19 @@ func (s) TestRDSFedTwoWatchDifferentContextParameterOrder(t *testing.T) {
 }
 
 // TestClusterFedTwoWatchDifferentContextParameterOrder covers the case with new style resource name
-// - Two watches with the same query string, but in different order. The two
-//   watches should watch the same resource.
-// - The response has the same query string, but in different order. The watch
-//   should still be notified.
+//   - Two watches with the same query string, but in different order. The two
+//     watches should watch the same resource.
+//   - The response has the same query string, but in different order. The watch
+//     should still be notified.
 func (s) TestClusterFedTwoWatchDifferentContextParameterOrder(t *testing.T) {
 	testFedTwoWatchDifferentContextParameterOrder(t, xdsresource.ClusterResource, xdsresource.ClusterUpdate{ClusterName: testEDSName})
 }
 
 // TestEndpointsFedTwoWatchDifferentContextParameterOrder covers the case with new style resource name
-// - Two watches with the same query string, but in different order. The two
-//   watches should watch the same resource.
-// - The response has the same query string, but in different order. The watch
-//   should still be notified.
+//   - Two watches with the same query string, but in different order. The two
+//     watches should watch the same resource.
+//   - The response has the same query string, but in different order. The watch
+//     should still be notified.
 func (s) TestEndpointsFedTwoWatchDifferentContextParameterOrder(t *testing.T) {
 	testFedTwoWatchDifferentContextParameterOrder(t, xdsresource.EndpointsResource, xdsresource.EndpointsUpdate{Localities: []xdsresource.Locality{testLocalities[0]}})
 }

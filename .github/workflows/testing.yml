@@ -24,7 +24,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.18
+          go-version: 1.19
       - name: Checkout repo
         uses: actions/checkout@v2
 
@@ -44,19 +44,22 @@ jobs:
       matrix:
         include:
           - type: vet+tests
-            goversion: 1.18
+            goversion: 1.19
 
           - type: tests
-            goversion: 1.18
+            goversion: 1.19
             testflags: -race
 
           - type: tests
-            goversion: 1.18
+            goversion: 1.19
             goarch: 386
 
           - type: tests
-            goversion: 1.18
+            goversion: 1.19
             goarch: arm64
+
+          - type: tests
+            goversion: 1.18
 
           - type: tests
             goversion: 1.17
@@ -64,11 +67,8 @@ jobs:
           - type: tests
             goversion: 1.16
 
-          - type: tests
-            goversion: 1.15
-
           - type: extras
-            goversion: 1.18
+            goversion: 1.19
 
     steps:
       # Setup the environment.

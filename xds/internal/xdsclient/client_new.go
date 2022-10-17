@@ -72,7 +72,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration, i
 // NewWithConfigForTesting returns an xDS client for the specified bootstrap
 // config, separate from the global singleton.
 //
-// Testing Only
+// # Testing Only
 //
 // This function should ONLY be used for testing purposes.
 func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout, authorityIdleTimeout time.Duration) (XDSClient, error) {
@@ -86,8 +86,7 @@ func NewWithConfigForTesting(config *bootstrap.Config, watchExpiryTimeout, autho
 // NewWithBootstrapContentsForTesting returns an xDS client for this config,
 // separate from the global singleton.
 //
-//
-// Testing Only
+// # Testing Only
 //
 // This function should ONLY be used for testing purposes.
 func NewWithBootstrapContentsForTesting(contents []byte) (XDSClient, error) {
