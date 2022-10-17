@@ -63,16 +63,17 @@ type OOBListener interface {
 
 // OOBListenerOptions contains options to control how an OOBListener is called.
 type OOBListenerOptions struct {
-	// How often to request the server to provide a load report.  May be
-	// provided less frequently if the server requires a longer interval, or
-	// may be provided more frequently if another subscriber requests a shorter
-	// interval.
+	// ReportInterval specifies how often to request the server to provide a
+	// load report.  May be provided less frequently if the server requires a
+	// longer interval, or may be provided more frequently if another
+	// subscriber requests a shorter interval.
 	ReportInterval time.Duration
 }
 
 // RegisterOOBListener registers an out-of-band load report listener on sc.
 // Any OOBListener may only be registered once per subchannel at a time.  The
-// returned stop function must be called when no longer needed.
+// returned stop function must be called when no longer needed.  Do not
+// register a single OOBListener more than once per SubConn.
 func RegisterOOBListener(sc balancer.SubConn, l OOBListener, opts OOBListenerOptions) (stop func()) {
 	pr, close := sc.GetOrBuildProducer(producerBuilderSingleton)
 	p := pr.(*producer)
@@ -95,9 +96,11 @@ func RegisterOOBListener(sc balancer.SubConn, l OOBListener, opts OOBListenerOpt
 type producer struct {
 	client v3orcaservicegrpc.OpenRcaServiceClient
 
-	ctx     context.Context
-	cancel  func()
-	closed  *grpcsync.Event // fired when closure completes
+	closed *grpcsync.Event // fired when closure completes
+	// backoff is called between stream attempts to determine how long to delay
+	// to avoid overloading a server experiencing problems.  The attempt count
+	// is incremented when stream errors occur and is reset when the stream
+	// reports a result.
 	backoff func(int) time.Duration
 
 	mu        sync.Mutex
@@ -130,9 +133,9 @@ func (p *producer) unregisterListener(l OOBListener, interval time.Duration) {
 func (p *producer) minInterval() time.Duration {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	min := time.Duration(-1)
-	for t := range p.intervals {
-		if min == time.Duration(-1) || t < min {
+	var min time.Duration
+	for i, t := range p.intervals {
+		if t < min || i == 0 {
 			min = t
 		}
 	}
@@ -197,7 +200,7 @@ func (p *producer) runStream(ctx context.Context) (resetBackoff bool, err error)
 		ReportInterval: durationpb.New(interval),
 	})
 	if err != nil {
-		return resetBackoff, err
+		return false, err
 	}
 
 	for {

@@ -308,7 +308,7 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 		channelz.Warningf(logger, ccb.cc.channelzID, "acBalancerWrapper: NewSubConn: failed to newAddrConn: %v", err)
 		return nil, err
 	}
-	acbw := &acBalancerWrapper{ac: ac, producers: make(map[balancer.ProducerBuilder]*producerData)}
+	acbw := &acBalancerWrapper{ac: ac, producers: make(map[balancer.ProducerBuilder]*refCountedProducer)}
 	acbw.ac.mu.Lock()
 	ac.acbw = acbw
 	acbw.ac.mu.Unlock()
@@ -364,7 +364,7 @@ func (ccb *ccBalancerWrapper) Target() string {
 type acBalancerWrapper struct {
 	mu        sync.Mutex
 	ac        *addrConn
-	producers map[balancer.ProducerBuilder]*producerData
+	producers map[balancer.ProducerBuilder]*refCountedProducer
 }
 
 func (acbw *acBalancerWrapper) UpdateAddresses(addrs []resolver.Address) {
@@ -444,12 +444,10 @@ func (acbw *acBalancerWrapper) Invoke(ctx context.Context, method string, args i
 	return cs.RecvMsg(reply)
 }
 
-// producerData stores a producer, a ref counting mechanism, and a close
-// function to be called when the producer no longer has any references.
-type producerData struct {
+type refCountedProducer struct {
 	producer balancer.Producer
-	refs     int
-	close    func()
+	refs     int    // number of current refs to the producer
+	close    func() // underlying producer's close function
 }
 
 func (acbw *acBalancerWrapper) GetOrBuildProducer(pb balancer.ProducerBuilder) (balancer.Producer, func()) {
@@ -461,14 +459,14 @@ func (acbw *acBalancerWrapper) GetOrBuildProducer(pb balancer.ProducerBuilder) (
 	if pData == nil {
 		// Not found; create a new one and add it to the producers map.
 		p, close := pb.Build(acbw)
-		pData = &producerData{producer: p, close: close}
+		pData = &refCountedProducer{producer: p, close: close}
 		acbw.producers[pb] = pData
 	}
 	// Account for this new reference.
 	pData.refs++
 
 	// Return a cleanup function wrapped in a sync.Once to remove this
-	// reference and delete the producerData from the map if the total
+	// reference and delete the refCountedProducer from the map if the total
 	// reference count goes to zero.
 	unref := func() {
 		acbw.mu.Lock()
