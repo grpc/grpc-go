@@ -33,8 +33,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -242,8 +242,8 @@ func commonSetup(ctx context.Context, t *testing.T) (xdsclient.XDSClient, *e2e.M
 	}
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{
-		Version:   xds.TransportV3,
+	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
+		Version:   bootstrap.TransportV3,
 		NodeID:    nodeID,
 		ServerURI: fs.Address,
 	})

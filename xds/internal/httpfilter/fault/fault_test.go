@@ -39,8 +39,8 @@ import (
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -106,8 +106,8 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	}
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{
-		Version:                            xds.TransportV3,
+	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
+		Version:                            bootstrap.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          fs.Address,
 		ServerListenerResourceNameTemplate: "grpc/server",

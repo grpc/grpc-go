@@ -25,7 +25,7 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal"
-	xdsinternal "google.golang.org/grpc/internal/xds"
+	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/resolver"
 )
 
@@ -78,8 +78,8 @@ func SetupManagementServer(t *testing.T, opts *ManagementServerOptions) (*Manage
 
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
-	bootstrapContents, err := xdsinternal.BootstrapContents(xdsinternal.BootstrapOptions{
-		Version:                            xdsinternal.TransportV3,
+	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
+		Version:                            bootstrap.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          server.Address,
 		CertificateProviders:               cpc,

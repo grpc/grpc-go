@@ -23,18 +23,19 @@ import (
 	"fmt"
 	"testing"
 
-	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
-	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	xdsinternal "google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/resolver"
+
+	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	testgrpc "google.golang.org/grpc/test/grpc_testing"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -69,8 +70,8 @@ func (s) TestClientSideFederation(t *testing.T) {
 
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
-	bootstrapContents, err := xdsinternal.BootstrapContents(xdsinternal.BootstrapOptions{
-		Version:                            xdsinternal.TransportV3,
+	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
+		Version:                            bootstrap.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          serverDefaultAuth.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
