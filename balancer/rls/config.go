@@ -127,13 +127,13 @@ type lbConfigJSON struct {
 //	       - across all `headers`, `constant_keys` and `extra_keys` fields:
 //	         - must not have the same `key` specified twice
 //	         - no `key` must be the empty string
-//	- `lookup_service` field must be set and must parse as a target URI
-//	- if `max_age` > 5m, it should be set to 5 minutes
-//	- if `stale_age` > `max_age`, ignore it
-//	- if `stale_age` is set, then `max_age` must also be set
-//	- ignore `valid_targets` field
-//	- `cache_size_bytes` field must have a value greater than 0, and if its
-//	  value is greater than 5M, we cap it at 5M
+//	   - `lookup_service` field must be set and must parse as a target URI
+//	   - if `max_age` > 5m, it should be set to 5 minutes
+//	   - if `stale_age` > `max_age`, ignore it
+//	   - if `stale_age` is set, then `max_age` must also be set
+//	   - ignore `valid_targets` field
+//	   - `cache_size_bytes` field must have a value greater than 0, and if its
+//	     value is greater than 5M, we cap it at 5M
 //
 //	- routeLookupChannelServiceConfig:
 //	  - if specified, must parse as valid service config
