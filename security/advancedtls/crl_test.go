@@ -359,7 +359,7 @@ func loadCRL(t *testing.T, path string) *certificateListExt {
 
 func TestCachedCRL(t *testing.T) {
 	internal_cache, err := lru.New(5)
-	cache := CRLCache{internal_cache}
+	cache := TimedCRLCache{internal_cache}
 	if err != nil {
 		t.Fatalf("lru.New: err = %v", err)
 	}
@@ -415,7 +415,7 @@ func TestCachedCRL(t *testing.T) {
 
 func TestGetIssuerCRLCache(t *testing.T) {
 	internal_cache, err := lru.New(5)
-	cache := CRLCache{internal_cache}
+	cache := TimedCRLCache{internal_cache}
 	if err != nil {
 		t.Fatalf("lru.New: err = %v", err)
 	}
@@ -526,7 +526,7 @@ func TestRevokedCert(t *testing.T) {
 	revokedLeafChain := makeChain(t, testdata.Path("crl/revokedLeaf.pem"))
 	validChain := makeChain(t, testdata.Path("crl/unrevoked.pem"))
 	internal_cache, err := lru.New(5)
-	cache := CRLCache{internal_cache}
+	cache := TimedCRLCache{internal_cache}
 	if err != nil {
 		t.Fatalf("lru.New: err = %v", err)
 	}

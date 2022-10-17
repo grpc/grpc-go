@@ -518,7 +518,7 @@ func extractCRLIssuer(crlBytes []byte) ([]byte, error) {
 	return issuer, nil
 }
 
-type CRLCache struct {
+type TimedCRLCache struct {
 	cache *lru.Cache
 }
 
@@ -527,12 +527,12 @@ type cRLCacheEntry struct {
 	updatedAt time.Time
 }
 
-func (c CRLCache) Add(key, value interface{}) bool {
+func (c TimedCRLCache) Add(key, value interface{}) bool {
 	evicted := c.cache.Add(key, cRLCacheEntry{value, time.Now()})
 	return evicted
 }
 
-func (c CRLCache) Get(key interface{}) (value interface{}, ok bool) {
+func (c TimedCRLCache) Get(key interface{}) (value interface{}, ok bool) {
 	val, ok := c.cache.Get(key)
 	if !ok {
 		grpclogLogger.Infof("Retrieving crl issuer hash %v from cache failed", key)
@@ -554,10 +554,10 @@ func (c CRLCache) Get(key interface{}) (value interface{}, ok bool) {
 	return crl, true
 }
 
-func (c CRLCache) Purge() {
+func (c TimedCRLCache) Purge() {
 	c.cache.Purge()
 }
 
-func (c CRLCache) Len() int {
+func (c TimedCRLCache) Len() int {
 	return c.cache.Len()
 }
