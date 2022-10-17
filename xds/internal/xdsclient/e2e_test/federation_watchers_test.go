@@ -26,8 +26,8 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
@@ -64,8 +64,8 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 
 	// Create the bootstrap
 	nodeID := uuid.New().String()
-	bootstrapContents, err := xds.BootstrapContents(xds.BootstrapOptions{
-		Version:                            xds.TransportV3,
+	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
+		Version:                            bootstrap.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          serverDefaultAuthority.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
