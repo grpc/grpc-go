@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/internal/grpcsync"
 )
 
 // TestCallbackSerializer_Schedule_FIFO verifies that callbacks are executed in
@@ -171,17 +170,14 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	cs := newCallbackSerializer(ctx)
 
-	// Schedule a callback which blocks until signalled by the test to finish.
+	// Schedule a callback which blocks until the context passed to it is
+	// canceled. It also closes a couple of channels to signal that it started
+	// and finished respectively.
 	firstCallbackStartedCh := make(chan struct{})
-	firstCallbackBlockCh := make(chan struct{})
 	firstCallbackFinishCh := make(chan struct{})
 	cs.Schedule(func(ctx context.Context) {
 		close(firstCallbackStartedCh)
-		select {
-		case <-ctx.Done():
-			return
-		case <-firstCallbackBlockCh:
-		}
+		<-ctx.Done()
 		close(firstCallbackFinishCh)
 	})
 
@@ -192,12 +188,9 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	// one started earlier is blocked.
 	const numCallbacks = 10
 	errCh := make(chan error, numCallbacks)
-	closeReturned := grpcsync.NewEvent()
 	for i := 0; i < numCallbacks; i++ {
 		cs.Schedule(func(_ context.Context) {
-			if closeReturned.HasFired() {
-				errCh <- fmt.Errorf("callback %d executed when not expected to", i)
-			}
+			errCh <- fmt.Errorf("callback %d executed when not expected to", i)
 		})
 	}
 
@@ -208,17 +201,12 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Close will block until the first callback finishes. There is no way to
-	// ensure that the call to Close() in the below goroutines happens before we
-	// unblock the first callback. The best we can do is to ensure that once Close()
-	// returns, none of the other callbacks are executed.
-	go func() {
-		cancel()
-		closeReturned.Done()
-	}()
-	close(firstCallbackBlockCh)
-
+	// Cancel the context which will unblock the first callback. None of the
+	// other callbacks (which have not started executing at this point) should
+	// be executed after this.
+	cancel()
 	<-firstCallbackFinishCh
+
 	// Ensure that the newer callbacks are not executed.
 	select {
 	case <-time.After(defaultTestShortTimeout):

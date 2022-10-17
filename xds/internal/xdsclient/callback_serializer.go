@@ -37,7 +37,7 @@ type callbackSerializer struct {
 // newCallbackSerializer returns a new callbackSerializer instance. The provided
 // context will be passed to the scheduled callbacks. Users should cancel the
 // provided context to shutdown the callbackSerializer. It is guaranteed that no
-// callbacks will be scheduled once this context is canceled.
+// callbacks will be executed once this context is canceled.
 func newCallbackSerializer(ctx context.Context) *callbackSerializer {
 	t := &callbackSerializer{callbacks: buffer.NewUnbounded()}
 	go t.run(ctx)
@@ -53,7 +53,7 @@ func (t *callbackSerializer) Schedule(f func(ctx context.Context)) {
 }
 
 func (t *callbackSerializer) run(ctx context.Context) {
-	for {
+	for ctx.Err() == nil {
 		select {
 		case <-ctx.Done():
 			return
