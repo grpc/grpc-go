@@ -219,7 +219,7 @@ func (s) TestCDSWatch(t *testing.T) {
 // 2. After one of the watches is cancelled, a redundant update from the
 //    management server should not result in the invocation of either of the
 //    watch callbacks.
-// 3. An update from the management server containing the resource being
+// 3. A new update from the management server containing the resource being
 //    watched should result in the invocation of the un-cancelled watch
 //    callback.
 //
@@ -351,10 +351,10 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 	}
 }
 
-// TestCDSWatch_ThreeWatchesForDifferentResourceNames covers the case with three
-// watchers (two watchers for one resource, and the third watcher for another
-// resource), exist across two cluster resources.  The test verifies that an
-// update from the management server containing both resources results in the
+// TestCDSWatch_ThreeWatchesForDifferentResourceNames covers the case where
+// three watchers (two watchers for one resource, and the third watcher for
+// another resource) exist across two cluster resources.  The test verifies that
+// an update from the management server containing both resources results in the
 // invocation of all watch callbacks.
 //
 // The test is run with both old and new style names.
@@ -383,7 +383,8 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	})
 	defer cdsCancel2()
 
-	// Register the third watch for a different cluster resource.
+	// Register the third watch for a different cluster resource, and push the
+	// received updates onto a channel.
 	updateCh3 := testutils.NewChannel()
 	cdsCancel3 := client.WatchCluster(cdsNameNewStyle, func(u xdsresource.ClusterUpdate, err error) {
 		updateCh3.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
@@ -545,8 +546,8 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Register a watch for a resource which is expected to fail with an error
-	// after the watch expiry timer fires.
+	// Register a watch for a resource which is expected to be invoked with an
+	// error after the watch expiry timer fires.
 	updateCh := testutils.NewChannel()
 	cdsCancel := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
 		updateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
@@ -632,13 +633,13 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	}
 }
 
-// TestCDSWatch_ResourceRemoved covers the cases where a resource being watched
-// is removed from the management server. The test verifies the following
-// scenarios:
-// 1. Removing a resource should trigger the watch callback with a resource
-//    removed error. It should not trigger the watch callback for an unrelated
-//    resource.
-// 2. An update to another resource should result in the invocation of the watch
+// TestCDSWatch_ResourceRemoved covers the cases where two watchers exists for
+// two different resources. One of these resources being watched is removed from
+// the management server. The test verifies the following scenarios:
+// 1. Removing a resource should trigger the watch callback associated with that
+//    resource with a resource removed error. It should not trigger the watch
+//    callback for an unrelated resource.
+// 2. An update to other resource should result in the invocation of the watch
 //    callback associated with that resource.  It should not result in the
 //    invocation of the watch callback associated with the deleted resource.
 //
@@ -717,7 +718,7 @@ func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 	}
 
 	// The first watcher should receive a resource removed error, while the
-	// second watcher should not see an update.
+	// second watcher should not receive an update.
 	if err := verifyClusterUpdate(ctx, updateCh1, xdsresource.ClusterUpdateErrTuple{Err: xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")}); err != nil {
 		t.Fatal(err)
 	}
@@ -726,7 +727,7 @@ func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 	}
 
 	// Update the second cluster resource on the management server. The first
-	// watcher should not see an update, while the second watcher should.
+	// watcher should not receive an update, while the second watcher should.
 	resources = e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(resourceName2, "new-eds-resource", e2e.SecurityLevelNone)},
@@ -773,7 +774,7 @@ func (s) TestCDSWatch_NACKError(t *testing.T) {
 	defer cdsCancel()
 
 	// Configure the management server to return a single cluster resource
-	// which is expected to be NACKed by the client.
+	// which is expected to be NACK'ed by the client.
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Clusters:       []*v3clusterpb.Cluster{badClusterResource(cdsName, edsName, e2e.SecurityLevelNone)},
@@ -814,7 +815,7 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 	defer client.Close()
 
 	// Register two watches for cluster resources. The first watch is expected
-	// to receive an error because the received resource is NACKed. The second
+	// to receive an error because the received resource is NACK'ed. The second
 	// watch is expected to get a good update.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -844,8 +845,8 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	// Verify that the expected error is propagated to the watcher which
-	// requested for the bad resource.
+	// Verify that the expected error is propagated to the watcher which is
+	// watching the bad resource.
 	u, err := updateCh1.Receive(ctx)
 	if err != nil {
 		t.Fatalf("timeout when waiting for a cluster resource from the management server: %v", err)
