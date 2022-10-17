@@ -33,8 +33,9 @@ import (
 // TestCallbackSerializer_Schedule_FIFO verifies that callbacks are executed in
 // the same order in which they were scheduled.
 func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
-	cs := newCallbackSerializer()
-	defer cs.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	cs := newCallbackSerializer(ctx)
+	defer cancel()
 
 	// We have two channels, one to record the order of scheduling, and the
 	// other to record the order of execution. We spawn a bunch of goroutines
@@ -52,7 +53,13 @@ func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 			mu.Lock()
 			defer mu.Unlock()
 			scheduleOrderCh <- id
-			cs.Schedule(func() { executionOrderCh <- id })
+			cs.Schedule(func(ctx context.Context) {
+				select {
+				case <-ctx.Done():
+					return
+				case executionOrderCh <- id:
+				}
+			})
 		}(i)
 	}
 
@@ -62,8 +69,6 @@ func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 	executionOrder := make([]int, numCallbacks)
 	var wg sync.WaitGroup
 	wg.Add(2)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < numCallbacks; i++ {
@@ -96,8 +101,9 @@ func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 // TestCallbackSerializer_Schedule_RunToCompletion verifies that all scheduled
 // callbacks are run to completion.
 func (s) TestCallbackSerializer_Schedule_RunToCompletion(t *testing.T) {
-	cs := newCallbackSerializer()
-	defer cs.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	cs := newCallbackSerializer(ctx)
+	defer cancel()
 
 	// We have two channels, one to record the order of scheduling, and the
 	// other to record the order of execution. We spawn a bunch of goroutines
@@ -112,7 +118,13 @@ func (s) TestCallbackSerializer_Schedule_RunToCompletion(t *testing.T) {
 	for i := 0; i < numCallbacks; i++ {
 		go func(id int) {
 			scheduleOrderCh <- id
-			cs.Schedule(func() { executionOrderCh <- id })
+			cs.Schedule(func(ctx context.Context) {
+				select {
+				case <-ctx.Done():
+					return
+				case executionOrderCh <- id:
+				}
+			})
 		}(i)
 	}
 
@@ -122,8 +134,6 @@ func (s) TestCallbackSerializer_Schedule_RunToCompletion(t *testing.T) {
 	executionOrder := make([]int, numCallbacks)
 	var wg sync.WaitGroup
 	wg.Add(2)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	go func() {
 		defer wg.Done()
 		for i := 0; i < numCallbacks; i++ {
@@ -158,15 +168,20 @@ func (s) TestCallbackSerializer_Schedule_RunToCompletion(t *testing.T) {
 // TestCallbackSerializer_Schedule_Close verifies that callbacks in the queue
 // are not executed once Close() returns.
 func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
-	cs := newCallbackSerializer()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	cs := newCallbackSerializer(ctx)
 
 	// Schedule a callback which blocks until signalled by the test to finish.
 	firstCallbackStartedCh := make(chan struct{})
 	firstCallbackBlockCh := make(chan struct{})
 	firstCallbackFinishCh := make(chan struct{})
-	cs.Schedule(func() {
+	cs.Schedule(func(ctx context.Context) {
 		close(firstCallbackStartedCh)
-		<-firstCallbackBlockCh
+		select {
+		case <-ctx.Done():
+			return
+		case <-firstCallbackBlockCh:
+		}
 		close(firstCallbackFinishCh)
 	})
 
@@ -179,7 +194,7 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	errCh := make(chan error, numCallbacks)
 	closeReturned := grpcsync.NewEvent()
 	for i := 0; i < numCallbacks; i++ {
-		cs.Schedule(func() {
+		cs.Schedule(func(_ context.Context) {
 			if closeReturned.HasFired() {
 				errCh <- fmt.Errorf("callback %d executed when not expected to", i)
 			}
@@ -198,7 +213,7 @@ func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	// unblock the first callback. The best we can do is to ensure that once Close()
 	// returns, none of the other callbacks are executed.
 	go func() {
-		cs.Close()
+		cancel()
 		closeReturned.Done()
 	}()
 	close(firstCallbackBlockCh)

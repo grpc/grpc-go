@@ -20,83 +20,46 @@ package xdsclient
 
 import (
 	"context"
-	"sync"
 
 	"google.golang.org/grpc/internal/buffer"
-	"google.golang.org/grpc/internal/grpcsync"
 )
 
 // callbackSerializer provides a mechanism to schedule callbacks in a
 // synchronized manner. It provides a FIFO guarantee on the order of execution
-// of scheduled callbacks.
-//
-// New callbacks can be scheduled by invoking the Schedule() method. To cleanup
-// resources used by the serializer and to discard any queued callbacks, the
-// Close() method needs to be called.
+// of scheduled callbacks. New callbacks can be scheduled by invoking the
+// Schedule() method.
 //
 // This type is safe for concurrent access.
 type callbackSerializer struct {
-	closedMu sync.Mutex
-	closed   bool
-
-	cancel    context.CancelFunc
-	done      *grpcsync.Event
 	callbacks *buffer.Unbounded
 }
 
-// newCallbackSerializer returns a new CallbackSerializer instance.
-func newCallbackSerializer() *callbackSerializer {
-	ctx, cancel := context.WithCancel(context.Background())
-	t := &callbackSerializer{
-		cancel:    cancel,
-		done:      grpcsync.NewEvent(),
-		callbacks: buffer.NewUnbounded(),
-	}
+// newCallbackSerializer returns a new callbackSerializer instance. The provided
+// context will be passed to the scheduled callbacks. Users should cancel the
+// provided context to shutdown the callbackSerializer. It is guaranteed that no
+// callbacks will be scheduled once this context is canceled.
+func newCallbackSerializer(ctx context.Context) *callbackSerializer {
+	t := &callbackSerializer{callbacks: buffer.NewUnbounded()}
 	go t.run(ctx)
 	return t
 }
 
-// Close shuts down the CallbackSerializer. It is guaranteed that no callbacks
-// will be scheduled once this function returns. If a callback is currently
-// being executed, this functions blocks until execution of that callback
-// finishes before returning.
-func (t *callbackSerializer) Close() {
-	t.closedMu.Lock()
-	if t.closed {
-		t.closedMu.Unlock()
-		return
-	}
-	t.closed = true
-	t.closedMu.Unlock()
-
-	t.cancel()
-	<-t.done.Done()
-}
-
 // Schedule adds a callback to be scheduled after existing callbacks are run.
-func (t *callbackSerializer) Schedule(f func()) {
-	// We don't check for closed here because if the serializer is closed, the
-	// run() goroutine would have exited and therefore this callback will never
-	// be processed.
+//
+// Callbacks are expected to honor the context when performing any blocking
+// operations, and should return early when the context is canceled.
+func (t *callbackSerializer) Schedule(f func(ctx context.Context)) {
 	t.callbacks.Put(f)
 }
 
 func (t *callbackSerializer) run(ctx context.Context) {
-	defer t.done.Fire()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case callback := <-t.callbacks.Get():
-			t.closedMu.Lock()
-			if t.closed {
-				t.closedMu.Unlock()
-				return
-			}
-			t.closedMu.Unlock()
-
 			t.callbacks.Load()
-			callback.(func())()
+			callback.(func(ctx context.Context))(ctx)
 		}
 	}
 }
