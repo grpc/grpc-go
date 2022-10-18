@@ -21,7 +21,6 @@ package xdsclient
 import (
 	"context"
 	"fmt"
-	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -97,70 +96,39 @@ func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 	}
 }
 
-// TestCallbackSerializer_Schedule_RunToCompletion verifies that all scheduled
-// callbacks are run to completion.
-func (s) TestCallbackSerializer_Schedule_RunToCompletion(t *testing.T) {
+// TestCallbackSerializer_Schedule_Concurrent verifies that all concurrently
+// scheduled callbacks get executed.
+func (s) TestCallbackSerializer_Schedule_Concurrent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	cs := newCallbackSerializer(ctx)
 	defer cancel()
 
-	// We have two channels, one to record the order of scheduling, and the
-	// other to record the order of execution. We spawn a bunch of goroutines
-	// which record the order of scheduling and call the actual Schedule()
-	// method as well.  The callbacks record the order of execution.
-	//
-	// The act of recording the schedule and the act of calling Schedule() are
-	// not guaranteed to happen atomically.
+	// Schedule callbacks concurrently by calling Schedule() from goroutines.
+	// The execution of the callbacks call Done() on the waitgroup, which
+	// eventually unblocks the test and allows it to complete.
 	const numCallbacks = 100
-	scheduleOrderCh := make(chan int, numCallbacks)
-	executionOrderCh := make(chan int, numCallbacks)
+	var wg sync.WaitGroup
+	wg.Add(numCallbacks)
 	for i := 0; i < numCallbacks; i++ {
-		go func(id int) {
-			scheduleOrderCh <- id
-			cs.Schedule(func(ctx context.Context) {
-				select {
-				case <-ctx.Done():
-					return
-				case executionOrderCh <- id:
-				}
+		go func() {
+			cs.Schedule(func(context.Context) {
+				wg.Done()
 			})
-		}(i)
+		}()
 	}
 
-	// Spawn a couple of goroutines to capture the order or scheduling and the
-	// order of execution.
-	scheduleOrder := make([]int, numCallbacks)
-	executionOrder := make([]int, numCallbacks)
-	var wg sync.WaitGroup
-	wg.Add(2)
+	// We call Wait() on the waitgroup from a goroutine so that we can select on
+	// the Wait() being unblocked and the overall test deadline expiring.
+	done := make(chan struct{})
 	go func() {
-		defer wg.Done()
-		for i := 0; i < numCallbacks; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case id := <-scheduleOrderCh:
-				scheduleOrder[i] = id
-			}
-		}
+		wg.Wait()
+		close(done)
 	}()
-	go func() {
-		defer wg.Done()
-		for i := 0; i < numCallbacks; i++ {
-			select {
-			case <-ctx.Done():
-				return
-			case id := <-executionOrderCh:
-				executionOrder[i] = id
-			}
-		}
-	}()
-	wg.Wait()
 
-	sort.Ints(scheduleOrder)
-	sort.Ints(executionOrder)
-	if diff := cmp.Diff(executionOrder, scheduleOrder); diff != "" {
-		t.Fatalf("Not all scheduled callbacks are executed. diff(-want, +got):\n%s", diff)
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for all scheduled callbacks to be executed")
+	case <-done:
 	}
 }
 
