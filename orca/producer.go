@@ -184,7 +184,7 @@ func (p *producer) run(ctx context.Context) {
 			// retry when the state is READY again.
 		default:
 			// Log all other errors.
-			logger.Error("Received unexpected stream error:", err, ctx.Err())
+			logger.Error("Received unexpected stream error:", err)
 		}
 	}
 }
