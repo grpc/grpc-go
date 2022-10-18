@@ -359,7 +359,7 @@ func loadCRL(t *testing.T, path string) *certificateListExt {
 
 func TestCachedCRL(t *testing.T) {
 	internal_cache, err := lru.New(5)
-	cache := TimedCRLCache{internal_cache}
+	cache := TimedCRLCache{internal_cache, 1}
 	if err != nil {
 		t.Fatalf("lru.New: err = %v", err)
 	}
@@ -415,7 +415,7 @@ func TestCachedCRL(t *testing.T) {
 
 func TestGetIssuerCRLCache(t *testing.T) {
 	internal_cache, err := lru.New(5)
-	cache := TimedCRLCache{internal_cache}
+	cache := TimedCRLCache{internal_cache, 10}
 	if err != nil {
 		t.Fatalf("lru.New: err = %v", err)
 	}
@@ -526,7 +526,7 @@ func TestRevokedCert(t *testing.T) {
 	revokedLeafChain := makeChain(t, testdata.Path("crl/revokedLeaf.pem"))
 	validChain := makeChain(t, testdata.Path("crl/unrevoked.pem"))
 	internal_cache, err := lru.New(5)
-	cache := TimedCRLCache{internal_cache}
+	cache := TimedCRLCache{internal_cache, 10}
 	if err != nil {
 		t.Fatalf("lru.New: err = %v", err)
 	}
@@ -774,4 +774,72 @@ func TestCRLCacheExpiration(t *testing.T) {
 		t.Fatalf("A certificate should have been `RevocationREvoked` but was not")
 	}
 
+}
+
+// TODO how to mock out time so each of these tests don't actually take 1 second each
+func TestTimedCRLCacheExpiration(t *testing.T) {
+	var crlCacheExpirationTests = []struct {
+		desc                      string
+		crlFile                   string
+		certificateFile           string
+		revokedCertIndex          int
+		expirationDurationSeconds int
+		revoked                   bool
+	}{
+		{
+			desc:                      "Intermediate revoked after refresh",
+			crlFile:                   "crl/3.crl",
+			certificateFile:           "crl/revokedInt.pem",
+			revokedCertIndex:          1,
+			expirationDurationSeconds: 1,
+		},
+		{
+			desc:                      "Leaf revoked after refresh",
+			crlFile:                   "crl/6.crl",
+			certificateFile:           "crl/revokedLeaf.pem",
+			revokedCertIndex:          2,
+			expirationDurationSeconds: 1,
+		},
+	}
+	for _, tt := range crlCacheExpirationTests {
+		lru, err := lru.New(5)
+		if err != nil {
+			t.Fatalf("Creating cache failed")
+		}
+		cache := TimedCRLCache{lru, tt.expirationDurationSeconds}
+
+		var certs = makeChain(t, testdata.Path(tt.certificateFile))
+		// Certs[1] has the same issuer as the revoked cert
+		rawIssuer := certs[tt.revokedCertIndex].RawIssuer
+
+		// `3.crl`` revokes `revokedInt.pem`
+		crl := loadCRL(t, testdata.Path(tt.crlFile))
+		// Modify the crl so that the cert is NOT revoked and add it to the cache
+		crl.CertList.TBSCertList.RevokedCertificates = []pkix.RevokedCertificate{}
+		// Don't make it expire because of NextUpdate (an hour won't pass during this test)
+		crl.CertList.TBSCertList.NextUpdate = time.Now().Add(time.Hour)
+		cache.Add(hex.EncodeToString(rawIssuer), crl)
+		for i, cert := range certs {
+			revStatus := checkCert(cert, certs, RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache})
+			if revStatus != RevocationUnrevoked {
+				t.Fatalf("Certificate check should be RevocationUnrevoked, was %v, %v", revStatus, i)
+			}
+		}
+
+		// Wait expirationDurationSeconds so that the cache entry will be expired
+		time.Sleep(time.Duration(tt.expirationDurationSeconds) * time.Second)
+
+		// Now see if the entry is revoked
+		revoked := false
+		for _, cert := range certs {
+			revStatus := checkCert(cert, certs, RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache})
+			if revStatus == RevocationRevoked {
+				revoked = true
+			}
+		}
+
+		if !revoked {
+			t.Fatalf("A certificate should have been `RevocationRevoked` but was not")
+		}
+	}
 }

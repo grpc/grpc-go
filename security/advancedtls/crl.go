@@ -519,7 +519,8 @@ func extractCRLIssuer(crlBytes []byte) ([]byte, error) {
 }
 
 type TimedCRLCache struct {
-	cache *lru.Cache
+	cache                     *lru.Cache
+	expirationDurationSeconds int
 }
 
 type cRLCacheEntry struct {
@@ -546,7 +547,7 @@ func (c TimedCRLCache) Get(key interface{}) (value interface{}, ok bool) {
 	}
 	crl := cacheEntry.value
 	// TODO make this value configurable
-	if cacheEntry.updatedAt.Add(time.Hour).Before(time.Now()) {
+	if cacheEntry.updatedAt.Add(time.Duration(c.expirationDurationSeconds) * time.Second).Before(time.Now()) {
 		// Need to refresh
 		grpclogLogger.Infof("CRLCache entry for key=%v more than 1 hour old, refreshing", key)
 		return nil, false
