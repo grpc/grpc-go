@@ -36,7 +36,6 @@ import (
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
-	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/testdata"
 
 	_ "google.golang.org/grpc/balancer/grpclb"      // Register the grpclb load balancing policy.
@@ -140,7 +139,6 @@ func main() {
 		credsChosen = credsComputeEngineCreds
 	}
 
-	resolver.SetDefaultScheme("dns")
 	serverAddr := *serverHost
 	if *serverPort != 0 {
 		serverAddr = net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
