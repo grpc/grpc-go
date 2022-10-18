@@ -73,8 +73,12 @@ const (
 
 	ldsName         = "xdsclient-test-lds-resource"
 	rdsName         = "xdsclient-test-rds-resource"
+	cdsName         = "xdsclient-test-cds-resource"
+	edsName         = "xdsclient-test-eds-resource"
 	ldsNameNewStyle = "xdstp:///envoy.config.listener.v3.Listener/xdsclient-test-lds-resource"
 	rdsNameNewStyle = "xdstp:///envoy.config.route.v3.RouteConfiguration/xdsclient-test-rds-resource"
+	cdsNameNewStyle = "xdstp:///envoy.config.cluster.v3.Cluster/xdsclient-test-cds-resource"
+	edsNameNewStyle = "xdstp:///envoy.config.endpoint.v3.ClusterLoadAssignment/xdsclient-test-eds-resource"
 )
 
 // badListenerResource returns a listener resource for the given name which does
