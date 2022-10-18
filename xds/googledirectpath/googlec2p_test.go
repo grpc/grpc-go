@@ -211,13 +211,20 @@ func TestBuildXDS(t *testing.T) {
 					},
 				}
 			}
+			serverConfig := &bootstrap.ServerConfig{
+				ServerURI:    tdURL,
+				TransportAPI: version.TransportV3,
+				NodeProto:    wantNode,
+			}
 			wantConfig := &bootstrap.Config{
-				XDSServer: &bootstrap.ServerConfig{
-					ServerURI:    tdURL,
-					TransportAPI: version.TransportV3,
-					NodeProto:    wantNode,
-				},
+				XDSServer: serverConfig,
 				ClientDefaultListenerResourceNameTemplate: "%s",
+				Authorities: map[string]*bootstrap.Authority{
+					"traffic-director-c2p.xds.googleapis.com": {
+						ClientListenerResourceNameTemplate: "%s",
+						XDSServer:                          serverConfig,
+					},
+				},
 			}
 			if tt.tdURI != "" {
 				wantConfig.XDSServer.ServerURI = tt.tdURI
