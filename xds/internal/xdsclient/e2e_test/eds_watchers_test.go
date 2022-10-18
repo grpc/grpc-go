@@ -105,7 +105,7 @@ func verifyNoEndpointsUpdate(ctx context.Context, updateCh *testutils.Channel) e
 	return nil
 }
 
-// TestEDSWatch covers the case where a single endpoints exists for a single
+// TestEDSWatch covers the case where a single endpoint exists for a single
 // endpoints resource. The test verifies the following scenarios:
 // 1. An update from the management server containing the resource being
 //    watched should result in the invocation of the watch callback.
