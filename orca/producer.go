@@ -84,13 +84,10 @@ func RegisterOOBListener(sc balancer.SubConn, l OOBListener, opts OOBListenerOpt
 
 	// If stop is called multiple times, prevent it from having any effect on
 	// subsequent calls.
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			p.unregisterListener(l, opts.ReportInterval)
-			close()
-		})
-	}
+	return grpcsync.OnceFunc(func() {
+		p.unregisterListener(l, opts.ReportInterval)
+		close()
+	})
 }
 
 type producer struct {

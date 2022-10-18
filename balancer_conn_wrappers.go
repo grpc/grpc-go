@@ -465,9 +465,9 @@ func (acbw *acBalancerWrapper) GetOrBuildProducer(pb balancer.ProducerBuilder) (
 	// Account for this new reference.
 	pData.refs++
 
-	// Return a cleanup function wrapped in a sync.Once to remove this
-	// reference and delete the refCountedProducer from the map if the total
-	// reference count goes to zero.
+	// Return a cleanup function wrapped in a OnceFunc to remove this reference
+	// and delete the refCountedProducer from the map if the total reference
+	// count goes to zero.
 	unref := func() {
 		acbw.mu.Lock()
 		pData.refs--
@@ -477,6 +477,5 @@ func (acbw *acBalancerWrapper) GetOrBuildProducer(pb balancer.ProducerBuilder) (
 		}
 		acbw.mu.Unlock()
 	}
-	once := sync.Once{}
-	return pData.producer, func() { once.Do(unref) }
+	return pData.producer, grpcsync.OnceFunc(unref)
 }
