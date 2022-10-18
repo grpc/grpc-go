@@ -1241,6 +1241,13 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 			return
 		}
 		hcancel()
+		if ac.transport == nil {
+			// We're still connecting to this address, which could error.  Do
+			// not update the connectivity state or resolve; these will happen
+			// at the end of the tryAllAddrs connection loop in the event of an
+			// error.
+			return
+		}
 		ac.transport = nil
 		// Refresh the name resolver on any connection loss.
 		ac.cc.resolveNow(resolver.ResolveNowOptions{})
@@ -1286,8 +1293,9 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 	}
 	if hctx.Err() != nil {
 		// onClose was already called for this connection, but the connection
-		// was successfully established first.  Leave the state as onClose left
-		// it, and report a success.
+		// was successfully established first.  Consider it a success and set
+		// the new state to Idle.
+		ac.updateConnectivityState(connectivity.Idle, nil)
 		return nil
 	}
 	ac.curAddr = addr

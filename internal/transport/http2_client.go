@@ -391,7 +391,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 			err = <-readerErrCh
 		}
 		if err != nil {
-			t.close(err, false)
+			t.Close(err)
 		}
 	}()
 
@@ -925,7 +925,10 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 	}
 }
 
-func (t *http2Client) close(err error, callOnClose bool) {
+// Close kicks off the shutdown process of the transport. This should be called
+// only once on a transport. Once it is called, the transport should not be
+// accessed any more.
+func (t *http2Client) Close(err error) {
 	t.mu.Lock()
 	// Make sure we only close once.
 	if t.state == closing {
@@ -934,9 +937,7 @@ func (t *http2Client) close(err error, callOnClose bool) {
 	}
 	// Call t.onClose ASAP to prevent the client from attempting to create new
 	// streams.
-	if callOnClose {
-		t.onClose()
-	}
+	t.onClose()
 	t.state = closing
 	streams := t.activeStreams
 	t.activeStreams = nil
@@ -972,13 +973,6 @@ func (t *http2Client) close(err error, callOnClose bool) {
 		}
 		sh.HandleConn(t.ctx, connEnd)
 	}
-}
-
-// Close kicks off the shutdown process of the transport. This should be called
-// only once on a transport. Once it is called, the transport should not be
-// accessed any more.
-func (t *http2Client) Close(err error) {
-	t.close(err, true)
 }
 
 // GracefulClose sets the state to draining, which prevents new streams from
