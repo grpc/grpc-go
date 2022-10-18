@@ -134,9 +134,11 @@ func (p *producer) minInterval() time.Duration {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	var min time.Duration
-	for i, t := range p.intervals {
-		if t < min || i == 0 {
+	first := true
+	for t := range p.intervals {
+		if t < min || first {
 			min = t
+			first = false
 		}
 	}
 	return min
