@@ -338,14 +338,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		onGoAway:              onGoAway,
 		keepaliveEnabled:      keepaliveEnabled,
 		bufferPool:            newBufferPool(),
-		onClose:               func() {},
+		onClose:               onClose,
 	}
-	// Assign onClose only if we return successfully so it is never called while running this function.
-	defer func() {
-		if err == nil {
-			t.onClose = onClose
-		}
-	}()
 	// Add peer information to the http2client context.
 	t.ctx = peer.NewContext(t.ctx, t.getPeer())
 
@@ -379,6 +373,10 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	if err != nil {
 		return nil, err
 	}
+	if t.keepaliveEnabled {
+		t.kpDormancyCond = sync.NewCond(&t.mu)
+		go t.keepalive()
+	}
 
 	// Start the reader goroutine for incoming messages. Each transport has a
 	// dedicated goroutine which reads HTTP2 frames from the network. Then it
@@ -389,11 +387,11 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	readerErrCh := make(chan error, 1)
 	go t.reader(readerErrCh)
 	defer func() {
-		if err != nil {
-			return
+		if err == nil {
+			err = <-readerErrCh
 		}
-		if err = <-readerErrCh; err != nil {
-			t.Close(err)
+		if err != nil {
+			t.close(err, false)
 		}
 	}()
 
@@ -401,12 +399,10 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	n, err := t.conn.Write(clientPreface)
 	if err != nil {
 		err = connectionErrorf(true, err, "transport: failed to write client preface: %v", err)
-		t.Close(err)
 		return nil, err
 	}
 	if n != len(clientPreface) {
 		err = connectionErrorf(true, nil, "transport: preface mismatch, wrote %d bytes; want %d", n, len(clientPreface))
-		t.Close(err)
 		return nil, err
 	}
 	var ss []http2.Setting
@@ -426,14 +422,12 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	err = t.framer.fr.WriteSettings(ss...)
 	if err != nil {
 		err = connectionErrorf(true, err, "transport: failed to write initial settings frame: %v", err)
-		t.Close(err)
 		return nil, err
 	}
 	// Adjust the connection flow control window if needed.
 	if delta := uint32(icwz - defaultWindowSize); delta > 0 {
 		if err := t.framer.fr.WriteWindowUpdate(0, delta); err != nil {
 			err = connectionErrorf(true, err, "transport: failed to write window update: %v", err)
-			t.Close(err)
 			return nil, err
 		}
 	}
@@ -441,7 +435,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	t.connectionID = atomic.AddUint64(&clientConnectionCounter, 1)
 
 	if err := t.framer.writer.Flush(); err != nil {
-		t.Close(err)
 		return nil, err
 	}
 	go func() {
@@ -458,11 +451,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		t.controlBuf.finish()
 		close(t.writerDone)
 	}()
-
-	if t.keepaliveEnabled {
-		t.kpDormancyCond = sync.NewCond(&t.mu)
-		go t.keepalive()
-	}
 
 	return t, nil
 }
@@ -937,23 +925,18 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 	}
 }
 
-// Close kicks off the shutdown process of the transport. This should be called
-// only once on a transport. Once it is called, the transport should not be
-// accessed any more.
-//
-// This method blocks until the addrConn that initiated this transport is
-// re-connected. This happens because t.onClose() begins reconnect logic at the
-// addrConn level and blocks until the addrConn is successfully connected.
-func (t *http2Client) Close(err error) {
+func (t *http2Client) close(err error, callOnClose bool) {
 	t.mu.Lock()
-	// Make sure we only Close once.
+	// Make sure we only close once.
 	if t.state == closing {
 		t.mu.Unlock()
 		return
 	}
-	// Call t.onClose before setting the state to closing to prevent the client
-	// from attempting to create new streams ASAP.
-	t.onClose()
+	// Call t.onClose ASAP to prevent the client from attempting to create new
+	// streams.
+	if callOnClose {
+		t.onClose()
+	}
 	t.state = closing
 	streams := t.activeStreams
 	t.activeStreams = nil
@@ -989,6 +972,13 @@ func (t *http2Client) Close(err error) {
 		}
 		sh.HandleConn(t.ctx, connEnd)
 	}
+}
+
+// Close kicks off the shutdown process of the transport. This should be called
+// only once on a transport. Once it is called, the transport should not be
+// accessed any more.
+func (t *http2Client) Close(err error) {
+	t.close(err, true)
 }
 
 // GracefulClose sets the state to draining, which prevents new streams from
