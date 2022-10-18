@@ -523,14 +523,20 @@ type TimedCRLCache struct {
 	expirationDurationSeconds int
 }
 
-type cRLCacheEntry struct {
+type timedCRLCacheEntry struct {
 	value     interface{}
 	updatedAt time.Time
 }
 
 func (c TimedCRLCache) Add(key, value interface{}) bool {
-	evicted := c.cache.Add(key, cRLCacheEntry{value, time.Now()})
+	evicted := c.cache.Add(key, timedCRLCacheEntry{value, time.Now()})
 	return evicted
+}
+
+func (c TimedCRLCache) add(key interface{}, value timedCRLCacheEntry) bool {
+	evicted := c.cache.Add(key, value)
+	return evicted
+
 }
 
 func (c TimedCRLCache) Get(key interface{}) (value interface{}, ok bool) {
@@ -540,7 +546,7 @@ func (c TimedCRLCache) Get(key interface{}) (value interface{}, ok bool) {
 		return nil, false
 	}
 
-	cacheEntry, ok := val.(cRLCacheEntry)
+	cacheEntry, ok := val.(timedCRLCacheEntry)
 	if !ok {
 		grpclogLogger.Warningf("Couldn't convert cache entry to cRLCacheEntry key=%v value=%v", key, val)
 		return nil, false

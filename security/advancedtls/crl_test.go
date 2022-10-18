@@ -843,3 +843,74 @@ func TestTimedCRLCacheExpiration(t *testing.T) {
 		}
 	}
 }
+
+// Alternative to mocking time. Negative of this approach is we don't actually test TimedCRLCache.Add
+func TestTimedCRLCacheExpirationAlternate(t *testing.T) {
+	var crlCacheExpirationTests = []struct {
+		desc                      string
+		crlFile                   string
+		certificateFile           string
+		revokedCertIndex          int
+		expirationDurationSeconds int
+		revoked                   bool
+	}{
+		{
+			desc:                      "Intermediate revoked after refresh",
+			crlFile:                   "crl/3.crl",
+			certificateFile:           "crl/revokedInt.pem",
+			revokedCertIndex:          1,
+			expirationDurationSeconds: 10,
+		},
+		{
+			desc:                      "Leaf revoked after refresh",
+			crlFile:                   "crl/6.crl",
+			certificateFile:           "crl/revokedLeaf.pem",
+			revokedCertIndex:          2,
+			expirationDurationSeconds: 10,
+		},
+	}
+	for _, tt := range crlCacheExpirationTests {
+		lru, err := lru.New(5)
+		if err != nil {
+			t.Fatalf("Creating cache failed")
+		}
+		cache := TimedCRLCache{lru, tt.expirationDurationSeconds}
+
+		var certs = makeChain(t, testdata.Path(tt.certificateFile))
+		// Certs[1] has the same issuer as the revoked cert
+		rawIssuer := certs[tt.revokedCertIndex].RawIssuer
+
+		// `3.crl`` revokes `revokedInt.pem`
+		crl := loadCRL(t, testdata.Path(tt.crlFile))
+		// Modify the crl so that the cert is NOT revoked and add it to the cache
+		crl.CertList.TBSCertList.RevokedCertificates = []pkix.RevokedCertificate{}
+		// Don't make it expire because of NextUpdate (an hour won't pass during this test)
+		crl.CertList.TBSCertList.NextUpdate = time.Now().Add(time.Hour)
+		issuerHash := hex.EncodeToString(rawIssuer)
+		cache.Add(issuerHash, crl)
+		for i, cert := range certs {
+			revStatus := checkCert(cert, certs, RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache})
+			if revStatus != RevocationUnrevoked {
+				t.Fatalf("Certificate check should be RevocationUnrevoked, was %v, %v", revStatus, i)
+			}
+		}
+
+		// Create an entry in the cache where the timedCRLCacheEntry will have passed
+		// Uses the private add on TimeCRLCache to directly add an entry
+		expiredEntry := timedCRLCacheEntry{crl, time.Now().Add(-time.Duration(tt.expirationDurationSeconds) * time.Second)}
+		cache.add(issuerHash, expiredEntry)
+
+		// Now see if the entry is revoked
+		revoked := false
+		for _, cert := range certs {
+			revStatus := checkCert(cert, certs, RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache})
+			if revStatus == RevocationRevoked {
+				revoked = true
+			}
+		}
+
+		if !revoked {
+			t.Fatalf("A certificate should have been `RevocationRevoked` but was not")
+		}
+	}
+}
