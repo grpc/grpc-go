@@ -62,7 +62,6 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 	}
 	t.Cleanup(serverNonDefaultAuthority.Stop)
 
-	// Create the bootstrap
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
 		Version:                            bootstrap.TransportV3,
