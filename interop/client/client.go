@@ -53,6 +53,7 @@ const (
 
 var (
 	caFile                                 = flag.String("ca_file", "", "The file containning the CA root cert file")
+	defaultScheme                          = flag.String("default_scheme", "", "Default URI scheme to configure globally on the grpc library. Leave empty to not configure one.")
 	useTLS                                 = flag.Bool("use_tls", false, "Connection uses TLS if true")
 	useALTS                                = flag.Bool("use_alts", false, "Connection uses ALTS if true (this option can only be used on GCP)")
 	customCredentialsType                  = flag.String("custom_credentials_type", "", "Custom creds to use, excluding TLS or ALTS")
@@ -140,7 +141,9 @@ func main() {
 		credsChosen = credsComputeEngineCreds
 	}
 
-	resolver.SetDefaultScheme("dns")
+	if *defaultScheme != "" {
+		resolver.SetDefaultScheme(*defaultScheme)
+	}
 	serverAddr := *serverHost
 	if *serverPort != 0 {
 		serverAddr = net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
