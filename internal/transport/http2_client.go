@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 	icredentials "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpcutil"
 	imetadata "google.golang.org/grpc/internal/metadata"
 	istatus "google.golang.org/grpc/internal/status"
@@ -100,10 +101,6 @@ type http2Client struct {
 	maxSendHeaderListSize *uint32
 
 	bdpEst *bdpEstimator
-	// onPrefaceReceipt is a callback that client transport calls upon
-	// receiving server preface to signal that a succefull HTTP2
-	// connection was established.
-	onPrefaceReceipt func()
 
 	maxConcurrentStreams  uint32
 	streamQuota           int64
@@ -196,7 +193,7 @@ func isTemporary(err error) bool {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onPrefaceReceipt func(), onGoAway func(GoAwayReason), onClose func()) (_ *http2Client, err error) {
+func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onGoAway func(GoAwayReason), onClose func()) (_ *http2Client, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -218,12 +215,35 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		}
 		return nil, connectionErrorf(true, err, "transport: Error while dialing %v", err)
 	}
+
 	// Any further errors will close the underlying connection
 	defer func(conn net.Conn) {
 		if err != nil {
 			conn.Close()
 		}
 	}(conn)
+
+	// Monitor context; close connection if expired or canceled before returning.
+	ctxMonitorDone := grpcsync.NewEvent()
+	newClientCtx, newClientDone := context.WithCancel(connectCtx)
+	defer func() {
+		newClientDone()
+		// Wait for the goroutine to exit.  If we do not wait before returning,
+		// the caller could cancel the connectCtx after we return, but we might
+		// see this and close the connection.
+		<-ctxMonitorDone.Done()
+	}()
+	go func(conn net.Conn) {
+		defer ctxMonitorDone.Fire() // Signal this goroutine has exited.
+		<-newClientCtx.Done()
+		if connectCtx.Err() == nil {
+			// Only newClientCtx was canceled; success.
+			return
+		}
+		// connectCtx expired.  Hard close the connection.
+		conn.Close()
+	}(conn)
+
 	kp := opts.KeepaliveParams
 	// Validate keepalive parameters.
 	if kp.Time == 0 {
@@ -255,15 +275,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		}
 	}
 	if transportCreds != nil {
-		rawConn := conn
-		// Pull the deadline from the connectCtx, which will be used for
-		// timeouts in the authentication protocol handshake. Can ignore the
-		// boolean as the deadline will return the zero value, which will make
-		// the conn not timeout on I/O operations.
-		deadline, _ := connectCtx.Deadline()
-		rawConn.SetDeadline(deadline)
-		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, rawConn)
-		rawConn.SetDeadline(time.Time{})
+		conn, authInfo, err = transportCreds.ClientHandshake(connectCtx, addr.ServerName, conn)
 		if err != nil {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: authentication handshake failed: %v", err)
 		}
@@ -318,17 +330,22 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		kp:                    kp,
 		statsHandlers:         opts.StatsHandlers,
 		initialWindowSize:     initialWindowSize,
-		onPrefaceReceipt:      onPrefaceReceipt,
 		nextID:                1,
 		maxConcurrentStreams:  defaultMaxStreamsClient,
 		streamQuota:           defaultMaxStreamsClient,
 		streamsQuotaAvailable: make(chan struct{}, 1),
 		czData:                new(channelzData),
 		onGoAway:              onGoAway,
-		onClose:               onClose,
 		keepaliveEnabled:      keepaliveEnabled,
 		bufferPool:            newBufferPool(),
+		onClose:               func() {},
 	}
+	// Assign onClose only if we return successfully so it is never called while running this function.
+	defer func() {
+		if err == nil {
+			t.onClose = onClose
+		}
+	}()
 	// Add peer information to the http2client context.
 	t.ctx = peer.NewContext(t.ctx, t.getPeer())
 
@@ -362,14 +379,23 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	if err != nil {
 		return nil, err
 	}
-	if t.keepaliveEnabled {
-		t.kpDormancyCond = sync.NewCond(&t.mu)
-		go t.keepalive()
-	}
-	// Start the reader goroutine for incoming message. Each transport has
-	// a dedicated goroutine which reads HTTP2 frame from network. Then it
-	// dispatches the frame to the corresponding stream entity.
-	go t.reader()
+
+	// Start the reader goroutine for incoming messages. Each transport has a
+	// dedicated goroutine which reads HTTP2 frames from the network. Then it
+	// dispatches the frame to the corresponding stream entity.  When the
+	// server preface is received, readerErrCh is closed.  If an error occurs
+	// first, an error is pushed to the channel.  This must be checked before
+	// returning from this function.
+	readerErrCh := make(chan error, 1)
+	go t.reader(readerErrCh)
+	defer func() {
+		if err != nil {
+			return
+		}
+		if err = <-readerErrCh; err != nil {
+			t.Close(err)
+		}
+	}()
 
 	// Send connection preface to server.
 	n, err := t.conn.Write(clientPreface)
@@ -415,6 +441,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	t.connectionID = atomic.AddUint64(&clientConnectionCounter, 1)
 
 	if err := t.framer.writer.Flush(); err != nil {
+		t.Close(err)
 		return nil, err
 	}
 	go func() {
@@ -431,6 +458,12 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		t.controlBuf.finish()
 		close(t.writerDone)
 	}()
+
+	if t.keepaliveEnabled {
+		t.kpDormancyCond = sync.NewCond(&t.mu)
+		go t.keepalive()
+	}
+
 	return t, nil
 }
 
@@ -1509,32 +1542,27 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	t.closeStream(s, io.EOF, rst, http2.ErrCodeNo, statusGen, mdata, true)
 }
 
-// reader runs as a separate goroutine in charge of reading data from network
-// connection.
-//
-// TODO(zhaoq): currently one reader per transport. Investigate whether this is
-// optimal.
-// TODO(zhaoq): Check the validity of the incoming frame sequence.
-func (t *http2Client) reader() {
+// reader verifies the server preface and reads all subsequent data from
+// network connection.
+func (t *http2Client) reader(errCh chan<- error) {
 	defer close(t.readerDone)
+
 	// Check the validity of server preface.
 	frame, err := t.framer.fr.ReadFrame()
 	if err != nil {
-		err = connectionErrorf(true, err, "error reading server preface: %v", err)
-		t.Close(err) // this kicks off resetTransport, so must be last before return
+		errCh <- connectionErrorf(true, err, "error reading server preface: %v", err)
 		return
 	}
-	t.conn.SetReadDeadline(time.Time{}) // reset deadline once we get the settings frame (we didn't time out, yay!)
 	if t.keepaliveEnabled {
 		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
 		// this kicks off resetTransport, so must be last before return
-		t.Close(connectionErrorf(true, nil, "initial http2 frame from server is not a settings frame: %T", frame))
+		errCh <- connectionErrorf(true, nil, "initial http2 frame from server is not a settings frame: %T", frame)
 		return
 	}
-	t.onPrefaceReceipt()
+	close(errCh) // received settings frame
 	t.handleSettings(sf, true)
 
 	// loop to keep reading incoming messages on this transport.
