@@ -352,29 +352,6 @@ func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, w
 	return nil
 }
 
-// verifyClusterUpdate waits for an update to be received on the provided update
-// channel and verifies that it matches the expected update.
-//
-// Returns an error if no update is received before the context deadline expires
-// or the received update does not match the expected one.
-func verifyClusterUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.ClusterUpdateErrTuple) error {
-	u, err := updateCh.Receive(ctx)
-	if err != nil {
-		return fmt.Errorf("timeout when waiting for a cluster resource from the management server: %v", err)
-	}
-	got := u.(xdsresource.ClusterUpdateErrTuple)
-	if wantUpdate.Err != nil {
-		if gotType, wantType := xdsresource.ErrType(got.Err), xdsresource.ErrType(wantUpdate.Err); gotType != wantType {
-			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
-		}
-	}
-	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.ClusterUpdate{}, "Raw")}
-	if diff := cmp.Diff(wantUpdate.Update, got.Update, cmpOpts...); diff != "" {
-		return fmt.Errorf("received unepected diff in the cluster resource update: (-want, got):\n%s", diff)
-	}
-	return nil
-}
-
 // verifyEndpointsUpdate waits for an update to be received on the provided
 // update channel and verifies that it matches the expected update.
 //
