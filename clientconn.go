@@ -1284,6 +1284,12 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		go newTr.Close(transport.ErrConnClosing)
 		return nil
 	}
+	if hctx.Err() != nil {
+		// onClose was already called for this connection, but the connection
+		// was successfully established first.  Leave the state as onClose left
+		// it, and report a success.
+		return nil
+	}
 	ac.curAddr = addr
 	ac.transport = newTr
 	ac.startHealthCheck(hctx) // Will set state to READY if appropriate.
