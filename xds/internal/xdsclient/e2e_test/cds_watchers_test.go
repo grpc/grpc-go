@@ -43,9 +43,9 @@ import (
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 )
 
-// badClusterResource returns a cluster resource for the given name contains a
-// config_source specifier for the `lrs_server` field which is not set to
-// `self`, and hence is expected to be NACKed by the client.
+// badClusterResource returns a cluster resource for the given name which
+// contains a config_source_specifier for the `lrs_server` field which is not
+// set to `self`, and hence is expected to be NACKed by the client.
 func badClusterResource(clusterName, edsServiceName string, secLevel e2e.SecurityLevel) *v3clusterpb.Cluster {
 	cluster := e2e.DefaultCluster(clusterName, edsServiceName, secLevel)
 	cluster.LrsServer = &v3corepb.ConfigSource{ConfigSourceSpecifier: &v3corepb.ConfigSource_Ads{}}
@@ -88,7 +88,7 @@ func verifyNoClusterUpdate(ctx context.Context, updateCh *testutils.Channel) err
 	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
 	if u, err := updateCh.Receive(sCtx); err != context.DeadlineExceeded {
-		return fmt.Errorf("unexpected ClusterUpdate: %v", u)
+		return fmt.Errorf("received unexpected ClusterUpdate when expecting none: %v", u)
 	}
 	return nil
 }
@@ -353,11 +353,10 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 
 // TestCDSWatch_ThreeWatchesForDifferentResourceNames covers the case where
 // three watchers (two watchers for one resource, and the third watcher for
-// another resource) exist across two cluster resources.  The test verifies that
-// an update from the management server containing both resources results in the
-// invocation of all watch callbacks.
-//
-// The test is run with both old and new style names.
+// another resource) exist across two cluster resources (one with an old style
+// name and one with a new style name).  The test verifies that an update from
+// the management server containing both resources results in the invocation of
+// all watch callbacks.
 func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
@@ -634,16 +633,15 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 }
 
 // TestCDSWatch_ResourceRemoved covers the cases where two watchers exists for
-// two different resources. One of these resources being watched is removed from
-// the management server. The test verifies the following scenarios:
+// two different resources (one with an old style name and one with a new style
+// name). One of these resources being watched is removed from the management
+// server. The test verifies the following scenarios:
 // 1. Removing a resource should trigger the watch callback associated with that
 //    resource with a resource removed error. It should not trigger the watch
 //    callback for an unrelated resource.
 // 2. An update to other resource should result in the invocation of the watch
 //    callback associated with that resource.  It should not result in the
 //    invocation of the watch callback associated with the deleted resource.
-//
-// The test is run with both old and new style names.
 func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
