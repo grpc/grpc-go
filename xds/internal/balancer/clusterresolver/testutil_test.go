@@ -19,16 +19,12 @@ package clusterresolver
 import (
 	"fmt"
 	"net"
-	"reflect"
 	"strconv"
-	"time"
 
 	xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
 	typepb "github.com/envoyproxy/go-control-plane/envoy/type"
-	"google.golang.org/grpc/balancer"
-	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
@@ -114,71 +110,4 @@ func parseEndpoints(lbEndpoints []*endpointpb.LbEndpoint) []xdsresource.Endpoint
 		})
 	}
 	return endpoints
-}
-
-// testPickerFromCh receives pickers from the channel, and check if their
-// behaviors are as expected (that the given function returns nil err).
-//
-// It returns nil if one picker has the correct behavior.
-//
-// It returns error when there's no picker from channel after 1 second timeout,
-// and the error returned is the mismatch error from the previous picker.
-func testPickerFromCh(ch chan balancer.Picker, f func(balancer.Picker) error) error {
-	var (
-		p   balancer.Picker
-		err error
-	)
-	for {
-		select {
-		case p = <-ch:
-		case <-time.After(defaultTestTimeout):
-			// TODO: this function should take a context, and use the context
-			// here, instead of making a new timer.
-			return fmt.Errorf("timeout waiting for picker with expected behavior, error from previous picker: %v", err)
-		}
-
-		err = f(p)
-		if err == nil {
-			return nil
-		}
-	}
-}
-
-func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
-	return func() balancer.SubConn {
-		scst, _ := p.Pick(balancer.PickInfo{})
-		return scst.SubConn
-	}
-}
-
-// testRoundRobinPickerFromCh receives pickers from the channel, and check if
-// their behaviors are round-robin of want.
-//
-// It returns nil if one picker has the correct behavior.
-//
-// It returns error when there's no picker from channel after 1 second timeout,
-// and the error returned is the mismatch error from the previous picker.
-func testRoundRobinPickerFromCh(ch chan balancer.Picker, want []balancer.SubConn) error {
-	return testPickerFromCh(ch, func(p balancer.Picker) error {
-		return testutils.IsRoundRobin(want, subConnFromPicker(p))
-	})
-}
-
-// testErrPickerFromCh receives pickers from the channel, and check if they
-// return the wanted error.
-//
-// It returns nil if one picker has the correct behavior.
-//
-// It returns error when there's no picker from channel after 1 second timeout,
-// and the error returned is the mismatch error from the previous picker.
-func testErrPickerFromCh(ch chan balancer.Picker, want error) error {
-	return testPickerFromCh(ch, func(p balancer.Picker) error {
-		for i := 0; i < 5; i++ {
-			_, err := p.Pick(balancer.PickInfo{})
-			if !reflect.DeepEqual(err, want) {
-				return fmt.Errorf("picker.Pick, got err %q, want err %q", err, want)
-			}
-		}
-		return nil
-	})
 }

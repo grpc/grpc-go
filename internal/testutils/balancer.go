@@ -339,6 +339,13 @@ func IsRoundRobin(want []balancer.SubConn, f func() balancer.SubConn) error {
 	return nil
 }
 
+func SubConnFromPicker(p balancer.Picker) func() balancer.SubConn {
+	return func() balancer.SubConn {
+		scst, _ := p.Pick(balancer.PickInfo{})
+		return scst.SubConn
+	}
+}
+
 // ErrTestConstPicker is error returned by test const picker.
 var ErrTestConstPicker = fmt.Errorf("const picker error")
 
