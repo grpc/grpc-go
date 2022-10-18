@@ -113,7 +113,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		Authorities: map[string]*bootstrap.Authority{
 			"traffic-director-c2p.xds.googleapis.com": &bootstrap.Authority{
 				ClientListenerResourceNameTemplate: "%s",
-				XDSServer: serverConfig,
+				XDSServer:                          serverConfig,
 			},
 		},
 	}
