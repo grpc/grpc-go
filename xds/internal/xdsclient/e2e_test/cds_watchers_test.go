@@ -95,13 +95,13 @@ func verifyNoClusterUpdate(ctx context.Context, updateCh *testutils.Channel) err
 
 // TestCDSWatch covers the case where a single watcher exists for a single
 // cluster resource. The test verifies the following scenarios:
-// 1. An update from the management server containing the resource being
-//    watched should result in the invocation of the watch callback.
-// 2. An update from the management server containing a resource *not* being
-//    watched should not result in the invocation of the watch callback.
-// 3. After the watch is cancelled, an update from the management server
-//    containing the resource that was being watched should not result in the
-//    invocation of the watch callback.
+//  1. An update from the management server containing the resource being
+//     watched should result in the invocation of the watch callback.
+//  2. An update from the management server containing a resource *not* being
+//     watched should not result in the invocation of the watch callback.
+//  3. After the watch is cancelled, an update from the management server
+//     containing the resource that was being watched should not result in the
+//     invocation of the watch callback.
 //
 // The test is run for old and new style names.
 func (s) TestCDSWatch(t *testing.T) {
@@ -214,14 +214,14 @@ func (s) TestCDSWatch(t *testing.T) {
 // TestCDSWatch_TwoWatchesForSameResourceName covers the case where two watchers
 // exist for a single cluster resource.  The test verifies the following
 // scenarios:
-// 1. An update from the management server containing the resource being
-//    watched should result in the invocation of both watch callbacks.
-// 2. After one of the watches is cancelled, a redundant update from the
-//    management server should not result in the invocation of either of the
-//    watch callbacks.
-// 3. A new update from the management server containing the resource being
-//    watched should result in the invocation of the un-cancelled watch
-//    callback.
+//  1. An update from the management server containing the resource being
+//     watched should result in the invocation of both watch callbacks.
+//  2. After one of the watches is cancelled, a redundant update from the
+//     management server should not result in the invocation of either of the
+//     watch callbacks.
+//  3. A new update from the management server containing the resource being
+//     watched should result in the invocation of the un-cancelled watch
+//     callback.
 //
 // The test is run for old and new style names.
 func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
@@ -636,12 +636,12 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 // two different resources (one with an old style name and one with a new style
 // name). One of these resources being watched is removed from the management
 // server. The test verifies the following scenarios:
-// 1. Removing a resource should trigger the watch callback associated with that
-//    resource with a resource removed error. It should not trigger the watch
-//    callback for an unrelated resource.
-// 2. An update to other resource should result in the invocation of the watch
-//    callback associated with that resource.  It should not result in the
-//    invocation of the watch callback associated with the deleted resource.
+//  1. Removing a resource should trigger the watch callback associated with that
+//     resource with a resource removed error. It should not trigger the watch
+//     callback for an unrelated resource.
+//  2. An update to other resource should result in the invocation of the watch
+//     callback associated with that resource.  It should not result in the
+//     invocation of the watch callback associated with the deleted resource.
 func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 	overrideFedEnvVar(t)
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
@@ -820,13 +820,13 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 	badResourceName := cdsName
 	updateCh1 := testutils.NewChannel()
 	cdsCancel1 := client.WatchCluster(badResourceName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
+		updateCh1.SendContext(ctx, xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
 	defer cdsCancel1()
 	goodResourceName := cdsNameNewStyle
 	updateCh2 := testutils.NewChannel()
 	cdsCancel2 := client.WatchCluster(goodResourceName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
+		updateCh2.SendContext(ctx, xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
 	defer cdsCancel2()
 
