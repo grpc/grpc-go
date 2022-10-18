@@ -63,11 +63,14 @@ func newTestConfigBalancerBuilder() *testConfigBalancerBuilder {
 	}
 }
 
-func makeRPCsAndAssertContainsError(rpcCount int, want error) func(balancer.Picker) error {
+// pickAndCheckError returns a function which takes a picker, invokes the Pick() method
+// multiple times and ensures that the error returned by the picker matches the provided error.
+func pickAndCheckError(want error) func(balancer.Picker) error {
+	const rpcCount = 5
 	return func(p balancer.Picker) error {
 		for i := 0; i < rpcCount; i++ {
-			if _, err := p.Pick(balancer.PickInfo{}); !strings.Contains(err.Error(), want.Error()) {
-				return fmt.Errorf("want pick error to contain %q, got %q", want, err)
+			if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), want.Error()) {
+				return fmt.Errorf("got %q, want error to contain %q, ", want, err)
 			}
 		}
 		return nil
@@ -608,8 +611,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
-	if err := cc.WaitForPicker(ctx, makeRPCsAndAssertContainsError(5, wantSubConnErr)); err != nil {
+	if err := cc.WaitForPicker(ctx, pickAndCheckError(wantSubConnErr)); err != nil {
 		t.Fatal(err.Error())
 	}
 }
@@ -851,8 +853,7 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-
-	if err := cc.WaitForPicker(ctx, makeRPCsAndAssertContainsError(5, wantSubConnErr)); err != nil {
+	if err := cc.WaitForPicker(ctx, pickAndCheckError(wantSubConnErr)); err != nil {
 		t.Fatal(err.Error())
 	}
 }
@@ -1102,7 +1103,7 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 
 	for i := 0; i < 5; i++ {
 		if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), wantSubConnErr.Error()) {
-			t.Fatalf("want pick error %q, got error %q", wantSubConnErr, err)
+			t.Fatalf("got error %q, want pick error %q", wantSubConnErr, err)
 		}
 	}
 
@@ -1115,9 +1116,8 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 	}
 
 	for i := 0; i < 5; i++ {
-		r, err := p.Pick(balancer.PickInfo{})
-		if err == nil || !strings.Contains(err.Error(), wantSubConnErr.Error()) {
-			t.Fatalf("want pick error %q, got result %v, err %q", wantSubConnErr, r, err)
+		if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), wantSubConnErr.Error()) {
+			t.Fatalf("got result %v, want pick error %q", wantSubConnErr, err)
 		}
 	}
 }
