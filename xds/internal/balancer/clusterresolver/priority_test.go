@@ -120,7 +120,7 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Add p2, it shouldn't cause any updates.
@@ -142,7 +142,7 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	case p := <-cc.NewPickerCh:
 		// If we do get a new picker, ensure it is still a p1 picker.
 		if err := testutils.IsRoundRobin([]balancer.SubConn{sc1}, testutils.SubConnFromPicker(p)); err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 	default:
 		// No new picker; we were previously using p1 and should still be using
@@ -168,7 +168,7 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	case p := <-cc.NewPickerCh:
 		// If we do get a new picker, ensure it is still a p1 picker.
 		if err := testutils.IsRoundRobin([]balancer.SubConn{sc1}, testutils.SubConnFromPicker(p)); err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 	default:
 		// No new picker; we were previously using p1 and should still be using
@@ -206,7 +206,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Turn down 0, 1 is used.
@@ -221,7 +221,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 
 	// Test pick with 1.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Add p2, it shouldn't cause any updates.
@@ -243,7 +243,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	case p := <-cc.NewPickerCh:
 		// If we do get a new picker, ensure it is still a p1 picker.
 		if err := testutils.IsRoundRobin([]balancer.SubConn{sc1}, testutils.SubConnFromPicker(p)); err != nil {
-			t.Fatal(err.Error())
+			t.Fatal(err)
 		}
 	default:
 		// No new picker; we were previously using p1 and should still be using
@@ -267,7 +267,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 
 	// Test pick with 2.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Remove 2, use 1.
@@ -285,7 +285,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	// Should get an update with 1's old picker, to override 2's old picker.
 	want := errors.New("last connection error: subConn connection error")
 	if err := cc.WaitForPickerWithErr(ctx, want); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 }
@@ -345,7 +345,7 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 
 	// Test pick with 2.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 }
@@ -389,7 +389,7 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// When 0 becomes ready, 0 should be used, 1 and 2 should all be closed.
@@ -424,7 +424,7 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 
 	// Test pick with 0.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 }
 
@@ -478,7 +478,7 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 }
 
@@ -506,7 +506,7 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Turn down p0 subconns, p1 subconns will be created.
@@ -522,7 +522,7 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 
 	// Test roundrobin with only p1 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Reconnect p0 subconns, p1 subconn will be closed.
@@ -535,7 +535,7 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 
 	// Test roundrobin with only p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Add two localities, with two priorities, with one backend.
@@ -555,7 +555,7 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 
 	// Test roundrobin with only two p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0, sc2); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Turn down p0 subconns, p1 subconns will be created.
@@ -571,7 +571,7 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 
 	// Test roundrobin with only p1 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc3, sc4); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 }
 
@@ -605,7 +605,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Remove all priorities.
@@ -650,7 +650,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 
 	// Test roundrobin with only p1 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc11); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Remove p1 from EDS, to fallback to p0.
@@ -676,7 +676,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 
 	// Test roundrobin with only p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc01); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	select {
@@ -714,7 +714,7 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Remove addresses from priority 0, should use p1.
@@ -739,7 +739,7 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 
 	// Test roundrobin with only p1 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 }
 
@@ -767,7 +767,7 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Set priority 0 endpoints to all unhealthy, should use p1.
@@ -794,7 +794,7 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 
 	// Test roundrobin with only p1 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 }
 
@@ -884,7 +884,7 @@ func (s) TestFallbackToDNS(t *testing.T) {
 
 	// Test roundrobin with only p0 subconns.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Turn down 0, p1 (DNS) will be used.
@@ -912,7 +912,7 @@ func (s) TestFallbackToDNS(t *testing.T) {
 
 	// Test pick with 1.
 	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 
 	// Turn down the DNS endpoint, this should trigger an re-resolve in the DNS

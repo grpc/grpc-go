@@ -612,7 +612,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := cc.WaitForPicker(ctx, pickAndCheckError(wantSubConnErr)); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 }
 
@@ -854,7 +854,7 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	if err := cc.WaitForPicker(ctx, pickAndCheckError(wantSubConnErr)); err != nil {
-		t.Fatal(err.Error())
+		t.Fatal(err)
 	}
 }
 
