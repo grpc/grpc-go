@@ -809,10 +809,9 @@ func TestTimedCRLCacheExpiration(t *testing.T) {
 		cache := TimedCRLCache{lru, tt.expirationDurationSeconds}
 
 		var certs = makeChain(t, testdata.Path(tt.certificateFile))
-		// Certs[1] has the same issuer as the revoked cert
+		// Certs[i] has the same issuer as the revoked cert
 		rawIssuer := certs[tt.revokedCertIndex].RawIssuer
 
-		// `3.crl`` revokes `revokedInt.pem`
 		crl := loadCRL(t, testdata.Path(tt.crlFile))
 		// Modify the crl so that the cert is NOT revoked and add it to the cache
 		crl.CertList.TBSCertList.RevokedCertificates = []pkix.RevokedCertificate{}
@@ -877,10 +876,9 @@ func TestTimedCRLCacheExpirationAlternate(t *testing.T) {
 		cache := TimedCRLCache{lru, tt.expirationDurationSeconds}
 
 		var certs = makeChain(t, testdata.Path(tt.certificateFile))
-		// Certs[1] has the same issuer as the revoked cert
+		// Certs[i] has the same issuer as the revoked cert
 		rawIssuer := certs[tt.revokedCertIndex].RawIssuer
 
-		// `3.crl`` revokes `revokedInt.pem`
 		crl := loadCRL(t, testdata.Path(tt.crlFile))
 		// Modify the crl so that the cert is NOT revoked and add it to the cache
 		crl.CertList.TBSCertList.RevokedCertificates = []pkix.RevokedCertificate{}
