@@ -223,25 +223,25 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		}
 	}(conn)
 
-	// Monitor context; close connection if expired or canceled before returning.
+	// The following defer and goroutine monitor the connectCtx for cancelation
+	// and deadline.  On context expiration, the connection is hard closed and
+	// this function will naturally fail as a result.  Otherwise, the defer
+	// waits for the goroutine to exit to prevent the context from being
+	// monitored (and to prevent the connection from ever being closed) after
+	// returning from this function.
 	ctxMonitorDone := grpcsync.NewEvent()
 	newClientCtx, newClientDone := context.WithCancel(connectCtx)
 	defer func() {
-		newClientDone()
-		// Wait for the goroutine to exit.  If we do not wait before returning,
-		// the caller could cancel the connectCtx after we return, but we might
-		// see this and close the connection.
-		<-ctxMonitorDone.Done()
+		newClientDone()         // Awaken the goroutine below if connectCtx hasn't expired.
+		<-ctxMonitorDone.Done() // Wait for the goroutine below to exit.
 	}()
 	go func(conn net.Conn) {
 		defer ctxMonitorDone.Fire() // Signal this goroutine has exited.
-		<-newClientCtx.Done()
-		if connectCtx.Err() == nil {
-			// Only newClientCtx was canceled; success.
-			return
+		<-newClientCtx.Done()       // Block until connectCtx expires or the defer above executes.
+		if connectCtx.Err() != nil {
+			// connectCtx expired before exiting the function.  Hard close the connection.
+			conn.Close()
 		}
-		// connectCtx expired.  Hard close the connection.
-		conn.Close()
 	}(conn)
 
 	kp := opts.KeepaliveParams
@@ -451,7 +451,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		t.controlBuf.finish()
 		close(t.writerDone)
 	}()
-
 	return t, nil
 }
 
@@ -1526,28 +1525,35 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 	t.closeStream(s, io.EOF, rst, http2.ErrCodeNo, statusGen, mdata, true)
 }
 
-// reader verifies the server preface and reads all subsequent data from
-// network connection.
-func (t *http2Client) reader(errCh chan<- error) {
-	defer close(t.readerDone)
+// readServerPreface reads and handles the initial settings frame from the
+// server.  If an error is encountered, it is pushed to errCh.  errCh is closed
+// upon returning.
+func (t *http2Client) readServerPreface(errCh chan<- error) {
+	defer close(errCh)
 
-	// Check the validity of server preface.
 	frame, err := t.framer.fr.ReadFrame()
 	if err != nil {
 		errCh <- connectionErrorf(true, err, "error reading server preface: %v", err)
 		return
 	}
-	if t.keepaliveEnabled {
-		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
-	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
-		// this kicks off resetTransport, so must be last before return
 		errCh <- connectionErrorf(true, nil, "initial http2 frame from server is not a settings frame: %T", frame)
 		return
 	}
-	close(errCh) // received settings frame
 	t.handleSettings(sf, true)
+}
+
+// reader verifies the server preface and reads all subsequent data from
+// network connection.  If the server preface is not read successfully, an
+// error is pushed to errCh; otherwise errCh is closed with no error.
+func (t *http2Client) reader(errCh chan<- error) {
+	defer close(t.readerDone)
+
+	t.readServerPreface(errCh)
+	if t.keepaliveEnabled {
+		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
+	}
 
 	// loop to keep reading incoming messages on this transport.
 	for {

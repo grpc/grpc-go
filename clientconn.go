@@ -1236,7 +1236,7 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 		defer ac.mu.Unlock()
 		if ac.state == connectivity.Shutdown {
 			// Already shut down.  tearDown() already cleared the transport and
-			// canceled the context, and we expected this connection to be
+			// canceled hctx via ac.ctx, and we expected this connection to be
 			// closed, so do nothing here.
 			return
 		}
