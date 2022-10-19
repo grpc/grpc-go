@@ -137,11 +137,11 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 
 // TestAuthorityShare tests the authority sharing logic. The test verifies the
 // following scenarios:
-// - A watch for a resource name with an authority matching an existing watch
-//   should not result in a new transport being created.
-// - A watch for a resource name with different authority name but same
-//   authority config as an existing watch should not result in a new transport
-//   being created.
+//   - A watch for a resource name with an authority matching an existing watch
+//     should not result in a new transport being created.
+//   - A watch for a resource name with different authority name but same
+//     authority config as an existing watch should not result in a new transport
+//     being created.
 func (s) TestAuthorityShare(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
