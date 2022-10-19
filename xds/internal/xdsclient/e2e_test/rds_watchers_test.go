@@ -753,7 +753,7 @@ func (s) TestRDSWatch_NACKError(t *testing.T) {
 	defer cancel()
 	updateCh := testutils.NewChannel()
 	rdsCancel := client.WatchRouteConfig(rdsName, func(u xdsresource.RouteConfigUpdate, err error) {
-		updateCh.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
+		updateCh.SendContext(ctx, xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
 	})
 	defer rdsCancel()
 
@@ -804,13 +804,13 @@ func (s) TestRDSWatch_PartialValid(t *testing.T) {
 	badResourceName := rdsName
 	updateCh1 := testutils.NewChannel()
 	rdsCancel1 := client.WatchRouteConfig(badResourceName, func(u xdsresource.RouteConfigUpdate, err error) {
-		updateCh1.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
+		updateCh1.SendContext(ctx, xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
 	})
 	defer rdsCancel1()
 	goodResourceName := rdsNameNewStyle
 	updateCh2 := testutils.NewChannel()
 	rdsCancel2 := client.WatchRouteConfig(goodResourceName, func(u xdsresource.RouteConfigUpdate, err error) {
-		updateCh2.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
+		updateCh2.SendContext(ctx, xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
 	})
 	defer rdsCancel2()
 
