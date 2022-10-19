@@ -1275,8 +1275,7 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 		sfr := http2.NewFramer(sconn, sconn)
 		// Do not write a settings frame, but read from the conn forever.
 		for {
-			_, err := sfr.ReadFrame()
-			if err != nil {
+			if _, err := sfr.ReadFrame(); err != nil {
 				return
 			}
 		}
@@ -1289,9 +1288,12 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 
 	copts := ConnectOptions{ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil)}
 	_, err = NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {}, func() {})
+	if err == nil {
+		t.Fatalf("NewClientTransport() returned successfully; wanted error")
+	}
 	t.Logf("NewClientTransport() = _, %v", err)
 	if time.Now().Sub(timeBefore) > 2*time.Second {
-		t.Fatalf("NewClientTransport returned > 1.5s after context cancelation")
+		t.Fatalf("NewClientTransport returned > 1.9s after context cancelation")
 	}
 
 	// Test context deadline.
@@ -1299,9 +1301,12 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 	connectCtx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	_, err = NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {}, func() {})
+	if err == nil {
+		t.Fatalf("NewClientTransport() returned successfully; wanted error")
+	}
 	t.Logf("NewClientTransport() = _, %v", err)
 	if time.Now().Sub(timeBefore) > 2*time.Second {
-		t.Fatalf("NewClientTransport returned > 1.5s after context deadline")
+		t.Fatalf("NewClientTransport returned > 1.9s after context deadline")
 	}
 }
 

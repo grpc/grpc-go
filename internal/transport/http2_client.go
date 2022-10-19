@@ -1526,22 +1526,18 @@ func (t *http2Client) operateHeaders(frame *http2.MetaHeadersFrame) {
 }
 
 // readServerPreface reads and handles the initial settings frame from the
-// server.  If an error is encountered, it is pushed to errCh.  errCh is closed
-// upon returning.
-func (t *http2Client) readServerPreface(errCh chan<- error) {
-	defer close(errCh)
-
+// server.
+func (t *http2Client) readServerPreface() error {
 	frame, err := t.framer.fr.ReadFrame()
 	if err != nil {
-		errCh <- connectionErrorf(true, err, "error reading server preface: %v", err)
-		return
+		return connectionErrorf(true, err, "error reading server preface: %v", err)
 	}
 	sf, ok := frame.(*http2.SettingsFrame)
 	if !ok {
-		errCh <- connectionErrorf(true, nil, "initial http2 frame from server is not a settings frame: %T", frame)
-		return
+		return connectionErrorf(true, nil, "initial http2 frame from server is not a settings frame: %T", frame)
 	}
 	t.handleSettings(sf, true)
+	return nil
 }
 
 // reader verifies the server preface and reads all subsequent data from
@@ -1550,7 +1546,11 @@ func (t *http2Client) readServerPreface(errCh chan<- error) {
 func (t *http2Client) reader(errCh chan<- error) {
 	defer close(t.readerDone)
 
-	t.readServerPreface(errCh)
+	if err := t.readServerPreface(); err != nil {
+		errCh <- err
+		return
+	}
+	close(errCh)
 	if t.keepaliveEnabled {
 		atomic.StoreInt64(&t.lastRead, time.Now().UnixNano())
 	}

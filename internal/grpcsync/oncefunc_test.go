@@ -48,6 +48,6 @@ func (s) TestOnceFunc(t *testing.T) {
 	block.Fire()                 // Unblock them.
 	wg.Wait()                    // Wait for them to complete.
 	if v != 1 {
-		t.Fatalf("v = %v; want 1", v)
+		t.Fatalf("OnceFunc() called %v times; want 1", v)
 	}
 }
