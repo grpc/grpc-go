@@ -117,7 +117,9 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -139,8 +141,8 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	select {
 	case p := <-cc.NewPickerCh:
 		// If we do get a new picker, ensure it is still a p1 picker.
-		if err := testutils.IsRoundRobin([]balancer.SubConn{sc1}, subConnFromPicker(p)); err != nil {
-			t.Fatal(err.Error())
+		if err := testutils.IsRoundRobin([]balancer.SubConn{sc1}, testutils.SubConnFromPicker(p)); err != nil {
+			t.Fatal(err)
 		}
 	default:
 		// No new picker; we were previously using p1 and should still be using
@@ -165,8 +167,8 @@ func (s) TestEDSPriority_HighPriorityReady(t *testing.T) {
 	select {
 	case p := <-cc.NewPickerCh:
 		// If we do get a new picker, ensure it is still a p1 picker.
-		if err := testutils.IsRoundRobin([]balancer.SubConn{sc1}, subConnFromPicker(p)); err != nil {
-			t.Fatal(err.Error())
+		if err := testutils.IsRoundRobin([]balancer.SubConn{sc1}, testutils.SubConnFromPicker(p)); err != nil {
+			t.Fatal(err)
 		}
 	default:
 		// No new picker; we were previously using p1 and should still be using
@@ -201,7 +203,9 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	edsb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -216,7 +220,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 1.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -238,8 +242,8 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	select {
 	case p := <-cc.NewPickerCh:
 		// If we do get a new picker, ensure it is still a p1 picker.
-		if err := testutils.IsRoundRobin([]balancer.SubConn{sc1}, subConnFromPicker(p)); err != nil {
-			t.Fatal(err.Error())
+		if err := testutils.IsRoundRobin([]balancer.SubConn{sc1}, testutils.SubConnFromPicker(p)); err != nil {
+			t.Fatal(err)
 		}
 	default:
 		// No new picker; we were previously using p1 and should still be using
@@ -262,7 +266,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 	edsb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 2.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc2}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -280,7 +284,7 @@ func (s) TestEDSPriority_SwitchPriority(t *testing.T) {
 
 	// Should get an update with 1's old picker, to override 2's old picker.
 	want := errors.New("last connection error: subConn connection error")
-	if err := testErrPickerFromCh(cc.NewPickerCh, want); err != nil {
+	if err := cc.WaitForPickerWithErr(ctx, want); err != nil {
 		t.Fatal(err)
 	}
 
@@ -318,8 +322,10 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	})
 
 	// Test pick failure.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	want := errors.New("last connection error: subConn connection error")
-	if err := testErrPickerFromCh(cc.NewPickerCh, want); err != nil {
+	if err := cc.WaitForPickerWithErr(ctx, want); err != nil {
 		t.Fatal(err)
 	}
 
@@ -338,7 +344,7 @@ func (s) TestEDSPriority_HigherDownWhileAddingLower(t *testing.T) {
 	edsb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 2.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc2}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -380,7 +386,9 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	edsb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 2.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc2}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -415,7 +423,7 @@ func (s) TestEDSPriority_HigherReadyCloseAllLower(t *testing.T) {
 	}
 
 	// Test pick with 0.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -467,7 +475,9 @@ func (s) TestEDSPriority_InitTimeout(t *testing.T) {
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 1.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -493,7 +503,9 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	edsb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -509,7 +521,7 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -522,7 +534,7 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	}
 
 	// Test roundrobin with only p0 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -542,7 +554,7 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	edsb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only two p0 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0, sc2}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc0, sc2); err != nil {
 		t.Fatal(err)
 	}
 
@@ -558,7 +570,7 @@ func (s) TestEDSPriority_MultipleLocalities(t *testing.T) {
 	edsb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc3, sc4}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc3, sc4); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -590,7 +602,9 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	edsb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -606,7 +620,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	// time.Sleep(time.Second)
 
 	// Test pick return TransientFailure.
-	if err := testErrPickerFromCh(cc.NewPickerCh, priority.ErrAllPrioritiesRemoved); err != nil {
+	if err := cc.WaitForPickerWithErr(ctx, priority.ErrAllPrioritiesRemoved); err != nil {
 		t.Fatal(err)
 	}
 
@@ -635,7 +649,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	edsb.UpdateSubConnState(sc11, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc11}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc11); err != nil {
 		t.Fatal(err)
 	}
 
@@ -651,7 +665,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	}
 
 	// Test pick return TransientFailure.
-	if err := testErrPickerFromCh(cc.NewPickerCh, balancer.ErrNoSubConnAvailable); err != nil {
+	if err := cc.WaitForPickerWithErr(ctx, balancer.ErrNoSubConnAvailable); err != nil {
 		t.Fatal(err)
 	}
 
@@ -661,7 +675,7 @@ func (s) TestEDSPriority_RemovesAllLocalities(t *testing.T) {
 	edsb.UpdateSubConnState(sc01, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc01}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc01); err != nil {
 		t.Fatal(err)
 	}
 
@@ -697,7 +711,9 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -722,7 +738,7 @@ func (s) TestEDSPriority_HighPriorityNoEndpoints(t *testing.T) {
 	edsb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc2}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -748,7 +764,9 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err)
 	}
 
@@ -775,7 +793,7 @@ func (s) TestEDSPriority_HighPriorityAllUnhealthy(t *testing.T) {
 	edsb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p1 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc2}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc2); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -865,7 +883,7 @@ func (s) TestFallbackToDNS(t *testing.T) {
 	edsb.UpdateSubConnState(sc0, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test roundrobin with only p0 subconns.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc0}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc0); err != nil {
 		t.Fatal(err)
 	}
 
@@ -893,7 +911,7 @@ func (s) TestFallbackToDNS(t *testing.T) {
 	edsb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.Ready})
 
 	// Test pick with 1.
-	if err := testRoundRobinPickerFromCh(cc.NewPickerCh, []balancer.SubConn{sc1}); err != nil {
+	if err := cc.WaitForRoundRobinPicker(ctx, sc1); err != nil {
 		t.Fatal(err)
 	}
 
