@@ -109,13 +109,13 @@ func verifyNoRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel)
 
 // TestRDSWatch covers the case where a single watcher exists for a single route
 // configuration resource. The test verifies the following scenarios:
-// 1. An update from the management server containing the resource being
-//    watched should result in the invocation of the watch callback.
-// 2. An update from the management server containing a resource *not* being
-//    watched should not result in the invocation of the watch callback.
-// 3. After the watch is cancelled, an update from the management server
-//    containing the resource that was being watched should not result in the
-//    invocation of the watch callback.
+//  1. An update from the management server containing the resource being
+//     watched should result in the invocation of the watch callback.
+//  2. An update from the management server containing a resource *not* being
+//     watched should not result in the invocation of the watch callback.
+//  3. After the watch is cancelled, an update from the management server
+//     containing the resource that was being watched should not result in the
+//     invocation of the watch callback.
 //
 // The test is run for old and new style names.
 func (s) TestRDSWatch(t *testing.T) {
@@ -248,14 +248,14 @@ func (s) TestRDSWatch(t *testing.T) {
 // TestRDSWatch_TwoWatchesForSameResourceName covers the case where two watchers
 // exist for a single route configuration resource.  The test verifies the
 // following scenarios:
-// 1. An update from the management server containing the resource being
-//    watched should result in the invocation of both watch callbacks.
-// 2. After one of the watches is cancelled, a redundant update from the
-//    management server should not result in the invocation of either of the
-//    watch callbacks.
-// 3. An update from the management server containing the resource being
-//    watched should result in the invocation of the un-cancelled watch
-//    callback.
+//  1. An update from the management server containing the resource being
+//     watched should result in the invocation of both watch callbacks.
+//  2. After one of the watches is cancelled, a redundant update from the
+//     management server should not result in the invocation of either of the
+//     watch callbacks.
+//  3. An update from the management server containing the resource being
+//     watched should result in the invocation of the un-cancelled watch
+//     callback.
 //
 // The test is run for old and new style names.
 func (s) TestRDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
