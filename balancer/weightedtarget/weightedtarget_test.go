@@ -70,7 +70,7 @@ func pickAndCheckError(want error) func(balancer.Picker) error {
 	return func(p balancer.Picker) error {
 		for i := 0; i < rpcCount; i++ {
 			if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), want.Error()) {
-				return fmt.Errorf("got %q, want error to contain %q, ", want, err)
+				return fmt.Errorf("picker.Pick() returned error: %v, want: %v", err, want)
 			}
 		}
 		return nil
@@ -1103,7 +1103,7 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 
 	for i := 0; i < 5; i++ {
 		if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), wantSubConnErr.Error()) {
-			t.Fatalf("got error %q, want pick error %q", wantSubConnErr, err)
+			t.Fatalf("picker.Pick() returned error: %v, want: %v", err, wantSubConnErr)
 		}
 	}
 
@@ -1117,7 +1117,7 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 
 	for i := 0; i < 5; i++ {
 		if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), wantSubConnErr.Error()) {
-			t.Fatalf("got result %v, want pick error %q", wantSubConnErr, err)
+			t.Fatalf("picker.Pick() returned error: %v, want: %v", err, wantSubConnErr)
 		}
 	}
 }
