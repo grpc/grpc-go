@@ -35,7 +35,6 @@ import (
 	"strings"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
 	"golang.org/x/crypto/cryptobyte"
 	cbasn1 "golang.org/x/crypto/cryptobyte/asn1"
 	"google.golang.org/grpc/grpclog"
@@ -51,6 +50,10 @@ type Cache interface {
 	Add(key, value interface{}) bool
 	// Get looks up a key's value from the cache.
 	Get(key interface{}) (value interface{}, ok bool)
+	// Len returns the number of items in the cache
+	Len() int
+	// Purge is used to clear the cache
+	Purge()
 }
 
 // RevocationConfig contains options for CRL lookup.
@@ -519,7 +522,7 @@ func extractCRLIssuer(crlBytes []byte) ([]byte, error) {
 }
 
 type TimedCRLCache struct {
-	cache                     *lru.Cache
+	cache                     Cache
 	expirationDurationSeconds int
 }
 
