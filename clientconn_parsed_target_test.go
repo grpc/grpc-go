@@ -40,7 +40,6 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 		wantParsed resolver.Target
 	}{
 		// No scheme is specified.
-		{target: "", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: ""}},
 		{target: "://", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "://"}},
 		{target: ":///", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: ":///"}},
 		{target: "://a/", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "://a/"}},
@@ -110,6 +109,7 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 
 func (s) TestParsedTarget_Failure_WithoutCustomDialer(t *testing.T) {
 	targets := []string{
+		"",
 		"unix://a/b/c",
 		"unix://authority",
 		"unix-abstract://authority/a/b/c",
@@ -178,6 +178,12 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 			badScheme:         true,
 			wantParsed:        resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "/unix/socket/address"},
 			wantDialerAddress: "/unix/socket/address",
+		},
+		{
+			target:            "",
+			badScheme:         true,
+			wantParsed:        resolver.Target{Scheme: defScheme, Authority: "", Endpoint: ""},
+			wantDialerAddress: "",
 		},
 		{
 			target:            "passthrough://a.server.com/google.com",
