@@ -735,7 +735,7 @@ func TestIssuerNonPrintableString(t *testing.T) {
 	}
 }
 
-func TestCRLCacheExpiration(t *testing.T) {
+func TestCRLNextUpdateExpiration(t *testing.T) {
 	cache, err := lru.New(5)
 	if err != nil {
 		t.Fatalf("Creating cache failed")
