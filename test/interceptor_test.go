@@ -277,3 +277,270 @@ func (s) TestChainStreamClientInterceptor_ContextValuePropagation(t *testing.T) 
 		t.Fatalf("stream interceptor failed: %v", val)
 	}
 }
+
+// TestCallUnaryClientInterceptor_ContextValuePropagation verifies that unary interceptors
+// passed as CallOptions receive context values specified in the original call
+// as well as the ones specified by prior interceptors in the chain.
+func (s) TestCallUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
+	errCh := testutils.NewChannel()
+	firstInt := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("first interceptor got %q in context.Val, want %q", got, parentCtxVal))
+		}
+		if ctx.Value(firstInterceptorCtxkey{}) != nil {
+			errCh.SendContext(ctx, fmt.Errorf("first interceptor should not have %T in context", firstInterceptorCtxkey{}))
+		}
+		if ctx.Value(secondInterceptorCtxkey{}) != nil {
+			errCh.SendContext(ctx, fmt.Errorf("first interceptor should not have %T in context", secondInterceptorCtxkey{}))
+		}
+		firstCtx := context.WithValue(ctx, firstInterceptorCtxkey{}, firstInterceptorCtxVal)
+		return invoker(firstCtx, method, req, reply, cc, opts...)
+	}
+
+	secondInt := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("second interceptor got %q in context.Val, want %q", got, parentCtxVal))
+		}
+		if got, ok := ctx.Value(firstInterceptorCtxkey{}).(string); !ok || got != firstInterceptorCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("second interceptor got %q in context.Val, want %q", got, firstInterceptorCtxVal))
+		}
+		if ctx.Value(secondInterceptorCtxkey{}) != nil {
+			errCh.SendContext(ctx, fmt.Errorf("second interceptor should not have %T in context", secondInterceptorCtxkey{}))
+		}
+		secondCtx := context.WithValue(ctx, secondInterceptorCtxkey{}, secondInterceptorCtxVal)
+		return invoker(secondCtx, method, req, reply, cc, opts...)
+	}
+
+	lastInt := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("last interceptor got %q in context.Val, want %q", got, parentCtxVal))
+		}
+		if got, ok := ctx.Value(firstInterceptorCtxkey{}).(string); !ok || got != firstInterceptorCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("last interceptor got %q in context.Val, want %q", got, firstInterceptorCtxVal))
+		}
+		if got, ok := ctx.Value(secondInterceptorCtxkey{}).(string); !ok || got != secondInterceptorCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("last interceptor got %q in context.Val, want %q", got, secondInterceptorCtxVal))
+		}
+		errCh.SendContext(ctx, nil)
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+
+	// Start a stub server.
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Failed to start stub server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	opts := []grpc.CallOption{
+		grpc.CallUnaryClientInterceptor(firstInt),
+		grpc.CallUnaryClientInterceptor(secondInt),
+		grpc.CallUnaryClientInterceptor(lastInt),
+	}
+	// Use the above chain of interceptors while invoking a unary RPC.
+	if _, err := ss.Client.EmptyCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal), &testpb.Empty{}, opts...); err != nil {
+		t.Fatalf("ss.Client.EmptyCall() failed: %v", err)
+	}
+	val, err := errCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout when waiting for unary interceptor to be invoked: %v", err)
+	}
+	if val != nil {
+		t.Fatalf("unary interceptor failed: %v", val)
+	}
+}
+
+// TestCallOnDialUnaryClientInterceptor_ContextValuePropagation verifies that
+// unary interceptors specified as DialOptions or as CallOptions
+// receive context values specified in the original call as well as the ones
+// specified by interceptors in the chain.
+func (s) TestCallOnDialUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
+	errCh := testutils.NewChannel()
+	dialInt := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("dial interceptor got %q in context.Val, want %q", got, parentCtxVal))
+		}
+		if ctx.Value(baseInterceptorCtxKey{}) != nil {
+			errCh.SendContext(ctx, fmt.Errorf("dial interceptor should not have %T in context", baseInterceptorCtxKey{}))
+		}
+		dialCtx := context.WithValue(ctx, baseInterceptorCtxKey{}, baseInterceptorCtxVal)
+		return invoker(dialCtx, method, req, reply, cc, opts...)
+	}
+
+	callInt := func(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("call interceptor got %q in context.Val, want %q", got, parentCtxVal))
+		}
+		if got, ok := ctx.Value(baseInterceptorCtxKey{}).(string); !ok || got != baseInterceptorCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("call interceptor got %q in context.Val, want %q", got, baseInterceptorCtxVal))
+		}
+		errCh.SendContext(ctx, nil)
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+
+	// Start a stub server and use the first unary interceptor while creating
+	// a ClientConn to it.
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	}
+	if err := ss.Start(nil, grpc.WithUnaryInterceptor(dialInt)); err != nil {
+		t.Fatalf("Failed to start stub server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Use the second interceptor while invoking a unary RPC.
+	if _, err := ss.Client.EmptyCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal), &testpb.Empty{}, grpc.CallUnaryClientInterceptor(callInt)); err != nil {
+		t.Fatalf("ss.Client.EmptyCall() failed: %v", err)
+	}
+	val, err := errCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout when waiting for unary interceptor to be invoked: %v", err)
+	}
+	if val != nil {
+		t.Fatalf("unary interceptor failed: %v", val)
+	}
+}
+
+// TestCallStreamClientInterceptor_ContextValuePropagation verifies that stream interceptors
+// passed as CallOptions receive context values specified in the original
+// call as well as the ones specified by the prior interceptors in the chain.
+func (s) TestCallStreamClientInterceptor_ContextValuePropagation(t *testing.T) {
+	errCh := testutils.NewChannel()
+	firstInt := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("first interceptor got %q in context.Val, want %q", got, parentCtxVal))
+		}
+		if ctx.Value(firstInterceptorCtxkey{}) != nil {
+			errCh.SendContext(ctx, fmt.Errorf("first interceptor should not have %T in context", firstInterceptorCtxkey{}))
+		}
+		if ctx.Value(secondInterceptorCtxkey{}) != nil {
+			errCh.SendContext(ctx, fmt.Errorf("first interceptor should not have %T in context", secondInterceptorCtxkey{}))
+		}
+		firstCtx := context.WithValue(ctx, firstInterceptorCtxkey{}, firstInterceptorCtxVal)
+		return streamer(firstCtx, desc, cc, method, opts...)
+	}
+
+	secondInt := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("second interceptor got %q in context.Val, want %q", got, parentCtxVal))
+		}
+		if got, ok := ctx.Value(firstInterceptorCtxkey{}).(string); !ok || got != firstInterceptorCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("second interceptor got %q in context.Val, want %q", got, firstInterceptorCtxVal))
+		}
+		if ctx.Value(secondInterceptorCtxkey{}) != nil {
+			errCh.SendContext(ctx, fmt.Errorf("second interceptor should not have %T in context", secondInterceptorCtxkey{}))
+		}
+		secondCtx := context.WithValue(ctx, secondInterceptorCtxkey{}, secondInterceptorCtxVal)
+		return streamer(secondCtx, desc, cc, method, opts...)
+	}
+
+	lastInt := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("last interceptor got %q in context.Val, want %q", got, parentCtxVal))
+		}
+		if got, ok := ctx.Value(firstInterceptorCtxkey{}).(string); !ok || got != firstInterceptorCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("last interceptor got %q in context.Val, want %q", got, firstInterceptorCtxVal))
+		}
+		if got, ok := ctx.Value(secondInterceptorCtxkey{}).(string); !ok || got != secondInterceptorCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("last interceptor got %q in context.Val, want %q", got, secondInterceptorCtxVal))
+		}
+		errCh.SendContext(ctx, nil)
+		return streamer(ctx, desc, cc, method, opts...)
+	}
+
+	// Start a stub server.
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			if _, err := stream.Recv(); err != nil {
+				return err
+			}
+			return stream.Send(&testpb.StreamingOutputCallResponse{})
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Failed to start stub server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	opts := []grpc.CallOption{
+		grpc.CallStreamClientInterceptor(firstInt),
+		grpc.CallStreamClientInterceptor(secondInt),
+		grpc.CallStreamClientInterceptor(lastInt),
+	}
+	// Use the above chain of interceptors while invoking a streaming RPC.
+	if _, err := ss.Client.FullDuplexCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal), opts...); err != nil {
+		t.Fatalf("ss.Client.FullDuplexCall() failed: %v", err)
+	}
+	val, err := errCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout when waiting for stream interceptor to be invoked: %v", err)
+	}
+	if val != nil {
+		t.Fatalf("stream interceptor failed: %v", val)
+	}
+}
+
+// TestCallOnDialStreamClientInterceptor_ContextValuePropagation verifies that stream interceptors
+// specified as DialOptions or as CallOptions receive context values specified in the original call
+// as well as the ones specified by interceptors in the chain.
+func (s) TestCallOnDialStreamClientInterceptor_ContextValuePropagation(t *testing.T) {
+	errCh := testutils.NewChannel()
+	dialInt := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("dial interceptor got %q in context.Val, want %q", got, parentCtxVal))
+		}
+		if ctx.Value(baseInterceptorCtxKey{}) != nil {
+			errCh.SendContext(ctx, fmt.Errorf("first interceptor should not have %T in context", baseInterceptorCtxKey{}))
+		}
+		dialCtx := context.WithValue(ctx, baseInterceptorCtxKey{}, baseInterceptorCtxVal)
+		return streamer(dialCtx, desc, cc, method, opts...)
+	}
+
+	callInt := func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		if got, ok := ctx.Value(parentCtxkey{}).(string); !ok || got != parentCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("call interceptor got %q in context.Val, want %q", got, parentCtxVal))
+		}
+		if got, ok := ctx.Value(baseInterceptorCtxKey{}).(string); !ok || got != baseInterceptorCtxVal {
+			errCh.SendContext(ctx, fmt.Errorf("call interceptor got %q in context.Val, want %q", got, baseInterceptorCtxVal))
+		}
+		errCh.SendContext(ctx, nil)
+		return streamer(ctx, desc, cc, method, opts...)
+	}
+
+	// Start a stub server and use the first stream interceptor while creating
+	// a ClientConn to it.
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			if _, err := stream.Recv(); err != nil {
+				return err
+			}
+			return stream.Send(&testpb.StreamingOutputCallResponse{})
+		},
+	}
+	if err := ss.Start(nil, grpc.WithStreamInterceptor(dialInt)); err != nil {
+		t.Fatalf("Failed to start stub server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	// Use the second interceptor while invoking a streaming RPC.
+	if _, err := ss.Client.FullDuplexCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal), grpc.CallStreamClientInterceptor(callInt)); err != nil {
+		t.Fatalf("ss.Client.FullDuplexCall() failed: %v", err)
+	}
+	val, err := errCh.Receive(ctx)
+	if err != nil {
+		t.Fatalf("timeout when waiting for stream interceptor to be invoked: %v", err)
+	}
+	if val != nil {
+		t.Fatalf("stream interceptor failed: %v", val)
+	}
+}

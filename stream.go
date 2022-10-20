@@ -162,9 +162,8 @@ func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method st
 			chainStreamInts = append(chainStreamInts, streamIntOpt.StreamClientInterceptor)
 		}
 	}
-
 	if streamInt := chainStreamClientInterceptors(cc.dopts.streamInt, chainStreamInts); streamInt != nil {
-		return cc.dopts.streamInt(ctx, desc, cc, method, newClientStream, opts...)
+		return streamInt(ctx, desc, cc, method, newClientStream, opts...)
 	}
 	return newClientStream(ctx, desc, cc, method, opts...)
 }

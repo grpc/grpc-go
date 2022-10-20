@@ -37,7 +37,6 @@ func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply int
 			chainUnaryInts = append(chainUnaryInts, unaryIntOpt.UnaryClientInterceptor)
 		}
 	}
-
 	if unaryInt := chainUnaryClientInterceptors(cc.dopts.unaryInt, chainUnaryInts); unaryInt != nil {
 		return unaryInt(ctx, method, args, reply, cc, invoke, opts...)
 	}

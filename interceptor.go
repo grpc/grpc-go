@@ -28,10 +28,11 @@ type UnaryInvoker func(ctx context.Context, method string, req, reply interface{
 // UnaryClientInterceptor intercepts the execution of a unary RPC on the client.
 // Unary interceptors can be specified as a DialOption, using
 // WithUnaryInterceptor() or WithChainUnaryInterceptor(), when creating a
-// ClientConn. When a unary interceptor(s) is set on a ClientConn, gRPC
-// delegates all unary RPC invocations to the interceptor, and it is the
-// responsibility of the interceptor to call invoker to complete the processing
-// of the RPC.
+// ClientConn or as a CallOption, using CallUnaryClientInterceptor(), when
+// invoking a unary RPC. When a unary interceptor(s) is set on a ClientConn
+// or passed to a unary RPC, gRPC delegates all unary RPC invocations
+// to the interceptor, and it is the responsibility of the interceptor
+// to call invoker to complete the processing of the RPC.
 //
 // method is the RPC name. req and reply are the corresponding request and
 // response messages. cc is the ClientConn on which the RPC was invoked. invoker
@@ -47,10 +48,11 @@ type Streamer func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method
 
 // StreamClientInterceptor intercepts the creation of a ClientStream. Stream
 // interceptors can be specified as a DialOption, using WithStreamInterceptor()
-// or WithChainStreamInterceptor(), when creating a ClientConn. When a stream
-// interceptor(s) is set on the ClientConn, gRPC delegates all stream creations
-// to the interceptor, and it is the responsibility of the interceptor to call
-// streamer.
+// or WithChainStreamInterceptor(), when creating a ClientConn or as a CallOption,
+// using CallStreamClientInterceptor(), when creating a ClientStream. When a stream
+// interceptor(s) is set on the ClientConn or passed to a streaming RPC,
+// gRPC delegates all stream creations to the interceptor,
+// and it is the responsibility of the interceptor to call streamer.
 //
 // desc contains a description of the stream. cc is the ClientConn on which the
 // RPC was invoked. streamer is the handler to create a ClientStream and it is
