@@ -31,8 +31,15 @@ func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply int
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)
 
-	if cc.dopts.unaryInt != nil {
-		return cc.dopts.unaryInt(ctx, method, args, reply, cc, invoke, opts...)
+	var chainUnaryInts []UnaryClientInterceptor
+	for _, opt := range opts {
+		if unaryIntOpt, ok := opt.(UnaryClientInterceptorCallOption); ok {
+			chainUnaryInts = append(chainUnaryInts, unaryIntOpt.UnaryClientInterceptor)
+		}
+	}
+
+	if unaryInt := chainUnaryClientInterceptors(cc.dopts.unaryInt, chainUnaryInts); unaryInt != nil {
+		return unaryInt(ctx, method, args, reply, cc, invoke, opts...)
 	}
 	return invoke(ctx, method, args, reply, cc, opts...)
 }

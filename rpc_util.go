@@ -522,6 +522,38 @@ func (o MaxRetryRPCBufferSizeCallOption) before(c *callInfo) error {
 }
 func (o MaxRetryRPCBufferSizeCallOption) after(c *callInfo, attempt *csAttempt) {}
 
+// CallUnaryClientInterceptor returns a CallOption that specifies the interceptor
+// for unary RPCs.
+func CallUnaryClientInterceptor(f UnaryClientInterceptor) CallOption {
+	return UnaryClientInterceptorCallOption{UnaryClientInterceptor: f}
+}
+
+// UnaryClientInterceptorCallOption is a CallOption that specifies the interceptor
+// for unary RPCs.
+type UnaryClientInterceptorCallOption struct {
+	UnaryClientInterceptor UnaryClientInterceptor
+}
+
+func (o UnaryClientInterceptorCallOption) before(c *callInfo) error { return nil }
+
+func (o UnaryClientInterceptorCallOption) after(c *callInfo, attempt *csAttempt) {}
+
+// CallStreamClientInterceptor returns a CallOption that specifies the interceptor
+// for streaming RPCs.
+func CallStreamClientInterceptor(f StreamClientInterceptor) CallOption {
+	return StreamClientInterceptorCallOption{StreamClientInterceptor: f}
+}
+
+// StreamClientInterceptorCallOption is a CallOption that specifies the interceptor
+// for streaming RPCs.
+type StreamClientInterceptorCallOption struct {
+	StreamClientInterceptor StreamClientInterceptor
+}
+
+func (o StreamClientInterceptorCallOption) before(c *callInfo) error { return nil }
+
+func (o StreamClientInterceptorCallOption) after(c *callInfo, attempt *csAttempt) {}
+
 // The format of the payload: compressed or not?
 type payloadFormat uint8
 

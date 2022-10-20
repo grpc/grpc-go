@@ -156,7 +156,14 @@ func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method st
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)
 
-	if cc.dopts.streamInt != nil {
+	var chainStreamInts []StreamClientInterceptor
+	for _, opt := range opts {
+		if streamIntOpt, ok := opt.(StreamClientInterceptorCallOption); ok {
+			chainStreamInts = append(chainStreamInts, streamIntOpt.StreamClientInterceptor)
+		}
+	}
+
+	if streamInt := chainStreamClientInterceptors(cc.dopts.streamInt, chainStreamInts); streamInt != nil {
 		return cc.dopts.streamInt(ctx, desc, cc, method, newClientStream, opts...)
 	}
 	return newClientStream(ctx, desc, cc, method, opts...)

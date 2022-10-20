@@ -154,8 +154,8 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 		opt.apply(&cc.dopts)
 	}
 
-	chainUnaryClientInterceptors(cc)
-	chainStreamClientInterceptors(cc)
+	cc.dopts.unaryInt = chainUnaryClientInterceptors(cc.dopts.unaryInt, cc.dopts.chainUnaryInts)
+	cc.dopts.streamInt = chainStreamClientInterceptors(cc.dopts.streamInt, cc.dopts.chainStreamInts)
 
 	defer func() {
 		if err != nil {
@@ -332,24 +332,21 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 }
 
 // chainUnaryClientInterceptors chains all unary client interceptors into one.
-func chainUnaryClientInterceptors(cc *ClientConn) {
-	interceptors := cc.dopts.chainUnaryInts
-	// Prepend dopts.unaryInt to the chaining interceptors if it exists, since unaryInt will
-	// be executed before any other chained interceptors.
-	if cc.dopts.unaryInt != nil {
-		interceptors = append([]UnaryClientInterceptor{cc.dopts.unaryInt}, interceptors...)
+// unaryInt will be executed before any other chained interceptor.
+func chainUnaryClientInterceptors(unaryInt UnaryClientInterceptor, chainUnaryInts []UnaryClientInterceptor) UnaryClientInterceptor {
+	interceptors := chainUnaryInts
+	if unaryInt != nil {
+		interceptors = append([]UnaryClientInterceptor{unaryInt}, interceptors...)
 	}
-	var chainedInt UnaryClientInterceptor
 	if len(interceptors) == 0 {
-		chainedInt = nil
-	} else if len(interceptors) == 1 {
-		chainedInt = interceptors[0]
-	} else {
-		chainedInt = func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
-			return interceptors[0](ctx, method, req, reply, cc, getChainUnaryInvoker(interceptors, 0, invoker), opts...)
-		}
+		return nil
 	}
-	cc.dopts.unaryInt = chainedInt
+	if len(interceptors) == 1 {
+		return interceptors[0]
+	}
+	return func(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, invoker UnaryInvoker, opts ...CallOption) error {
+		return interceptors[0](ctx, method, req, reply, cc, getChainUnaryInvoker(interceptors, 0, invoker), opts...)
+	}
 }
 
 // getChainUnaryInvoker recursively generate the chained unary invoker.
@@ -363,24 +360,21 @@ func getChainUnaryInvoker(interceptors []UnaryClientInterceptor, curr int, final
 }
 
 // chainStreamClientInterceptors chains all stream client interceptors into one.
-func chainStreamClientInterceptors(cc *ClientConn) {
-	interceptors := cc.dopts.chainStreamInts
-	// Prepend dopts.streamInt to the chaining interceptors if it exists, since streamInt will
-	// be executed before any other chained interceptors.
-	if cc.dopts.streamInt != nil {
-		interceptors = append([]StreamClientInterceptor{cc.dopts.streamInt}, interceptors...)
+// streamInt will be executed before any other chained interceptor.
+func chainStreamClientInterceptors(streamInt StreamClientInterceptor, chainStreamInts []StreamClientInterceptor) StreamClientInterceptor {
+	interceptors := chainStreamInts
+	if streamInt != nil {
+		interceptors = append([]StreamClientInterceptor{streamInt}, interceptors...)
 	}
-	var chainedInt StreamClientInterceptor
 	if len(interceptors) == 0 {
-		chainedInt = nil
-	} else if len(interceptors) == 1 {
-		chainedInt = interceptors[0]
-	} else {
-		chainedInt = func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
-			return interceptors[0](ctx, desc, cc, method, getChainStreamer(interceptors, 0, streamer), opts...)
-		}
+		return nil
 	}
-	cc.dopts.streamInt = chainedInt
+	if len(interceptors) == 1 {
+		return interceptors[0]
+	}
+	return func(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, streamer Streamer, opts ...CallOption) (ClientStream, error) {
+		return interceptors[0](ctx, desc, cc, method, getChainStreamer(interceptors, 0, streamer), opts...)
+	}
 }
 
 // getChainStreamer recursively generate the chained client stream constructor.
