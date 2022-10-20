@@ -32,7 +32,7 @@ type passthroughBuilder struct{}
 
 func (*passthroughBuilder) Build(target resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
 	if target.Endpoint == "" && opts.Dialer == nil {
-		return nil, errors.New("passthrough resolver：missing address")
+		return nil, errors.New("passthrough resolver: missing address")
 	}
 	r := &passthroughResolver{
 		target: target,
