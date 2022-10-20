@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
@@ -327,27 +325,4 @@ func (s) TestFederation_EndpointsResourceContextParamOrder(t *testing.T) {
 
 func newStringP(s string) *string {
 	return &s
-}
-
-// verifyRouteConfigUpdate waits for an update to be received on the provided
-// update channel and verifies that it matches the expected update.
-//
-// Returns an error if no update is received before the context deadline expires
-// or the received update does not match the expected one.
-func verifyRouteConfigUpdate(ctx context.Context, updateCh *testutils.Channel, wantUpdate xdsresource.RouteConfigUpdateErrTuple) error {
-	u, err := updateCh.Receive(ctx)
-	if err != nil {
-		return fmt.Errorf("timeout when waiting for a route configuration resource from the management server: %v", err)
-	}
-	got := u.(xdsresource.RouteConfigUpdateErrTuple)
-	if wantUpdate.Err != nil {
-		if gotType, wantType := xdsresource.ErrType(got.Err), xdsresource.ErrType(wantUpdate.Err); gotType != wantType {
-			return fmt.Errorf("received update with error type %v, want %v", gotType, wantType)
-		}
-	}
-	cmpOpts := []cmp.Option{cmpopts.EquateEmpty(), cmpopts.IgnoreFields(xdsresource.RouteConfigUpdate{}, "Raw")}
-	if diff := cmp.Diff(wantUpdate.Update, got.Update, cmpOpts...); diff != "" {
-		return fmt.Errorf("received unepected diff in the route configuration resource update: (-want, got):\n%s", diff)
-	}
-	return nil
 }

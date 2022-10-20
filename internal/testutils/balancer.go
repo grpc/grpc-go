@@ -339,6 +339,16 @@ func IsRoundRobin(want []balancer.SubConn, f func() balancer.SubConn) error {
 	return nil
 }
 
+// SubConnFromPicker returns a function which returns a SubConn by calling the
+// Pick() method of the provided picker. There is no caching of SubConns here.
+// Every invocation of the returned function results in a new pick.
+func SubConnFromPicker(p balancer.Picker) func() balancer.SubConn {
+	return func() balancer.SubConn {
+		scst, _ := p.Pick(balancer.PickInfo{})
+		return scst.SubConn
+	}
+}
+
 // ErrTestConstPicker is error returned by test const picker.
 var ErrTestConstPicker = fmt.Errorf("const picker error")
 
