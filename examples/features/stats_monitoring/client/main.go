@@ -28,8 +28,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	pb "google.golang.org/grpc/examples/features/proto/echo"
-	sh "google.golang.org/grpc/examples/features/stats_monitoring/statshandler"
+	echogrpc "google.golang.org/grpc/examples/features/proto/echo"
+	echopb "google.golang.org/grpc/examples/features/proto/echo"
+	"google.golang.org/grpc/examples/features/stats_monitoring/statshandler"
 )
 
 var addr = flag.String("addr", "localhost:50051", "the address to connect to")
@@ -38,7 +39,7 @@ func main() {
 	flag.Parse()
 	opts := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithStatsHandler(sh.New()),
+		grpc.WithStatsHandler(statshandler.New()),
 	}
 	conn, err := grpc.Dial(*addr, opts...)
 	if err != nil {
@@ -49,12 +50,11 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	c := pb.NewEchoClient(conn)
+	c := echogrpc.NewEchoClient(conn)
 
-	resp, err := c.UnaryEcho(ctx, &pb.EchoRequest{Message: "stats handler demo"})
+	resp, err := c.UnaryEcho(ctx, &echopb.EchoRequest{Message: "stats handler demo"})
 	if err != nil {
 		log.Fatalf("unexpected error from UnaryEcho: %v", err)
 	}
 	log.Printf("RPC response: %s", resp.Message)
-
 }

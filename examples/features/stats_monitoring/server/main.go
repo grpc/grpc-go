@@ -30,8 +30,9 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 
-	pb "google.golang.org/grpc/examples/features/proto/echo"
-	sh "google.golang.org/grpc/examples/features/stats_monitoring/statshandler"
+	echogrpc "google.golang.org/grpc/examples/features/proto/echo"
+	echopb "google.golang.org/grpc/examples/features/proto/echo"
+	"google.golang.org/grpc/examples/features/stats_monitoring/statshandler"
 )
 
 var port = flag.Int("port", 50051, "the port to serve on")
@@ -41,12 +42,12 @@ func init() {
 }
 
 type server struct {
-	pb.UnimplementedEchoServer
+	echogrpc.UnimplementedEchoServer
 }
 
-func (s *server) UnaryEcho(ctx context.Context, req *pb.EchoRequest) (*pb.EchoResponse, error) {
+func (s *server) UnaryEcho(ctx context.Context, req *echopb.EchoRequest) (*echopb.EchoResponse, error) {
 	time.Sleep(2 * time.Second)
-	return &pb.EchoResponse{Message: req.Message}, nil
+	return &echopb.EchoResponse{Message: req.Message}, nil
 }
 
 func main() {
@@ -57,7 +58,7 @@ func main() {
 	}
 	grpclog.Infof("server listening at %v\n", lis.Addr())
 
-	s := grpc.NewServer(grpc.StatsHandler(sh.New()))
-	pb.RegisterEchoServer(s, &server{})
+	s := grpc.NewServer(grpc.StatsHandler(statshandler.New()))
+	echogrpc.RegisterEchoServer(s, &server{})
 	grpclog.Fatalf("failed to serve: %v", s.Serve(lis))
 }

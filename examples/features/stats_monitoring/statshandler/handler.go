@@ -28,7 +28,7 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
-// handler implements [stats.Handler](https://pkg.go.dev/google.golang.org/grpc/stats#Handler) interface
+// handler implements [stats.Handler](https://pkg.go.dev/google.golang.org/grpc/stats#Handler) interface.
 type handler struct{}
 
 type connStatCtxKey struct{}
@@ -66,7 +66,7 @@ func (st *handler) TagRPC(ctx context.Context, stat *stats.RPCTagInfo) context.C
 	return context.WithValue(ctx, rpcStatCtxKey{}, stat)
 }
 
-// Note: All stat fields are read-only
+// Note: All stat fields are read-only.
 func (st *handler) HandleRPC(ctx context.Context, stat stats.RPCStats) {
 	var sMethod string
 	if s, ok := ctx.Value(rpcStatCtxKey{}).(*stats.RPCTagInfo); ok {
@@ -74,7 +74,7 @@ func (st *handler) HandleRPC(ctx context.Context, stat stats.RPCStats) {
 	}
 
 	var cAddr net.Addr
-	// for gRPC clients, key connStatCtxKey{} will not be present in HandleRPC's context
+	// for gRPC clients, key connStatCtxKey{} will not be present in HandleRPC's context.
 	if s, ok := ctx.Value(connStatCtxKey{}).(*stats.ConnTagInfo); ok {
 		cAddr = s.RemoteAddr
 	}
@@ -86,7 +86,7 @@ func (st *handler) HandleRPC(ctx context.Context, stat stats.RPCStats) {
 	}
 }
 
-// New returns a new implementation of [stats.Handler](https://pkg.go.dev/google.golang.org/grpc/stats#Handler) interface
+// New returns a new implementation of [stats.Handler](https://pkg.go.dev/google.golang.org/grpc/stats#Handler) interface.
 func New() *handler {
 	return &handler{}
 }
