@@ -112,6 +112,17 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "duplicate endpoint address",
+			m: func() *v3endpointpb.ClusterLoadAssignment {
+				clab0 := newClaBuilder("test", nil)
+				clab0.addLocality("locality-1", 1, 1, []string{"addr:997"}, nil)
+				clab0.addLocality("locality-2", 1, 0, []string{"addr:997"}, nil)
+				return clab0.Build()
+			}(),
+			want:    EndpointsUpdate{},
+			wantErr: true,
+		},
+		{
 			name: "good",
 			m: func() *v3endpointpb.ClusterLoadAssignment {
 				clab0 := newClaBuilder("test", nil)

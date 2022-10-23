@@ -25,6 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -63,6 +64,12 @@ var (
 		protocmp.Transform(),
 	}
 )
+
+func overrideFedEnvVar(t *testing.T) {
+	oldFed := envconfig.XDSFederation
+	envconfig.XDSFederation = true
+	t.Cleanup(func() { envconfig.XDSFederation = oldFed })
+}
 
 // watchAndFetchNewController starts a CDS watch on the client for the given
 // resourceName, and tries to receive a new controller from the ctrlCh.
@@ -163,9 +170,9 @@ func (s) TestAuthorityNoneDefaultAuthority(t *testing.T) {
 }
 
 // TestAuthorityShare covers that
-// - watch with the same authority name doesn't create new authority
-// - watch with different authority name but same authority config doesn't
-//   create new authority
+//   - watch with the same authority name doesn't create new authority
+//   - watch with different authority name but same authority config doesn't
+//     create new authority
 func (s) TestAuthorityShare(t *testing.T) {
 	overrideFedEnvVar(t)
 	ctrlCh := overrideNewController(t)
@@ -210,9 +217,9 @@ func (s) TestAuthorityShare(t *testing.T) {
 }
 
 // TestAuthorityIdle covers that
-// - authorities are put in a timeout cache when the last watch is canceled
-// - idle authorities are not immediately closed. They will be closed after a
-//   timeout.
+//   - authorities are put in a timeout cache when the last watch is canceled
+//   - idle authorities are not immediately closed. They will be closed after a
+//     timeout.
 func (s) TestAuthorityIdleTimeout(t *testing.T) {
 	overrideFedEnvVar(t)
 	ctrlCh := overrideNewController(t)

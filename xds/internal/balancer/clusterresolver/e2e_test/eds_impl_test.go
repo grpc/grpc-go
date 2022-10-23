@@ -168,11 +168,11 @@ func clientEndpointsResource(nodeID, edsServiceName string, localities []localit
 
 // TestEDS_OneLocality tests the cluster_resolver LB policy using an EDS
 // resource with one locality. The following scenarios are tested:
-// 1. Single backend. Test verifies that RPCs reach this backend.
-// 2. Add a backend. Test verifies that RPCs are roundrobined across the two
-//    backends.
-// 3. Remove one backend. Test verifies that all RPCs reach the other backend.
-// 4. Replace the backend. Test verifies that all RPCs reach the new backend.
+//  1. Single backend. Test verifies that RPCs reach this backend.
+//  2. Add a backend. Test verifies that RPCs are roundrobined across the two
+//     backends.
+//  3. Remove one backend. Test verifies that all RPCs reach the other backend.
+//  4. Replace the backend. Test verifies that all RPCs reach the new backend.
 func (s) TestEDS_OneLocality(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
 	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, nil)
@@ -262,16 +262,16 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 
 // TestEDS_MultipleLocalities tests the cluster_resolver LB policy using an EDS
 // resource with multiple localities. The following scenarios are tested:
-// 1. Two localities, each with a single backend. Test verifies that RPCs are
-//    weighted roundrobined across these two backends.
-// 2. Add another locality, with a single backend. Test verifies that RPCs are
-//    weighted roundrobined across all the backends.
-// 3. Remove one locality. Test verifies that RPCs are weighted roundrobined
-//    across backends from the remaining localities.
-// 4. Add a backend to one locality. Test verifies that RPCs are weighted
-//    roundrobined across localities.
-// 5. Change the weight of one of the localities. Test verifies that RPCs are
-//    weighted roundrobined across the localities.
+//  1. Two localities, each with a single backend. Test verifies that RPCs are
+//     weighted roundrobined across these two backends.
+//  2. Add another locality, with a single backend. Test verifies that RPCs are
+//     weighted roundrobined across all the backends.
+//  3. Remove one locality. Test verifies that RPCs are weighted roundrobined
+//     across backends from the remaining localities.
+//  4. Add a backend to one locality. Test verifies that RPCs are weighted
+//     roundrobined across localities.
+//  5. Change the weight of one of the localities. Test verifies that RPCs are
+//     weighted roundrobined across the localities.
 //
 // In our LB policy tree, one of the descendents of the "cluster_resolver" LB
 // policy is the "weighted_target" LB policy which performs weighted roundrobin

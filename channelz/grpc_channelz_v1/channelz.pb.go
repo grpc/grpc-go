@@ -514,6 +514,7 @@ type ChannelTraceEvent struct {
 	// created.
 	//
 	// Types that are assignable to ChildRef:
+	//
 	//	*ChannelTraceEvent_ChannelRef
 	//	*ChannelTraceEvent_SubchannelRef
 	ChildRef isChannelTraceEvent_ChildRef `protobuf_oneof:"child_ref"`
@@ -1338,6 +1339,7 @@ type Address struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Address:
+	//
 	//	*Address_TcpipAddress
 	//	*Address_UdsAddress_
 	//	*Address_OtherAddress_
@@ -1433,6 +1435,7 @@ type Security struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to Model:
+	//
 	//	*Security_Tls_
 	//	*Security_Other
 	Model isSecurity_Model `protobuf_oneof:"model"`
@@ -2908,6 +2911,7 @@ type Security_Tls struct {
 	unknownFields protoimpl.UnknownFields
 
 	// Types that are assignable to CipherSuite:
+	//
 	//	*Security_Tls_StandardName
 	//	*Security_Tls_OtherName
 	CipherSuite isSecurity_Tls_CipherSuite `protobuf_oneof:"cipher_suite"`

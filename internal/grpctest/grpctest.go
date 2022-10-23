@@ -79,10 +79,12 @@ func getTestFunc(t *testing.T, xv reflect.Value, name string) func(*testing.T) {
 // functions, respectively.
 //
 // For example usage, see example_test.go.  Run it using:
-//     $ go test -v -run TestExample .
+//
+//	$ go test -v -run TestExample .
 //
 // To run a specific test/subtest:
-//     $ go test -v -run 'TestExample/^Something$' .
+//
+//	$ go test -v -run 'TestExample/^Something$' .
 func RunSubTests(t *testing.T, x interface{}) {
 	xt := reflect.TypeOf(x)
 	xv := reflect.ValueOf(x)

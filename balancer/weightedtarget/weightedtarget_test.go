@@ -19,8 +19,11 @@
 package weightedtarget
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,6 +41,10 @@ import (
 	"google.golang.org/grpc/serviceconfig"
 )
 
+const (
+	defaultTestTimeout = 5 * time.Second
+)
+
 type s struct {
 	grpctest.Tester
 }
@@ -53,6 +60,20 @@ type testConfigBalancerBuilder struct {
 func newTestConfigBalancerBuilder() *testConfigBalancerBuilder {
 	return &testConfigBalancerBuilder{
 		Builder: balancer.Get(roundrobin.Name),
+	}
+}
+
+// pickAndCheckError returns a function which takes a picker, invokes the Pick() method
+// multiple times and ensures that the error returned by the picker matches the provided error.
+func pickAndCheckError(want error) func(balancer.Picker) error {
+	const rpcCount = 5
+	return func(p balancer.Picker) error {
+		for i := 0; i < rpcCount; i++ {
+			if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), want.Error()) {
+				return fmt.Errorf("picker.Pick() returned error: %v, want: %v", err, want)
+			}
+		}
+		return nil
 	}
 }
 
@@ -287,13 +308,6 @@ func (s) TestWeightedTarget(t *testing.T) {
 	}
 }
 
-func subConnFromPicker(p balancer.Picker) func() balancer.SubConn {
-	return func() balancer.SubConn {
-		scst, _ := p.Pick(balancer.PickInfo{})
-		return scst.SubConn
-	}
-}
-
 // TestWeightedTarget_OneSubBalancer_AddRemoveBackend tests the case where we
 // have a weighted target balancer will one sub-balancer, and we add and remove
 // backends from the subBalancer.
@@ -364,7 +378,7 @@ func (s) TestWeightedTarget_OneSubBalancer_AddRemoveBackend(t *testing.T) {
 
 	// Test round robin pick.
 	want := []balancer.SubConn{sc1, sc2}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p)); err != nil {
+	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -453,7 +467,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_OneBackend(t *testing.T) {
 
 	// Test roundrobin on the last picker.
 	want := []balancer.SubConn{sc1, sc2}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p)); err != nil {
+	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -534,7 +548,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	// Test roundrobin on the last picker. RPCs should be sent equally to all
 	// backends.
 	want := []balancer.SubConn{sc1, sc2, sc3, sc4}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p)); err != nil {
+	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -542,7 +556,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
 	p = <-cc.NewPickerCh
 	want = []balancer.SubConn{sc1, sc1, sc3, sc4}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p)); err != nil {
+	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -564,15 +578,19 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	wtb.UpdateSubConnState(scRemoved, balancer.SubConnState{ConnectivityState: connectivity.Shutdown})
 	p = <-cc.NewPickerCh
 	want = []balancer.SubConn{sc1, sc4}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p)); err != nil {
+	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
 	// Turn sc1's connection down.
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	wantSubConnErr := errors.New("subConn connection error")
+	wtb.UpdateSubConnState(sc1, balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   wantSubConnErr,
+	})
 	p = <-cc.NewPickerCh
 	want = []balancer.SubConn{sc4}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p)); err != nil {
+	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -586,12 +604,15 @@ func (s) TestWeightedTarget_TwoSubBalancers_MoreBackends(t *testing.T) {
 	}
 
 	// Turn all connections down.
-	wtb.UpdateSubConnState(sc4, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
-	p = <-cc.NewPickerCh
-	for i := 0; i < 5; i++ {
-		if _, err := p.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
-		}
+	wtb.UpdateSubConnState(sc4, balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   wantSubConnErr,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.WaitForPicker(ctx, pickAndCheckError(wantSubConnErr)); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -671,7 +692,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_DifferentWeight_MoreBackends(t *test
 	// Test roundrobin on the last picker. Twice the number of RPCs should be
 	// sent to cluster_1 when compared to cluster_2.
 	want := []balancer.SubConn{sc1, sc1, sc2, sc2, sc3, sc4}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p)); err != nil {
+	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -748,7 +769,7 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 	p := <-cc.NewPickerCh
 
 	want := []balancer.SubConn{sc1, sc2, sc3}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p)); err != nil {
+	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -788,12 +809,16 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc2, scRemoved)
 	}
 	want = []balancer.SubConn{sc1, sc3}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p)); err != nil {
+	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
 	// Move balancer 3 into transient failure.
-	wtb.UpdateSubConnState(sc3, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	wantSubConnErr := errors.New("subConn connection error")
+	wtb.UpdateSubConnState(sc3, balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   wantSubConnErr,
+	})
 	<-cc.NewPickerCh
 
 	// Remove the first balancer, while the third is transient failure.
@@ -820,16 +845,16 @@ func (s) TestWeightedTarget_ThreeSubBalancers_RemoveBalancer(t *testing.T) {
 
 	// Removing a subBalancer causes the weighted target LB policy to push a new
 	// picker which ensures that the removed subBalancer is not picked for RPCs.
-	p = <-cc.NewPickerCh
 
 	scRemoved = <-cc.RemoveSubConnCh
 	if !cmp.Equal(scRemoved, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
 		t.Fatalf("RemoveSubConn, want %v, got %v", sc1, scRemoved)
 	}
-	for i := 0; i < 5; i++ {
-		if _, err := p.Pick(balancer.PickInfo{}); err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick error %v, got %v", balancer.ErrTransientFailure, err)
-		}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := cc.WaitForPicker(ctx, pickAndCheckError(wantSubConnErr)); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -909,7 +934,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_ChangeWeight_MoreBackends(t *testing
 	// Test roundrobin on the last picker. Twice the number of RPCs should be
 	// sent to cluster_1 when compared to cluster_2.
 	want := []balancer.SubConn{sc1, sc1, sc2, sc2, sc3, sc4}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p)); err != nil {
+	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 
@@ -945,7 +970,7 @@ func (s) TestWeightedTarget_TwoSubBalancers_ChangeWeight_MoreBackends(t *testing
 	// Weight change causes a new picker to be pushed to the channel.
 	p = <-cc.NewPickerCh
 	want = []balancer.SubConn{sc1, sc1, sc1, sc2, sc2, sc2, sc3, sc4}
-	if err := testutils.IsRoundRobin(want, subConnFromPicker(p)); err != nil {
+	if err := testutils.IsRoundRobin(want, testutils.SubConnFromPicker(p)); err != nil {
 		t.Fatalf("want %v, got %v", want, err)
 	}
 }
@@ -1064,15 +1089,21 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 
 	// Set both subconn to TransientFailure, this will put both sub-balancers in
 	// transient failure.
-	wtb.UpdateSubConnState(sc1, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	wantSubConnErr := errors.New("subConn connection error")
+	wtb.UpdateSubConnState(sc1, balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   wantSubConnErr,
+	})
 	<-cc.NewPickerCh
-	wtb.UpdateSubConnState(sc2, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	wtb.UpdateSubConnState(sc2, balancer.SubConnState{
+		ConnectivityState: connectivity.TransientFailure,
+		ConnectionError:   wantSubConnErr,
+	})
 	p := <-cc.NewPickerCh
 
 	for i := 0; i < 5; i++ {
-		r, err := p.Pick(balancer.PickInfo{})
-		if err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick to fail with %v, got result %v, err %v", balancer.ErrTransientFailure, r, err)
+		if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), wantSubConnErr.Error()) {
+			t.Fatalf("picker.Pick() returned error: %v, want: %v", err, wantSubConnErr)
 		}
 	}
 
@@ -1085,9 +1116,8 @@ func (s) TestBalancerGroup_SubBalancerTurnsConnectingFromTransientFailure(t *tes
 	}
 
 	for i := 0; i < 5; i++ {
-		r, err := p.Pick(balancer.PickInfo{})
-		if err != balancer.ErrTransientFailure {
-			t.Fatalf("want pick to fail with %v, got result %v, err %v", balancer.ErrTransientFailure, r, err)
+		if _, err := p.Pick(balancer.PickInfo{}); err == nil || !strings.Contains(err.Error(), wantSubConnErr.Error()) {
+			t.Fatalf("picker.Pick() returned error: %v, want: %v", err, wantSubConnErr)
 		}
 	}
 }

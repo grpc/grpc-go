@@ -21,8 +21,8 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
+	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	xdsinternal "google.golang.org/grpc/internal/xds"
 )
 
 type controlPlane struct {
@@ -39,8 +39,8 @@ func newControlPlane() (*controlPlane, error) {
 	}
 
 	nodeID := uuid.New().String()
-	bootstrapContentBytes, err := xdsinternal.BootstrapContents(xdsinternal.BootstrapOptions{
-		Version:                            xdsinternal.TransportV3,
+	bootstrapContentBytes, err := bootstrap.Contents(bootstrap.Options{
+		Version:                            bootstrap.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          server.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,

@@ -20,7 +20,7 @@
 // Envoy) on the data plane. In a proxyless world with gRPC enabled
 // applications, aggregation of such reports will be done by the gRPC client.
 //
-// Experimental
+// # Experimental
 //
 // Notice: All APIs is this package are EXPERIMENTAL and may be changed or
 // removed in a later release.

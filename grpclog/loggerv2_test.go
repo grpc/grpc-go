@@ -52,7 +52,8 @@ func TestLoggerV2Severity(t *testing.T) {
 }
 
 // check if b is in the format of:
-//  2017/04/07 14:55:42 WARNING: WARNING
+//
+//	2017/04/07 14:55:42 WARNING: WARNING
 func checkLogForSeverity(s int, b []byte) error {
 	expected := regexp.MustCompile(fmt.Sprintf(`^[0-9]{4}/[0-9]{2}/[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} %s: %s\n$`, severityName[s], severityName[s]))
 	if m := expected.Match(b); !m {

@@ -340,7 +340,8 @@ type rpcConfig struct {
 }
 
 // parseRPCMetadata turns EmptyCall:key1:value1 into
-//   {typ: emptyCall, md: {key1:value1}}.
+//
+//	{typ: emptyCall, md: {key1:value1}}.
 func parseRPCMetadata(rpcMetadataStr string, rpcs []string) []*rpcConfig {
 	rpcMetadataSplit := strings.Split(rpcMetadataStr, ",")
 	rpcsToMD := make(map[string][]string)

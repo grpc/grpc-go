@@ -428,6 +428,7 @@ func testWatchAfterCache(t *testing.T, typ xdsresource.ResourceType, update inte
 // - an update is received after a watch()
 // - another update is received, with one resource removed
 //   - this should trigger callback with resource removed error
+//
 // - one more update without the removed resource
 //   - the callback (above) shouldn't receive any update
 func testResourceRemoved(t *testing.T, typ xdsresource.ResourceType, update1 interface{}, resourceName1 string, update2 interface{}, resourceName2 string) {

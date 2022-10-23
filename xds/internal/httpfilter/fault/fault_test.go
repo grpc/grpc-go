@@ -39,8 +39,8 @@ import (
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/internal/xds"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -92,11 +92,11 @@ func (*testService) FullDuplexCall(stream testpb.TestService_FullDuplexCallServe
 // - create a local TCP listener and start serving on it
 //
 // Returns the following:
-// - the management server: tests use this to configure resources
-// - nodeID expected by the management server: this is set in the Node proto
-//   sent by the xdsClient for queries.
-// - the port the server is listening on
-// - cleanup function to be invoked by the tests when done
+//   - the management server: tests use this to configure resources
+//   - nodeID expected by the management server: this is set in the Node proto
+//     sent by the xdsClient for queries.
+//   - the port the server is listening on
+//   - cleanup function to be invoked by the tests when done
 func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
@@ -106,8 +106,8 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 	}
 
 	// Create a bootstrap file in a temporary directory.
-	bootstrapCleanup, err := xds.SetupBootstrapFile(xds.BootstrapOptions{
-		Version:                            xds.TransportV3,
+	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
+		Version:                            bootstrap.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          fs.Address,
 		ServerListenerResourceNameTemplate: "grpc/server",

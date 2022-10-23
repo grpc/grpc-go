@@ -220,12 +220,12 @@ func startManualResolverWithConfig(t *testing.T, rlsConfig *e2e.RLSConfig) *manu
 //
 // There are many instances where it can take a while before the attempted RPC
 // reaches the expected backend. Examples include, but are not limited to:
-// - control channel is changed in a config update. The RLS LB policy creates a
-//   new control channel, and sends a new picker to gRPC. But it takes a while
-//   before gRPC actually starts using the new picker.
-// - test is waiting for a cache entry to expire after which we expect a
-//   different behavior because we have configured the fake RLS server to return
-//   different backends.
+//   - control channel is changed in a config update. The RLS LB policy creates a
+//     new control channel, and sends a new picker to gRPC. But it takes a while
+//     before gRPC actually starts using the new picker.
+//   - test is waiting for a cache entry to expire after which we expect a
+//     different behavior because we have configured the fake RLS server to return
+//     different backends.
 //
 // Therefore, we do not return an error when the RPC fails. Instead, we wait for
 // the context to expire before failing.

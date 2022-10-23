@@ -150,12 +150,12 @@ func x509NameHash(r pkix.RDNSequence) string {
 
 // CheckRevocation checks the connection for revoked certificates based on RFC5280.
 // This implementation has the following major limitations:
-// 	* Indirect CRL files are not supported.
-// 	* CRL loading is only supported from directories in the X509_LOOKUP_hash_dir format.
-// 	* OnlySomeReasons is not supported.
-// 	* Delta CRL files are not supported.
-// 	* Certificate CRLDistributionPoint must be URLs, but are then ignored and converted into a file path.
-// 	* CRL checks are done after path building, which goes against RFC4158.
+//   - Indirect CRL files are not supported.
+//   - CRL loading is only supported from directories in the X509_LOOKUP_hash_dir format.
+//   - OnlySomeReasons is not supported.
+//   - Delta CRL files are not supported.
+//   - Certificate CRLDistributionPoint must be URLs, but are then ignored and converted into a file path.
+//   - CRL checks are done after path building, which goes against RFC4158.
 func CheckRevocation(conn tls.ConnectionState, cfg RevocationConfig) error {
 	return CheckChainRevocation(conn.VerifiedChains, cfg)
 }
@@ -359,8 +359,8 @@ type authKeyID struct {
 // 		indirectCRL                [4] BOOLEAN DEFAULT FALSE,
 // 		onlyContainsAttributeCerts [5] BOOLEAN DEFAULT FALSE }
 
-// 		-- at most one of onlyContainsUserCerts, onlyContainsCACerts,
-// 		-- and onlyContainsAttributeCerts may be set to TRUE.
+// -- at most one of onlyContainsUserCerts, onlyContainsCACerts,
+// -- and onlyContainsAttributeCerts may be set to TRUE.
 type issuingDistributionPoint struct {
 	DistributionPoint          asn1.RawValue  `asn1:"optional,tag:0"`
 	OnlyContainsUserCerts      bool           `asn1:"optional,tag:1"`

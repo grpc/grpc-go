@@ -452,7 +452,7 @@ func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts 
 	copts.ChannelzParentID = channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil)
 
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func() {}, func(GoAwayReason) {}, func() {})
+	ct, connErr := NewClientTransport(connectCtx, context.Background(), addr, copts, func(GoAwayReason) {}, func() {})
 	if connErr != nil {
 		cancel() // Do not cancel in success path.
 		t.Fatalf("failed to create transport: %v", connErr)
@@ -474,10 +474,16 @@ func setUpWithNoPingServer(t *testing.T, copts ConnectOptions, connCh chan net.C
 			close(connCh)
 			return
 		}
+		framer := http2.NewFramer(conn, conn)
+		if err := framer.WriteSettings(); err != nil {
+			t.Errorf("Error at server-side while writing settings: %v", err)
+			close(connCh)
+			return
+		}
 		connCh <- conn
 	}()
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	tr, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func() {}, func(GoAwayReason) {}, func() {})
+	tr, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		cancel() // Do not cancel in success path.
 		// Server clean-up.
@@ -1248,6 +1254,59 @@ func (s) TestServerWithMisbehavedClient(t *testing.T) {
 	}
 }
 
+func (s) TestClientHonorsConnectContext(t *testing.T) {
+	// Create a server that will not send a preface.
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Error while listening: %v", err)
+	}
+	defer lis.Close()
+	go func() { // Launch the misbehaving server.
+		sconn, err := lis.Accept()
+		if err != nil {
+			t.Errorf("Error while accepting: %v", err)
+			return
+		}
+		defer sconn.Close()
+		if _, err := io.ReadFull(sconn, make([]byte, len(clientPreface))); err != nil {
+			t.Errorf("Error while reading client preface: %v", err)
+			return
+		}
+		sfr := http2.NewFramer(sconn, sconn)
+		// Do not write a settings frame, but read from the conn forever.
+		for {
+			if _, err := sfr.ReadFrame(); err != nil {
+				return
+			}
+		}
+	}()
+
+	// Test context cancelation.
+	timeBefore := time.Now()
+	connectCtx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	time.AfterFunc(100*time.Millisecond, cancel)
+
+	copts := ConnectOptions{ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil)}
+	_, err = NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {}, func() {})
+	if err == nil {
+		t.Fatalf("NewClientTransport() returned successfully; wanted error")
+	}
+	t.Logf("NewClientTransport() = _, %v", err)
+	if time.Now().Sub(timeBefore) > 3*time.Second {
+		t.Fatalf("NewClientTransport returned > 2.9s after context cancelation")
+	}
+
+	// Test context deadline.
+	timeBefore = time.Now()
+	connectCtx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	_, err = NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {}, func() {})
+	if err == nil {
+		t.Fatalf("NewClientTransport() returned successfully; wanted error")
+	}
+	t.Logf("NewClientTransport() = _, %v", err)
+}
+
 func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	// Create a misbehaving server.
 	lis, err := net.Listen("tcp", "localhost:0")
@@ -1266,10 +1325,14 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 		}
 		defer sconn.Close()
 		if _, err := io.ReadFull(sconn, make([]byte, len(clientPreface))); err != nil {
-			t.Errorf("Error while reading clieng preface: %v", err)
+			t.Errorf("Error while reading client preface: %v", err)
 			return
 		}
 		sfr := http2.NewFramer(sconn, sconn)
+		if err := sfr.WriteSettings(); err != nil {
+			t.Errorf("Error while writing settings: %v", err)
+			return
+		}
 		if err := sfr.WriteSettingsAck(); err != nil {
 			t.Errorf("Error while writing settings: %v", err)
 			return
@@ -1316,7 +1379,7 @@ func (s) TestClientWithMisbehavedServer(t *testing.T) {
 	defer cancel()
 
 	copts := ConnectOptions{ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil)}
-	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func() {}, func(GoAwayReason) {}, func() {})
+	ct, err := NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		t.Fatalf("Error while creating client transport: %v", err)
 	}
@@ -2005,7 +2068,7 @@ func (s) TestPingPong1MB(t *testing.T) {
 	runPingPongTest(t, 1048576)
 }
 
-//This is a stress-test of flow control logic.
+// This is a stress-test of flow control logic.
 func runPingPongTest(t *testing.T, msgSize int) {
 	server, client, cancel := setUp(t, 0, 0, pingpong)
 	defer cancel()
@@ -2217,7 +2280,7 @@ func (s) TestClientHandshakeInfo(t *testing.T) {
 		TransportCredentials: creds,
 		ChannelzParentID:     channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
 	}
-	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func() {}, func(GoAwayReason) {}, func() {})
+	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
 	}
@@ -2258,7 +2321,7 @@ func (s) TestClientHandshakeInfoDialer(t *testing.T) {
 		Dialer:           dialer,
 		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
 	}
-	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func() {}, func(GoAwayReason) {}, func() {})
+	tr, err := NewClientTransport(ctx, context.Background(), addr, copts, func(GoAwayReason) {}, func() {})
 	if err != nil {
 		t.Fatalf("NewClientTransport(): %v", err)
 	}

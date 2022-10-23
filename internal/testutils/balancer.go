@@ -290,16 +290,16 @@ func (tcc *TestClientConn) WaitForPicker(ctx context.Context, f func(balancer.Pi
 // Step 1. the return values of f should form a permutation of all elements in
 // want, but not necessary in the same order. E.g. if want is {a,a,b}, the check
 // fails if f returns:
-//  - {a,a,a}: third a is returned before b
-//  - {a,b,b}: second b is returned before the second a
+//   - {a,a,a}: third a is returned before b
+//   - {a,b,b}: second b is returned before the second a
 //
 // If error is found in this step, the returned error contains only the first
 // iteration until where it goes wrong.
 //
 // Step 2. the return values of f should be repetitions of the same permutation.
 // E.g. if want is {a,a,b}, the check failes if f returns:
-//  - {a,b,a,b,a,a}: though it satisfies step 1, the second iteration is not
-//  repeating the first iteration.
+//   - {a,b,a,b,a,a}: though it satisfies step 1, the second iteration is not
+//     repeating the first iteration.
 //
 // If error is found in this step, the returned error contains the first
 // iteration + the second iteration until where it goes wrong.
@@ -337,6 +337,16 @@ func IsRoundRobin(want []balancer.SubConn, f func() balancer.SubConn) error {
 	}
 
 	return nil
+}
+
+// SubConnFromPicker returns a function which returns a SubConn by calling the
+// Pick() method of the provided picker. There is no caching of SubConns here.
+// Every invocation of the returned function results in a new pick.
+func SubConnFromPicker(p balancer.Picker) func() balancer.SubConn {
+	return func() balancer.SubConn {
+		scst, _ := p.Pick(balancer.PickInfo{})
+		return scst.SubConn
+	}
 }
 
 // ErrTestConstPicker is error returned by test const picker.

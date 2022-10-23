@@ -45,21 +45,21 @@ const (
 // The throttler has the following knobs for which we will use defaults for
 // now. If there is a need to make them configurable at a later point in time,
 // support for the same will be added.
-// * Duration: amount of recent history that will be taken into account for
-//   making client-side throttling decisions. A default of 30 seconds is used.
-// * Bins: number of bins to be used for bucketing historical data. A default
-//   of 100 is used.
-// * RatioForAccepts: ratio by which accepts are multiplied, typically a value
-//   slightly larger than 1.0. This is used to make the throttler behave as if
-//   the backend had accepted more requests than it actually has, which lets us
-//   err on the side of sending to the backend more requests than we think it
-//   will accept for the sake of speeding up the propagation of state. A
-//   default of 2.0 is used.
-// * RequestsPadding: is used to decrease the (client-side) throttling
-//   probability in the low QPS regime (to speed up propagation of state), as
-//   well as to safeguard against hitting a client-side throttling probability
-//   of 100%. The weight of this value decreases as the number of requests in
-//   recent history grows. A default of 8 is used.
+//   - Duration: amount of recent history that will be taken into account for
+//     making client-side throttling decisions. A default of 30 seconds is used.
+//   - Bins: number of bins to be used for bucketing historical data. A default
+//     of 100 is used.
+//   - RatioForAccepts: ratio by which accepts are multiplied, typically a value
+//     slightly larger than 1.0. This is used to make the throttler behave as if
+//     the backend had accepted more requests than it actually has, which lets us
+//     err on the side of sending to the backend more requests than we think it
+//     will accept for the sake of speeding up the propagation of state. A
+//     default of 2.0 is used.
+//   - RequestsPadding: is used to decrease the (client-side) throttling
+//     probability in the low QPS regime (to speed up propagation of state), as
+//     well as to safeguard against hitting a client-side throttling probability
+//     of 100%. The weight of this value decreases as the number of requests in
+//     recent history grows. A default of 8 is used.
 //
 // The adaptive throttler attempts to estimate the probability that a request
 // will be throttled using recent history. Server requests (both throttled and

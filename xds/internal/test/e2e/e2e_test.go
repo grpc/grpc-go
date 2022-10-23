@@ -123,6 +123,7 @@ func TestPingPong(t *testing.T) {
 // - verify that
 //   - all RPCs with the same metadata value are sent to the same backend
 //   - only one backend is Ready
+//
 // - send more RPCs with different metadata values until a new backend is picked, and verify that
 //   - only two backends are in Ready
 func TestAffinity(t *testing.T) {
