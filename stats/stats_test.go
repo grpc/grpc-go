@@ -1393,7 +1393,7 @@ func (s) TestMultipleClientStatsHandler(t *testing.T) {
 
 	for start := time.Now(); time.Since(start) < defaultTestTimeout; {
 		h.mu.Lock()
-		if _, ok := h.gotRPC[len(h.gotRPC)-1].s.(*stats.End); ok {
+		if _, ok := h.gotRPC[len(h.gotRPC)-1].s.(*stats.End); ok && len(h.gotRPC) == 12 {
 			h.mu.Unlock()
 			break
 		}
@@ -1403,7 +1403,7 @@ func (s) TestMultipleClientStatsHandler(t *testing.T) {
 
 	for start := time.Now(); time.Since(start) < defaultTestTimeout; {
 		h.mu.Lock()
-		if _, ok := h.gotConn[len(h.gotConn)-1].s.(*stats.ConnEnd); ok {
+		if _, ok := h.gotConn[len(h.gotConn)-1].s.(*stats.ConnEnd); ok && len(h.gotConn) == 4 {
 			h.mu.Unlock()
 			break
 		}
