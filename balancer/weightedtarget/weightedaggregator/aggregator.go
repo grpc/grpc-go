@@ -123,8 +123,8 @@ func (wbsa *Aggregator) Add(id string, weight uint32) {
 	}
 	// Record transition to connectivity.Connecting
 	wbsa.csEvltr.RecordTransition(connectivity.Shutdown, connectivity.Connecting)
-	// Call BuildAndUpdateLocked to update picker state
-	wbsa.BuildAndUpdateLocked()
+	// Call buildAndUpdateLocked to update picker state
+	wbsa.buildAndUpdateLocked()
 }
 
 // Remove removes the sub-balancer state. Future updates from this sub-balancer,
@@ -141,8 +141,8 @@ func (wbsa *Aggregator) Remove(id string) {
 	// Remove id and picker from picker map. This also results in future updates
 	// for this ID to be ignored.
 	delete(wbsa.idToPickerState, id)
-	// Call BuildAndUpdateLocked to update picker state
-	wbsa.BuildAndUpdateLocked()
+	// Call buildAndUpdateLocked to update picker state
+	wbsa.buildAndUpdateLocked()
 }
 
 // UpdateWeight updates the weight for the given id. Note that this doesn't
@@ -236,13 +236,13 @@ func (wbsa *Aggregator) clearStates() {
 func (wbsa *Aggregator) BuildAndUpdate() {
 	wbsa.mu.Lock()
 	defer wbsa.mu.Unlock()
-	wbsa.BuildAndUpdateLocked()
+	wbsa.buildAndUpdateLocked()
 }
 
 // BuildAndUpdateLocked combines the sub-state from each sub-balancer into one
 // state, and update it to parent ClientConn - assuming that the lock on
 // wbsa.mu is already in place
-func (wbsa *Aggregator) BuildAndUpdateLocked() {
+func (wbsa *Aggregator) buildAndUpdateLocked() {
 	if !wbsa.started {
 		return
 	}
