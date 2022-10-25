@@ -124,6 +124,8 @@ func (wbsa *Aggregator) Add(id string, weight uint32) {
 		stateToAggregate: connectivity.Connecting,
 	}
 	wbsa.state = wbsa.csEvltr.RecordTransition(connectivity.Shutdown, connectivity.Connecting)
+	// Call BuildAndUpdate to update picker state
+	wbsa.cc.UpdateState(wbsa.build())
 }
 
 // Remove removes the sub-balancer state. Future updates from this sub-balancer,
@@ -139,6 +141,8 @@ func (wbsa *Aggregator) Remove(id string) {
 	// Remove id and picker from picker map. This also results in future updates
 	// for this ID to be ignored.
 	delete(wbsa.idToPickerState, id)
+	// Call BuildAndUpdate to update picker state
+	wbsa.cc.UpdateState(wbsa.build())
 }
 
 // UpdateWeight updates the weight for the given id. Note that this doesn't
@@ -183,7 +187,6 @@ func (wbsa *Aggregator) UpdateState(id string, newState balancer.State) {
 	wbsa.mu.Lock()
 	defer wbsa.mu.Unlock()
 	oldState, ok := wbsa.idToPickerState[id]
-
 	if !ok {
 		// All state starts with an entry in pickStateMap. If ID is not in map,
 		// it's either removed, or never existed.

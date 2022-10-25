@@ -1267,6 +1267,7 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	balFuncs := stub.BalancerFuncs{
 		UpdateClientConnState: func(bd *stub.BalancerData, s balancer.ClientConnState) error {
 			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.TransientFailure, Picker: nil})
+			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Connecting, Picker: nil})
 			bd.ClientConn.UpdateState(balancer.State{ConnectivityState: connectivity.Ready, Picker: nil})
 			return nil
 		},
@@ -1298,8 +1299,10 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 		t.Fatalf("failed to update ClientConn state: %v", err)
 	}
 
-	// Verify that the only state update is the second one called by the child.
-	if len(cc.states) != 1 || cc.states[0].ConnectivityState != connectivity.Ready {
-		t.Fatalf("cc.states = %v; want [connectivity.Ready]", cc.states)
+	// Verify that the only 2 state updates are 1.to connectivity.Connecting when
+	// the sub-balancer is first added and 2. to connectivity.Ready which is the
+	// third one called by the child
+	if len(cc.states) != 2 || cc.states[1].ConnectivityState != connectivity.Ready {
+		t.Fatalf("cc.states = %v; want [connectivity.Connecting, connectivity.Ready]", cc.states)
 	}
 }
