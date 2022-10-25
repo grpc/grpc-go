@@ -58,7 +58,6 @@ type Aggregator struct {
 	newWRR func() wrr.WRR
 
 	csEvltr *balancer.ConnectivityStateEvaluator
-	state   connectivity.State
 
 	mu sync.Mutex
 	// If started is false, no updates should be sent to the parent cc. A closed
@@ -85,7 +84,6 @@ func New(cc balancer.ClientConn, logger *grpclog.PrefixLogger, newWRR func() wrr
 		logger:          logger,
 		newWRR:          newWRR,
 		csEvltr:         &balancer.ConnectivityStateEvaluator{},
-		state:           connectivity.Connecting,
 		idToPickerState: make(map[string]*weightedPickerState),
 	}
 }
@@ -123,9 +121,10 @@ func (wbsa *Aggregator) Add(id string, weight uint32) {
 		},
 		stateToAggregate: connectivity.Connecting,
 	}
-	wbsa.state = wbsa.csEvltr.RecordTransition(connectivity.Shutdown, connectivity.Connecting)
-	// Call BuildAndUpdate to update picker state
-	wbsa.cc.UpdateState(wbsa.build())
+	// Record transition to connectivity.Connecting
+	wbsa.csEvltr.RecordTransition(connectivity.Shutdown, connectivity.Connecting)
+	// Call BuildAndUpdateLocked to update picker state
+	wbsa.BuildAndUpdateLocked()
 }
 
 // Remove removes the sub-balancer state. Future updates from this sub-balancer,
@@ -136,13 +135,14 @@ func (wbsa *Aggregator) Remove(id string) {
 	if _, ok := wbsa.idToPickerState[id]; !ok {
 		return
 	}
-	// Record transition for picker to connectivity.Shutdown
-	wbsa.state = wbsa.csEvltr.RecordTransition(wbsa.idToPickerState[id].stateToAggregate, connectivity.Shutdown)
+	// Record transition for picker to connectivity.Shutdown to decrement counter
+	// for the picker's previous state
+	wbsa.csEvltr.RecordTransition(wbsa.idToPickerState[id].stateToAggregate, connectivity.Shutdown)
 	// Remove id and picker from picker map. This also results in future updates
 	// for this ID to be ignored.
 	delete(wbsa.idToPickerState, id)
-	// Call BuildAndUpdate to update picker state
-	wbsa.cc.UpdateState(wbsa.build())
+	// Call BuildAndUpdateLocked to update picker state
+	wbsa.BuildAndUpdateLocked()
 }
 
 // UpdateWeight updates the weight for the given id. Note that this doesn't
@@ -192,7 +192,8 @@ func (wbsa *Aggregator) UpdateState(id string, newState balancer.State) {
 		// it's either removed, or never existed.
 		return
 	}
-	wbsa.state = wbsa.csEvltr.RecordTransition(oldState.stateToAggregate, newState.ConnectivityState)
+	// Record Transition from old state to new state
+	wbsa.csEvltr.RecordTransition(oldState.stateToAggregate, newState.ConnectivityState)
 	if !(oldState.state.ConnectivityState == connectivity.TransientFailure && newState.ConnectivityState == connectivity.Connecting) {
 		// If old state is TransientFailure, and new state is Connecting, don't
 		// update the state, to prevent the aggregated state from being always
@@ -235,6 +236,13 @@ func (wbsa *Aggregator) clearStates() {
 func (wbsa *Aggregator) BuildAndUpdate() {
 	wbsa.mu.Lock()
 	defer wbsa.mu.Unlock()
+	wbsa.BuildAndUpdateLocked()
+}
+
+// BuildAndUpdateLocked combines the sub-state from each sub-balancer into one
+// state, and update it to parent ClientConn - assuming that the lock on
+// wbsa.mu is already in place
+func (wbsa *Aggregator) BuildAndUpdateLocked() {
 	if !wbsa.started {
 		return
 	}
@@ -257,10 +265,11 @@ func (wbsa *Aggregator) build() balancer.State {
 	// Make sure picker's return error is consistent with the aggregatedState.
 	pickers := make([]weightedPickerState, 0, len(wbsa.idToPickerState))
 
-	switch wbsa.state {
+	aggState := wbsa.csEvltr.CurrentState()
+	switch aggState {
 	case connectivity.Connecting:
 		return balancer.State{
-			ConnectivityState: wbsa.state,
+			ConnectivityState: aggState,
 			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable)}
 	case connectivity.TransientFailure:
 		for _, ps := range wbsa.idToPickerState {
@@ -275,7 +284,7 @@ func (wbsa *Aggregator) build() balancer.State {
 			}
 		}
 	}
-	return balancer.State{ConnectivityState: wbsa.state, Picker: newWeightedPickerGroup(pickers, wbsa.newWRR)}
+	return balancer.State{ConnectivityState: aggState, Picker: newWeightedPickerGroup(pickers, wbsa.newWRR)}
 }
 
 type weightedPickerGroup struct {

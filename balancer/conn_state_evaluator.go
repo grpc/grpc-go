@@ -55,7 +55,10 @@ func (cse *ConnectivityStateEvaluator) RecordTransition(oldState, newState conne
 			cse.numIdle += updateVal
 		}
 	}
+	return cse.CurrentState()
+}
 
+func (cse *ConnectivityStateEvaluator) CurrentState() connectivity.State {
 	// Evaluate.
 	if cse.numReady > 0 {
 		return connectivity.Ready
