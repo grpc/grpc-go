@@ -240,7 +240,6 @@ func initBalancerGroupForCachingTest(t *testing.T) (*weightedaggregator.Aggregat
 
 	gator.Remove(testBalancerIDs[1])
 	bg.Remove(testBalancerIDs[1])
-	gator.BuildAndUpdate()
 	// Don't wait for SubConns to be removed after close, because they are only
 	// removed after close timeout.
 	for i := 0; i < 10; i++ {
