@@ -121,9 +121,8 @@ func (wbsa *Aggregator) Add(id string, weight uint32) {
 		},
 		stateToAggregate: connectivity.Connecting,
 	}
-	// Record transition to connectivity.Connecting
 	wbsa.csEvltr.RecordTransition(connectivity.Shutdown, connectivity.Connecting)
-	// Call buildAndUpdateLocked to update picker state
+
 	wbsa.buildAndUpdateLocked()
 }
 
@@ -135,13 +134,13 @@ func (wbsa *Aggregator) Remove(id string) {
 	if _, ok := wbsa.idToPickerState[id]; !ok {
 		return
 	}
-	// Record transition for picker to connectivity.Shutdown to decrement counter
-	// for the picker's previous state
+	// Setting the state of the deleted sub-balancer to Shutdown will get csEvltr
+	// to remove the previous state for any aggregated state evaluations.
+	// transitions to and from connectivity.Shutdown are ignored by csEvltr.
 	wbsa.csEvltr.RecordTransition(wbsa.idToPickerState[id].stateToAggregate, connectivity.Shutdown)
 	// Remove id and picker from picker map. This also results in future updates
 	// for this ID to be ignored.
 	delete(wbsa.idToPickerState, id)
-	// Call buildAndUpdateLocked to update picker state
 	wbsa.buildAndUpdateLocked()
 }
 
@@ -192,8 +191,9 @@ func (wbsa *Aggregator) UpdateState(id string, newState balancer.State) {
 		// it's either removed, or never existed.
 		return
 	}
-	// Record Transition from old state to new state
+
 	wbsa.csEvltr.RecordTransition(oldState.stateToAggregate, newState.ConnectivityState)
+
 	if !(oldState.state.ConnectivityState == connectivity.TransientFailure && newState.ConnectivityState == connectivity.Connecting) {
 		// If old state is TransientFailure, and new state is Connecting, don't
 		// update the state, to prevent the aggregated state from being always
@@ -239,9 +239,10 @@ func (wbsa *Aggregator) BuildAndUpdate() {
 	wbsa.buildAndUpdateLocked()
 }
 
-// buildAndUpdateLocked combines the sub-state from each sub-balancer into one
-// state, and update it to parent ClientConn - assuming that the lock on
-// wbsa.mu is already in place
+// buildAndUpdateLocked aggregates the connectivity states of the sub-balancers,
+// builds a new picker and sends an update to the parent ClientConn.
+//
+// Caller must hold wbsa.mu.
 func (wbsa *Aggregator) buildAndUpdateLocked() {
 	if !wbsa.started {
 		return
@@ -265,26 +266,30 @@ func (wbsa *Aggregator) build() balancer.State {
 	// Make sure picker's return error is consistent with the aggregatedState.
 	pickers := make([]weightedPickerState, 0, len(wbsa.idToPickerState))
 
-	aggState := wbsa.csEvltr.CurrentState()
-	switch aggState {
+	switch aggState := wbsa.csEvltr.CurrentState(); aggState {
 	case connectivity.Connecting:
 		return balancer.State{
 			ConnectivityState: aggState,
 			Picker:            base.NewErrPicker(balancer.ErrNoSubConnAvailable)}
 	case connectivity.TransientFailure:
+		// this means that all sub-balancers are now in TransientFailure.
 		for _, ps := range wbsa.idToPickerState {
-			if ps.stateToAggregate == connectivity.TransientFailure {
-				pickers = append(pickers, *ps)
-			}
+			pickers = append(pickers, *ps)
 		}
+		return balancer.State{
+			ConnectivityState: aggState,
+			Picker:            newWeightedPickerGroup(pickers, wbsa.newWRR)}
 	default:
 		for _, ps := range wbsa.idToPickerState {
 			if ps.stateToAggregate == connectivity.Ready {
 				pickers = append(pickers, *ps)
 			}
 		}
+		return balancer.State{
+			ConnectivityState: aggState,
+			Picker:            newWeightedPickerGroup(pickers, wbsa.newWRR)}
 	}
-	return balancer.State{ConnectivityState: aggState, Picker: newWeightedPickerGroup(pickers, wbsa.newWRR)}
+
 }
 
 type weightedPickerGroup struct {

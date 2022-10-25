@@ -143,8 +143,6 @@ func (b *weightedTargetBalancer) UpdateClientConnState(s balancer.ClientConnStat
 
 	b.targets = newConfig.Targets
 
-	b.stateAggregator.BuildAndUpdate()
-
 	return nil
 }
 
