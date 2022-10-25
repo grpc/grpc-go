@@ -239,7 +239,7 @@ func (wbsa *Aggregator) BuildAndUpdate() {
 	wbsa.buildAndUpdateLocked()
 }
 
-// BuildAndUpdateLocked combines the sub-state from each sub-balancer into one
+// buildAndUpdateLocked combines the sub-state from each sub-balancer into one
 // state, and update it to parent ClientConn - assuming that the lock on
 // wbsa.mu is already in place
 func (wbsa *Aggregator) buildAndUpdateLocked() {

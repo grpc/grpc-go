@@ -58,6 +58,7 @@ func (cse *ConnectivityStateEvaluator) RecordTransition(oldState, newState conne
 	return cse.CurrentState()
 }
 
+// CurrentState returns the current aggregate conn state by evaluating the counters
 func (cse *ConnectivityStateEvaluator) CurrentState() connectivity.State {
 	// Evaluate.
 	if cse.numReady > 0 {
