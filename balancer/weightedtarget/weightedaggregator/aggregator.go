@@ -88,7 +88,7 @@ func New(cc balancer.ClientConn, logger *grpclog.PrefixLogger, newWRR func() wrr
 	}
 }
 
-// Start starts the aggregator. It can be called after Close to restart the
+// Start starts the aggregator. It can be called after Stop to restart the
 // aggretator.
 func (wbsa *Aggregator) Start() {
 	wbsa.mu.Lock()
@@ -96,7 +96,7 @@ func (wbsa *Aggregator) Start() {
 	wbsa.started = true
 }
 
-// Stop stops the aggregator. When the aggregator is closed, it won't call
+// Stop stops the aggregator. When the aggregator is stopped, it won't call
 // parent ClientConn to update balancer state.
 func (wbsa *Aggregator) Stop() {
 	wbsa.mu.Lock()
@@ -203,18 +203,7 @@ func (wbsa *Aggregator) UpdateState(id string, newState balancer.State) {
 	}
 	oldState.state = newState
 
-	if !wbsa.started {
-		return
-	}
-
-	if wbsa.pauseUpdateState {
-		// If updates are paused, do not call UpdateState, but remember that we
-		// need to call it when they are resumed.
-		wbsa.needUpdateStateOnResume = true
-		return
-	}
-
-	wbsa.cc.UpdateState(wbsa.build())
+	wbsa.buildAndUpdateLocked()
 }
 
 // clearState Reset everything to init state (Connecting) but keep the entry in
@@ -229,14 +218,6 @@ func (wbsa *Aggregator) clearStates() {
 		}
 		pState.stateToAggregate = connectivity.Connecting
 	}
-}
-
-// BuildAndUpdate combines the sub-state from each sub-balancer into one state,
-// and update it to parent ClientConn.
-func (wbsa *Aggregator) BuildAndUpdate() {
-	wbsa.mu.Lock()
-	defer wbsa.mu.Unlock()
-	wbsa.buildAndUpdateLocked()
 }
 
 // buildAndUpdateLocked aggregates the connectivity states of the sub-balancers,
