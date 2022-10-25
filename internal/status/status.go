@@ -31,10 +31,10 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // Status represents an RPC status code, message, and details.  It is immutable
@@ -84,7 +84,7 @@ func (s *Status) Message() string {
 	return s.s.Message
 }
 
-// Proto returns s's status as an spb.Status proto message.
+// Proto returns s's status as a spb.Status proto message.
 func (s *Status) Proto() *spb.Status {
 	if s == nil {
 		return nil
@@ -109,11 +109,11 @@ func (s *Status) WithDetails(details ...proto.Message) (*Status, error) {
 	// s.Code() != OK implies that s.Proto() != nil.
 	p := s.Proto()
 	for _, detail := range details {
-		any, err := ptypes.MarshalAny(detail)
+		a, err := anypb.New(detail)
 		if err != nil {
 			return nil, err
 		}
-		p.Details = append(p.Details, any)
+		p.Details = append(p.Details, a)
 	}
 	return &Status{s: p}, nil
 }
@@ -125,13 +125,13 @@ func (s *Status) Details() []interface{} {
 		return nil
 	}
 	details := make([]interface{}, 0, len(s.s.Details))
-	for _, any := range s.s.Details {
-		detail := &ptypes.DynamicAny{}
-		if err := ptypes.UnmarshalAny(any, detail); err != nil {
+	for _, a := range s.s.Details {
+		detail, err := a.UnmarshalNew()
+		if err != nil {
 			details = append(details, err)
 			continue
 		}
-		details = append(details, detail.Message)
+		details = append(details, detail)
 	}
 	return details
 }
@@ -156,7 +156,7 @@ func (e *Error) GRPCStatus() *Status {
 }
 
 // Is implements future error.Is functionality.
-// A Error is equivalent if the code and message are identical.
+// An Error is equivalent if the code and message are identical.
 func (e *Error) Is(target error) bool {
 	tse, ok := target.(*Error)
 	if !ok {

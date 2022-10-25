@@ -24,8 +24,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes"
 	apb "github.com/golang/protobuf/ptypes/any"
 	dpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
@@ -35,6 +33,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/status"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/runtime/protoimpl"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type s struct {
@@ -311,11 +312,12 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 						ResourceType: "book",
 						ResourceName: "projects/1234/books/5678",
 						Owner:        "User",
-					}),
+					},
+					),
 				},
 			}),
 			[]interface{}{
-				errors.New(`message type url "" is invalid`),
+				protoimpl.X.NewError("invalid empty type URL"),
 				&epb.ResourceInfo{
 					ResourceType: "book",
 					ResourceName: "projects/1234/books/5678",
@@ -348,11 +350,11 @@ func str(s *Status) string {
 
 // mustMarshalAny converts a protobuf message to an any.
 func mustMarshalAny(msg proto.Message) *apb.Any {
-	any, err := ptypes.MarshalAny(msg)
+	a, err := anypb.New(msg)
 	if err != nil {
 		panic(fmt.Sprintf("ptypes.MarshalAny(%+v) failed: %v", msg, err))
 	}
-	return any
+	return a
 }
 
 func (s) TestFromContextError(t *testing.T) {
