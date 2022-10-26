@@ -563,7 +563,7 @@ func (l *loopyWriter) run() (err error) {
 			}
 			if gosched {
 				gosched = false
-				if l.framer.writer.offset < minBatchSize {
+				if l.framer.writer.Buffered() < minBatchSize {
 					runtime.Gosched()
 					continue hasdata
 				}

@@ -234,11 +234,10 @@ func newJoinServerOption(opts ...ServerOption) ServerOption {
 }
 
 // WriteBufferSize determines how much data can be batched before doing a write
-// on the wire. The corresponding memory allocation for this buffer will be
-// twice the size to keep syscalls low. The default value for this buffer is
-// 32KB. Zero or negative values will disable the write buffer such that each
-// write will be on underlying connection.
-// Note: A Send call may not directly translate to a write.
+// on the wire. The default value for this buffer is 32KB.  Zero or negative
+// values will disable the write buffer such that each write will be on
+// underlying connection. Note: A Send call may not directly translate to a
+// write.
 func WriteBufferSize(s int) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.writeBufferSize = s

@@ -309,55 +309,26 @@ func decodeGrpcMessageUnchecked(msg string) string {
 	return sb.String()
 }
 
-type bufWriter struct {
-	buf       []byte
-	offset    int
-	batchSize int
-	conn      net.Conn
-	err       error
+type writer interface {
+	io.Writer
+	Buffered() int
+	Flush() error
 }
 
-func newBufWriter(conn net.Conn, batchSize int) *bufWriter {
-	return &bufWriter{
-		buf:       make([]byte, batchSize*2),
-		batchSize: batchSize,
-		conn:      conn,
-	}
+type connwriter struct {
+	net.Conn
 }
 
-func (w *bufWriter) Write(b []byte) (n int, err error) {
-	if w.err != nil {
-		return 0, w.err
-	}
-	if w.batchSize == 0 { // Buffer has been disabled.
-		return w.conn.Write(b)
-	}
-	for len(b) > 0 {
-		nn := copy(w.buf[w.offset:], b)
-		b = b[nn:]
-		w.offset += nn
-		n += nn
-		if w.offset >= w.batchSize {
-			err = w.Flush()
-		}
-	}
-	return n, err
+func (c connwriter) Buffered() int {
+	return 0
 }
 
-func (w *bufWriter) Flush() error {
-	if w.err != nil {
-		return w.err
-	}
-	if w.offset == 0 {
-		return nil
-	}
-	_, w.err = w.conn.Write(w.buf[:w.offset])
-	w.offset = 0
-	return w.err
+func (c connwriter) Flush() error {
+	return nil
 }
 
 type framer struct {
-	writer *bufWriter
+	writer writer
 	fr     *http2.Framer
 }
 
@@ -369,7 +340,10 @@ func newFramer(conn net.Conn, writeBufferSize, readBufferSize int, maxHeaderList
 	if readBufferSize > 0 {
 		r = bufio.NewReaderSize(r, readBufferSize)
 	}
-	w := newBufWriter(conn, writeBufferSize)
+	var w writer = connwriter{conn}
+	if writeBufferSize > 0 {
+		w = bufio.NewWriterSize(conn, writeBufferSize)
+	}
 	f := &framer{
 		writer: w,
 		fr:     http2.NewFramer(w, r),
