@@ -27,6 +27,7 @@ package googledirectpath
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	"google.golang.org/grpc"
@@ -49,6 +50,7 @@ import (
 const (
 	c2pScheme             = "google-c2p"
 	c2pExperimentalScheme = "google-c2p-experimental"
+	c2pAuthority          = "traffic-director-c2p.xds.googleapis.com"
 
 	tdURL          = "dns:///directpath-pa.googleapis.com"
 	httpReqTimeout = 10 * time.Second
@@ -120,7 +122,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		XDSServer: serverConfig,
 		ClientDefaultListenerResourceNameTemplate: "%s",
 		Authorities: map[string]*bootstrap.Authority{
-			"traffic-director-c2p.xds.googleapis.com": {
+			c2pAuthority: {
 				XDSServer: serverConfig,
 			},
 		},
@@ -135,6 +137,15 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 
 	// Create and return an xDS resolver.
 	t.Scheme = xdsName
+	if envconfig.XDSFederation {
+		t = resolver.Target{
+			URL: url.URL{
+				Scheme: xdsName,
+				Host:   c2pAuthority,
+				Path:   t.URL.Path,
+			},
+		}
+	}
 	xdsR, err := resolver.Get(xdsName).Build(t, cc, opts)
 	if err != nil {
 		xdsC.Close()
