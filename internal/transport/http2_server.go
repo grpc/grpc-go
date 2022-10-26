@@ -27,6 +27,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -454,6 +455,10 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			rst:            !frame.StreamEnded(),
 		})
 		return false
+	}
+
+	if encodings := mdata["grpc-accept-encoding"]; len(encodings) != 0 {
+		s.clientAdvertisedCompressors = strings.Join(encodings, ",")
 	}
 
 	if !isGRPC || headerError {

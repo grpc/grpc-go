@@ -270,6 +270,10 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
+		err = s.SetSendCompress("gzip")
+		if err != nil {
+			t.Error(err)
+		}
 
 		md := metadata.Pairs("custom-header", "Another custom header value")
 		err = s.SendHeader(md)
@@ -286,6 +290,10 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 		if err == nil {
 			t.Error("expected second SendHeader call to fail")
 		}
+		err = s.SetSendCompress("snappy")
+		if err == nil {
+			t.Error("expected second SetSendCompress call to fail")
+		}
 
 		st.bodyw.Close() // no body
 		st.ht.WriteStatus(s, status.New(codes.OK, ""))
@@ -299,6 +307,7 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 		"Content-Type":  {"application/grpc"},
 		"Trailer":       {"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
 		"Custom-Header": {"Custom header value", "Another custom header value"},
+		"Grpc-Encoding": {"gzip"},
 	}
 	wantTrailer := http.Header{
 		"Grpc-Status":    {"0"},

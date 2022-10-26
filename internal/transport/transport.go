@@ -253,6 +253,9 @@ type Stream struct {
 	fc           *inFlow
 	wq           *writeQuota
 
+	// Holds compressor names passed in grpc-accept-encoding metadata from the
+	// client. This is empty for the client side Stream.
+	clientAdvertisedCompressors string
 	// Callback to state application's intentions to read data. This
 	// is used to adjust flow control, if needed.
 	requestRead func(int)
@@ -341,8 +344,24 @@ func (s *Stream) RecvCompress() string {
 }
 
 // SetSendCompress sets the compression algorithm to the stream.
-func (s *Stream) SetSendCompress(str string) {
+func (s *Stream) SetSendCompress(str string) error {
+	if s.isHeaderSent() || s.getState() == streamDone {
+		return status.Error(codes.Internal, "transport: set send compressor called after headers sent or stream done")
+	}
+
 	s.sendCompress = str
+	return nil
+}
+
+// SendCompress returns the send compressor name.
+func (s *Stream) SendCompress() string {
+	return s.sendCompress
+}
+
+// ClientAdvertisedCompressors returns the advertised compressor names by the
+// client.
+func (s *Stream) ClientAdvertisedCompressors() string {
+	return s.clientAdvertisedCompressors
 }
 
 // Done returns a channel which is closed when it receives the final status
