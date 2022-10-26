@@ -449,9 +449,9 @@ func (bg *BalancerGroup) connect(sb *subBalancerWrapper) {
 
 // Following are actions from the parent grpc.ClientConn, forward to sub-balancers.
 
-// UpdateSubConnState handles the state for the subconn. It finds the
-// corresponding balancer and forwards the update.
-func (bg *BalancerGroup) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+// updateSubConnState handles the state for the subconn. It finds the
+// corresponding balancer and forwards the update to cb.
+func (bg *BalancerGroup) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState, cb func(balancer.SubConnState)) {
 	bg.incomingMu.Lock()
 	config, ok := bg.scToSubBalancer[sc]
 	if !ok {
@@ -465,8 +465,18 @@ func (bg *BalancerGroup) UpdateSubConnState(sc balancer.SubConn, state balancer.
 	bg.incomingMu.Unlock()
 
 	bg.outgoingMu.Lock()
-	config.updateSubConnState(sc, state)
+	if cb != nil {
+		cb(state)
+	} else {
+		config.updateSubConnState(sc, state)
+	}
 	bg.outgoingMu.Unlock()
+}
+
+// UpdateSubConnState handles the state for the subconn. It finds the
+// corresponding balancer and forwards the update.
+func (bg *BalancerGroup) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+	bg.updateSubConnState(sc, state, nil)
 }
 
 // UpdateClientConnState handles ClientState (including balancer config and
@@ -507,6 +517,9 @@ func (bg *BalancerGroup) newSubConn(config *subBalancerWrapper, addrs []resolver
 		bg.incomingMu.Unlock()
 		return nil, fmt.Errorf("NewSubConn is called after balancer group is closed")
 	}
+	var sc balancer.SubConn
+	oldListener := opts.StateListener
+	opts.StateListener = func(state balancer.SubConnState) { bg.updateSubConnState(sc, state, oldListener) }
 	sc, err := bg.cc.NewSubConn(addrs, opts)
 	if err != nil {
 		bg.incomingMu.Unlock()

@@ -329,6 +329,19 @@ type wrappedPriorityBuilder struct {
 	lbCfgCh   chan serviceconfig.LoadBalancingConfig
 }
 
+// wpbCCWrapper wraps a ClientConn and intercepts NewSubConn calls so the
+// wrapped priority balancer can intercept SubConn state updates.
+type wpbCCWrapper struct {
+	balancer.ClientConn
+	b *wrappedPriorityBalancer
+}
+
+func (c *wpbCCWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (sc balancer.SubConn, err error) {
+	oldListener := opts.StateListener
+	opts.StateListener = func(state balancer.SubConnState) { c.b.updateSubConnState(sc, state, oldListener) }
+	return c.ClientConn.NewSubConn(addrs, opts)
+}
+
 func newWrappedPriorityBuilder(b balancer.Builder) *wrappedPriorityBuilder {
 	return &wrappedPriorityBuilder{
 		scStateCh:    buffer.NewUnbounded(),
@@ -339,12 +352,13 @@ func newWrappedPriorityBuilder(b balancer.Builder) *wrappedPriorityBuilder {
 }
 
 func (b *wrappedPriorityBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
-	priorityLB := b.Builder.Build(cc, opts)
-	return &wrappedPriorityBalancer{
-		Balancer:  priorityLB,
+	wpb := &wrappedPriorityBalancer{
 		scStateCh: b.scStateCh,
 		lbCfgCh:   b.lbCfgCh,
 	}
+	priorityLB := b.Builder.Build(&wpbCCWrapper{cc, wpb}, opts)
+	wpb.Balancer = priorityLB
+	return wpb
 }
 
 type wrappedPriorityBalancer struct {
@@ -353,9 +367,18 @@ type wrappedPriorityBalancer struct {
 	lbCfgCh   chan serviceconfig.LoadBalancingConfig
 }
 
+// UpdateSubConnState does nothing, as we ensure all SubConns created by this
+// balancer have a StateListener set.
 func (b *wrappedPriorityBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.SubConnState) {
+}
+
+func (b *wrappedPriorityBalancer) updateSubConnState(sc balancer.SubConn, state balancer.SubConnState, cb func(balancer.SubConnState)) {
 	b.scStateCh.Put(state)
-	b.Balancer.UpdateSubConnState(sc, state)
+	if cb != nil {
+		cb(state)
+	} else {
+		b.Balancer.UpdateSubConnState(sc, state)
+	}
 }
 
 func (b *wrappedPriorityBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {

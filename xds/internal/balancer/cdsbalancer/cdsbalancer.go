@@ -580,6 +580,8 @@ func (ccw *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubC
 	for i, addr := range addrs {
 		newAddrs[i] = xdsinternal.SetHandshakeInfo(addr, ccw.xdsHI)
 	}
+	// No need to override opts.StateListener; just forward all calls to the
+	// child that created the SubConn.
 	return ccw.ClientConn.NewSubConn(newAddrs, opts)
 }
 

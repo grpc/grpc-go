@@ -125,9 +125,18 @@ func (ccb *ccBalancerWrapper) updateClientConnState(ccs *balancer.ClientConnStat
 func (ccb *ccBalancerWrapper) updateSubConnState(sc balancer.SubConn, s connectivity.State, err error) {
 	ccb.mu.Lock()
 	ccb.serializer.Schedule(func(_ context.Context) {
-		ccb.balancer.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: s, ConnectionError: err})
+		// Even though it is optional for balancers, gracefulswitch ensures
+		// opts.StateListener is set, so this cannot ever be nil.
+		sc.(*acBalancerWrapper).stateListener(balancer.SubConnState{ConnectivityState: s, ConnectionError: err})
 	})
 	ccb.mu.Unlock()
+}
+
+func (ccb *ccBalancerWrapper) handleExitIdle() {
+	if ccb.cc.GetState() != connectivity.Idle {
+		return
+	}
+	ccb.balancer.ExitIdle()
 }
 
 func (ccb *ccBalancerWrapper) resolverError(err error) {
@@ -300,7 +309,11 @@ func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer
 		channelz.Warningf(logger, ccb.cc.channelzID, "acBalancerWrapper: NewSubConn: failed to newAddrConn: %v", err)
 		return nil, err
 	}
-	acbw := &acBalancerWrapper{ac: ac, producers: make(map[balancer.ProducerBuilder]*refCountedProducer)}
+	acbw := &acBalancerWrapper{
+		ac:            ac,
+		producers:     make(map[balancer.ProducerBuilder]*refCountedProducer),
+		stateListener: opts.StateListener,
+	}
 	ac.acbw = acbw
 	return acbw, nil
 }
@@ -366,7 +379,8 @@ func (ccb *ccBalancerWrapper) Target() string {
 // acBalancerWrapper is a wrapper on top of ac for balancers.
 // It implements balancer.SubConn interface.
 type acBalancerWrapper struct {
-	ac *addrConn // read-only
+	ac            *addrConn // read-only
+	stateListener func(balancer.SubConnState)
 
 	mu        sync.Mutex
 	producers map[balancer.ProducerBuilder]*refCountedProducer

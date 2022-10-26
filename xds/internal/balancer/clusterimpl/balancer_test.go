@@ -148,7 +148,7 @@ func (s) TestDropByCategory(t *testing.T) {
 				}
 				continue
 			}
-			if err != nil || !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			if err != nil || gotSCSt.SubConn != sc1 {
 				return fmt.Errorf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
 			}
 			if gotSCSt.Done != nil {
@@ -215,7 +215,7 @@ func (s) TestDropByCategory(t *testing.T) {
 				}
 				continue
 			}
-			if err != nil || !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			if err != nil || gotSCSt.SubConn != sc1 {
 				return fmt.Errorf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
 			}
 			if gotSCSt.Done != nil {
@@ -621,14 +621,14 @@ func (s) TestLoadReporting(t *testing.T) {
 	if err := cc.WaitForPicker(ctx, func(p balancer.Picker) error {
 		for i := 0; i < successCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
-			if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			if gotSCSt.SubConn != sc1 {
 				return fmt.Errorf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
 			}
 			gotSCSt.Done(balancer.DoneInfo{})
 		}
 		for i := 0; i < errorCount; i++ {
 			gotSCSt, err := p.Pick(balancer.PickInfo{})
-			if !cmp.Equal(gotSCSt.SubConn, sc1, cmp.AllowUnexported(testutils.TestSubConn{})) {
+			if gotSCSt.SubConn != sc1 {
 				return fmt.Errorf("picker.Pick, got %v, %v, want SubConn=%v", gotSCSt, err, sc1)
 			}
 			gotSCSt.Done(balancer.DoneInfo{Err: fmt.Errorf("error")})

@@ -120,7 +120,7 @@ func testPick(t *testing.T, p balancer.Picker, info balancer.PickInfo, wantSC ba
 		if fmt.Sprint(err) != fmt.Sprint(wantErr) {
 			t.Fatalf("picker.Pick(%+v), got error %v, want %v", info, err, wantErr)
 		}
-		if !cmp.Equal(gotSCSt.SubConn, wantSC, cmp.AllowUnexported(testutils.TestSubConn{})) {
+		if gotSCSt.SubConn != wantSC {
 			t.Fatalf("picker.Pick(%+v), got %v, want SubConn=%v", info, gotSCSt, wantSC)
 		}
 	}

@@ -88,6 +88,7 @@ func (bb) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Bal
 	b.resourceWatcher = newResourceResolver(b, b.logger)
 	b.cc = &ccWrapper{
 		ClientConn:      cc,
+		b:               b,
 		resourceWatcher: b.resourceWatcher,
 	}
 
@@ -398,12 +399,26 @@ func (b *clusterResolverBalancer) ExitIdle() {
 }
 
 // ccWrapper overrides ResolveNow(), so that re-resolution from the child
-// policies will trigger the DNS resolver in cluster_resolver balancer.
+// policies will trigger the DNS resolver in cluster_resolver balancer.  It
+// also intercepts NewSubConn calls in case children don't set the
+// StateListener, to allow redirection to happen via this cluster_resolver
+// balancer.
 type ccWrapper struct {
 	balancer.ClientConn
+	b               *clusterResolverBalancer
 	resourceWatcher *resourceResolver
 }
 
 func (c *ccWrapper) ResolveNow(resolver.ResolveNowOptions) {
 	c.resourceWatcher.resolveNow()
+}
+
+func (c *ccWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (sc balancer.SubConn, err error) {
+	if opts.StateListener == nil {
+		// If already set, just allow updates to be sent directly to the
+		// child's listener.  Otherwise, we are responsible for forwarding the
+		// update we'll receive to the proper child.
+		opts.StateListener = func(state balancer.SubConnState) { c.b.UpdateSubConnState(sc, state) }
+	}
+	return c.ClientConn.NewSubConn(addrs, opts)
 }

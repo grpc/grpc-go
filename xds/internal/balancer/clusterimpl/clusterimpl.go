@@ -279,7 +279,7 @@ func (b *clusterImplBalancer) ResolverError(err error) {
 	b.child.ResolverError(err)
 }
 
-func (b *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
+func (b *clusterImplBalancer) updateSubConnState(sc balancer.SubConn, s balancer.SubConnState, cb func(balancer.SubConnState)) {
 	if b.closed.HasFired() {
 		b.logger.Warningf("xds: received subconn state change {%+v, %+v} after clusterImplBalancer was closed", sc, s)
 		return
@@ -305,7 +305,15 @@ func (b *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer
 		}
 	}
 	b.scWrappersMu.Unlock()
-	b.child.UpdateSubConnState(sc, s)
+	if cb != nil {
+		cb(s)
+	} else {
+		b.child.UpdateSubConnState(sc, s)
+	}
+}
+
+func (b *clusterImplBalancer) UpdateSubConnState(sc balancer.SubConn, s balancer.SubConnState) {
+	b.updateSubConnState(sc, s, nil)
 }
 
 func (b *clusterImplBalancer) Close() {
@@ -378,6 +386,9 @@ func (b *clusterImplBalancer) NewSubConn(addrs []resolver.Address, opts balancer
 		newAddrs[i] = internal.SetXDSHandshakeClusterName(addr, clusterName)
 		lID = xdsinternal.GetLocalityID(newAddrs[i])
 	}
+	var sc balancer.SubConn
+	oldListener := opts.StateListener
+	opts.StateListener = func(state balancer.SubConnState) { b.updateSubConnState(sc, state, oldListener) }
 	sc, err := b.ClientConn.NewSubConn(newAddrs, opts)
 	if err != nil {
 		return nil, err
