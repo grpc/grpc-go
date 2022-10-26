@@ -31,14 +31,8 @@ func (cc *ClientConn) Invoke(ctx context.Context, method string, args, reply int
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)
 
-	var chainUnaryInts []UnaryClientInterceptor
-	for _, opt := range opts {
-		if unaryIntOpt, ok := opt.(UnaryClientInterceptorCallOption); ok {
-			chainUnaryInts = append(chainUnaryInts, unaryIntOpt.UnaryClientInterceptor)
-		}
-	}
-	if unaryInt := chainUnaryClientInterceptors(cc.dopts.unaryInt, chainUnaryInts); unaryInt != nil {
-		return unaryInt(ctx, method, args, reply, cc, invoke, opts...)
+	if cc.dopts.unaryInt != nil {
+		return cc.dopts.unaryInt(ctx, method, args, reply, cc, invoke, opts...)
 	}
 	return invoke(ctx, method, args, reply, cc, opts...)
 }
@@ -69,6 +63,16 @@ func Invoke(ctx context.Context, method string, args, reply interface{}, cc *Cli
 var unaryStreamDesc = &StreamDesc{ServerStreams: false, ClientStreams: false}
 
 func invoke(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, opts ...CallOption) error {
+	for i, opt := range opts {
+		if unaryIntOpt, ok := opt.(UnaryClientInterceptorCallOption); ok {
+			// filter out to be invoked interceptor.
+			fopts := make([]CallOption, 0, len(opts)-1)
+			fopts = append(append(fopts, opts[:i]...), opts[i+1:]...)
+
+			return unaryIntOpt.UnaryClientInterceptor(ctx, method, req, reply, cc, invoke, fopts...)
+		}
+	}
+
 	cs, err := newClientStream(ctx, unaryStreamDesc, cc, method, opts...)
 	if err != nil {
 		return err

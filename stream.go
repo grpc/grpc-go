@@ -156,14 +156,8 @@ func (cc *ClientConn) NewStream(ctx context.Context, desc *StreamDesc, method st
 	// configured as defaults from dial option as well as per-call options
 	opts = combine(cc.dopts.callOptions, opts)
 
-	var chainStreamInts []StreamClientInterceptor
-	for _, opt := range opts {
-		if streamIntOpt, ok := opt.(StreamClientInterceptorCallOption); ok {
-			chainStreamInts = append(chainStreamInts, streamIntOpt.StreamClientInterceptor)
-		}
-	}
-	if streamInt := chainStreamClientInterceptors(cc.dopts.streamInt, chainStreamInts); streamInt != nil {
-		return streamInt(ctx, desc, cc, method, newClientStream, opts...)
+	if cc.dopts.streamInt != nil {
+		return cc.dopts.streamInt(ctx, desc, cc, method, newClientStream, opts...)
 	}
 	return newClientStream(ctx, desc, cc, method, opts...)
 }
@@ -174,6 +168,16 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 }
 
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
+	for i, opt := range opts {
+		if streamIntOpt, ok := opt.(StreamClientInterceptorCallOption); ok {
+			// filter out to be invoked interceptor.
+			fopts := make([]CallOption, 0, len(opts)-1)
+			fopts = append(append(fopts, opts[:i]...), opts[i+1:]...)
+
+			return streamIntOpt.StreamClientInterceptor(ctx, desc, cc, method, newClientStream, fopts...)
+		}
+	}
+
 	if md, _, ok := metadata.FromOutgoingContextRaw(ctx); ok {
 		if err := imetadata.Validate(md); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
