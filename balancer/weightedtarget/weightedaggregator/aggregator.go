@@ -192,13 +192,12 @@ func (wbsa *Aggregator) UpdateState(id string, newState balancer.State) {
 		return
 	}
 
-	wbsa.csEvltr.RecordTransition(oldState.stateToAggregate, newState.ConnectivityState)
-
 	if !(oldState.state.ConnectivityState == connectivity.TransientFailure && newState.ConnectivityState == connectivity.Connecting) {
 		// If old state is TransientFailure, and new state is Connecting, don't
 		// update the state, to prevent the aggregated state from being always
 		// CONNECTING. Otherwise, stateToAggregate is the same as
 		// state.ConnectivityState.
+		wbsa.csEvltr.RecordTransition(oldState.stateToAggregate, newState.ConnectivityState)
 		oldState.stateToAggregate = newState.ConnectivityState
 	}
 	oldState.state = newState

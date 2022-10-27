@@ -1249,6 +1249,46 @@ func (s) TestInitialIdle(t *testing.T) {
 	}
 }
 
+// TestSubBalancerStateLazyUpdate covers the case that if the child reports a
+// transition from TF to Connection, the overall state will still be TF.
+func (s) TestSubBalancerStateLazyUpdate(t *testing.T) {
+	cc := &tcc{TestClientConn: testutils.NewTestClientConn(t)}
+
+	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
+	defer wtb.Close()
+
+	config, err := wtbParser.ParseConfig([]byte(`
+{
+  "targets": {
+    "cluster_1": {
+      "weight":1,
+      "childPolicy": [{"round_robin": ""}]
+    }
+  }
+}`))
+	if err != nil {
+		t.Fatalf("failed to parse balancer config: %v", err)
+	}
+
+	// Send the config, and an address with hierarchy path ["cluster_1"].
+	addr := resolver.Address{Addr: testBackendAddrStrs[0], Attributes: nil}
+	if err := wtb.UpdateClientConnState(balancer.ClientConnState{
+		ResolverState:  resolver.State{Addresses: []resolver.Address{hierarchy.Set(addr, []string{"cluster_1"})}},
+		BalancerConfig: config,
+	}); err != nil {
+		t.Fatalf("failed to update ClientConn state: %v", err)
+	}
+
+	sc := <-cc.NewSubConnCh
+	wtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.TransientFailure})
+	wtb.UpdateSubConnState(sc, balancer.SubConnState{ConnectivityState: connectivity.Connecting})
+
+	// Verify that the SubConnState update from TF to Connecting is ignored.
+	if len(cc.states) != 2 || cc.states[0].ConnectivityState != connectivity.Connecting || cc.states[1].ConnectivityState != connectivity.TransientFailure {
+		t.Fatalf("cc.states = %v; want [connectivity.Ready]", cc.states)
+	}
+}
+
 // tcc wraps a testutils.TestClientConn but stores all state transitions in a
 // slice.
 type tcc struct {
