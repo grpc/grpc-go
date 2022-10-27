@@ -170,7 +170,8 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
 	for i, opt := range opts {
 		if streamIntOpt, ok := opt.(StreamClientInterceptorCallOption); ok {
-			// filter out to be invoked interceptor.
+			// filter out to be invoked interceptor to restrict that a per-call
+			// interceptor sees only its successors, not itself and its predecessors
 			fopts := make([]CallOption, 0, len(opts)-1)
 			fopts = append(append(fopts, opts[:i]...), opts[i+1:]...)
 

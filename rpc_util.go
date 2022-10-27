@@ -522,11 +522,11 @@ func (o MaxRetryRPCBufferSizeCallOption) before(c *callInfo) error {
 }
 func (o MaxRetryRPCBufferSizeCallOption) after(c *callInfo, attempt *csAttempt) {}
 
-// CallUnaryClientInterceptor returns a CallOption that specifies the interceptor
+// PerRPCUnaryClientInterceptor returns a CallOption that specifies the interceptor
 // for unary RPCs. Interceptors are invoked in order they are passed to unary RPCs.
 //
 // CallOption interceptors are invoked after DialOption interceptors.
-func CallUnaryClientInterceptor(f UnaryClientInterceptor) CallOption {
+func PerRPCUnaryClientInterceptor(f UnaryClientInterceptor) CallOption {
 	return UnaryClientInterceptorCallOption{UnaryClientInterceptor: f}
 }
 
@@ -540,11 +540,11 @@ func (o UnaryClientInterceptorCallOption) before(c *callInfo) error { return nil
 
 func (o UnaryClientInterceptorCallOption) after(c *callInfo, attempt *csAttempt) {}
 
-// CallStreamClientInterceptor returns a CallOption that specifies the interceptor
+// PerRPCStreamClientInterceptor returns a CallOption that specifies the interceptor
 // for streaming RPCs. Interceptors are invoked in order they are passed to streaming RPCs.
 //
 // CallOption interceptors are invoked after DialOption interceptors.
-func CallStreamClientInterceptor(f StreamClientInterceptor) CallOption {
+func PerRPCStreamClientInterceptor(f StreamClientInterceptor) CallOption {
 	return StreamClientInterceptorCallOption{StreamClientInterceptor: f}
 }
 
