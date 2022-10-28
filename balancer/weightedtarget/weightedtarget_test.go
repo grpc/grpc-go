@@ -1285,7 +1285,7 @@ func (s) TestSubBalancerStateLazyUpdate(t *testing.T) {
 
 	// Verify that the SubConnState update from TF to Connecting is ignored.
 	if len(cc.states) != 2 || cc.states[0].ConnectivityState != connectivity.Connecting || cc.states[1].ConnectivityState != connectivity.TransientFailure {
-		t.Fatalf("cc.states = %v; want [connectivity.Ready]", cc.states)
+		t.Fatalf("cc.states = %v; want [Connecting, TransientFailure]", cc.states)
 	}
 }
 
