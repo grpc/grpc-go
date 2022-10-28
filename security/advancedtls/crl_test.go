@@ -760,6 +760,6 @@ func TestCRLCacheExpirationReloading(t *testing.T) {
 
 	revocationStatus = checkChain(certs, cfg)
 	if revocationStatus != RevocationRevoked {
-		t.Fatalf("A certificate should have been `RevocationREvoked` but was not")
+		t.Fatalf("A certificate should have been `RevocationRevoked` but was %v", revocationStatus)
 	}
 }
