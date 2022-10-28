@@ -731,3 +731,35 @@ func TestIssuerNonPrintableString(t *testing.T) {
 		t.Fatalf("fetchCRL failed: %s", err)
 	}
 }
+
+func TestCRLCacheExpirationReloading(t *testing.T) {
+	cache, err := lru.New(5)
+	if err != nil {
+		t.Fatalf("Creating cache failed")
+	}
+
+	var certs = makeChain(t, testdata.Path("crl/revokedInt.pem"))
+	// Certs[1] has the same issuer as the revoked cert
+	rawIssuer := certs[1].RawIssuer
+
+	// `3.crl`` revokes `revokedInt.pem`
+	crl := loadCRL(t, testdata.Path("crl/3.crl"))
+	// Modify the crl so that the cert is NOT revoked and add it to the cache
+	crl.CertList.TBSCertList.RevokedCertificates = []pkix.RevokedCertificate{}
+	crl.CertList.TBSCertList.NextUpdate = time.Now().Add(time.Hour)
+	cache.Add(hex.EncodeToString(rawIssuer), crl)
+	var cfg = RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache}
+	revocationStatus := checkChain(certs, cfg)
+	if revocationStatus != RevocationUnrevoked {
+		t.Fatalf("Certificate check should be RevocationUnrevoked, was %v", revocationStatus)
+	}
+
+	// Modify the entry in the cache so that the cache will be refreshed
+	crl.CertList.TBSCertList.NextUpdate = time.Now()
+	cache.Add(hex.EncodeToString(rawIssuer), crl)
+
+	revocationStatus = checkChain(certs, cfg)
+	if revocationStatus != RevocationRevoked {
+		t.Fatalf("A certificate should have been `RevocationREvoked` but was not")
+	}
+}
