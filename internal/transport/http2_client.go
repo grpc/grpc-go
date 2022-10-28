@@ -59,17 +59,18 @@ var clientConnectionCounter uint64
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
-	lastRead   int64 // Keep this field 64-bit aligned. Accessed atomically.
-	ctx        context.Context
-	cancel     context.CancelFunc
-	ctxDone    <-chan struct{} // Cache the ctx.Done() chan.
-	userAgent  string
-	md         metadata.MD
-	conn       net.Conn // underlying communication channel
-	loopy      *loopyWriter
-	remoteAddr net.Addr
-	localAddr  net.Addr
-	authInfo   credentials.AuthInfo // auth info about the connection
+	lastRead    int64 // Keep this field 64-bit aligned. Accessed atomically.
+	ctx         context.Context
+	cancel      context.CancelFunc
+	ctxDone     <-chan struct{} // Cache the ctx.Done() chan.
+	userAgent   string
+	usedAddress resolver.Address // Record the used resolver address of client, and replace :authority to resolver address if serverName is not empty.
+	md          metadata.MD
+	conn        net.Conn // underlying communication channel
+	loopy       *loopyWriter
+	remoteAddr  net.Addr
+	localAddr   net.Addr
+	authInfo    credentials.AuthInfo // auth info about the connection
 
 	readerDone chan struct{} // sync point to enable testing.
 	writerDone chan struct{} // sync point to enable testing.
@@ -314,6 +315,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		cancel:                cancel,
 		userAgent:             opts.UserAgent,
 		registeredCompressors: grpcutil.RegisteredCompressors(),
+		usedAddress:           addr, // resolver address
 		conn:                  conn,
 		remoteAddr:            conn.RemoteAddr(),
 		localAddr:             conn.LocalAddr(),
@@ -452,6 +454,11 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		close(t.writerDone)
 	}()
 	return t, nil
+}
+
+// GetUsedResolverAddress return the transport used resolver address meta info
+func (t *http2Client) GetUsedResolverAddress() resolver.Address {
+	return t.usedAddress
 }
 
 func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {

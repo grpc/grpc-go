@@ -657,6 +657,9 @@ type ClientTransport interface {
 	// with a human readable string with debug info.
 	GetGoAwayReason() (GoAwayReason, string)
 
+	// GetUsedResolverAddress return the transport used resolver address meta info
+	GetUsedResolverAddress() resolver.Address
+
 	// RemoteAddr returns the remote network address.
 	RemoteAddr() net.Addr
 
