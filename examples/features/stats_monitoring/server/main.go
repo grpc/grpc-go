@@ -23,12 +23,11 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"net"
-	"os"
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/grpclog"
 
 	echogrpc "google.golang.org/grpc/examples/features/proto/echo"
 	echopb "google.golang.org/grpc/examples/features/proto/echo"
@@ -36,10 +35,6 @@ import (
 )
 
 var port = flag.Int("port", 50051, "the port to serve on")
-
-func init() {
-	grpclog.SetLoggerV2(grpclog.NewLoggerV2(os.Stdout, os.Stdout, os.Stderr))
-}
 
 type server struct {
 	echogrpc.UnimplementedEchoServer
@@ -54,11 +49,14 @@ func main() {
 	flag.Parse()
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		grpclog.Fatalf("failed to listen on port %d: %v", *port, err)
+		log.Fatalf("failed to listen on port %d: %v", *port, err)
 	}
-	grpclog.Infof("server listening at %v\n", lis.Addr())
+	log.Printf("server listening at %v\n", lis.Addr())
 
 	s := grpc.NewServer(grpc.StatsHandler(statshandler.New()))
 	echogrpc.RegisterEchoServer(s, &server{})
-	grpclog.Fatalf("failed to serve: %v", s.Serve(lis))
+
+	if err := s.Serve(lis); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
 }
