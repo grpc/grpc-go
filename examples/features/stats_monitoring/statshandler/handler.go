@@ -16,7 +16,7 @@
  *
  */
 
-// pkg statshandler is an example pkg to illustrate the use of the stats handler.
+// Package statshandler is an example pkg to illustrate the use of the stats handler.
 package statshandler
 
 import (
@@ -28,8 +28,8 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
-// handler implements [stats.Handler](https://pkg.go.dev/google.golang.org/grpc/stats#Handler) interface.
-type handler struct{}
+// Handler implements [stats.Handler](https://pkg.go.dev/google.golang.org/grpc/stats#Handler) interface.
+type Handler struct{}
 
 type connStatCtxKey struct{}
 
@@ -39,12 +39,12 @@ type connStatCtxKey struct{}
 // The context used in HandleRPC for RPCs on this connection will NOT be derived from the context returned.
 // In gRPC server:
 // The context used in HandleRPC for RPCs on this connection will be derived from the context returned.
-func (st *handler) TagConn(ctx context.Context, stat *stats.ConnTagInfo) context.Context {
+func (st *Handler) TagConn(ctx context.Context, stat *stats.ConnTagInfo) context.Context {
 	log.Printf("[TagConn] [%T]: %+[1]v", stat)
 	return context.WithValue(ctx, connStatCtxKey{}, stat)
 }
 
-func (st *handler) HandleConn(ctx context.Context, stat stats.ConnStats) {
+func (st *Handler) HandleConn(ctx context.Context, stat stats.ConnStats) {
 	var rAddr net.Addr
 	if s, ok := ctx.Value(connStatCtxKey{}).(*stats.ConnTagInfo); ok {
 		rAddr = s.RemoteAddr
@@ -61,13 +61,13 @@ type rpcStatCtxKey struct{}
 
 // TagRPC can attach some information to the given context.
 // The context used for the rest lifetime of the RPC will be derived from the returned context.
-func (st *handler) TagRPC(ctx context.Context, stat *stats.RPCTagInfo) context.Context {
+func (st *Handler) TagRPC(ctx context.Context, stat *stats.RPCTagInfo) context.Context {
 	log.Printf("[TagRPC] [%T]: %+[1]v", stat)
 	return context.WithValue(ctx, rpcStatCtxKey{}, stat)
 }
 
 // Note: All stat fields are read-only.
-func (st *handler) HandleRPC(ctx context.Context, stat stats.RPCStats) {
+func (st *Handler) HandleRPC(ctx context.Context, stat stats.RPCStats) {
 	var sMethod string
 	if s, ok := ctx.Value(rpcStatCtxKey{}).(*stats.RPCTagInfo); ok {
 		sMethod = filepath.Base(s.FullMethodName)
@@ -87,6 +87,6 @@ func (st *handler) HandleRPC(ctx context.Context, stat stats.RPCStats) {
 }
 
 // New returns a new implementation of [stats.Handler](https://pkg.go.dev/google.golang.org/grpc/stats#Handler) interface.
-func New() *handler {
-	return &handler{}
+func New() *Handler {
+	return &Handler{}
 }
