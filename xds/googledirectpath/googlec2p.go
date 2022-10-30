@@ -110,14 +110,20 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	if balancerName == "" {
 		balancerName = tdURL
 	}
+	serverConfig := &bootstrap.ServerConfig{
+		ServerURI:    balancerName,
+		Creds:        grpc.WithCredentialsBundle(google.NewDefaultCredentials()),
+		TransportAPI: version.TransportV3,
+		NodeProto:    newNode(<-zoneCh, <-ipv6CapableCh),
+	}
 	config := &bootstrap.Config{
-		XDSServer: &bootstrap.ServerConfig{
-			ServerURI:    balancerName,
-			Creds:        grpc.WithCredentialsBundle(google.NewDefaultCredentials()),
-			TransportAPI: version.TransportV3,
-			NodeProto:    newNode(<-zoneCh, <-ipv6CapableCh),
-		},
+		XDSServer: serverConfig,
 		ClientDefaultListenerResourceNameTemplate: "%s",
+		Authorities: map[string]*bootstrap.Authority{
+			"traffic-director-c2p.xds.googleapis.com": {
+				XDSServer: serverConfig,
+			},
+		},
 	}
 
 	// Create singleton xds client with this config. The xds client will be
