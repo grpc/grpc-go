@@ -44,6 +44,7 @@ func (st *Handler) TagConn(ctx context.Context, stat *stats.ConnTagInfo) context
 	return context.WithValue(ctx, connStatCtxKey{}, stat)
 }
 
+// HandleConn processes the Conn stats.
 func (st *Handler) HandleConn(ctx context.Context, stat stats.ConnStats) {
 	var rAddr net.Addr
 	if s, ok := ctx.Value(connStatCtxKey{}).(*stats.ConnTagInfo); ok {
@@ -66,7 +67,7 @@ func (st *Handler) TagRPC(ctx context.Context, stat *stats.RPCTagInfo) context.C
 	return context.WithValue(ctx, rpcStatCtxKey{}, stat)
 }
 
-// Note: All stat fields are read-only.
+// HandleRPC processes the RPC stats. Note: All stat fields are read-only.
 func (st *Handler) HandleRPC(ctx context.Context, stat stats.RPCStats) {
 	var sMethod string
 	if s, ok := ctx.Value(rpcStatCtxKey{}).(*stats.RPCTagInfo); ok {
