@@ -189,7 +189,10 @@ func newNode(zone string, ipv6Capable bool) *v3corepb.Node {
 // runDirectPath returns whether this resolver should use direct path.
 //
 // direct path is enabled if this client is running on GCE, and the normal xDS
-// is not used (bootstrap env vars are not set).
+// is not used (bootstrap env vars are not set) or federation is enabled.
 func runDirectPath() bool {
-	return envconfig.XDSBootstrapFileName == "" && envconfig.XDSBootstrapFileContent == "" && onGCE()
+	if !onGCE() {
+		return false
+	}
+	return envconfig.XDSFederation || envconfig.XDSBootstrapFileName == "" && envconfig.XDSBootstrapFileContent == ""
 }
