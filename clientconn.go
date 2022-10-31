@@ -1552,7 +1552,7 @@ func (cc *ClientConn) parseTargetAndFindResolver() (resolver.Builder, error) {
 		channelz.Infof(logger, cc.channelzID, "dial target %q parse failed: %v", cc.target, err)
 	} else {
 		channelz.Infof(logger, cc.channelzID, "parsed dial target is: %+v", parsedTarget)
-		rb = cc.getResolver(parsedTarget.Scheme)
+		rb = cc.getResolver(parsedTarget.URL.Scheme)
 		if rb != nil {
 			cc.parsedTarget = parsedTarget
 			return rb, nil
@@ -1573,9 +1573,9 @@ func (cc *ClientConn) parseTargetAndFindResolver() (resolver.Builder, error) {
 		return nil, err
 	}
 	channelz.Infof(logger, cc.channelzID, "parsed dial target is: %+v", parsedTarget)
-	rb = cc.getResolver(parsedTarget.Scheme)
+	rb = cc.getResolver(parsedTarget.URL.Scheme)
 	if rb == nil {
-		return nil, fmt.Errorf("could not get resolver for default scheme: %q", parsedTarget.Scheme)
+		return nil, fmt.Errorf("could not get resolver for default scheme: %q", parsedTarget.URL.Scheme)
 	}
 	cc.parsedTarget = parsedTarget
 	return rb, nil
