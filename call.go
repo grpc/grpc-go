@@ -65,8 +65,9 @@ var unaryStreamDesc = &StreamDesc{ServerStreams: false, ClientStreams: false}
 func invoke(ctx context.Context, method string, req, reply interface{}, cc *ClientConn, opts ...CallOption) error {
 	for i, opt := range opts {
 		if unaryIntOpt, ok := opt.(UnaryClientInterceptorCallOption); ok {
-			// filter out to be invoked interceptor to restrict that a per-call
-			// interceptor sees only its successors, not itself and its predecessors
+			// Filter out the current interceptor from the list of call options. This ensures
+			// that a per-call interceptor sees only its successors, not itself or its predecessors
+			// in the list of call options passed to it.
 			fopts := make([]CallOption, 0, len(opts)-1)
 			fopts = append(append(fopts, opts[:i]...), opts[i+1:]...)
 

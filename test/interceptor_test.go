@@ -72,12 +72,8 @@ func (s) TestUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
 	if _, err := ss.Client.EmptyCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal), &testpb.Empty{}); err != nil {
 		t.Fatalf("ss.Client.EmptyCall() failed: %v", err)
 	}
-	val, err := errCh.Receive(ctx)
-	if err != nil {
+	if _, err := errCh.Receive(ctx); err != nil {
 		t.Fatalf("timeout when waiting for unary interceptor to be invoked: %v", err)
-	}
-	if val != nil {
-		t.Fatalf("unary interceptor failed: %v", val)
 	}
 }
 
@@ -143,12 +139,8 @@ func (s) TestChainUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
 	if _, err := ss.Client.EmptyCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal), &testpb.Empty{}); err != nil {
 		t.Fatalf("ss.Client.EmptyCall() failed: %v", err)
 	}
-	val, err := errCh.Receive(ctx)
-	if err != nil {
+	if _, err := errCh.Receive(ctx); err != nil {
 		t.Fatalf("timeout when waiting for unary interceptor to be invoked: %v", err)
-	}
-	if val != nil {
-		t.Fatalf("unary interceptor failed: %v", val)
 	}
 }
 
@@ -195,12 +187,8 @@ func (s) TestChainOnBaseUnaryClientInterceptor_ContextValuePropagation(t *testin
 	if _, err := ss.Client.EmptyCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal), &testpb.Empty{}); err != nil {
 		t.Fatalf("ss.Client.EmptyCall() failed: %v", err)
 	}
-	val, err := errCh.Receive(ctx)
-	if err != nil {
+	if _, err := errCh.Receive(ctx); err != nil {
 		t.Fatalf("timeout when waiting for unary interceptor to be invoked: %v", err)
-	}
-	if val != nil {
-		t.Fatalf("unary interceptor failed: %v", val)
 	}
 }
 
@@ -271,12 +259,8 @@ func (s) TestChainStreamClientInterceptor_ContextValuePropagation(t *testing.T) 
 	if _, err := ss.Client.FullDuplexCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal)); err != nil {
 		t.Fatalf("ss.Client.FullDuplexCall() failed: %v", err)
 	}
-	val, err := errCh.Receive(ctx)
-	if err != nil {
+	if _, err := errCh.Receive(ctx); err != nil {
 		t.Fatalf("timeout when waiting for stream interceptor to be invoked: %v", err)
-	}
-	if val != nil {
-		t.Fatalf("stream interceptor failed: %v", val)
 	}
 }
 
@@ -347,12 +331,8 @@ func (s) TestCallUnaryClientInterceptor_ContextValuePropagation(t *testing.T) {
 	if _, err := ss.Client.EmptyCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal), &testpb.Empty{}, opts...); err != nil {
 		t.Fatalf("ss.Client.EmptyCall() failed: %v", err)
 	}
-	val, err := errCh.Receive(ctx)
-	if err != nil {
+	if _, err := errCh.Receive(ctx); err != nil {
 		t.Fatalf("timeout when waiting for unary interceptor to be invoked: %v", err)
-	}
-	if val != nil {
-		t.Fatalf("unary interceptor failed: %v", val)
 	}
 }
 
@@ -400,12 +380,8 @@ func (s) TestCallOnDialUnaryClientInterceptor_ContextValuePropagation(t *testing
 	if _, err := ss.Client.EmptyCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal), &testpb.Empty{}, grpc.PerRPCUnaryClientInterceptor(callInt)); err != nil {
 		t.Fatalf("ss.Client.EmptyCall() failed: %v", err)
 	}
-	val, err := errCh.Receive(ctx)
-	if err != nil {
+	if _, err := errCh.Receive(ctx); err != nil {
 		t.Fatalf("timeout when waiting for unary interceptor to be invoked: %v", err)
-	}
-	if val != nil {
-		t.Fatalf("unary interceptor failed: %v", val)
 	}
 }
 
@@ -481,12 +457,8 @@ func (s) TestCallStreamClientInterceptor_ContextValuePropagation(t *testing.T) {
 	if _, err := ss.Client.FullDuplexCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal), opts...); err != nil {
 		t.Fatalf("ss.Client.FullDuplexCall() failed: %v", err)
 	}
-	val, err := errCh.Receive(ctx)
-	if err != nil {
+	if _, err := errCh.Receive(ctx); err != nil {
 		t.Fatalf("timeout when waiting for stream interceptor to be invoked: %v", err)
-	}
-	if val != nil {
-		t.Fatalf("stream interceptor failed: %v", val)
 	}
 }
 
@@ -538,12 +510,8 @@ func (s) TestCallOnDialStreamClientInterceptor_ContextValuePropagation(t *testin
 	if _, err := ss.Client.FullDuplexCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal), grpc.PerRPCStreamClientInterceptor(callInt)); err != nil {
 		t.Fatalf("ss.Client.FullDuplexCall() failed: %v", err)
 	}
-	val, err := errCh.Receive(ctx)
-	if err != nil {
+	if _, err := errCh.Receive(ctx); err != nil {
 		t.Fatalf("timeout when waiting for stream interceptor to be invoked: %v", err)
-	}
-	if val != nil {
-		t.Fatalf("stream interceptor failed: %v", val)
 	}
 }
 
@@ -605,12 +573,8 @@ func (s) TestCallUnaryClientInterceptor_PredecessorsFiltering(t *testing.T) {
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, opts...); err != nil {
 		t.Fatalf("ss.Client.EmptyCall() failed: %v", err)
 	}
-	val, err := errCh.Receive(ctx)
-	if err != nil {
+	if _, err := errCh.Receive(ctx); err != nil {
 		t.Fatalf("timeout when waiting for unary interceptor to be invoked: %v", err)
-	}
-	if val != nil {
-		t.Fatalf("unary interceptor failed: %v", val)
 	}
 }
 
@@ -677,11 +641,7 @@ func (s) TestCallStreamClientInterceptor_PredecessorsFiltering(t *testing.T) {
 	if _, err := ss.Client.FullDuplexCall(context.WithValue(ctx, parentCtxkey{}, parentCtxVal), opts...); err != nil {
 		t.Fatalf("ss.Client.FullDuplexCall() failed: %v", err)
 	}
-	val, err := errCh.Receive(ctx)
-	if err != nil {
+	if _, err := errCh.Receive(ctx); err != nil {
 		t.Fatalf("timeout when waiting for stream interceptor to be invoked: %v", err)
-	}
-	if val != nil {
-		t.Fatalf("stream interceptor failed: %v", val)
 	}
 }
