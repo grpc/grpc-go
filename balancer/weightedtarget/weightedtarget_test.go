@@ -1249,9 +1249,9 @@ func (s) TestInitialIdle(t *testing.T) {
 	}
 }
 
-// TestSubBalancerStateLazyUpdate covers the case that if the child reports a
-// transition from TF to Connection, the overall state will still be TF.
-func (s) TestSubBalancerStateLazyUpdate(t *testing.T) {
+// TestIgnoreSubBalancerStateTransitions covers the case that if the child reports a
+// transition from TF to Connecting, the overall state will still be TF.
+func (s) TestIgnoreSubBalancerStateTransitions(t *testing.T) {
 	cc := &tcc{TestClientConn: testutils.NewTestClientConn(t)}
 
 	wtb := wtbBuilder.Build(cc, balancer.BuildOptions{})
