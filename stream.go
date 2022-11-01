@@ -752,17 +752,25 @@ func (cs *clientStream) withRetry(op func(a *csAttempt) error, onSuccess func())
 
 func (cs *clientStream) Header() (metadata.MD, error) {
 	var m metadata.MD
+	noHeader := false
 	err := cs.withRetry(func(a *csAttempt) error {
 		var err error
 		m, err = a.s.Header()
+		if err == transport.ErrNoHeaders {
+			noHeader = true
+			return nil
+		}
 		return toRPCErr(err)
 	}, cs.commitAttemptLocked)
+
 	if err != nil {
 		cs.finish(err)
 		return nil, err
 	}
-	if len(cs.binlogs) != 0 && !cs.serverHeaderBinlogged {
-		// Only log if binary log is on and header has not been logged.
+
+	if len(cs.binlogs) != 0 && !cs.serverHeaderBinlogged && !noHeader {
+		// Only log if binary log is on and header has not been logged, and
+		// there is actually headers to log.
 		logEntry := &binarylog.ServerHeader{
 			OnClientSide: true,
 			Header:       m,

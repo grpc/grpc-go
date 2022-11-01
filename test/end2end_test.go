@@ -8259,8 +8259,8 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 		t.Fatalf("unexpected error: %v, expected an EOF error", err)
 	}
 
-	if csbl.mml.events != 9 {
-		t.Fatalf("want 9 client side binary logging events, got %v", csbl.mml.events)
+	if csbl.mml.events != 8 {
+		t.Fatalf("want 8 client side binary logging events, got %v", csbl.mml.events)
 	}
 	if ssbl.mml.events != 8 {
 		t.Fatalf("want 8 server side binary logging events, got %v", ssbl.mml.events)
