@@ -106,6 +106,10 @@ var (
 	useBufconn          = flag.Bool("bufconn", false, "Use in-memory connection instead of system network I/O")
 	enableKeepalive     = flag.Bool("enable_keepalive", false, "Enable client keepalive. \n"+
 		"Keepalive.Time is set to 10s, Keepalive.Timeout is set to 1s, Keepalive.PermitWithoutStream is set to true.")
+	clientReadBufferSize  = flags.IntSlice("clientReadBufferSize", []int{-1}, "Configures the client read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	clientWriteBufferSize = flags.IntSlice("clientWriteBufferSize", []int{-1}, "Configures the client write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	serverReadBufferSize  = flags.IntSlice("serverReadBufferSize", []int{-1}, "Configures the server read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	serverWriteBufferSize = flags.IntSlice("serverWriteBufferSize", []int{-1}, "Configures the server write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
 
 	logger = grpclog.Component("benchmark")
 )
@@ -306,6 +310,19 @@ func makeClient(bf stats.Features) (testgrpc.BenchmarkServiceClient, func()) {
 			}),
 		)
 	}
+	if bf.ClientReadBufferSize >= 0 {
+		opts = append(opts, grpc.WithReadBufferSize(bf.ClientReadBufferSize))
+	}
+	if bf.ClientWriteBufferSize >= 0 {
+		opts = append(opts, grpc.WithWriteBufferSize(bf.ClientWriteBufferSize))
+	}
+	if bf.ServerReadBufferSize >= 0 {
+		sopts = append(sopts, grpc.ReadBufferSize(bf.ServerReadBufferSize))
+	}
+	if bf.ServerWriteBufferSize >= 0 {
+		sopts = append(sopts, grpc.WriteBufferSize(bf.ServerWriteBufferSize))
+	}
+
 	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(bf.MaxConcurrentCalls+1)))
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
