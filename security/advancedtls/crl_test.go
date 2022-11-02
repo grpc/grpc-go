@@ -732,6 +732,14 @@ func TestIssuerNonPrintableString(t *testing.T) {
 	}
 }
 
+// TestCRLCacheExpirationReloading tests the basic expiration and reloading of a
+// cached CRL. The setup places an empty CRL in the cache, and a corresponding
+// CRL with a revocation in the CRL directory. We then validate the certificate
+// to verify that the certificate is not revoked.  Then, we modify the
+// NextUpdate time to be in the past so that when we next check for revocation,
+// the existing cache entry should be seen as expired, and the CRL in the
+// directory showing `revokedInt.pem` as revoked will be loaded, resulting in
+// the check returning `RevocationRevoked`.
 func TestCRLCacheExpirationReloading(t *testing.T) {
 	cache, err := lru.New(5)
 	if err != nil {
