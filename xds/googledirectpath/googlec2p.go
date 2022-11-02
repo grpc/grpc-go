@@ -92,6 +92,10 @@ type c2pResolverBuilder struct {
 }
 
 func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+	if t.URL.Host != "" {
+		return nil, fmt.Errorf("google-c2p URI scheme does not support authorities")
+	}
+
 	if !runDirectPath() {
 		// If not xDS, fallback to DNS.
 		t.Scheme = dnsName

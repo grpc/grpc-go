@@ -19,6 +19,7 @@
 package googledirectpath
 
 import (
+	"net/url"
 	"strconv"
 	"testing"
 	"time"
@@ -249,5 +250,17 @@ func TestBuildXDS(t *testing.T) {
 				t.Fatalf("timeout waiting for client close")
 			}
 		})
+	}
+}
+
+// TestBuildFailsWhenCalledWithAuthority asserts that c2p resolver.build
+// fails when called with a URL with an authority.
+func TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
+	builder := resolver.Get(c2pScheme)
+	targetURL, _ := url.Parse("google-c2p://an-authority/resource")
+
+	_, err := builder.Build(resolver.Target{URL: *targetURL}, nil, resolver.BuildOptions{})
+	if err == nil {
+		t.Fatalf("c2p resolver should not support target's with authorities, but build succeeded")
 	}
 }
