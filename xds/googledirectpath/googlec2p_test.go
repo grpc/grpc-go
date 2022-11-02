@@ -267,7 +267,6 @@ func TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
 	}()
 	wantErr := "google-c2p URI scheme does not support authorities"
 	if err == nil || !strings.Contains(err.Error(), wantErr) {
-		cc.Close()
 		t.Fatalf("grpc.Dial(%s) returned error: %v, want: %v", uri, err, wantErr)
 	}
 }
