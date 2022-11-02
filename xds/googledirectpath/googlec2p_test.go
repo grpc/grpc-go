@@ -19,14 +19,15 @@
 package googledirectpath
 
 import (
-	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -253,14 +254,20 @@ func TestBuildXDS(t *testing.T) {
 	}
 }
 
-// TestBuildFailsWhenCalledWithAuthority asserts that c2p resolver.build
-// fails when called with a URL with an authority.
+// TestDialFailsWhenTargetContainsAuthority attempts to Dial a target URI of
+// google-c2p scheme with a non-empty authority and verifies that it fails with
+// an expected error.
 func TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
-	builder := resolver.Get(c2pScheme)
-	targetURL, _ := url.Parse("google-c2p://an-authority/resource")
-
-	_, err := builder.Build(resolver.Target{URL: *targetURL}, nil, resolver.BuildOptions{})
-	if err == nil {
-		t.Fatalf("c2p resolver should not support target's with authorities, but build succeeded")
+	uri := "google-c2p://an-authority/resource"
+	cc, err := grpc.Dial(uri, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	defer func() {
+		if cc != nil {
+			cc.Close()
+		}
+	}()
+	wantErr := "google-c2p URI scheme does not support authorities"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		cc.Close()
+		t.Fatalf("grpc.Dial(%s) returned error: %v, want: %v", uri, err, wantErr)
 	}
 }
