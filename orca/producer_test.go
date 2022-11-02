@@ -143,8 +143,8 @@ func (s) TestProducer(t *testing.T) {
 	oobLis := newTestOOBListener()
 
 	lisOpts := orca.OOBListenerOptions{ReportInterval: 50 * time.Millisecond}
-	lao := &listenerInfo{listener: oobLis, opts: lisOpts}
-	addr := setListenerInfo(resolver.Address{Addr: lis.Addr().String()}, lao)
+	li := &listenerInfo{listener: oobLis, opts: lisOpts}
+	addr := setListenerInfo(resolver.Address{Addr: lis.Addr().String()}, li)
 	r.InitialState(resolver.State{Addresses: []resolver.Address{addr}})
 	cc, err := grpc.Dial("whatever:///whatever", grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"customLB":{}}]}`), grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -176,7 +176,7 @@ testReport:
 				break testReport
 			}
 		case <-ctx.Done():
-			t.Fatalf("timed out waiting for load report of: %v", loadReportWant)
+			t.Fatalf("timed out waiting for load report: %v", loadReportWant)
 		}
 	}
 
@@ -199,7 +199,7 @@ testReport:
 				return
 			}
 		case <-ctx.Done():
-			t.Fatalf("timed out waiting for load report of: %v", loadReportWant)
+			t.Fatalf("timed out waiting for load report: %v", loadReportWant)
 		}
 	}
 }
@@ -307,8 +307,8 @@ func (s) TestProducerBackoff(t *testing.T) {
 	oobLis := newTestOOBListener()
 
 	lisOpts := orca.OOBListenerOptions{ReportInterval: reportInterval}
-	lao := &listenerInfo{listener: oobLis, opts: lisOpts}
-	r.InitialState(resolver.State{Addresses: []resolver.Address{setListenerInfo(resolver.Address{Addr: lis.Addr().String()}, lao)}})
+	li := &listenerInfo{listener: oobLis, opts: lisOpts}
+	r.InitialState(resolver.State{Addresses: []resolver.Address{setListenerInfo(resolver.Address{Addr: lis.Addr().String()}, li)}})
 	cc, err := grpc.Dial("whatever:///whatever", grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"customLB":{}}]}`), grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.Dial failed: %v", err)
@@ -337,7 +337,7 @@ func (s) TestProducerBackoff(t *testing.T) {
 			break
 		}
 	case <-ctx.Done():
-		t.Fatalf("timed out waiting for load report of: %v", loadReportWant)
+		t.Fatalf("timed out waiting for load report: %v", loadReportWant)
 	}
 
 	// The next request should be immediate, since there was a message
@@ -370,7 +370,7 @@ func (s) TestProducerBackoff(t *testing.T) {
 			break
 		}
 	case <-ctx.Done():
-		t.Fatalf("timed out waiting for load report of: %v", loadReportWant)
+		t.Fatalf("timed out waiting for load report: %v", loadReportWant)
 	}
 }
 
@@ -423,8 +423,8 @@ func (s) TestProducerMultipleListeners(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 	oobLis1 := newTestOOBListener()
 	lisOpts1 := orca.OOBListenerOptions{ReportInterval: reportInterval1}
-	lao := &listenerInfo{listener: oobLis1, opts: lisOpts1}
-	r.InitialState(resolver.State{Addresses: []resolver.Address{setListenerInfo(resolver.Address{Addr: lis.Addr().String()}, lao)}})
+	li := &listenerInfo{listener: oobLis1, opts: lisOpts1}
+	r.InitialState(resolver.State{Addresses: []resolver.Address{setListenerInfo(resolver.Address{Addr: lis.Addr().String()}, li)}})
 	cc, err := grpc.Dial("whatever:///whatever", grpc.WithDefaultServiceConfig(`{"loadBalancingConfig": [{"customLB":{}}]}`), grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("grpc.Dial failed: %v", err)
@@ -514,14 +514,14 @@ func (s) TestProducerMultipleListeners(t *testing.T) {
 
 	// Register listener 2 with a less frequent interval; no need to recreate
 	// stream.  Report should go to both listeners.
-	oobLis2.cleanup = orca.RegisterOOBListener(lao.sc, oobLis2, lisOpts2)
+	oobLis2.cleanup = orca.RegisterOOBListener(li.sc, oobLis2, lisOpts2)
 	fake.respCh <- loadReportWant
 	checkReports(2, 1, 0)
 
 	// Register listener 3 with a more frequent interval; stream is recreated
 	// with this interval after the next report is received.  The first report
 	// will go to all three listeners.
-	oobLis3.cleanup = orca.RegisterOOBListener(lao.sc, oobLis3, lisOpts3)
+	oobLis3.cleanup = orca.RegisterOOBListener(li.sc, oobLis3, lisOpts3)
 	fake.respCh <- loadReportWant
 	checkReports(3, 2, 1)
 	awaitRequest(reportInterval3)
@@ -543,6 +543,7 @@ func (s) TestProducerMultipleListeners(t *testing.T) {
 	fake.respCh <- loadReportWant
 	checkReports(6, 3, 3)
 	awaitRequest(reportInterval1)
+	// Another report without a change in listeners should go to the first listener.
 	fake.respCh <- loadReportWant
 	checkReports(7, 3, 3)
 }
