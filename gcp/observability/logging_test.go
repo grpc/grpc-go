@@ -608,9 +608,9 @@ func (s) TestBothClientAndServerRPCEvents(t *testing.T) {
 		t.Fatalf("unexpected error: %v, expected an EOF error", err)
 	}
 	fle.mu.Lock()
-	if len(fle.entries) != 17 {
+	if len(fle.entries) != 16 {
 		fle.mu.Unlock()
-		t.Fatalf("Unexpected length of entries %v, want 17 (collective of client and server)", len(fle.entries))
+		t.Fatalf("Unexpected length of entries %v, want 16 (collective of client and server)", len(fle.entries))
 	}
 	fle.mu.Unlock()
 }
@@ -937,23 +937,12 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 			Authority:   ss.Address,
 		},
 		{
-			Type:        eventTypeServerHeader,
-			Logger:      loggerClient,
-			ServiceName: "grpc.testing.TestService",
-			MethodName:  "FullDuplexCall",
-			SequenceID:  3,
-			Authority:   ss.Address,
-			Payload: payload{
-				Metadata: map[string]string{},
-			},
-		},
-		{
 			Type:        eventTypeServerTrailer,
 			Logger:      loggerClient,
 			ServiceName: "grpc.testing.TestService",
 			MethodName:  "FullDuplexCall",
 			Authority:   ss.Address,
-			SequenceID:  4,
+			SequenceID:  3,
 			Payload: payload{
 				Metadata: map[string]string{},
 			},
