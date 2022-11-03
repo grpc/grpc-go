@@ -190,6 +190,9 @@ type fakeSubConn struct{}
 
 func (*fakeSubConn) UpdateAddresses([]resolver.Address) { panic("implement me") }
 func (*fakeSubConn) Connect()                           { panic("implement me") }
+func (*fakeSubConn) GetOrBuildProducer(balancer.ProducerBuilder) (balancer.Producer, func()) {
+	panic("implement me")
+}
 
 // waitForNewChildLB makes sure that a new child LB is created by the top-level
 // clusterResolverBalancer.

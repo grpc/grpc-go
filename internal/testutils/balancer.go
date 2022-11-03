@@ -68,6 +68,11 @@ func (tsc *TestSubConn) Connect() {
 	}
 }
 
+// GetOrBuildProducer is a no-op.
+func (tsc *TestSubConn) GetOrBuildProducer(balancer.ProducerBuilder) (balancer.Producer, func()) {
+	return nil, nil
+}
+
 // String implements stringer to print human friendly error message.
 func (tsc *TestSubConn) String() string {
 	return tsc.id
