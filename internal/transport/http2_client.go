@@ -710,12 +710,13 @@ func (e NewStreamError) Error() string {
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream, error) {
 	ctx = peer.NewContext(ctx, t.getPeer())
 
+	dupCallHdr := *callHdr
 	// replace host with the actual server name, if it is exist and unmatch
-	if t.address.ServerName != "" && t.address.ServerName != callHdr.Host {
-		callHdr.Host = t.address.ServerName
+	if t.address.ServerName != "" && t.address.ServerName != dupCallHdr.Host {
+		dupCallHdr.Host = t.address.ServerName
 	}
 
-	headerFields, err := t.createHeaderFields(ctx, callHdr)
+	headerFields, err := t.createHeaderFields(ctx, &dupCallHdr)
 	if err != nil {
 		return nil, &NewStreamError{Err: err, AllowTransparentRetry: false}
 	}
