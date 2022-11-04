@@ -30,13 +30,14 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 )
 
-// TestWatchCallAnotherWatch covers the case where watch() is called inline by a
-// callback. It makes sure it doesn't cause a deadlock.
+// TestWatchCallAnotherWatch tests the scenario where a watch is registered for
+// a resource, and more watches are registered from the first watch's callback.
+// The test verifies that this scenario does not lead to a deadlock.
 func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	overrideFedEnvVar(t)
 
 	// Start an xDS management server and set the option to allow it to respond
-	// to request which only specify a subset of the configured resources.
+	// to requests which only specify a subset of the configured resources.
 	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, &e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer cleanup()
 
@@ -47,7 +48,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	}
 	defer client.Close()
 
-	// Configure the management server to with route configuration resources.
+	// Configure the management server to respond with route config resources.
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
 		Routes: []*v3routepb.RouteConfiguration{
@@ -76,20 +77,16 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		rdsCancel2 = client.WatchRouteConfig(rdsName, func(u xdsresource.RouteConfigUpdate, err error) {
 			updateCh2.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
 		})
+		t.Cleanup(rdsCancel2)
 		// Watch for a different resource name.
 		rdsCancel3 = client.WatchRouteConfig(rdsNameNewStyle, func(u xdsresource.RouteConfigUpdate, err error) {
 			updateCh3.Send(xdsresource.RouteConfigUpdateErrTuple{Update: u, Err: err})
-		})
-	})
-	defer rdsCancel1()
-	defer func() {
-		if rdsCancel2 != nil {
-			rdsCancel2()
-		}
-		if rdsCancel3 != nil {
 			rdsCancel3()
-		}
-	}()
+		})
+		t.Cleanup(rdsCancel3)
+	})
+	// defer rdsCancel1()
+	t.Cleanup(rdsCancel1)
 
 	// Verify the contents of the received update for the all watchers.
 	wantUpdate12 := xdsresource.RouteConfigUpdateErrTuple{
@@ -133,6 +130,4 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	if err := verifyRouteConfigUpdate(ctx, updateCh3, wantUpdate3); err != nil {
 		t.Fatal(err)
 	}
-	rdsCancel2()
-	rdsCancel3()
 }

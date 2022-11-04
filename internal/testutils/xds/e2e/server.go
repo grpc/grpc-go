@@ -105,13 +105,10 @@ type ManagementServerOptions struct {
 // logic. When the test is done, it should call the Stop() method to cleanup
 // resources allocated by the management server.
 func StartManagementServer(opts *ManagementServerOptions) (*ManagementServer, error) {
-	// Create a snapshot cache. The first parameter controls whether the server
-	// should wait for all resources to be explicitly named in the request
-	// before responding to any of them.
-	wait := true
-	if opts != nil {
-		wait = !opts.AllowResourceSubset
-	}
+	// Create a snapshot cache. The first parameter to NewSnapshotCache()
+	// controls whether the server should wait for all resources to be
+	// explicitly named in the request before responding to any of them.
+	wait := opts == nil || !opts.AllowResourceSubset
 	cache := v3cache.NewSnapshotCache(wait, v3cache.IDHash{}, serverLogger{})
 	logger.Infof("Created new snapshot cache...")
 
