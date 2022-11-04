@@ -104,10 +104,10 @@ func startOpenCensus(config *config) error {
 	}
 
 	if config.CloudMonitoring != nil {
-		if err := view.Register(ocgrpc.ClientCompletedRPCsView); err != nil {
+		if err := view.Register(ocgrpc.ServerStartedRPCsView, ocgrpc.ClientCompletedRPCsView); err != nil {
 			return fmt.Errorf("failed to register default client views: %v", err)
 		}
-		if err := view.Register(ocgrpc.ServerCompletedRPCsView); err != nil {
+		if err := view.Register(ocgrpc.ClientStartedRPCsView, ocgrpc.ServerCompletedRPCsView); err != nil {
 			return fmt.Errorf("failed to register default server views: %v", err)
 		}
 		view.SetReportingPeriod(defaultMetricsReportingInterval)
