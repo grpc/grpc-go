@@ -456,12 +456,6 @@ func (a *csAttempt) newStream() error {
 	cs := a.cs
 	cs.callHdr.PreviousAttempts = cs.numRetries
 
-	// Replace with the actual serverName, if it exist
-	addr := a.t.GetUsedResolverAddress()
-	if addr.ServerName != "" {
-		cs.callHdr.Host = addr.ServerName
-	}
-	
 	s, err := a.t.NewStream(a.ctx, cs.callHdr)
 	if err != nil {
 		nse, ok := err.(*transport.NewStreamError)
