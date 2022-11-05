@@ -45,7 +45,8 @@ func UnmarshalListener(opts *UnmarshalOptions) (map[string]ListenerUpdateErrTupl
 	return update, md, err
 }
 
-func unmarshalListenerResource(r *anypb.Any, f UpdateValidatorFunc, logger *grpclog.PrefixLogger) (string, ListenerUpdate, error) {
+// UnmarshalListenerResource TBD.
+func UnmarshalListenerResource(r *anypb.Any, f UpdateValidatorFunc, logger *grpclog.PrefixLogger) (string, ListenerUpdate, error) {
 	r, err := unwrapResource(r)
 	if err != nil {
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
