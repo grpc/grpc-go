@@ -60,6 +60,14 @@ type ManagementServerOptions struct {
 	// will be created and used.
 	Listener net.Listener
 
+	// AllowResourceSubSet allows the management server to respond to requests
+	// before all configured resources are explicitly named in the request. The
+	// default behavior that we want is for the management server to wait for
+	// all configured resources to be requested before responding to any of
+	// them, since this is how we have run our tests historically, and should be
+	// set to true only for tests which explicitly require the other behavior.
+	AllowResourceSubset bool
+
 	// The callbacks defined below correspond to the state of the world (sotw)
 	// version of the xDS API on the management server.
 
@@ -97,8 +105,11 @@ type ManagementServerOptions struct {
 // logic. When the test is done, it should call the Stop() method to cleanup
 // resources allocated by the management server.
 func StartManagementServer(opts *ManagementServerOptions) (*ManagementServer, error) {
-	// Create a snapshot cache.
-	cache := v3cache.NewSnapshotCache(true, v3cache.IDHash{}, serverLogger{})
+	// Create a snapshot cache. The first parameter to NewSnapshotCache()
+	// controls whether the server should wait for all resources to be
+	// explicitly named in the request before responding to any of them.
+	wait := opts == nil || !opts.AllowResourceSubset
+	cache := v3cache.NewSnapshotCache(wait, v3cache.IDHash{}, serverLogger{})
 	logger.Infof("Created new snapshot cache...")
 
 	var lis net.Listener

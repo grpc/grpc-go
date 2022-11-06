@@ -1297,7 +1297,6 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 	}
 
 	// Test context deadline.
-	timeBefore = time.Now()
 	connectCtx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	_, err = NewClientTransport(connectCtx, context.Background(), resolver.Address{Addr: lis.Addr().String()}, copts, func(GoAwayReason) {}, func() {})

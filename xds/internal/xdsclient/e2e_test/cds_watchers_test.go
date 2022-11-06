@@ -766,8 +766,10 @@ func (s) TestCDSWatch_NACKError(t *testing.T) {
 	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
 	updateCh := testutils.NewChannel()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	cdsCancel := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
+		updateCh.SendContext(ctx, xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
 	defer cdsCancel()
 
@@ -778,8 +780,6 @@ func (s) TestCDSWatch_NACKError(t *testing.T) {
 		Clusters:       []*v3clusterpb.Cluster{badClusterResource(cdsName, edsName, e2e.SecurityLevelNone)},
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}

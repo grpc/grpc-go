@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"testing"
 
+	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/testutils"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -29,6 +30,12 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/protobuf/types/known/anypb"
 )
+
+func overrideFedEnvVar(t *testing.T) {
+	oldFed := envconfig.XDSFederation
+	envconfig.XDSFederation = true
+	t.Cleanup(func() { envconfig.XDSFederation = oldFed })
+}
 
 // testClientSetup sets up the client and controller for the test. It returns a
 // newly created client, and a channel where new controllers will be sent to.
