@@ -1110,11 +1110,10 @@ func (s) TestCloudLoggingAPICallsFiltered(t *testing.T) {
 	// The exporter should have received no new log entries due to these three
 	// calls, as they should be filtered out.
 	fle.mu.Lock()
+	defer fle.mu.Unlock()
 	if len(fle.entries) != 0 {
-		fle.mu.Unlock()
 		t.Fatalf("Unexpected length of entries %v, want 0", len(fle.entries))
 	}
-	fle.mu.Unlock()
 }
 
 func (s) TestMarshalJSON(t *testing.T) {
