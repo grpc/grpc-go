@@ -725,8 +725,6 @@ func (s) TestDurationOfInterval(t *testing.T) {
 		},
 	})
 
-	ctx, cancel = context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	// No timer should have been started.
 	sCtx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer cancel()
