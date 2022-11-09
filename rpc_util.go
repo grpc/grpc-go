@@ -526,12 +526,22 @@ func (o MaxRetryRPCBufferSizeCallOption) after(c *callInfo, attempt *csAttempt) 
 // for unary RPCs. Interceptors are invoked in order they are passed to unary RPCs.
 //
 // CallOption interceptors are invoked after DialOption interceptors.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func PerRPCUnaryClientInterceptor(f UnaryClientInterceptor) CallOption {
 	return UnaryClientInterceptorCallOption{UnaryClientInterceptor: f}
 }
 
 // UnaryClientInterceptorCallOption is a CallOption that specifies an interceptor
 // for unary RPCs.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type UnaryClientInterceptorCallOption struct {
 	UnaryClientInterceptor UnaryClientInterceptor
 }
@@ -544,12 +554,22 @@ func (o UnaryClientInterceptorCallOption) after(c *callInfo, attempt *csAttempt)
 // for streaming RPCs. Interceptors are invoked in order they are passed to streaming RPCs.
 //
 // CallOption interceptors are invoked after DialOption interceptors.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func PerRPCStreamClientInterceptor(f StreamClientInterceptor) CallOption {
 	return StreamClientInterceptorCallOption{StreamClientInterceptor: f}
 }
 
 // StreamClientInterceptorCallOption is a CallOption that specifies an interceptor
 // for streaming RPCs.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type StreamClientInterceptorCallOption struct {
 	StreamClientInterceptor StreamClientInterceptor
 }
