@@ -1440,7 +1440,6 @@ func TestCustomAuthority(t *testing.T) {
 
 		b := NewBuilder()
 		cc := &testClientConn{target: "foo.bar.com", errChan: make(chan error, 1)}
-
 		target := resolver.Target{
 			Endpoint:  "foo.bar.com",
 			Authority: a.authority,
