@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"reflect"
 	"strings"
@@ -1439,7 +1440,12 @@ func TestCustomAuthority(t *testing.T) {
 
 		b := NewBuilder()
 		cc := &testClientConn{target: "foo.bar.com", errChan: make(chan error, 1)}
-		r, err := b.Build(resolver.Target{Endpoint: "foo.bar.com", Authority: a.authority}, cc, resolver.BuildOptions{})
+		target := resolver.Target{
+			Endpoint:  "foo.bar.com",
+			Authority: a.authority,
+			URL:       url.URL{Host: a.authority},
+		}
+		r, err := b.Build(target, cc, resolver.BuildOptions{})
 
 		if err == nil {
 			r.Close()
