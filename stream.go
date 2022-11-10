@@ -262,8 +262,14 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		return nil, err
 	}
 
+	authority := cc.authority
+	if c.authorityModifier != nil {
+		authority = c.authorityModifier(ctx, authority)
+	}
+
 	callHdr := &transport.CallHdr{
 		Host:           cc.authority,
+		Authority:      authority,
 		Method:         method,
 		ContentSubtype: c.contentSubtype,
 		DoneFunc:       doneFunc,
@@ -762,7 +768,6 @@ func (cs *clientStream) Header() (metadata.MD, error) {
 		}
 		return toRPCErr(err)
 	}, cs.commitAttemptLocked)
-
 	if err != nil {
 		cs.finish(err)
 		return nil, err
@@ -1181,8 +1186,14 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		return nil, err
 	}
 
+	authority := ac.cc.authority
+	if c.authorityModifier != nil {
+		authority = c.authorityModifier(ctx, authority)
+	}
+
 	callHdr := &transport.CallHdr{
 		Host:           ac.cc.authority,
+		Authority:      authority,
 		Method:         method,
 		ContentSubtype: c.contentSubtype,
 	}

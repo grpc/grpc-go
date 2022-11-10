@@ -160,6 +160,7 @@ type callInfo struct {
 	contentSubtype        string
 	codec                 baseCodec
 	maxRetryRPCBufferSize int
+	authorityModifier     func(ctx context.Context, authority string) string
 }
 
 func defaultCallInfo() *callInfo {
@@ -232,6 +233,29 @@ func (o TrailerCallOption) before(c *callInfo) error { return nil }
 func (o TrailerCallOption) after(c *callInfo, attempt *csAttempt) {
 	*o.TrailerAddr = attempt.s.Trailer()
 }
+
+// Authority returns a CallOption that mofifies the :authority header for a RPC.
+func Authority(modifier func(ctx context.Context, authority string) string) CallOption {
+	return AuthorityCallOption{
+		modifier: modifier,
+	}
+}
+
+// AuthorityCallOption is a CallOption for modifying the :authority header.
+//
+// # Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
+type AuthorityCallOption struct {
+	modifier func(ctx context.Context, authority string) string
+}
+
+func (o AuthorityCallOption) before(c *callInfo) error {
+	c.authorityModifier = o.modifier
+	return nil
+}
+func (o AuthorityCallOption) after(c *callInfo, attempt *csAttempt) {}
 
 // Peer returns a CallOption that retrieves peer information for a unary RPC.
 // The peer field will be populated *after* the RPC completes.
