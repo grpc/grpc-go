@@ -448,7 +448,7 @@ func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, *http2
 
 func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
 	server := setUpServerOnly(t, port, sc, ht)
-	addr := resolver.Address{Addr: "localhost:" + server.port, ServerName: server.addr()}
+	addr := resolver.Address{Addr: "localhost:" + server.port}
 	copts.ChannelzParentID = channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil)
 
 	connectCtx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
