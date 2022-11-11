@@ -207,8 +207,8 @@ func (s) TestColonPortAuthority(t *testing.T) {
 	}
 }
 
-// TestAuthorityReplacedWithResolverAddress This test makes sure that the http2 client replace the authority
-// to the resolver address server name when it is set.
+// TestAuthorityReplacedWithResolverAddress This test makes sure that the http2 client 
+// replaces the authority to the resolver address server name when it is set.
 func (s) TestAuthorityReplacedWithResolverAddress(t *testing.T) {
 	const expectedAuthority = "test.server.name"
 
