@@ -35,7 +35,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 
 	"github.com/google/go-cmp/cmp"
@@ -92,7 +91,6 @@ const (
 	invalidHeaderField
 	delayRead
 	pingpong
-	returnHeaderAuthority
 )
 
 func (h *testStreamHandler) handleStreamAndNotify(s *Stream) {
@@ -203,31 +201,6 @@ func (h *testStreamHandler) handleStreamInvalidHeaderField(s *Stream) {
 		hf:        headerFields,
 		endStream: false,
 	})
-}
-
-func (h *testStreamHandler) handleStreamReturnValueOfAuthority(t *testing.T, s *Stream) {
-	var (
-		md, exist = metadata.FromIncomingContext(s.ctx)
-		resp      string
-	)
-
-	if !exist || len(md.Get(":authority")) == 0 {
-		h.handleStreamInvalidHeaderField(s)
-		return
-	}
-
-	resp = md.Get(":authority")[0]
-
-	req := expectedRequest
-	p := make([]byte, len(req))
-	_, err := s.Read(p)
-	if err != nil {
-		return
-	}
-	// send a response back to the client.
-	h.t.Write(s, nil, []byte(resp), &Options{})
-	// send the trailer to end the stream.
-	h.t.WriteStatus(s, status.New(codes.OK, ""))
 }
 
 // handleStreamDelayRead delays reads so that the other side has to halt on
@@ -403,12 +376,6 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		case invalidHeaderField:
 			go transport.HandleStreams(func(s *Stream) {
 				go h.handleStreamInvalidHeaderField(s)
-			}, func(ctx context.Context, method string) context.Context {
-				return ctx
-			})
-		case returnHeaderAuthority:
-			go transport.HandleStreams(func(s *Stream) {
-				go h.handleStreamReturnValueOfAuthority(t, s)
 			}, func(ctx context.Context, method string) context.Context {
 				return ctx
 			})
@@ -1460,38 +1427,6 @@ func (s) TestEncodingRequiredStatus(t *testing.T) {
 	if !testutils.StatusErrEqual(s.Status().Err(), encodingTestStatus.Err()) {
 		t.Fatalf("stream with status %v, want %v", s.Status(), encodingTestStatus)
 	}
-	ct.Close(fmt.Errorf("closed manually by test"))
-	server.stop()
-}
-
-func (s) TestHeaderHostReplacedWithResolverAddress(t *testing.T) {
-	server, ct, cancel := setUp(t, 0, math.MaxUint32, returnHeaderAuthority)
-	defer cancel()
-	callHdr := &CallHdr{
-		Host:   "scheme://testSrv.com/testPath",
-		Method: "foo",
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	s, err := ct.NewStream(ctx, callHdr)
-	if err != nil {
-		return
-	}
-
-	opts := Options{Last: true}
-	if err := ct.Write(s, nil, expectedRequest, &opts); err != nil && err != errStreamDone {
-		t.Fatalf("Failed to write the request: %v", err)
-	}
-	respOfAuthority := make([]byte, http2MaxFrameLen)
-	len, recvErr := s.Read(respOfAuthority)
-	if err, ok := status.FromError(recvErr); ok {
-		t.Fatalf("Read got error %v, headers are unexpected", err)
-	}
-
-	if string(respOfAuthority[:len]) != server.addr() {
-		t.Fatalf("Read got a unexpected :authority value %v, want %v", string(respOfAuthority), server.addr())
-	}
-
 	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()
 }

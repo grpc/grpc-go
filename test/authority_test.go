@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -199,6 +200,38 @@ func (s) TestColonPortAuthority(t *testing.T) {
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err = testpb.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
+	if err != nil {
+		t.Errorf("us.client.EmptyCall(_, _) = _, %v; want _, nil", err)
+	}
+}
+
+// TestAuthorityReplacedWithResolverAddress This test makes sure that the http2 client replace the authority
+// to the resolver address server name when it is set.
+func (s) TestAuthorityReplacedWithResolverAddress(t *testing.T) {
+	const expectedAuthority = "test.server.name"
+
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			return authorityChecker(ctx, expectedAuthority)
+		},
+		Network: "tcp",
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	r := manual.NewBuilderWithScheme("whatever")
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address, ServerName: expectedAuthority}}})
+	cc, err := grpc.Dial(r.Scheme()+":///whatever", grpc.WithInsecure(), grpc.WithResolvers(r))
+	if err != nil {
+		t.Fatalf("grpc.Dial(%q) = %v", ss.Address, err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	_, err = testpb.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
 	if err != nil {
