@@ -31,13 +31,14 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-
-	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var port = flag.Int("port", 50051, "the port to serve on")
+
+var errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
 
 const (
 	timestampFormat = time.StampNano
@@ -64,6 +65,13 @@ func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoRes
 	if t, ok := md["timestamp"]; ok {
 		fmt.Printf("timestamp from metadata:\n")
 		for i, e := range t {
+			fmt.Printf(" %d. %s\n", i, e)
+		}
+	}
+
+	if v, ok := md["key1"]; ok {
+		fmt.Printf("key1 from metadata: \n")
+		for i, e := range v {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
@@ -154,6 +162,39 @@ func (s *server) ClientStreamingEcho(stream pb.Echo_ClientStreamingEchoServer) e
 	}
 }
 
+func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, errMissingMetadata
+	} else {
+		md.Append("key1", "value1")
+	}
+	ctx = metadata.NewIncomingContext(ctx, md)
+
+	return handler(ctx, req)
+}
+
+type wrappedStream struct {
+	grpc.ServerStream
+	ctx context.Context
+}
+
+func (s *wrappedStream) Context() context.Context {
+	return s.ctx
+}
+
+func streamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	md, ok := metadata.FromIncomingContext(ss.Context())
+	if !ok {
+		return errMissingMetadata
+	} else {
+		md.Append("key1", "value1")
+	}
+	ctx := metadata.NewIncomingContext(ss.Context(), md)
+
+	return handler(srv, &wrappedStream{ss, ctx})
+}
+
 func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamingEchoServer) error {
 	fmt.Printf("--- BidirectionalStreamingEcho ---\n")
 	// Create trailer in defer to record function return time.
@@ -171,6 +212,13 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 	if t, ok := md["timestamp"]; ok {
 		fmt.Printf("timestamp from metadata:\n")
 		for i, e := range t {
+			fmt.Printf(" %d. %s\n", i, e)
+		}
+	}
+
+	if v, ok := md["key1"]; ok {
+		fmt.Printf("key1 from metadata: \n")
+		for i, e := range v {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
@@ -204,7 +252,9 @@ func main() {
 	}
 	fmt.Printf("server listening at %v\n", lis.Addr())
 
-	s := grpc.NewServer()
+	s := grpc.NewServer(
+		grpc.UnaryInterceptor(unaryInterceptor),
+		grpc.StreamInterceptor(streamInterceptor))
 	pb.RegisterEchoServer(s, &server{})
 	s.Serve(lis)
 }
