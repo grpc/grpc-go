@@ -141,3 +141,29 @@ type DecodeResult struct {
 	// watched.
 	Resource ResourceData
 }
+
+// resourceTypeState wraps the static state associated with concrete resource
+// type implementations, which can then embed this struct and get the methods
+// implemented here for free.
+type resourceTypeState struct {
+	v2TypeURL                  string
+	v3TypeURL                  string
+	typeEnum                   ResourceType
+	allResourcesRequiredInSotW bool
+}
+
+func (r resourceTypeState) V2TypeURL() string {
+	return r.v2TypeURL
+}
+
+func (r resourceTypeState) V3TypeURL() string {
+	return r.v3TypeURL
+}
+
+func (r resourceTypeState) TypeEnum() ResourceType {
+	return r.typeEnum
+}
+
+func (r resourceTypeState) AllResourcesRequiredInSotW() bool {
+	return r.allResourcesRequiredInSotW
+}

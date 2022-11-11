@@ -48,7 +48,7 @@ type XDSClient interface {
 	//
 	// TODO: Once this generic client API is fully implemented and integrated,
 	// delete the resource type specific watch APIs on this interface.
-	xdsresource.XDSClient
+	WatchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.GenericResourceWatcher) (cancel func())
 
 	DumpLDS() map[string]xdsresource.UpdateWithMD
 	DumpRDS() map[string]xdsresource.UpdateWithMD

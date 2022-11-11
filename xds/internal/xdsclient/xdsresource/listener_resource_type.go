@@ -32,7 +32,14 @@ var (
 	_ ResourceData = &ListenerResourceData{}
 
 	// Singleton instantiation of the resource type implementation.
-	listenerType = listenerResourceType{}
+	listenerType = listenerResourceType{
+		resourceTypeState: resourceTypeState{
+			v2TypeURL:                  "type.googleapis.com/envoy.api.v2.Listener",
+			v3TypeURL:                  "type.googleapis.com/envoy.config.listener.v3.Listener",
+			typeEnum:                   ListenerResource,
+			allResourcesRequiredInSotW: true,
+		},
+	}
 )
 
 // listenerResourceType provides the resource-type specific functionality for a
@@ -40,29 +47,7 @@ var (
 //
 // Implements the Type interface.
 type listenerResourceType struct {
-}
-
-// V2TypeURL is the xDS type URL of this resource type for v2 transport.
-func (listenerResourceType) V2TypeURL() string {
-	return "type.googleapis.com/envoy.api.v2.Listener"
-
-}
-
-// V3TypeURL is the xDS type URL of this resource type for v3 transport.
-func (listenerResourceType) V3TypeURL() string {
-	return "type.googleapis.com/envoy.config.listener.v3.Listener"
-}
-
-// TypeEnum identifies resources in a transport protocol agnostic way.
-func (listenerResourceType) TypeEnum() ResourceType {
-	return ListenerResource
-}
-
-// AllResourcesRequiredInSotW indicates whether this resource type requires that
-// all resources be present in every SotW response from the server. This is true
-// for a Listener resource.
-func (listenerResourceType) AllResourcesRequiredInSotW() bool {
-	return true
+	resourceTypeState
 }
 
 func securityConfigValidator(bc *bootstrap.Config, sc *SecurityConfig) error {

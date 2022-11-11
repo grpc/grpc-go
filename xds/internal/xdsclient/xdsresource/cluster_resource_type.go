@@ -29,7 +29,14 @@ var (
 	_ ResourceData = &ClusterResourceData{}
 
 	// Singleton instantiation of the resource type implementation.
-	clusterType = clusterResourceType{}
+	clusterType = clusterResourceType{
+		resourceTypeState: resourceTypeState{
+			v2TypeURL:                  "type.googleapis.com/envoy.api.v2.Cluster",
+			v3TypeURL:                  "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+			typeEnum:                   ClusterResource,
+			allResourcesRequiredInSotW: true,
+		},
+	}
 )
 
 // clusterResourceType provides the resource-type specific functionality for a
@@ -37,29 +44,7 @@ var (
 //
 // Implements the Type interface.
 type clusterResourceType struct {
-}
-
-// V2TypeURL is the xDS type URL of this resource type for v2 transport.
-func (clusterResourceType) V2TypeURL() string {
-	return "type.googleapis.com/envoy.api.v2.Cluster"
-
-}
-
-// V3TypeURL is the xDS type URL of this resource type for v3 transport.
-func (clusterResourceType) V3TypeURL() string {
-	return "type.googleapis.com/envoy.config.cluster.v3.Cluster"
-}
-
-// TypeEnum identifies resources in a transport protocol agnostic way.
-func (clusterResourceType) TypeEnum() ResourceType {
-	return ClusterResource
-}
-
-// AllResourcesRequiredInSotW indicates whether this resource type requires that
-// all resources be present in every SotW response from the server. This is true
-// for a Cluster resource.
-func (clusterResourceType) AllResourcesRequiredInSotW() bool {
-	return true
+	resourceTypeState
 }
 
 // Decode deserializes and validates an xDS resource serialized inside the

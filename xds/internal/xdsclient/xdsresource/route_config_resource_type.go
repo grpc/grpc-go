@@ -29,7 +29,14 @@ var (
 	_ ResourceData = &RouteConfigResourceData{}
 
 	// Singleton instantiation of the resource type implementation.
-	routeConfigType = routeConfigResourceType{}
+	routeConfigType = routeConfigResourceType{
+		resourceTypeState: resourceTypeState{
+			v2TypeURL:                  "type.googleapis.com/envoy.api.v2.RouteConfiguration",
+			v3TypeURL:                  "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+			typeEnum:                   RouteConfigResource,
+			allResourcesRequiredInSotW: false,
+		},
+	}
 )
 
 // routeConfigResourceType provides the resource-type specific functionality for
@@ -37,29 +44,7 @@ var (
 //
 // Implements the Type interface.
 type routeConfigResourceType struct {
-}
-
-// V2TypeURL is the xDS type URL of this resource type for v2 transport.
-func (routeConfigResourceType) V2TypeURL() string {
-	return "type.googleapis.com/envoy.api.v2.RouteConfiguration"
-
-}
-
-// V3TypeURL is the xDS type URL of this resource type for v3 transport.
-func (routeConfigResourceType) V3TypeURL() string {
-	return "type.googleapis.com/envoy.config.route.v3.RouteConfiguration"
-}
-
-// TypeEnum identifies resources in a transport protocol agnostic way.
-func (routeConfigResourceType) TypeEnum() ResourceType {
-	return RouteConfigResource
-}
-
-// AllResourcesRequiredInSotW indicates whether this resource type requires that
-// all resources be present in every SotW response from the server. This is
-// false for a RouteConfiguration resource.
-func (routeConfigResourceType) AllResourcesRequiredInSotW() bool {
-	return false
+	resourceTypeState
 }
 
 // Decode deserializes and validates an xDS resource serialized inside the
