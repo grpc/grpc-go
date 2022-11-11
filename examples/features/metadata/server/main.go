@@ -166,9 +166,9 @@ func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServ
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, errMissingMetadata
-	} else {
-		md.Append("key1", "value1")
 	}
+
+	md.Append("key1", "value1")
 	ctx = metadata.NewIncomingContext(ctx, md)
 
 	return handler(ctx, req)
@@ -187,9 +187,9 @@ func streamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamS
 	md, ok := metadata.FromIncomingContext(ss.Context())
 	if !ok {
 		return errMissingMetadata
-	} else {
-		md.Append("key1", "value1")
 	}
+
+	md.Append("key1", "value1")
 	ctx := metadata.NewIncomingContext(ss.Context(), md)
 
 	return handler(srv, &wrappedStream{ss, ctx})
