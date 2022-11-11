@@ -121,7 +121,7 @@ func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, 
 	// ref-counted client sets its pointer to `nil`. And if any watch APIs are
 	// made on such a closed client, we will get here with a `nil` receiver.
 	if c == nil || c.done.HasFired() {
-		c.logger.Warningf("Watch registered for name %q of type %q, but client is closed", rType.TypeEnum().String(), resourceName)
+		logger.Warningf("Watch registered for name %q of type %q, but client is closed", rType.TypeEnum().String(), resourceName)
 		return func() {}
 	}
 

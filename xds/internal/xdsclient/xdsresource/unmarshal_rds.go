@@ -45,8 +45,7 @@ func UnmarshalRouteConfig(opts *UnmarshalOptions) (map[string]RouteConfigUpdateE
 	return update, md, err
 }
 
-// UnmarshalRouteConfigResource TBD.
-func UnmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, RouteConfigUpdate, error) {
+func unmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, RouteConfigUpdate, error) {
 	r, err := unwrapResource(r)
 	if err != nil {
 		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)

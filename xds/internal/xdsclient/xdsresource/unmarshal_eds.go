@@ -42,8 +42,7 @@ func UnmarshalEndpoints(opts *UnmarshalOptions) (map[string]EndpointsUpdateErrTu
 	return update, md, err
 }
 
-// UnmarshalEndpointsResource TBD.
-func UnmarshalEndpointsResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, EndpointsUpdate, error) {
+func unmarshalEndpointsResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, EndpointsUpdate, error) {
 	r, err := unwrapResource(r)
 	if err != nil {
 		return "", EndpointsUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)

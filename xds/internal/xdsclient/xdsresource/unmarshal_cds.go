@@ -50,8 +50,7 @@ func UnmarshalCluster(opts *UnmarshalOptions) (map[string]ClusterUpdateErrTuple,
 	return update, md, err
 }
 
-// UnmarshalClusterResource TBD.
-func UnmarshalClusterResource(r *anypb.Any, f UpdateValidatorFunc, logger *grpclog.PrefixLogger) (string, ClusterUpdate, error) {
+func unmarshalClusterResource(r *anypb.Any, f UpdateValidatorFunc, logger *grpclog.PrefixLogger) (string, ClusterUpdate, error) {
 	r, err := unwrapResource(r)
 	if err != nil {
 		return "", ClusterUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
