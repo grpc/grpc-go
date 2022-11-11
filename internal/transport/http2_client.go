@@ -59,12 +59,15 @@ var clientConnectionCounter uint64
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
-	lastRead   int64 // Keep this field 64-bit aligned. Accessed atomically.
-	ctx        context.Context
-	cancel     context.CancelFunc
-	ctxDone    <-chan struct{} // Cache the ctx.Done() chan.
-	userAgent  string
-	address    resolver.Address // Record the used resolver address of client, and replace :authority to resolver address if serverName is not empty.
+	lastRead  int64 // Keep this field 64-bit aligned. Accessed atomically.
+	ctx       context.Context
+	cancel    context.CancelFunc
+	ctxDone   <-chan struct{} // Cache the ctx.Done() chan.
+	userAgent string
+	// address contains the resolver returned address for this transport.
+	// If the `ServerName` field is set, it takes precedence over `CallHdr.Host`
+	// passed to `NewStream`, when determining the :authority header.
+	address    resolver.Address
 	md         metadata.MD
 	conn       net.Conn // underlying communication channel
 	loopy      *loopyWriter
@@ -315,7 +318,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		cancel:                cancel,
 		userAgent:             opts.UserAgent,
 		registeredCompressors: grpcutil.RegisteredCompressors(),
-		address:               addr, // resolver address
+		address:               addr,
 		conn:                  conn,
 		remoteAddr:            conn.RemoteAddr(),
 		localAddr:             conn.LocalAddr(),
@@ -454,11 +457,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		close(t.writerDone)
 	}()
 	return t, nil
-}
-
-// Address return the resolver address meta info
-func (t *http2Client) Address() resolver.Address {
-	return t.address
 }
 
 func (t *http2Client) newStream(ctx context.Context, callHdr *CallHdr) *Stream {
@@ -711,8 +709,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 	ctx = peer.NewContext(ctx, t.getPeer())
 
 	dupCallHdr := *callHdr
-	// replace host with the actual server name, if it is exist and unmatch
-	if t.address.ServerName != "" && t.address.ServerName != dupCallHdr.Host {
+	// ServerName field of the resolver returned address takes precedence over
+	// Host field of CallHdr to determine the :authority header. This is because,
+	// the ServerName field takes precedence for server authentication during
+	// TLS handshake, and the :authority header should match the value used
+	// for server authentication.
+	if t.address.ServerName != "" {
 		dupCallHdr.Host = t.address.ServerName
 	}
 
