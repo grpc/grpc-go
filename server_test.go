@@ -27,6 +27,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/status"
 )
@@ -153,7 +154,7 @@ func (s) TestRetryChainedInterceptor(t *testing.T) {
 		return nil, nil
 	}
 	ii(context.Background(), nil, nil, handler)
-	if !reflect.DeepEqual(records, []int{1, 2, 3, 2, 3}) {
+	if !cmp.Equal(records, []int{1, 2, 3, 2, 3}) {
 		t.Fatalf("retry failed on chained interceptors: %v", records)
 	}
 }
