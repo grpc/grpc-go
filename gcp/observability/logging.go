@@ -338,6 +338,11 @@ type binaryLogger struct {
 }
 
 func (bl *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
+	// Prevent logging from logging, traces, and metrics API calls.
+	if strings.HasPrefix(methodName, "/google.logging.v2.LoggingServiceV2/") || strings.HasPrefix(methodName, "/google.monitoring.v3.MetricService/") ||
+		strings.HasPrefix(methodName, "/google.devtools.cloudtrace.v2.TraceService/") {
+		return nil
+	}
 	s, _, err := grpcutil.ParseMethod(methodName)
 	if err != nil {
 		logger.Infof("binarylogging: failed to parse %q: %v", methodName, err)

@@ -85,7 +85,6 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 		})
 		t.Cleanup(rdsCancel3)
 	})
-	// defer rdsCancel1()
 	t.Cleanup(rdsCancel1)
 
 	// Verify the contents of the received update for the all watchers.
