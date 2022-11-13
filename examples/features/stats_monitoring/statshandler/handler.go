@@ -35,10 +35,10 @@ type connStatCtxKey struct{}
 
 // TagConn can attach some information to the given context.
 // The context used in HandleConn for this connection will be derived from the context returned.
-// In gRPC client:
-// The context used in HandleRPC for RPCs on this connection will NOT be derived from the context returned.
-// In gRPC server:
-// The context used in HandleRPC for RPCs on this connection will be derived from the context returned.
+// In the gRPC client:
+// The context used in HandleRPC for RPCs on this connection will be the user's context and NOT derived from the context returned here.
+// In the gRPC server:
+// The context used in HandleRPC for RPCs on this connection will be derived from the context returned here.
 func (st *Handler) TagConn(ctx context.Context, stat *stats.ConnTagInfo) context.Context {
 	log.Printf("[TagConn] [%T]: %+[1]v", stat)
 	return context.WithValue(ctx, connStatCtxKey{}, stat)
