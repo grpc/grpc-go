@@ -36,6 +36,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
@@ -207,7 +208,7 @@ func (s) TestColonPortAuthority(t *testing.T) {
 	}
 }
 
-// TestAuthorityReplacedWithResolverAddress This test makes sure that the http2 client 
+// TestAuthorityReplacedWithResolverAddress This test makes sure that the http2 client
 // replaces the authority to the resolver address server name when it is set.
 func (s) TestAuthorityReplacedWithResolverAddress(t *testing.T) {
 	const expectedAuthority = "test.server.name"
