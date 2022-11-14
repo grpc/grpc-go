@@ -198,7 +198,7 @@ func buildClusterImplConfigForDNS(g *nameGenerator, addrStrs []string, mechanism
 	retAddrs := make([]resolver.Address, 0, len(addrStrs))
 	pName := fmt.Sprintf("priority-%v", g.prefix)
 	for _, addrStr := range addrStrs {
-		retAddrs = append(retAddrs, hierarchy.Set(resolver.Address{Addr: addrStr}, []string{pName}))
+		retAddrs = append(retAddrs, hierarchy.Set(resolver.Address{Addr: addrStr, ServerName: mechanism.DNSHostname}, []string{pName}))
 	}
 	return pName, &clusterimpl.LBConfig{
 		Cluster:     mechanism.Cluster,
