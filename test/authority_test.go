@@ -208,8 +208,10 @@ func (s) TestColonPortAuthority(t *testing.T) {
 	}
 }
 
-// TestAuthorityReplacedWithResolverAddress This test makes sure that the http2 client
-// replaces the authority to the resolver address server name when it is set.
+// TestAuthorityReplacedWithResolverAddress tests the scenario where the resolver
+// returned address contains a ServerName override. The test verifies that the the
+// :authority header value sent to the server as part of the http/2 HEADERS frame
+// is set to the value specified in the resolver returned address.
 func (s) TestAuthorityReplacedWithResolverAddress(t *testing.T) {
 	const expectedAuthority = "test.server.name"
 
@@ -217,7 +219,6 @@ func (s) TestAuthorityReplacedWithResolverAddress(t *testing.T) {
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
 			return authorityChecker(ctx, expectedAuthority)
 		},
-		Network: "tcp",
 	}
 	if err := ss.Start(nil); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
@@ -234,8 +235,7 @@ func (s) TestAuthorityReplacedWithResolverAddress(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	_, err = testpb.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
-	if err != nil {
-		t.Errorf("us.client.EmptyCall(_, _) = _, %v; want _, nil", err)
+	if _, err = testpb.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() rpc failed: %v", err)
 	}
 }
