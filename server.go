@@ -236,7 +236,8 @@ func newJoinServerOption(opts ...ServerOption) ServerOption {
 // WriteBufferSize determines how much data can be batched before doing a write on the wire.
 // The corresponding memory allocation for this buffer will be twice the size to keep syscalls low.
 // The default value for this buffer is 32KB.
-// Zero will disable the write buffer such that each write will be on underlying connection.
+// Zero or negative values will disable the write buffer such that each write will be on underlying
+// connection.
 // Note: A Send call may not directly translate to a write.
 func WriteBufferSize(s int) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
@@ -247,8 +248,8 @@ func WriteBufferSize(s int) ServerOption {
 // ReadBufferSize lets you set the size of read buffer, this determines how much data can be read at most
 // for one read syscall.
 // The default value for this buffer is 32KB.
-// Zero will disable read buffer for a connection so data framer can access the underlying
-// conn directly.
+// Zero or negative values will disable read buffer for a connection so data framer can access the
+// underlying conn directly.
 func ReadBufferSize(s int) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.readBufferSize = s
