@@ -226,7 +226,7 @@ func (s *server) SomeStreamingRPC(stream pb.Service_SomeStreamingRPCServer) erro
 
 ## Updating metadata in the interceptor - server side
 
-Server side metadata updating in the interceptor examples are available [here](../examples/features/metadata/server/main.go).
+Server side metadata updating in the interceptor examples are available [here](../examples/features/metadata_interceptor/server/main.go).
 
 #### Unary interceptor
 
