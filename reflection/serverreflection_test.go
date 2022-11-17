@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
-	rpb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
+	rv1alphapb "google.golang.org/grpc/reflection/grpc_reflection_v1alpha"
 	pb "google.golang.org/grpc/reflection/grpc_testing"
 	pbv3 "google.golang.org/grpc/reflection/grpc_testing_not_regenerate"
 	"google.golang.org/protobuf/proto"
@@ -216,7 +216,7 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 	}
 	defer conn.Close()
 
-	c := rpb.NewServerReflectionClient(conn)
+	c := rv1alphapb.NewServerReflectionClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	stream, err := c.ServerReflectionInfo(ctx, grpc.WaitForReady(true))
@@ -239,10 +239,10 @@ func (x) TestReflectionEnd2end(t *testing.T) {
 	s.Stop()
 }
 
-func testFileByFilenameTransitiveClosure(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient, expectClosure bool) {
+func testFileByFilenameTransitiveClosure(t *testing.T, stream rv1alphapb.ServerReflection_ServerReflectionInfoClient, expectClosure bool) {
 	filename := "reflection/grpc_testing/proto2_ext2.proto"
-	if err := stream.Send(&rpb.ServerReflectionRequest{
-		MessageRequest: &rpb.ServerReflectionRequest_FileByFilename{
+	if err := stream.Send(&rv1alphapb.ServerReflectionRequest{
+		MessageRequest: &rv1alphapb.ServerReflectionRequest_FileByFilename{
 			FileByFilename: filename,
 		},
 	}); err != nil {
@@ -254,7 +254,7 @@ func testFileByFilenameTransitiveClosure(t *testing.T, stream rpb.ServerReflecti
 		t.Fatalf("failed to recv response: %v", err)
 	}
 	switch r.MessageResponse.(type) {
-	case *rpb.ServerReflectionResponse_FileDescriptorResponse:
+	case *rv1alphapb.ServerReflectionResponse_FileDescriptorResponse:
 		if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[0], fdProto2Ext2Byte) {
 			t.Errorf("FileByFilename(%v)\nreceived: %q,\nwant: %q", filename, r.GetFileDescriptorResponse().FileDescriptorProto[0], fdProto2Ext2Byte)
 		}
@@ -272,7 +272,7 @@ func testFileByFilenameTransitiveClosure(t *testing.T, stream rpb.ServerReflecti
 	}
 }
 
-func testFileByFilename(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+func testFileByFilename(t *testing.T, stream rv1alphapb.ServerReflection_ServerReflectionInfoClient) {
 	for _, test := range []struct {
 		filename string
 		want     []byte
@@ -282,8 +282,8 @@ func testFileByFilename(t *testing.T, stream rpb.ServerReflection_ServerReflecti
 		{"reflection/grpc_testing/proto2_ext.proto", fdProto2ExtByte},
 		{"dynamic.proto", fdDynamicByte},
 	} {
-		if err := stream.Send(&rpb.ServerReflectionRequest{
-			MessageRequest: &rpb.ServerReflectionRequest_FileByFilename{
+		if err := stream.Send(&rv1alphapb.ServerReflectionRequest{
+			MessageRequest: &rv1alphapb.ServerReflectionRequest_FileByFilename{
 				FileByFilename: test.filename,
 			},
 		}); err != nil {
@@ -296,7 +296,7 @@ func testFileByFilename(t *testing.T, stream rpb.ServerReflection_ServerReflecti
 		}
 
 		switch r.MessageResponse.(type) {
-		case *rpb.ServerReflectionResponse_FileDescriptorResponse:
+		case *rv1alphapb.ServerReflectionResponse_FileDescriptorResponse:
 			if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want) {
 				t.Errorf("FileByFilename(%v)\nreceived: %q,\nwant: %q", test.filename, r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
 			}
@@ -306,14 +306,14 @@ func testFileByFilename(t *testing.T, stream rpb.ServerReflection_ServerReflecti
 	}
 }
 
-func testFileByFilenameError(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+func testFileByFilenameError(t *testing.T, stream rv1alphapb.ServerReflection_ServerReflectionInfoClient) {
 	for _, test := range []string{
 		"test.poto",
 		"proo2.proto",
 		"proto2_et.proto",
 	} {
-		if err := stream.Send(&rpb.ServerReflectionRequest{
-			MessageRequest: &rpb.ServerReflectionRequest_FileByFilename{
+		if err := stream.Send(&rv1alphapb.ServerReflectionRequest{
+			MessageRequest: &rv1alphapb.ServerReflectionRequest_FileByFilename{
 				FileByFilename: test,
 			},
 		}); err != nil {
@@ -326,14 +326,14 @@ func testFileByFilenameError(t *testing.T, stream rpb.ServerReflection_ServerRef
 		}
 
 		switch r.MessageResponse.(type) {
-		case *rpb.ServerReflectionResponse_ErrorResponse:
+		case *rv1alphapb.ServerReflectionResponse_ErrorResponse:
 		default:
 			t.Errorf("FileByFilename(%v) = %v, want type <ServerReflectionResponse_ErrorResponse>", test, r.MessageResponse)
 		}
 	}
 }
 
-func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+func testFileContainingSymbol(t *testing.T, stream rv1alphapb.ServerReflection_ServerReflectionInfoClient) {
 	for _, test := range []struct {
 		symbol string
 		want   []byte
@@ -359,8 +359,8 @@ func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerRe
 		{"grpc.testing.DynamicReq", fdDynamicByte},
 		{"grpc.testing.DynamicRes", fdDynamicByte},
 	} {
-		if err := stream.Send(&rpb.ServerReflectionRequest{
-			MessageRequest: &rpb.ServerReflectionRequest_FileContainingSymbol{
+		if err := stream.Send(&rv1alphapb.ServerReflectionRequest{
+			MessageRequest: &rv1alphapb.ServerReflectionRequest_FileContainingSymbol{
 				FileContainingSymbol: test.symbol,
 			},
 		}); err != nil {
@@ -373,7 +373,7 @@ func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerRe
 		}
 
 		switch r.MessageResponse.(type) {
-		case *rpb.ServerReflectionResponse_FileDescriptorResponse:
+		case *rv1alphapb.ServerReflectionResponse_FileDescriptorResponse:
 			if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want) {
 				t.Errorf("FileContainingSymbol(%v)\nreceived: %q,\nwant: %q", test.symbol, r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
 			}
@@ -383,15 +383,15 @@ func testFileContainingSymbol(t *testing.T, stream rpb.ServerReflection_ServerRe
 	}
 }
 
-func testFileContainingSymbolError(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+func testFileContainingSymbolError(t *testing.T, stream rv1alphapb.ServerReflection_ServerReflectionInfoClient) {
 	for _, test := range []string{
 		"grpc.testing.SerchService",
 		"grpc.testing.SearchService.SearchE",
 		"grpc.tesing.SearchResponse",
 		"gpc.testing.ToBeExtended",
 	} {
-		if err := stream.Send(&rpb.ServerReflectionRequest{
-			MessageRequest: &rpb.ServerReflectionRequest_FileContainingSymbol{
+		if err := stream.Send(&rv1alphapb.ServerReflectionRequest{
+			MessageRequest: &rv1alphapb.ServerReflectionRequest_FileContainingSymbol{
 				FileContainingSymbol: test,
 			},
 		}); err != nil {
@@ -404,14 +404,14 @@ func testFileContainingSymbolError(t *testing.T, stream rpb.ServerReflection_Ser
 		}
 
 		switch r.MessageResponse.(type) {
-		case *rpb.ServerReflectionResponse_ErrorResponse:
+		case *rv1alphapb.ServerReflectionResponse_ErrorResponse:
 		default:
 			t.Errorf("FileContainingSymbol(%v) = %v, want type <ServerReflectionResponse_ErrorResponse>", test, r.MessageResponse)
 		}
 	}
 }
 
-func testFileContainingExtension(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+func testFileContainingExtension(t *testing.T, stream rv1alphapb.ServerReflection_ServerReflectionInfoClient) {
 	for _, test := range []struct {
 		typeName string
 		extNum   int32
@@ -423,9 +423,9 @@ func testFileContainingExtension(t *testing.T, stream rpb.ServerReflection_Serve
 		{"grpc.testing.ToBeExtended", 23, fdProto2Ext2Byte},
 		{"grpc.testing.ToBeExtended", 29, fdProto2Ext2Byte},
 	} {
-		if err := stream.Send(&rpb.ServerReflectionRequest{
-			MessageRequest: &rpb.ServerReflectionRequest_FileContainingExtension{
-				FileContainingExtension: &rpb.ExtensionRequest{
+		if err := stream.Send(&rv1alphapb.ServerReflectionRequest{
+			MessageRequest: &rv1alphapb.ServerReflectionRequest_FileContainingExtension{
+				FileContainingExtension: &rv1alphapb.ExtensionRequest{
 					ContainingType:  test.typeName,
 					ExtensionNumber: test.extNum,
 				},
@@ -440,7 +440,7 @@ func testFileContainingExtension(t *testing.T, stream rpb.ServerReflection_Serve
 		}
 
 		switch r.MessageResponse.(type) {
-		case *rpb.ServerReflectionResponse_FileDescriptorResponse:
+		case *rv1alphapb.ServerReflectionResponse_FileDescriptorResponse:
 			if !reflect.DeepEqual(r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want) {
 				t.Errorf("FileContainingExtension(%v, %v)\nreceived: %q,\nwant: %q", test.typeName, test.extNum, r.GetFileDescriptorResponse().FileDescriptorProto[0], test.want)
 			}
@@ -450,7 +450,7 @@ func testFileContainingExtension(t *testing.T, stream rpb.ServerReflection_Serve
 	}
 }
 
-func testFileContainingExtensionError(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+func testFileContainingExtensionError(t *testing.T, stream rv1alphapb.ServerReflection_ServerReflectionInfoClient) {
 	for _, test := range []struct {
 		typeName string
 		extNum   int32
@@ -458,9 +458,9 @@ func testFileContainingExtensionError(t *testing.T, stream rpb.ServerReflection_
 		{"grpc.testing.ToBExtended", 17},
 		{"grpc.testing.ToBeExtended", 15},
 	} {
-		if err := stream.Send(&rpb.ServerReflectionRequest{
-			MessageRequest: &rpb.ServerReflectionRequest_FileContainingExtension{
-				FileContainingExtension: &rpb.ExtensionRequest{
+		if err := stream.Send(&rv1alphapb.ServerReflectionRequest{
+			MessageRequest: &rv1alphapb.ServerReflectionRequest_FileContainingExtension{
+				FileContainingExtension: &rv1alphapb.ExtensionRequest{
 					ContainingType:  test.typeName,
 					ExtensionNumber: test.extNum,
 				},
@@ -475,14 +475,14 @@ func testFileContainingExtensionError(t *testing.T, stream rpb.ServerReflection_
 		}
 
 		switch r.MessageResponse.(type) {
-		case *rpb.ServerReflectionResponse_ErrorResponse:
+		case *rv1alphapb.ServerReflectionResponse_ErrorResponse:
 		default:
 			t.Errorf("FileContainingExtension(%v, %v) = %v, want type <ServerReflectionResponse_FileDescriptorResponse>", test.typeName, test.extNum, r.MessageResponse)
 		}
 	}
 }
 
-func testAllExtensionNumbersOfType(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+func testAllExtensionNumbersOfType(t *testing.T, stream rv1alphapb.ServerReflection_ServerReflectionInfoClient) {
 	for _, test := range []struct {
 		typeName string
 		want     []int32
@@ -490,8 +490,8 @@ func testAllExtensionNumbersOfType(t *testing.T, stream rpb.ServerReflection_Ser
 		{"grpc.testing.ToBeExtended", []int32{13, 17, 19, 23, 29}},
 		{"grpc.testing.DynamicReq", nil},
 	} {
-		if err := stream.Send(&rpb.ServerReflectionRequest{
-			MessageRequest: &rpb.ServerReflectionRequest_AllExtensionNumbersOfType{
+		if err := stream.Send(&rv1alphapb.ServerReflectionRequest{
+			MessageRequest: &rv1alphapb.ServerReflectionRequest_AllExtensionNumbersOfType{
 				AllExtensionNumbersOfType: test.typeName,
 			},
 		}); err != nil {
@@ -504,7 +504,7 @@ func testAllExtensionNumbersOfType(t *testing.T, stream rpb.ServerReflection_Ser
 		}
 
 		switch r.MessageResponse.(type) {
-		case *rpb.ServerReflectionResponse_AllExtensionNumbersResponse:
+		case *rv1alphapb.ServerReflectionResponse_AllExtensionNumbersResponse:
 			extNum := r.GetAllExtensionNumbersResponse().ExtensionNumber
 			sort.Sort(intArray(extNum))
 			if r.GetAllExtensionNumbersResponse().BaseTypeName != test.typeName ||
@@ -517,12 +517,12 @@ func testAllExtensionNumbersOfType(t *testing.T, stream rpb.ServerReflection_Ser
 	}
 }
 
-func testAllExtensionNumbersOfTypeError(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
+func testAllExtensionNumbersOfTypeError(t *testing.T, stream rv1alphapb.ServerReflection_ServerReflectionInfoClient) {
 	for _, test := range []string{
 		"grpc.testing.ToBeExtendedE",
 	} {
-		if err := stream.Send(&rpb.ServerReflectionRequest{
-			MessageRequest: &rpb.ServerReflectionRequest_AllExtensionNumbersOfType{
+		if err := stream.Send(&rv1alphapb.ServerReflectionRequest{
+			MessageRequest: &rv1alphapb.ServerReflectionRequest_AllExtensionNumbersOfType{
 				AllExtensionNumbersOfType: test,
 			},
 		}); err != nil {
@@ -535,16 +535,16 @@ func testAllExtensionNumbersOfTypeError(t *testing.T, stream rpb.ServerReflectio
 		}
 
 		switch r.MessageResponse.(type) {
-		case *rpb.ServerReflectionResponse_ErrorResponse:
+		case *rv1alphapb.ServerReflectionResponse_ErrorResponse:
 		default:
 			t.Errorf("AllExtensionNumbersOfType(%v) = %v, want type <ServerReflectionResponse_ErrorResponse>", test, r.MessageResponse)
 		}
 	}
 }
 
-func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflectionInfoClient) {
-	if err := stream.Send(&rpb.ServerReflectionRequest{
-		MessageRequest: &rpb.ServerReflectionRequest_ListServices{},
+func testListServices(t *testing.T, stream rv1alphapb.ServerReflection_ServerReflectionInfoClient) {
+	if err := stream.Send(&rv1alphapb.ServerReflectionRequest{
+		MessageRequest: &rv1alphapb.ServerReflectionRequest_ListServices{},
 	}); err != nil {
 		t.Fatalf("failed to send request: %v", err)
 	}
@@ -555,7 +555,7 @@ func testListServices(t *testing.T, stream rpb.ServerReflection_ServerReflection
 	}
 
 	switch r.MessageResponse.(type) {
-	case *rpb.ServerReflectionResponse_ListServicesResponse:
+	case *rv1alphapb.ServerReflectionResponse_ListServicesResponse:
 		services := r.GetListServicesResponse().Service
 		want := []string{
 			"grpc.testingv3.SearchServiceV3",
