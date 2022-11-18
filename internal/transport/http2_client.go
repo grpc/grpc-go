@@ -708,17 +708,18 @@ func (e NewStreamError) Error() string {
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream, error) {
 	ctx = peer.NewContext(ctx, t.getPeer())
 
-	dupCallHdr := *callHdr
 	// ServerName field of the resolver returned address takes precedence over
 	// Host field of CallHdr to determine the :authority header. This is because,
 	// the ServerName field takes precedence for server authentication during
 	// TLS handshake, and the :authority header should match the value used
 	// for server authentication.
 	if t.address.ServerName != "" {
-		dupCallHdr.Host = t.address.ServerName
+		newCallHdr := *callHdr
+		newCallHdr.Host = t.address.ServerName
+		callHdr = &newCallHdr
 	}
 
-	headerFields, err := t.createHeaderFields(ctx, &dupCallHdr)
+	headerFields, err := t.createHeaderFields(ctx, callHdr)
 	if err != nil {
 		return nil, &NewStreamError{Err: err, AllowTransparentRetry: false}
 	}
