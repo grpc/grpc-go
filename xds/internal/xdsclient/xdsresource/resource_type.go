@@ -23,37 +23,26 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// XDSClient wraps the functionality provided by a full fledged xDS client which
-// queries a set of discovery APIs on a remote management server, to discover
-// various dynamic resources.
+// Producer contains a single method to discover resource configuration from a
+// remote management server using xDS APIs.
 //
 // The xdsclient package provides a concrete implementation of this interface.
-type XDSClient interface {
+type Producer interface {
 	// WatchResource uses xDS to discover the resource associated with the
 	// provided resource name. The resource type implementation determines how
 	// xDS requests are sent out and how responses are deserialized and
 	// validated. Upon receipt of a response from the management server, an
 	// appropriate callback on the watcher is invoked.
-	//
-	// Most callers will not have a need to use this API directly. They will
-	// instead use a resource-type-specific wrapper API provided by the relevant
-	// resource type implementation.
-	WatchResource(rType Type, resourceName string, watcher GenericResourceWatcher) (cancel func())
+	WatchResource(rType Type, resourceName string, watcher ResourceWatcher) (cancel func())
 }
 
-// GenericResourceWatcher wraps the callbacks invoked by the xDS client
-// implementation for different events corresponding to the resource being
-// watched.
-//
-// Most callers will not have a need to use this API directly. They will instead
-// use a resource-type-specific watcher interfaces provided by the relevant
-// resource type implementation.
-type GenericResourceWatcher interface {
-	// OnGenericResourceChanged is invoked when an update for the resource being
-	// watched is received from the management server. The ResourceData
-	// parameter needs to be type asserted to the appropriate type for the
-	// resource being watched.
-	OnGenericResourceChanged(ResourceData)
+// ResourceWatcher wraps the callbacks to be invoked for different events
+// corresponding to the resource being watched.
+type ResourceWatcher interface {
+	// OnUpdate is invoked to report an update for the resource being watched.
+	// The ResourceData parameter needs to be type asserted to the appropriate
+	// type for the resource being watched.
+	OnUpdate(ResourceData)
 
 	// OnError is invoked under different error conditions including but not
 	// limited to the following:

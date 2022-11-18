@@ -103,15 +103,11 @@ func (l *ClusterResourceData) Raw() *anypb.Any {
 	return l.Resource.Raw
 }
 
-// ClusterResourceWatcher wraps the callbacks invoked by the xDS client
-// implementation for different events corresponding to the listener resource
-// being watched.
+// ClusterResourceWatcher wraps the callbacks to be invoked for different events
+// corresponding to the cluster resource being watched.
 type ClusterResourceWatcher interface {
-	// OnResourceChanged is invoked when an update for the resource being
-	// watched is received from the management server. The ResourceData
-	// parameter needs to be type asserted to the appropriate type for the
-	// resource being watched.
-	OnResourceChanged(*ClusterResourceData)
+	// OnUpdate is invoked to report an update for the resource being watched.
+	OnUpdate(*ClusterResourceData)
 
 	// OnError is invoked under different error conditions including but not
 	// limited to the following:
@@ -132,9 +128,9 @@ type delegatingClusterWatcher struct {
 	watcher ClusterResourceWatcher
 }
 
-func (d *delegatingClusterWatcher) OnGenericResourceChanged(data ResourceData) {
-	l := data.(*ClusterResourceData)
-	d.watcher.OnResourceChanged(l)
+func (d *delegatingClusterWatcher) OnUpdate(data ResourceData) {
+	c := data.(*ClusterResourceData)
+	d.watcher.OnUpdate(c)
 }
 
 func (d *delegatingClusterWatcher) OnError(err error) {
@@ -150,7 +146,7 @@ func (d *delegatingClusterWatcher) OnResourceDoesNotExist() {
 //
 // This is a convenience wrapper around the WatchResource() API and callers are
 // encouraged to use this over the latter.
-func WatchCluster(c XDSClient, resourceName string, watcher ClusterResourceWatcher) (cancel func()) {
+func WatchCluster(c Producer, resourceName string, watcher ClusterResourceWatcher) (cancel func()) {
 	delegator := &delegatingClusterWatcher{watcher: watcher}
 	return c.WatchResource(clusterType, resourceName, delegator)
 }

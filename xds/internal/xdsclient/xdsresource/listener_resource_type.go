@@ -135,15 +135,11 @@ func (l *ListenerResourceData) Raw() *anypb.Any {
 	return l.Resource.Raw
 }
 
-// ListenerResourceWatcher wraps the callbacks invoked by the xDS client
-// implementation for different events corresponding to the listener resource
-// being watched.
+// ListenerResourceWatcher wraps the callbacks to be invoked for different
+// events corresponding to the listener resource being watched.
 type ListenerResourceWatcher interface {
-	// OnResourceChanged is invoked when an update for the resource being
-	// watched is received from the management server. The ResourceData
-	// parameter needs to be type asserted to the appropriate type for the
-	// resource being watched.
-	OnResourceChanged(*ListenerResourceData)
+	// OnUpdate is invoked to report an update for the resource being watched.
+	OnUpdate(*ListenerResourceData)
 
 	// OnError is invoked under different error conditions including but not
 	// limited to the following:
@@ -164,9 +160,9 @@ type delegatingListenerWatcher struct {
 	watcher ListenerResourceWatcher
 }
 
-func (d *delegatingListenerWatcher) OnGenericResourceChanged(data ResourceData) {
+func (d *delegatingListenerWatcher) OnUpdate(data ResourceData) {
 	l := data.(*ListenerResourceData)
-	d.watcher.OnResourceChanged(l)
+	d.watcher.OnUpdate(l)
 }
 
 func (d *delegatingListenerWatcher) OnError(err error) {
@@ -179,7 +175,7 @@ func (d *delegatingListenerWatcher) OnResourceDoesNotExist() {
 
 // WatchListener uses xDS to discover the configuration associated with the
 // provided listener resource name.
-func WatchListener(c XDSClient, resourceName string, watcher ListenerResourceWatcher) (cancel func()) {
+func WatchListener(c Producer, resourceName string, watcher ListenerResourceWatcher) (cancel func()) {
 	delegator := &delegatingListenerWatcher{watcher: watcher}
 	return c.WatchResource(listenerType, resourceName, delegator)
 }

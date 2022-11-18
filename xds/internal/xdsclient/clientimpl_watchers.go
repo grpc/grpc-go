@@ -113,7 +113,7 @@ func (c *clientImpl) WatchEndpoints(clusterName string, cb func(xdsresource.Endp
 // are sent out and how responses are deserialized and validated. Upon receipt
 // of a response from the management server, an appropriate callback on the
 // watcher is invoked.
-func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.GenericResourceWatcher) (cancel func()) {
+func (c *clientImpl) WatchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) (cancel func()) {
 	// Return early if the client is already closed.
 	//
 	// The client returned from the top-level API is a ref-counted client which

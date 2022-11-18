@@ -98,15 +98,11 @@ func (e *EndpointsResourceData) Raw() *anypb.Any {
 	return e.Resource.Raw
 }
 
-// EndpointsResourceWatcher wraps the callbacks invoked by the xDS client
-// implementation for different events corresponding to the listener resource
-// being watched.
+// EndpointsResourceWatcher wraps the callbacks to be invoked for different
+// events corresponding to the endpoints resource being watched.
 type EndpointsResourceWatcher interface {
-	// OnResourceChanged is invoked when an update for the resource being
-	// watched is received from the management server. The ResourceData
-	// parameter needs to be type asserted to the appropriate type for the
-	// resource being watched.
-	OnResourceChanged(*EndpointsResourceData)
+	// OnUpdate is invoked to report an update for the resource being watched.
+	OnUpdate(*EndpointsResourceData)
 
 	// OnError is invoked under different error conditions including but not
 	// limited to the following:
@@ -127,9 +123,9 @@ type delegatingEndpointsWatcher struct {
 	watcher EndpointsResourceWatcher
 }
 
-func (d *delegatingEndpointsWatcher) OnGenericResourceChanged(data ResourceData) {
-	l := data.(*EndpointsResourceData)
-	d.watcher.OnResourceChanged(l)
+func (d *delegatingEndpointsWatcher) OnUpdate(data ResourceData) {
+	e := data.(*EndpointsResourceData)
+	d.watcher.OnUpdate(e)
 }
 
 func (d *delegatingEndpointsWatcher) OnError(err error) {
@@ -145,7 +141,7 @@ func (d *delegatingEndpointsWatcher) OnResourceDoesNotExist() {
 //
 // This is a convenience wrapper around the WatchResource() API and callers are
 // encouraged to use this over the latter.
-func WatchEndpoints(c XDSClient, resourceName string, watcher EndpointsResourceWatcher) (cancel func()) {
+func WatchEndpoints(c Producer, resourceName string, watcher EndpointsResourceWatcher) (cancel func()) {
 	delegator := &delegatingEndpointsWatcher{watcher: watcher}
 	return c.WatchResource(endpointsType, resourceName, delegator)
 }

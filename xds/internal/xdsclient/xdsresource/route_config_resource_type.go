@@ -99,15 +99,11 @@ func (r *RouteConfigResourceData) Raw() *anypb.Any {
 	return r.Resource.Raw
 }
 
-// RouteConfigResourceWatcher wraps the callbacks invoked by the xDS client
-// implementation for different events corresponding to the route configuration
-// resource being watched.
+// RouteConfigResourceWatcher wraps the callbacks to be invoked for different
+// events corresponding to the route configuration resource being watched.
 type RouteConfigResourceWatcher interface {
-	// OnResourceChanged is invoked when an update for the resource being
-	// watched is received from the management server. The ResourceData
-	// parameter needs to be type asserted to the appropriate type for the
-	// resource being watched.
-	OnResourceChanged(*RouteConfigResourceData)
+	// OnUpdate is invoked to report an update for the resource being watched.
+	OnUpdate(*RouteConfigResourceData)
 
 	// OnError is invoked under different error conditions including but not
 	// limited to the following:
@@ -128,9 +124,9 @@ type delegatingRouteConfigWatcher struct {
 	watcher RouteConfigResourceWatcher
 }
 
-func (d *delegatingRouteConfigWatcher) OnGenericResourceChanged(data ResourceData) {
-	l := data.(*RouteConfigResourceData)
-	d.watcher.OnResourceChanged(l)
+func (d *delegatingRouteConfigWatcher) OnUpdate(data ResourceData) {
+	rc := data.(*RouteConfigResourceData)
+	d.watcher.OnUpdate(rc)
 }
 
 func (d *delegatingRouteConfigWatcher) OnError(err error) {
@@ -146,7 +142,7 @@ func (d *delegatingRouteConfigWatcher) OnResourceDoesNotExist() {
 //
 // This is a convenience wrapper around the WatchResource() API and callers are
 // encouraged to use this over the latter.
-func WatchRouteConfig(c XDSClient, resourceName string, watcher RouteConfigResourceWatcher) (cancel func()) {
+func WatchRouteConfig(c Producer, resourceName string, watcher RouteConfigResourceWatcher) (cancel func()) {
 	delegator := &delegatingRouteConfigWatcher{watcher: watcher}
 	return c.WatchResource(routeConfigType, resourceName, delegator)
 }
