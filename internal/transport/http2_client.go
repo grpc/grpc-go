@@ -59,11 +59,15 @@ var clientConnectionCounter uint64
 
 // http2Client implements the ClientTransport interface with HTTP2.
 type http2Client struct {
-	lastRead   int64 // Keep this field 64-bit aligned. Accessed atomically.
-	ctx        context.Context
-	cancel     context.CancelFunc
-	ctxDone    <-chan struct{} // Cache the ctx.Done() chan.
-	userAgent  string
+	lastRead  int64 // Keep this field 64-bit aligned. Accessed atomically.
+	ctx       context.Context
+	cancel    context.CancelFunc
+	ctxDone   <-chan struct{} // Cache the ctx.Done() chan.
+	userAgent string
+	// address contains the resolver returned address for this transport.
+	// If the `ServerName` field is set, it takes precedence over `CallHdr.Host`
+	// passed to `NewStream`, when determining the :authority header.
+	address    resolver.Address
 	md         metadata.MD
 	conn       net.Conn // underlying communication channel
 	loopy      *loopyWriter
@@ -314,6 +318,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		cancel:                cancel,
 		userAgent:             opts.UserAgent,
 		registeredCompressors: grpcutil.RegisteredCompressors(),
+		address:               addr,
 		conn:                  conn,
 		remoteAddr:            conn.RemoteAddr(),
 		localAddr:             conn.LocalAddr(),
@@ -702,6 +707,18 @@ func (e NewStreamError) Error() string {
 // streams.  All non-nil errors returned will be *NewStreamError.
 func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream, error) {
 	ctx = peer.NewContext(ctx, t.getPeer())
+
+	// ServerName field of the resolver returned address takes precedence over
+	// Host field of CallHdr to determine the :authority header. This is because,
+	// the ServerName field takes precedence for server authentication during
+	// TLS handshake, and the :authority header should match the value used
+	// for server authentication.
+	if t.address.ServerName != "" {
+		newCallHdr := *callHdr
+		newCallHdr.Host = t.address.ServerName
+		callHdr = &newCallHdr
+	}
+
 	headerFields, err := t.createHeaderFields(ctx, callHdr)
 	if err != nil {
 		return nil, &NewStreamError{Err: err, AllowTransparentRetry: false}
