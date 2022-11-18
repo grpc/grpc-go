@@ -63,7 +63,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				Method:     "GET",
 				Header:     http.Header{},
 			},
-			wantErr: "invalid gRPC request method",
+			wantErr: `invalid gRPC request method "GET"`,
 		},
 		{
 			name: "bad content type",
@@ -74,7 +74,7 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 					"Content-Type": {"application/foo"},
 				},
 			},
-			wantErr: "invalid gRPC request content-type",
+			wantErr: `invalid gRPC request content-type "application/foo"`,
 		},
 		{
 			name: "not flusher",
