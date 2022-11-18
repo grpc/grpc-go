@@ -119,8 +119,4 @@ mv ${WORKDIR}/out/google.golang.org/grpc/lookup/grpc_lookup_v1/* ${WORKDIR}/out/
 # see grpc_testing_not_regenerate/README.md for details.
 rm ${WORKDIR}/out/google.golang.org/grpc/reflection/grpc_testing_not_regenerate/*.pb.go
 
-# grpc/testing does not have a go_package option.
-mv ${WORKDIR}/out/grpc/testing/*.pb.go interop/grpc_testing/
-mv ${WORKDIR}/out/grpc/core/*.pb.go interop/grpc_testing/core/
-
 cp -R ${WORKDIR}/out/google.golang.org/grpc/* .
