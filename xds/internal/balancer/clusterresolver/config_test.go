@@ -249,7 +249,7 @@ func TestParseConfig(t *testing.T) {
 				},
 				XDSLBPolicy: &internalserviceconfig.BalancerConfig{
 					Name:   ringhash.Name,
-					Config: &ringhash.LBConfig{MinRingSize: 1024, MaxRingSize: 8388608}, // Ringhash LB config with default min and max.
+					Config: &ringhash.LBConfig{MinRingSize: 1024, MaxRingSize: 4096}, // Ringhash LB config with default min and max.
 				},
 			},
 			wantErr: false,
