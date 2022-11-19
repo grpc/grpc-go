@@ -29,34 +29,33 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var addr = flag.String("addr", "localhost:50051", "the address to connect to")
 
-const message = "hello world"
-
-func callUnaryEcho(client pb.EchoClient, message string) {
+func callUnaryEcho(client pb.EchoClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	resp, err := client.UnaryEcho(ctx, &pb.EchoRequest{Message: message})
+	resp, err := client.UnaryEcho(ctx, &pb.EchoRequest{Message: "hello world"})
 	if err != nil {
-		log.Fatalf("client.UnaryEcho(_) = _, %v: ", err)
+		log.Fatalf("UnaryEcho %v", err)
 	}
 	fmt.Println("UnaryEcho: ", resp.Message)
 }
 
-func callBidiStreamingEcho(client pb.EchoClient, message string) {
+func callBidiStreamingEcho(client pb.EchoClient) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	c, err := client.BidirectionalStreamingEcho(ctx)
 	if err != nil {
-		return
+		log.Fatalf("BidiStreamingEcho %v", err)
 	}
 
-	if err := c.Send(&pb.EchoRequest{Message: message}); err != nil {
-		log.Fatalf("failed to send request due to error: %v", err)
+	if err := c.Send(&pb.EchoRequest{Message: "hello world"}); err != nil {
+		log.Fatalf("Sending echo request: %v", err)
 	}
 	c.CloseSend()
 
@@ -66,7 +65,7 @@ func callBidiStreamingEcho(client pb.EchoClient, message string) {
 			break
 		}
 		if err != nil {
-			log.Fatalf("failed to receive response due to error: %v", err)
+			log.Fatalf("Receiving echo response: %v", err)
 		}
 		fmt.Println("BidiStreaming Echo: ", resp.Message)
 	}
@@ -74,17 +73,16 @@ func callBidiStreamingEcho(client pb.EchoClient, message string) {
 
 func main() {
 	flag.Parse()
-	// Set up a connection to the server.
+
 	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		log.Fatalf("grpc.Dial(%q): %v", *addr, err)
 	}
 	defer conn.Close()
 
 	ec := pb.NewEchoClient(conn)
 
-	callUnaryEcho(ec, message)
-	time.Sleep(1 * time.Second)
+	callUnaryEcho(ec)
 
-	callBidiStreamingEcho(ec, message)
+	callBidiStreamingEcho(ec)
 }

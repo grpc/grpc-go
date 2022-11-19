@@ -31,9 +31,10 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	pb "google.golang.org/grpc/examples/features/proto/echo"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+
+	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var port = flag.Int("port", 50051, "the port to serve on")
