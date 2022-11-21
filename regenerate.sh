@@ -57,7 +57,8 @@ LEGACY_SOURCES=(
   ${WORKDIR}/grpc-proto/grpc/health/v1/health.proto
   ${WORKDIR}/grpc-proto/grpc/lb/v1/load_balancer.proto
   profiling/proto/service.proto
-  reflection/grpc_reflection_v1alpha/reflection.proto
+  ${WORKDIR}/grpc-proto/grpc/reflection/v1alpha/reflection.proto
+  ${WORKDIR}/grpc-proto/grpc/reflection/v1/reflection.proto
 )
 
 # Generates only the new gRPC Service symbols
