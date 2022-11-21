@@ -5532,13 +5532,13 @@ func (s) TestServerHandlerSetSendCompression(t *testing.T) {
 		{
 			desc:          "fail_on_unregistered_res_compressor",
 			resCompressor: "snappy2",
-			wantErr:       fmt.Errorf("rpc error: code = Internal desc = grpc: failed to set send compressor compressor not registered: snappy2"),
+			wantErr:       fmt.Errorf("rpc error: code = Internal desc = grpc: failed to set send compressor compressor not registered snappy2"),
 		},
 		{
 			desc:                   "fail_on_unadvertised_res_compressor",
 			resCompressor:          "gzip",
 			disableClientAdvertise: true,
-			wantErr:                fmt.Errorf("rpc error: code = Internal desc = grpc: failed to set send compressor client does not support compressor: gzip"),
+			wantErr:                fmt.Errorf("rpc error: code = Internal desc = grpc: failed to set send compressor client does not support compressor gzip"),
 		},
 		{
 			desc:              "fail_when_set_compressor_called_after_headers_sent",

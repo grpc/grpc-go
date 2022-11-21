@@ -1289,15 +1289,18 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	// NOTE: this needs to be ahead of all handling, https://github.com/grpc/grpc-go/issues/686.
 	if s.opts.cp != nil {
 		cp = s.opts.cp
-		_ = stream.SetSendCompress(cp.Type())
 		sendCompressorName = cp.Type()
 	} else if rc := stream.RecvCompress(); rc != "" && rc != encoding.Identity {
 		// Legacy compressor not specified; attempt to respond with same encoding.
 		comp = encoding.GetCompressor(rc)
 		if comp != nil {
-			_ = stream.SetSendCompress(rc)
 			sendCompressorName = comp.Name()
 		}
+	}
+
+	if sendCompressorName != "" {
+		// Safe to ignore returned error value as we are guaranteed to succeed here
+		_ = stream.SetSendCompress(sendCompressorName)
 	}
 
 	var payInfo *payloadInfo
@@ -1383,6 +1386,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 	opts := &transport.Options{Last: true}
 
+	// Server handler could have set new compressor by calling SetSendCompressor.
+	// In case it is set, we need to use it for compressing outbound message.
 	if stream.SendCompress() != sendCompressorName {
 		comp = encoding.GetCompressor(stream.SendCompress())
 	}
@@ -1613,15 +1618,18 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	// NOTE: this needs to be ahead of all handling, https://github.com/grpc/grpc-go/issues/686.
 	if s.opts.cp != nil {
 		ss.cp = s.opts.cp
-		_ = stream.SetSendCompress(s.opts.cp.Type())
 		ss.sendCompressorName = s.opts.cp.Type()
 	} else if rc := stream.RecvCompress(); rc != "" && rc != encoding.Identity {
 		// Legacy compressor not specified; attempt to respond with same encoding.
 		ss.comp = encoding.GetCompressor(rc)
 		if ss.comp != nil {
-			_ = stream.SetSendCompress(rc)
 			ss.sendCompressorName = rc
 		}
+	}
+
+	if ss.sendCompressorName != "" {
+		// Safe to ignore returned error value as we are guaranteed to succeed here
+		_ = stream.SetSendCompress(ss.sendCompressorName)
 	}
 
 	ss.ctx = newContextWithRPCInfo(ss.ctx, false, ss.codec, ss.cp, ss.comp)
@@ -1953,27 +1961,32 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 	return nil
 }
 
-// SetSendCompressor sets the compressor that will be used when sending
-// RPC payload back to the client. It may be called at most once, and must not
-// be called after any event that causes headers to be sent (see SetHeader for
-// a complete list). Provided compressor is used when below conditions are met:
+// SetSendCompressor sets a compressor for outbound messages.
+// It must not be called after any event that causes headers to be sent
+// (see SetHeader for a complete list). Provided compressor is used when below
+// conditions are met:
 //
 //   - compressor is registered via encoding.RegisterCompressor
 //   - compressor name exists in the client advertised compressor names sent in
-//     grpc-accept-encoding metadata.
+//     :grpc-accept-encoding header.
 //
 // The context provided must be the context passed to the server's handler.
 //
 // The error returned is compatible with the status package.  However, the
 // status code will often not match the RPC status as seen by the client
 // application, and therefore, should not be relied upon for this purpose.
+//
+// # Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func SetSendCompressor(ctx context.Context, name string) error {
 	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.Stream)
 	if !ok || stream == nil {
 		return status.Errorf(codes.Internal, "grpc: failed to fetch the stream from the context %v", ctx)
 	}
 
-	if err := grpcutil.ValidateSendCompressor(name, stream.ClientAdvertisedCompressors()); err != nil {
+	if err := validateSendCompressor(name, stream.ClientAdvertisedCompressors()); err != nil {
 		return status.Errorf(codes.Internal, "grpc: failed to set send compressor %v", err)
 	}
 
@@ -2013,4 +2026,23 @@ type channelzServer struct {
 
 func (c *channelzServer) ChannelzMetric() *channelz.ServerInternalMetric {
 	return c.s.channelzMetric()
+}
+
+// validateSendCompressor returns an error when given compressor name cannot be
+// handled by the server or the client based on the advertised compressors.
+func validateSendCompressor(name, clientCompressors string) error {
+	if name == "identity" {
+		return nil
+	}
+
+	if !grpcutil.IsCompressorNameRegistered(name) {
+		return fmt.Errorf("compressor not registered %s", name)
+	}
+
+	for _, clientCompressor := range strings.Split(clientCompressors, ",") {
+		if clientCompressor == name {
+			return nil // found match
+		}
+	}
+	return fmt.Errorf("client does not support compressor %s", name)
 }

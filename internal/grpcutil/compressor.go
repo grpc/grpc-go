@@ -19,7 +19,6 @@
 package grpcutil
 
 import (
-	"fmt"
 	"strings"
 
 	"google.golang.org/grpc/internal/envconfig"
@@ -45,42 +44,4 @@ func RegisteredCompressors() string {
 		return ""
 	}
 	return strings.Join(RegisteredCompressorNames, ",")
-}
-
-// ValidateSendCompressor returns an error when given compressor name cannot be
-// handled by the server or the client based on the advertised compressors.
-func ValidateSendCompressor(name, clientAdvertisedCompressors string) error {
-	if name == "identity" {
-		return nil
-	}
-
-	if !IsCompressorNameRegistered(name) {
-		return fmt.Errorf("compressor not registered: %s", name)
-	}
-
-	if !compressorExists(name, clientAdvertisedCompressors) {
-		return fmt.Errorf("client does not support compressor: %s", name)
-	}
-
-	return nil
-}
-
-// compressorExists returns true when the given name exists in the comma
-// separated compressor list.
-func compressorExists(name, compressors string) bool {
-	var (
-		i      = 0
-		length = len(compressors)
-	)
-	for j := 0; j <= length; j++ {
-		if j < length && compressors[j] != ',' {
-			continue
-		}
-
-		if compressors[i:j] == name {
-			return true
-		}
-		i = j + 1
-	}
-	return false
 }
