@@ -153,12 +153,6 @@ func newResourceTypeRegistry() *resourceTypeRegistry {
 	return &resourceTypeRegistry{types: make(map[string]xdsresource.Type)}
 }
 
-func (r *resourceTypeRegistry) get(url string) xdsresource.Type {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.types[url]
-}
-
 func (r *resourceTypeRegistry) maybeRegister(rType xdsresource.Type) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
