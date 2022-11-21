@@ -98,9 +98,9 @@ func (e *EndpointsResourceData) Raw() *anypb.Any {
 	return e.Resource.Raw
 }
 
-// EndpointsResourceWatcher wraps the callbacks to be invoked for different
+// EndpointsWatcher wraps the callbacks to be invoked for different
 // events corresponding to the endpoints resource being watched.
-type EndpointsResourceWatcher interface {
+type EndpointsWatcher interface {
 	// OnUpdate is invoked to report an update for the resource being watched.
 	OnUpdate(*EndpointsResourceData)
 
@@ -120,7 +120,7 @@ type EndpointsResourceWatcher interface {
 }
 
 type delegatingEndpointsWatcher struct {
-	watcher EndpointsResourceWatcher
+	watcher EndpointsWatcher
 }
 
 func (d *delegatingEndpointsWatcher) OnUpdate(data ResourceData) {
@@ -138,10 +138,7 @@ func (d *delegatingEndpointsWatcher) OnResourceDoesNotExist() {
 
 // WatchEndpoints uses xDS to discover the configuration associated with the
 // provided endpoints resource name.
-//
-// This is a convenience wrapper around the WatchResource() API and callers are
-// encouraged to use this over the latter.
-func WatchEndpoints(c Producer, resourceName string, watcher EndpointsResourceWatcher) (cancel func()) {
-	delegator := &delegatingEndpointsWatcher{watcher: watcher}
-	return c.WatchResource(endpointsType, resourceName, delegator)
+func WatchEndpoints(p Producer, name string, w EndpointsWatcher) (cancel func()) {
+	delegator := &delegatingEndpointsWatcher{watcher: w}
+	return p.WatchResource(endpointsType, name, delegator)
 }

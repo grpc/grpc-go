@@ -67,7 +67,7 @@ func securityConfigValidator(bc *bootstrap.Config, sc *SecurityConfig) error {
 	return nil
 }
 
-func listenerResourceValidator(bc *bootstrap.Config, lis ListenerUpdate) error {
+func listenerValidator(bc *bootstrap.Config, lis ListenerUpdate) error {
 	if lis.InboundListenerCfg == nil || lis.InboundListenerCfg.FilterChains == nil {
 		return nil
 	}
@@ -93,7 +93,7 @@ func (listenerResourceType) Decode(opts *DecodeOptions, resource *anypb.Any) (*D
 	}
 
 	// Perform extra validation here.
-	if err := listenerResourceValidator(opts.BootstrapConfig, listener); err != nil {
+	if err := listenerValidator(opts.BootstrapConfig, listener); err != nil {
 		return &DecodeResult{Name: name, Resource: &ListenerResourceData{Resource: ListenerUpdate{}}}, err
 	}
 
@@ -135,9 +135,9 @@ func (l *ListenerResourceData) Raw() *anypb.Any {
 	return l.Resource.Raw
 }
 
-// ListenerResourceWatcher wraps the callbacks to be invoked for different
+// ListenerWatcher wraps the callbacks to be invoked for different
 // events corresponding to the listener resource being watched.
-type ListenerResourceWatcher interface {
+type ListenerWatcher interface {
 	// OnUpdate is invoked to report an update for the resource being watched.
 	OnUpdate(*ListenerResourceData)
 
@@ -157,7 +157,7 @@ type ListenerResourceWatcher interface {
 }
 
 type delegatingListenerWatcher struct {
-	watcher ListenerResourceWatcher
+	watcher ListenerWatcher
 }
 
 func (d *delegatingListenerWatcher) OnUpdate(data ResourceData) {
@@ -175,7 +175,7 @@ func (d *delegatingListenerWatcher) OnResourceDoesNotExist() {
 
 // WatchListener uses xDS to discover the configuration associated with the
 // provided listener resource name.
-func WatchListener(c Producer, resourceName string, watcher ListenerResourceWatcher) (cancel func()) {
-	delegator := &delegatingListenerWatcher{watcher: watcher}
-	return c.WatchResource(listenerType, resourceName, delegator)
+func WatchListener(p Producer, name string, w ListenerWatcher) (cancel func()) {
+	delegator := &delegatingListenerWatcher{watcher: w}
+	return p.WatchResource(listenerType, name, delegator)
 }

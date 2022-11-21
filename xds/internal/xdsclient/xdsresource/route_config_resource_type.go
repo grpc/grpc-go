@@ -99,9 +99,9 @@ func (r *RouteConfigResourceData) Raw() *anypb.Any {
 	return r.Resource.Raw
 }
 
-// RouteConfigResourceWatcher wraps the callbacks to be invoked for different
+// RouteConfigWatcher wraps the callbacks to be invoked for different
 // events corresponding to the route configuration resource being watched.
-type RouteConfigResourceWatcher interface {
+type RouteConfigWatcher interface {
 	// OnUpdate is invoked to report an update for the resource being watched.
 	OnUpdate(*RouteConfigResourceData)
 
@@ -121,7 +121,7 @@ type RouteConfigResourceWatcher interface {
 }
 
 type delegatingRouteConfigWatcher struct {
-	watcher RouteConfigResourceWatcher
+	watcher RouteConfigWatcher
 }
 
 func (d *delegatingRouteConfigWatcher) OnUpdate(data ResourceData) {
@@ -139,10 +139,7 @@ func (d *delegatingRouteConfigWatcher) OnResourceDoesNotExist() {
 
 // WatchRouteConfig uses xDS to discover the configuration associated with the
 // provided route configuration resource name.
-//
-// This is a convenience wrapper around the WatchResource() API and callers are
-// encouraged to use this over the latter.
-func WatchRouteConfig(c Producer, resourceName string, watcher RouteConfigResourceWatcher) (cancel func()) {
-	delegator := &delegatingRouteConfigWatcher{watcher: watcher}
-	return c.WatchResource(routeConfigType, resourceName, delegator)
+func WatchRouteConfig(p Producer, name string, w RouteConfigWatcher) (cancel func()) {
+	delegator := &delegatingRouteConfigWatcher{watcher: w}
+	return p.WatchResource(routeConfigType, name, delegator)
 }

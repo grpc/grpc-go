@@ -82,30 +82,30 @@ type ClusterResourceData struct {
 }
 
 // Equal returns true if other is equal to r.
-func (l *ClusterResourceData) Equal(other ResourceData) bool {
-	if l == nil && other == nil {
+func (c *ClusterResourceData) Equal(other ResourceData) bool {
+	if c == nil && other == nil {
 		return true
 	}
-	if (l == nil) != (other == nil) {
+	if (c == nil) != (other == nil) {
 		return false
 	}
-	return proto.Equal(l.Resource.Raw, other.Raw())
+	return proto.Equal(c.Resource.Raw, other.Raw())
 
 }
 
 // ToJSON returns a JSON string representation of the resource data.
-func (l *ClusterResourceData) ToJSON() string {
-	return pretty.ToJSON(l.Resource)
+func (c *ClusterResourceData) ToJSON() string {
+	return pretty.ToJSON(c.Resource)
 }
 
 // Raw returns the underlying raw protobuf form of the cluster resource.
-func (l *ClusterResourceData) Raw() *anypb.Any {
-	return l.Resource.Raw
+func (c *ClusterResourceData) Raw() *anypb.Any {
+	return c.Resource.Raw
 }
 
-// ClusterResourceWatcher wraps the callbacks to be invoked for different events
+// ClusterWatcher wraps the callbacks to be invoked for different events
 // corresponding to the cluster resource being watched.
-type ClusterResourceWatcher interface {
+type ClusterWatcher interface {
 	// OnUpdate is invoked to report an update for the resource being watched.
 	OnUpdate(*ClusterResourceData)
 
@@ -125,7 +125,7 @@ type ClusterResourceWatcher interface {
 }
 
 type delegatingClusterWatcher struct {
-	watcher ClusterResourceWatcher
+	watcher ClusterWatcher
 }
 
 func (d *delegatingClusterWatcher) OnUpdate(data ResourceData) {
@@ -143,10 +143,7 @@ func (d *delegatingClusterWatcher) OnResourceDoesNotExist() {
 
 // WatchCluster uses xDS to discover the configuration associated with the
 // provided cluster resource name.
-//
-// This is a convenience wrapper around the WatchResource() API and callers are
-// encouraged to use this over the latter.
-func WatchCluster(c Producer, resourceName string, watcher ClusterResourceWatcher) (cancel func()) {
-	delegator := &delegatingClusterWatcher{watcher: watcher}
-	return c.WatchResource(clusterType, resourceName, delegator)
+func WatchCluster(p Producer, name string, w ClusterWatcher) (cancel func()) {
+	delegator := &delegatingClusterWatcher{watcher: w}
+	return p.WatchResource(clusterType, name, delegator)
 }
