@@ -62,7 +62,7 @@ func (t *Transport) lrsStartStream() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.lrsCancelStream = cancel
-	go t.reportLoad(ctx)
+	go t.lrsRunner(ctx)
 }
 
 // lrsStopStream closes the LRS stream, if this is the last user of the stream.
@@ -77,15 +77,15 @@ func (t *Transport) lrsStopStream() {
 	}
 
 	t.lrsCancelStream()
-	<-t.reportLoadDoneCh
+	<-t.lrsRunnerDoneCh
 	t.logger.Infof("Stopping LRS stream")
 }
 
-// reportLoad starts an LRS stream to report load data to the management server.
+// lrsRunner starts an LRS stream to report load data to the management server.
 // It reports load at constant intervals (as configured by the management
 // server) until the context is cancelled.
-func (t *Transport) reportLoad(ctx context.Context) {
-	defer close(t.reportLoadDoneCh)
+func (t *Transport) lrsRunner(ctx context.Context) {
+	defer close(t.lrsRunnerDoneCh)
 
 	// This feature indicates that the client supports the
 	// LoadStatsResponse.send_all_clusters field in the LRS response.

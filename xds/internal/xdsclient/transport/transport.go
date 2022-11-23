@@ -59,13 +59,15 @@ type Transport struct {
 	// These fields are initialized at creation time and are read-only afterwards.
 	cc                  *grpc.ClientConn        // ClientConn to the mangement server.
 	serverURI           string                  // URI of the management server.
-	stopRunGoroutine    context.CancelFunc      // CancelFunc for the run() goroutine.
 	updateHandler       UpdateHandlerFunc       // Resource update handler. xDS data model layer.
 	adsStreamErrHandler func(error)             // To report underlying stream errors.
 	lrsStore            *load.Store             // Store returned to user for pushing loads.
 	backoff             func(int) time.Duration // Backoff after stream failures.
 	nodeProto           *v3corepb.Node          // Identifies the gRPC application.
 	logger              *grpclog.PrefixLogger   // Prefix logger for transport logs.
+	adsRunnerCancel     context.CancelFunc      // CancelFunc for the ADS goroutine.
+	adsRunnerDoneCh     chan struct{}           // To notify exit of ADS goroutine.
+	lrsRunnerDoneCh     chan struct{}           // To notify exit of LRS goroutine.
 
 	// These channels enable synchronization amongst the different goroutines
 	// spawned by the transport, and between asynchorous events resulting from
@@ -89,10 +91,9 @@ type Transport struct {
 	// will be reset upon stream restarts.
 	nonces map[string]string
 
-	lrsMu            sync.Mutex         // Protects all LRS state.
-	lrsCancelStream  context.CancelFunc // CancelFunc for the LRS stream.
-	lrsRefCount      int                // Reference count on the load store.
-	reportLoadDoneCh chan struct{}      // To notify exit of LRS goroutine.
+	lrsMu           sync.Mutex         // Protects all LRS state.
+	lrsCancelStream context.CancelFunc // CancelFunc for the LRS stream.
+	lrsRefCount     int                // Reference count on the load store.
 }
 
 // UpdateHandlerFunc is the implementation at the xDS data model layer, which
@@ -195,12 +196,13 @@ func New(opts Options) (*Transport, error) {
 		nodeProto:           node,
 		logger:              opts.Logger,
 
-		adsStreamCh:      make(chan adsStream, 1),
-		adsRequestCh:     buffer.NewUnbounded(),
-		resources:        make(map[string]map[string]bool),
-		versions:         make(map[string]string),
-		nonces:           make(map[string]string),
-		reportLoadDoneCh: make(chan struct{}),
+		adsStreamCh:     make(chan adsStream, 1),
+		adsRequestCh:    buffer.NewUnbounded(),
+		resources:       make(map[string]map[string]bool),
+		versions:        make(map[string]string),
+		nonces:          make(map[string]string),
+		adsRunnerDoneCh: make(chan struct{}),
+		lrsRunnerDoneCh: make(chan struct{}),
 	}
 
 	// This context is used for sending and receiving RPC requests and
@@ -209,8 +211,8 @@ func New(opts Options) (*Transport, error) {
 	// closed will essentially cancel any pending RPCs, and cause the goroutines
 	// to terminate.
 	ctx, cancel := context.WithCancel(context.Background())
-	ret.stopRunGoroutine = cancel
-	go ret.run(ctx)
+	ret.adsRunnerCancel = cancel
+	go ret.adsRunner(ctx)
 
 	ret.logger.Infof("Created transport to server %q", ret.serverURI)
 	return ret, nil
@@ -281,45 +283,52 @@ func (t *Transport) recvAggregatedDiscoveryServiceResponse(stream adsStream) (re
 	return resp.GetResources(), resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce(), nil
 }
 
-// run starts an ADS stream (and backs off exponentially, if the previous
+// adsRunner starts an ADS stream (and backs off exponentially, if the previous
 // stream failed without receiving a single reply) and runs the sender and
 // receiver routines to send and receive data from the stream respectively.
-func (t *Transport) run(ctx context.Context) {
+func (t *Transport) adsRunner(ctx context.Context) {
+	defer close(t.adsRunnerDoneCh)
+
 	go t.send(ctx)
+
 	// TODO: start a goroutine monitoring ClientConn's connectivity state, and
 	// report error (and log) when stats is transient failure.
 
-	retries := 0
-	lastStreamStartTime := time.Time{}
+	backoffAttempt := 0
+	backoffTimer := time.NewTimer(0)
 	for ctx.Err() == nil {
-		dur := time.Until(lastStreamStartTime.Add(t.backoff(retries)))
-		if dur > 0 {
-			timer := time.NewTimer(dur)
-			select {
-			case <-timer.C:
-			case <-ctx.Done():
-				timer.Stop()
-				return
-			}
-		}
-
-		retries++
-		lastStreamStartTime = time.Now()
-		stream, err := t.newAggregatedDiscoveryServiceStream(ctx, t.cc)
-		if err != nil {
-			t.adsStreamErrHandler(err)
-			t.logger.Warningf("ADS stream creation failed: %v", err)
-			continue
-		}
-		t.logger.Infof("ADS stream created")
-
 		select {
-		case <-t.adsStreamCh:
-		default:
+		case <-backoffTimer.C:
+		case <-ctx.Done():
+			backoffTimer.Stop()
+			return
 		}
-		t.adsStreamCh <- stream
-		if t.recv(stream) {
-			retries = 0
+
+		// We reset backoff state when we successfully receive at least one
+		// message from the server.
+		resetBackoff := func() bool {
+			stream, err := t.newAggregatedDiscoveryServiceStream(ctx, t.cc)
+			if err != nil {
+				t.adsStreamErrHandler(err)
+				t.logger.Warningf("ADS stream creation failed: %v", err)
+				return false
+			}
+			t.logger.Infof("ADS stream created")
+
+			select {
+			case <-t.adsStreamCh:
+			default:
+			}
+			t.adsStreamCh <- stream
+			return t.recv(stream)
+		}()
+
+		if resetBackoff {
+			backoffTimer.Reset(0)
+			backoffAttempt = 0
+		} else {
+			backoffTimer.Reset(t.backoff(backoffAttempt))
+			backoffAttempt++
 		}
 	}
 }
@@ -412,7 +421,8 @@ func (t *Transport) sendExisting(stream adsStream) bool {
 }
 
 // recv receives xDS responses on the provided ADS stream and branches out to
-// message specific handlers.
+// message specific handlers. Returns true if at least one message was
+// successfully received.
 func (t *Transport) recv(stream adsStream) bool {
 	msgReceived := false
 	for {
@@ -547,7 +557,8 @@ func (t *Transport) processAckRequest(ack *ackRequest, stream grpc.ClientStream)
 
 // Close closes the Transport and frees any associated resources.
 func (t *Transport) Close() {
-	t.stopRunGoroutine()
+	t.adsRunnerCancel()
+	<-t.adsRunnerDoneCh
 	t.cc.Close()
 }
 
