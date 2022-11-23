@@ -37,7 +37,7 @@ import (
 	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 )
 
-type lrsStream v3lrsgrpc.LoadReportingService_StreamLoadStatsClient
+type lrsStream = v3lrsgrpc.LoadReportingService_StreamLoadStatsClient
 
 // ReportLoad starts reporting loads to the management server the transport is
 // configured to use.
@@ -181,7 +181,7 @@ func (t *Transport) recvFirstLoadStatsResponse(stream lrsStream) ([]string, time
 	}
 
 	if resp.ReportEndpointGranularity {
-		// TODO: fixme to support per endpoint loads.
+		// TODO(easwars): Support per endpoint loads.
 		return nil, 0, errors.New("lrs: endpoint loads requested, but not supported by current implementation")
 	}
 

@@ -45,7 +45,7 @@ import (
 	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 )
 
-type adsStream v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
+type adsStream = v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
 
 // Transport provides a resource-type agnostic implementation of the xDS
 // transport protocol. At this layer, resource contents are supposed to be
