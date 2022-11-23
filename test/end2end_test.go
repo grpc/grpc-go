@@ -1376,7 +1376,14 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	close(rpcDoneOnClient)
 }
 
+// TestDetailedGoawayErrorOnGracefulClosePropagatesToRPCError tests the scenario
+// where the configured max connection age expires for a connection. The server
+// is expected to gracefully close the connection in this case by sending a
+// GoAway frame. The test verifies that the error message contained in the
+// GoAway frame is propagated to the RPC error.
 func (s) TestDetailedGoawayErrorOnGracefulClosePropagatesToRPCError(t *testing.T) {
+	// Setup a stub server where the bidi streaming RPC handler blocks on a
+	// channel which is closed when the test is done.
 	rpcDoneOnClient := make(chan struct{})
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
@@ -1384,10 +1391,17 @@ func (s) TestDetailedGoawayErrorOnGracefulClosePropagatesToRPCError(t *testing.T
 			return status.Error(codes.Internal, "arbitrary status")
 		},
 	}
+	const maxConnectionAge = 100 * time.Millisecond
 	sopts := []grpc.ServerOption{
 		grpc.KeepaliveParams(keepalive.ServerParameters{
-			MaxConnectionAge:      time.Millisecond * 100,
-			MaxConnectionAgeGrace: time.Millisecond,
+			// Use a very short value for max connection age. The server is
+			// expected to send a GoAway once max connection age expires.
+			MaxConnectionAge: maxConnectionAge,
+			// Use a longer value for the grace period. The server hard closes
+			// the connection once the grace period expires, and if this
+			// happens, the client will see an EOF error when attempting to read
+			// from the stream.
+			MaxConnectionAgeGrace: time.Second,
 		}),
 	}
 	if err := ss.Start(sopts); err != nil {
@@ -1395,17 +1409,21 @@ func (s) TestDetailedGoawayErrorOnGracefulClosePropagatesToRPCError(t *testing.T
 	}
 	defer ss.Stop()
 
+	// Initiate the bidi streaming RPC which will block on the server.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	stream, err := ss.Client.FullDuplexCall(ctx)
 	if err != nil {
-		t.Fatalf("%v.FullDuplexCall = _, %v, want _, <nil>", ss.Client, err)
+		t.Fatalf("FullDuplexCall failed: %v", err)
 	}
-	const expectedErrorMessageSubstring = "received prior goaway: code: NO_ERROR"
+
+	// Reading from the stream should return the error specified in the GoAway
+	// received from the server.
+	const wantErrStr = "received prior goaway: code: NO_ERROR"
 	_, err = stream.Recv()
 	close(rpcDoneOnClient)
-	if err == nil || !strings.Contains(err.Error(), expectedErrorMessageSubstring) {
-		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: %q", stream, err, expectedErrorMessageSubstring)
+	if err == nil || !strings.Contains(err.Error(), wantErrStr) {
+		t.Fatalf("Recv() = %v, want rpc error containing substring: %q", err, wantErrStr)
 	}
 }
 
