@@ -88,23 +88,20 @@ func (t *Transport) lrsStopStream() {
 // server) until the context is cancelled.
 func (t *Transport) reportLoad(ctx context.Context) {
 	defer close(t.reportLoadDoneCh)
-	retries := 0
-	lastStreamStartTime := time.Time{}
+
+	backoffAttempt := 0
+	backoffTimer := time.NewTimer(0)
 	for ctx.Err() == nil {
-		dur := time.Until(lastStreamStartTime.Add(t.backoff(retries)))
-		if dur > 0 {
-			timer := time.NewTimer(dur)
-			select {
-			case <-timer.C:
-			case <-ctx.Done():
-				timer.Stop()
-				return
-			}
+		select {
+		case <-backoffTimer.C:
+		case <-ctx.Done():
+			backoffTimer.Stop()
+			return
 		}
 
-		retries++
-		lastStreamStartTime = time.Now()
-		func() {
+		// We reset backoff state when we successfully receive at least one
+		// message from the server.
+		resetBackoff := func() bool {
 			// streamCtx is created and canceled in case we terminate the stream
 			// early for any reason, to avoid gRPC-Go leaking the RPC's monitoring
 			// goroutine.
@@ -113,24 +110,32 @@ func (t *Transport) reportLoad(ctx context.Context) {
 			stream, err := v3lrsgrpc.NewLoadReportingServiceClient(t.cc).StreamLoadStats(streamCtx)
 			if err != nil {
 				t.logger.Warningf("Failed to create LRS stream: %v", err)
-				return
+				return false
 			}
 			t.logger.Infof("Created LRS stream to server: %s", t.serverURI)
 
 			if err := t.sendFirstLoadStatsRequest(stream); err != nil {
 				t.logger.Warningf("Failed to send first LRS request: %v", err)
-				return
+				return false
 			}
 
 			clusters, interval, err := t.recvFirstLoadStatsResponse(stream)
 			if err != nil {
 				t.logger.Warningf("Failed to read from LRS stream: %v", err)
-				return
+				return false
 			}
 
-			retries = 0
 			t.sendLoads(streamCtx, stream, clusters, interval)
+			return true
 		}()
+
+		if resetBackoff {
+			backoffTimer.Reset(0)
+			backoffAttempt = 0
+		} else {
+			backoffTimer.Reset(t.backoff(backoffAttempt))
+			backoffAttempt++
+		}
 	}
 }
 
