@@ -253,7 +253,7 @@ func (t *Transport) newAggregatedDiscoveryServiceStream(ctx context.Context, cc 
 	return v3adsgrpc.NewAggregatedDiscoveryServiceClient(cc).StreamAggregatedResources(ctx, grpc.WaitForReady(true))
 }
 
-func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, resourceNames []string, resourceURL, version, nonce, errMsg string) error {
+func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, resourceNames []string, resourceURL, version, nonce string, nackErr error) error {
 	req := &v3discoverypb.DiscoveryRequest{
 		Node:          t.nodeProto,
 		TypeUrl:       resourceURL,
@@ -261,9 +261,9 @@ func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, reso
 		VersionInfo:   version,
 		ResponseNonce: nonce,
 	}
-	if errMsg != "" {
+	if nackErr != nil {
 		req.ErrorDetail = &statuspb.Status{
-			Code: int32(codes.InvalidArgument), Message: errMsg,
+			Code: int32(codes.InvalidArgument), Message: nackErr.Error(),
 		}
 	}
 	if err := stream.Send(req); err != nil {
@@ -357,9 +357,10 @@ func (t *Transport) send(ctx context.Context) {
 			t.adsRequestCh.Load()
 
 			var (
-				resources                   []string
-				url, version, nonce, errMsg string
-				send                        bool
+				resources           []string
+				url, version, nonce string
+				send                bool
+				nackErr             error
 			)
 			switch update := u.(type) {
 			case *resourceRequest:
@@ -369,7 +370,7 @@ func (t *Transport) send(ctx context.Context) {
 				if !send {
 					continue
 				}
-				errMsg = update.errMsg
+				nackErr = update.nackErr
 			}
 			if stream == nil {
 				// There's no stream yet. Skip the request. This request
@@ -378,7 +379,7 @@ func (t *Transport) send(ctx context.Context) {
 				// sending response back).
 				continue
 			}
-			if err := t.sendAggregatedDiscoveryServiceRequest(stream, resources, url, version, nonce, errMsg); err != nil {
+			if err := t.sendAggregatedDiscoveryServiceRequest(stream, resources, url, version, nonce, nackErr); err != nil {
 				t.logger.Warningf("ADS request for {resources: %q, url: %v, version: %q, nonce: %q} failed: %v", resources, url, version, nonce, err)
 				// Send failed, clear the current stream.
 				stream = nil
@@ -411,7 +412,7 @@ func (t *Transport) sendExisting(stream adsStream) bool {
 	t.nonces = make(map[string]string)
 
 	for url, resources := range t.resources {
-		if err := t.sendAggregatedDiscoveryServiceRequest(stream, mapToSlice(resources), url, t.versions[url], "", ""); err != nil {
+		if err := t.sendAggregatedDiscoveryServiceRequest(stream, mapToSlice(resources), url, t.versions[url], "", nil); err != nil {
 			t.logger.Warningf("ADS request failed: %v", err)
 			return false
 		}
@@ -443,22 +444,27 @@ func (t *Transport) recv(stream adsStream) bool {
 			t.logger.Warningf("%s", e.ErrStr)
 			continue
 		}
+		// If the data model layer returned an error, we need to NACK the
+		// response in which case we need to set the version to the most
+		// recently accepted version of this resource type.
 		if err != nil {
+			t.mu.Lock()
 			t.adsRequestCh.Put(&ackRequest{
 				url:     url,
-				version: "",
 				nonce:   nonce,
-				errMsg:  err.Error(),
 				stream:  stream,
+				version: t.versions[url],
+				nackErr: err,
 			})
+			t.mu.Unlock()
 			t.logger.Warningf("Sending NACK for resource type: %v, version: %v, nonce: %v, reason: %v", url, rVersion, nonce, err)
 			continue
 		}
 		t.adsRequestCh.Put(&ackRequest{
 			url:     url,
-			version: rVersion,
 			nonce:   nonce,
 			stream:  stream,
+			version: rVersion,
 		})
 		t.logger.Infof("Sending ACK for resource type: %v, version: %v, nonce: %v", url, rVersion, nonce)
 	}
@@ -502,7 +508,7 @@ type ackRequest struct {
 	url     string // Resource type URL.
 	version string // NACK if version is an empty string.
 	nonce   string
-	errMsg  string // Empty unless it's a NACK.
+	nackErr error // nil for ACK, non-nil for NACK.
 	// ACK/NACK are tagged with the stream it's for. When the stream is down,
 	// all the ACK/NACK for this stream will be dropped, and the version/nonce
 	// won't be updated.
@@ -543,16 +549,12 @@ func (t *Transport) processAckRequest(ack *ackRequest, stream grpc.ClientStream)
 	}
 	resources := mapToSlice(s)
 
-	version := ack.version
-	if version == "" {
-		// This is a NACK. Get the previously ACKed version, which could also be
-		// an empty string.  This can happen if there wasn't any ACK before.
-		version = t.versions[ack.url]
-	} else {
-		// This is an ACK. Update the versions map.
-		t.versions[ack.url] = version
+	// Update the versions map only when we plan to send an ACK.
+	if ack.nackErr == nil {
+		t.versions[ack.url] = ack.version
 	}
-	return resources, ack.url, version, nonce, true
+
+	return resources, ack.url, ack.version, nonce, true
 }
 
 // Close closes the Transport and frees any associated resources.
