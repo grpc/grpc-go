@@ -37,8 +37,6 @@ import (
 	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 )
 
-const clientFeatureLRSSendAllClusters = "envoy.lrs.supports_send_all_clusters"
-
 type lrsStream v3lrsgrpc.LoadReportingService_StreamLoadStatsClient
 
 // ReportLoad starts reporting loads to the management server the transport is
@@ -89,6 +87,11 @@ func (t *Transport) lrsStopStream() {
 func (t *Transport) reportLoad(ctx context.Context) {
 	defer close(t.reportLoadDoneCh)
 
+	// This feature indicates that the client supports the
+	// LoadStatsResponse.send_all_clusters field in the LRS response.
+	node := proto.Clone(t.nodeProto).(*v3corepb.Node)
+	node.ClientFeatures = append(node.ClientFeatures, "envoy.lrs.supports_send_all_clusters")
+
 	backoffAttempt := 0
 	backoffTimer := time.NewTimer(0)
 	for ctx.Err() == nil {
@@ -114,7 +117,7 @@ func (t *Transport) reportLoad(ctx context.Context) {
 			}
 			t.logger.Infof("Created LRS stream to server: %s", t.serverURI)
 
-			if err := t.sendFirstLoadStatsRequest(stream); err != nil {
+			if err := t.sendFirstLoadStatsRequest(stream, node); err != nil {
 				t.logger.Warningf("Failed to send first LRS request: %v", err)
 				return false
 			}
@@ -155,9 +158,7 @@ func (t *Transport) sendLoads(ctx context.Context, stream lrsStream, clusterName
 	}
 }
 
-func (t *Transport) sendFirstLoadStatsRequest(stream lrsStream) error {
-	node := proto.Clone(t.nodeProto).(*v3corepb.Node)
-	node.ClientFeatures = append(node.ClientFeatures, clientFeatureLRSSendAllClusters)
+func (t *Transport) sendFirstLoadStatsRequest(stream lrsStream, node *v3corepb.Node) error {
 	req := &v3lrspb.LoadStatsRequest{Node: node}
 	t.logger.Debugf("Sending initial LoadStatsRequest: %s", pretty.ToJSON(req))
 	err := stream.Send(req)
