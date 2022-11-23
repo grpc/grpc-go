@@ -89,9 +89,10 @@ type Transport struct {
 	// will be reset upon stream restarts.
 	nonces map[string]string
 
-	lrsMu           sync.Mutex         // Protects all LRS state.
-	lrsCancelStream context.CancelFunc // CancelFunc for the LRS stream.
-	lrsRefCount     int                // Reference count on the load store.
+	lrsMu            sync.Mutex         // Protects all LRS state.
+	lrsCancelStream  context.CancelFunc // CancelFunc for the LRS stream.
+	lrsRefCount      int                // Reference count on the load store.
+	reportLoadDoneCh chan struct{}      // To notify exit of LRS goroutine.
 }
 
 // UpdateHandlerFunc is the implementation at the xDS data model layer, which
@@ -200,11 +201,12 @@ func New(opts *Options) (*Transport, error) {
 		nodeProto:           node,
 		logger:              opts.Logger,
 
-		adsStreamCh:  make(chan adsStream, 1),
-		adsRequestCh: buffer.NewUnbounded(),
-		resources:    make(map[string]map[string]bool),
-		versions:     make(map[string]string),
-		nonces:       make(map[string]string),
+		adsStreamCh:      make(chan adsStream, 1),
+		adsRequestCh:     buffer.NewUnbounded(),
+		resources:        make(map[string]map[string]bool),
+		versions:         make(map[string]string),
+		nonces:           make(map[string]string),
+		reportLoadDoneCh: make(chan struct{}),
 	}
 
 	// This context is used for sending and receiving RPC requests and

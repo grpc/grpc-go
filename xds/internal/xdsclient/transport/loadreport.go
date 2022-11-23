@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
@@ -41,26 +42,20 @@ const clientFeatureLRSSendAllClusters = "envoy.lrs.supports_send_all_clusters"
 type lrsStream v3lrsgrpc.LoadReportingService_StreamLoadStatsClient
 
 // ReportLoad starts reporting loads to the management server the transport is
-// configured to talk to.
+// configured to use.
 //
 // It returns a Store for the user to report loads and a function to cancel the
 // load reporting.
 func (t *Transport) ReportLoad() (*load.Store, func()) {
-	t.lrsMu.Lock()
-	defer t.lrsMu.Unlock()
-
 	t.lrsStartStream()
-	return t.lrsStore, func() {
-		t.lrsMu.Lock()
-		t.lrsStopStream()
-		t.lrsMu.Unlock()
-	}
+	return t.lrsStore, grpcsync.OnceFunc(func() { t.lrsStopStream() })
 }
 
 // lrsStartStream starts an LRS stream to the server, if none exists.
-//
-// Caller must hold t.lrsMu.
 func (t *Transport) lrsStartStream() {
+	t.lrsMu.Lock()
+	defer t.lrsMu.Unlock()
+
 	t.lrsRefCount++
 	if t.lrsRefCount != 1 {
 		// Return early if the stream has already been started.
@@ -73,9 +68,10 @@ func (t *Transport) lrsStartStream() {
 }
 
 // lrsStopStream closes the LRS stream, if this is the last user of the stream.
-//
-// Caller must hold t.lrsMu.
 func (t *Transport) lrsStopStream() {
+	t.lrsMu.Lock()
+	defer t.lrsMu.Unlock()
+
 	t.lrsRefCount--
 	if t.lrsRefCount != 0 {
 		// Return early if the stream has other references.
@@ -83,6 +79,7 @@ func (t *Transport) lrsStopStream() {
 	}
 
 	t.lrsCancelStream()
+	<-t.reportLoadDoneCh
 	t.logger.Infof("Stopping LRS stream")
 }
 
@@ -90,6 +87,7 @@ func (t *Transport) lrsStopStream() {
 // It reports load at constant intervals (as configured by the management
 // server) until the context is cancelled.
 func (t *Transport) reportLoad(ctx context.Context) {
+	defer close(t.reportLoadDoneCh)
 	retries := 0
 	lastStreamStartTime := time.Time{}
 	for ctx.Err() == nil {
