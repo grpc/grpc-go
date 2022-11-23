@@ -177,7 +177,7 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 			mgmtServer.XDSResponseChan <- &fakeserver.Response{Resp: test.managementServerResponse}
 
 			// Construct the server config to represent the management server.
-			serverCfg := &bootstrap.ServerConfig{
+			serverCfg := bootstrap.ServerConfig{
 				ServerURI:    mgmtServer.Address,
 				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 				CredsType:    "insecure",
@@ -187,7 +187,7 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 
 			// Create a new transport.
 			resourcesCh := testutils.NewChannel()
-			tr, err := transport.New(&transport.Options{
+			tr, err := transport.New(transport.Options{
 				ServerCfg: serverCfg,
 				// No validation. Simply push received resources on a channel.
 				UpdateHandler: func(update transport.ResourceUpdate) error {

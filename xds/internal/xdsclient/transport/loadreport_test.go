@@ -46,7 +46,7 @@ func (s) TestReportLoad(t *testing.T) {
 
 	// Construct the server config to represent the management server.
 	nodeProto := &v3corepb.Node{Id: uuid.New().String()}
-	serverCfg := &bootstrap.ServerConfig{
+	serverCfg := bootstrap.ServerConfig{
 		ServerURI:    mgmtServer.Address,
 		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 		CredsType:    "insecure",
@@ -55,7 +55,7 @@ func (s) TestReportLoad(t *testing.T) {
 	}
 
 	// Create a transport to the fake server.
-	tr, err := transport.New(&transport.Options{
+	tr, err := transport.New(transport.Options{
 		ServerCfg:          serverCfg,
 		UpdateHandler:      func(transport.ResourceUpdate) error { return nil }, // No ADS validation.
 		StreamErrorHandler: func(error) {},                                      // No ADS stream error handling.

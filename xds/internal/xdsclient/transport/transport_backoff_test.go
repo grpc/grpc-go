@@ -100,7 +100,7 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 
 	// Construct the server config to represent the management server.
 	nodeID := uuid.New().String()
-	serverCfg := &bootstrap.ServerConfig{
+	serverCfg := bootstrap.ServerConfig{
 		ServerURI:    mgmtServer.Address,
 		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 		CredsType:    "insecure",
@@ -110,7 +110,7 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 
 	// Create a new transport. Since we are only testing backoff behavior here,
 	// we can pass a no-op data model layer implementation.
-	tr, err := transport.New(&transport.Options{
+	tr, err := transport.New(transport.Options{
 		ServerCfg:     serverCfg,
 		UpdateHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
 		StreamErrorHandler: func(err error) {
@@ -268,7 +268,7 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 	})
 
 	// Construct the server config to represent the management server.
-	serverCfg := &bootstrap.ServerConfig{
+	serverCfg := bootstrap.ServerConfig{
 		ServerURI:    lis.Addr().String(),
 		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 		CredsType:    "insecure",
@@ -278,7 +278,7 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 
 	// Create a new transport. Since we are only testing backoff behavior here,
 	// we can pass a no-op data model layer implementation.
-	tr, err := transport.New(&transport.Options{
+	tr, err := transport.New(transport.Options{
 		ServerCfg:     serverCfg,
 		UpdateHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
 		StreamErrorHandler: func(err error) {
@@ -407,7 +407,7 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 
 	// Construct the server config to represent the management server.
 	nodeID := uuid.New().String()
-	serverCfg := &bootstrap.ServerConfig{
+	serverCfg := bootstrap.ServerConfig{
 		ServerURI:    lis.Addr().String(),
 		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 		CredsType:    "insecure",
@@ -417,7 +417,7 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 
 	// Create a new transport. Since we are only testing backoff behavior here,
 	// we can pass a no-op data model layer implementation.
-	tr, err := transport.New(&transport.Options{
+	tr, err := transport.New(transport.Options{
 		ServerCfg:          serverCfg,
 		UpdateHandler:      func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
 		StreamErrorHandler: func(error) {},                                      // No stream error handling.

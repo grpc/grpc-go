@@ -129,7 +129,7 @@ func (s) TestSimpleAckAndNack(t *testing.T) {
 	})
 
 	// Construct the server config to represent the management server.
-	serverCfg := &bootstrap.ServerConfig{
+	serverCfg := bootstrap.ServerConfig{
 		ServerURI:    mgmtServer.Address,
 		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 		CredsType:    "insecure",
@@ -138,7 +138,7 @@ func (s) TestSimpleAckAndNack(t *testing.T) {
 	}
 
 	// Create a new transport.
-	tr, err := transport.New(&transport.Options{
+	tr, err := transport.New(transport.Options{
 		ServerCfg:          serverCfg,
 		UpdateHandler:      dataModelValidator,
 		StreamErrorHandler: func(err error) {},
@@ -312,7 +312,7 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 	})
 
 	// Construct the server config to represent the management server.
-	serverCfg := &bootstrap.ServerConfig{
+	serverCfg := bootstrap.ServerConfig{
 		ServerURI:    mgmtServer.Address,
 		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 		CredsType:    "insecure",
@@ -321,7 +321,7 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 	}
 
 	// Create a new transport.
-	tr, err := transport.New(&transport.Options{
+	tr, err := transport.New(transport.Options{
 		ServerCfg:          serverCfg,
 		UpdateHandler:      dataModelValidator,
 		StreamErrorHandler: func(err error) {},
@@ -434,7 +434,7 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 	})
 
 	// Construct the server config to represent the management server.
-	serverCfg := &bootstrap.ServerConfig{
+	serverCfg := bootstrap.ServerConfig{
 		ServerURI:    mgmtServer.Address,
 		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 		CredsType:    "insecure",
@@ -443,7 +443,7 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 	}
 
 	// Create a new transport.
-	tr, err := transport.New(&transport.Options{
+	tr, err := transport.New(transport.Options{
 		ServerCfg:          serverCfg,
 		UpdateHandler:      dataModelValidator,
 		StreamErrorHandler: func(err error) {},

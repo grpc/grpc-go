@@ -123,7 +123,7 @@ type ResourceUpdate struct {
 type Options struct {
 	// ServerCfg contains all the configuration required to connect to the xDS
 	// management server.
-	ServerCfg *bootstrap.ServerConfig
+	ServerCfg bootstrap.ServerConfig
 	// UpdateHandler is the component which makes ACK/NACK decisions based on
 	// the received resources.
 	//
@@ -148,18 +148,12 @@ type Options struct {
 var grpcDial = grpc.Dial
 
 // New creates a new Transport.
-func New(opts *Options) (*Transport, error) {
+func New(opts Options) (*Transport, error) {
 	switch {
-	case opts == nil:
-		return nil, errors.New("missing options when creating a new transport")
-	case opts.ServerCfg == nil:
-		return nil, errors.New("missing ServerConfig when creating a new transport")
 	case opts.ServerCfg.ServerURI == "":
 		return nil, errors.New("missing server URI when creating a new transport")
 	case opts.ServerCfg.Creds == nil:
 		return nil, errors.New("missing credentials when creating a new transport")
-	case opts.ServerCfg.NodeProto == nil:
-		return nil, errors.New("missing node proto when creating a new transport")
 	case opts.UpdateHandler == nil:
 		return nil, errors.New("missing update handler when creating a new transport")
 	case opts.StreamErrorHandler == nil:

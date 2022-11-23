@@ -36,40 +36,22 @@ import (
 func (s) TestNew(t *testing.T) {
 	tests := []struct {
 		name       string
-		opts       *transport.Options
+		opts       transport.Options
 		wantErrStr string
 	}{
 		{
-			name:       "nil options",
-			opts:       nil,
-			wantErrStr: "missing options when creating a new transport",
-		},
-		{
-			name:       "missing server config",
-			opts:       &transport.Options{},
-			wantErrStr: "missing ServerConfig when creating a new transport",
-		},
-		{
 			name:       "missing server URI",
-			opts:       &transport.Options{ServerCfg: &bootstrap.ServerConfig{}},
+			opts:       transport.Options{ServerCfg: bootstrap.ServerConfig{}},
 			wantErrStr: "missing server URI when creating a new transport",
 		},
 		{
 			name:       "missing credentials",
-			opts:       &transport.Options{ServerCfg: &bootstrap.ServerConfig{ServerURI: "server-address"}},
+			opts:       transport.Options{ServerCfg: bootstrap.ServerConfig{ServerURI: "server-address"}},
 			wantErrStr: "missing credentials when creating a new transport",
 		},
 		{
-			name: "missing node proto",
-			opts: &transport.Options{ServerCfg: &bootstrap.ServerConfig{
-				ServerURI: "server-address",
-				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			}},
-			wantErrStr: "missing node proto when creating a new transport",
-		},
-		{
 			name: "missing update handler",
-			opts: &transport.Options{ServerCfg: &bootstrap.ServerConfig{
+			opts: transport.Options{ServerCfg: bootstrap.ServerConfig{
 				ServerURI: "server-address",
 				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 				NodeProto: &v3corepb.Node{},
@@ -78,8 +60,8 @@ func (s) TestNew(t *testing.T) {
 		},
 		{
 			name: "missing stream error handler",
-			opts: &transport.Options{
-				ServerCfg: &bootstrap.ServerConfig{
+			opts: transport.Options{
+				ServerCfg: bootstrap.ServerConfig{
 					ServerURI: "server-address",
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 					NodeProto: &v3corepb.Node{},
@@ -90,8 +72,8 @@ func (s) TestNew(t *testing.T) {
 		},
 		{
 			name: "node proto version mismatch for v3",
-			opts: &transport.Options{
-				ServerCfg: &bootstrap.ServerConfig{
+			opts: transport.Options{
+				ServerCfg: bootstrap.ServerConfig{
 					ServerURI:    "server-address",
 					Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 					NodeProto:    &v2corepb.Node{},
@@ -104,8 +86,8 @@ func (s) TestNew(t *testing.T) {
 		},
 		{
 			name: "happy case",
-			opts: &transport.Options{
-				ServerCfg: &bootstrap.ServerConfig{
+			opts: transport.Options{
+				ServerCfg: bootstrap.ServerConfig{
 					ServerURI:    "server-address",
 					Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 					NodeProto:    &v3corepb.Node{},

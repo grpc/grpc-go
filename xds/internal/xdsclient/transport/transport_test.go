@@ -48,8 +48,8 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 	defer func() { grpcDial = oldDial }()
 
 	// Create a new transport and ensure that the custom dialer was called.
-	opts := &Options{
-		ServerCfg: &bootstrap.ServerConfig{
+	opts := Options{
+		ServerCfg: bootstrap.ServerConfig{
 			ServerURI:    "server-address",
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 			NodeProto:    &v3corepb.Node{},
