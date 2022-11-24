@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2022 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,9 +35,7 @@ import (
 
 var addr = flag.String("addr", "localhost:50051", "the address to connect to")
 
-func callUnaryEcho(client pb.EchoClient) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func callUnaryEcho(ctx context.Context, client pb.EchoClient) {
 	resp, err := client.UnaryEcho(ctx, &pb.EchoRequest{Message: "hello world"})
 	if err != nil {
 		log.Fatalf("UnaryEcho %v", err)
@@ -45,10 +43,7 @@ func callUnaryEcho(client pb.EchoClient) {
 	fmt.Println("UnaryEcho: ", resp.Message)
 }
 
-func callBidiStreamingEcho(client pb.EchoClient) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
+func callBidiStreamingEcho(ctx context.Context, client pb.EchoClient) {
 	c, err := client.BidirectionalStreamingEcho(ctx)
 	if err != nil {
 		log.Fatalf("BidiStreamingEcho %v", err)
@@ -82,7 +77,10 @@ func main() {
 
 	ec := pb.NewEchoClient(conn)
 
-	callUnaryEcho(ec)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	callBidiStreamingEcho(ec)
+	callUnaryEcho(ctx, ec)
+
+	callBidiStreamingEcho(ctx, ec)
 }

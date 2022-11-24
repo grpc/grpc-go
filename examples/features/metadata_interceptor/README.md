@@ -1,6 +1,6 @@
 # Metadata interceptor example
 
-This example shows how to update metadata in RPC unary interceptor and streaming interceptor.
+This example shows how to update metadata from unary and streaming interceptors on the server.
 Please see
 [grpc-metadata.md](https://github.com/grpc/grpc-go/blob/master/Documentation/grpc-metadata.md)
 for more information.

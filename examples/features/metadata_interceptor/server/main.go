@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2018 gRPC authors.
+ * Copyright 2022 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,23 +23,20 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
-	"log"
-	"math/rand"
-	"net"
-	"time"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"io"
+	"log"
+	"net"
 
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var port = flag.Int("port", 50051, "the port to serve on")
 
-var errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
+var errMissingMetadata = status.Errorf(codes.InvalidArgument, "no incoming metadata in rpc context")
 
 type server struct {
 	pb.UnimplementedEchoServer
@@ -62,18 +59,16 @@ func (s *server) UnaryEcho(ctx context.Context, in *pb.EchoRequest) (*pb.EchoRes
 
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, status.Errorf(codes.DataLoss, "UnaryEcho: failed to get metadata")
+		return nil, status.Errorf(codes.Internal, "UnaryEcho: missing incoming metadata in rpc context")
 	}
 
-	// Read metadata from interceptor
+	// Read and print metadata added by the interceptor.
 	if v, ok := md["key1"]; ok {
 		fmt.Printf("key1 from metadata: \n")
 		for i, e := range v {
 			fmt.Printf(" %d. %s\n", i, e)
 		}
 	}
-
-	fmt.Printf("request received: %v, sending echo\n", in)
 
 	return &pb.EchoResponse{Message: in.Message}, nil
 }
@@ -104,10 +99,10 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 
 	md, ok := metadata.FromIncomingContext(stream.Context())
 	if !ok {
-		return status.Errorf(codes.DataLoss, "BidirectionalStreamingEcho: failed to get metadata")
+		return status.Errorf(codes.Internal, "BidirectionalStreamingEcho: missing incoming metadata in rpc context")
 	}
 
-	// Read metadata from interceptor.
+	// Read and print metadata added by the interceptor.
 	if v, ok := md["key1"]; ok {
 		fmt.Printf("key1 from metadata: \n")
 		for i, e := range v {
@@ -124,7 +119,6 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 		if err != nil {
 			return err
 		}
-		fmt.Printf("request received %v, sending echo\n", in)
 		if err = stream.Send(&pb.EchoResponse{Message: in.Message}); err != nil {
 			return err
 		}
@@ -133,16 +127,13 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 
 func main() {
 	flag.Parse()
-	rand.Seed(time.Now().UnixNano())
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatalf("net.Listen() failed: %v", err)
 	}
-	fmt.Printf("server listening at %v\n", lis.Addr())
+	fmt.Printf("Server listening at %v\n", lis.Addr())
 
-	s := grpc.NewServer(
-		grpc.UnaryInterceptor(unaryInterceptor),
-		grpc.StreamInterceptor(streamInterceptor))
+	s := grpc.NewServer(grpc.UnaryInterceptor(unaryInterceptor), grpc.StreamInterceptor(streamInterceptor))
 	pb.RegisterEchoServer(s, &server{})
 	s.Serve(lis)
 }

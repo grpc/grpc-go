@@ -224,14 +224,16 @@ func (s *server) SomeStreamingRPC(stream pb.Service_SomeStreamingRPCServer) erro
 }
 ```
 
-## Updating metadata in the interceptor - server side
+## Updating metadata from a server interceptor
 
-Server side metadata updating in the interceptor examples are available [here](../examples/features/metadata_interceptor/server/main.go).
+An example for updating metadata from a server interceptor is
+available [here](../examples/features/metadata_interceptor/server/main.go).
 
 #### Unary interceptor
 
-To read and update metadata in the interceptor under unary call,
-the server needs to retrieve it from RPC context and update it through this RPC context.
+The interceptor can read the existing metadata from the RPC context passed to it.
+Since Go contexts are immutable, the interceptor will have to create a new context
+with the updated metadata and pass it to the provided handler.
 
 ```go
 func SomeInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -248,9 +250,13 @@ func SomeInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServe
 
 #### Streaming interceptor
 
-There is no direct way to set RPC context in the stream interceptor.
-The `wrappedStream` could be created and override `Context()` method.
-Then pass this `wrappedStream` to the stream interceptor.
+`grpc.ServerStream` does not provide a way to modify its RPC context. The streaming
+interceptor therefore needs to implement the `grpc.ServerStream` interface and return
+a context with the updated metadata.
+
+The easiest way to do this would be to create a type which embeds the `grpc.ServerStream`
+interface and overrides only the `Context()` method to return a context with the updated
+metadata. The streaming interceptor would then pass this wrapped stream to the provided handler.
 
 ```go
 type wrappedStream struct {
