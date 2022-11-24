@@ -1150,21 +1150,16 @@ func chainUnaryServerInterceptors(s *Server) {
 
 func chainUnaryInterceptors(interceptors []UnaryServerInterceptor) UnaryServerInterceptor {
 	return func(ctx context.Context, req interface{}, info *UnaryServerInfo, handler UnaryHandler) (interface{}, error) {
-		// the struct ensures the variables are allocated together, rather than separately, since we
-		// know they should be garbage collected together. This saves 1 allocation and decreases
-		// time/call by about 10% on the microbenchmark.
-		var state struct {
-			i    int
-			next UnaryHandler
-		}
-		state.next = func(ctx context.Context, req interface{}) (interface{}, error) {
-			if state.i == len(interceptors)-1 {
-				return interceptors[state.i](ctx, req, info, handler)
-			}
-			state.i++
-			return interceptors[state.i-1](ctx, req, info, state.next)
-		}
-		return state.next(ctx, req)
+		return interceptors[0](ctx, req, info, getChainUnaryHandler(interceptors, 0, info, handler))
+	}
+}
+
+func getChainUnaryHandler(interceptors []UnaryServerInterceptor, curr int, info *UnaryServerInfo, finalHandler UnaryHandler) UnaryHandler {
+	if curr == len(interceptors)-1 {
+		return finalHandler
+	}
+	return func(ctx context.Context, req interface{}) (interface{}, error) {
+		return interceptors[curr+1](ctx, req, info, getChainUnaryHandler(interceptors, curr+1, info, finalHandler))
 	}
 }
 
@@ -1470,21 +1465,16 @@ func chainStreamServerInterceptors(s *Server) {
 
 func chainStreamInterceptors(interceptors []StreamServerInterceptor) StreamServerInterceptor {
 	return func(srv interface{}, ss ServerStream, info *StreamServerInfo, handler StreamHandler) error {
-		// the struct ensures the variables are allocated together, rather than separately, since we
-		// know they should be garbage collected together. This saves 1 allocation and decreases
-		// time/call by about 10% on the microbenchmark.
-		var state struct {
-			i    int
-			next StreamHandler
-		}
-		state.next = func(srv interface{}, ss ServerStream) error {
-			if state.i == len(interceptors)-1 {
-				return interceptors[state.i](srv, ss, info, handler)
-			}
-			state.i++
-			return interceptors[state.i-1](srv, ss, info, state.next)
-		}
-		return state.next(srv, ss)
+		return interceptors[0](srv, ss, info, getChainStreamHandler(interceptors, 0, info, handler))
+	}
+}
+
+func getChainStreamHandler(interceptors []StreamServerInterceptor, curr int, info *StreamServerInfo, finalHandler StreamHandler) StreamHandler {
+	if curr == len(interceptors)-1 {
+		return finalHandler
+	}
+	return func(srv interface{}, stream ServerStream) error {
+		return interceptors[curr+1](srv, stream, info, getChainStreamHandler(interceptors, curr+1, info, finalHandler))
 	}
 }
 

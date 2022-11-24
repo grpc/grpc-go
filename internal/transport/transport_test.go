@@ -1292,7 +1292,7 @@ func (s) TestClientHonorsConnectContext(t *testing.T) {
 		t.Fatalf("NewClientTransport() returned successfully; wanted error")
 	}
 	t.Logf("NewClientTransport() = _, %v", err)
-	if time.Now().Sub(timeBefore) > 3*time.Second {
+	if time.Since(timeBefore) > 3*time.Second {
 		t.Fatalf("NewClientTransport returned > 2.9s after context cancelation")
 	}
 

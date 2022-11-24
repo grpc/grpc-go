@@ -64,9 +64,6 @@ jobs:
           - type: tests
             goversion: 1.17
 
-          - type: tests
-            goversion: 1.16
-
           - type: extras
             goversion: 1.19
 
