@@ -23,6 +23,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -111,7 +112,7 @@ type exampleResolver struct {
 }
 
 func (r *exampleResolver) start() {
-	addrStrs := r.addrsStore[r.target.Endpoint]
+	addrStrs := r.addrsStore[strings.Trim(r.target.URL.Path, "/")]
 	addrs := make([]resolver.Address, len(addrStrs))
 	for i, s := range addrStrs {
 		addrs[i] = resolver.Address{Addr: s}
