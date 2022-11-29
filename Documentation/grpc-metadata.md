@@ -231,9 +231,9 @@ available [here](../examples/features/metadata_interceptor/server/main.go).
 
 #### Unary interceptor
 
-The interceptor can read the existing metadata from the RPC context passed to it.
+The interceptor can read existing metadata from the RPC context passed to it.
 Since Go contexts are immutable, the interceptor will have to create a new context
-with the updated metadata and pass it to the provided handler.
+with updated metadata and pass it to the provided handler.
 
 ```go
 func SomeInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -252,10 +252,10 @@ func SomeInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServe
 
 `grpc.ServerStream` does not provide a way to modify its RPC context. The streaming
 interceptor therefore needs to implement the `grpc.ServerStream` interface and return
-a context with the updated metadata.
+a context with updated metadata.
 
 The easiest way to do this would be to create a type which embeds the `grpc.ServerStream`
-interface and overrides only the `Context()` method to return a context with the updated
+interface and overrides only the `Context()` method to return a context with updated
 metadata. The streaming interceptor would then pass this wrapped stream to the provided handler.
 
 ```go
