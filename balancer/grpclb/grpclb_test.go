@@ -36,11 +36,13 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/balancer"
-	grpclbstate "google.golang.org/grpc/balancer/grpclb/state"
+	"google.golang.org/grpc/balancer/grpclb/state"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/pickfirst"
+	"google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -411,15 +413,17 @@ func startBackendsAndRemoteLoadBalancer(numberOfBackends int, customUserAgent st
 	return
 }
 
-func (s) TestGRPCLB(t *testing.T) {
-	r := manual.NewBuilderWithScheme("whatever")
-
+// TestGRPCLB_Basic tests the basic case of a channel being configured with
+// grpclb as the load balancing policy.
+func (s) TestGRPCLB_Basic(t *testing.T) {
+	// Start a test backend and the remote balancer.
 	tss, cleanup, err := startBackendsAndRemoteLoadBalancer(1, testUserAgent, nil)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
 	}
 	defer cleanup()
 
+	// Push the test backend address to the remote balancer.
 	tss.ls.sls <- &lbpb.ServerList{
 		Servers: []*lbpb.Server{
 			{
@@ -430,35 +434,48 @@ func (s) TestGRPCLB(t *testing.T) {
 		},
 	}
 
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName,
+	// Connect to the test backend.
+	r := manual.NewBuilderWithScheme("whatever")
+	dopts := []grpc.DialOption{
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
 		grpc.WithContextDialer(fakeNameDialer),
-		grpc.WithUserAgent(testUserAgent))
+		grpc.WithUserAgent(testUserAgent),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
-	testC := testpb.NewTestServiceClient(cc)
 
-	rs := grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)},
-		&grpclbstate.State{BalancerAddresses: []resolver.Address{{
-			Addr:       tss.lbAddr,
-			ServerName: lbServerName,
-		}}})
+	// Push a service config with grpclb as the load balancing policy and the
+	// remote balancer address specified via attributes.
+	s := &state.State{
+		BalancerAddresses: []resolver.Address{
+			{
+				Addr:       tss.lbAddr,
+				ServerName: lbServerName,
+			},
+		},
+	}
+	rs := state.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)}, s)
 	r.UpdateState(rs)
 
+	// Make one successful RPC.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	testC := testpb.NewTestServiceClient(cc)
 	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
 	}
 }
 
-// The remote balancer sends response with duplicates to grpclb client.
-func (s) TestGRPCLBWeighted(t *testing.T) {
-	r := manual.NewBuilderWithScheme("whatever")
-
+// TestGRPCLB_Weighted tests weighted roundrobin. The remote balancer is
+// configured to send a response with duplicate backend addresses (to simulate
+// weights) to the grpclb client. The test verifies that RPCs are weighted
+// roundrobin-ed across these backends.
+func (s) TestGRPCLB_Weighted(t *testing.T) {
+	// Start test backends and the remote balancer.
 	tss, cleanup, err := startBackendsAndRemoteLoadBalancer(2, "", nil)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
@@ -474,58 +491,65 @@ func (s) TestGRPCLBWeighted(t *testing.T) {
 		Port:             int32(tss.bePorts[1]),
 		LoadBalanceToken: lbToken,
 	}}
-	portsToIndex := make(map[int]int)
-	for i := range beServers {
-		portsToIndex[tss.bePorts[i]] = i
-	}
 
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName,
+	// Connect to the test backends.
+	r := manual.NewBuilderWithScheme("whatever")
+	dopts := []grpc.DialOption{
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
-		grpc.WithContextDialer(fakeNameDialer))
+		grpc.WithContextDialer(fakeNameDialer),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
-	testC := testpb.NewTestServiceClient(cc)
 
-	rs := grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)},
-		&grpclbstate.State{BalancerAddresses: []resolver.Address{{
-			Addr:       tss.lbAddr,
-			ServerName: lbServerName,
-		}}})
+	// Push a service config with grpclb as the load balancing policy and the
+	// remote balancer address specified via attributes.
+	s := &state.State{
+		BalancerAddresses: []resolver.Address{
+			{
+				Addr:       tss.lbAddr,
+				ServerName: lbServerName,
+			},
+		},
+	}
+	rs := state.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)}, s)
 	r.UpdateState(rs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	sequences := []string{"00101", "00011"}
+	// Sequence represents the sequence of backends to be returned from the
+	// remote load balancer.
+	sequences := [][]int{
+		{0, 0, 1, 0, 1},
+		{0, 0, 0, 1, 1},
+	}
 	for _, seq := range sequences {
-		var (
-			bes    []*lbpb.Server
-			p      peer.Peer
-			result string
-		)
+		// Push the configured sequence of backend to the remote balancer, and
+		// compute the expected addresses to which RPCs should be routed.
+		var backends []*lbpb.Server
+		var wantAddrs []resolver.Address
 		for _, s := range seq {
-			bes = append(bes, beServers[s-'0'])
+			backends = append(backends, beServers[s])
+			wantAddrs = append(wantAddrs, resolver.Address{Addr: tss.beListeners[s].Addr().String()})
 		}
-		tss.ls.sls <- &lbpb.ServerList{Servers: bes}
+		tss.ls.sls <- &lbpb.ServerList{Servers: backends}
 
-		for i := 0; i < 1000; i++ {
-			if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-				t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-			}
-			result += strconv.Itoa(portsToIndex[p.Addr.(*net.TCPAddr).Port])
-		}
-		// The generated result will be in format of "0010100101".
-		if !strings.Contains(result, strings.Repeat(seq, 2)) {
-			t.Errorf("got result sequence %q, want patten %q", result, seq)
+		testC := testpb.NewTestServiceClient(cc)
+		if err := roundrobin.CheckWeightedRoundRobinRPCs(ctx, testC, wantAddrs); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
 
-func (s) TestDropRequest(t *testing.T) {
-	r := manual.NewBuilderWithScheme("whatever")
-
+// TestGRPCLB_DropRequest tests grpclb support for dropping requests based on
+// configuration received from the remote balancer.
+//
+// TODO: Rewrite this test to verify drop behavior using the
+// ClientStats.CallsFinishedWithDrop field instead.
+func (s) TestGRPCLB_DropRequest(t *testing.T) {
 	tss, cleanup, err := startBackendsAndRemoteLoadBalancer(2, "", nil)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
@@ -547,21 +571,28 @@ func (s) TestDropRequest(t *testing.T) {
 		}},
 	}
 
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName,
+	r := manual.NewBuilderWithScheme("whatever")
+	dopts := []grpc.DialOption{
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
-		grpc.WithContextDialer(fakeNameDialer))
+		grpc.WithContextDialer(fakeNameDialer),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	rs := grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)},
-		&grpclbstate.State{BalancerAddresses: []resolver.Address{{
-			Addr:       tss.lbAddr,
-			ServerName: lbServerName,
-		}}})
+	s := &state.State{
+		BalancerAddresses: []resolver.Address{
+			{
+				Addr:       tss.lbAddr,
+				ServerName: lbServerName,
+			},
+		},
+	}
+	rs := state.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)}, s)
 	r.UpdateState(rs)
 
 	var (
@@ -675,10 +706,11 @@ func (s) TestDropRequest(t *testing.T) {
 	}
 }
 
-// When the balancer in use disconnects, grpclb should connect to the next address from resolved balancer address list.
-func (s) TestBalancerDisconnects(t *testing.T) {
-	r := manual.NewBuilderWithScheme("whatever")
-
+// TestGRPCLB_BalancerDisconnects tests the case where the remote balancer in
+// use disconnects. The test verifies that grpclb connects to the next remote
+// balancer address specified in attributes, and RPCs get routed to the backends
+// returned by the new balancer.
+func (s) TestGRPCLB_BalancerDisconnects(t *testing.T) {
 	var (
 		tests []*testServers
 		lbs   []*grpc.Server
@@ -704,18 +736,21 @@ func (s) TestBalancerDisconnects(t *testing.T) {
 		lbs = append(lbs, tss.lb)
 	}
 
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName,
+	r := manual.NewBuilderWithScheme("whatever")
+	dopts := []grpc.DialOption{
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
-		grpc.WithContextDialer(fakeNameDialer))
+		grpc.WithContextDialer(fakeNameDialer),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
 	testC := testpb.NewTestServiceClient(cc)
 
-	rs := grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)},
-		&grpclbstate.State{BalancerAddresses: []resolver.Address{
+	s := &state.State{
+		BalancerAddresses: []resolver.Address{
 			{
 				Addr:       tests[0].lbAddr,
 				ServerName: lbServerName,
@@ -724,38 +759,36 @@ func (s) TestBalancerDisconnects(t *testing.T) {
 				Addr:       tests[1].lbAddr,
 				ServerName: lbServerName,
 			},
-		}})
+		},
+	}
+	rs := state.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)}, s)
 	r.UpdateState(rs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	var p peer.Peer
-	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-		t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-	}
-	if p.Addr.(*net.TCPAddr).Port != tests[0].bePorts[0] {
-		t.Fatalf("got peer: %v, want peer port: %v", p.Addr, tests[0].bePorts[0])
+	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, []resolver.Address{{Addr: tests[0].beListeners[0].Addr().String()}}); err != nil {
+		t.Fatal(err)
 	}
 
-	lbs[0].Stop()
 	// Stop balancer[0], balancer[1] should be used by grpclb.
 	// Check peer address to see if that happened.
-	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-		}
-		if p.Addr.(*net.TCPAddr).Port == tests[1].bePorts[0] {
-			return
-		}
-		time.Sleep(time.Millisecond)
+	lbs[0].Stop()
+	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, []resolver.Address{{Addr: tests[1].beListeners[0].Addr().String()}}); err != nil {
+		t.Fatal(err)
 	}
-	t.Fatalf("No RPC sent to second backend after 1 second")
 }
 
-func (s) TestFallback(t *testing.T) {
+// TestGRPCLB_Fallback tests the following fallback scenarios:
+//   - when the remote balancer address specified in attributes is invalid, the
+//     test verifies that RPCs are routed to the fallback backend.
+//   - when the remote balancer address specified in attributes is changed to a
+//     valid one, the test verifies that RPCs are routed to the backend returned
+//     by the remote balancer.
+//   - when the configured remote balancer goes down, the test verifies that
+//     RPCs are routed to the fallback backend.
+func (s) TestGRPCLB_Fallback(t *testing.T) {
 	balancer.Register(newLBBuilderWithFallbackTimeout(100 * time.Millisecond))
 	defer balancer.Register(newLBBuilder())
-	r := manual.NewBuilderWithScheme("whatever")
 
 	// Start a remote balancer and a backend. Push the backend address to the
 	// remote balancer.
@@ -784,10 +817,13 @@ func (s) TestFallback(t *testing.T) {
 	standaloneBEs := startBackends(beServerName, true, beLis)
 	defer stopBackends(standaloneBEs)
 
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName,
+	r := manual.NewBuilderWithScheme("whatever")
+	dopts := []grpc.DialOption{
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
-		grpc.WithContextDialer(fakeNameDialer))
+		grpc.WithContextDialer(fakeNameDialer),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -801,18 +837,14 @@ func (s) TestFallback(t *testing.T) {
 		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
 		ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
 	}
-	rs = grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: "invalid.address", ServerName: lbServerName}}})
+	rs = state.Set(rs, &state.State{BalancerAddresses: []resolver.Address{{Addr: "invalid.address", ServerName: lbServerName}}})
 	r.UpdateState(rs)
 
 	// Make an RPC and verify that it got routed to the fallback backend.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	var p peer.Peer
-	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-		t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
-	}
-	if p.Addr.String() != beLis.Addr().String() {
-		t.Fatalf("got peer: %v, want peer: %v", p.Addr, beLis.Addr())
+	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, []resolver.Address{{Addr: beLis.Addr().String()}}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Push another update to the resolver, this time with a valid balancer
@@ -821,7 +853,7 @@ func (s) TestFallback(t *testing.T) {
 		ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
 		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
 	}
-	rs = grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}})
+	rs = state.Set(rs, &state.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}})
 	r.UpdateState(rs)
 	select {
 	case <-ctx.Done():
@@ -830,70 +862,30 @@ func (s) TestFallback(t *testing.T) {
 	}
 
 	// Wait for RPCs to get routed to the backend behind the remote balancer.
-	var backendUsed bool
-	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-		}
-		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
-			backendUsed = true
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if !backendUsed {
-		t.Fatalf("No RPC sent to backend behind remote balancer after 1 second")
+	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, []resolver.Address{{Addr: tss.beListeners[0].Addr().String()}}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Close backend and remote balancer connections, should use fallback.
 	tss.beListeners[0].(*testutils.RestartableListener).Stop()
 	tss.lbListener.(*testutils.RestartableListener).Stop()
-
-	var fallbackUsed bool
-	for i := 0; i < 2000; i++ {
-		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			// Because we are hard-closing the connection, above, it's possible
-			// for the first RPC attempt to be sent on the old connection,
-			// which will lead to an Unavailable error when it is closed.
-			// Ignore unavailable errors.
-			if status.Code(err) != codes.Unavailable {
-				t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-			}
-		}
-		if p.Addr.String() == beLis.Addr().String() {
-			fallbackUsed = true
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if !fallbackUsed {
-		t.Fatalf("No RPC sent to fallback after 2 seconds")
+	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, []resolver.Address{{Addr: beLis.Addr().String()}}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Restart backend and remote balancer, should not use fallback backend.
 	tss.beListeners[0].(*testutils.RestartableListener).Restart()
 	tss.lbListener.(*testutils.RestartableListener).Restart()
 	tss.ls.sls <- sl
-
-	var backendUsed2 bool
-	for i := 0; i < 2000; i++ {
-		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-		}
-		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
-			backendUsed2 = true
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if !backendUsed2 {
-		t.Fatalf("No RPC sent to backend behind remote balancer after 2 seconds")
+	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, []resolver.Address{{Addr: tss.beListeners[0].Addr().String()}}); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func (s) TestExplicitFallback(t *testing.T) {
-	r := manual.NewBuilderWithScheme("whatever")
-
+// TestGRPCLB_ExplicitFallback tests the case where the remote balancer sends an
+// explicit fallback signal to the grpclb client, and the test verifies that
+// RPCs are routed to the fallback backend.
+func (s) TestGRPCLB_ExplicitFallback(t *testing.T) {
 	// Start a remote balancer and a backend. Push the backend address to the
 	// remote balancer.
 	tss, cleanup, err := startBackendsAndRemoteLoadBalancer(1, "", nil)
@@ -921,10 +913,13 @@ func (s) TestExplicitFallback(t *testing.T) {
 	standaloneBEs := startBackends(beServerName, true, beLis)
 	defer stopBackends(standaloneBEs)
 
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName,
+	r := manual.NewBuilderWithScheme("whatever")
+	dopts := []grpc.DialOption{
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
-		grpc.WithContextDialer(fakeNameDialer))
+		grpc.WithContextDialer(fakeNameDialer),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -935,65 +930,31 @@ func (s) TestExplicitFallback(t *testing.T) {
 		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
 		ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
 	}
-	rs = grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}})
+	rs = state.Set(rs, &state.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}})
 	r.UpdateState(rs)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	var p peer.Peer
-	var backendUsed bool
-	for i := 0; i < 2000; i++ {
-		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-		}
-		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
-			backendUsed = true
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if !backendUsed {
-		t.Fatalf("No RPC sent to backend behind remote balancer after 2 seconds")
+	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, []resolver.Address{{Addr: tss.beListeners[0].Addr().String()}}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Send fallback signal from remote balancer; should use fallback.
 	tss.ls.fallbackNow()
-
-	var fallbackUsed bool
-	for i := 0; i < 2000; i++ {
-		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-		}
-		if p.Addr.String() == beLis.Addr().String() {
-			fallbackUsed = true
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if !fallbackUsed {
-		t.Fatalf("No RPC sent to fallback after 2 seconds")
+	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, []resolver.Address{{Addr: beLis.Addr().String()}}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Send another server list; should use backends again.
 	tss.ls.sls <- sl
-
-	backendUsed = false
-	for i := 0; i < 2000; i++ {
-		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-		}
-		if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
-			backendUsed = true
-			break
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if !backendUsed {
-		t.Fatalf("No RPC sent to backend behind remote balancer after 2 seconds")
+	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, []resolver.Address{{Addr: tss.beListeners[0].Addr().String()}}); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func (s) TestFallBackWithNoServerAddress(t *testing.T) {
+// TestGRPCLB_FallBackWithNoServerAddress tests the fallback case where no
+// backend addresses are returned by the remote balancer.
+func (s) TestGRPCLB_FallBackWithNoServerAddress(t *testing.T) {
 	resolveNowCh := testutils.NewChannel()
 	r := manual.NewBuilderWithScheme("whatever")
 	r.ResolveNowCallback = func(resolver.ResolveNowOptions) {
@@ -1004,8 +965,8 @@ func (s) TestFallBackWithNoServerAddress(t *testing.T) {
 		}
 	}
 
-	// Start a remote balancer and a backend. Push the backend address to the
-	// remote balancer yet.
+	// Start a remote balancer and a backend. Don't push the backend address to
+	// the remote balancer yet.
 	tss, cleanup, err := startBackendsAndRemoteLoadBalancer(1, "", nil)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
@@ -1030,10 +991,12 @@ func (s) TestFallBackWithNoServerAddress(t *testing.T) {
 	standaloneBEs := startBackends(beServerName, true, beLis)
 	defer stopBackends(standaloneBEs)
 
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName,
+	dopts := []grpc.DialOption{
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
-		grpc.WithContextDialer(fakeNameDialer))
+		grpc.WithContextDialer(fakeNameDialer),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -1077,7 +1040,7 @@ func (s) TestFallBackWithNoServerAddress(t *testing.T) {
 			Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
 			ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
 		}
-		rs = grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}})
+		rs = state.Set(rs, &state.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}})
 		r.UpdateState(rs)
 
 		select {
@@ -1086,26 +1049,17 @@ func (s) TestFallBackWithNoServerAddress(t *testing.T) {
 		case <-tss.ls.balanceLoadCh:
 		}
 
-		var backendUsed bool
-		for i := 0; i < 1000; i++ {
-			if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-				t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-			}
-			if p.Addr.(*net.TCPAddr).Port == tss.bePorts[0] {
-				backendUsed = true
-				break
-			}
-			time.Sleep(time.Millisecond)
-		}
-		if !backendUsed {
-			t.Fatalf("No RPC sent to backend behind remote balancer after 1 second")
+		if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, []resolver.Address{{Addr: tss.beListeners[0].Addr().String()}}); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
 
-func (s) TestGRPCLBPickFirst(t *testing.T) {
-	r := manual.NewBuilderWithScheme("whatever")
-
+// TestGRPCLB_PickFirst configures grpclb with pick_first as the child policy.
+// The test changes the list of backend addresses returned by the remote
+// balancer and verifies that RPCs are sent to the first address returned.
+func (s) TestGRPCLB_PickFirst(t *testing.T) {
+	// Start test backends and the remote balancer.
 	tss, cleanup, err := startBackendsAndRemoteLoadBalancer(3, "", nil)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
@@ -1125,101 +1079,83 @@ func (s) TestGRPCLBPickFirst(t *testing.T) {
 		Port:             int32(tss.bePorts[2]),
 		LoadBalanceToken: lbToken,
 	}}
-	portsToIndex := make(map[int]int)
-	for i := range beServers {
-		portsToIndex[tss.bePorts[i]] = i
+	beServerAddrs := []resolver.Address{}
+	for _, lis := range tss.beListeners {
+		beServerAddrs = append(beServerAddrs, resolver.Address{Addr: lis.Addr().String()})
 	}
 
-	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName,
+	// Connect to the test backends.
+	r := manual.NewBuilderWithScheme("whatever")
+	dopts := []grpc.DialOption{
 		grpc.WithResolvers(r),
 		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
-		grpc.WithContextDialer(fakeNameDialer))
+		grpc.WithContextDialer(fakeNameDialer),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
 	defer cc.Close()
-	testC := testpb.NewTestServiceClient(cc)
 
-	var (
-		p      peer.Peer
-		result string
-	)
-	tss.ls.sls <- &lbpb.ServerList{Servers: beServers[0:3]}
-
-	// Start with sub policy pick_first.
+	// Push a service config with grpclb as the load balancing policy and
+	// configure pick_first as its child policy.
 	rs := resolver.State{ServiceConfig: r.CC.ParseServiceConfig(`{"loadBalancingConfig":[{"grpclb":{"childPolicy":[{"pick_first":{}}]}}]}`)}
-	r.UpdateState(grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}}))
 
+	// Push a resolver update with the remote balancer address specified via
+	// attributes.
+	r.UpdateState(state.Set(rs, &state.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}}))
+
+	// Push all three backend addresses to the remote balancer, and verify that
+	// RPCs are routed to the first backend.
+	tss.ls.sls <- &lbpb.ServerList{Servers: beServers[0:3]}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	result = ""
-	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
-		}
-		result += strconv.Itoa(portsToIndex[p.Addr.(*net.TCPAddr).Port])
-	}
-	if seq := "00000"; !strings.Contains(result, strings.Repeat(seq, 100)) {
-		t.Errorf("got result sequence %q, want patten %q", result, seq)
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, beServerAddrs[0]); err != nil {
+		t.Fatal(err)
 	}
 
+	// Update the address list with the remote balancer and verify pick_first
+	// behavior based on the new backends.
 	tss.ls.sls <- &lbpb.ServerList{Servers: beServers[2:]}
-	result = ""
-	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
-		}
-		result += strconv.Itoa(portsToIndex[p.Addr.(*net.TCPAddr).Port])
-	}
-	if seq := "22222"; !strings.Contains(result, strings.Repeat(seq, 100)) {
-		t.Errorf("got result sequence %q, want patten %q", result, seq)
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, beServerAddrs[2]); err != nil {
+		t.Fatal(err)
 	}
 
+	// Update the address list with the remote balancer and verify pick_first
+	// behavior based on the new backends. Since the currently connected backend
+	// is in the new list (even though it is not the first one on the list),
+	// pick_first will continue to use it.
 	tss.ls.sls <- &lbpb.ServerList{Servers: beServers[1:]}
-	result = ""
-	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
-		}
-		result += strconv.Itoa(portsToIndex[p.Addr.(*net.TCPAddr).Port])
-	}
-	if seq := "22222"; !strings.Contains(result, strings.Repeat(seq, 100)) {
-		t.Errorf("got result sequence %q, want patten %q", result, seq)
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, beServerAddrs[2]); err != nil {
+		t.Fatal(err)
 	}
 
-	// Switch sub policy to roundrobin.
-	rs = grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)},
-		&grpclbstate.State{BalancerAddresses: []resolver.Address{{
-			Addr:       tss.lbAddr,
-			ServerName: lbServerName,
-		}}})
+	// Switch child policy to roundrobin.
+	s := &state.State{
+		BalancerAddresses: []resolver.Address{
+			{
+				Addr:       tss.lbAddr,
+				ServerName: lbServerName,
+			},
+		},
+	}
+	rs = state.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)}, s)
 	r.UpdateState(rs)
-
-	result = ""
-	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("_.EmptyCall(_, _) = _, %v, want _, <nil>", err)
-		}
-		result += strconv.Itoa(portsToIndex[p.Addr.(*net.TCPAddr).Port])
-	}
-	if seq := "121212"; !strings.Contains(result, strings.Repeat(seq, 100)) {
-		t.Errorf("got result sequence %q, want patten %q", result, seq)
+	testC := testpb.NewTestServiceClient(cc)
+	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, beServerAddrs[1:]); err != nil {
+		t.Fatal(err)
 	}
 
 	tss.ls.sls <- &lbpb.ServerList{Servers: beServers[0:3]}
-	result = ""
-	for i := 0; i < 1000; i++ {
-		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true), grpc.Peer(&p)); err != nil {
-			t.Fatalf("%v.EmptyCall(_, _) = _, %v, want _, <nil>", testC, err)
-		}
-		result += strconv.Itoa(portsToIndex[p.Addr.(*net.TCPAddr).Port])
-	}
-	if seq := "012012012"; !strings.Contains(result, strings.Repeat(seq, 2)) {
-		t.Errorf("got result sequence %q, want patten %q", result, seq)
+	if err := roundrobin.CheckRoundRobinRPCs(ctx, testC, beServerAddrs[0:3]); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func (s) TestGRPCLBBackendConnectionErrorPropagation(t *testing.T) {
+// TestGRPCLB_BackendConnectionErrorPropagation tests the case where grpclb
+// falls back to a backend which returns an error and the test verifies that the
+// error is propagated to the RPC.
+func (s) TestGRPCLB_BackendConnectionErrorPropagation(t *testing.T) {
 	r := manual.NewBuilderWithScheme("whatever")
 
 	// Start up an LB which will tells the client to fall back right away.
@@ -1254,7 +1190,7 @@ func (s) TestGRPCLBBackendConnectionErrorPropagation(t *testing.T) {
 		Addresses:     []resolver.Address{{Addr: beLis.Addr().String()}},
 		ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig),
 	}
-	rs = grpclbstate.Set(rs, &grpclbstate.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}})
+	rs = state.Set(rs, &state.State{BalancerAddresses: []resolver.Address{{Addr: tss.lbAddr, ServerName: lbServerName}}})
 	r.UpdateState(rs)
 
 	// If https://github.com/grpc/grpc-go/blob/65cabd74d8e18d7347fecd414fa8d83a00035f5f/balancer/grpclb/grpclb_test.go#L103
@@ -1275,8 +1211,6 @@ func (s) TestGRPCLBBackendConnectionErrorPropagation(t *testing.T) {
 }
 
 func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
-	r := manual.NewBuilderWithScheme("whatever")
-
 	tss, cleanup, err := startBackendsAndRemoteLoadBalancer(1, "", nil)
 	if err != nil {
 		t.Fatalf("failed to create new load balancer: %v", err)
@@ -1289,13 +1223,15 @@ func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
 		LoadBalanceToken: lbToken,
 	}}
 
-	creds := serverNameCheckCreds{}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName,
+	r := manual.NewBuilderWithScheme("whatever")
+	dopts := []grpc.DialOption{
 		grpc.WithResolvers(r),
-		grpc.WithTransportCredentials(&creds),
-		grpc.WithContextDialer(fakeNameDialer))
+		grpc.WithTransportCredentials(&serverNameCheckCreds{}),
+		grpc.WithContextDialer(fakeNameDialer),
+	}
+	cc, err := grpc.DialContext(ctx, r.Scheme()+":///"+beServerName, dopts...)
 	if err != nil {
 		t.Fatalf("Failed to dial to the backend %v", err)
 	}
@@ -1304,11 +1240,15 @@ func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
 
 	tss.ls.sls <- &lbpb.ServerList{Servers: beServers}
 
-	rs := grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(svcfg)},
-		&grpclbstate.State{BalancerAddresses: []resolver.Address{{
-			Addr:       tss.lbAddr,
-			ServerName: lbServerName,
-		}}})
+	s := &state.State{
+		BalancerAddresses: []resolver.Address{
+			{
+				Addr:       tss.lbAddr,
+				ServerName: lbServerName,
+			},
+		},
+	}
+	rs := state.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(svcfg)}, s)
 	r.UpdateState(rs)
 	t.Log("Perform an initial RPC and expect it to succeed...")
 	if _, err := testC.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
@@ -1317,7 +1257,7 @@ func testGRPCLBEmptyServerList(t *testing.T, svcfg string) {
 	t.Log("Now send an empty server list. Wait until we see an RPC failure to make sure the client got it...")
 	tss.ls.sls <- &lbpb.ServerList{}
 	gotError := false
-	for i := 0; i < 100; i++ {
+	for ; ctx.Err() == nil; <-time.After(time.Millisecond) {
 		if _, err := testC.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			gotError = true
 			break
@@ -1376,8 +1316,8 @@ func (s) TestGRPCLBWithTargetNameFieldInConfig(t *testing.T) {
 	// Push a resolver update with grpclb configuration which does not contain the
 	// target_name field. Our fake remote balancer is configured to always
 	// expect `beServerName` as the server name in the initial request.
-	rs := grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)},
-		&grpclbstate.State{BalancerAddresses: []resolver.Address{{
+	rs := state.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(grpclbConfig)},
+		&state.State{BalancerAddresses: []resolver.Address{{
 			Addr:       tss.lbAddr,
 			ServerName: lbServerName,
 		}}})
@@ -1405,11 +1345,15 @@ func (s) TestGRPCLBWithTargetNameFieldInConfig(t *testing.T) {
 	// Push a resolver update with grpclb configuration containing the
 	// target_name field. Our fake remote balancer has been updated above to expect the newServerName in the initial request.
 	lbCfg := fmt.Sprintf(`{"loadBalancingConfig": [{"grpclb": {"serviceName": "%s"}}]}`, newServerName)
-	rs = grpclbstate.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(lbCfg)},
-		&grpclbstate.State{BalancerAddresses: []resolver.Address{{
-			Addr:       tss.lbAddr,
-			ServerName: lbServerName,
-		}}})
+	s := &state.State{
+		BalancerAddresses: []resolver.Address{
+			{
+				Addr:       tss.lbAddr,
+				ServerName: lbServerName,
+			},
+		},
+	}
+	rs = state.Set(resolver.State{ServiceConfig: r.CC.ParseServiceConfig(lbCfg)}, s)
 	r.UpdateState(rs)
 	select {
 	case <-ctx.Done():
