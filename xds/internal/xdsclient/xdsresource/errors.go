@@ -34,6 +34,9 @@ const (
 	// response. It's typically returned if the resource is removed in the xds
 	// server.
 	ErrorTypeResourceNotFound
+	// ErrTypeResourceTypeUnsupported indicates is an error used to indicate an unsupported xDS
+	// resource type. The wrapped ErrStr contains the details.
+	ErrTypeResourceTypeUnsupported
 )
 
 type xdsClientError struct {
