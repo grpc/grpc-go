@@ -440,8 +440,8 @@ func (t *Transport) recv(stream adsStream) bool {
 			URL:       url,
 			Version:   rVersion,
 		})
-		if e, ok := err.(xdsresource.ErrResourceTypeUnsupported); ok {
-			t.logger.Warningf("%s", e.ErrStr)
+		if xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceTypeUnsupported {
+			t.logger.Warningf("%v", err)
 			continue
 		}
 		// If the data model layer returned an error, we need to NACK the

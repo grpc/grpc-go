@@ -77,8 +77,8 @@ func (t *Transport) lrsStopStream() {
 	}
 
 	t.lrsCancelStream()
-	<-t.lrsRunnerDoneCh
 	t.logger.Infof("Stopping LRS stream")
+	<-t.lrsRunnerDoneCh
 }
 
 // lrsRunner starts an LRS stream to report load data to the management server.

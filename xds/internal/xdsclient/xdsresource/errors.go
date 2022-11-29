@@ -34,9 +34,9 @@ const (
 	// response. It's typically returned if the resource is removed in the xds
 	// server.
 	ErrorTypeResourceNotFound
-	// ErrTypeResourceTypeUnsupported indicates is an error used to indicate an unsupported xDS
-	// resource type. The wrapped ErrStr contains the details.
-	ErrTypeResourceTypeUnsupported
+	// ErrorTypeResourceTypeUnsupported indicates the receipt of a message from
+	// the management server with resources of an unsupported resource type.
+	ErrorTypeResourceTypeUnsupported
 )
 
 type xdsClientError struct {
@@ -60,15 +60,4 @@ func ErrType(e error) ErrorType {
 		return xe.t
 	}
 	return ErrorTypeUnknown
-}
-
-// ErrResourceTypeUnsupported is an error used to indicate an unsupported xDS
-// resource type. The wrapped ErrStr contains the details.
-type ErrResourceTypeUnsupported struct {
-	ErrStr string
-}
-
-// Error helps implements the error interface.
-func (e ErrResourceTypeUnsupported) Error() string {
-	return e.ErrStr
 }
