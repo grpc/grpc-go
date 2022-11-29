@@ -37,7 +37,7 @@ import (
 // if the RPCs are routed to a peer matching wantAddr.
 //
 // Returns a non-nil error if context deadline expires before all RPCs begin to
-// be routed to the peer matching wantAddr.
+// be routed to the peer matching wantAddr, or if the backend returns RPC errors.
 func CheckRPCsToBackend(ctx context.Context, cc *grpc.ClientConn, wantAddr resolver.Address) error {
 	client := testgrpc.NewTestServiceClient(cc)
 	peer := &peer.Peer{}
