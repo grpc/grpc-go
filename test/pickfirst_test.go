@@ -20,7 +20,6 @@ package test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -30,10 +29,11 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/stubserver"
-	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/internal/testutils/pickfirst"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
 	"google.golang.org/grpc/status"
+
 	testgrpc "google.golang.org/grpc/test/grpc_testing"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
@@ -93,41 +93,6 @@ func setupPickFirst(t *testing.T, backendCount int, opts ...grpc.DialOption) (*g
 	return cc, r, backends
 }
 
-// checkPickFirst makes a bunch of RPCs on the given ClientConn and verifies if
-// the RPCs are routed to a peer matching wantAddr.
-func checkPickFirst(ctx context.Context, cc *grpc.ClientConn, wantAddr string) error {
-	client := testgrpc.NewTestServiceClient(cc)
-	peer := &peer.Peer{}
-	// Make sure the RPC reaches the expected backend once.
-	for {
-		time.Sleep(time.Millisecond)
-		if ctx.Err() != nil {
-			return fmt.Errorf("timeout waiting for RPC to be routed to %q", wantAddr)
-		}
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
-			// Some tests remove backends and check if pick_first is happening across
-			// the remaining backends. In such cases, RPCs can initially fail on the
-			// connection using the removed backend. Just keep retrying and eventually
-			// the connection using the removed backend will shutdown and will be
-			// removed.
-			continue
-		}
-		if peer.Addr.String() == wantAddr {
-			break
-		}
-	}
-	// Make sure subsequent RPCs are all routed to the same backend.
-	for i := 0; i < 10; i++ {
-		if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.Peer(peer)); err != nil {
-			return fmt.Errorf("EmptyCall() = %v, want <nil>", err)
-		}
-		if gotAddr := peer.Addr.String(); gotAddr != wantAddr {
-			return fmt.Errorf("rpc sent to peer %q, want peer %q", gotAddr, wantAddr)
-		}
-	}
-	return nil
-}
-
 // stubBackendsToResolverAddrs converts from a set of stub server backends to
 // resolver addresses. Useful when pushing addresses to the manual resolver.
 func stubBackendsToResolverAddrs(backends []*stubserver.StubServer) []resolver.Address {
@@ -148,7 +113,7 @@ func (s) TestPickFirst_OneBackend(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -163,7 +128,7 @@ func (s) TestPickFirst_MultipleBackends(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -179,14 +144,14 @@ func (s) TestPickFirst_OneServerDown(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Stop the backend which is currently being used. RPCs should get routed to
 	// the next backend in the list.
 	backends[0].Stop()
-	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -202,7 +167,7 @@ func (s) TestPickFirst_AllServersDown(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -233,35 +198,35 @@ func (s) TestPickFirst_AddressesRemoved(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Remove the first backend from the list of addresses originally pushed.
 	// RPCs should get routed to the first backend in the new list.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[1], addrs[2]}})
-	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Append the backend that we just removed to the end of the list.
 	// Nothing should change.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[1], addrs[2], addrs[0]}})
-	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Remove the first backend from the existing list of addresses.
 	// RPCs should get routed to the first backend in the new list.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[2], addrs[0]}})
-	if err := checkPickFirst(ctx, cc, addrs[2].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[2]); err != nil {
 		t.Fatal(err)
 	}
 
 	// Remove the first backend from the existing list of addresses.
 	// RPCs should get routed to the first backend in the new list.
 	r.UpdateState(resolver.State{Addresses: []resolver.Address{addrs[0]}})
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -278,7 +243,7 @@ func (s) TestPickFirst_NewAddressWhileBlocking(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 

@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils/fakegrpclb"
+	"google.golang.org/grpc/internal/testutils/pickfirst"
 	rrutil "google.golang.org/grpc/internal/testutils/roundrobin"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
@@ -127,7 +128,7 @@ func (s) TestBalancerSwitch_Basic(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: addrs})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -146,7 +147,7 @@ func (s) TestBalancerSwitch_Basic(t *testing.T) {
 		Addresses:     addrs,
 		ServiceConfig: parseServiceConfig(t, r, pickFirstServiceConfig),
 	})
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -191,7 +192,7 @@ func (s) TestBalancerSwitch_grpclbToPickFirst(t *testing.T) {
 	// returned by the "grpclb" balancer. So, we should see RPCs going to the
 	// newly configured backends, as part of the balancer switch.
 	r.UpdateState(resolver.State{Addresses: addrs[1:]})
-	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -216,7 +217,7 @@ func (s) TestBalancerSwitch_pickFirstToGRPCLB(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: addrs[1:]})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -238,7 +239,7 @@ func (s) TestBalancerSwitch_pickFirstToGRPCLB(t *testing.T) {
 
 	// Switch to "pick_first" again by sending no grpclb server addresses.
 	r.UpdateState(resolver.State{Addresses: addrs[1:]})
-	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -332,7 +333,7 @@ func (s) TestBalancerSwitch_grpclbNotRegistered(t *testing.T) {
 	r.UpdateState(resolver.State{Addresses: addrs})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -371,7 +372,7 @@ func (s) TestBalancerSwitch_grpclbAddressOverridesLoadBalancingPolicy(t *testing
 	r.UpdateState(resolver.State{Addresses: addrs[1:]})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if err := checkPickFirst(ctx, cc, addrs[1].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[1]); err != nil {
 		t.Fatal(err)
 	}
 
@@ -609,7 +610,7 @@ func (s) TestBalancerSwitch_Graceful(t *testing.T) {
 	// underlying "pick_first" balancer which will result in a healthy picker
 	// being reported to the channel. RPCs should start using the new balancer.
 	close(waitToProceed)
-	if err := checkPickFirst(ctx, cc, addrs[0].Addr); err != nil {
+	if err := pickfirst.CheckRPCsToBackend(ctx, cc, addrs[0]); err != nil {
 		t.Fatal(err)
 	}
 }
