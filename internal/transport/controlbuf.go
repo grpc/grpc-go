@@ -209,6 +209,10 @@ type outFlowControlSizeRequest struct {
 
 func (*outFlowControlSizeRequest) isTransportResponseFrame() bool { return false }
 
+type closeConnection struct{}
+
+func (closeConnection) isTransportResponseFrame() bool { return false }
+
 type outStreamState int
 
 const (
@@ -817,6 +821,11 @@ func (l *loopyWriter) goAwayHandler(g *goAway) error {
 	return nil
 }
 
+func (l *loopyWriter) closeConnectionHandler() error {
+	l.framer.writer.Flush()
+	return ErrConnClosing
+}
+
 func (l *loopyWriter) handle(i interface{}) error {
 	switch i := i.(type) {
 	case *incomingWindowUpdate:
@@ -845,6 +854,8 @@ func (l *loopyWriter) handle(i interface{}) error {
 		return l.goAwayHandler(i)
 	case *outFlowControlSizeRequest:
 		return l.outFlowControlSizeRequestHandler(i)
+	case closeConnection:
+		return l.closeConnectionHandler()
 	default:
 		return fmt.Errorf("transport: unknown control message type %T", i)
 	}
