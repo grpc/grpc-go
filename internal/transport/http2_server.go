@@ -1154,14 +1154,6 @@ func (t *http2Server) keepalive() {
 					logger.Infof("transport: closing server transport due to maximum connection age.")
 				}
 				t.controlBuf.put(closeConnection{})
-				// Allow some time for the connection to close via the above
-				// signal, then hard close eventually if it doesn't happen.
-				ageTimer.Reset(5 * time.Second)
-				select {
-				case <-ageTimer.C:
-					t.Close()
-				case <-t.done:
-				}
 			case <-t.done:
 			}
 			return
