@@ -828,7 +828,7 @@ func (l *loopyWriter) goAwayHandler(g *goAway) error {
 func (l *loopyWriter) closeConnectionHandler() error {
 	l.framer.writer.Flush()
 	// Exit loopyWriter entirely by returning an error here.  This will lead to
-	// the transport closing the conneciton, and, ultimately, transport
+	// the transport closing the connection, and, ultimately, transport
 	// closure.
 	return ErrConnClosing
 }
