@@ -23,13 +23,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
+	"log"
+	"net"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"io"
-	"log"
-	"net"
 
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
