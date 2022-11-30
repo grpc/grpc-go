@@ -209,6 +209,10 @@ type outFlowControlSizeRequest struct {
 
 func (*outFlowControlSizeRequest) isTransportResponseFrame() bool { return false }
 
+// closeConnection is an instruction to tell the loopy writer to flush the
+// framer and exit, which will cause the transport's connection to be closed
+// (by the client or server).  The transport itself will close after the reader
+// encounters the EOF caused by the connection closure.
 type closeConnection struct{}
 
 func (closeConnection) isTransportResponseFrame() bool { return false }
@@ -823,6 +827,9 @@ func (l *loopyWriter) goAwayHandler(g *goAway) error {
 
 func (l *loopyWriter) closeConnectionHandler() error {
 	l.framer.writer.Flush()
+	// Exit loopyWriter entirely by returning an error here.  This will lead to
+	// the transport closing the conneciton, and, ultimately, transport
+	// closure.
 	return ErrConnClosing
 }
 
