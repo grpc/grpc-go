@@ -66,8 +66,6 @@ var (
 	// Dialer replaces fakeName with localhost when dialing.
 	// This will test that custom dialer is passed from Dial to grpclb.
 	fakeName = "fake.Name"
-
-	grpclbSC = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(grpclbConfig)
 )
 
 const (
