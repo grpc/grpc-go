@@ -1532,9 +1532,10 @@ func (s) TestAccountCheckWindowSizeWithLargeWindow(t *testing.T) {
 }
 
 func (s) TestAccountCheckWindowSizeWithSmallWindow(t *testing.T) {
+	// These settings disable dynamic window sizes based on BDP estimation;
+	// must be at least defaultWindowSize or the setting is ignored.
 	wc := windowSizeConfig{
 		serverStream: defaultWindowSize,
-		// Note this is smaller than initialConnWindowSize which is the current default.
 		serverConn:   defaultWindowSize,
 		clientStream: defaultWindowSize,
 		clientConn:   defaultWindowSize,
@@ -1576,10 +1577,11 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	for k := range server.conns {
 		st = k.(*http2Server)
 	}
+	server.mu.Unlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	server.mu.Unlock()
-	const numStreams = 10
+	const numStreams = 5
 	clientStreams := make([]*Stream, numStreams)
 	for i := 0; i < numStreams; i++ {
 		var err error
@@ -1599,26 +1601,27 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 			binary.BigEndian.PutUint32(buf[1:], uint32(msgSize))
 			opts := Options{}
 			header := make([]byte, 5)
-			for i := 1; i <= 10; i++ {
+			for i := 1; i <= 5; i++ {
 				if err := client.Write(stream, nil, buf, &opts); err != nil {
-					t.Errorf("Error on client while writing message: %v", err)
+					t.Errorf("Error on client while writing message %v on stream %v: %v", i, stream.id, err)
 					return
 				}
 				if _, err := stream.Read(header); err != nil {
-					t.Errorf("Error on client while reading data frame header: %v", err)
+					t.Errorf("Error on client while reading data frame header %v on stream %v: %v", i, stream.id, err)
 					return
 				}
 				sz := binary.BigEndian.Uint32(header[1:])
 				recvMsg := make([]byte, int(sz))
 				if _, err := stream.Read(recvMsg); err != nil {
-					t.Errorf("Error on client while reading data: %v", err)
+					t.Errorf("Error on client while reading data %v on stream %v: %v", i, stream.id, err)
 					return
 				}
 				if len(recvMsg) != msgSize {
-					t.Errorf("Length of message received by client: %v, want: %v", len(recvMsg), msgSize)
+					t.Errorf("Length of message %v received by client on stream %v: %v, want: %v", i, stream.id, len(recvMsg), msgSize)
 					return
 				}
 			}
+			t.Logf("stream %v done with pingpongs", stream.id)
 		}(stream)
 	}
 	wg.Wait()
