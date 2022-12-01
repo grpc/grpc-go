@@ -106,6 +106,10 @@ var (
 	useBufconn          = flag.Bool("bufconn", false, "Use in-memory connection instead of system network I/O")
 	enableKeepalive     = flag.Bool("enable_keepalive", false, "Enable client keepalive. \n"+
 		"Keepalive.Time is set to 10s, Keepalive.Timeout is set to 1s, Keepalive.PermitWithoutStream is set to true.")
+	clientReadBufferSize  = flags.IntSlice("clientReadBufferSize", []int{-1}, "Configures the client read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	clientWriteBufferSize = flags.IntSlice("clientWriteBufferSize", []int{-1}, "Configures the client write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	serverReadBufferSize  = flags.IntSlice("serverReadBufferSize", []int{-1}, "Configures the server read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	serverWriteBufferSize = flags.IntSlice("serverWriteBufferSize", []int{-1}, "Configures the server write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
 
 	logger = grpclog.Component("benchmark")
 )
@@ -306,6 +310,19 @@ func makeClient(bf stats.Features) (testgrpc.BenchmarkServiceClient, func()) {
 			}),
 		)
 	}
+	if bf.ClientReadBufferSize >= 0 {
+		opts = append(opts, grpc.WithReadBufferSize(bf.ClientReadBufferSize))
+	}
+	if bf.ClientWriteBufferSize >= 0 {
+		opts = append(opts, grpc.WithWriteBufferSize(bf.ClientWriteBufferSize))
+	}
+	if bf.ServerReadBufferSize >= 0 {
+		sopts = append(sopts, grpc.ReadBufferSize(bf.ServerReadBufferSize))
+	}
+	if bf.ServerWriteBufferSize >= 0 {
+		sopts = append(sopts, grpc.WriteBufferSize(bf.ServerWriteBufferSize))
+	}
+
 	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(bf.MaxConcurrentCalls+1)))
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 
@@ -496,18 +513,22 @@ type benchOpts struct {
 // features through command line flags. We generate all possible combinations
 // for the provided values and run the benchmarks for each combination.
 type featureOpts struct {
-	enableTrace        []bool
-	readLatencies      []time.Duration
-	readKbps           []int
-	readMTU            []int
-	maxConcurrentCalls []int
-	reqSizeBytes       []int
-	respSizeBytes      []int
-	reqPayloadCurves   []*stats.PayloadCurve
-	respPayloadCurves  []*stats.PayloadCurve
-	compModes          []string
-	enableChannelz     []bool
-	enablePreloader    []bool
+	enableTrace           []bool
+	readLatencies         []time.Duration
+	readKbps              []int
+	readMTU               []int
+	maxConcurrentCalls    []int
+	reqSizeBytes          []int
+	respSizeBytes         []int
+	reqPayloadCurves      []*stats.PayloadCurve
+	respPayloadCurves     []*stats.PayloadCurve
+	compModes             []string
+	enableChannelz        []bool
+	enablePreloader       []bool
+	clientReadBufferSize  []int
+	clientWriteBufferSize []int
+	serverReadBufferSize  []int
+	serverWriteBufferSize []int
 }
 
 // makeFeaturesNum returns a slice of ints of size 'maxFeatureIndex' where each
@@ -544,6 +565,14 @@ func makeFeaturesNum(b *benchOpts) []int {
 			featuresNum[i] = len(b.features.enableChannelz)
 		case stats.EnablePreloaderIndex:
 			featuresNum[i] = len(b.features.enablePreloader)
+		case stats.ClientReadBufferSize:
+			featuresNum[i] = len(b.features.clientReadBufferSize)
+		case stats.ClientWriteBufferSize:
+			featuresNum[i] = len(b.features.clientWriteBufferSize)
+		case stats.ServerReadBufferSize:
+			featuresNum[i] = len(b.features.serverReadBufferSize)
+		case stats.ServerWriteBufferSize:
+			featuresNum[i] = len(b.features.serverWriteBufferSize)
 		default:
 			log.Fatalf("Unknown feature index %v in generateFeatures. maxFeatureIndex is %v", i, stats.MaxFeatureIndex)
 		}
@@ -598,14 +627,18 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 			EnableKeepalive: b.enableKeepalive,
 			BenchTime:       b.benchTime,
 			// These features can potentially change for each iteration.
-			EnableTrace:        b.features.enableTrace[curPos[stats.EnableTraceIndex]],
-			Latency:            b.features.readLatencies[curPos[stats.ReadLatenciesIndex]],
-			Kbps:               b.features.readKbps[curPos[stats.ReadKbpsIndex]],
-			MTU:                b.features.readMTU[curPos[stats.ReadMTUIndex]],
-			MaxConcurrentCalls: b.features.maxConcurrentCalls[curPos[stats.MaxConcurrentCallsIndex]],
-			ModeCompressor:     b.features.compModes[curPos[stats.CompModesIndex]],
-			EnableChannelz:     b.features.enableChannelz[curPos[stats.EnableChannelzIndex]],
-			EnablePreloader:    b.features.enablePreloader[curPos[stats.EnablePreloaderIndex]],
+			EnableTrace:           b.features.enableTrace[curPos[stats.EnableTraceIndex]],
+			Latency:               b.features.readLatencies[curPos[stats.ReadLatenciesIndex]],
+			Kbps:                  b.features.readKbps[curPos[stats.ReadKbpsIndex]],
+			MTU:                   b.features.readMTU[curPos[stats.ReadMTUIndex]],
+			MaxConcurrentCalls:    b.features.maxConcurrentCalls[curPos[stats.MaxConcurrentCallsIndex]],
+			ModeCompressor:        b.features.compModes[curPos[stats.CompModesIndex]],
+			EnableChannelz:        b.features.enableChannelz[curPos[stats.EnableChannelzIndex]],
+			EnablePreloader:       b.features.enablePreloader[curPos[stats.EnablePreloaderIndex]],
+			ClientReadBufferSize:  b.features.clientReadBufferSize[curPos[stats.ClientReadBufferSize]],
+			ClientWriteBufferSize: b.features.clientWriteBufferSize[curPos[stats.ClientWriteBufferSize]],
+			ServerReadBufferSize:  b.features.serverReadBufferSize[curPos[stats.ServerReadBufferSize]],
+			ServerWriteBufferSize: b.features.serverWriteBufferSize[curPos[stats.ServerWriteBufferSize]],
 		}
 		if len(b.features.reqPayloadCurves) == 0 {
 			f.ReqSizeBytes = b.features.reqSizeBytes[curPos[stats.ReqSizeBytesIndex]]
@@ -662,16 +695,20 @@ func processFlags() *benchOpts {
 		useBufconn:          *useBufconn,
 		enableKeepalive:     *enableKeepalive,
 		features: &featureOpts{
-			enableTrace:        setToggleMode(*traceMode),
-			readLatencies:      append([]time.Duration(nil), *readLatency...),
-			readKbps:           append([]int(nil), *readKbps...),
-			readMTU:            append([]int(nil), *readMTU...),
-			maxConcurrentCalls: append([]int(nil), *maxConcurrentCalls...),
-			reqSizeBytes:       append([]int(nil), *readReqSizeBytes...),
-			respSizeBytes:      append([]int(nil), *readRespSizeBytes...),
-			compModes:          setCompressorMode(*compressorMode),
-			enableChannelz:     setToggleMode(*channelzOn),
-			enablePreloader:    setToggleMode(*preloaderMode),
+			enableTrace:           setToggleMode(*traceMode),
+			readLatencies:         append([]time.Duration(nil), *readLatency...),
+			readKbps:              append([]int(nil), *readKbps...),
+			readMTU:               append([]int(nil), *readMTU...),
+			maxConcurrentCalls:    append([]int(nil), *maxConcurrentCalls...),
+			reqSizeBytes:          append([]int(nil), *readReqSizeBytes...),
+			respSizeBytes:         append([]int(nil), *readRespSizeBytes...),
+			compModes:             setCompressorMode(*compressorMode),
+			enableChannelz:        setToggleMode(*channelzOn),
+			enablePreloader:       setToggleMode(*preloaderMode),
+			clientReadBufferSize:  append([]int(nil), *clientReadBufferSize...),
+			clientWriteBufferSize: append([]int(nil), *clientWriteBufferSize...),
+			serverReadBufferSize:  append([]int(nil), *serverReadBufferSize...),
+			serverWriteBufferSize: append([]int(nil), *serverWriteBufferSize...),
 		},
 	}
 
