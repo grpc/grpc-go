@@ -242,7 +242,7 @@ func (o *ClientOptions) config() (*tls.Config, error) {
 		return nil, fmt.Errorf("GetIdentityCertificatesForServer cannot be specified on the client side")
 	}
 	if o.VersionOptions.MinVersion > o.VersionOptions.MaxVersion {
-		return nil, fmt.Errorf("the minimum TLS version is larger than maximum TLS version")
+		return nil, fmt.Errorf("the minimum TLS version is larger than the maximum TLS version")
 	}
 	config := &tls.Config{
 		ServerName: o.ServerNameOverride,
@@ -318,7 +318,7 @@ func (o *ServerOptions) config() (*tls.Config, error) {
 		return nil, fmt.Errorf("GetIdentityCertificatesForClient cannot be specified on the server side")
 	}
 	if o.VersionOptions.MinVersion > o.VersionOptions.MaxVersion {
-		return nil, fmt.Errorf("the minimum TLS version is larger than maximum TLS version")
+		return nil, fmt.Errorf("the minimum TLS version is larger than the maximum TLS version")
 	}
 	clientAuth := tls.NoClientCert
 	if o.RequireClientCert {
