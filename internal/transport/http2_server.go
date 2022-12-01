@@ -1153,7 +1153,7 @@ func (t *http2Server) keepalive() {
 				if logger.V(logLevel) {
 					logger.Infof("transport: closing server transport due to maximum connection age.")
 				}
-				t.Close()
+				t.controlBuf.put(closeConnection{})
 			case <-t.done:
 			}
 			return
