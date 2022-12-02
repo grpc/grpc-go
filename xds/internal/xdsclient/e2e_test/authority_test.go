@@ -77,14 +77,14 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	lisNonDefault := testutils.NewListenerWrapper(t, nil)
 
 	// Start a management server to act as the default authority.
-	defaultAuthorityServer, err := e2e.StartManagementServer(&e2e.ManagementServerOptions{Listener: lisDefault})
+	defaultAuthorityServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{Listener: lisDefault})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
 	}
 	t.Cleanup(func() { defaultAuthorityServer.Stop() })
 
 	// Start a management server to act as the non-default authority.
-	nonDefaultAuthorityServer, err := e2e.StartManagementServer(&e2e.ManagementServerOptions{Listener: lisNonDefault})
+	nonDefaultAuthorityServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{Listener: lisNonDefault})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
 	}

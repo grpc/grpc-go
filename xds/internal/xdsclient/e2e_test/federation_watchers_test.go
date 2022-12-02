@@ -47,14 +47,14 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 	overrideFedEnvVar(t)
 
 	// Start a management server as the default authority.
-	serverDefaultAuthority, err := e2e.StartManagementServer(nil)
+	serverDefaultAuthority, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
 	}
 	t.Cleanup(serverDefaultAuthority.Stop)
 
 	// Start another management server as the other authority.
-	serverNonDefaultAuthority, err := e2e.StartManagementServer(nil)
+	serverNonDefaultAuthority, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
 	}

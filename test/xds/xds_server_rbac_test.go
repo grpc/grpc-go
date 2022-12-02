@@ -60,7 +60,7 @@ func (s) TestServerSideXDS_RouteConfiguration(t *testing.T) {
 	defer func() {
 		envconfig.XDSRBAC = oldRBAC
 	}()
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
+	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
@@ -605,7 +605,7 @@ func (s) TestRBACHTTPFilter(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			func() {
-				managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
+				managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 				defer cleanup1()
 
 				lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
@@ -790,7 +790,7 @@ func (s) TestRBACToggledOn_WithBadRouteConfiguration(t *testing.T) {
 		envconfig.XDSRBAC = oldRBAC
 	}()
 
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
+	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
@@ -847,7 +847,7 @@ func (s) TestRBACToggledOff_WithBadRouteConfiguration(t *testing.T) {
 		envconfig.XDSRBAC = oldRBAC
 	}()
 
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
+	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
 	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)

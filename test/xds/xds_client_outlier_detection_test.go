@@ -49,7 +49,7 @@ import (
 // Detection balancer. This test verifies that an RPC is able to proceed
 // normally with this configuration.
 func (s) TestOutlierDetection_NoopConfig(t *testing.T) {
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
+	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
 	port, cleanup2 := startTestService(t, nil)
@@ -166,7 +166,7 @@ func checkRoundRobinRPCs(ctx context.Context, client testpb.TestServiceClient, a
 // the unhealthy upstream is ejected, RPC's should regularly round robin across
 // all three upstreams.
 func (s) TestOutlierDetectionWithOutlier(t *testing.T) {
-	managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, nil)
+	managementServer, nodeID, _, r, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
 	// Working backend 1.
