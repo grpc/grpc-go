@@ -407,7 +407,7 @@ func (s) TestControlChannelCredsFailure(t *testing.T) {
 				Authority: "authority-mismatch",
 			},
 			wantCode:     codes.Unavailable,
-			wantErrRegex: regexp.MustCompile(`transport: authentication handshake failed: .* \*.test.example.com.*authority-mismatch`),
+			wantErrRegex: regexp.MustCompile(`transport: authentication handshake failed: .* \*\.test\.example\.com.*authority-mismatch`),
 		},
 		{
 			name:  "transport creds handshake failure",
