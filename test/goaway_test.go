@@ -97,7 +97,7 @@ func (s) TestDetailedGoAwayErrorOnGracefulClosePropagatesToRPCError(t *testing.T
 	sopts := []grpc.ServerOption{
 		grpc.KeepaliveParams(keepalive.ServerParameters{
 			MaxConnectionAge:      time.Millisecond * 100,
-			MaxConnectionAgeGrace: time.Millisecond,
+			MaxConnectionAgeGrace: time.Nanosecond, // ~instantaneously, but non-zero to avoid default
 		}),
 	}
 	if err := ss.Start(sopts); err != nil {
