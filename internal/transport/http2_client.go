@@ -223,6 +223,9 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	// Any further errors will close the underlying connection
 	defer func(conn net.Conn) {
 		if err != nil {
+			if logger.V(logLevel) {
+				logger.Errorf("transport: closing connection due to error %v.", err)
+			}
 			conn.Close()
 		}
 	}(conn)
@@ -244,6 +247,9 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		<-newClientCtx.Done()       // Block until connectCtx expires or the defer above executes.
 		if connectCtx.Err() != nil {
 			// connectCtx expired before exiting the function.  Hard close the connection.
+			if logger.V(logLevel) {
+				logger.Infof("transport: closing connection due to connect context expiring.")
+			}
 			conn.Close()
 		}
 	}(conn)
@@ -396,6 +402,9 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 			err = <-readerErrCh
 		}
 		if err != nil {
+			if logger.V(logLevel) {
+				logger.Errorf("transport: closing transport due to error reading server preface: %v.", err)
+			}
 			t.Close(err)
 		}
 	}()
@@ -447,7 +456,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		err := t.loopy.run()
 		if err != nil {
 			if logger.V(logLevel) {
-				logger.Errorf("transport: loopyWriter.run returning. Err: %v", err)
+				logger.Errorf("transport: loopyWriter.run returned. Err: %v. Closing connection.", err)
 			}
 		}
 		// Do not close the transport.  Let reader goroutine handle it since
@@ -965,6 +974,9 @@ func (t *http2Client) Close(err error) {
 	t.mu.Unlock()
 	t.controlBuf.finish()
 	t.cancel()
+	if logger.V(logLevel) {
+		logger.Infof("transport: calling Close on the conn within transport.Close.")
+	}
 	t.conn.Close()
 	channelz.RemoveEntry(t.channelzID)
 	// Append info about previous goaways if there were any, since this may be important
@@ -1007,6 +1019,9 @@ func (t *http2Client) GracefulClose() {
 	active := len(t.activeStreams)
 	t.mu.Unlock()
 	if active == 0 {
+		if logger.V(logLevel) {
+			logger.Infof("transport: closing transport because no active streams left to process in GracefulClose call.")
+		}
 		t.Close(ErrConnClosing)
 		return
 	}
@@ -1255,7 +1270,11 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	id := f.LastStreamID
 	if id > 0 && id%2 == 0 {
 		t.mu.Unlock()
-		t.Close(connectionErrorf(true, nil, "received goaway with non-zero even-numbered numbered stream id: %v", id))
+		err := connectionErrorf(true, nil, "received goaway with non-zero even-numbered numbered stream id: %v", id)
+		if logger.V(logLevel) {
+			logger.Errorf("transport: closing transport due to error in goaway handling: %v.", err)
+		}
+		t.Close(err)
 		return
 	}
 	// A client can receive multiple GoAways from the server (see
@@ -1273,7 +1292,11 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		// If there are multiple GoAways the first one should always have an ID greater than the following ones.
 		if id > t.prevGoAwayID {
 			t.mu.Unlock()
-			t.Close(connectionErrorf(true, nil, "received goaway with stream id: %v, which exceeds stream id of previous goaway: %v", id, t.prevGoAwayID))
+			err := connectionErrorf(true, nil, "received goaway with stream id: %v, which exceeds stream id of previous goaway: %v", id, t.prevGoAwayID)
+			if logger.V(logLevel) {
+				logger.Errorf("transport: closing transport due to error in goaway handling: %v.", err)
+			}
+			t.Close(err)
 			return
 		}
 	default:
@@ -1296,7 +1319,11 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	t.prevGoAwayID = id
 	if len(t.activeStreams) == 0 {
 		t.mu.Unlock()
-		t.Close(connectionErrorf(true, nil, "received goaway and there are no active streams"))
+		err := connectionErrorf(true, nil, "received goaway and there are no active streams")
+		if logger.V(logLevel) {
+			logger.Errorf("transport: closing transport due to error in goaway handling: %v.", err)
+		}
+		t.Close(err)
 		return
 	}
 
@@ -1602,7 +1629,11 @@ func (t *http2Client) reader(errCh chan<- error) {
 				continue
 			} else {
 				// Transport error.
-				t.Close(connectionErrorf(true, err, "error reading from server: %v", err))
+				err := connectionErrorf(true, err, "error reading from server: %v", err)
+				if logger.V(logLevel) {
+					logger.Errorf("transport: closing transport due to connection level error %v.", err)
+				}
+				t.Close(err)
 				return
 			}
 		}
@@ -1661,7 +1692,11 @@ func (t *http2Client) keepalive() {
 				continue
 			}
 			if outstandingPing && timeoutLeft <= 0 {
-				t.Close(connectionErrorf(true, nil, "keepalive ping failed to receive ACK within timeout"))
+				err := connectionErrorf(true, nil, "keepalive ping failed to receive ACK within timeout")
+				if logger.V(logLevel) {
+					logger.Errorf("transport: closing transport due to error in keep alive handling: %v.", err)
+				}
+				t.Close(err)
 				return
 			}
 			t.mu.Lock()

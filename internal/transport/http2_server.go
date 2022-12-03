@@ -333,7 +333,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
 		if err := t.loopy.run(); err != nil {
 			if logger.V(logLevel) {
-				logger.Errorf("transport: loopyWriter.run returning. Err: %v", err)
+				logger.Errorf("transport: loopyWriter.run returned. Err: %v. Closing Connection.", err)
 			}
 		}
 		t.conn.Close()
@@ -630,11 +630,14 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 				continue
 			}
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
+				if logger.V(logLevel) {
+					logger.Infof("transport: closing the server transport due to connection level EOF.")
+				}
 				t.Close()
 				return
 			}
 			if logger.V(logLevel) {
-				logger.Warningf("transport: http2Server.HandleStreams failed to read frame: %v", err)
+				logger.Warningf("transport: http2Server.HandleStreams failed to read frame: %v, closing transport.", err)
 			}
 			t.Close()
 			return
@@ -642,6 +645,9 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
 			if t.operateHeaders(frame, handle, traceCtx) {
+				if logger.V(logLevel) {
+					logger.Errorf("transport: closing the transport due to fatal error processing headers frame.")
+				}
 				t.Close()
 				break
 			}
@@ -1170,7 +1176,7 @@ func (t *http2Server) keepalive() {
 			}
 			if outstandingPing && kpTimeoutLeft <= 0 {
 				if logger.V(logLevel) {
-					logger.Infof("transport: closing server transport due to idleness.")
+					logger.Infof("transport: closing server transport due to keep alive ping not being acked within timeout %v.", t.kp.Time.String())
 				}
 				t.Close()
 				return
@@ -1211,6 +1217,9 @@ func (t *http2Server) Close() {
 	t.mu.Unlock()
 	t.controlBuf.finish()
 	close(t.done)
+	if logger.V(logLevel) {
+		logger.Infof("transport: calling Close on the conn within transport.Close.")
+	}
 	if err := t.conn.Close(); err != nil && logger.V(logLevel) {
 		logger.Infof("transport: error closing conn during Close: %v", err)
 	}
@@ -1320,6 +1329,9 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		t.state = draining
 		sid := t.maxStreamID
 		if len(t.activeStreams) == 0 {
+			if logger.V(logLevel) {
+				logger.Infof("transport: second goaway written and no active streams left to process, closing the connection.")
+			}
 			g.closeConn = true
 		}
 		t.mu.Unlock()

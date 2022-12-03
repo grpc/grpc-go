@@ -416,6 +416,9 @@ func (c *controlBuffer) get(block bool) (interface{}, error) {
 		select {
 		case <-c.ch:
 		case <-c.done:
+			if logger.V(logLevel) {
+				logger.Infof("transport: trigger loopy to exit (with a subsequent conn closure) because transports context expired.")
+			}
 			return nil, ErrConnClosing
 		}
 	}
@@ -772,6 +775,9 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 		}
 	}
 	if l.side == clientSide && l.draining && len(l.estdStreams) == 0 {
+		if logger.V(logLevel) {
+			logger.Infof("transport: trigger loopy to exit (with a subsequent conn closure) because no active streams left to finish processing while in draining mode.")
+		}
 		return ErrConnClosing
 	}
 	return nil
@@ -807,6 +813,9 @@ func (l *loopyWriter) incomingGoAwayHandler(*incomingGoAway) error {
 	if l.side == clientSide {
 		l.draining = true
 		if len(l.estdStreams) == 0 {
+			if logger.V(logLevel) {
+				logger.Infof("transport: trigger loopy to exit (with a subsequent conn closure) because no active streams to wait to finish processing when GOAWAY frame received.")
+			}
 			return ErrConnClosing
 		}
 	}
