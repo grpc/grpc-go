@@ -41,29 +41,6 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 		missingIdentityProviderInstance = "missing-identity-provider-instance"
 		missingRootProviderInstance     = "missing-root-provider-instance"
 	)
-	managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
-	defer cleanup1()
-
-	lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
-	defer cleanup2()
-
-	// Grab the host and port of the server and create client side xDS
-	// resources corresponding to it.
-	host, port, err := hostPortFromListener(lis)
-	if err != nil {
-		t.Fatalf("failed to retrieve host and port of server: %v", err)
-	}
-
-	// Create xDS resources to be consumed on the client side. This
-	// includes the listener, route configuration, cluster (with
-	// security configuration) and endpoint resources.
-	resources := e2e.DefaultClientResources(e2e.ResourceParams{
-		DialTarget: serviceName,
-		NodeID:     nodeID,
-		Host:       host,
-		Port:       port,
-		SecLevel:   e2e.SecurityLevelMTLS,
-	})
 
 	tests := []struct {
 		name           string
@@ -164,22 +141,41 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
+			defer cleanup1()
+
+			lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
+			defer cleanup2()
+
+			// Grab the host and port of the server and create client side xDS
+			// resources corresponding to it.
+			host, port, err := hostPortFromListener(lis)
+			if err != nil {
+				t.Fatalf("failed to retrieve host and port of server: %v", err)
+			}
+
+			// Create xDS resources to be consumed on the client side. This
+			// includes the listener, route configuration, cluster (with
+			// security configuration) and endpoint resources.
+			resources := e2e.DefaultClientResources(e2e.ResourceParams{
+				DialTarget: serviceName,
+				NodeID:     nodeID,
+				Host:       host,
+				Port:       port,
+				SecLevel:   e2e.SecurityLevelMTLS,
+			})
+
 			// Create an inbound xDS listener resource for the server side.
 			inboundLis := e2e.DefaultServerListener(host, port, e2e.SecurityLevelMTLS)
 			for _, fc := range inboundLis.GetFilterChains() {
 				fc.TransportSocket = test.securityConfig
 			}
+			resources.Listeners = append(resources.Listeners, inboundLis)
 
-			// Setup the management server with client and server resources.
-			if len(resources.Listeners) == 1 {
-				resources.Listeners = append(resources.Listeners, inboundLis)
-			} else {
-				resources.Listeners[1] = inboundLis
-			}
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
 			if err := managementServer.Update(ctx, resources); err != nil {
 				t.Fatal(err)
 			}
@@ -203,10 +199,10 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 			if test.wantErr {
 				timeout = defaultTestShortTimeout
 			}
-			ctx2, cancel2 := context.WithTimeout(ctx, timeout)
-			defer cancel2()
+			ctx, cancel = context.WithTimeout(ctx, timeout)
+			defer cancel()
 			client := testgrpc.NewTestServiceClient(cc)
-			if _, err := client.EmptyCall(ctx2, &testpb.Empty{}, grpc.WaitForReady(true)); (err != nil) != test.wantErr {
+			if _, err := client.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); (err != nil) != test.wantErr {
 				t.Fatalf("EmptyCall() returned err: %v, wantErr %v", err, test.wantErr)
 			}
 		})
