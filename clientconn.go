@@ -1274,6 +1274,9 @@ func (ac *addrConn) createTransport(addr resolver.Address, copts transport.Conne
 
 	newTr, err := transport.NewClientTransport(connectCtx, ac.cc.ctx, addr, copts, onGoAway, onClose)
 	if err != nil {
+		if logger.V(2) {
+			logger.Errorf("NewClientTransport failed to connect to %s. Err: %v", addr, err)
+		}
 		// newTr is either nil, or closed.
 		hcancel()
 		channelz.Warningf(logger, ac.channelzID, "grpc: addrConn.createTransport failed to connect to %s. Err: %v", addr, err)

@@ -191,7 +191,7 @@ type goAway struct {
 	code      http2.ErrCode
 	debugData []byte
 	headsUp   bool
-	closeConn bool
+	closeConn error
 }
 
 func (*goAway) isTransportResponseFrame() bool { return false }
@@ -417,7 +417,7 @@ func (c *controlBuffer) get(block bool) (interface{}, error) {
 		case <-c.ch:
 		case <-c.done:
 			if logger.V(logLevel) {
-				logger.Infof("transport: trigger loopy to exit (with a subsequent conn closure) because transports context expired.")
+				logger.Infof("transport: trigger loopy to exit (with a subsequent conn closure) because transport's context expired.")
 			}
 			return nil, ErrConnClosing
 		}

@@ -892,10 +892,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 
 	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
-		if logger.V(logLevel) {
-			logger.Errorf("transport: Got too many pings from the client, closing the connection.")
-		}
-		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: true})
+		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: fmt.Errorf("got too many pings from the client")})
 	}
 }
 
@@ -1176,7 +1173,7 @@ func (t *http2Server) keepalive() {
 			}
 			if outstandingPing && kpTimeoutLeft <= 0 {
 				if logger.V(logLevel) {
-					logger.Infof("transport: closing server transport due to keep alive ping not being acked within timeout %v.", t.kp.Time.String())
+					logger.Infof("transport: closing server transport due to keepalive ping not being acked within timeout %v.", t.kp.Time.String())
 				}
 				t.Close()
 				return
@@ -1328,22 +1325,20 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		// Stop accepting more streams now.
 		t.state = draining
 		sid := t.maxStreamID
+		retErr := g.closeConn
 		if len(t.activeStreams) == 0 {
-			if logger.V(logLevel) {
-				logger.Infof("transport: second goaway written and no active streams left to process, closing the connection.")
-			}
-			g.closeConn = true
+			retErr = fmt.Errorf("second goaway written and no active streams left to process")
 		}
 		t.mu.Unlock()
 		t.maxStreamMu.Unlock()
 		if err := t.framer.fr.WriteGoAway(sid, g.code, g.debugData); err != nil {
 			return false, err
 		}
-		if g.closeConn {
+		if retErr != nil {
 			// Abruptly close the connection following the GoAway (via
 			// loopywriter).  But flush out what's inside the buffer first.
 			t.framer.writer.Flush()
-			return false, fmt.Errorf("transport: Connection closing")
+			return false, retErr
 		}
 		return true, nil
 	}

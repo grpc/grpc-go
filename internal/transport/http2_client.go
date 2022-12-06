@@ -223,9 +223,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	// Any further errors will close the underlying connection
 	defer func(conn net.Conn) {
 		if err != nil {
-			if logger.V(logLevel) {
-				logger.Errorf("transport: closing connection due to error %v.", err)
-			}
 			conn.Close()
 		}
 	}(conn)
@@ -960,6 +957,9 @@ func (t *http2Client) Close(err error) {
 		t.mu.Unlock()
 		return
 	}
+	if logger.V(logLevel) {
+		logger.Infof("closing transport due to err: %v, will close the connection.", err)
+	}
 	// Call t.onClose ASAP to prevent the client from attempting to create new
 	// streams.
 	t.onClose()
@@ -974,9 +974,6 @@ func (t *http2Client) Close(err error) {
 	t.mu.Unlock()
 	t.controlBuf.finish()
 	t.cancel()
-	if logger.V(logLevel) {
-		logger.Infof("transport: calling Close on the conn within transport.Close.")
-	}
 	t.conn.Close()
 	channelz.RemoveEntry(t.channelzID)
 	// Append info about previous goaways if there were any, since this may be important
@@ -1015,14 +1012,14 @@ func (t *http2Client) GracefulClose() {
 		t.mu.Unlock()
 		return
 	}
+	if logger.V(logLevel) {
+		logger.Infof("transport: GracefulClose called, transport switched to draining")
+	}
 	t.state = draining
 	active := len(t.activeStreams)
 	t.mu.Unlock()
 	if active == 0 {
-		if logger.V(logLevel) {
-			logger.Infof("transport: closing transport because no active streams left to process in GracefulClose call.")
-		}
-		t.Close(ErrConnClosing)
+		t.Close(errNoStreamsDraining)
 		return
 	}
 	t.controlBuf.put(&incomingGoAway{})
@@ -1270,10 +1267,8 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	id := f.LastStreamID
 	if id > 0 && id%2 == 0 {
 		t.mu.Unlock()
+
 		err := connectionErrorf(true, nil, "received goaway with non-zero even-numbered numbered stream id: %v", id)
-		if logger.V(logLevel) {
-			logger.Errorf("transport: closing transport due to error in goaway handling: %v.", err)
-		}
 		t.Close(err)
 		return
 	}
@@ -1293,9 +1288,6 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		if id > t.prevGoAwayID {
 			t.mu.Unlock()
 			err := connectionErrorf(true, nil, "received goaway with stream id: %v, which exceeds stream id of previous goaway: %v", id, t.prevGoAwayID)
-			if logger.V(logLevel) {
-				logger.Errorf("transport: closing transport due to error in goaway handling: %v.", err)
-			}
 			t.Close(err)
 			return
 		}
@@ -1320,9 +1312,6 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 	if len(t.activeStreams) == 0 {
 		t.mu.Unlock()
 		err := connectionErrorf(true, nil, "received goaway and there are no active streams")
-		if logger.V(logLevel) {
-			logger.Errorf("transport: closing transport due to error in goaway handling: %v.", err)
-		}
 		t.Close(err)
 		return
 	}
@@ -1630,9 +1619,6 @@ func (t *http2Client) reader(errCh chan<- error) {
 			} else {
 				// Transport error.
 				err := connectionErrorf(true, err, "error reading from server: %v", err)
-				if logger.V(logLevel) {
-					logger.Errorf("transport: closing transport due to connection level error %v.", err)
-				}
 				t.Close(err)
 				return
 			}
@@ -1694,7 +1680,7 @@ func (t *http2Client) keepalive() {
 			if outstandingPing && timeoutLeft <= 0 {
 				err := connectionErrorf(true, nil, "keepalive ping failed to receive ACK within timeout")
 				if logger.V(logLevel) {
-					logger.Errorf("transport: closing transport due to error in keep alive handling: %v.", err)
+					logger.Errorf("transport: closing transport due to error in keepalive handling: %v.", err)
 				}
 				t.Close(err)
 				return
