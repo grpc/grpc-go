@@ -141,7 +141,10 @@ type serverHandlerTransport struct {
 	stats []stats.Handler
 }
 
-func (ht *serverHandlerTransport) Close() {
+func (ht *serverHandlerTransport) Close(err error) {
+	if logger.V(logLevel) {
+		logger.Infof("closing serverHandlerTransport due to err: %v", err)
+	}
 	ht.closeOnce.Do(ht.closeCloseChanOnce)
 }
 
@@ -236,7 +239,7 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 			})
 		}
 	}
-	ht.Close()
+	ht.Close(fmt.Errorf("finished writing status"))
 	return err
 }
 
@@ -346,7 +349,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		case <-ht.req.Context().Done():
 		}
 		cancel()
-		ht.Close()
+		ht.Close(fmt.Errorf("request is done processing"))
 	}()
 
 	req := ht.req

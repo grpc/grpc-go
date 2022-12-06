@@ -293,7 +293,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 
 	defer func() {
 		if err != nil {
-			t.Close()
+			t.Close(err)
 		}
 	}()
 
@@ -344,8 +344,9 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	return t, nil
 }
 
-// operateHeader takes action on the decoded headers.
-func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) (fatal bool) {
+// operateHeader takes action on the decoded headers. Returns an error if fatal
+// error encountered and transport needs to close, otherwise returns nil.
+func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) error {
 	// Acquire max stream ID lock for entire duration
 	t.maxStreamMu.Lock()
 	defer t.maxStreamMu.Unlock()
@@ -361,15 +362,12 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			rstCode:  http2.ErrCodeFrameSize,
 			onWrite:  func() {},
 		})
-		return false
+		return nil
 	}
 
 	if streamID%2 != 1 || streamID <= t.maxStreamID {
 		// illegal gRPC stream id.
-		if logger.V(logLevel) {
-			logger.Errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", streamID)
-		}
-		return true
+		return fmt.Errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", streamID)
 	}
 	t.maxStreamID = streamID
 
@@ -453,7 +451,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			status:         status.New(codes.Internal, errMsg),
 			rst:            !frame.StreamEnded(),
 		})
-		return false
+		return nil
 	}
 
 	if !isGRPC || headerError {
@@ -463,7 +461,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			rstCode:  http2.ErrCodeProtocol,
 			onWrite:  func() {},
 		})
-		return false
+		return nil
 	}
 
 	// "If :authority is missing, Host must be renamed to :authority." - A41
@@ -503,7 +501,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	if t.state != reachable {
 		t.mu.Unlock()
 		s.cancel()
-		return false
+		return nil
 	}
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
@@ -514,7 +512,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			onWrite:  func() {},
 		})
 		s.cancel()
-		return false
+		return nil
 	}
 	if httpMethod != http.MethodPost {
 		t.mu.Unlock()
@@ -530,7 +528,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			rst:            !frame.StreamEnded(),
 		})
 		s.cancel()
-		return false
+		return nil
 	}
 	if t.inTapHandle != nil {
 		var err error
@@ -550,7 +548,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				status:         stat,
 				rst:            !frame.StreamEnded(),
 			})
-			return false
+			return nil
 		}
 	}
 	t.activeStreams[streamID] = s
@@ -597,7 +595,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		wq:       s.wq,
 	})
 	handle(s)
-	return false
+	return nil
 }
 
 // HandleStreams receives incoming streams using the given handler. This is
@@ -630,25 +628,16 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 				continue
 			}
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				if logger.V(logLevel) {
-					logger.Infof("transport: closing the server transport due to connection level EOF.")
-				}
-				t.Close()
+				t.Close(err)
 				return
 			}
-			if logger.V(logLevel) {
-				logger.Warningf("transport: http2Server.HandleStreams failed to read frame: %v, closing transport.", err)
-			}
-			t.Close()
+			t.Close(err)
 			return
 		}
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
-			if t.operateHeaders(frame, handle, traceCtx) {
-				if logger.V(logLevel) {
-					logger.Errorf("transport: closing the transport due to fatal error processing headers frame.")
-				}
-				t.Close()
+			if err := t.operateHeaders(frame, handle, traceCtx); err != nil {
+				t.Close(err)
 				break
 			}
 		case *http2.DataFrame:
@@ -1175,7 +1164,7 @@ func (t *http2Server) keepalive() {
 				if logger.V(logLevel) {
 					logger.Infof("transport: closing server transport due to keepalive ping not being acked within timeout %v.", t.kp.Time.String())
 				}
-				t.Close()
+				t.Close(fmt.Errorf("keep alive ping not acked within timeout %v", t.kp.Time.String()))
 				return
 			}
 			if !outstandingPing {
@@ -1202,11 +1191,14 @@ func (t *http2Server) keepalive() {
 // Close starts shutting down the http2Server transport.
 // TODO(zhaoq): Now the destruction is not blocked on any pending streams. This
 // could cause some resource issue. Revisit this later.
-func (t *http2Server) Close() {
+func (t *http2Server) Close(err error) {
 	t.mu.Lock()
 	if t.state == closing {
 		t.mu.Unlock()
 		return
+	}
+	if logger.V(logLevel) {
+		logger.Infof("closing transport due to err: %v, will close the connection.", err)
 	}
 	t.state = closing
 	streams := t.activeStreams
@@ -1214,9 +1206,6 @@ func (t *http2Server) Close() {
 	t.mu.Unlock()
 	t.controlBuf.finish()
 	close(t.done)
-	if logger.V(logLevel) {
-		logger.Infof("transport: calling Close on the conn within transport.Close.")
-	}
 	if err := t.conn.Close(); err != nil && logger.V(logLevel) {
 		logger.Infof("transport: error closing conn during Close: %v", err)
 	}

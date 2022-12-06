@@ -942,7 +942,7 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 }
 
 func (s *Server) serveStreams(st transport.ServerTransport) {
-	defer st.Close()
+	defer st.Close(fmt.Errorf("finished serving streams for the server transport"))
 	var wg sync.WaitGroup
 
 	var roundRobinCounter uint32
@@ -1046,7 +1046,7 @@ func (s *Server) addConn(addr string, st transport.ServerTransport) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.conns == nil {
-		st.Close()
+		st.Close(fmt.Errorf("s.conns (representing active server transports) is nil"))
 		return false
 	}
 	if s.drain {
@@ -1809,7 +1809,7 @@ func (s *Server) Stop() {
 	}
 	for _, cs := range conns {
 		for st := range cs {
-			st.Close()
+			st.Close(fmt.Errorf("server Stop called"))
 		}
 	}
 	if s.opts.numServerWorkers > 0 {
