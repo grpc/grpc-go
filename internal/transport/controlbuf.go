@@ -416,10 +416,7 @@ func (c *controlBuffer) get(block bool) (interface{}, error) {
 		select {
 		case <-c.ch:
 		case <-c.done:
-			if logger.V(logLevel) {
-				logger.Infof("transport: trigger loopy to exit (with a subsequent conn closure) because transport's context expired.")
-			}
-			return nil, ErrConnClosing
+			return nil, errors.New("transport's context expired")
 		}
 	}
 }
@@ -530,18 +527,6 @@ const minBatchSize = 1000
 // As an optimization, to increase the batch size for each flush, loopy yields the processor, once
 // if the batch size is too low to give stream goroutines a chance to fill it up.
 func (l *loopyWriter) run() (err error) {
-	defer func() {
-		if err == ErrConnClosing {
-			// Don't log ErrConnClosing as error since it happens
-			// 1. When the connection is closed by some other known issue.
-			// 2. User closed the connection.
-			// 3. A graceful close of connection.
-			if logger.V(logLevel) {
-				logger.Infof("transport: loopyWriter.run returning. %v", err)
-			}
-			err = nil
-		}
-	}()
 	for {
 		it, err := l.cbuf.get(true)
 		if err != nil {
@@ -773,10 +758,7 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 		}
 	}
 	if l.side == clientSide && l.draining && len(l.estdStreams) == 0 {
-		if logger.V(logLevel) {
-			logger.Infof("transport: trigger loopy to exit (with a subsequent conn closure) because no active streams left to finish processing while in draining mode.")
-		}
-		return ErrConnClosing
+		return errors.New("finished processing active streams while in draining mode, no more streams to finish processing")
 	}
 	return nil
 }
@@ -811,10 +793,7 @@ func (l *loopyWriter) incomingGoAwayHandler(*incomingGoAway) error {
 	if l.side == clientSide {
 		l.draining = true
 		if len(l.estdStreams) == 0 {
-			if logger.V(logLevel) {
-				logger.Infof("transport: trigger loopy to exit (with a subsequent conn closure) because no active streams to wait to finish processing when GOAWAY frame received.")
-			}
-			return ErrConnClosing
+			return errors.New("no active streams left to process when GOAWAY frame received, so can trigger closure")
 		}
 	}
 	return nil

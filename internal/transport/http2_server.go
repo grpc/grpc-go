@@ -334,7 +334,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
 		if err := t.loopy.run(); err != nil {
 			if logger.V(logLevel) {
-				logger.Errorf("transport: loopyWriter exited. Closing connection. Err: %v", err)
+				logger.Infof("transport: loopyWriter exited. Closing connection. Err: %v", err)
 			}
 		}
 		t.conn.Close()
