@@ -21,6 +21,7 @@ package transport
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -333,7 +334,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
 		if err := t.loopy.run(); err != nil {
 			if logger.V(logLevel) {
-				logger.Errorf("transport: loopyWriter.run returned. Err: %v. Closing Connection.", err)
+				logger.Errorf("transport: loopyWriter exited. Closing connection. Err: %v", err)
 			}
 		}
 		t.conn.Close()
@@ -881,7 +882,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 
 	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
-		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: fmt.Errorf("got too many pings from the client")})
+		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: errors.New("got too many pings from the client")})
 	}
 }
 
@@ -1161,10 +1162,7 @@ func (t *http2Server) keepalive() {
 				continue
 			}
 			if outstandingPing && kpTimeoutLeft <= 0 {
-				if logger.V(logLevel) {
-					logger.Infof("transport: closing server transport due to keepalive ping not being acked within timeout %v.", t.kp.Time.String())
-				}
-				t.Close(fmt.Errorf("keep alive ping not acked within timeout %v", t.kp.Time.String()))
+				t.Close(fmt.Errorf("keepalive ping not acked within timeout %s", t.kp.Time))
 				return
 			}
 			if !outstandingPing {
@@ -1198,7 +1196,7 @@ func (t *http2Server) Close(err error) {
 		return
 	}
 	if logger.V(logLevel) {
-		logger.Infof("closing transport due to err: %v, will close the connection.", err)
+		logger.Infof("Closing transport, will close the connection. Err: %v", err)
 	}
 	t.state = closing
 	streams := t.activeStreams
@@ -1316,7 +1314,7 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		sid := t.maxStreamID
 		retErr := g.closeConn
 		if len(t.activeStreams) == 0 {
-			retErr = fmt.Errorf("second goaway written and no active streams left to process")
+			retErr = errors.New("second goaway written and no active streams left to process")
 		}
 		t.mu.Unlock()
 		t.maxStreamMu.Unlock()

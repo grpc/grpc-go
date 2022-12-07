@@ -585,7 +585,6 @@ func (l *loopyWriter) run() (err error) {
 			}
 			l.framer.writer.Flush()
 			break hasdata
-
 		}
 	}
 }
@@ -673,11 +672,10 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 func (l *loopyWriter) originateStream(str *outStream) error {
 	hdr := str.itl.dequeue().(*headerFrame)
 	if err := hdr.initStream(str.id); err != nil {
-		if err == ErrConnClosing {
-			return err
+		if err == errStreamDrain { // errStreamDrain need not close transport
+			return nil
 		}
-		// Other errors(errStreamDrain) need not close transport.
-		return nil
+		return err
 	}
 	if err := l.writeHeader(str.id, hdr.endStream, hdr.hf, hdr.onWrite); err != nil {
 		return err

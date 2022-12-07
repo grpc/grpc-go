@@ -343,7 +343,7 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		s.mu.Lock()
 		if s.conns == nil {
 			s.mu.Unlock()
-			transport.Close(fmt.Errorf("s.conns is nil"))
+			transport.Close(errors.New("s.conns is nil"))
 			return
 		}
 		s.conns[transport] = true
@@ -421,7 +421,7 @@ func (s *server) stop() {
 	s.lis.Close()
 	s.mu.Lock()
 	for c := range s.conns {
-		c.Close(fmt.Errorf("server Stop called"))
+		c.Close(errors.New("server Stop called"))
 	}
 	s.conns = nil
 	s.mu.Unlock()
@@ -1649,8 +1649,8 @@ func testFlowControlAccountCheck(t *testing.T, msgSize int, wc windowSizeConfig)
 	}
 	// Close down both server and client so that their internals can be read without data
 	// races.
-	client.Close(fmt.Errorf("closed manually by test"))
-	st.Close(fmt.Errorf("closed manually by test"))
+	client.Close(errors.New("closed manually by test"))
+	st.Close(errors.New("closed manually by test"))
 	<-st.readerDone
 	<-st.writerDone
 	<-client.readerDone
