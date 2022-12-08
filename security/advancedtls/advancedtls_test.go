@@ -91,7 +91,8 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 		clientVType     VerificationType
 		IdentityOptions IdentityCertificateOptions
 		RootOptions     RootCertificateOptions
-		VersionOptions  TLSVersionOptions
+		MinVersion      uint16
+		MaxVersion      uint16
 	}{
 		{
 			desc:        "Skip default verification and provide no root credentials",
@@ -124,11 +125,9 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 			},
 		},
 		{
-			desc: "Invalid min/max TLS versions",
-			VersionOptions: TLSVersionOptions{
-				MinVersion: tls.VersionTLS13,
-				MaxVersion: tls.VersionTLS12,
-			},
+			desc:       "Invalid min/max TLS versions",
+			MinVersion: tls.VersionTLS13,
+			MaxVersion: tls.VersionTLS12,
 		},
 	}
 	for _, test := range tests {
@@ -138,7 +137,8 @@ func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 				VType:           test.clientVType,
 				IdentityOptions: test.IdentityOptions,
 				RootOptions:     test.RootOptions,
-				VersionOptions:  test.VersionOptions,
+				MinVersion:      test.MinVersion,
+				MaxVersion:      test.MaxVersion,
 			}
 			_, err := clientOptions.config()
 			if err == nil {
@@ -154,7 +154,8 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 		clientVType     VerificationType
 		IdentityOptions IdentityCertificateOptions
 		RootOptions     RootCertificateOptions
-		VersionOptions  TLSVersionOptions
+		MinVersion      uint16
+		MaxVersion      uint16
 	}{
 		{
 			desc:        "Use system default if no fields in RootCertificateOptions is specified",
@@ -169,10 +170,8 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 			IdentityOptions: IdentityCertificateOptions{
 				IdentityProvider: fakeProvider{pt: provTypeIdentity},
 			},
-			VersionOptions: TLSVersionOptions{
-				MinVersion: tls.VersionTLS12,
-				MaxVersion: tls.VersionTLS13,
-			},
+			MinVersion: tls.VersionTLS12,
+			MaxVersion: tls.VersionTLS13,
 		},
 	}
 	for _, test := range tests {
@@ -182,7 +181,8 @@ func (s) TestClientOptionsConfigSuccessCases(t *testing.T) {
 				VType:           test.clientVType,
 				IdentityOptions: test.IdentityOptions,
 				RootOptions:     test.RootOptions,
-				VersionOptions:  test.VersionOptions,
+				MinVersion:      test.MinVersion,
+				MaxVersion:      test.MaxVersion,
 			}
 			clientConfig, err := clientOptions.config()
 			if err != nil {
@@ -207,7 +207,8 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 		serverVType       VerificationType
 		IdentityOptions   IdentityCertificateOptions
 		RootOptions       RootCertificateOptions
-		VersionOptions    TLSVersionOptions
+		MinVersion        uint16
+		MaxVersion        uint16
 	}{
 		{
 			desc:              "Skip default verification and provide no root credentials",
@@ -246,11 +247,9 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 			},
 		},
 		{
-			desc: "Invalid min/max TLS versions",
-			VersionOptions: TLSVersionOptions{
-				MinVersion: tls.VersionTLS13,
-				MaxVersion: tls.VersionTLS12,
-			},
+			desc:       "Invalid min/max TLS versions",
+			MinVersion: tls.VersionTLS13,
+			MaxVersion: tls.VersionTLS12,
 		},
 	}
 	for _, test := range tests {
@@ -261,7 +260,8 @@ func (s) TestServerOptionsConfigErrorCases(t *testing.T) {
 				RequireClientCert: test.requireClientCert,
 				IdentityOptions:   test.IdentityOptions,
 				RootOptions:       test.RootOptions,
-				VersionOptions:    test.VersionOptions,
+				MinVersion:        test.MinVersion,
+				MaxVersion:        test.MaxVersion,
 			}
 			_, err := serverOptions.config()
 			if err == nil {
@@ -278,7 +278,8 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 		serverVType       VerificationType
 		IdentityOptions   IdentityCertificateOptions
 		RootOptions       RootCertificateOptions
-		VersionOptions    TLSVersionOptions
+		MinVersion        uint16
+		MaxVersion        uint16
 	}{
 		{
 			desc:              "Use system default if no fields in RootCertificateOptions is specified",
@@ -300,10 +301,8 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 					return nil, nil
 				},
 			},
-			VersionOptions: TLSVersionOptions{
-				MinVersion: tls.VersionTLS12,
-				MaxVersion: tls.VersionTLS13,
-			},
+			MinVersion: tls.VersionTLS12,
+			MaxVersion: tls.VersionTLS13,
 		},
 	}
 	for _, test := range tests {
@@ -314,7 +313,8 @@ func (s) TestServerOptionsConfigSuccessCases(t *testing.T) {
 				RequireClientCert: test.requireClientCert,
 				IdentityOptions:   test.IdentityOptions,
 				RootOptions:       test.RootOptions,
-				VersionOptions:    test.VersionOptions,
+				MinVersion:        test.MinVersion,
+				MaxVersion:        test.MaxVersion,
 			}
 			serverConfig, err := serverOptions.config()
 			if err != nil {
