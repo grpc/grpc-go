@@ -5598,7 +5598,7 @@ func (s) TestSendCompressFailureAfterHeaderSend(t *testing.T) {
 			grpc.SendHeader(ctx, metadata.MD{})
 			err := grpc.SetSendCompressor(ctx, "gzip")
 			if err == nil {
-				t.Fatalf("Wanted set send compressor error")
+				t.Error("Wanted set send compressor error")
 			}
 			return nil, err
 		},
@@ -5606,7 +5606,7 @@ func (s) TestSendCompressFailureAfterHeaderSend(t *testing.T) {
 			grpc.SendHeader(stream.Context(), metadata.MD{})
 			err := grpc.SetSendCompressor(stream.Context(), "gzip")
 			if err == nil {
-				t.Fatalf("Wanted set send compressor error")
+				t.Error("Wanted set send compressor error")
 			}
 			return err
 		},
