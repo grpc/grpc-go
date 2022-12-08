@@ -254,7 +254,7 @@ type Stream struct {
 	wq           *writeQuota
 
 	// Holds compressor names passed in grpc-accept-encoding metadata from the
-	// client. This is empty for the client side Stream.
+	// client. This is empty for the client side stream.
 	clientAdvertisedCompressors string
 	// Callback to state application's intentions to read data. This
 	// is used to adjust flow control, if needed.

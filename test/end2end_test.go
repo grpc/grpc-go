@@ -5510,7 +5510,7 @@ func (s) TestClientForwardsGrpcAcceptEncodingHeader(t *testing.T) {
 	}
 }
 
-func (s) TestServerSetSendCompressor(t *testing.T) {
+func (s) TestServerHandlerSetSendCompressor(t *testing.T) {
 	for _, tt := range []struct {
 		desc          string
 		resCompressor string
@@ -5592,7 +5592,7 @@ func testSetSendCompressorHandler(t *testing.T, resCompressor string, wantErr er
 	}
 }
 
-func (s) TestSendCompressFailureAfterHeaderSend(t *testing.T) {
+func (s) TestSendCompressorFailureAfterHeaderSend(t *testing.T) {
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			grpc.SendHeader(ctx, metadata.MD{})
