@@ -758,7 +758,7 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 		}
 	}
 	if l.side == clientSide && l.draining && len(l.estdStreams) == 0 {
-		return errors.New("finished processing active streams while in draining mode, no more streams to finish processing")
+		return errors.New("finished processing active streams while in draining mode")
 	}
 	return nil
 }
@@ -793,7 +793,7 @@ func (l *loopyWriter) incomingGoAwayHandler(*incomingGoAway) error {
 	if l.side == clientSide {
 		l.draining = true
 		if len(l.estdStreams) == 0 {
-			return errors.New("no active streams left to process when GOAWAY frame received, so can trigger closure")
+			return errors.New("received GOAWAY with no active streams")
 		}
 	}
 	return nil

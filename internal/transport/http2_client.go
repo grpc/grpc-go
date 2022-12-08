@@ -245,7 +245,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		if connectCtx.Err() != nil {
 			// connectCtx expired before exiting the function.  Hard close the connection.
 			if logger.V(logLevel) {
-				logger.Infof("transport: closing connection due to connect context expiring.")
+				logger.Infof("newClientTransport: closing connection due to connect context expiring.")
 			}
 			conn.Close()
 		}
@@ -448,10 +448,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	go func() {
 		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst)
 		err := t.loopy.run()
-		if err != nil {
-			if logger.V(logLevel) {
-				logger.Infof("transport: loopyWriter exited. Closing connection. Err: %v", err)
-			}
+		if logger.V(logLevel) {
+			logger.Infof("transport: loopyWriter exited. Closing connection. Err: %v", err)
 		}
 		// Do not close the transport.  Let reader goroutine handle it since
 		// there might be data in the buffers.
@@ -955,7 +953,7 @@ func (t *http2Client) Close(err error) {
 		return
 	}
 	if logger.V(logLevel) {
-		logger.Infof("Closing transport, will close the connection. Err: %v", err)
+		logger.Infof("Closing transport, will close the connection: %v", err)
 	}
 	// Call t.onClose ASAP to prevent the client from attempting to create new
 	// streams.
@@ -1016,7 +1014,7 @@ func (t *http2Client) GracefulClose() {
 	active := len(t.activeStreams)
 	t.mu.Unlock()
 	if active == 0 {
-		t.Close(errNoStreamsDraining)
+		t.Close(connectionErrorf(true, nil, "no active streams left to process while draining"))
 		return
 	}
 	t.controlBuf.put(&incomingGoAway{})

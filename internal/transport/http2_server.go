@@ -332,10 +332,9 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	go func() {
 		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst)
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
-		if err := t.loopy.run(); err != nil {
-			if logger.V(logLevel) {
-				logger.Infof("transport: loopyWriter exited. Closing connection. Err: %v", err)
-			}
+		err := t.loopy.run()
+		if logger.V(logLevel) {
+			logger.Infof("transport: loopyWriter exited. Closing connection. Err: %v", err)
 		}
 		t.conn.Close()
 		t.controlBuf.finish()
@@ -345,7 +344,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	return t, nil
 }
 
-// operateHeader takes action on the decoded headers. Returns an error if fatal
+// operateHeaders takes action on the decoded headers. Returns an error if fatal
 // error encountered and transport needs to close, otherwise returns nil.
 func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) error {
 	// Acquire max stream ID lock for entire duration
@@ -368,7 +367,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 
 	if streamID%2 != 1 || streamID <= t.maxStreamID {
 		// illegal gRPC stream id.
-		return fmt.Errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", streamID)
+		return fmt.Errorf("received an illegal stream id: %v", streamID)
 	}
 	t.maxStreamID = streamID
 
@@ -1196,7 +1195,7 @@ func (t *http2Server) Close(err error) {
 		return
 	}
 	if logger.V(logLevel) {
-		logger.Infof("Closing transport, will close the connection. Err: %v", err)
+		logger.Infof("Closing transport, will close the connection: %v", err)
 	}
 	t.state = closing
 	streams := t.activeStreams
@@ -1314,7 +1313,7 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		sid := t.maxStreamID
 		retErr := g.closeConn
 		if len(t.activeStreams) == 0 {
-			retErr = errors.New("second goaway written and no active streams left to process")
+			retErr = errors.New("second GOAWAY written and no active streams left to process")
 		}
 		t.mu.Unlock()
 		t.maxStreamMu.Unlock()

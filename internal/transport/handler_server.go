@@ -142,10 +142,12 @@ type serverHandlerTransport struct {
 }
 
 func (ht *serverHandlerTransport) Close(err error) {
-	if logger.V(logLevel) {
-		logger.Infof("Closing serverHandlerTransport: %v", err)
-	}
-	ht.closeOnce.Do(ht.closeCloseChanOnce)
+	ht.closeOnce.Do(func() {
+		if logger.V(logLevel) {
+			logger.Infof("Closing serverHandlerTransport: %v", err)
+		}
+		ht.closeCloseChanOnce()
+	})
 }
 
 func (ht *serverHandlerTransport) closeCloseChanOnce() { close(ht.closedCh) }

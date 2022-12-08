@@ -1046,7 +1046,7 @@ func (s *Server) addConn(addr string, st transport.ServerTransport) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.conns == nil {
-		st.Close(errors.New("s.conns (representing active server transports) is nil"))
+		st.Close(errors.New("Server.addConn called when server has already been stopped"))
 		return false
 	}
 	if s.drain {

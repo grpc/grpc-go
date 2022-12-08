@@ -761,10 +761,6 @@ func (e ConnectionError) Unwrap() error {
 var (
 	// ErrConnClosing indicates that the transport is closing.
 	ErrConnClosing = connectionErrorf(true, nil, "transport is closing")
-	// errNoStreamsDraining indicates that this transport is finished processing
-	// while in draining mode due to no more active streams to process, thus
-	// making the transport and connection immediately ready to close.
-	errNoStreamsDraining = connectionErrorf(true, nil, "no active streams left to process while draining")
 	// errStreamDrain indicates that the stream is rejected because the
 	// connection is draining. This could be caused by goaway or balancer
 	// removing the address.
