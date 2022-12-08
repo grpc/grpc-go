@@ -1975,7 +1975,8 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 // The error returned is compatible with the status package.  However, the
 // status code will often not match the RPC status as seen by the client
 // application, and therefore, should not be relied upon for this purpose.
-//
+// It is not safe to call SetSendCompressor concurrently with SendHeader and
+// SendMsg.
 // # Experimental
 //
 // Notice: This type is EXPERIMENTAL and may be changed or removed in a
@@ -1987,7 +1988,7 @@ func SetSendCompressor(ctx context.Context, name string) error {
 	}
 
 	if err := validateSendCompressor(name, stream.ClientAdvertisedCompressors()); err != nil {
-		return status.Errorf(codes.Internal, "grpc: failed to set send compressor %v", err)
+		return status.Errorf(codes.Internal, "grpc: unable to set send compressor: %v", err)
 	}
 
 	return stream.SetSendCompress(name)
@@ -2036,13 +2037,13 @@ func validateSendCompressor(name, clientCompressors string) error {
 	}
 
 	if !grpcutil.IsCompressorNameRegistered(name) {
-		return fmt.Errorf("compressor not registered %s", name)
+		return fmt.Errorf("compressor not registered %q", name)
 	}
 
-	for _, clientCompressor := range strings.Split(clientCompressors, ",") {
-		if clientCompressor == name {
+	for _, c := range strings.Split(clientCompressors, ",") {
+		if c == name {
 			return nil // found match
 		}
 	}
-	return fmt.Errorf("client does not support compressor %s", name)
+	return fmt.Errorf("client does not support compressor %q", name)
 }

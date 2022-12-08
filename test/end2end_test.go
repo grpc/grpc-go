@@ -5510,103 +5510,128 @@ func (s) TestClientForwardsGrpcAcceptEncodingHeader(t *testing.T) {
 	}
 }
 
-func (s) TestServerHandlerSetSendCompression(t *testing.T) {
+func (s) TestServerSetSendCompressor(t *testing.T) {
 	for _, tt := range []struct {
-		desc                   string
-		reqCompressor          string // request compressor name
-		resCompressor          string // response compressor name
-		disableClientAdvertise bool   // don't advertise compressor if true
-		sendMetadataEarly      bool   // server handler sends metadata immediately
-		wantErr                error
+		desc          string
+		resCompressor string
+		wantErr       error
 	}{
 		{
-			desc:          "success_with_gzip_req_res",
-			reqCompressor: "gzip",
+			desc:          "gzip_response_compressor",
 			resCompressor: "gzip",
 		},
 		{
-			desc:          "success_with_gzip_req_identity_res",
-			reqCompressor: "gzip",
+			desc:          "identity_response_compressor",
 			resCompressor: "identity",
 		},
 		{
-			desc:          "fail_on_unregistered_res_compressor",
+			desc:          "unregistered_snappy2_response_compressor",
 			resCompressor: "snappy2",
-			wantErr:       fmt.Errorf("rpc error: code = Internal desc = grpc: failed to set send compressor compressor not registered snappy2"),
-		},
-		{
-			desc:                   "fail_on_unadvertised_res_compressor",
-			resCompressor:          "gzip",
-			disableClientAdvertise: true,
-			wantErr:                fmt.Errorf("rpc error: code = Internal desc = grpc: failed to set send compressor client does not support compressor gzip"),
-		},
-		{
-			desc:              "fail_when_set_compressor_called_after_headers_sent",
-			sendMetadataEarly: true,
-			resCompressor:     "gzip",
-			wantErr:           fmt.Errorf("rpc error: code = Internal desc = transport: set send compressor called after headers sent or stream done"),
+			wantErr:       fmt.Errorf("rpc error: code = Internal desc = grpc: unable to set send compressor: compressor not registered \"snappy2\""),
 		},
 	} {
 		t.Run(tt.desc, func(t *testing.T) {
-			if tt.disableClientAdvertise {
-				defer func(b bool) { envconfig.AdvertiseCompressors = b }(envconfig.AdvertiseCompressors)
-				envconfig.AdvertiseCompressors = false
-			}
-			ss := &stubserver.StubServer{
-				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-					if tt.sendMetadataEarly {
-						grpc.SendHeader(ctx, metadata.MD{})
-					}
-					if tt.resCompressor != "" {
-						if err := grpc.SetSendCompressor(ctx, tt.resCompressor); err != nil {
-							return nil, err
-						}
-					}
-					return &testpb.Empty{}, nil
-				},
-				FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-					if tt.sendMetadataEarly {
-						grpc.SendHeader(stream.Context(), metadata.MD{})
-					}
-					if _, err := stream.Recv(); err != nil {
-						return err
-					}
-
-					if tt.resCompressor != "" {
-						if err := grpc.SetSendCompressor(stream.Context(), tt.resCompressor); err != nil {
-							return err
-						}
-					}
-
-					return stream.Send(&testpb.StreamingOutputCallResponse{})
-				},
-			}
-			if err := ss.Start(nil); err != nil {
-				t.Fatalf("Error starting endpoint server: %v", err)
-			}
-			defer ss.Stop()
-
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-
-			_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.UseCompressor(tt.reqCompressor))
-			if fmt.Sprint(err) != fmt.Sprint(tt.wantErr) {
-				t.Fatalf("Unexpected unary call error, got: %v, want: %v", err, tt.wantErr)
-			}
-
-			s, err := ss.Client.FullDuplexCall(ctx)
-			if err != nil {
-				t.Fatalf("Unexpected full duplex call error, got: %v, want: nil", err)
-			}
-
-			if err := s.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
-				t.Fatalf("Unexpected full duplex call send error, got: %v, want: nil", err)
-			}
-
-			if _, err := s.Recv(); fmt.Sprint(err) != fmt.Sprint(tt.wantErr) {
-				t.Fatalf("Unexpected full duplex recv error, got: %v, want: %v", err, tt.wantErr)
-			}
+			testSetSendCompressorHandler(t, tt.resCompressor, tt.wantErr)
 		})
+	}
+}
+
+func (s) TestUnadvertisedSendCompressorFailure(t *testing.T) {
+	// disable client compressor advertisement.
+	defer func(b bool) { envconfig.AdvertiseCompressors = b }(envconfig.AdvertiseCompressors)
+	envconfig.AdvertiseCompressors = false
+
+	wantErr := fmt.Errorf("rpc error: code = Internal desc = grpc: unable to set send compressor: client does not support compressor \"gzip\"")
+	testSetSendCompressorHandler(t, "gzip", wantErr)
+}
+
+func testSetSendCompressorHandler(t *testing.T, resCompressor string, wantErr error) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			if err := grpc.SetSendCompressor(ctx, resCompressor); err != nil {
+				return nil, err
+			}
+			return &testpb.Empty{}, nil
+		},
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			if _, err := stream.Recv(); err != nil {
+				return err
+			}
+
+			if err := grpc.SetSendCompressor(stream.Context(), resCompressor); err != nil {
+				return err
+			}
+
+			return stream.Send(&testpb.StreamingOutputCallResponse{})
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}, grpc.UseCompressor("gzip"))
+	if fmt.Sprint(err) != fmt.Sprint(wantErr) {
+		t.Fatalf("Unexpected unary call error, got: %v, want: %v", err, wantErr)
+	}
+
+	s, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("Unexpected full duplex call error, got: %v, want: nil", err)
+	}
+
+	if err := s.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+		t.Fatalf("Unexpected full duplex call send error, got: %v, want: nil", err)
+	}
+
+	if _, err := s.Recv(); fmt.Sprint(err) != fmt.Sprint(wantErr) {
+		t.Fatalf("Unexpected full duplex recv error, got: %v, want: %v", err, wantErr)
+	}
+}
+
+func (s) TestSendCompressFailureAfterHeaderSend(t *testing.T) {
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+			grpc.SendHeader(ctx, metadata.MD{})
+			err := grpc.SetSendCompressor(ctx, "gzip")
+			if err == nil {
+				t.Fatalf("Wanted set send compressor error")
+			}
+			return nil, err
+		},
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			grpc.SendHeader(stream.Context(), metadata.MD{})
+			err := grpc.SetSendCompressor(stream.Context(), "gzip")
+			if err == nil {
+				t.Fatalf("Wanted set send compressor error")
+			}
+			return err
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	wantErr := fmt.Errorf("rpc error: code = Internal desc = transport: set send compressor called after headers sent or stream done")
+	_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
+	if fmt.Sprint(err) != fmt.Sprint(wantErr) {
+		t.Fatalf("Unexpected unary call error, got: %v, want: %v", err, wantErr)
+	}
+
+	s, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("Unexpected full duplex call error, got: %v, want: nil", err)
+	}
+
+	if _, err := s.Recv(); fmt.Sprint(err) != fmt.Sprint(wantErr) {
+		t.Fatalf("Unexpected full duplex recv error, got: %v, want: %v", err, wantErr)
 	}
 }
 

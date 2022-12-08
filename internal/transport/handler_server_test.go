@@ -262,37 +262,34 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 			t.Errorf("stream method = %q; want %q", s.method, want)
 		}
 
-		err := s.SetHeader(metadata.Pairs("custom-header", "Custom header value"))
-		if err != nil {
-			t.Error(err)
+		if err := s.SetHeader(metadata.Pairs("custom-header", "Custom header value")); err != nil {
+			t.Fatal(err)
 		}
-		err = s.SetTrailer(metadata.Pairs("custom-trailer", "Custom trailer value"))
-		if err != nil {
-			t.Error(err)
+
+		if err := s.SetTrailer(metadata.Pairs("custom-trailer", "Custom trailer value")); err != nil {
+			t.Fatal(err)
 		}
-		err = s.SetSendCompress("gzip")
-		if err != nil {
-			t.Error(err)
+
+		if err := s.SetSendCompress("gzip"); err != nil {
+			t.Fatal(err)
 		}
 
 		md := metadata.Pairs("custom-header", "Another custom header value")
-		err = s.SendHeader(md)
+		if err := s.SendHeader(md); err != nil {
+			t.Fatal(err)
+		}
 		delete(md, "custom-header")
-		if err != nil {
-			t.Error(err)
+
+		if err := s.SetHeader(metadata.Pairs("too-late", "Header value that should be ignored")); err == nil {
+			t.Fatal("expected SetHeader call after SendHeader to fail")
 		}
 
-		err = s.SetHeader(metadata.Pairs("too-late", "Header value that should be ignored"))
-		if err == nil {
-			t.Error("expected SetHeader call after SendHeader to fail")
+		if err := s.SendHeader(metadata.Pairs("too-late", "This header value should be ignored as well")); err == nil {
+			t.Fatal("expected second SendHeader call to fail")
 		}
-		err = s.SendHeader(metadata.Pairs("too-late", "This header value should be ignored as well"))
-		if err == nil {
-			t.Error("expected second SendHeader call to fail")
-		}
-		err = s.SetSendCompress("snappy")
-		if err == nil {
-			t.Error("expected second SetSendCompress call to fail")
+
+		if err := s.SetSendCompress("snappy"); err == nil {
+			t.Fatal("expected second SetSendCompress call to fail")
 		}
 
 		st.bodyw.Close() // no body
