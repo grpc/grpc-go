@@ -242,10 +242,10 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	go func(conn net.Conn) {
 		defer ctxMonitorDone.Fire() // Signal this goroutine has exited.
 		<-newClientCtx.Done()       // Block until connectCtx expires or the defer above executes.
-		if connectCtx.Err() != nil {
+		if err := connectCtx.Err(); err != nil {
 			// connectCtx expired before exiting the function.  Hard close the connection.
 			if logger.V(logLevel) {
-				logger.Infof("newClientTransport: closing connection due to connect context expiring.")
+				logger.Infof("newClientTransport: aborting due to connectCtx: %v", err)
 			}
 			conn.Close()
 		}
@@ -1008,7 +1008,7 @@ func (t *http2Client) GracefulClose() {
 		return
 	}
 	if logger.V(logLevel) {
-		logger.Infof("transport: GracefulClose called, transport switched to draining")
+		logger.Infof("transport: GracefulClose called")
 	}
 	t.state = draining
 	active := len(t.activeStreams)

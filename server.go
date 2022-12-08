@@ -1809,7 +1809,7 @@ func (s *Server) Stop() {
 	}
 	for _, cs := range conns {
 		for st := range cs {
-			st.Close(errors.New("server Stop called"))
+			st.Close(errors.New("Server.Stop called"))
 		}
 	}
 	if s.opts.numServerWorkers > 0 {

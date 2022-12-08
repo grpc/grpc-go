@@ -146,11 +146,9 @@ func (ht *serverHandlerTransport) Close(err error) {
 		if logger.V(logLevel) {
 			logger.Infof("Closing serverHandlerTransport: %v", err)
 		}
-		ht.closeCloseChanOnce()
+		close(ht.closedCh)
 	})
 }
-
-func (ht *serverHandlerTransport) closeCloseChanOnce() { close(ht.closedCh) }
 
 func (ht *serverHandlerTransport) RemoteAddr() net.Addr { return strAddr(ht.req.RemoteAddr) }
 
