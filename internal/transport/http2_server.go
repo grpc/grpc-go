@@ -108,9 +108,10 @@ type http2Server struct {
 	// During this time we don't want to write another first GoAway(with ID 2^31 -1) frame.
 	// Thus call to Drain() will be a no-op if drainChan is already initialized since draining is
 	// already underway.
-	drainChan     chan struct{}
-	state         transportState
-	activeStreams map[uint32]*Stream
+	drainChan               chan struct{}
+	firstGoAwayPingReceived bool
+	state                   transportState
+	activeStreams           map[uint32]*Stream
 	// idle is the time instant when the connection went idle.
 	// This is either the beginning of the connection or when the number of
 	// RPCs go down to 0.
@@ -839,7 +840,10 @@ const (
 func (t *http2Server) handlePing(f *http2.PingFrame) {
 	if f.IsAck() {
 		if f.Data == goAwayPing.data && t.drainChan != nil {
-			close(t.drainChan)
+			if !t.firstGoAwayPingReceived {
+				close(t.drainChan)
+			}
+			t.firstGoAwayPingReceived = true
 			return
 		}
 		// Maybe it's a BDP ping.
