@@ -1977,6 +1977,7 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 // application, and therefore, should not be relied upon for this purpose.
 // It is not safe to call SetSendCompressor concurrently with SendHeader and
 // SendMsg.
+//
 // # Experimental
 //
 // Notice: This type is EXPERIMENTAL and may be changed or removed in a
