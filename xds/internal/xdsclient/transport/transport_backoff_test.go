@@ -62,7 +62,7 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 
 	// Create an xDS management server listening on a local port.
 	streamErr := errors.New("ADS stream error")
-	mgmtServer, err := e2e.StartManagementServer(&e2e.ManagementServerOptions{
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 		// Push on a channel whenever the stream is closed.
 		OnStreamClosed: func(int64) {
 			select {
@@ -206,7 +206,7 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 		t.Fatalf("Failed to create a local listener for the xDS management server: %v", err)
 	}
 	lis := testutils.NewRestartableListener(l)
-	mgmtServer, err := e2e.StartManagementServer(&e2e.ManagementServerOptions{
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 		Listener: lis,
 		// Push the received request on to a channel for the test goroutine to
 		// verify that it matches expectations.
@@ -380,7 +380,7 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	lis := testutils.NewRestartableListener(l)
 	streamErr := errors.New("ADS stream error")
 
-	mgmtServer, err := e2e.StartManagementServer(&e2e.ManagementServerOptions{
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 		Listener: lis,
 
 		// Return an error everytime a request is sent on the stream. This

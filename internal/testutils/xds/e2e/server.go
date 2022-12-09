@@ -104,18 +104,16 @@ type ManagementServerOptions struct {
 // resource snapshot held by the management server, as required by the test
 // logic. When the test is done, it should call the Stop() method to cleanup
 // resources allocated by the management server.
-func StartManagementServer(opts *ManagementServerOptions) (*ManagementServer, error) {
+func StartManagementServer(opts ManagementServerOptions) (*ManagementServer, error) {
 	// Create a snapshot cache. The first parameter to NewSnapshotCache()
 	// controls whether the server should wait for all resources to be
 	// explicitly named in the request before responding to any of them.
-	wait := opts == nil || !opts.AllowResourceSubset
+	wait := !opts.AllowResourceSubset
 	cache := v3cache.NewSnapshotCache(wait, v3cache.IDHash{}, serverLogger{})
 	logger.Infof("Created new snapshot cache...")
 
-	var lis net.Listener
-	if opts != nil && opts.Listener != nil {
-		lis = opts.Listener
-	} else {
+	lis := opts.Listener
+	if lis == nil {
 		var err error
 		lis, err = net.Listen("tcp", "localhost:0")
 		if err != nil {
@@ -126,14 +124,11 @@ func StartManagementServer(opts *ManagementServerOptions) (*ManagementServer, er
 	// Cancelling the context passed to the server is the only way of stopping it
 	// at the end of the test.
 	ctx, cancel := context.WithCancel(context.Background())
-	callbacks := v3server.CallbackFuncs{}
-	if opts != nil {
-		callbacks = v3server.CallbackFuncs{
-			StreamOpenFunc:     opts.OnStreamOpen,
-			StreamClosedFunc:   opts.OnStreamClosed,
-			StreamRequestFunc:  opts.OnStreamRequest,
-			StreamResponseFunc: opts.OnStreamResponse,
-		}
+	callbacks := v3server.CallbackFuncs{
+		StreamOpenFunc:     opts.OnStreamOpen,
+		StreamClosedFunc:   opts.OnStreamClosed,
+		StreamRequestFunc:  opts.OnStreamRequest,
+		StreamResponseFunc: opts.OnStreamResponse,
 	}
 
 	// Create an xDS management server and register the ADS implementation

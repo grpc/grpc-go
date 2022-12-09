@@ -87,7 +87,7 @@ func (s) TestSimpleAckAndNack(t *testing.T) {
 	// the test goroutine to verify ack version and nonce.
 	streamRequestCh := make(chan *v3discoverypb.DiscoveryRequest, 1)
 	streamResponseCh := make(chan *v3discoverypb.DiscoveryResponse, 1)
-	mgmtServer, err := e2e.StartManagementServer(&e2e.ManagementServerOptions{
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			select {
 			case streamRequestCh <- req:
@@ -273,7 +273,7 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 	// the test goroutine to verify ack version and nonce.
 	streamRequestCh := make(chan *v3discoverypb.DiscoveryRequest, 1)
 	streamResponseCh := make(chan *v3discoverypb.DiscoveryResponse, 1)
-	mgmtServer, err := e2e.StartManagementServer(&e2e.ManagementServerOptions{
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			select {
 			case streamRequestCh <- req:
@@ -403,7 +403,7 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 	// the test goroutine to verify ack version and nonce.
 	streamRequestCh := make(chan *v3discoverypb.DiscoveryRequest, 1)
 	streamResponseCh := make(chan *v3discoverypb.DiscoveryResponse, 1)
-	mgmtServer, err := e2e.StartManagementServer(&e2e.ManagementServerOptions{
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			select {
 			case streamRequestCh <- req:

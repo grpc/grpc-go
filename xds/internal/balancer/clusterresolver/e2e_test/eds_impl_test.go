@@ -175,7 +175,7 @@ func clientEndpointsResource(nodeID, edsServiceName string, localities []localit
 //  4. Replace the backend. Test verifies that all RPCs reach the new backend.
 func (s) TestEDS_OneLocality(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
-	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, nil)
+	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
 	// Start backend servers which provide an implementation of the TestService.
@@ -280,7 +280,7 @@ func (s) TestEDS_OneLocality(t *testing.T) {
 // weighted roundrobined across them.
 func (s) TestEDS_MultipleLocalities(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
-	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, nil)
+	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
 	// Start backend servers which provide an implementation of the TestService.
@@ -403,7 +403,7 @@ func (s) TestEDS_MultipleLocalities(t *testing.T) {
 // traffic is routed only to backends deemed capable of receiving traffic.
 func (s) TestEDS_EndpointsHealth(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
-	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, nil)
+	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
 	// Start backend servers which provide an implementation of the TestService.
@@ -483,7 +483,7 @@ func (s) TestEDS_EndpointsHealth(t *testing.T) {
 // removed" error.
 func (s) TestEDS_EmptyUpdate(t *testing.T) {
 	// Spin up a management server to receive xDS resources from.
-	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, nil)
+	managementServer, nodeID, bootstrapContents, _, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
 	// Start backend servers which provide an implementation of the TestService.

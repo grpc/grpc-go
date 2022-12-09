@@ -38,7 +38,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 
 	// Start an xDS management server and set the option to allow it to respond
 	// to requests which only specify a subset of the configured resources.
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, &e2e.ManagementServerOptions{AllowResourceSubset: true})
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{AllowResourceSubset: true})
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.

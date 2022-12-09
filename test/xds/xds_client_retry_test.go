@@ -49,7 +49,7 @@ func (s) TestClientSideRetry(t *testing.T) {
 		},
 	}
 
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
+	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
 	port, cleanup2 := startTestService(t, ss)

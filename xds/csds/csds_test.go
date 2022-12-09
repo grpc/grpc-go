@@ -236,7 +236,7 @@ func commonSetup(ctx context.Context, t *testing.T) (xdsclient.XDSClient, *e2e.M
 
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
-	fs, err := e2e.StartManagementServer(nil)
+	fs, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

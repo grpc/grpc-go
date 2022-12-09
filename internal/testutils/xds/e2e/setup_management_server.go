@@ -41,7 +41,7 @@ import (
 // - bootstrap contents to be used by the client
 // - xDS resolver builder to be used by the client
 // - a cleanup function to be invoked at the end of the test
-func SetupManagementServer(t *testing.T, opts *ManagementServerOptions) (*ManagementServer, string, []byte, resolver.Builder, func()) {
+func SetupManagementServer(t *testing.T, opts ManagementServerOptions) (*ManagementServer, string, []byte, resolver.Builder, func()) {
 	t.Helper()
 
 	// Spin up an xDS management server on a local port.

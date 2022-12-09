@@ -81,7 +81,7 @@ func (s) TestClientResourceVersionAfterStreamRestart(t *testing.T) {
 
 	// Map from stream id to a map of resource type to resource version.
 	ackVersionsMap := make(map[int64]map[string]string)
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, &e2e.ManagementServerOptions{
+	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
 		Listener: lis,
 		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
 			// Return early under the following circumstances:
