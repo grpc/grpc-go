@@ -21,6 +21,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/url"
 	"testing"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/testutils"
 
 	"google.golang.org/grpc/resolver"
 )
@@ -40,46 +42,46 @@ func (s) TestParsedTarget_Success_WithoutCustomDialer(t *testing.T) {
 		wantParsed resolver.Target
 	}{
 		// No scheme is specified.
-		{target: "://", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "://"}},
-		{target: ":///", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: ":///"}},
-		{target: "://a/", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "://a/"}},
-		{target: ":///a", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: ":///a"}},
-		{target: "://a/b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "://a/b"}},
-		{target: "/", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "/"}},
-		{target: "a/b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "a/b"}},
-		{target: "a//b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "a//b"}},
-		{target: "google.com", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "google.com"}},
-		{target: "google.com/?a=b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "google.com/"}},
-		{target: "/unix/socket/address", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "/unix/socket/address"}},
+		{target: "://", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "://"))}},
+		{target: ":///", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, ":///"))}},
+		{target: "://a/", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "://a/"))}},
+		{target: ":///a", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, ":///a"))}},
+		{target: "://a/b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "://a/b"))}},
+		{target: "/", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "/"))}},
+		{target: "a/b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "a/b"))}},
+		{target: "a//b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "a//b"))}},
+		{target: "google.com", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "google.com"))}},
+		{target: "google.com/?a=b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "google.com/?a=b"))}},
+		{target: "/unix/socket/address", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "/unix/socket/address"))}},
 
 		// An unregistered scheme is specified.
-		{target: "a:///", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "a:///"}},
-		{target: "a://b/", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "a://b/"}},
-		{target: "a:///b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "a:///b"}},
-		{target: "a://b/c", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "a://b/c"}},
-		{target: "a:b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "a:b"}},
-		{target: "a:/b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "a:/b"}},
-		{target: "a://b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "a://b"}},
+		{target: "a:///", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "a:///"))}},
+		{target: "a://b/", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "a://b/"))}},
+		{target: "a:///b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "a:///b"))}},
+		{target: "a://b/c", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "a://b/c"))}},
+		{target: "a:b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "a:b"))}},
+		{target: "a:/b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "a:/b"))}},
+		{target: "a://b", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "a://b"))}},
 
 		// A registered scheme is specified.
-		{target: "dns:///google.com", wantParsed: resolver.Target{Scheme: "dns", Authority: "", Endpoint: "google.com"}},
-		{target: "dns://a.server.com/google.com", wantParsed: resolver.Target{Scheme: "dns", Authority: "a.server.com", Endpoint: "google.com"}},
-		{target: "dns://a.server.com/google.com/?a=b", wantParsed: resolver.Target{Scheme: "dns", Authority: "a.server.com", Endpoint: "google.com/"}},
-		{target: "unix:///a/b/c", wantParsed: resolver.Target{Scheme: "unix", Authority: "", Endpoint: "a/b/c"}},
-		{target: "unix-abstract:a/b/c", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "a/b/c"}},
-		{target: "unix-abstract:a b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "a b"}},
-		{target: "unix-abstract:a:b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "a:b"}},
-		{target: "unix-abstract:a-b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "a-b"}},
-		{target: "unix-abstract:/ a///://::!@#$%25^&*()b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: " a///://::!@"}},
-		{target: "unix-abstract:passthrough:abc", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "passthrough:abc"}},
-		{target: "unix-abstract:unix:///abc", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "unix:///abc"}},
-		{target: "unix-abstract:///a/b/c", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: "a/b/c"}},
-		{target: "unix-abstract:///", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", Endpoint: ""}},
-		{target: "passthrough:///unix:///a/b/c", wantParsed: resolver.Target{Scheme: "passthrough", Authority: "", Endpoint: "unix:///a/b/c"}},
+		{target: "dns:///google.com", wantParsed: resolver.Target{Scheme: "dns", Authority: "", URL: *testutils.MustParseURL("dns:///google.com")}},
+		{target: "dns://a.server.com/google.com", wantParsed: resolver.Target{Scheme: "dns", Authority: "a.server.com", URL: *testutils.MustParseURL("dns://a.server.com/google.com")}},
+		{target: "dns://a.server.com/google.com/?a=b", wantParsed: resolver.Target{Scheme: "dns", Authority: "a.server.com", URL: *testutils.MustParseURL("dns://a.server.com/google.com/?a=b")}},
+		{target: "unix:///a/b/c", wantParsed: resolver.Target{Scheme: "unix", Authority: "", URL: *testutils.MustParseURL("unix:///a/b/c")}},
+		{target: "unix-abstract:a/b/c", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", URL: *testutils.MustParseURL("unix-abstract:a/b/c")}},
+		{target: "unix-abstract:a b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", URL: *testutils.MustParseURL("unix-abstract:a b")}},
+		{target: "unix-abstract:a:b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", URL: *testutils.MustParseURL("unix-abstract:a:b")}},
+		{target: "unix-abstract:a-b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", URL: *testutils.MustParseURL("unix-abstract:a-b")}},
+		{target: "unix-abstract:/ a///://::!@#$%25^&*()b", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", URL: *testutils.MustParseURL("unix-abstract:/ a///://::!@#$%25^&*()b")}},
+		{target: "unix-abstract:passthrough:abc", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", URL: *testutils.MustParseURL("unix-abstract:passthrough:abc")}},
+		{target: "unix-abstract:unix:///abc", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", URL: *testutils.MustParseURL("unix-abstract:unix:///abc")}},
+		{target: "unix-abstract:///a/b/c", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", URL: *testutils.MustParseURL("unix-abstract:///a/b/c")}},
+		{target: "unix-abstract:///", wantParsed: resolver.Target{Scheme: "unix-abstract", Authority: "", URL: *testutils.MustParseURL("unix-abstract:///")}},
+		{target: "passthrough:///unix:///a/b/c", wantParsed: resolver.Target{Scheme: "passthrough", Authority: "", URL: *testutils.MustParseURL("passthrough:///unix:///a/b/c")}},
 
 		// Cases for `scheme:absolute-path`.
-		{target: "dns:/a/b/c", wantParsed: resolver.Target{Scheme: "dns", Authority: "", Endpoint: "a/b/c"}},
-		{target: "unregistered:/a/b/c", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "unregistered:/a/b/c"}},
+		{target: "dns:/a/b/c", wantParsed: resolver.Target{Scheme: "dns", Authority: "", URL: *testutils.MustParseURL("dns:/a/b/c")}},
+		{target: "unregistered:/a/b/c", badScheme: true, wantParsed: resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL("unregistered:/a/b/c")}},
 	}
 
 	for _, test := range tests {
@@ -138,56 +140,56 @@ func (s) TestParsedTarget_WithCustomDialer(t *testing.T) {
 		// different behaviors with a custom dialer.
 		{
 			target:            "unix:a/b/c",
-			wantParsed:        resolver.Target{Scheme: "unix", Authority: "", Endpoint: "a/b/c"},
+			wantParsed:        resolver.Target{Scheme: "unix", Authority: "", URL: *testutils.MustParseURL("unix:a/b/c")},
 			wantDialerAddress: "unix:a/b/c",
 		},
 		{
 			target:            "unix:/a/b/c",
-			wantParsed:        resolver.Target{Scheme: "unix", Authority: "", Endpoint: "a/b/c"},
+			wantParsed:        resolver.Target{Scheme: "unix", Authority: "", URL: *testutils.MustParseURL("unix:/a/b/c")},
 			wantDialerAddress: "unix:///a/b/c",
 		},
 		{
 			target:            "unix:///a/b/c",
-			wantParsed:        resolver.Target{Scheme: "unix", Authority: "", Endpoint: "a/b/c"},
+			wantParsed:        resolver.Target{Scheme: "unix", Authority: "", URL: *testutils.MustParseURL("unix:///a/b/c")},
 			wantDialerAddress: "unix:///a/b/c",
 		},
 		{
 			target:            "dns:///127.0.0.1:50051",
-			wantParsed:        resolver.Target{Scheme: "dns", Authority: "", Endpoint: "127.0.0.1:50051"},
+			wantParsed:        resolver.Target{Scheme: "dns", Authority: "", URL: *testutils.MustParseURL("dns:///127.0.0.1:50051")},
 			wantDialerAddress: "127.0.0.1:50051",
 		},
 		{
 			target:            ":///127.0.0.1:50051",
 			badScheme:         true,
-			wantParsed:        resolver.Target{Scheme: defScheme, Authority: "", Endpoint: ":///127.0.0.1:50051"},
+			wantParsed:        resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, ":///127.0.0.1:50051"))},
 			wantDialerAddress: ":///127.0.0.1:50051",
 		},
 		{
 			target:            "dns://authority/127.0.0.1:50051",
-			wantParsed:        resolver.Target{Scheme: "dns", Authority: "authority", Endpoint: "127.0.0.1:50051"},
+			wantParsed:        resolver.Target{Scheme: "dns", Authority: "authority", URL: *testutils.MustParseURL("dns://authority/127.0.0.1:50051")},
 			wantDialerAddress: "127.0.0.1:50051",
 		},
 		{
 			target:            "://authority/127.0.0.1:50051",
 			badScheme:         true,
-			wantParsed:        resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "://authority/127.0.0.1:50051"},
+			wantParsed:        resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "://authority/127.0.0.1:50051"))},
 			wantDialerAddress: "://authority/127.0.0.1:50051",
 		},
 		{
 			target:            "/unix/socket/address",
 			badScheme:         true,
-			wantParsed:        resolver.Target{Scheme: defScheme, Authority: "", Endpoint: "/unix/socket/address"},
+			wantParsed:        resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, "/unix/socket/address"))},
 			wantDialerAddress: "/unix/socket/address",
 		},
 		{
 			target:            "",
 			badScheme:         true,
-			wantParsed:        resolver.Target{Scheme: defScheme, Authority: "", Endpoint: ""},
+			wantParsed:        resolver.Target{Scheme: defScheme, Authority: "", URL: *testutils.MustParseURL(fmt.Sprintf("%s:///%s", defScheme, ""))},
 			wantDialerAddress: "",
 		},
 		{
 			target:            "passthrough://a.server.com/google.com",
-			wantParsed:        resolver.Target{Scheme: "passthrough", Authority: "a.server.com", Endpoint: "google.com"},
+			wantParsed:        resolver.Target{Scheme: "passthrough", Authority: "a.server.com", URL: *testutils.MustParseURL("passthrough://a.server.com/google.com")},
 			wantDialerAddress: "google.com",
 		},
 	}

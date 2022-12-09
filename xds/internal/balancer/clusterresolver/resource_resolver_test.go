@@ -24,9 +24,10 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/resolver/manual"
-	"google.golang.org/grpc/xds/internal/testutils"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
@@ -40,10 +41,10 @@ var (
 )
 
 func init() {
-	clab1 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab1 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab1.AddLocality(testSubZones[0], 1, 0, testEndpointAddrs[:1], nil)
 	testEDSUpdates = append(testEDSUpdates, parseEDSRespProtoForTesting(clab1.Build()))
-	clab2 := testutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
+	clab2 := xdstestutils.NewClusterLoadAssignmentBuilder(testClusterNames[0], nil)
 	clab2.AddLocality(testSubZones[1], 1, 0, testEndpointAddrs[1:2], nil)
 	testEDSUpdates = append(testEDSUpdates, parseEDSRespProtoForTesting(clab2.Build()))
 }
@@ -156,7 +157,7 @@ func (s) TestResourceResolverOneDNSResource(t *testing.T) {
 		{
 			name:       "watch DNS",
 			target:     testDNSTarget,
-			wantTarget: resolver.Target{Scheme: "dns", Endpoint: testDNSTarget},
+			wantTarget: resolver.Target{Scheme: "dns", URL: *testutils.MustParseURL("dns:///" + testDNSTarget)},
 			addrs:      []resolver.Address{{Addr: "1.1.1.1"}, {Addr: "2.2.2.2"}},
 			want: []priorityConfig{{
 				mechanism: DiscoveryMechanism{
@@ -614,7 +615,7 @@ func (s) TestResourceResolverEDSAndDNS(t *testing.T) {
 	}
 	select {
 	case target := <-dnsTargetCh:
-		if diff := cmp.Diff(target, resolver.Target{Scheme: "dns", Endpoint: testDNSTarget}); diff != "" {
+		if diff := cmp.Diff(target, resolver.Target{Scheme: "dns", URL: *testutils.MustParseURL("dns:///" + testDNSTarget)}); diff != "" {
 			t.Fatalf("got unexpected DNS target to watch, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -719,7 +720,7 @@ func (s) TestResourceResolverChangeFromEDSToDNS(t *testing.T) {
 	}})
 	select {
 	case target := <-dnsTargetCh:
-		if diff := cmp.Diff(target, resolver.Target{Scheme: "dns", Endpoint: testDNSTarget}); diff != "" {
+		if diff := cmp.Diff(target, resolver.Target{Scheme: "dns", URL: *testutils.MustParseURL("dns:///" + testDNSTarget)}); diff != "" {
 			t.Fatalf("got unexpected DNS target to watch, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -786,7 +787,7 @@ func (s) TestResourceResolverError(t *testing.T) {
 	}
 	select {
 	case target := <-dnsTargetCh:
-		if diff := cmp.Diff(target, resolver.Target{Scheme: "dns", Endpoint: testDNSTarget}); diff != "" {
+		if diff := cmp.Diff(target, resolver.Target{Scheme: "dns", URL: *testutils.MustParseURL("dns:///" + testDNSTarget)}); diff != "" {
 			t.Fatalf("got unexpected DNS target to watch, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
@@ -847,7 +848,7 @@ func (s) TestResourceResolverDNSResolveNow(t *testing.T) {
 	defer ctxCancel()
 	select {
 	case target := <-dnsTargetCh:
-		if diff := cmp.Diff(target, resolver.Target{Scheme: "dns", Endpoint: testDNSTarget}); diff != "" {
+		if diff := cmp.Diff(target, resolver.Target{Scheme: "dns", URL: *testutils.MustParseURL("dns:///" + testDNSTarget)}); diff != "" {
 			t.Fatalf("got unexpected DNS target to watch, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():

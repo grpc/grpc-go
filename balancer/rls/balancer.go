@@ -481,7 +481,7 @@ func (b *rlsBalancer) sendNewPickerLocked() {
 	}
 	picker := &rlsPicker{
 		kbm:           b.lbCfg.kbMap,
-		origEndpoint:  b.bopts.Target.Endpoint,
+		origEndpoint:  b.bopts.Target.Endpoint(),
 		lb:            b,
 		defaultPolicy: b.defaultPolicy,
 		ctrlCh:        b.ctrlCh,

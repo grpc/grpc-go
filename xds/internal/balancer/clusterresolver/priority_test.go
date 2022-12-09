@@ -62,7 +62,8 @@ func setupTestEDS(t *testing.T, initChild *internalserviceconfig.BalancerConfig)
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
 	cc := testutils.NewTestClientConn(t)
 	builder := balancer.Get(Name)
-	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{Endpoint: testEDSServcie}})
+	// TODO: @kylejb will fix typo for 'testEDSServcie' in another PR
+	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{URL: *testutils.MustParseURL("dns:///" + testEDSServcie)}})
 	if edsb == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
@@ -853,7 +854,7 @@ func (s) TestFallbackToDNS(t *testing.T) {
 	defer ctxCancel()
 	select {
 	case target := <-dnsTargetCh:
-		if diff := cmp.Diff(target, resolver.Target{Scheme: "dns", Endpoint: testDNSTarget}); diff != "" {
+		if diff := cmp.Diff(target, resolver.Target{Scheme: "dns", URL: *testutils.MustParseURL("dns:///" + testDNSTarget)}); diff != "" {
 			t.Fatalf("got unexpected DNS target to watch, diff (-got, +want): %v", diff)
 		}
 	case <-ctx.Done():
