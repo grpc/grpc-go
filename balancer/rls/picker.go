@@ -170,10 +170,22 @@ func (p *rlsPicker) delegateToChildPolicies(dcEntry *cacheEntry, info balancer.P
 	for i, cpw := range dcEntry.childPolicyWrappers {
 		state := (*balancer.State)(atomic.LoadPointer(&cpw.state))
 		// Delegate to the child policy if it is not in TRANSIENT_FAILURE, or if
-		// it the last one (which handles the case of delegating to the last
+		// it is the last one (which handles the case of delegating to the last
 		// child picker if all child polcies are in TRANSIENT_FAILURE).
 		if state.ConnectivityState != connectivity.TransientFailure || i == len(dcEntry.childPolicyWrappers)-1 {
-			return state.Picker.Pick(info)
+			// Any header data received from the RLS server is stored in the
+			// cache entry and needs to be sent to the actual backend in the
+			// X-Google-RLS-Data header.
+			res, err := state.Picker.Pick(info)
+			if err != nil {
+				return res, err
+			}
+			if res.Metatada == nil {
+				res.Metatada = metadata.Pairs("x-google-rls-data", dcEntry.headerData)
+			} else {
+				res.Metatada.Append("x-google-rls-data", dcEntry.headerData)
+			}
+			return res, nil
 		}
 	}
 	// In the unlikely event that we have a cache entry with no targets, we end up
