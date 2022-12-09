@@ -44,6 +44,9 @@ func cmpLoggingEntryList(got []*grpcLogEntry, want []*grpcLogEntry) error {
 			if len(a) > len(b) {
 				a, b = b, a
 			}
+			if len(a) == 0 && len(a) != len(b) { // No metadata for one and the other comparator wants metadata.
+				return false
+			}
 			for k, v := range a {
 				if b[k] != v {
 					return false
@@ -1144,4 +1147,129 @@ func (s) TestMarshalJSON(t *testing.T) {
 	if _, err := json.Marshal(logEntry); err != nil {
 		t.Fatalf("json.Marshal(%v) failed with error: %v", logEntry, err)
 	}
+}
+
+// TestMetadataTruncationAccountsKey tests that the metadata truncation takes
+// into account both the key and value of metadata. It configures an
+// observability system with a maximum byte length for metadata, which is
+// greater than just the byte length of the metadata value but less than the
+// byte length of the metadata key + metadata value. Thus, in the ClientHeader
+// logging event, no metadata should be logged.
+func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
+	fle := &fakeLoggingExporter{
+		t: t,
+	}
+	defer func(ne func(ctx context.Context, config *config) (loggingExporter, error)) {
+		newLoggingExporter = ne
+	}(newLoggingExporter)
+
+	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+		return fle, nil
+	}
+
+	const mdValue = "value"
+	configMetadataLimit := &config{
+		ProjectID: "fake",
+		CloudLogging: &cloudLogging{
+			ClientRPCEvents: []clientRPCEvents{
+				{
+					Methods:          []string{"*"},
+					MaxMetadataBytes: len(mdValue) + 1,
+				},
+			},
+		},
+	}
+
+	cleanup, err := setupObservabilitySystemWithConfig(configMetadataLimit)
+	if err != nil {
+		t.Fatalf("error setting up observability %v", err)
+	}
+	defer cleanup()
+
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
+			return &grpc_testing.SimpleResponse{}, nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// the set config MaxMetdataBytes is in between len(mdValue) and len("key")
+	// + len(mdValue), and thus shouldn't log this metadata entry.
+	md := metadata.MD{
+		"key": []string{mdValue},
+	}
+	ctx = metadata.NewOutgoingContext(ctx, md)
+	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: []byte("00000")}}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+
+	grpcLogEntriesWant := []*grpcLogEntry{
+		{
+			Type:        eventTypeClientHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			Authority:   ss.Address,
+			SequenceID:  1,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
+			PayloadTruncated: true,
+		},
+		{
+			Type:        eventTypeClientMessage,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  2,
+			Authority:   ss.Address,
+			Payload: payload{
+				MessageLength: 9,
+				Message:       []uint8{},
+			},
+			PayloadTruncated: true,
+		},
+		{
+			Type:        eventTypeServerHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  3,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
+		},
+		{
+			Type:        eventTypeServerMessage,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			Authority:   ss.Address,
+			SequenceID:  4,
+		},
+		{
+			Type:        eventTypeServerTrailer,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  5,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
+		},
+	}
+	fle.mu.Lock()
+	if err := cmpLoggingEntryList(fle.entries, grpcLogEntriesWant); err != nil {
+		fle.mu.Unlock()
+		t.Fatalf("error in logging entry list comparison %v", err)
+	}
+	fle.mu.Unlock()
 }
