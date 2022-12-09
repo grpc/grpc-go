@@ -274,7 +274,7 @@ func (st *serverTester) writeRSTStream(streamID uint32, code http2.ErrCode) {
 	}
 }
 
-func (st *serverTester) writeGoAwayPing(ack bool, data [8]byte) {
+func (st *serverTester) writePing(ack bool, data [8]byte) {
 	if err := st.fr.WritePing(ack, data); err != nil {
 		st.t.Fatalf("Error writing PING: %v", err)
 	}

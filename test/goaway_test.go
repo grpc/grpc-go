@@ -720,6 +720,7 @@ func (s) TestTwoGoAwayPingFrames(t *testing.T) {
 	}
 	defer lis.Close()
 	s := grpc.NewServer()
+	defer s.Stop()
 	go s.Serve(lis)
 
 	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
@@ -756,8 +757,8 @@ func (s) TestTwoGoAwayPingFrames(t *testing.T) {
 		t.Fatalf("Error waiting for ping frame client side from graceful shutdown: %v", err)
 	}
 	// Write two goaway pings here.
-	st.writeGoAwayPing(true, [8]byte{1, 6, 1, 8, 0, 3, 3, 9})
-	st.writeGoAwayPing(true, [8]byte{1, 6, 1, 8, 0, 3, 3, 9})
+	st.writePing(true, [8]byte{1, 6, 1, 8, 0, 3, 3, 9})
+	st.writePing(true, [8]byte{1, 6, 1, 8, 0, 3, 3, 9})
 	// Close the conn to finish up the Graceful Shutdown process.
 	conn.Close()
 	if _, err := gsDone.Receive(ctx); err != nil {
