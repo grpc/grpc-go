@@ -1166,13 +1166,15 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
 		return fle, nil
 	}
+
+	const mdValue = "value"
 	configMetadataLimit := &config{
 		ProjectID: "fake",
 		CloudLogging: &cloudLogging{
 			ClientRPCEvents: []clientRPCEvents{
 				{
 					Methods:          []string{"*"},
-					MaxMetadataBytes: 6,
+					MaxMetadataBytes: len(mdValue) + 1,
 				},
 			},
 		},
@@ -1197,10 +1199,10 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	// the set config MaxMetdataBytes is in between len("value") and len("key")
-	// + len("value"), and thus shouldn't log this metadata entry.
+	// the set config MaxMetdataBytes is in between len(mdValue) and len("key")
+	// + len(mdValue), and thus shouldn't log this metadata entry.
 	md := metadata.MD{
-		"key": []string{"value"},
+		"key": []string{mdValue},
 	}
 	ctx = metadata.NewOutgoingContext(ctx, md)
 	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: []byte("00000")}}); err != nil {
