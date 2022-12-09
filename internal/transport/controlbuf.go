@@ -416,7 +416,7 @@ func (c *controlBuffer) get(block bool) (interface{}, error) {
 		select {
 		case <-c.ch:
 		case <-c.done:
-			return nil, errors.New("transport's context expired")
+			return nil, errors.New("transport closed by client")
 		}
 	}
 }

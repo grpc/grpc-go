@@ -953,7 +953,7 @@ func (t *http2Client) Close(err error) {
 		return
 	}
 	if logger.V(logLevel) {
-		logger.Infof("Closing transport, will close the connection: %v", err)
+		logger.Infof("transport: closing: %v", err)
 	}
 	// Call t.onClose ASAP to prevent the client from attempting to create new
 	// streams.

@@ -367,7 +367,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 
 	if streamID%2 != 1 || streamID <= t.maxStreamID {
 		// illegal gRPC stream id.
-		return fmt.Errorf("received an illegal stream id: %v", streamID)
+		return fmt.Errorf("received an illegal stream id: %v. headers frame: %+v", streamID, frame)
 	}
 	t.maxStreamID = streamID
 
@@ -1195,7 +1195,7 @@ func (t *http2Server) Close(err error) {
 		return
 	}
 	if logger.V(logLevel) {
-		logger.Infof("Closing transport, will close the connection: %v", err)
+		logger.Infof("transport: closing: %v", err)
 	}
 	t.state = closing
 	streams := t.activeStreams
