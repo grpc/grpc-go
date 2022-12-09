@@ -143,7 +143,7 @@ func (s) TestUnmarshalListener_WithUpdateValidatorFunc(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
+			managementServer, nodeID, bootstrapContents, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup1()
 
 			lis, cleanup2 := setupGRPCServer(t, bootstrapContents)
