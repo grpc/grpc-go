@@ -233,6 +233,11 @@ type PickInfo struct {
 	FullMethodName string
 	// Ctx is the RPC's context, and may contain relevant RPC-level information
 	// like the outgoing header metadata.
+	//
+	// If an LB policy wishes to mutate the outgoing header metadata on a
+	// per-call basis, it could get the existing outgoing metadata from this
+	// context using a call to metadata.FromOutgoingContext(), mutate it and
+	// pass it back in the Metadata field of PickResult.
 	Ctx context.Context
 }
 
@@ -279,6 +284,15 @@ type PickResult struct {
 	// type, Done may not be called.  May be nil if the balancer does not wish
 	// to be notified when the RPC completes.
 	Done func(DoneInfo)
+
+	// Metadata provides a way for LB policies to inject arbitrary per-call
+	// metadata. If this is non-nil, it will be used as-is and will overwrite
+	// any existing metadata stored in the RPC context. LB policies are advised
+	// to use this with caution. See PickInfo.Ctx for more details.
+	//
+	// LB policies with child policies are responsible for propagating metadata
+	// injected by their children to the ClientConn, as part of Pick().
+	Metatada metadata.MD
 }
 
 // TransientFailureError returns e.  It exists for backward compatibility and

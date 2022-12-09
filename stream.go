@@ -438,7 +438,7 @@ func (a *csAttempt) getTransport() error {
 	cs := a.cs
 
 	var err error
-	a.t, a.done, err = cs.cc.getTransport(a.ctx, cs.callInfo.failFast, cs.callHdr.Method)
+	a.t, a.pickResult, err = cs.cc.getTransport(a.ctx, cs.callInfo.failFast, cs.callHdr.Method)
 	if err != nil {
 		if de, ok := err.(dropError); ok {
 			err = de.error
@@ -455,7 +455,12 @@ func (a *csAttempt) getTransport() error {
 func (a *csAttempt) newStream() error {
 	cs := a.cs
 	cs.callHdr.PreviousAttempts = cs.numRetries
-	s, err := a.t.NewStream(a.ctx, cs.callHdr)
+	// Metadata from PickResult takes precedence over metadata from RPC context.
+	ctx := a.ctx
+	if a.pickResult.Metatada != nil {
+		ctx = metadata.NewOutgoingContext(a.ctx, a.pickResult.Metatada)
+	}
+	s, err := a.t.NewStream(ctx, cs.callHdr)
 	if err != nil {
 		nse, ok := err.(*transport.NewStreamError)
 		if !ok {
@@ -529,12 +534,12 @@ type clientStream struct {
 // csAttempt implements a single transport stream attempt within a
 // clientStream.
 type csAttempt struct {
-	ctx  context.Context
-	cs   *clientStream
-	t    transport.ClientTransport
-	s    *transport.Stream
-	p    *parser
-	done func(balancer.DoneInfo)
+	ctx        context.Context
+	cs         *clientStream
+	t          transport.ClientTransport
+	s          *transport.Stream
+	p          *parser
+	pickResult balancer.PickResult
 
 	finished  bool
 	dc        Decompressor
@@ -1103,12 +1108,12 @@ func (a *csAttempt) finish(err error) {
 		tr = a.s.Trailer()
 	}
 
-	if a.done != nil {
+	if a.pickResult.Done != nil {
 		br := false
 		if a.s != nil {
 			br = a.s.BytesReceived()
 		}
-		a.done(balancer.DoneInfo{
+		a.pickResult.Done(balancer.DoneInfo{
 			Err:           err,
 			Trailer:       tr,
 			BytesSent:     a.s != nil,

@@ -866,3 +866,123 @@ func (s) TestAuthorityInBuildOptions(t *testing.T) {
 		})
 	}
 }
+
+// wrappedPickFirstBalancerBuilder builds a custom balancer which wraps an
+// underlying pick_first balancer.
+type wrappedPickFirstBalancerBuilder struct {
+	name string
+}
+
+func (*wrappedPickFirstBalancerBuilder) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
+	builder := balancer.Get(grpc.PickFirstBalancerName)
+	wpfb := &wrappedPickFirstBalancer{
+		ClientConn: cc,
+	}
+	pf := builder.Build(wpfb, opts)
+	wpfb.Balancer = pf
+	return wpfb
+}
+
+func (wbb *wrappedPickFirstBalancerBuilder) Name() string {
+	return wbb.name
+}
+
+// wrappedPickFirstBalancer contains a pick_first balancer and forwards all
+// calls from the ClientConn to it. For state updates from the pick_first
+// balancer, it creates a custom picker which injects arbitrary metadata on a
+// per-call basis.
+type wrappedPickFirstBalancer struct {
+	balancer.Balancer
+	balancer.ClientConn
+}
+
+func (wb *wrappedPickFirstBalancer) UpdateState(state balancer.State) {
+	state.Picker = &wrappedPicker{p: state.Picker}
+	wb.ClientConn.UpdateState(state)
+}
+
+const (
+	metadataHeaderInjectedByWrappedBalancer = "metadata-header-injected-by-wrapped-balancer"
+	metadataValueInjectedByWrappedBalancer  = "metadata-value-injected-by-wrapped-balancer"
+)
+
+// wrappedPicker wraps the picker returned by the pick_first
+type wrappedPicker struct {
+	p balancer.Picker
+}
+
+func (wp *wrappedPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	res, err := wp.p.Pick(info)
+	if err != nil {
+		return balancer.PickResult{}, err
+	}
+
+	if res.Metatada == nil {
+		res.Metatada = metadata.Pairs(metadataHeaderInjectedByWrappedBalancer, metadataValueInjectedByWrappedBalancer)
+	} else {
+		res.Metatada.Append(metadataHeaderInjectedByWrappedBalancer, metadataValueInjectedByWrappedBalancer)
+	}
+	return res, nil
+}
+
+// TestMetadataInPickResult tests the scenario where an LB policy inject
+// arbitrary metadata on a per-call basis and verifies that the injected
+// metadata makes it all the way to the server RPC handler.
+func (s) TestMetadataInPickResult(t *testing.T) {
+	mdChan := make(chan []string, 1)
+	ss := &stubserver.StubServer{
+		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
+			md, ok := metadata.FromIncomingContext(ctx)
+			if ok {
+				select {
+				case mdChan <- md[metadataHeaderInjectedByWrappedBalancer]:
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				}
+			}
+			return &testpb.Empty{}, nil
+		},
+	}
+	if err := ss.StartServer(); err != nil {
+		t.Fatalf("Starting test backend: %v", err)
+	}
+	defer ss.Stop()
+	t.Logf("Started test backend at %q", ss.Address)
+
+	b := &wrappedPickFirstBalancerBuilder{name: t.Name() + "wrappedPickFirstBalancer"}
+	balancer.Register(b)
+	t.Logf("Registered test balancer with name %q", b.Name())
+
+	r := manual.NewBuilderWithScheme("whatever")
+	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
+	dopts := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithResolvers(r),
+		grpc.WithDefaultServiceConfig(fmt.Sprintf(`{"loadBalancingConfig": [{"%s":{}}]}`, b.Name())),
+	}
+	cc, err := grpc.Dial(r.Scheme()+":///test.server", dopts...)
+	if err != nil {
+		t.Fatalf("grpc.Dial(): %v", err)
+	}
+	defer cc.Close()
+	tc := testpb.NewTestServiceClient(cc)
+	t.Log("Created ClientConn to test backend")
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() RPC: %v", err)
+	}
+	t.Log("EmptyCall() RPC succeeded")
+
+	var gotMD []string
+	select {
+	case gotMD = <-mdChan:
+	case <-ctx.Done():
+		t.Fatalf("Timed out waiting for custom metadata in test backend")
+	}
+	wantMD := []string{metadataValueInjectedByWrappedBalancer}
+	if !cmp.Equal(gotMD, wantMD) {
+		t.Fatalf("Mismatch in custom metadata received at test backend, got: %v, want %v", gotMD, wantMD)
+	}
+}
