@@ -242,8 +242,11 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	go func(conn net.Conn) {
 		defer ctxMonitorDone.Fire() // Signal this goroutine has exited.
 		<-newClientCtx.Done()       // Block until connectCtx expires or the defer above executes.
-		if connectCtx.Err() != nil {
+		if err := connectCtx.Err(); err != nil {
 			// connectCtx expired before exiting the function.  Hard close the connection.
+			if logger.V(logLevel) {
+				logger.Infof("newClientTransport: aborting due to connectCtx: %v", err)
+			}
 			conn.Close()
 		}
 	}(conn)
@@ -445,10 +448,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 	go func() {
 		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst)
 		err := t.loopy.run()
-		if err != nil {
-			if logger.V(logLevel) {
-				logger.Errorf("transport: loopyWriter.run returning. Err: %v", err)
-			}
+		if logger.V(logLevel) {
+			logger.Infof("transport: loopyWriter exited. Closing connection. Err: %v", err)
 		}
 		// Do not close the transport.  Let reader goroutine handle it since
 		// there might be data in the buffers.
@@ -951,6 +952,9 @@ func (t *http2Client) Close(err error) {
 		t.mu.Unlock()
 		return
 	}
+	if logger.V(logLevel) {
+		logger.Infof("transport: closing: %v", err)
+	}
 	// Call t.onClose ASAP to prevent the client from attempting to create new
 	// streams.
 	t.onClose()
@@ -1003,11 +1007,14 @@ func (t *http2Client) GracefulClose() {
 		t.mu.Unlock()
 		return
 	}
+	if logger.V(logLevel) {
+		logger.Infof("transport: GracefulClose called")
+	}
 	t.state = draining
 	active := len(t.activeStreams)
 	t.mu.Unlock()
 	if active == 0 {
-		t.Close(ErrConnClosing)
+		t.Close(connectionErrorf(true, nil, "no active streams left to process while draining"))
 		return
 	}
 	t.controlBuf.put(&incomingGoAway{})

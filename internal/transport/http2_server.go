@@ -21,6 +21,7 @@ package transport
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -293,7 +294,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 
 	defer func() {
 		if err != nil {
-			t.Close()
+			t.Close(err)
 		}
 	}()
 
@@ -331,10 +332,9 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	go func() {
 		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst)
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
-		if err := t.loopy.run(); err != nil {
-			if logger.V(logLevel) {
-				logger.Errorf("transport: loopyWriter.run returning. Err: %v", err)
-			}
+		err := t.loopy.run()
+		if logger.V(logLevel) {
+			logger.Infof("transport: loopyWriter exited. Closing connection. Err: %v", err)
 		}
 		t.conn.Close()
 		t.controlBuf.finish()
@@ -344,8 +344,9 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	return t, nil
 }
 
-// operateHeader takes action on the decoded headers.
-func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) (fatal bool) {
+// operateHeaders takes action on the decoded headers. Returns an error if fatal
+// error encountered and transport needs to close, otherwise returns nil.
+func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(*Stream), traceCtx func(context.Context, string) context.Context) error {
 	// Acquire max stream ID lock for entire duration
 	t.maxStreamMu.Lock()
 	defer t.maxStreamMu.Unlock()
@@ -361,15 +362,12 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			rstCode:  http2.ErrCodeFrameSize,
 			onWrite:  func() {},
 		})
-		return false
+		return nil
 	}
 
 	if streamID%2 != 1 || streamID <= t.maxStreamID {
 		// illegal gRPC stream id.
-		if logger.V(logLevel) {
-			logger.Errorf("transport: http2Server.HandleStreams received an illegal stream id: %v", streamID)
-		}
-		return true
+		return fmt.Errorf("received an illegal stream id: %v. headers frame: %+v", streamID, frame)
 	}
 	t.maxStreamID = streamID
 
@@ -453,7 +451,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			status:         status.New(codes.Internal, errMsg),
 			rst:            !frame.StreamEnded(),
 		})
-		return false
+		return nil
 	}
 
 	if !isGRPC || headerError {
@@ -463,7 +461,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			rstCode:  http2.ErrCodeProtocol,
 			onWrite:  func() {},
 		})
-		return false
+		return nil
 	}
 
 	// "If :authority is missing, Host must be renamed to :authority." - A41
@@ -503,7 +501,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	if t.state != reachable {
 		t.mu.Unlock()
 		s.cancel()
-		return false
+		return nil
 	}
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
@@ -514,7 +512,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			onWrite:  func() {},
 		})
 		s.cancel()
-		return false
+		return nil
 	}
 	if httpMethod != http.MethodPost {
 		t.mu.Unlock()
@@ -530,7 +528,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			rst:            !frame.StreamEnded(),
 		})
 		s.cancel()
-		return false
+		return nil
 	}
 	if t.inTapHandle != nil {
 		var err error
@@ -550,7 +548,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 				status:         stat,
 				rst:            !frame.StreamEnded(),
 			})
-			return false
+			return nil
 		}
 	}
 	t.activeStreams[streamID] = s
@@ -597,7 +595,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		wq:       s.wq,
 	})
 	handle(s)
-	return false
+	return nil
 }
 
 // HandleStreams receives incoming streams using the given handler. This is
@@ -630,19 +628,16 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 				continue
 			}
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				t.Close()
+				t.Close(err)
 				return
 			}
-			if logger.V(logLevel) {
-				logger.Warningf("transport: http2Server.HandleStreams failed to read frame: %v", err)
-			}
-			t.Close()
+			t.Close(err)
 			return
 		}
 		switch frame := frame.(type) {
 		case *http2.MetaHeadersFrame:
-			if t.operateHeaders(frame, handle, traceCtx) {
-				t.Close()
+			if err := t.operateHeaders(frame, handle, traceCtx); err != nil {
+				t.Close(err)
 				break
 			}
 		case *http2.DataFrame:
@@ -886,10 +881,7 @@ func (t *http2Server) handlePing(f *http2.PingFrame) {
 
 	if t.pingStrikes > maxPingStrikes {
 		// Send goaway and close the connection.
-		if logger.V(logLevel) {
-			logger.Errorf("transport: Got too many pings from the client, closing the connection.")
-		}
-		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: true})
+		t.controlBuf.put(&goAway{code: http2.ErrCodeEnhanceYourCalm, debugData: []byte("too_many_pings"), closeConn: errors.New("got too many pings from the client")})
 	}
 }
 
@@ -1169,10 +1161,7 @@ func (t *http2Server) keepalive() {
 				continue
 			}
 			if outstandingPing && kpTimeoutLeft <= 0 {
-				if logger.V(logLevel) {
-					logger.Infof("transport: closing server transport due to idleness.")
-				}
-				t.Close()
+				t.Close(fmt.Errorf("keepalive ping not acked within timeout %s", t.kp.Time))
 				return
 			}
 			if !outstandingPing {
@@ -1199,11 +1188,14 @@ func (t *http2Server) keepalive() {
 // Close starts shutting down the http2Server transport.
 // TODO(zhaoq): Now the destruction is not blocked on any pending streams. This
 // could cause some resource issue. Revisit this later.
-func (t *http2Server) Close() {
+func (t *http2Server) Close(err error) {
 	t.mu.Lock()
 	if t.state == closing {
 		t.mu.Unlock()
 		return
+	}
+	if logger.V(logLevel) {
+		logger.Infof("transport: closing: %v", err)
 	}
 	t.state = closing
 	streams := t.activeStreams
@@ -1319,19 +1311,20 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		// Stop accepting more streams now.
 		t.state = draining
 		sid := t.maxStreamID
+		retErr := g.closeConn
 		if len(t.activeStreams) == 0 {
-			g.closeConn = true
+			retErr = errors.New("second GOAWAY written and no active streams left to process")
 		}
 		t.mu.Unlock()
 		t.maxStreamMu.Unlock()
 		if err := t.framer.fr.WriteGoAway(sid, g.code, g.debugData); err != nil {
 			return false, err
 		}
-		if g.closeConn {
+		if retErr != nil {
 			// Abruptly close the connection following the GoAway (via
 			// loopywriter).  But flush out what's inside the buffer first.
 			t.framer.writer.Flush()
-			return false, fmt.Errorf("transport: Connection closing")
+			return false, retErr
 		}
 		return true, nil
 	}

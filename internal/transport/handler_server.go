@@ -141,11 +141,14 @@ type serverHandlerTransport struct {
 	stats []stats.Handler
 }
 
-func (ht *serverHandlerTransport) Close() {
-	ht.closeOnce.Do(ht.closeCloseChanOnce)
+func (ht *serverHandlerTransport) Close(err error) {
+	ht.closeOnce.Do(func() {
+		if logger.V(logLevel) {
+			logger.Infof("Closing serverHandlerTransport: %v", err)
+		}
+		close(ht.closedCh)
+	})
 }
-
-func (ht *serverHandlerTransport) closeCloseChanOnce() { close(ht.closedCh) }
 
 func (ht *serverHandlerTransport) RemoteAddr() net.Addr { return strAddr(ht.req.RemoteAddr) }
 
@@ -236,7 +239,7 @@ func (ht *serverHandlerTransport) WriteStatus(s *Stream, st *status.Status) erro
 			})
 		}
 	}
-	ht.Close()
+	ht.Close(errors.New("finished writing status"))
 	return err
 }
 
@@ -346,7 +349,7 @@ func (ht *serverHandlerTransport) HandleStreams(startStream func(*Stream), trace
 		case <-ht.req.Context().Done():
 		}
 		cancel()
-		ht.Close()
+		ht.Close(errors.New("request is done processing"))
 	}()
 
 	req := ht.req
