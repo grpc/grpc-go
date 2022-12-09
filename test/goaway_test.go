@@ -741,7 +741,7 @@ func (s) TestTwoGoAwayPingFrames(t *testing.T) {
 			case *http2.PingFrame:
 				pingReceivedClientSide.Send(nil)
 			default:
-				t.Fatalf("server tester received unexpected frame type %T", f)
+				t.Errorf("server tester received unexpected frame type %T", f)
 			}
 		}
 	}()
