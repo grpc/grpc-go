@@ -62,6 +62,7 @@ type bb struct{}
 
 func (bb) Build(cc balancer.ClientConn, bOpts balancer.BuildOptions) balancer.Balancer {
 	b := &outlierDetectionBalancer{
+		bOpts:          bOpts,
 		cc:             cc,
 		closed:         grpcsync.NewEvent(),
 		done:           grpcsync.NewEvent(),
@@ -161,6 +162,7 @@ type outlierDetectionBalancer struct {
 
 	closed *grpcsync.Event
 	done   *grpcsync.Event
+	bOpts  balancer.BuildOptions
 	cc     balancer.ClientConn
 	logger *grpclog.PrefixLogger
 
@@ -577,7 +579,7 @@ func (b *outlierDetectionBalancer) ResolveNow(opts resolver.ResolveNowOptions) {
 }
 
 func (b *outlierDetectionBalancer) Target() string {
-	return b.cc.Target()
+	return b.bOpts.Target.URL.String()
 }
 
 func max(x, y int64) int64 {
