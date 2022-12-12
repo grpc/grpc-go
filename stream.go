@@ -455,11 +455,22 @@ func (a *csAttempt) getTransport() error {
 func (a *csAttempt) newStream() error {
 	cs := a.cs
 	cs.callHdr.PreviousAttempts = cs.numRetries
-	// Metadata from PickResult takes precedence over metadata from RPC context.
+
+	// Merge metadata stored in PickResult, if any, with existing call metadata.
 	ctx := a.ctx
 	if a.pickResult.Metatada != nil {
-		ctx = metadata.NewOutgoingContext(a.ctx, a.pickResult.Metatada)
+		// We currently do not have a function it the metadata package which
+		// merges given metadata with existing metadata in a context. Exising
+		// function `AppendToOutgoingContext()` takes a variadic argument of key
+		// value pairs.
+		//
+		// TODO: Make it possible to retrieve key value pairs from metadata.MD
+		// in a form passable to AppendToOutgoingContext().
+		md, _ := metadata.FromOutgoingContext(ctx)
+		md = metadata.Join(md, a.pickResult.Metatada)
+		ctx = metadata.NewOutgoingContext(a.ctx, md)
 	}
+
 	s, err := a.t.NewStream(ctx, cs.callHdr)
 	if err != nil {
 		nse, ok := err.(*transport.NewStreamError)

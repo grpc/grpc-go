@@ -902,8 +902,10 @@ func (wb *wrappedPickFirstBalancer) UpdateState(state balancer.State) {
 }
 
 const (
-	metadataHeaderInjectedByWrappedBalancer = "metadata-header-injected-by-wrapped-balancer"
-	metadataValueInjectedByWrappedBalancer  = "metadata-value-injected-by-wrapped-balancer"
+	metadataHeaderInjectedByBalancer    = "metadata-header-injected-by-balancer"
+	metadataHeaderInjectedByApplication = "metadata-header-injected-by-application"
+	metadataValueInjectedByBalancer     = "metadata-value-injected-by-balancer"
+	metadataValueInjectedByApplication  = "metadata-value-injected-by-application"
 )
 
 // wrappedPicker wraps the picker returned by the pick_first
@@ -918,9 +920,9 @@ func (wp *wrappedPicker) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 	}
 
 	if res.Metatada == nil {
-		res.Metatada = metadata.Pairs(metadataHeaderInjectedByWrappedBalancer, metadataValueInjectedByWrappedBalancer)
+		res.Metatada = metadata.Pairs(metadataHeaderInjectedByBalancer, metadataValueInjectedByBalancer)
 	} else {
-		res.Metatada.Append(metadataHeaderInjectedByWrappedBalancer, metadataValueInjectedByWrappedBalancer)
+		res.Metatada.Append(metadataHeaderInjectedByBalancer, metadataValueInjectedByBalancer)
 	}
 	return res, nil
 }
@@ -929,16 +931,15 @@ func (wp *wrappedPicker) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 // arbitrary metadata on a per-call basis and verifies that the injected
 // metadata makes it all the way to the server RPC handler.
 func (s) TestMetadataInPickResult(t *testing.T) {
-	mdChan := make(chan []string, 1)
+	t.Log("Starting test backend...")
+	mdChan := make(chan metadata.MD, 1)
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, _ *testpb.Empty) (*testpb.Empty, error) {
-			md, ok := metadata.FromIncomingContext(ctx)
-			if ok {
-				select {
-				case mdChan <- md[metadataHeaderInjectedByWrappedBalancer]:
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				}
+			md, _ := metadata.FromIncomingContext(ctx)
+			select {
+			case mdChan <- md:
+			case <-ctx.Done():
+				return nil, ctx.Err()
 			}
 			return &testpb.Empty{}, nil
 		},
@@ -949,10 +950,12 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 	defer ss.Stop()
 	t.Logf("Started test backend at %q", ss.Address)
 
+	name := t.Name() + "wrappedPickFirstBalancer"
+	t.Logf("Registering test balancer with name %q...", name)
 	b := &wrappedPickFirstBalancerBuilder{name: t.Name() + "wrappedPickFirstBalancer"}
 	balancer.Register(b)
-	t.Logf("Registered test balancer with name %q", b.Name())
 
+	t.Log("Creating ClientConn to test backend...")
 	r := manual.NewBuilderWithScheme("whatever")
 	r.InitialState(resolver.State{Addresses: []resolver.Address{{Addr: ss.Address}}})
 	dopts := []grpc.DialOption{
@@ -966,23 +969,36 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 	}
 	defer cc.Close()
 	tc := testpb.NewTestServiceClient(cc)
-	t.Log("Created ClientConn to test backend")
 
+	t.Log("Making EmptyCall() RPC with custom metadata...")
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
+	md := metadata.Pairs(metadataHeaderInjectedByApplication, metadataValueInjectedByApplication)
+	ctx = metadata.NewOutgoingContext(ctx, md)
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("EmptyCall() RPC: %v", err)
 	}
 	t.Log("EmptyCall() RPC succeeded")
 
-	var gotMD []string
+	t.Log("Waiting for custom metadata to be received at the test backend...")
+	var gotMD metadata.MD
 	select {
 	case gotMD = <-mdChan:
 	case <-ctx.Done():
-		t.Fatalf("Timed out waiting for custom metadata in test backend")
+		t.Fatalf("Timed out waiting for custom metadata to be received at the test backend")
 	}
-	wantMD := []string{metadataValueInjectedByWrappedBalancer}
-	if !cmp.Equal(gotMD, wantMD) {
-		t.Fatalf("Mismatch in custom metadata received at test backend, got: %v, want %v", gotMD, wantMD)
+
+	t.Log("Veirfying custom metadata added by the client application is recieved at the test backend...")
+	wantMDVal := []string{metadataValueInjectedByApplication}
+	gotMDVal := gotMD.Get(metadataHeaderInjectedByApplication)
+	if !cmp.Equal(gotMDVal, wantMDVal) {
+		t.Fatalf("Mismatch in custom metadata received at test backend, got: %v, want %v", gotMDVal, wantMDVal)
+	}
+
+	t.Log("Veirfying custom metadata added by the LB policy is recieved at the test backend...")
+	wantMDVal = []string{metadataValueInjectedByBalancer}
+	gotMDVal = gotMD.Get(metadataHeaderInjectedByBalancer)
+	if !cmp.Equal(gotMDVal, wantMDVal) {
+		t.Fatalf("Mismatch in custom metadata received at test backend, got: %v, want %v", gotMDVal, wantMDVal)
 	}
 }
