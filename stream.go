@@ -460,7 +460,7 @@ func (a *csAttempt) newStream() error {
 	ctx := a.ctx
 	if a.pickResult.Metatada != nil {
 		// We currently do not have a function it the metadata package which
-		// merges given metadata with existing metadata in a context. Exising
+		// merges given metadata with existing metadata in a context. Existing
 		// function `AppendToOutgoingContext()` takes a variadic argument of key
 		// value pairs.
 		//

@@ -988,14 +988,14 @@ func (s) TestMetadataInPickResult(t *testing.T) {
 		t.Fatalf("Timed out waiting for custom metadata to be received at the test backend")
 	}
 
-	t.Log("Veirfying custom metadata added by the client application is recieved at the test backend...")
+	t.Log("Verifying custom metadata added by the client application is received at the test backend...")
 	wantMDVal := []string{metadataValueInjectedByApplication}
 	gotMDVal := gotMD.Get(metadataHeaderInjectedByApplication)
 	if !cmp.Equal(gotMDVal, wantMDVal) {
 		t.Fatalf("Mismatch in custom metadata received at test backend, got: %v, want %v", gotMDVal, wantMDVal)
 	}
 
-	t.Log("Veirfying custom metadata added by the LB policy is recieved at the test backend...")
+	t.Log("Verifying custom metadata added by the LB policy is received at the test backend...")
 	wantMDVal = []string{metadataValueInjectedByBalancer}
 	gotMDVal = gotMD.Get(metadataHeaderInjectedByBalancer)
 	if !cmp.Equal(gotMDVal, wantMDVal) {
