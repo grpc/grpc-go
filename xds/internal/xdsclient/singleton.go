@@ -91,8 +91,8 @@ func newRefCountedWithConfig(config *bootstrap.Config) (XDSClient, error) {
 	singletonClient.refCount++
 	singletonClientImplCreateHook()
 	nodeID := "<unknown>"
-	if id, ok := config.XDSServer.NodeProto.(interface{ GetId() string }); ok {
-		nodeID = id.GetId()
+	if node, ok := config.XDSServer.NodeProto.(interface{ GetId() string }); ok {
+		nodeID = node.GetId()
 	}
 	logger.Infof("xDS node ID: %s", nodeID)
 	return &onceClosingClient{XDSClient: singletonClient}, nil
