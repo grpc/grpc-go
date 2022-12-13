@@ -1008,7 +1008,8 @@ var _ http.Handler = (*Server)(nil)
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	st, err := transport.NewServerHandlerTransport(w, r, s.opts.statsHandlers)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		// Errors returned from transport.NewServerHandlerTransport have
+		// already been written to w.
 		return
 	}
 	if !s.addConn(listenerAddressForServeHTTP, st) {
