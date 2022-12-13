@@ -363,6 +363,7 @@ func testServerMultipleGoAwayPendingRPC(t *testing.T, e env) {
 		close(ch2)
 	}()
 	// Loop until the server side GoAway signal is propagated to the client.
+
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
@@ -402,6 +403,7 @@ func testServerMultipleGoAwayPendingRPC(t *testing.T, e env) {
 	if err := stream.CloseSend(); err != nil {
 		t.Fatalf("%v.CloseSend() = %v, want <nil>", stream, err)
 	}
+
 	<-ch1
 	<-ch2
 	cancel()
@@ -706,4 +708,60 @@ func (s) TestGoAwayStreamIDSmallerThanCreatedStreams(t *testing.T) {
 	<-someStreamsCreated.Done()
 	ct.writeGoAway(1, http2.ErrCodeNo, []byte{})
 	goAwayWritten.Fire()
+}
+
+// TestTwoGoAwayPingFrames tests the scenario where you get two go away ping
+// frames from the client during graceful shutdown. This should not crash the
+// server.
+func (s) TestTwoGoAwayPingFrames(t *testing.T) {
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("Failed to listen: %v", err)
+	}
+	defer lis.Close()
+	s := grpc.NewServer()
+	defer s.Stop()
+	go s.Serve(lis)
+
+	conn, err := net.DialTimeout("tcp", lis.Addr().String(), defaultTestTimeout)
+	if err != nil {
+		t.Fatalf("Failed to dial: %v", err)
+	}
+
+	st := newServerTesterFromConn(t, conn)
+	st.greet()
+	pingReceivedClientSide := testutils.NewChannel()
+	go func() {
+		for {
+			f, err := st.readFrame()
+			if err != nil {
+				return
+			}
+			switch f.(type) {
+			case *http2.GoAwayFrame:
+			case *http2.PingFrame:
+				pingReceivedClientSide.Send(nil)
+			default:
+				t.Errorf("server tester received unexpected frame type %T", f)
+			}
+		}
+	}()
+	gsDone := testutils.NewChannel()
+	go func() {
+		s.GracefulStop()
+		gsDone.Send(nil)
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err := pingReceivedClientSide.Receive(ctx); err != nil {
+		t.Fatalf("Error waiting for ping frame client side from graceful shutdown: %v", err)
+	}
+	// Write two goaway pings here.
+	st.writePing(true, [8]byte{1, 6, 1, 8, 0, 3, 3, 9})
+	st.writePing(true, [8]byte{1, 6, 1, 8, 0, 3, 3, 9})
+	// Close the conn to finish up the Graceful Shutdown process.
+	conn.Close()
+	if _, err := gsDone.Receive(ctx); err != nil {
+		t.Fatalf("Error waiting for graceful shutdown of the server: %v", err)
+	}
 }

@@ -273,3 +273,9 @@ func (st *serverTester) writeRSTStream(streamID uint32, code http2.ErrCode) {
 		st.t.Fatalf("Error writing RST_STREAM: %v", err)
 	}
 }
+
+func (st *serverTester) writePing(ack bool, data [8]byte) {
+	if err := st.fr.WritePing(ack, data); err != nil {
+		st.t.Fatalf("Error writing PING: %v", err)
+	}
+}

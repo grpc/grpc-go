@@ -42,6 +42,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
@@ -102,13 +103,13 @@ type http2Server struct {
 
 	mu sync.Mutex // guard the following
 
-	// drainChan is initialized when Drain() is called the first time.
-	// After which the server writes out the first GoAway(with ID 2^31-1) frame.
-	// Then an independent goroutine will be launched to later send the second GoAway.
-	// During this time we don't want to write another first GoAway(with ID 2^31 -1) frame.
-	// Thus call to Drain() will be a no-op if drainChan is already initialized since draining is
-	// already underway.
-	drainChan     chan struct{}
+	// drainEvent is initialized when Drain() is called the first time. After
+	// which the server writes out the first GoAway(with ID 2^31-1) frame. Then
+	// an independent goroutine will be launched to later send the second
+	// GoAway. During this time we don't want to write another first GoAway(with
+	// ID 2^31 -1) frame. Thus call to Drain() will be a no-op if drainEvent is
+	// already initialized since draining is already underway.
+	drainEvent    *grpcsync.Event
 	state         transportState
 	activeStreams map[uint32]*Stream
 	// idle is the time instant when the connection went idle.
@@ -838,8 +839,8 @@ const (
 
 func (t *http2Server) handlePing(f *http2.PingFrame) {
 	if f.IsAck() {
-		if f.Data == goAwayPing.data && t.drainChan != nil {
-			close(t.drainChan)
+		if f.Data == goAwayPing.data && t.drainEvent != nil {
+			t.drainEvent.Fire()
 			return
 		}
 		// Maybe it's a BDP ping.
@@ -1287,10 +1288,10 @@ func (t *http2Server) RemoteAddr() net.Addr {
 func (t *http2Server) Drain() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.drainChan != nil {
+	if t.drainEvent != nil {
 		return
 	}
-	t.drainChan = make(chan struct{})
+	t.drainEvent = grpcsync.NewEvent()
 	t.controlBuf.put(&goAway{code: http2.ErrCodeNo, debugData: []byte{}, headsUp: true})
 }
 
@@ -1346,7 +1347,7 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		timer := time.NewTimer(time.Minute)
 		defer timer.Stop()
 		select {
-		case <-t.drainChan:
+		case <-t.drainEvent.Done():
 		case <-timer.C:
 		case <-t.done:
 			return
