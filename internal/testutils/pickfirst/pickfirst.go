@@ -41,7 +41,12 @@ import (
 func CheckRPCsToBackend(ctx context.Context, cc *grpc.ClientConn, wantAddr resolver.Address) error {
 	client := testgrpc.NewTestServiceClient(cc)
 	peer := &peer.Peer{}
-	// Make sure the RPC reaches the expected backend once.
+	// Make sure that 20 RPCs in a row reach the expected backend. Some
+	// tests switch from round_robin back to pick_first and call this
+	// function. None of our tests spin up more than 10 backends. So,
+	// waiting for 20 RPCs to reach a single backend would a decent
+	// indicator of having switched to pick_first.
+	count := 0
 	for {
 		time.Sleep(time.Millisecond)
 		if ctx.Err() != nil {
@@ -55,7 +60,12 @@ func CheckRPCsToBackend(ctx context.Context, cc *grpc.ClientConn, wantAddr resol
 			// removed.
 			continue
 		}
-		if peer.Addr.String() == wantAddr.Addr {
+		if peer.Addr.String() != wantAddr.Addr {
+			count = 0
+			continue
+		}
+		count++
+		if count > 20 {
 			break
 		}
 	}
