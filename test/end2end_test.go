@@ -888,6 +888,23 @@ type lazyConn struct {
 	beLazy int32
 }
 
+// errMsgContainsPossibleStopMessages addresses around the timing of when TCP packets
+// are sent from client to server, and when we tell the server to stop, so we need to account for both
+// of these possible error messages:
+//  1. If the call to ss.S.Stop() causes the server's sockets to close while there's still in-fight
+//     data from the client on the TCP connection, then the kernel can send an RST back to the client (also
+//     see https://stackoverflow.com/questions/33053507/econnreset-in-send-linux-c). Note that while this
+//     condition is expected to be rare due to the rpcStartedOnServer synchronization, in theory it should
+//     be possible, e.g. if the client sends a BDP ping at the right time.
+//  2. If, for example, the call to ss.S.Stop() happens after the RPC headers have been received at the
+//     server, then the TCP connection can shutdown gracefully when the server's socket closes. raceyness around checks if the error message when checking reading frames
+const possibleConnResetMsg = "connection reset by peer"
+const possibleEOFMsg = "error reading from server: EOF"
+
+func errMsgContainsPossibleStopMessages(err error) bool {
+	return !strings.Contains(err.Error(), possibleConnResetMsg) && !strings.Contains(err.Error(), possibleEOFMsg)
+}
+
 func (l *lazyConn) Write(b []byte) (int, error) {
 	if atomic.LoadInt32(&(l.beLazy)) == 1 {
 		time.Sleep(time.Second)
@@ -1013,18 +1030,7 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// The precise behavior of this test is subject to raceyness around the timing of when TCP packets
-	// are sent from client to server, and when we tell the server to stop, so we need to account for both
-	// of these possible error messages:
-	// 1) If the call to ss.S.Stop() causes the server's sockets to close while there's still in-fight
-	//    data from the client on the TCP connection, then the kernel can send an RST back to the client (also
-	//    see https://stackoverflow.com/questions/33053507/econnreset-in-send-linux-c). Note that while this
-	//    condition is expected to be rare due to the rpcStartedOnServer synchronization, in theory it should
-	//    be possible, e.g. if the client sends a BDP ping at the right time.
-	// 2) If, for example, the call to ss.S.Stop() happens after the RPC headers have been received at the
-	//    server, then the TCP connection can shutdown gracefully when the server's socket closes.
-	const possibleConnResetMsg = "connection reset by peer"
-	const possibleEOFMsg = "error reading from server: EOF"
+
 	// Start an RPC. Then, while the RPC is still being accepted or handled at the server, abruptly
 	// stop the server, killing the connection. The RPC error message should include details about the specific
 	// connection error that was encountered.
@@ -1037,7 +1043,10 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	// the RPC has been started on it.
 	<-rpcStartedOnServer
 	ss.S.Stop()
-	if _, err := stream.Recv(); err == nil || (!strings.Contains(err.Error(), possibleConnResetMsg) && !strings.Contains(err.Error(), possibleEOFMsg)) {
+	// The precise behavior of this test is subject to raceyness around the timing of when TCP packets
+	// are sent from client to server, and when we tell the server to stop, so we need to account for both
+	// of these possible error messages
+	if _, err := stream.Recv(); err == nil || errMsgContainsPossibleStopMessages(err) {
 		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: %q OR %q", stream, err, possibleConnResetMsg, possibleEOFMsg)
 	}
 	close(rpcDoneOnClient)
@@ -6815,12 +6824,14 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 
 // Testing non-Trailers-only Trailers (delivered in second HEADERS frame)
 func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
-	for _, test := range []struct {
+	tests := []struct {
+		name           string
 		responseHeader []string
 		trailer        []string
 		errCode        codes.Code
 	}{
 		{
+			name: "trailer missing grpc-status",
 			responseHeader: []string{
 				":status", "200",
 				"content-type", "application/grpc",
@@ -6832,6 +6843,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 			errCode: codes.Unavailable,
 		},
 		{
+			name: "malformed grpc-status-details-bin field with status 404",
 			responseHeader: []string{
 				":status", "404",
 				"content-type", "application/grpc",
@@ -6844,6 +6856,7 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 			errCode: codes.Unimplemented,
 		},
 		{
+			name: "malformed grpc-status-details-bin field with status 200",
 			responseHeader: []string{
 				":status", "200",
 				"content-type", "application/grpc",
@@ -6855,8 +6868,12 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 			},
 			errCode: codes.Internal,
 		},
-	} {
-		doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer)
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer)
+		})
+
 	}
 }
 
@@ -6930,14 +6947,14 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 		}
 		writer.Flush() // necessary since client is expecting preface before declaring connection fully setup.
 		var sid uint32
-		// Loop until conn is closed and framer returns io.EOF
+		// Loop until conn is closed and framer returns possible Stop error messages
 		for requestNum := 0; ; requestNum = (requestNum + 1) % len(s.responses) {
 			// Read frames until a header is received.
 			for {
 				frame, err := framer.ReadFrame()
 				if err != nil {
-					if err != io.EOF {
-						t.Errorf("Error at server-side while reading frame. Err: %v", err)
+					if errMsgContainsPossibleStopMessages(err) {
+						t.Errorf("Error at server-side while reading frame. got: %q, want: rpc error containing substring %q OR %q", err, possibleConnResetMsg, possibleEOFMsg)
 					}
 					return
 				}
