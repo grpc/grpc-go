@@ -902,7 +902,7 @@ const possibleConnResetMsg = "connection reset by peer"
 const possibleEOFMsg = "error reading from server: EOF"
 
 func errMsgContainsPossibleStopMessages(err error) bool {
-	return !strings.Contains(err.Error(), possibleConnResetMsg) && !strings.Contains(err.Error(), possibleEOFMsg)
+	return strings.Contains(err.Error(), possibleConnResetMsg) || strings.Contains(err.Error(), possibleEOFMsg) || err == io.EOF
 }
 
 func (l *lazyConn) Write(b []byte) (int, error) {
@@ -1046,7 +1046,7 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	// The precise behavior of this test is subject to raceyness around the timing of when TCP packets
 	// are sent from client to server, and when we tell the server to stop, so we need to account for both
 	// of these possible error messages
-	if _, err := stream.Recv(); err == nil || errMsgContainsPossibleStopMessages(err) {
+	if _, err := stream.Recv(); err == nil || !errMsgContainsPossibleStopMessages(err) {
 		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: %q OR %q", stream, err, possibleConnResetMsg, possibleEOFMsg)
 	}
 	close(rpcDoneOnClient)
@@ -6953,7 +6953,7 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 			for {
 				frame, err := framer.ReadFrame()
 				if err != nil {
-					if errMsgContainsPossibleStopMessages(err) {
+					if !errMsgContainsPossibleStopMessages(err) {
 						t.Errorf("Error at server-side while reading frame. got: %q, want: rpc error containing substring %q OR %q", err, possibleConnResetMsg, possibleEOFMsg)
 					}
 					return
