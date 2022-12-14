@@ -73,24 +73,8 @@ var cmpOpts = cmp.Options{
 		return out
 	}),
 	protocmp.Transform(),
-}
-
-// filterFields clears unimportant fields in the proto messages.
-//
-// protocmp.IgnoreFields() doesn't work on nil messages (it panics).
-func filterFields(ms []*v3statuspb.ClientConfig_GenericXdsConfig) []*v3statuspb.ClientConfig_GenericXdsConfig {
-	out := append([]*v3statuspb.ClientConfig_GenericXdsConfig{}, ms...)
-	for _, m := range out {
-		if m == nil {
-			continue
-		}
-		m.LastUpdated = nil
-		if m.ErrorState != nil {
-			m.ErrorState.Details = ""
-			m.ErrorState.LastUpdateAttempt = nil
-		}
-	}
-	return out
+	protocmp.IgnoreFields((*v3statuspb.ClientConfig_GenericXdsConfig)(nil), "last_updated"),
+	protocmp.IgnoreFields((*v3adminpb.UpdateFailureState)(nil), "last_update_attempt", "details"),
 }
 
 type s struct {
@@ -374,7 +358,8 @@ func checkClientStatusResponse(stream v3statuspbgrpc.ClientStatusDiscoveryServic
 	if n := len(resp.Config); n != 1 {
 		return fmt.Errorf("got %d configs, want 1: %v", n, proto.MarshalTextString(resp))
 	}
-	if diff := cmp.Diff(filterFields(resp.Config[0].GenericXdsConfigs), want, cmpOpts); diff != "" {
+
+	if diff := cmp.Diff(resp.Config[0].GenericXdsConfigs, want, cmpOpts); diff != "" {
 		return fmt.Errorf(diff)
 	}
 	return nil
