@@ -94,17 +94,6 @@ const (
 type intermediateBalancerConfig []map[string]json.RawMessage
 
 func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (ClusterUpdate, error) {
-	// Send this PR out for review - but can't merge xdsclient emission changes is what it gets switched to
-	// This is gonna break the whole system lol
-
-	// Need to do another pass and fill in all the error messages that were questionable
-
-	// After cleaning up this write tests...
-
-	// Fix breaking ones - could even fix by switching what was there backward compatible wise to
-	// spit out JSON rather than a certain struct
-
-
 	var lbCfgJSON json.RawMessage // is the zero value correct to emit if it passes the if else code block below?
 	var err error
 	if cluster.GetLoadBalancingPolicy() != nil && envconfig.XDSCustomLBPolicy {

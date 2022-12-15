@@ -46,7 +46,6 @@ type clusterHandlerUpdate struct {
 	// does need configs, this is only set to the ringhash config, if the policy
 	// is ringhash. In the future, if we support more policies, we can make this
 	// an interface, and set it to config of the other policies.
-	// lbPolicy *xdsresource.ClusterLBPolicyRingHash
 	lbPolicy json.RawMessage
 
 	// updates is a list of ClusterUpdates from all the leaf clusters.
@@ -128,7 +127,7 @@ func (ch *clusterHandler) constructClusterUpdate() {
 	}
 	ch.updateChannel <- clusterHandlerUpdate{
 		securityCfg: ch.createdClusters[ch.rootClusterName].clusterUpdate.SecurityCfg,
-		lbPolicy:    ch.createdClusters[ch.rootClusterName].clusterUpdate.LBPolicy, // one for the whole update list..., shared/the same?
+		lbPolicy:    ch.createdClusters[ch.rootClusterName].clusterUpdate.LBPolicy,
 		updates:     clusterUpdate,
 	}
 }

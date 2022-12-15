@@ -146,7 +146,7 @@ type ClusterUpdate struct {
 	DNSHostName string
 	// PrioritizedClusterNames is used only for cluster type aggregate. It represents
 	// a prioritized list of cluster names.
-	PrioritizedClusterNames []string // yes, it is for the whole cluster
+	PrioritizedClusterNames []string
 
 	// LBPolicy is the lb policy for this cluster.
 	//

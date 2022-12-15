@@ -52,7 +52,6 @@ func ConvertToServiceConfig(policy *v3clusterpb.LoadBalancingPolicy, depth int) 
 	// "This function iterate over the list of policy messages in
 	// LoadBalancingPolicy, attempting to convert each one to gRPC form,
 	// stopping at the first supported policy." - A52
-
 	for _, plcy := range policy.Policies { // yeah what if policy is nil?
 		// The policy message contains a TypedExtensionConfig
 		// message with the configuration information. TypedExtensionConfig in turn
@@ -98,7 +97,6 @@ func ConvertToServiceConfig(policy *v3clusterpb.LoadBalancingPolicy, depth int) 
 
 // "the registry will maintain a set of converters that are able to map
 // from the xDS LoadBalancingPolicy to the internal gRPC JSON format"
-
 func convertRingHash(rhCfg *ring_hashv3.RingHash) (json.RawMessage, error) {
 	// the only thing validated here is the XX_HASH conversion algorithm, move
 	// the other validations to the lb policy ParseConfig(), keep it consistent
@@ -115,7 +113,7 @@ func convertRingHash(rhCfg *ring_hashv3.RingHash) (json.RawMessage, error) {
 		maxSize = max.GetValue()
 	}
 
-	rhLBCfg := ringhash.LBConfig{ // this implements the interface, and is a struct that can get marshaled to JSON
+	rhLBCfg := ringhash.LBConfig{
 		MinRingSize: minSize,
 		MaxRingSize: maxSize,
 	}
@@ -123,15 +121,13 @@ func convertRingHash(rhCfg *ring_hashv3.RingHash) (json.RawMessage, error) {
 	// "The gRPC policy name will be ring_hash_experimental."
 	bc := internalserviceconfig.BalancerConfig{
 		Name: "ring_hash_experimental",
-		Config: rhLBCfg, // externalserrviceconfig.BalancerCOnfig, which gets directly marshaled into JSON
+		Config: rhLBCfg,
 	}
 	lbCfgJSON, err := json.Marshal(bc)
 	if err != nil { // shouldn't happen
 		return nil, fmt.Errorf("error unmarshaling json in ring hash converter: %v", err)
 	}
 	return lbCfgJSON, nil
-
-	// ringhash.LBConfig // this will cause an absurd amount of circular dependencies...wait no this isn't the xdsclient, actually maybe not? if so maybe don't maybe move this to the client
 }
 
 func convertRoundRobin() (json.RawMessage, error) {
@@ -162,7 +158,7 @@ func convertCustomPolicyV3(typedStruct *v3.TypedStruct) (json.RawMessage, error)
 	return convertCustomPolicy(typedStruct.GetTypeUrl(), typedStruct.GetValue())
 }
 
-func convertCustomPolicyV1(typedStruct *v1.TypedStruct /*is this the right type i.e. import path*/) (json.RawMessage, error) {
+func convertCustomPolicyV1(typedStruct *v1.TypedStruct /*is this the right type? i.e. import path*/) (json.RawMessage, error) {
 	return convertCustomPolicy(typedStruct.GetTypeUrl(), typedStruct.GetValue())
 }
 

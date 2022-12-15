@@ -47,17 +47,14 @@ type XDSClient interface {
 	Close()
 }
 
-
-// will need these two functions in custom lb for locality weight map
-
 // FromResolverState returns the Client from state, or nil if not present.
-func FromResolverState(state resolver.State) XDSClient { // similar to this, only used in the tree as needed
+func FromResolverState(state resolver.State) XDSClient {
 	cs, _ := state.Attributes.Value(clientKey).(XDSClient)
 	return cs
 }
 
 // SetClient sets c in state and returns the new state.
-func SetClient(state resolver.State, c XDSClient) resolver.State { // why is this called in cds? Maybe a whole new resolver state?
+func SetClient(state resolver.State, c XDSClient) resolver.State {
 	state.Attributes = state.Attributes.WithValue(clientKey, c)
 	return state
 }
