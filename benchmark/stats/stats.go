@@ -209,7 +209,7 @@ func (f Features) partialString(b *bytes.Buffer, wantFeatures []bool, sep, delim
 			case EnablePreloaderIndex:
 				b.WriteString(fmt.Sprintf("Preloader%v%v%v", sep, f.EnablePreloader, delim))
 			case ClientReadBufferSize:
-				b.WriteString(fmt.Sprintf("ClientReadBufferSize%v%v%v", sep, f.ClientWriteBufferSize, delim))
+				b.WriteString(fmt.Sprintf("ClientReadBufferSize%v%v%v", sep, f.ClientReadBufferSize, delim))
 			case ClientWriteBufferSize:
 				b.WriteString(fmt.Sprintf("ClientWriteBufferSize%v%v%v", sep, f.ClientWriteBufferSize, delim))
 			case ServerReadBufferSize:
