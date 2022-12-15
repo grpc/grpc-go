@@ -102,7 +102,7 @@ type clusterImplBalancer struct {
 	xdsClient xdsclient.XDSClient
 
 	config           *LBConfig
-	childLB          balancer.Balancer
+	childLB          balancer.Balancer // switch this to graceful switch
 	cancelLoadReport func()
 	edsServiceName   string
 	lrsServer        *bootstrap.ServerConfig
@@ -230,7 +230,14 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 	// Need to check for potential errors at the beginning of this function, so
 	// that on errors, we reject the whole config, instead of applying part of
 	// it.
-	bb := balancer.Get(newConfig.ChildPolicy.Name)
+
+
+	// yup cluster impl already has the plumbing, you pull builder off registry
+	// and when you switch to graceful switch you call SwitchTo() is all you need to do here
+
+	// and then WRR Locality policy itself
+
+	bb := balancer.Get(newConfig.ChildPolicy.Name) // gets from registry with name, then builds that, I feel like this needs graceful switch
 	if bb == nil {
 		return fmt.Errorf("balancer %q not registered", newConfig.ChildPolicy.Name)
 	}
@@ -251,7 +258,7 @@ func (b *clusterImplBalancer) UpdateClientConnState(s balancer.ClientConnState) 
 		return err
 	}
 
-	// If child policy is a different type, recreate the sub-balancer.
+	// If child policy is a different type, recreate the sub-balancer. ** might want to switch to graceful switch
 	if b.config == nil || b.config.ChildPolicy.Name != newConfig.ChildPolicy.Name {
 		if b.childLB != nil {
 			b.childLB.Close()

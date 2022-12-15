@@ -401,15 +401,51 @@ func (b *cdsBalancer) handleWatchUpdate(update clusterHandlerUpdate) {
 	// lbPolicy is set only when the policy is ringhash. The default (when it's
 	// not set) is roundrobin. And similarly, we only need to set XDSLBPolicy
 	// for ringhash (it also defaults to roundrobin).
-	if lbp := update.lbPolicy; lbp != nil {
+	if lbp := update.lbPolicy; lbp != nil /* <- represents branch of rr vs. ring hash*/ { // switch this to just put json on directly, but it needs to fill out an internal struct which represents JSON
+		// Problem: I have this json.RawMessage []byte, need to make it an internal struct representation to send downward
+		update.lbPolicy // json.RawMessage []byte, need to fill out an internal struct...? for the lower levels?
+		// ^^^ json.RawMessage []byte
+		/*
+		type LBConfig struct {
+		    serviceconfig.LoadBalancingConfig `json:"-"`
+		    DiscoveryMechanisms               []DiscoveryMechanism                  `json:"discoveryMechanisms,omitempty"`
+		    XDSLBPolicy                       *serviceconfig.BalancerConfig `json:"xdsLbPolicy,omitempty"`
+		}
+		*/
+		// Switch XDSLBPolicy to a json? is there any json.RawMessage elsewhere in the balancerConfigs in the codebase?
+		// Something about internal struct representation in Outlier Detection
+
+		// Does anything mess up if you stick a rawJSON in this balancer config?
+
+		// It will be the responsibility of the XdsClient to validate the
+		// converted configuration. It will do this by having the gRPC LB policy
+		// registry parse the configuration.
+
+		// so once it gets to this point in the system, it has already been validated.
+		// json that is validated either a. you stick that json on this config
+		// or b. you convert JSON to internal struct than stick it on config?
+
+		// these are already correct types in configs (internalserviceconfig.BalancerConfig)
+		// I could just unmarshal it here (only place needed), and add extra validation but it's already been
+		// validated so it's fine...? but then how to deal with error?
+
+
+		// So in all places split into
+
+		// First one simply parsing the config from JSON into struct. We want this one.
+
+		// Second one validates there was a child found
+
 		lbCfg.XDSLBPolicy = &internalserviceconfig.BalancerConfig{
 			Name: ringhash.Name,
-			Config: &ringhash.LBConfig{
+			Config: &ringhash.LBConfig{ // this is a specific type...this needs to switch to "builds configuration for xds_cluster_resolver, including the configuration from xDS client"
 				MinRingSize: lbp.MinimumRingSize,
 				MaxRingSize: lbp.MaximumRingSize,
 			},
 		}
 	}
+
+
 
 	ccState := balancer.ClientConnState{
 		ResolverState:  xdsclient.SetClient(resolver.State{}, b.xdsClient),

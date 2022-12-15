@@ -55,7 +55,7 @@ func (bc *BalancerConfig) MarshalJSON() ([]byte, error) {
 		// If config is nil, return empty config `{}`.
 		return []byte(fmt.Sprintf(`[{%q: %v}]`, bc.Name, "{}")), nil
 	}
-	c, err := json.Marshal(bc.Config) // this takes externalserviceconfig.LoadBalancingConfig and marshals into JSON
+	c, err := json.Marshal(bc.Config)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +83,7 @@ func (bc *BalancerConfig) UnmarshalJSON(b []byte) error {
 		if len(lbcfg) != 1 {
 			return fmt.Errorf("invalid loadBalancingConfig: entry %v does not contain exactly 1 policy/config pair: %q", i, lbcfg)
 		}
-
+r
 		var (
 			name    string
 			jsonCfg json.RawMessage

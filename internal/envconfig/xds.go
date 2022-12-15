@@ -44,6 +44,7 @@ const (
 	outlierDetectionSupportEnv   = "GRPC_EXPERIMENTAL_ENABLE_OUTLIER_DETECTION"
 	federationEnv                = "GRPC_EXPERIMENTAL_XDS_FEDERATION"
 	rlsInXDSEnv                  = "GRPC_EXPERIMENTAL_XDS_RLS_LB"
+	customLBPolicyEnv            = "GRPC_EXPERIMENTAL_XDS_CUSTOM_LB_CONFIG"
 
 	c2pResolverTestOnlyTrafficDirectorURIEnv = "GRPC_TEST_ONLY_GOOGLE_C2P_RESOLVER_TRAFFIC_DIRECTOR_URI"
 )
@@ -90,6 +91,11 @@ var (
 	// XDSFederation indicates whether federation support is enabled.
 	XDSFederation = strings.EqualFold(os.Getenv(federationEnv), "true")
 
+	// XDSCustomLBPolicy indicates whether Custom LB Policies are
+	// enabled, which can be enabled by setting the environment variable
+	// "GRPC_EXPERIMENTAL_XDS_CUSTOM_LB_CONFIG" to "true".
+	XDSCustomLBPolicy = strings.EqualFold(os.Getenv(customLBPolicyEnv), "true")
+
 	// XDSRLS indicates whether processing of Cluster Specifier plugins and
 	// support for the RLS CLuster Specifier is enabled, which can be enabled by
 	// setting the environment variable "GRPC_EXPERIMENTAL_XDS_RLS_LB" to
@@ -98,4 +104,6 @@ var (
 
 	// C2PResolverTestOnlyTrafficDirectorURI is the TD URI for testing.
 	C2PResolverTestOnlyTrafficDirectorURI = os.Getenv(c2pResolverTestOnlyTrafficDirectorURIEnv)
+
+
 )

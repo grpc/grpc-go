@@ -217,6 +217,12 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 		name       string
 		cluster    *v3clusterpb.Cluster
 		wantUpdate ClusterUpdate
+		// this wantUpdate has either
+		// a. a nil lb config - equivalent to wrr locality + rr, so switch to that JSON (this is a constant you can just make this a variable)
+
+		// b. a populated lb config with ring hash, switch that to ring hash json - this only has two configurable knobs
+
+		// Also moved validations for ring hash from here to the balancer.go implementation
 	}{
 		{
 			name: "happy-case-logical-dns",
@@ -249,6 +255,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				ClusterName: clusterName,
 				ClusterType: ClusterTypeLogicalDNS,
 				DNSHostName: "dns_host:8080",
+				LBPolicy: /*wrr{rr{}} json var*/,
 			},
 		},
 		{
@@ -268,6 +275,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			wantUpdate: ClusterUpdate{
 				ClusterName: clusterName, LRSServerConfig: ClusterLRSOff, ClusterType: ClusterTypeAggregate,
 				PrioritizedClusterNames: []string{"a", "b", "c"},
+				LBPolicy: /*wrr{rr{}} json var*/,
 			},
 		},
 		{
@@ -284,7 +292,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 				},
 				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
-			wantUpdate: emptyUpdate,
+			wantUpdate: emptyUpdate, // add LBPolicy: /*wrr{rr{}} json var*/, to this empty update
 		},
 		{
 			name: "happy-case-no-lrs",
@@ -323,7 +331,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf},
+			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf, LBPolicy: /*wrr{rr{}} json var*/,},
 		},
 		{
 			name: "happiest-case-with-circuitbreakers",
@@ -357,7 +365,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 					},
 				},
 			},
-			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf, MaxRequests: func() *uint32 { i := uint32(512); return &i }()},
+			wantUpdate: ClusterUpdate{ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf, MaxRequests: func() *uint32 { i := uint32(512); return &i }(), LBPolicy: /*wrr{rr{}} json var*/},
 		},
 		{
 			name: "happiest-case-with-ring-hash-lb-policy-with-default-config",
@@ -381,7 +389,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 			wantUpdate: ClusterUpdate{
 				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf,
-				LBPolicy: &ClusterLBPolicyRingHash{MinimumRingSize: defaultRingHashMinSize, MaximumRingSize: defaultRingHashMaxSize},
+				LBPolicy: /*json for ring hash lb policy{defaultRingHashMinSize, defaultRingHashMaxSize}*/&ClusterLBPolicyRingHash{MinimumRingSize: defaultRingHashMinSize, MaximumRingSize: defaultRingHashMaxSize},
 			},
 		},
 		{
@@ -412,7 +420,7 @@ func (s) TestValidateCluster_Success(t *testing.T) {
 			},
 			wantUpdate: ClusterUpdate{
 				ClusterName: clusterName, EDSServiceName: serviceName, LRSServerConfig: ClusterLRSServerSelf,
-				LBPolicy: &ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
+				LBPolicy: /*json for ring hash lb policy{10, 100}*/&ClusterLBPolicyRingHash{MinimumRingSize: 10, MaximumRingSize: 100},
 			},
 		},
 	}

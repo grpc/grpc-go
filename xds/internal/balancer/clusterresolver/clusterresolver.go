@@ -212,6 +212,7 @@ func (b *clusterResolverBalancer) updateChildConfig() error {
 		b.child = newChildBalancer(b.priorityBuilder, b.cc, b.bOpts)
 	}
 
+	// Emits JSON - then priority marshals it into a priority config
 	childCfgBytes, addrs, err := buildPriorityConfigJSON(b.priorities, b.config.XDSLBPolicy)
 	if err != nil {
 		return fmt.Errorf("failed to build priority balancer config: %v", err)
@@ -223,9 +224,9 @@ func (b *clusterResolverBalancer) updateChildConfig() error {
 	b.logger.Infof("build balancer config: %v", pretty.ToJSON(childCfg))
 	return b.child.UpdateClientConnState(balancer.ClientConnState{
 		ResolverState: resolver.State{
-			Addresses:     addrs,
+			Addresses:     addrs, // sends the address like this - so logic for addresses is same. for how it builds. How do addresses logically map? i.e. is there any change in address logic now that wrr_locality combines the priority child config with locality weights?
 			ServiceConfig: b.configRaw,
-			Attributes:    b.attrsWithClient,
+			Attributes:    b.attrsWithClient, // this is where you stick the locality weight map into - "Passed in a similar way as the xDS Client"
 		},
 		BalancerConfig: childCfg,
 	})
@@ -332,7 +333,7 @@ func (b *clusterResolverBalancer) UpdateClientConnState(state balancer.ClientCon
 			return balancer.ErrBadResolverState
 		}
 		b.xdsClient = c
-		b.attrsWithClient = state.ResolverState.Attributes
+		b.attrsWithClient = state.ResolverState.Attributes // allows associated subchannels to be resued...associated with what?
 	}
 
 	b.updateCh.Put(&ccUpdate{state: state})

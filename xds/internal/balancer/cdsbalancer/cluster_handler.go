@@ -17,6 +17,7 @@
 package cdsbalancer
 
 import (
+	"encoding/json"
 	"errors"
 	"sync"
 
@@ -38,13 +39,15 @@ var (
 type clusterHandlerUpdate struct {
 	// securityCfg is the Security Config from the top (root) cluster.
 	securityCfg *xdsresource.SecurityConfig
+
 	// lbPolicy is the lb policy from the top (root) cluster.
 	//
 	// Currently, we only support roundrobin or ringhash, and since roundrobin
 	// does need configs, this is only set to the ringhash config, if the policy
 	// is ringhash. In the future, if we support more policies, we can make this
 	// an interface, and set it to config of the other policies.
-	lbPolicy *xdsresource.ClusterLBPolicyRingHash
+	// lbPolicy *xdsresource.ClusterLBPolicyRingHash
+	lbPolicy json.RawMessage
 
 	// updates is a list of ClusterUpdates from all the leaf clusters.
 	updates []xdsresource.ClusterUpdate
@@ -125,7 +128,7 @@ func (ch *clusterHandler) constructClusterUpdate() {
 	}
 	ch.updateChannel <- clusterHandlerUpdate{
 		securityCfg: ch.createdClusters[ch.rootClusterName].clusterUpdate.SecurityCfg,
-		lbPolicy:    ch.createdClusters[ch.rootClusterName].clusterUpdate.LBPolicy,
+		lbPolicy:    ch.createdClusters[ch.rootClusterName].clusterUpdate.LBPolicy, // one for the whole update list..., shared/the same?
 		updates:     clusterUpdate,
 	}
 }
