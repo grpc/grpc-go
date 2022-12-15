@@ -888,21 +888,29 @@ type lazyConn struct {
 	beLazy int32
 }
 
-// errMsgContainsPossibleStopMessages addresses around the timing of when TCP packets
-// are sent from client to server, and when we tell the server to stop, so we need to account for both
-// of these possible error messages:
-//  1. If the call to ss.S.Stop() causes the server's sockets to close while there's still in-fight
-//     data from the client on the TCP connection, then the kernel can send an RST back to the client (also
-//     see https://stackoverflow.com/questions/33053507/econnreset-in-send-linux-c). Note that while this
-//     condition is expected to be rare due to the rpcStartedOnServer synchronization, in theory it should
-//     be possible, e.g. if the client sends a BDP ping at the right time.
-//  2. If, for example, the call to ss.S.Stop() happens after the RPC headers have been received at the
-//     server, then the TCP connection can shutdown gracefully when the server's socket closes. raceyness around checks if the error message when checking reading frames
+// possible conn closed errors.
 const possibleConnResetMsg = "connection reset by peer"
 const possibleEOFMsg = "error reading from server: EOF"
 
-func errMsgContainsPossibleStopMessages(err error) bool {
-	return strings.Contains(err.Error(), possibleConnResetMsg) || strings.Contains(err.Error(), possibleEOFMsg) || err == io.EOF
+// isConnClosedErr checks the error msg for possible conn closed messages. There
+// is a raceyness in the timing of when TCP packets are sent from client to
+// server, and when we tell the server to stop, so we need to check for both of
+// these possible error messages:
+//  1. If the call to ss.S.Stop() causes the server's sockets to close while
+//     there's still in-fight data from the client on the TCP connection, then
+//     the kernel can send an RST back to the client (also see
+//     https://stackoverflow.com/questions/33053507/econnreset-in-send-linux-c).
+//     Note that while this condition is expected to be rare due to the
+//     rpcStartedOnServer synchronization, in theory it should be possible,
+//     e.g. if the client sends a BDP ping at the right time.
+//  2. If, for example, the call to ss.S.Stop() happens after the RPC headers
+//     have been received at the server, then the TCP connection can shutdown
+//     gracefully when the server's socket closes.
+func isConnClosedErr(err error) bool {
+	errContainsConnResetMsg := strings.Contains(err.Error(), possibleConnResetMsg)
+	errContainsEOFMsg := strings.Contains(err.Error(), possibleEOFMsg)
+
+	return errContainsConnResetMsg || errContainsEOFMsg || err == io.EOF
 }
 
 func (l *lazyConn) Write(b []byte) (int, error) {
@@ -1043,10 +1051,10 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	// the RPC has been started on it.
 	<-rpcStartedOnServer
 	ss.S.Stop()
-	// The precise behavior of this test is subject to raceyness around the timing of when TCP packets
-	// are sent from client to server, and when we tell the server to stop, so we need to account for both
-	// of these possible error messages
-	if _, err := stream.Recv(); err == nil || !errMsgContainsPossibleStopMessages(err) {
+	// The precise behavior of this test is subject to raceyness around the timing
+	// of when TCP packets are sent from client to server, and when we tell the
+	// server to stop, so we need to account for both possible error messages.
+	if _, err := stream.Recv(); err == nil || !isConnClosedErr(err) {
 		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: %q OR %q", stream, err, possibleConnResetMsg, possibleEOFMsg)
 	}
 	close(rpcDoneOnClient)
@@ -6748,31 +6756,37 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
 	// Non-gRPC content-type fallback path.
 	for httpCode := range transport.HTTPStatusConvTab {
-		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
+		if err := doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
 			":status", fmt.Sprintf("%d", httpCode),
 			"content-type", "text/html", // non-gRPC content type to switch to HTTP mode.
 			"grpc-status", "1", // Make up a gRPC status error
 			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
-		})
+		}); err != nil {
+			t.Error(err)
+		}
 	}
 
 	// Missing content-type fallback path.
 	for httpCode := range transport.HTTPStatusConvTab {
-		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
+		if err := doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
 			":status", fmt.Sprintf("%d", httpCode),
 			// Omitting content type to switch to HTTP mode.
 			"grpc-status", "1", // Make up a gRPC status error
 			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
-		})
+		}); err != nil {
+			t.Error(err)
+		}
 	}
 
 	// Malformed HTTP status when fallback.
-	doHTTPHeaderTest(t, codes.Internal, []string{
+	if err := doHTTPHeaderTest(t, codes.Internal, []string{
 		":status", "abc",
 		// Omitting content type to switch to HTTP mode.
 		"grpc-status", "1", // Make up a gRPC status error
 		"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
-	})
+	}); err != nil {
+		t.Error(err)
+	}
 }
 
 // Testing erroneous ResponseHeader or Trailers-only (delivered in the first HEADERS frame).
@@ -6818,7 +6832,9 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 			errCode: codes.Unavailable,
 		},
 	} {
-		doHTTPHeaderTest(t, test.errCode, test.header)
+		if err := doHTTPHeaderTest(t, test.errCode, test.header); err != nil {
+			t.Error(err)
+		}
 	}
 }
 
@@ -6871,7 +6887,9 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer)
+			if err := doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer); err != nil {
+				t.Error(err)
+			}
 		})
 
 	}
@@ -6882,7 +6900,9 @@ func (s) TestHTTPHeaderFrameErrorHandlingMoreThanTwoHeaders(t *testing.T) {
 		":status", "200",
 		"content-type", "application/grpc",
 	}
-	doHTTPHeaderTest(t, codes.Internal, header, header, header)
+	if err := doHTTPHeaderTest(t, codes.Internal, header, header, header); err != nil {
+		t.Fatal(err)
+	}
 }
 
 type httpServerResponse struct {
@@ -6947,13 +6967,13 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 		}
 		writer.Flush() // necessary since client is expecting preface before declaring connection fully setup.
 		var sid uint32
-		// Loop until conn is closed and framer returns possible Stop error messages
+		// Loop until framer returns possible conn closed errors.
 		for requestNum := 0; ; requestNum = (requestNum + 1) % len(s.responses) {
 			// Read frames until a header is received.
 			for {
 				frame, err := framer.ReadFrame()
 				if err != nil {
-					if !errMsgContainsPossibleStopMessages(err) {
+					if !isConnClosedErr(err) {
 						t.Errorf("Error at server-side while reading frame. got: %q, want: rpc error containing substring %q OR %q", err, possibleConnResetMsg, possibleEOFMsg)
 					}
 					return
@@ -7011,11 +7031,10 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 	}()
 }
 
-func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string) {
-	t.Helper()
+func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string) error {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("Failed to listen. Err: %v", err)
+		return fmt.Errorf("failed to listen. Err: %v", err)
 	}
 	defer lis.Close()
 	server := &httpServer{
@@ -7024,7 +7043,7 @@ func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string
 	server.start(t, lis)
 	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to dial due to err: %v", err)
+		return fmt.Errorf("failed to dial due to err: %v", err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -7032,11 +7051,12 @@ func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string
 	client := testpb.NewTestServiceClient(cc)
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
-		t.Fatalf("error creating stream due to err: %v", err)
+		return fmt.Errorf("error creating stream due to err: %v", err)
 	}
 	if _, err := stream.Recv(); err == nil || status.Code(err) != errCode {
-		t.Fatalf("stream.Recv() = _, %v, want error code: %v", err, errCode)
+		return fmt.Errorf("stream.Recv() = _, %v, want error code: %v", err, errCode)
 	}
+	return nil
 }
 
 func (s) TestClientCancellationPropagatesUnary(t *testing.T) {
