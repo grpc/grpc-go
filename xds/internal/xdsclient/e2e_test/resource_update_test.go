@@ -67,10 +67,7 @@ func startFakeManagementServer(t *testing.T) (*fakeserver.Server, func()) {
 
 func compareUpdateMetadata(ctx context.Context, dumpFunc func() map[string]xdsresource.UpdateWithMD, want map[string]xdsresource.UpdateWithMD) error {
 	var lastErr error
-	for {
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("Timeout when waiting for expected update metadata: %v", lastErr)
-		}
+	for ; ctx.Err() == nil; <-time.After(100 * time.Millisecond) {
 		cmpOpts := cmp.Options{
 			cmpopts.EquateEmpty(),
 			cmp.Comparer(func(a, b time.Time) bool { return true }),
@@ -83,8 +80,8 @@ func compareUpdateMetadata(ctx context.Context, dumpFunc func() map[string]xdsre
 			return nil
 		}
 		lastErr = fmt.Errorf("unexpected diff in metadata, diff (-want +got):\n%s\n want: %+v\n got: %+v", diff, want, gotUpdateMetadata)
-		time.Sleep(100 * time.Millisecond)
 	}
+	return fmt.Errorf("timeout when waiting for expected update metadata: %v", lastErr)
 }
 
 // TestHandleListenerResponseFromManagementServer covers different scenarios

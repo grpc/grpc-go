@@ -36,7 +36,7 @@ func (c *clientImpl) ReportLoad(server *bootstrap.ServerConfig) (*load.Store, fu
 		return nil, func() {}
 	}
 	// Hold the ref before starting load reporting.
-	a.ref()
+	a.refLocked()
 	store, cancelF := a.reportLoad()
 	return store, func() {
 		cancelF()

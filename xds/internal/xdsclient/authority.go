@@ -50,15 +50,16 @@ type resourceState struct {
 	wState watchState  // State of the watch
 }
 
-// authority is a combination of pubsub and the controller for this authority.
+// authority wraps all state associated with a single management server. It
+// contains the transport used to communicate with the management server and a
+// cache of resource state for resources requested from the management server.
 //
-// Note that it might make sense to use one pubsub for all the resources (for
-// all the controllers). One downside is the handling of StoW APIs (LDS/CDS).
-// These responses contain all the resources from that control plane, so pubsub
-// will need to keep lists of resources from each control plane, to know what
-// are removed.
+// Bootstrap configuration could contain multiple entries in the authorities map
+// that share the same server config (server address and credentials to use). We
+// share the same authority instance amongst these entries, and the reference
+// counting is taken care of by the `clientImpl` type.
 type authority struct {
-	config             *bootstrap.ServerConfig       // Server config for this authority
+	serverCfg          *bootstrap.ServerConfig       // Server config for this authority
 	bootstrapCfg       *bootstrap.Config             // Full bootstrap configuration
 	refCount           int                           // Reference count of watches referring to this authority
 	serializer         *callbackSerializer           // Callback serializer for invoking watch callbacks
@@ -77,6 +78,53 @@ type authority struct {
 	// actual state of the resource.
 	resourcesMu sync.Mutex
 	resources   map[xdsresource.Type]map[string]*resourceState
+}
+
+// authorityArgs is a convenience struct to wrap arguments required to create a
+// new authority. All fields here correspond directly to appropriate fields
+// stored in the authority struct.
+type authorityArgs struct {
+	// The reason for passing server config and bootstrap config separately
+	// (although the former is part of the latter) is because authorities in the
+	// bootstrap config might contain an empty server config, and in this case,
+	// the top-level server config is to be used.
+	//
+	// There are two code paths from where a new authority struct might be
+	// created. One is when a watch is registered for a resource, and one is
+	// when load reporting needs to be started. We have the authority name in
+	// the first case, but do in the second. We only have the server config in
+	// the second case.
+	serverCfg          *bootstrap.ServerConfig
+	bootstrapCfg       *bootstrap.Config
+	serializer         *callbackSerializer
+	resourceTypeGetter func(string) xdsresource.Type
+	watchExpiryTimeout time.Duration
+	logger             *grpclog.PrefixLogger
+}
+
+func newAuthority(args authorityArgs) (*authority, error) {
+	ret := &authority{
+		serverCfg:          args.serverCfg,
+		bootstrapCfg:       args.bootstrapCfg,
+		serializer:         args.serializer,
+		resourceTypeGetter: args.resourceTypeGetter,
+		watchExpiryTimeout: args.watchExpiryTimeout,
+		logger:             args.logger,
+		resources:          make(map[xdsresource.Type]map[string]*resourceState),
+	}
+
+	tr, err := transport.New(transport.Options{
+		ServerCfg:          *args.serverCfg,
+		UpdateHandler:      ret.handleResourceUpdate,
+		StreamErrorHandler: ret.newConnectionError,
+		Logger:             args.logger,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("creating new transport to %q: %v", args.serverCfg, err)
+	}
+	ret.transport = tr
+	return ret, nil
+
 }
 
 func (a *authority) handleResourceUpdate(resourceUpdate transport.ResourceUpdate) error {
@@ -250,21 +298,19 @@ func (a *authority) newConnectionError(err error) {
 	}
 }
 
-// caller must hold parent's authorityMu.
-func (a *authority) ref() {
+// Increments the reference count. Caller must hold parent's authorityMu.
+func (a *authority) refLocked() {
 	a.refCount++
 }
 
-// caller must hold parent's authorityMu.
-func (a *authority) unref() int {
+// Decrements the reference count. Caller must hold parent's authorityMu.
+func (a *authority) unrefLocked() int {
 	a.refCount--
 	return a.refCount
 }
 
 func (a *authority) close() {
-	if a.transport != nil {
-		a.transport.Close()
-	}
+	a.transport.Close()
 }
 
 func (a *authority) watchResource(rType xdsresource.Type, resourceName string, watcher xdsresource.ResourceWatcher) func() {
@@ -295,7 +341,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			a.handleWatchTimerExpiry(state, fmt.Errorf("watch for resource %q of type %s timed out", resourceName, rType.TypeEnum().String()))
 		})
 		resources[resourceName] = state
-		a.sendDiscoveryRequest(rType, resources)
+		a.sendDiscoveryRequestLocked(rType, resources)
 	}
 	// Always add the new watcher to the set of watchers.
 	state.watchers[watcher] = true
@@ -326,7 +372,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 		// associated with it, and instruct the transport to send a request
 		// which does not include this resource name.
 		delete(resources, resourceName)
-		a.sendDiscoveryRequest(rType, resources)
+		a.sendDiscoveryRequestLocked(rType, resources)
 	}
 }
 
@@ -345,7 +391,12 @@ func (a *authority) handleWatchTimerExpiry(state *resourceState, err error) {
 	}
 }
 
-func (a *authority) sendDiscoveryRequest(rType xdsresource.Type, resources map[string]*resourceState) {
+// sendDiscoveryRequestLocked sends a discovery request for the specified
+// resource type and resource names. Even though this method does not directly
+// access the resource cache, it is important that `resourcesMu` be beld when
+// calling this method to ensure that a consistent snapshot of resource names is
+// being requested.
+func (a *authority) sendDiscoveryRequestLocked(rType xdsresource.Type, resources map[string]*resourceState) {
 	resourcesToRequest := make([]string, len(resources))
 	i := 0
 	for name := range resources {

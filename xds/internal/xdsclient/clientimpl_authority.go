@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -70,12 +69,13 @@ func (c *clientImpl) findAuthority(n *xdsresource.Name) (_ *authority, unref fun
 	// authority.
 	//
 	// unref() will be done when the watch is canceled.
-	a.ref()
+	a.refLocked()
 	return a, func() { c.unrefAuthority(a) }, nil
 }
 
-// newAuthorityLocked creates a new authority for the config. But before that, it
-// checks the cache to see if an authority for this config already exists.
+// newAuthorityLocked creates a new authority for the given config.  If an
+// authority for the given config exists in the cache, it is returned instead of
+// creating a new one.
 //
 // The caller must take a reference of the returned authority before using, and
 // unref afterwards.
@@ -103,36 +103,19 @@ func (c *clientImpl) newAuthorityLocked(config *bootstrap.ServerConfig) (_ *auth
 	}
 
 	// Make a new authority since there's no existing authority for this config.
-	ret, err := c.newAuthority(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create new authority for config %q: %v", config.String(), err)
-	}
-	// Add it to the cache, so it will be reused.
-	c.authorities[configStr] = ret
-	return ret, nil
-}
-
-func (c *clientImpl) newAuthority(config *bootstrap.ServerConfig) (*authority, error) {
-	ret := &authority{
-		config:             config,
+	ret, err := newAuthority(authorityArgs{
+		serverCfg:          config,
 		bootstrapCfg:       c.config,
 		serializer:         c.serializer,
 		resourceTypeGetter: c.resourceTypes.get,
 		watchExpiryTimeout: c.watchExpiryTimeout,
 		logger:             c.logger,
-		resources:          make(map[xdsresource.Type]map[string]*resourceState),
-	}
-	tr, err := transport.New(transport.Options{
-		ServerCfg:          *config,
-		UpdateHandler:      ret.handleResourceUpdate,
-		StreamErrorHandler: ret.newConnectionError,
-		Logger:             c.logger,
 	})
 	if err != nil {
-		ret.close()
-		return nil, fmt.Errorf("failed to create a new transport : %v", err)
+		return nil, fmt.Errorf("creating new authority for config %q: %v", config.String(), err)
 	}
-	ret.transport = tr
+	// Add it to the cache, so it will be reused.
+	c.authorities[configStr] = ret
 	return ret, nil
 }
 
@@ -146,10 +129,10 @@ func (c *clientImpl) newAuthority(config *bootstrap.ServerConfig) (*authority, e
 func (c *clientImpl) unrefAuthority(a *authority) {
 	c.authorityMu.Lock()
 	defer c.authorityMu.Unlock()
-	if a.unref() > 0 {
+	if a.unrefLocked() > 0 {
 		return
 	}
-	configStr := a.config.String()
+	configStr := a.serverCfg.String()
 	delete(c.authorities, configStr)
 	c.idleAuthorities.Add(configStr, a, func() {
 		a.close()

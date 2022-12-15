@@ -21,6 +21,7 @@ package csds_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"testing"
@@ -92,7 +93,7 @@ func (s) TestCSDS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { mgmtServer.Stop() })
+	defer mgmtServer.Stop()
 
 	// Create a bootstrap file in a temporary directory.
 	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
@@ -103,7 +104,7 @@ func (s) TestCSDS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { bootstrapCleanup() })
+	defer bootstrapCleanup()
 
 	// Create an xDS client. This will end up using the same singleton as used
 	// by the CSDS service.
@@ -111,7 +112,7 @@ func (s) TestCSDS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	t.Cleanup(func() { xdsC.Close() })
+	defer xdsC.Close()
 
 	// Initialize an gRPC server and register CSDS on it.
 	server := grpc.NewServer()
@@ -120,10 +121,10 @@ func (s) TestCSDS(t *testing.T) {
 		t.Fatal(err)
 	}
 	v3statuspbgrpc.RegisterClientStatusDiscoveryServiceServer(server, csdss)
-	t.Cleanup(func() {
+	defer func() {
 		server.Stop()
 		csdss.Close()
-	})
+	}()
 
 	// Create a local listener and pass it to Serve().
 	lis, err := testutils.LocalTCPListener()
@@ -348,7 +349,16 @@ func makeGenericXdsConfig(typeURL, name, version string, status v3adminpb.Client
 
 func checkClientStatusResponse(stream v3statuspbgrpc.ClientStatusDiscoveryService_StreamClientStatusClient, want []*v3statuspb.ClientConfig_GenericXdsConfig) error {
 	if err := stream.Send(&v3statuspb.ClientStatusRequest{Node: nil}); err != nil {
-		return fmt.Errorf("failed to send ClientStatusRequest: %v", err)
+		if err != io.EOF {
+			return fmt.Errorf("failed to send ClientStatusRequest: %v", err)
+		}
+		// If the stream has closed, we call Recv() until it returns a non-nil
+		// error to get the actual error on the stream.
+		for {
+			if _, err := stream.Recv(); err != nil {
+				return fmt.Errorf("failed to recv ClientStatusResponse: %v", err)
+			}
+		}
 	}
 	resp, err := stream.Recv()
 	if err != nil {
