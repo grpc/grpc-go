@@ -26,9 +26,6 @@ import (
 	"google.golang.org/grpc/internal"
 )
 
-const maxRecvSize = 998765
-const initialWindowSize = 100
-
 func (s) TestAddExtraDialOptions(t *testing.T) {
 	// Ensure the Dial fails without credentials
 	if _, err := Dial("fake"); err == nil {
@@ -62,6 +59,7 @@ func (s) TestAddExtraDialOptions(t *testing.T) {
 }
 
 func (s) TestAddExtraServerOptions(t *testing.T) {
+	const maxRecvSize = 998765
 	// Set and check the ServerOptions
 	opts := []ServerOption{Creds(insecure.NewCredentials()), MaxRecvMsgSize(maxRecvSize)}
 	internal.AddGlobalServerOptions.(func(opt ...ServerOption))(opts...)
@@ -87,6 +85,8 @@ func (s) TestAddExtraServerOptions(t *testing.T) {
 // option with three individual dial options, and verifies that all three are
 // successfully applied.
 func (s) TestJoinDialOption(t *testing.T) {
+	const maxRecvSize = 998765
+	const initialWindowSize = 100
 	jdo := newJoinDialOption(WithTransportCredentials(insecure.NewCredentials()), WithReadBufferSize(maxRecvSize), WithInitialWindowSize(initialWindowSize))
 	cc, err := Dial("fake", jdo)
 	if err != nil {
@@ -105,6 +105,8 @@ func (s) TestJoinDialOption(t *testing.T) {
 // server option with three individual server options, and verifies that all
 // three are successfully applied.
 func (s) TestJoinServerOption(t *testing.T) {
+	const maxRecvSize = 998765
+	const initialWindowSize = 100
 	jso := newJoinServerOption(Creds(insecure.NewCredentials()), MaxRecvMsgSize(maxRecvSize), InitialWindowSize(initialWindowSize))
 	s := NewServer(jso)
 	if s.opts.maxReceiveMessageSize != maxRecvSize {

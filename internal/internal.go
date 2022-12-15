@@ -79,7 +79,7 @@ var (
 	ClearGlobalDialOptions func()
 	// JoinDialOptions combines the dial options passed as arguments into a
 	// single dial option.
-	JoinDialOptions interface{}
+	JoinDialOptions interface{} // func(...grpc.DialOption) grpc.DialOption
 	// JoinServerOptions combines the server options passed as arguments into a
 	// single server option.
 	JoinServerOptions interface{} // func(...grpc.ServerOption) grpc.ServerOption
