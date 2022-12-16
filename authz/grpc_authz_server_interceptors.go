@@ -17,13 +17,14 @@
 package authz
 
 import (
-	"bytes"
+	//"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
 	"sync/atomic"
 	"time"
 	"unsafe"
+	"log"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -144,15 +145,17 @@ func (i *FileWatcherInterceptor) updateInternalInterceptor() error {
 	if err != nil {
 		return fmt.Errorf("policyFile(%s) read failed: %v", i.policyFile, err)
 	}
+	/*
 	if bytes.Equal(i.policyContents, policyContents) {
 		return nil
-	}
+	}*/
 	i.policyContents = policyContents
 	policyContentsString := string(policyContents)
 	interceptor, err := NewStatic(policyContentsString)
 	if err != nil {
 		return err
 	}
+	log.Printf("StorePointer")
 	atomic.StorePointer(&i.internalInterceptor, unsafe.Pointer(interceptor))
 	logger.Infof("authorization policy reload status: successfully loaded new policy %v", policyContentsString)
 	return nil

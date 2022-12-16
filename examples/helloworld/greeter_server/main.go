@@ -25,8 +25,13 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"io/ioutil"
+	"os"
+	"path"
+	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/authz"
 	pb "google.golang.org/grpc/examples/helloworld/helloworld"
 )
 
@@ -41,17 +46,52 @@ type server struct {
 
 // SayHello implements helloworld.GreeterServer
 func (s *server) SayHello(ctx context.Context, in *pb.HelloRequest) (*pb.HelloReply, error) {
-	log.Printf("Received: %v", in.GetName())
+	//log.Printf("Received: %v", in.GetName())
 	return &pb.HelloReply{Message: "Hello " + in.GetName()}, nil
+}
+
+func createTmpPolicyFile(dirSuffix string, policy []byte) string {
+	// Create a temp directory. Passing an empty string for the first argument
+	// uses the system temp directory.
+	dir, err := ioutil.TempDir("", dirSuffix)
+	if err != nil {
+		log.Printf("ioutil.TempDir() failed: %v", err)
+	}
+	log.Printf("Using tmpdir: %s", dir)
+	// Write policy into file.
+	filename := path.Join(dir, "policy.json")
+	if err := ioutil.WriteFile(filename, policy, os.ModePerm); err != nil {
+		log.Printf("ioutil.WriteFile(%q) failed: %v", filename, err)
+	}
+	log.Printf("Wrote policy %s to file at %s", string(policy), filename)
+	//policyContents, err := ioutil.ReadFile(filename)
+	//log.Printf("policy(%s: %s) read failed: %v", filename, policyContents, err)
+	return filename
 }
 
 func main() {
 	flag.Parse()
+
+	authzPolicy := `{
+				"name": "authz",
+				"allow_rules":
+				[
+					{
+						"name": "allow_all"
+					}
+				]
+			}`
+	file := createTmpPolicyFile("testing", []byte(authzPolicy))
+	i, _ := authz.NewFileWatcher(file, 100*time.Millisecond)
+	defer i.Close()
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	s := grpc.NewServer()
+	s := grpc.NewServer(grpc.ChainUnaryInterceptor(i.UnaryInterceptor))
+	defer s.Stop()
+
 	pb.RegisterGreeterServer(s, &server{})
 	log.Printf("server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
