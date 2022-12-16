@@ -1048,6 +1048,41 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	// Make sure an RLS request is sent out.
 	verifyRLSRequest(t, rlsReqCh, true)
 
+	// Wait for the control channel to become READY, before reading the states
+	// out of the wrapping top-level balancer.
+	//
+	// makeTestRPCAndExpectItToReachBackend repeatedly sends RPCs with short
+	// deadlines until one succeeds. See its docstring for details.
+	//
+	// The following sequence of events is possible:
+	// 1. When the first RPC is attempted above, a pending cache entry is
+	//    created, an RLS request is sent out, and the pick is queued. The
+	//    channel is in CONNECTING state.
+	// 2. When the RLS response arrives, the pending cache entry is moved to the
+	//    data cache, a child policy is created for the target specified in the
+	//    response and a new picker is returned. The channel is still in
+	//    CONNECTING, and retried pick is again queued.
+	// 3. The child policy moves through the standard set of states, IDLE -->
+	//    CONNECTING --> READY. And for each of these state changes, a new
+	//    picker is sent on the channel. But the overall connectivity state of
+	//    the channel is still CONNECTING.
+	// 4. Right around the time when the child policy becomes READY, the
+	//    deadline associated with the first RPC made by
+	//    makeTestRPCAndExpectItToReachBackend() could expire, and it could send
+	//    a new one. And because the internal state of the LB policy now
+	//    contains a child policy which is READY, this RPC will succeed. But the
+	//    RLS LB policy has yet to push a new picker on the channel.
+	// 5. If we read the states seen by the top-level wrapping LB policy without
+	//    waiting for the channel to become READY, there is a possibility that we
+	//    might not see the READY state in there. And if that happens, we will
+	//    see two extra states in the last check made in the test, and thereby
+	//    the test would fail. Waiting for the channel to become READY here
+	//    ensures that the test does not flake because of this rare sequence of
+	//    events.
+	for s := cc.GetState(); s != connectivity.Ready; s = cc.GetState() {
+		cc.WaitForStateChange(ctx, s)
+	}
+
 	// Cache the state changes seen up to this point.
 	states0 := wb.getStates()
 

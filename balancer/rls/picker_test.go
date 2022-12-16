@@ -27,6 +27,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	rlstest "google.golang.org/grpc/internal/testutils/rls"
 	"google.golang.org/grpc/metadata"
@@ -185,10 +186,16 @@ func (s) TestPick_DataCacheMiss_PendingEntryExists(t *testing.T) {
 			}
 			defer cc.Close()
 
-			// Make an RPC and expect it to fail with deadline exceeded error.
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
+			// Make an RPC that results in the RLS request being sent out. And
+			// since the RLS server is configured to block on the first request,
+			// this RPC will block until its context expires. This ensures that
+			// we have a pending cache entry for the duration of the test.
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			makeTestRPCAndVerifyError(ctx, t, cc, codes.DeadlineExceeded, context.DeadlineExceeded)
+			go func() {
+				client := testgrpc.NewTestServiceClient(cc)
+				client.EmptyCall(ctx, &testpb.Empty{})
+			}()
 
 			// Make sure an RLS request is sent out.
 			verifyRLSRequest(t, rlsReqCh, true)
@@ -329,8 +336,9 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_StaleEntry(t *testing.T) {
 			// Start an RLS server and setup the throttler appropriately.
 			rlsServer, rlsReqCh := rlstest.SetupFakeRLSServer(t, nil)
 			var throttler *fakeThrottler
+			firstRPCDone := grpcsync.NewEvent()
 			if test.throttled {
-				throttler = oneTimeAllowingThrottler()
+				throttler = oneTimeAllowingThrottler(firstRPCDone)
 				overrideAdaptiveThrottler(t, throttler)
 			} else {
 				throttler = neverThrottlingThrottler()
@@ -368,6 +376,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_StaleEntry(t *testing.T) {
 
 			// Make sure an RLS request is sent out.
 			verifyRLSRequest(t, rlsReqCh, true)
+			firstRPCDone.Fire()
 
 			// The cache entry has a large maxAge, but a small stateAge. We keep
 			// retrying until the cache entry becomes stale, in which case we expect a
@@ -429,8 +438,9 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntry(t *testing.T) {
 			// Start an RLS server and setup the throttler appropriately.
 			rlsServer, rlsReqCh := rlstest.SetupFakeRLSServer(t, nil)
 			var throttler *fakeThrottler
+			firstRPCDone := grpcsync.NewEvent()
 			if test.throttled {
-				throttler = oneTimeAllowingThrottler()
+				throttler = oneTimeAllowingThrottler(firstRPCDone)
 				overrideAdaptiveThrottler(t, throttler)
 			} else {
 				throttler = neverThrottlingThrottler()
@@ -475,6 +485,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ExpiredEntry(t *testing.T) {
 
 			// Make sure an RLS request is sent out.
 			verifyRLSRequest(t, rlsReqCh, true)
+			firstRPCDone.Fire()
 
 			// Keep retrying the RPC until the cache entry expires. Expected behavior
 			// is dependent on the scenario being tested.
@@ -612,21 +623,26 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_StaleEntry(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// A unary interceptor which does nothing on the first RPC, but
-			// blocks on subsequent RPCs on the fake RLS server until the test
-			// is done. Since we configure the LB policy with a really low value
-			// for stale age, this allows us to simulate the condition where the
-			// LB policy has a stale entry and a pending entry in the cache.
+			// A unary interceptor which simply calls the underlying handler
+			// until the first client RPC is done. We want one client RPC to
+			// succeed to ensure that a data cache entry is created. For
+			// subsequent client RPCs which result in RLS requests, this
+			// interceptor blocks until the test's context expires. And since we
+			// configure the RLS LB policy with a really low value for max age,
+			// this allows us to simulate the condition where the it has an
+			// expired entry and a pending entry in the cache.
 			rlsReqCh := make(chan struct{}, 1)
-			i := 0
+			firstRPCDone := grpcsync.NewEvent()
 			interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-				rlsReqCh <- struct{}{}
-				if i == 0 {
-					i++
-					return handler(ctx, req)
+				select {
+				case rlsReqCh <- struct{}{}:
+				default:
 				}
-				<-ctx.Done()
-				return nil, ctx.Err()
+				if firstRPCDone.HasFired() {
+					<-ctx.Done()
+					return nil, ctx.Err()
+				}
+				return handler(ctx, req)
 			}
 
 			// Start an RLS server and set the throttler to never throttle.
@@ -669,6 +685,7 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_StaleEntry(t *testing.T) {
 
 			// Make sure an RLS request is sent out.
 			verifyRLSRequest(t, rlsReqCh, true)
+			firstRPCDone.Fire()
 
 			// The cache entry has a large maxAge, but a small stateAge. We keep
 			// retrying until the cache entry becomes stale, in which case we expect a
@@ -706,22 +723,26 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// A unary interceptor which does nothing on the first RPC, but
-			// blocks on subsequent RPCs on the fake RLS server until the test
-			// is done. And since we configure the LB policy with a really low
-			// value for max age, this allows us to simulate the condition where
-			// the LB policy has an expired entry and a pending entry in the
-			// cache.
+			// A unary interceptor which simply calls the underlying handler
+			// until the first client RPC is done. We want one client RPC to
+			// succeed to ensure that a data cache entry is created. For
+			// subsequent client RPCs which result in RLS requests, this
+			// interceptor blocks until the test's context expires. And since we
+			// configure the RLS LB policy with a really low value for max age,
+			// this allows us to simulate the condition where the it has an
+			// expired entry and a pending entry in the cache.
 			rlsReqCh := make(chan struct{}, 1)
-			i := 0
+			firstRPCDone := grpcsync.NewEvent()
 			interceptor := func(ctx context.Context, req interface{}, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-				rlsReqCh <- struct{}{}
-				if i == 0 {
-					i++
-					return handler(ctx, req)
+				select {
+				case rlsReqCh <- struct{}{}:
+				default:
 				}
-				<-ctx.Done()
-				return nil, ctx.Err()
+				if firstRPCDone.HasFired() {
+					<-ctx.Done()
+					return nil, ctx.Err()
+				}
+				return handler(ctx, req)
 			}
 
 			// Start an RLS server and set the throttler to never throttle.
@@ -762,13 +783,24 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 
 			// Make sure an RLS request is sent out.
 			verifyRLSRequest(t, rlsReqCh, true)
+			firstRPCDone.Fire()
 
-			// At this point, we have a cache entry with a small maxAge, and the RLS
-			// server is configured to block on further RLS requests. As we retry the
-			// RPC, at some point the cache entry would expire and force us to send an
-			// RLS request. But this request would exceed the deadline since the
-			// server blocks.
-			makeTestRPCAndVerifyError(ctx, t, cc, codes.DeadlineExceeded, context.DeadlineExceeded)
+			// At this point, we have a cache entry with a small maxAge, and the
+			// RLS server is configured to block on further RLS requests. As we
+			// retry the RPC, at some point the cache entry would expire and
+			// force us to send an RLS request which would block on the server,
+			// giving us a pending cache entry for the duration of the test.
+			go func() {
+				client := testgrpc.NewTestServiceClient(cc)
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+						client.EmptyCall(ctx, &testpb.Empty{})
+					}
+				}
+			}()
 			verifyRLSRequest(t, rlsReqCh, true)
 
 			// Another RPC at this point should find the pending entry and be queued.

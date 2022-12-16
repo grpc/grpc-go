@@ -91,14 +91,16 @@ func (rlsBB) Name() string {
 
 func (rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.Balancer {
 	lb := &rlsBalancer{
-		done:          grpcsync.NewEvent(),
-		cc:            cc,
-		bopts:         opts,
-		purgeTicker:   dataCachePurgeTicker(),
-		lbCfg:         &lbConfig{},
-		pendingMap:    make(map[cacheKey]*backoffState),
-		childPolicies: make(map[string]*childPolicyWrapper),
-		updateCh:      buffer.NewUnbounded(),
+		closed:             grpcsync.NewEvent(),
+		done:               grpcsync.NewEvent(),
+		cc:                 cc,
+		bopts:              opts,
+		purgeTicker:        dataCachePurgeTicker(),
+		dataCachePurgeHook: dataCachePurgeHook,
+		lbCfg:              &lbConfig{},
+		pendingMap:         make(map[cacheKey]*backoffState),
+		childPolicies:      make(map[string]*childPolicyWrapper),
+		updateCh:           buffer.NewUnbounded(),
 	}
 	lb.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf("[rls-experimental-lb %p] ", lb))
 	lb.dataCache = newDataCache(maxCacheSize, lb.logger)
@@ -110,11 +112,13 @@ func (rlsBB) Build(cc balancer.ClientConn, opts balancer.BuildOptions) balancer.
 
 // rlsBalancer implements the RLS LB policy.
 type rlsBalancer struct {
-	done        *grpcsync.Event
-	cc          balancer.ClientConn
-	bopts       balancer.BuildOptions
-	purgeTicker *time.Ticker
-	logger      *internalgrpclog.PrefixLogger
+	closed             *grpcsync.Event // Fires when Close() is invoked. Guarded by stateMu.
+	done               *grpcsync.Event // Fires when Close() is done.
+	cc                 balancer.ClientConn
+	bopts              balancer.BuildOptions
+	purgeTicker        *time.Ticker
+	dataCachePurgeHook func()
+	logger             *internalgrpclog.PrefixLogger
 
 	// If both cacheMu and stateMu need to be acquired, the former must be
 	// acquired first to prevent a deadlock. This order restriction is due to the
@@ -167,7 +171,18 @@ type controlChannelReady struct{}
 // on to a channel that this goroutine will select on, thereby the handling of
 // the update will happen asynchronously.
 func (b *rlsBalancer) run() {
-	go b.purgeDataCache()
+	// We exit out of the for loop below only after `Close()` has been invoked.
+	// Firing the done event here will ensure that Close() returns only after
+	// all goroutines are done.
+	defer func() { b.done.Fire() }()
+
+	// Wait for purgeDataCache() goroutine to exit before returning from here.
+	doneCh := make(chan struct{})
+	defer func() {
+		<-doneCh
+	}()
+	go b.purgeDataCache(doneCh)
+
 	for {
 		select {
 		case u := <-b.updateCh.Get():
@@ -194,7 +209,7 @@ func (b *rlsBalancer) run() {
 			default:
 				b.logger.Errorf("Unsupported update type %T", update)
 			}
-		case <-b.done.Done():
+		case <-b.closed.Done():
 			return
 		}
 	}
@@ -203,10 +218,12 @@ func (b *rlsBalancer) run() {
 // purgeDataCache is a long-running goroutine which periodically deletes expired
 // entries. An expired entry is one for which both the expiryTime and
 // backoffExpiryTime are in the past.
-func (b *rlsBalancer) purgeDataCache() {
+func (b *rlsBalancer) purgeDataCache(doneCh chan struct{}) {
+	defer close(doneCh)
+
 	for {
 		select {
-		case <-b.done.Done():
+		case <-b.closed.Done():
 			return
 		case <-b.purgeTicker.C:
 			b.cacheMu.Lock()
@@ -215,19 +232,21 @@ func (b *rlsBalancer) purgeDataCache() {
 			if updatePicker {
 				b.sendNewPicker()
 			}
-			dataCachePurgeHook()
+			b.dataCachePurgeHook()
 		}
 	}
 }
 
 func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	defer clientConnUpdateHook()
-	if b.done.HasFired() {
+
+	b.stateMu.Lock()
+	if b.closed.HasFired() {
+		b.stateMu.Unlock()
 		b.logger.Warningf("Received service config after balancer close: %s", pretty.ToJSON(ccs.BalancerConfig))
 		return errBalancerClosed
 	}
 
-	b.stateMu.Lock()
 	newCfg := ccs.BalancerConfig.(*lbConfig)
 	if b.lbCfg.Equal(newCfg) {
 		b.stateMu.Unlock()
@@ -405,10 +424,9 @@ func (b *rlsBalancer) UpdateSubConnState(sc balancer.SubConn, state balancer.Sub
 }
 
 func (b *rlsBalancer) Close() {
-	b.done.Fire()
-
-	b.purgeTicker.Stop()
 	b.stateMu.Lock()
+	b.closed.Fire()
+	b.purgeTicker.Stop()
 	if b.ctrlCh != nil {
 		b.ctrlCh.close()
 	}
@@ -479,8 +497,11 @@ func (b *rlsBalancer) sendNewPickerLocked() {
 
 func (b *rlsBalancer) sendNewPicker() {
 	b.stateMu.Lock()
+	defer b.stateMu.Unlock()
+	if b.closed.HasFired() {
+		return
+	}
 	b.sendNewPickerLocked()
-	b.stateMu.Unlock()
 }
 
 // The aggregated connectivity state reported is determined as follows:
