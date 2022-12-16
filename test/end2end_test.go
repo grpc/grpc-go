@@ -1055,7 +1055,7 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	// The precise behavior of this test is subject to raceyness around the timing
 	// of when TCP packets are sent from client to server, and when we tell the
 	// server to stop, so we need to account for both possible error messages.
-	if _, err := stream.Recv(); !isConnClosedErr(err) {
+	if _, err := stream.Recv(); err == io.EOF || !isConnClosedErr(err) {
 		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: %q OR %q", stream, err, possibleConnResetMsg, possibleEOFMsg)
 	}
 	close(rpcDoneOnClient)
