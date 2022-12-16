@@ -901,11 +901,12 @@ const possibleEOFMsg = "error reading from server: EOF"
 //     the kernel can send an RST back to the client (also see
 //     https://stackoverflow.com/questions/33053507/econnreset-in-send-linux-c).
 //     Note that while this condition is expected to be rare due to the
-//     rpcStartedOnServer synchronization, in theory it should be possible,
+//     test httpServer start synchronization, in theory it should be possible,
 //     e.g. if the client sends a BDP ping at the right time.
 //  2. If, for example, the call to ss.S.Stop() happens after the RPC headers
 //     have been received at the server, then the TCP connection can shutdown
 //     gracefully when the server's socket closes.
+//  3. If there is an actual io.EOF received because the client stopped the stream.
 func isConnClosedErr(err error) bool {
 	errContainsConnResetMsg := strings.Contains(err.Error(), possibleConnResetMsg)
 	errContainsEOFMsg := strings.Contains(err.Error(), possibleEOFMsg)
@@ -1054,7 +1055,7 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	// The precise behavior of this test is subject to raceyness around the timing
 	// of when TCP packets are sent from client to server, and when we tell the
 	// server to stop, so we need to account for both possible error messages.
-	if _, err := stream.Recv(); err == nil || !isConnClosedErr(err) {
+	if _, err := stream.Recv(); !isConnClosedErr(err) {
 		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: %q OR %q", stream, err, possibleConnResetMsg, possibleEOFMsg)
 	}
 	close(rpcDoneOnClient)
@@ -7034,7 +7035,7 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string) error {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		return fmt.Errorf("failed to listen. Err: %v", err)
+		return fmt.Errorf("listening on %q: %v", "localhost:0", err)
 	}
 	defer lis.Close()
 	server := &httpServer{
@@ -7043,7 +7044,7 @@ func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string
 	server.start(t, lis)
 	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return fmt.Errorf("failed to dial due to err: %v", err)
+		return fmt.Errorf("dial(%q): %v", lis.Addr().String(), err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -7051,10 +7052,10 @@ func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string
 	client := testpb.NewTestServiceClient(cc)
 	stream, err := client.FullDuplexCall(ctx)
 	if err != nil {
-		return fmt.Errorf("error creating stream due to err: %v", err)
+		return fmt.Errorf("creating FullDuplex stream: %v", err)
 	}
 	if _, err := stream.Recv(); err == nil || status.Code(err) != errCode {
-		return fmt.Errorf("stream.Recv() = _, %v, want error code: %v", err, errCode)
+		return fmt.Errorf("stream.Recv() = %v, want error code: %v", err, errCode)
 	}
 	return nil
 }
