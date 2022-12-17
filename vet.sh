@@ -66,6 +66,17 @@ elif [[ "$#" -ne 0 ]]; then
   die "Unknown argument(s): $*"
 fi
 
+# - Check that generated proto files are up to date.
+if [[ -z "${VET_SKIP_PROTO}" ]]; then
+  PATH="/home/travis/bin:${PATH}" make proto && \
+    git status --porcelain 2>&1 | fail_on_output || \
+    (git status; git --no-pager diff; exit 1)
+fi
+
+if [[ -n "${VET_ONLY_PROTO}" ]]; then
+  exit 0
+fi
+
 # - Ensure all source files contain a copyright message.
 # (Done in two parts because Darwin "git grep" has broken support for compound
 # exclusion matches.)
@@ -92,13 +103,6 @@ not git grep "\(import \|^\s*\)\"github.com/golang/protobuf/ptypes/" -- "*.go"
 git grep '"github.com/envoyproxy/go-control-plane/envoy' -- '*.go' ':(exclude)*.pb.go' | not grep -v 'pb "\|grpc "'
 
 misspell -error .
-
-# - Check that generated proto files are up to date.
-if [[ -z "${VET_SKIP_PROTO}" ]]; then
-  PATH="/home/travis/bin:${PATH}" make proto && \
-    git status --porcelain 2>&1 | fail_on_output || \
-    (git status; git --no-pager diff; exit 1)
-fi
 
 # - gofmt, goimports, golint (with exceptions for generated code), go vet,
 # go mod tidy.
