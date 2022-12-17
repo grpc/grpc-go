@@ -80,3 +80,39 @@ func (s) TestAddExtraServerOptions(t *testing.T) {
 		t.Fatalf("Unexpected len of extraServerOptions: %d != 0", len(extraServerOptions))
 	}
 }
+
+// TestJoinDialOption tests the join dial option. It configures a joined dial
+// option with three individual dial options, and verifies that all three are
+// successfully applied.
+func (s) TestJoinDialOption(t *testing.T) {
+	const maxRecvSize = 998765
+	const initialWindowSize = 100
+	jdo := newJoinDialOption(WithTransportCredentials(insecure.NewCredentials()), WithReadBufferSize(maxRecvSize), WithInitialWindowSize(initialWindowSize))
+	cc, err := Dial("fake", jdo)
+	if err != nil {
+		t.Fatalf("Dialing with insecure credentials failed: %v", err)
+	}
+	defer cc.Close()
+	if cc.dopts.copts.ReadBufferSize != maxRecvSize {
+		t.Fatalf("Unexpected cc.dopts.copts.ReadBufferSize: %d != %d", cc.dopts.copts.ReadBufferSize, maxRecvSize)
+	}
+	if cc.dopts.copts.InitialWindowSize != initialWindowSize {
+		t.Fatalf("Unexpected cc.dopts.copts.InitialWindowSize: %d != %d", cc.dopts.copts.InitialWindowSize, initialWindowSize)
+	}
+}
+
+// TestJoinDialOption tests the join server option. It configures a joined
+// server option with three individual server options, and verifies that all
+// three are successfully applied.
+func (s) TestJoinServerOption(t *testing.T) {
+	const maxRecvSize = 998765
+	const initialWindowSize = 100
+	jso := newJoinServerOption(Creds(insecure.NewCredentials()), MaxRecvMsgSize(maxRecvSize), InitialWindowSize(initialWindowSize))
+	s := NewServer(jso)
+	if s.opts.maxReceiveMessageSize != maxRecvSize {
+		t.Fatalf("Unexpected s.opts.maxReceiveMessageSize: %d != %d", s.opts.maxReceiveMessageSize, maxRecvSize)
+	}
+	if s.opts.initialWindowSize != initialWindowSize {
+		t.Fatalf("Unexpected s.opts.initialWindowSize: %d != %d", s.opts.initialWindowSize, initialWindowSize)
+	}
+}
