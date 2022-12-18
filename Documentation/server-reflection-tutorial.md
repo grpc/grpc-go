@@ -43,7 +43,7 @@ An example server with reflection registered can be found at
 ## gRPCurl
 
 After enabling Server Reflection in a server application, you can use gRPCurl
-to check its services. gRPC CLI is built with Go and has packages available.
+to check its services. gRPCurl is built with Go and has packages available.
 Instructions on how to install and use gRPCurl can be found at
 [gRPCurl Installation](https://github.com/fullstorydev/grpcurl#installation).
 
