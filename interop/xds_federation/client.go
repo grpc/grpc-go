@@ -21,18 +21,18 @@ package main
 
 import (
 	"flag"
-	"time"
 	"strings"
 	"sync"
+	"time"
 
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/interop"
 
-	_ "google.golang.org/grpc/balancer/grpclb"                // Register the grpclb load balancing policy.
-	_ "google.golang.org/grpc/balancer/rls"                      // Register the RLS load balancing policy.
+	_ "google.golang.org/grpc/balancer/grpclb"      // Register the grpclb load balancing policy.
+	_ "google.golang.org/grpc/balancer/rls"         // Register the RLS load balancing policy.
 	_ "google.golang.org/grpc/xds/googledirectpath" // Register xDS resolver required for c2p directpath.
 
 	testgrpc "google.golang.org/grpc/interop/grpc_testing"
@@ -40,7 +40,7 @@ import (
 
 const (
 	computeEngineCredsName = "compute_engine_channel_creds"
-	insecureCredsName = "INSECURE_CREDENTIALS"
+	insecureCredsName      = "INSECURE_CREDENTIALS"
 )
 
 var (
@@ -67,9 +67,9 @@ const (
 )
 
 type clientConfig struct {
-	tc testgrpc.TestServiceClient
+	tc   testgrpc.TestServiceClient
 	opts []grpc.DialOption
-	uri string
+	uri  string
 }
 
 func main() {
@@ -96,9 +96,9 @@ func main() {
 		}
 		defer cc.Close()
 		clients = append(clients, clientConfig{
-			tc: testgrpc.NewTestServiceClient(cc),
+			tc:   testgrpc.NewTestServiceClient(cc),
 			opts: opts,
-			uri: uris[i],
+			uri:  uris[i],
 		})
 	}
 	var wg sync.WaitGroup
