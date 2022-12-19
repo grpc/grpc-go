@@ -64,7 +64,7 @@ server listening at [::]:50051
 After installing gRPCurl, open a new terminal and run the commands from the new
 terminal.
 
-> gRPCurl expects a TLS-encrypted connection by default. For all of
+**NOTE:** gRPCurl expects a TLS-encrypted connection by default. For all of
 the commands below, use the `-plaintext` flag to use an unencrypted connection.
 
 ### List services and methods
