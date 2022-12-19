@@ -81,7 +81,7 @@ func main() {
 	if len(uris) != len(creds) {
 		logger.Fatalf("Number of entries in --server_uris (%d) != number of entries in --credentials_types (%d)", len(uris), len(creds))
 	}
-	for i, _ := range uris {
+	for i := range uris {
 		var opts []grpc.DialOption
 		if creds[i] == computeEngineCredsName {
 			opts = append(opts, grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()))
@@ -102,7 +102,7 @@ func main() {
 		})
 	}
 	var wg sync.WaitGroup
-	for i, _ := range clients {
+	for i := range clients {
 		wg.Add(1)
 		go func(c clientConfig) {
 			defer wg.Done()
