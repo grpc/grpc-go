@@ -467,7 +467,8 @@ func (a *csAttempt) newStream() error {
 		// value pairs.
 		//
 		// TODO: Make it possible to retrieve key value pairs from metadata.MD
-		// in a form passable to AppendToOutgoingContext().
+		// in a form passable to AppendToOutgoingContext(), or create a version
+		// of AppendToOutgoingContext() that accepts a metadata.MD.
 		md, _ := metadata.FromOutgoingContext(a.ctx)
 		md = metadata.Join(md, a.pickResult.Metatada)
 		a.ctx = metadata.NewOutgoingContext(a.ctx, md)
