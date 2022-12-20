@@ -934,7 +934,7 @@ func (cc *ClientConn) healthCheckConfig() *healthCheckConfig {
 	return cc.sc.healthCheckConfig
 }
 
-func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method string) (transport.ClientTransport, func(balancer.DoneInfo), error) {
+func (cc *ClientConn) getTransport(ctx context.Context, failfast bool, method string) (transport.ClientTransport, balancer.PickResult, error) {
 	return cc.blockingpicker.pick(ctx, failfast, balancer.PickInfo{
 		Ctx:            ctx,
 		FullMethodName: method,
