@@ -67,10 +67,25 @@ type clientConfig struct {
 
 func main() {
 	flag.Parse()
+	// validate flags
 	uris := strings.Split(*serverURIs, ",")
 	creds := strings.Split(*credentialsTypes, ",")
 	if len(uris) != len(creds) {
 		logger.Fatalf("Number of entries in --server_uris (%d) != number of entries in --credentials_types (%d)", len(uris), len(creds))
+	}
+	for _, c := range creds {
+		if c != computeEngineCredsName && c != insecureCredsName {
+			logger.Fatalf("Unsupported credentials type: %v", c)
+		}
+	}
+	var resetChannel bool
+	switch *testCase {
+	case "rpc_soak":
+		resetChannel = false
+	case "channel_soak":
+		resetChannel = true
+	default:
+		logger.Fatal("Unsupported test case: ", *testCase)
 	}
 
 	// create clients as specified in flags
@@ -82,8 +97,6 @@ func main() {
 			opts = append(opts, grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()))
 		case insecureCredsName:
 			opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		default:
-			logger.Fatalf("Unsupported credentials type: %v", creds[i])
 		}
 		cc, err := grpc.Dial(uris[i], opts...)
 		if err != nil {
@@ -103,17 +116,9 @@ func main() {
 	for i := range clients {
 		wg.Add(1)
 		go func(c clientConfig) {
-			defer wg.Done()
-			switch *testCase {
-			case "rpc_soak":
-				interop.DoSoakTest(c.tc, c.uri, c.opts, false /* resetChannel */, *soakIterations, *soakMaxFailures, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, time.Now().Add(time.Duration(*soakOverallTimeoutSeconds)*time.Second))
-				logger.Infof("RpcSoak done for server: %s", c.uri)
-			case "channel_soak":
-				interop.DoSoakTest(c.tc, c.uri, c.opts, true /* resetChannel */, *soakIterations, *soakMaxFailures, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, time.Now().Add(time.Duration(*soakOverallTimeoutSeconds)*time.Second))
-				logger.Infof("ChannelSoak done for server: %s", c.uri)
-			default:
-				logger.Fatal("Unsupported test case: ", *testCase)
-			}
+			interop.DoSoakTest(c.tc, c.uri, c.opts, resetChannel, *soakIterations, *soakMaxFailures, time.Duration(*soakPerIterationMaxAcceptableLatencyMs)*time.Millisecond, time.Duration(*soakMinTimeMsBetweenRPCs)*time.Millisecond, time.Now().Add(time.Duration(*soakOverallTimeoutSeconds)*time.Second))
+			logger.Infof("%s test done for server: %s", *testCase, c.uri)
+			wg.Done()
 		}(clients[i])
 	}
 	wg.Wait()
