@@ -2,8 +2,9 @@
 
 gRPC Server Reflection provides information about publicly-accessible gRPC
 services on a server, and assists clients at runtime to construct RPC requests
-and responses without precompiled service information. It is used by gRPC CLI,
-which can be used to introspect server protos and send/receive test RPCs.
+and responses without precompiled service information. It is used by
+[gRPCurl](https://github.com/fullstorydev/grpcurl), which can be used to
+introspect server protos and send/receive test RPCs.
 
 ## Enable Server Reflection
 
@@ -39,36 +40,41 @@ make the following changes:
 An example server with reflection registered can be found at
 `examples/features/reflection/server`.
 
-## gRPC CLI
+## gRPCurl
 
-After enabling Server Reflection in a server application, you can use gRPC CLI
-to check its services. gRPC CLI is only available in c++. Instructions on how to
-build and use gRPC CLI can be found at
-[command_line_tool.md](https://github.com/grpc/grpc/blob/master/doc/command_line_tool.md).
+After enabling Server Reflection in a server application, you can use gRPCurl
+to check its services. gRPCurl is built with Go and has packages available.
+Instructions on how to install and use gRPCurl can be found at
+[gRPCurl Installation](https://github.com/fullstorydev/grpcurl#installation).
 
-## Use gRPC CLI to check services
+## Use gRPCurl to check services
 
 First, start the helloworld server in grpc-go directory:
 
 ```sh
-$ cd <grpc-go-directory>
-$ go run examples/features/reflection/server/main.go
+$ cd <grpc-go-directory>/examples
+$ go run features/reflection/server/main.go
 ```
 
-Open a new terminal and make sure you are in the directory where grpc_cli lives:
-
+output:
 ```sh
-$ cd <grpc-cpp-directory>/bins/opt
+server listening at [::]:50051
 ```
 
-### List services
+After installing gRPCurl, open a new terminal and run the commands from the new
+terminal.
 
-`grpc_cli ls` command lists services and methods exposed at a given port:
+**NOTE:** gRPCurl expects a TLS-encrypted connection by default. For all of
+the commands below, use the `-plaintext` flag to use an unencrypted connection.
+
+### List services and methods
+
+The `list` command lists services exposed at a given port:
 
 - List all the services exposed at a given port
 
   ```sh
-  $ ./grpc_cli ls localhost:50051
+  $ grpcurl -plaintext localhost:50051 list
   ```
 
   output:
@@ -78,72 +84,88 @@ $ cd <grpc-cpp-directory>/bins/opt
   helloworld.Greeter
   ```
 
-- List one service with details
+- List all the methods of a service
 
-  `grpc_cli ls` command inspects a service given its full name (in the format of
-  \<package\>.\<service\>). It can print information with a long listing format
-  when `-l` flag is set. This flag can be used to get more details about a
-  service.
+  The `list` command lists methods given the full service name (in the format of
+  \<package\>.\<service\>).
 
   ```sh
-  $ ./grpc_cli ls localhost:50051 helloworld.Greeter -l
+  $ grpcurl -plaintext localhost:50051 list helloworld.Greeter
   ```
 
   output:
   ```sh
-  filename: helloworld.proto
-  package: helloworld;
+  helloworld.Greeter.SayHello
+  ```
+
+### Describe services and methods
+
+- Describe all services
+
+  The `describe` command inspects a service given its full name (in the format
+  of \<package\>.\<service\>). 
+
+  ```sh
+  $ grpcurl -plaintext localhost:50051 describe helloworld.Greeter
+  ```
+
+  output:
+  ```sh
+  helloworld.Greeter is a service:
   service Greeter {
-    rpc SayHello(helloworld.HelloRequest) returns (helloworld.HelloReply) {}
+    rpc SayHello ( .helloworld.HelloRequest ) returns ( .helloworld.HelloReply );
   }
-
   ```
 
-### List methods
+- Describe all methods of a service
 
-- List one method with details
-
-  `grpc_cli ls` command also inspects a method given its full name (in the
-  format of \<package\>.\<service\>.\<method\>).
+  The `describe` command inspects a method given its full name (in the format of
+  \<package\>.\<service\>.\<method\>).
 
   ```sh
-  $ ./grpc_cli ls localhost:50051 helloworld.Greeter.SayHello -l
+  $ grpcurl -plaintext localhost:50051 describe helloworld.Greeter.SayHello
   ```
 
   output:
   ```sh
-    rpc SayHello(helloworld.HelloRequest) returns (helloworld.HelloReply) {}
+  helloworld.Greeter.SayHello is a method:
+  rpc SayHello ( .helloworld.HelloRequest ) returns ( .helloworld.HelloReply );
   ```
 
 ### Inspect message types
 
-We can use`grpc_cli type` command to inspect request/response types given the
+We can use the `describe` command to inspect request/response types given the
 full name of the type (in the format of \<package\>.\<type\>).
 
 - Get information about the request type
 
   ```sh
-  $ ./grpc_cli type localhost:50051 helloworld.HelloRequest
+  $ grpcurl -plaintext localhost:50051 describe helloworld.HelloRequest
   ```
 
   output:
   ```sh
+  helloworld.HelloRequest is a message:
   message HelloRequest {
-    optional string name = 1[json_name = "name"];
+    string name = 1;
   }
   ```
 
 ### Call a remote method
 
-We can send RPCs to a server and get responses using `grpc_cli call` command.
+We can send RPCs to a server and get responses using the full method name (in
+the format of \<package\>.\<service\>.\<method\>). The `-d <string>` flag
+represents the request data and the `-format text` flag indicates that the
+request data is in text format.
 
 - Call a unary method
 
   ```sh
-  $ ./grpc_cli call localhost:50051 SayHello "name: 'gRPC CLI'"
+  $ grpcurl -plaintext -format text -d 'name: "gRPCurl"' \
+    localhost:50051 helloworld.Greeter.SayHello
   ```
 
   output:
   ```sh
-  message: "Hello gRPC CLI"
+  message: "Hello gRPCurl"
   ```
