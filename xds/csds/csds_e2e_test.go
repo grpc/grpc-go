@@ -89,7 +89,7 @@ func Test(t *testing.T) {
 func (s) TestCSDS(t *testing.T) {
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
-	mgmtServer, err := e2e.StartManagementServer(nil)
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}

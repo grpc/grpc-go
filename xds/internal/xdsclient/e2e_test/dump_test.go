@@ -94,7 +94,7 @@ func (s) TestDumpResources(t *testing.T) {
 	}
 
 	// Spin up an xDS management server on a local port.
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
