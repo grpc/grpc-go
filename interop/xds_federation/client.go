@@ -53,8 +53,8 @@ var (
 	soakMinTimeMsBetweenRPCs               = flag.Int("soak_min_time_ms_between_rpcs", 0, "The minimum time in milliseconds between consecutive RPCs in a soak test (rpc_soak or channel_soak), useful for limiting QPS")
 	testCase                               = flag.String("test_case", "rpc_soak",
 		`Configure different test cases. Valid options are:
-        rpc_soak: sends --soak_iterations large_unary rpcs;
-        channel_soak: sends --soak_iterations rpc, rebuilding the channel each time`)
+        rpc_soak: sends --soak_iterations large_unary RPCs;
+        channel_soak: sends --soak_iterations RPCs, rebuilding the channel each time`)
 
 	logger = grpclog.Component("interop")
 )
