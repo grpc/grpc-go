@@ -457,7 +457,9 @@ func (a *csAttempt) newStream() error {
 	cs.callHdr.PreviousAttempts = cs.numRetries
 
 	// Merge metadata stored in PickResult, if any, with existing call metadata.
-	ctx := a.ctx
+	// It is safe to overwrite the csAttempt's context here, since all state
+	// maintained in it are local to the attempt. When the attempt has to be
+	// retried, a new instance of csAttempt will be created.
 	if a.pickResult.Metatada != nil {
 		// We currently do not have a function it the metadata package which
 		// merges given metadata with existing metadata in a context. Existing
@@ -466,12 +468,12 @@ func (a *csAttempt) newStream() error {
 		//
 		// TODO: Make it possible to retrieve key value pairs from metadata.MD
 		// in a form passable to AppendToOutgoingContext().
-		md, _ := metadata.FromOutgoingContext(ctx)
+		md, _ := metadata.FromOutgoingContext(a.ctx)
 		md = metadata.Join(md, a.pickResult.Metatada)
-		ctx = metadata.NewOutgoingContext(a.ctx, md)
+		a.ctx = metadata.NewOutgoingContext(a.ctx, md)
 	}
 
-	s, err := a.t.NewStream(ctx, cs.callHdr)
+	s, err := a.t.NewStream(a.ctx, cs.callHdr)
 	if err != nil {
 		nse, ok := err.(*transport.NewStreamError)
 		if !ok {
