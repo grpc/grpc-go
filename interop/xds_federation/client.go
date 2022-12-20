@@ -44,7 +44,7 @@ const (
 )
 
 var (
-	serverUris                             = flag.String("server_uris", "", "Comma-separated list of sever URIs to make RPCs to")
+	serverURIs                             = flag.String("server_uris", "", "Comma-separated list of sever URIs to make RPCs to")
 	credentialsTypes                       = flag.String("credentials_types", "", "Comma-separated list of credentials, each entry is used for the server of the corresponding index in server_uris. Supported values: compute_engine_channel_creds, INSECURE_CREDENTIALS")
 	soakIterations                         = flag.Int("soak_iterations", 10, "The number of iterations to use for the two soak tests: rpc_soak and channel_soak")
 	soakMaxFailures                        = flag.Int("soak_max_failures", 0, "The number of iterations in soak tests that are allowed to fail (either due to non-OK status code or exceeding the per-iteration max acceptable latency).")
@@ -59,13 +59,6 @@ var (
 	logger = grpclog.Component("interop")
 )
 
-type credsMode uint8
-
-const (
-	credsNone credsMode = iota
-	credsComputeEngineCreds
-)
-
 type clientConfig struct {
 	tc   testgrpc.TestServiceClient
 	opts []grpc.DialOption
@@ -74,20 +67,22 @@ type clientConfig struct {
 
 func main() {
 	flag.Parse()
-	logger.Infof("Client running with test case %q", *testCase)
-	var clients []clientConfig
-	uris := strings.Split(*serverUris, ",")
+	uris := strings.Split(*serverURIs, ",")
 	creds := strings.Split(*credentialsTypes, ",")
 	if len(uris) != len(creds) {
 		logger.Fatalf("Number of entries in --server_uris (%d) != number of entries in --credentials_types (%d)", len(uris), len(creds))
 	}
+
+	// create clients as specified in flags
+	var clients []clientConfig
 	for i := range uris {
 		var opts []grpc.DialOption
-		if creds[i] == computeEngineCredsName {
+		switch creds[i] {
+		case computeEngineCredsName:
 			opts = append(opts, grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()))
-		} else if creds[i] == insecureCredsName {
+		case insecureCredsName:
 			opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		} else {
+		default:
 			logger.Fatalf("Unsupported credentials type: %v", creds[i])
 		}
 		cc, err := grpc.Dial(uris[i], opts...)
@@ -101,6 +96,9 @@ func main() {
 			uri:  uris[i],
 		})
 	}
+
+	// run soak tests with the different clients
+	logger.Infof("Clients running with test case %q", *testCase)
 	var wg sync.WaitGroup
 	for i := range clients {
 		wg.Add(1)
