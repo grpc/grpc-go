@@ -56,7 +56,7 @@ func unaryInterceptor(ctx context.Context, method string, req, reply interface{}
 	}
 	if !credsConfigured {
 		opts = append(opts, grpc.PerRPCCredentials(oauth.TokenSource{
-			oauth2.StaticTokenSource(&oauth2.Token{AccessToken: fallbackToken}),
+			TokenSource: oauth2.StaticTokenSource(&oauth2.Token{AccessToken: fallbackToken}),
 		}))
 	}
 	start := time.Now()
@@ -98,7 +98,7 @@ func streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.Clie
 	}
 	if !credsConfigured {
 		opts = append(opts, grpc.PerRPCCredentials(oauth.TokenSource{
-			oauth2.StaticTokenSource(&oauth2.Token{AccessToken: fallbackToken}),
+			TokenSource: oauth2.StaticTokenSource(&oauth2.Token{AccessToken: fallbackToken}),
 		}))
 	}
 	s, err := streamer(ctx, desc, cc, method, opts...)

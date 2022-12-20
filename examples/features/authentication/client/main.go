@@ -50,7 +50,7 @@ func main() {
 	flag.Parse()
 
 	// Set up the credentials for the connection.
-	perRPC := oauth.TokenSource{oauth2.StaticTokenSource(fetchToken())}
+	perRPC := oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(fetchToken())}
 	creds, err := credentials.NewClientTLSFromFile(data.Path("x509/ca_cert.pem"), "x.test.example.com")
 	if err != nil {
 		log.Fatalf("failed to load credentials: %v", err)

@@ -202,7 +202,7 @@ func main() {
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
 		} else if *testCase == "oauth2_auth_token" {
-			opts = append(opts, grpc.WithPerRPCCredentials(oauth.TokenSource{oauth2.StaticTokenSource(interop.GetToken(*serviceAccountKeyFile, *oauthScope))}))
+			opts = append(opts, grpc.WithPerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(interop.GetToken(*serviceAccountKeyFile, *oauthScope))}))
 		}
 	}
 	if len(*serviceConfigJSON) > 0 {
