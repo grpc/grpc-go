@@ -28,6 +28,7 @@ import (
 	"strconv"
 	"time"
 
+	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/alts"
@@ -201,7 +202,7 @@ func main() {
 			}
 			opts = append(opts, grpc.WithPerRPCCredentials(jwtCreds))
 		} else if *testCase == "oauth2_auth_token" {
-			opts = append(opts, grpc.WithPerRPCCredentials(oauth.NewOauthAccess(interop.GetToken(*serviceAccountKeyFile, *oauthScope))))
+			opts = append(opts, grpc.WithPerRPCCredentials(oauth.TokenSource{oauth2.StaticTokenSource(interop.GetToken(*serviceAccountKeyFile, *oauthScope))}))
 		}
 	}
 	if len(*serviceConfigJSON) > 0 {

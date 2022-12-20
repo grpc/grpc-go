@@ -29,9 +29,9 @@ https://godoc.org/google.golang.org/grpc/credentials/oauth for details.
 
 #### Client
 
-On client side, users should first get a valid oauth token, and then call
-[`credentials.NewOauthAccess`](https://godoc.org/google.golang.org/grpc/credentials/oauth#NewOauthAccess)
-to initialize a `credentials.PerRPCCredentials` with it. Next, if user wants to
+On client side, users should first get a valid oauth token, and then initialize a
+[`oauth.TokenSource`](https://godoc.org/google.golang.org/grpc/credentials/oauth#TokenSource)
+which implements `credentials.PerRPCCredentials`. Next, if user wants to
 apply a single OAuth token for all RPC calls on the same connection, then
 configure grpc `Dial` with `DialOption`
 [`WithPerRPCCredentials`](https://godoc.org/google.golang.org/grpc#WithPerRPCCredentials).
