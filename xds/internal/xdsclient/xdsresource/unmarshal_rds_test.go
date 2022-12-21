@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/httpfilter"
@@ -907,282 +908,127 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 			VirtualHosts: v3VirtualHost,
 		})
 	)
-	const testVersion = "test-version-rds"
 
 	tests := []struct {
 		name       string
-		resources  []*anypb.Any
-		wantUpdate map[string]RouteConfigUpdateErrTuple
-		wantMD     UpdateMetadata
+		resource   *anypb.Any
+		wantName   string
+		wantUpdate RouteConfigUpdate
 		wantErr    bool
 	}{
 		{
-			name:      "non-routeConfig resource type",
-			resources: []*anypb.Any{{TypeUrl: version.V3HTTPConnManagerURL}},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     cmpopts.AnyError,
-				},
-			},
-			wantErr: true,
+			name:     "non-routeConfig resource type",
+			resource: &anypb.Any{TypeUrl: version.V3HTTPConnManagerURL},
+			wantErr:  true,
 		},
 		{
 			name: "badly marshaled routeconfig resource",
-			resources: []*anypb.Any{
-				{
-					TypeUrl: version.V3RouteConfigURL,
-					Value:   []byte{1, 2, 3, 4},
-				},
-			},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     cmpopts.AnyError,
-				},
+			resource: &anypb.Any{
+				TypeUrl: version.V3RouteConfigURL,
+				Value:   []byte{1, 2, 3, 4},
 			},
 			wantErr: true,
 		},
 		{
-			name: "empty resource list",
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusACKed,
-				Version: testVersion,
-			},
-		},
-		{
-			name:      "v2 routeConfig resource",
-			resources: []*anypb.Any{v2RouteConfig},
-			wantUpdate: map[string]RouteConfigUpdateErrTuple{
-				v2RouteConfigName: {Update: RouteConfigUpdate{
-					VirtualHosts: []*VirtualHost{
-						{
-							Domains: []string{uninterestingDomain},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-						{
-							Domains: []string{ldsTarget},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
+			name:     "v2 routeConfig resource",
+			resource: v2RouteConfig,
+			wantName: v2RouteConfigName,
+			wantUpdate: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{uninterestingDomain},
+						Routes: []*Route{{Prefix: newStringP(""),
+							WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+							ActionType:       RouteActionRoute}},
 					},
-					Raw: v2RouteConfig,
-				}},
-			},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusACKed,
-				Version: testVersion,
-			},
-		},
-		{
-			name:      "v2 routeConfig resource wrapped",
-			resources: []*anypb.Any{testutils.MarshalAny(&v2xdspb.Resource{Resource: v2RouteConfig})},
-			wantUpdate: map[string]RouteConfigUpdateErrTuple{
-				v2RouteConfigName: {Update: RouteConfigUpdate{
-					VirtualHosts: []*VirtualHost{
-						{
-							Domains: []string{uninterestingDomain},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-						{
-							Domains: []string{ldsTarget},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
+					{
+						Domains: []string{ldsTarget},
+						Routes: []*Route{{Prefix: newStringP(""),
+							WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}},
+							ActionType:       RouteActionRoute}},
 					},
-					Raw: v2RouteConfig,
-				}},
-			},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusACKed,
-				Version: testVersion,
-			},
-		},
-		{
-			name:      "v3 routeConfig resource",
-			resources: []*anypb.Any{v3RouteConfig},
-			wantUpdate: map[string]RouteConfigUpdateErrTuple{
-				v3RouteConfigName: {Update: RouteConfigUpdate{
-					VirtualHosts: []*VirtualHost{
-						{
-							Domains: []string{uninterestingDomain},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-						{
-							Domains: []string{ldsTarget},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-					},
-					Raw: v3RouteConfig,
-				}},
-			},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusACKed,
-				Version: testVersion,
-			},
-		},
-		{
-			name:      "v3 routeConfig resource wrapped",
-			resources: []*anypb.Any{testutils.MarshalAny(&v3discoverypb.Resource{Resource: v3RouteConfig})},
-			wantUpdate: map[string]RouteConfigUpdateErrTuple{
-				v3RouteConfigName: {Update: RouteConfigUpdate{
-					VirtualHosts: []*VirtualHost{
-						{
-							Domains: []string{uninterestingDomain},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-						{
-							Domains: []string{ldsTarget},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-					},
-					Raw: v3RouteConfig,
-				}},
-			},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusACKed,
-				Version: testVersion,
-			},
-		},
-		{
-			name:      "multiple routeConfig resources",
-			resources: []*anypb.Any{v2RouteConfig, v3RouteConfig},
-			wantUpdate: map[string]RouteConfigUpdateErrTuple{
-				v3RouteConfigName: {Update: RouteConfigUpdate{
-					VirtualHosts: []*VirtualHost{
-						{
-							Domains: []string{uninterestingDomain},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-						{
-							Domains: []string{ldsTarget},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-					},
-					Raw: v3RouteConfig,
-				}},
-				v2RouteConfigName: {Update: RouteConfigUpdate{
-					VirtualHosts: []*VirtualHost{
-						{
-							Domains: []string{uninterestingDomain},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-						{
-							Domains: []string{ldsTarget},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-					},
-					Raw: v2RouteConfig,
-				}},
-			},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusACKed,
-				Version: testVersion,
-			},
-		},
-		{
-			// To test that unmarshal keeps processing on errors.
-			name: "good and bad routeConfig resources",
-			resources: []*anypb.Any{
-				v2RouteConfig,
-				testutils.MarshalAny(&v3routepb.RouteConfiguration{
-					Name: "bad",
-					VirtualHosts: []*v3routepb.VirtualHost{
-						{Domains: []string{ldsTarget},
-							Routes: []*v3routepb.Route{{
-								Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_ConnectMatcher_{}},
-							}}}}}),
-				v3RouteConfig,
-			},
-			wantUpdate: map[string]RouteConfigUpdateErrTuple{
-				v3RouteConfigName: {Update: RouteConfigUpdate{
-					VirtualHosts: []*VirtualHost{
-						{
-							Domains: []string{uninterestingDomain},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-						{
-							Domains: []string{ldsTarget},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-					},
-					Raw: v3RouteConfig,
-				}},
-				v2RouteConfigName: {Update: RouteConfigUpdate{
-					VirtualHosts: []*VirtualHost{
-						{
-							Domains: []string{uninterestingDomain},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-						{
-							Domains: []string{ldsTarget},
-							Routes: []*Route{{Prefix: newStringP(""),
-								WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}},
-								ActionType:       RouteActionRoute}},
-						},
-					},
-					Raw: v2RouteConfig,
-				}},
-				"bad": {Err: cmpopts.AnyError},
-			},
-			wantMD: UpdateMetadata{
-				Status:  ServiceStatusNACKed,
-				Version: testVersion,
-				ErrState: &UpdateErrorMetadata{
-					Version: testVersion,
-					Err:     cmpopts.AnyError,
 				},
+				Raw: v2RouteConfig,
 			},
-			wantErr: true,
+		},
+		{
+			name:     "v2 routeConfig resource wrapped",
+			resource: testutils.MarshalAny(&v2xdspb.Resource{Resource: v2RouteConfig}),
+			wantName: v2RouteConfigName,
+			wantUpdate: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{uninterestingDomain},
+						Routes: []*Route{{Prefix: newStringP(""),
+							WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+							ActionType:       RouteActionRoute}},
+					},
+					{
+						Domains: []string{ldsTarget},
+						Routes: []*Route{{Prefix: newStringP(""),
+							WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}},
+							ActionType:       RouteActionRoute}},
+					},
+				},
+				Raw: v2RouteConfig,
+			},
+		},
+		{
+			name:     "v3 routeConfig resource",
+			resource: v3RouteConfig,
+			wantName: v3RouteConfigName,
+			wantUpdate: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{uninterestingDomain},
+						Routes: []*Route{{Prefix: newStringP(""),
+							WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+							ActionType:       RouteActionRoute}},
+					},
+					{
+						Domains: []string{ldsTarget},
+						Routes: []*Route{{Prefix: newStringP(""),
+							WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}},
+							ActionType:       RouteActionRoute}},
+					},
+				},
+				Raw: v3RouteConfig,
+			},
+		},
+		{
+			name:     "v3 routeConfig resource wrapped",
+			resource: testutils.MarshalAny(&v3discoverypb.Resource{Resource: v3RouteConfig}),
+			wantName: v3RouteConfigName,
+			wantUpdate: RouteConfigUpdate{
+				VirtualHosts: []*VirtualHost{
+					{
+						Domains: []string{uninterestingDomain},
+						Routes: []*Route{{Prefix: newStringP(""),
+							WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
+							ActionType:       RouteActionRoute}},
+					},
+					{
+						Domains: []string{ldsTarget},
+						Routes: []*Route{{Prefix: newStringP(""),
+							WeightedClusters: map[string]WeightedCluster{v3ClusterName: {Weight: 1}},
+							ActionType:       RouteActionRoute}},
+					},
+				},
+				Raw: v3RouteConfig,
+			},
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			opts := &UnmarshalOptions{
-				Version:   testVersion,
-				Resources: test.resources,
-			}
-			update, md, err := UnmarshalRouteConfig(opts)
+			name, update, err := unmarshalRouteConfigResource(test.resource, nil)
 			if (err != nil) != test.wantErr {
-				t.Fatalf("UnmarshalRouteConfig(%+v), got err: %v, wantErr: %v", opts, err, test.wantErr)
+				t.Errorf("unmarshalRouteConfigResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
+			}
+			if name != test.wantName {
+				t.Errorf("unmarshalRouteConfigResource(%s), got name: %s, want: %s", pretty.ToJSON(test.resource), name, test.wantName)
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
-				t.Errorf("got unexpected update, diff (-got +want): %v", diff)
-			}
-			if diff := cmp.Diff(md, test.wantMD, cmpOptsIgnoreDetails); diff != "" {
-				t.Errorf("got unexpected metadata, diff (-got +want): %v", diff)
+				t.Errorf("unmarshalRouteConfigResource(%s), got unexpected update, diff (-got +want): %v", pretty.ToJSON(test.resource), diff)
 			}
 		})
 	}
