@@ -21,6 +21,7 @@ package envconfig
 
 import (
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -37,3 +38,17 @@ var (
 	// ("GRPC_GO_ADVERTISE_COMPRESSORS" is not "false").
 	AdvertiseCompressors = !strings.EqualFold(os.Getenv(advertiseCompressorsStr), "false")
 )
+
+func uint64FromEnv(envVar string, def, min, max uint64) uint64 {
+	v, err := strconv.ParseUint(os.Getenv(envVar), 10, 64)
+	if err != nil {
+		return def
+	}
+	if v < min {
+		return min
+	}
+	if v > max {
+		return max
+	}
+	return v
+}
