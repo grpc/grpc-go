@@ -240,7 +240,6 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			mgmtServer, cleanup := startFakeManagementServer(t)
 			defer cleanup()
 			t.Logf("Started xDS management server on %s", mgmtServer.Address)
-			mgmtServer.XDSResponseChan <- &fakeserver.Response{Resp: test.managementServerResponse}
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
@@ -257,6 +256,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("failed to create xds client: %v", err)
 			}
 			defer client.Close()
+			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
 			// A wrapper struct to wrap the update and the associated error, as
 			// received by the resource watch callback.
@@ -270,12 +270,32 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			client.WatchListener(test.resourceName, func(update xdsresource.ListenerUpdate, err error) {
 				updateAndErrCh.Send(updateAndErr{update: update, err: err})
 			})
+			t.Logf("Registered a watch for Listener %q", test.resourceName)
 
-			// Wait for the update from the channel and compare with expected
-			// values.
+			// Wait for the discovery request to be sent out.
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			val, err := updateAndErrCh.Receive(ctx)
+			val, err := mgmtServer.XDSRequestChan.Receive(ctx)
+			if err != nil {
+				t.Fatalf("Timeout when waiting for discovery request at the management server: %v", ctx)
+			}
+			wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
+				Node:          &v3corepb.Node{Id: nodeID},
+				ResourceNames: []string{test.resourceName},
+				TypeUrl:       "type.googleapis.com/envoy.config.listener.v3.Listener",
+			}}
+			gotReq := val.(*fakeserver.Request)
+			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
+				t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+			}
+			t.Logf("Discovery request received at management server")
+
+			// Configure the fake management server with a response.
+			mgmtServer.XDSResponseChan <- &fakeserver.Response{Resp: test.managementServerResponse}
+
+			// Wait for an update from the xDS client and compare with expected
+			// update.
+			val, err = updateAndErrCh.Receive(ctx)
 			if err != nil {
 				t.Fatalf("Timeout when waiting for watch callback to invoked after response from management server: %v", err)
 			}
@@ -487,7 +507,6 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			mgmtServer, cleanup := startFakeManagementServer(t)
 			defer cleanup()
 			t.Logf("Started xDS management server on %s", mgmtServer.Address)
-			mgmtServer.XDSResponseChan <- &fakeserver.Response{Resp: test.managementServerResponse}
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
@@ -504,6 +523,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("failed to create xds client: %v", err)
 			}
 			defer client.Close()
+			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
 			// A wrapper struct to wrap the update and the associated error, as
 			// received by the resource watch callback.
@@ -517,12 +537,32 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			client.WatchRouteConfig(test.resourceName, func(update xdsresource.RouteConfigUpdate, err error) {
 				updateAndErrCh.Send(updateAndErr{update: update, err: err})
 			})
+			t.Logf("Registered a watch for Route Configuration %q", test.resourceName)
 
-			// Wait for the update from the channel and compare with expected
-			// values.
+			// Wait for the discovery request to be sent out.
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			val, err := updateAndErrCh.Receive(ctx)
+			val, err := mgmtServer.XDSRequestChan.Receive(ctx)
+			if err != nil {
+				t.Fatalf("Timeout when waiting for discovery request at the management server: %v", ctx)
+			}
+			wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
+				Node:          &v3corepb.Node{Id: nodeID},
+				ResourceNames: []string{test.resourceName},
+				TypeUrl:       "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+			}}
+			gotReq := val.(*fakeserver.Request)
+			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
+				t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+			}
+			t.Logf("Discovery request received at management server")
+
+			// Configure the fake management server with a response.
+			mgmtServer.XDSResponseChan <- &fakeserver.Response{Resp: test.managementServerResponse}
+
+			// Wait for an update from the xDS client and compare with expected
+			// update.
+			val, err = updateAndErrCh.Receive(ctx)
 			if err != nil {
 				t.Fatalf("Timeout when waiting for watch callback to invoked after response from management server: %v", err)
 			}
@@ -710,7 +750,6 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			mgmtServer, cleanup := startFakeManagementServer(t)
 			defer cleanup()
 			t.Logf("Started xDS management server on %s", mgmtServer.Address)
-			mgmtServer.XDSResponseChan <- &fakeserver.Response{Resp: test.managementServerResponse}
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
@@ -727,6 +766,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("failed to create xds client: %v", err)
 			}
 			defer client.Close()
+			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
 			// A wrapper struct to wrap the update and the associated error, as
 			// received by the resource watch callback.
@@ -740,12 +780,32 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			client.WatchCluster(test.resourceName, func(update xdsresource.ClusterUpdate, err error) {
 				updateAndErrCh.Send(updateAndErr{update: update, err: err})
 			})
+			t.Logf("Registered a watch for Cluster %q", test.resourceName)
 
-			// Wait for the update from the channel and compare with expected
-			// values.
+			// Wait for the discovery request to be sent out.
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			val, err := updateAndErrCh.Receive(ctx)
+			val, err := mgmtServer.XDSRequestChan.Receive(ctx)
+			if err != nil {
+				t.Fatalf("Timeout when waiting for discovery request at the management server: %v", ctx)
+			}
+			wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
+				Node:          &v3corepb.Node{Id: nodeID},
+				ResourceNames: []string{test.resourceName},
+				TypeUrl:       "type.googleapis.com/envoy.config.cluster.v3.Cluster",
+			}}
+			gotReq := val.(*fakeserver.Request)
+			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
+				t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+			}
+			t.Logf("Discovery request received at management server")
+
+			// Configure the fake management server with a response.
+			mgmtServer.XDSResponseChan <- &fakeserver.Response{Resp: test.managementServerResponse}
+
+			// Wait for an update from the xDS client and compare with expected
+			// update.
+			val, err = updateAndErrCh.Receive(ctx)
 			if err != nil {
 				t.Fatalf("Timeout when waiting for watch callback to invoked after response from management server: %v", err)
 			}
@@ -1016,7 +1076,6 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			mgmtServer, cleanup := startFakeManagementServer(t)
 			defer cleanup()
 			t.Logf("Started xDS management server on %s", mgmtServer.Address)
-			mgmtServer.XDSResponseChan <- &fakeserver.Response{Resp: test.managementServerResponse}
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
@@ -1033,6 +1092,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				t.Fatalf("failed to create xds client: %v", err)
 			}
 			defer client.Close()
+			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
 			// A wrapper struct to wrap the update and the associated error, as
 			// received by the resource watch callback.
@@ -1046,12 +1106,32 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			client.WatchEndpoints(test.resourceName, func(update xdsresource.EndpointsUpdate, err error) {
 				updateAndErrCh.Send(updateAndErr{update: update, err: err})
 			})
+			t.Logf("Registered a watch for Endpoint %q", test.resourceName)
 
-			// Wait for the update from the channel and compare with expected
-			// values.
+			// Wait for the discovery request to be sent out.
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
-			val, err := updateAndErrCh.Receive(ctx)
+			val, err := mgmtServer.XDSRequestChan.Receive(ctx)
+			if err != nil {
+				t.Fatalf("Timeout when waiting for discovery request at the management server: %v", ctx)
+			}
+			wantReq := &fakeserver.Request{Req: &v3discoverypb.DiscoveryRequest{
+				Node:          &v3corepb.Node{Id: nodeID},
+				ResourceNames: []string{test.resourceName},
+				TypeUrl:       "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+			}}
+			gotReq := val.(*fakeserver.Request)
+			if diff := cmp.Diff(gotReq, wantReq, protocmp.Transform()); diff != "" {
+				t.Fatalf("Discovery request received at management server is %+v, want %+v", gotReq, wantReq)
+			}
+			t.Logf("Discovery request received at management server")
+
+			// Configure the fake management server with a response.
+			mgmtServer.XDSResponseChan <- &fakeserver.Response{Resp: test.managementServerResponse}
+
+			// Wait for an update from the xDS client and compare with expected
+			// update.
+			val, err = updateAndErrCh.Receive(ctx)
 			if err != nil {
 				t.Fatalf("Timeout when waiting for watch callback to invoked after response from management server: %v", err)
 			}
