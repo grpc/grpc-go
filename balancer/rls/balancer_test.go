@@ -1080,7 +1080,9 @@ func (s) TestUpdateStatePauses(t *testing.T) {
 	//    ensures that the test does not flake because of this rare sequence of
 	//    events.
 	for s := cc.GetState(); s != connectivity.Ready; s = cc.GetState() {
-		cc.WaitForStateChange(ctx, s)
+		if !cc.WaitForStateChange(ctx, s) {
+			t.Fatal("Timeout when waiting for connectivity state to reach READY")
+		}
 	}
 
 	// Cache the state changes seen up to this point.

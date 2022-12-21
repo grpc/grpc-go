@@ -791,14 +791,8 @@ func (s) TestPick_DataCacheHit_PendingEntryExists_ExpiredEntry(t *testing.T) {
 			// force us to send an RLS request which would block on the server,
 			// giving us a pending cache entry for the duration of the test.
 			go func() {
-				client := testgrpc.NewTestServiceClient(cc)
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					default:
-						client.EmptyCall(ctx, &testpb.Empty{})
-					}
+				for client := testgrpc.NewTestServiceClient(cc); ctx.Err() == nil; <-time.After(defaultTestShortTimeout) {
+					client.EmptyCall(ctx, &testpb.Empty{})
 				}
 			}()
 			verifyRLSRequest(t, rlsReqCh, true)

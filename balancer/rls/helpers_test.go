@@ -110,14 +110,8 @@ func neverThrottlingThrottler() *fakeThrottler {
 // before testing other cases.
 func oneTimeAllowingThrottler(firstRPCDone *grpcsync.Event) *fakeThrottler {
 	return &fakeThrottler{
-		throttleFunc: func() bool {
-			throttle := true
-			if !firstRPCDone.HasFired() {
-				throttle = false
-			}
-			return throttle
-		},
-		throttleCh: make(chan struct{}, 1),
+		throttleFunc: firstRPCDone.HasFired,
+		throttleCh:   make(chan struct{}, 1),
 	}
 }
 
