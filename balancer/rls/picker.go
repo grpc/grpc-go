@@ -167,6 +167,7 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 //
 // Caller must hold at least a read-lock on p.lb.cacheMu.
 func (p *rlsPicker) delegateToChildPolicies(dcEntry *cacheEntry, info balancer.PickInfo) (balancer.PickResult, error) {
+	const rlsDataHeaderName = "x-google-rls-data"
 	for i, cpw := range dcEntry.childPolicyWrappers {
 		state := (*balancer.State)(atomic.LoadPointer(&cpw.state))
 		// Delegate to the child policy if it is not in TRANSIENT_FAILURE, or if
@@ -181,9 +182,9 @@ func (p *rlsPicker) delegateToChildPolicies(dcEntry *cacheEntry, info balancer.P
 				return res, err
 			}
 			if res.Metatada == nil {
-				res.Metatada = metadata.Pairs("x-google-rls-data", dcEntry.headerData)
+				res.Metatada = metadata.Pairs(rlsDataHeaderName, dcEntry.headerData)
 			} else {
-				res.Metatada.Append("x-google-rls-data", dcEntry.headerData)
+				res.Metatada.Append(rlsDataHeaderName, dcEntry.headerData)
 			}
 			return res, nil
 		}

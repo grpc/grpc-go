@@ -261,15 +261,12 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry_WithHeaderData(t *testi
 	// Start a test backend which expects the header data contents sent from the
 	// RLS server to be part of RPC metadata as X-Google-RLS-Data header.
 	const headerDataContents = "foo,bar,baz"
-	rpcErrCh := make(chan error, 1)
 	backend := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			gotHeaderData := metadata.ValueFromIncomingContext(ctx, "x-google-rls-data")
 			if len(gotHeaderData) != 1 || gotHeaderData[0] != headerDataContents {
-				rpcErrCh <- fmt.Errorf("got metadata in `X-Google-RLS-Data` is %v, want %s", gotHeaderData, headerDataContents)
-				return &testpb.Empty{}, nil
+				return nil, fmt.Errorf("got metadata in `X-Google-RLS-Data` is %v, want %s", gotHeaderData, headerDataContents)
 			}
-			rpcErrCh <- nil
 			return &testpb.Empty{}, nil
 		},
 	}
@@ -277,7 +274,7 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry_WithHeaderData(t *testi
 		t.Fatalf("Failed to start backend: %v", err)
 	}
 	t.Logf("Started TestService backend at: %q", backend.Address)
-	t.Cleanup(func() { backend.Stop() })
+	defer backend.Stop()
 
 	// Setup the fake RLS server to return the above backend as a target in the
 	// RLS response. Also, populate the header data field in the response.
@@ -302,14 +299,8 @@ func (s) TestPick_DataCacheHit_NoPendingEntry_ValidEntry_WithHeaderData(t *testi
 	// data sent by the RLS server.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{})
-	select {
-	case err := <-rpcErrCh:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-ctx.Done():
-		t.Fatalf("Timeout when waiting for RPC to reach backend: %v", err)
+	if _, err := testgrpc.NewTestServiceClient(cc).EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Fatalf("EmptyCall() RPC: %v", err)
 	}
 }
 
