@@ -99,9 +99,3 @@ var (
 	// C2PResolverTestOnlyTrafficDirectorURI is the TD URI for testing.
 	C2PResolverTestOnlyTrafficDirectorURI = os.Getenv(c2pResolverTestOnlyTrafficDirectorURIEnv)
 )
-
-// XDSRingHashCap indicates the maximum ring size which defaults to 4096
-// entries but may be overridden by setting the environment variable
-// "GRPC_XDS_RING_HASH_CAP".  This does not override the default bounds
-// checking which NACKs configs specifying ring sizes > 8*1024*1024 (~8M).
-var XDSRingHashCap = uint64FromEnv("GRPC_XDS_RING_HASH_CAP", 4096, 1, 8*1024*1024)

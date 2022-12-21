@@ -53,11 +53,11 @@ func parseConfig(c json.RawMessage) (*LBConfig, error) {
 	if cfg.MinRingSize > cfg.MaxRingSize {
 		return nil, fmt.Errorf("min %v is greater than max %v", cfg.MinRingSize, cfg.MaxRingSize)
 	}
-	if cfg.MinRingSize > envconfig.XDSRingHashCap {
-		cfg.MinRingSize = envconfig.XDSRingHashCap
+	if cfg.MinRingSize > envconfig.RingHashCap {
+		cfg.MinRingSize = envconfig.RingHashCap
 	}
-	if cfg.MaxRingSize > envconfig.XDSRingHashCap {
-		cfg.MaxRingSize = envconfig.XDSRingHashCap
+	if cfg.MaxRingSize > envconfig.RingHashCap {
+		cfg.MaxRingSize = envconfig.RingHashCap
 	}
 	return &cfg, nil
 }

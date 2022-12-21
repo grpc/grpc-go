@@ -86,9 +86,9 @@ func (s) TestParseConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.envConfigCap != 0 {
-				old := envconfig.XDSRingHashCap
-				defer func() { envconfig.XDSRingHashCap = old }()
-				envconfig.XDSRingHashCap = tt.envConfigCap
+				old := envconfig.RingHashCap
+				defer func() { envconfig.RingHashCap = old }()
+				envconfig.RingHashCap = tt.envConfigCap
 			}
 			got, err := parseConfig([]byte(tt.js))
 			if (err != nil) != tt.wantErr {
