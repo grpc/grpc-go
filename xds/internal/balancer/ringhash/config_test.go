@@ -27,11 +27,11 @@ import (
 
 func (s) TestParseConfig(t *testing.T) {
 	tests := []struct {
-		name           string
-		js             string
-		envConfigLimit uint64
-		want           *LBConfig
-		wantErr        bool
+		name         string
+		js           string
+		envConfigCap uint64
+		want         *LBConfig
+		wantErr      bool
 	}{
 		{
 			name: "OK",
@@ -71,24 +71,24 @@ func (s) TestParseConfig(t *testing.T) {
 			want: &LBConfig{MinRingSize: 4096, MaxRingSize: 4096},
 		},
 		{
-			name:           "min and max less than raised global limit",
-			js:             `{"minRingSize": 5000, "maxRingSize": 6000}`,
-			envConfigLimit: 8000,
-			want:           &LBConfig{MinRingSize: 5000, MaxRingSize: 6000},
+			name:         "min and max less than raised global limit",
+			js:           `{"minRingSize": 5000, "maxRingSize": 6000}`,
+			envConfigCap: 8000,
+			want:         &LBConfig{MinRingSize: 5000, MaxRingSize: 6000},
 		},
 		{
-			name:           "min and max greater than raised global limit",
-			js:             `{"minRingSize": 10000, "maxRingSize": 10000}`,
-			envConfigLimit: 8000,
-			want:           &LBConfig{MinRingSize: 8000, MaxRingSize: 8000},
+			name:         "min and max greater than raised global limit",
+			js:           `{"minRingSize": 10000, "maxRingSize": 10000}`,
+			envConfigCap: 8000,
+			want:         &LBConfig{MinRingSize: 8000, MaxRingSize: 8000},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.envConfigLimit != 0 {
-				old := envconfig.XDSRingHashLimit
-				defer func() { envconfig.XDSRingHashLimit = old }()
-				envconfig.XDSRingHashLimit = tt.envConfigLimit
+			if tt.envConfigCap != 0 {
+				old := envconfig.XDSRingHashCap
+				defer func() { envconfig.XDSRingHashCap = old }()
+				envconfig.XDSRingHashCap = tt.envConfigCap
 			}
 			got, err := parseConfig([]byte(tt.js))
 			if (err != nil) != tt.wantErr {
