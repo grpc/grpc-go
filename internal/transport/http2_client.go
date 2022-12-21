@@ -140,8 +140,7 @@ type http2Client struct {
 	channelzID *channelz.Identifier
 	czData     *channelzData
 
-	onGoAway func(GoAwayReason)
-	onClose  func()
+	onClose func(GoAwayReason)
 
 	bufferPool *bufferPool
 
@@ -197,7 +196,7 @@ func isTemporary(err error) bool {
 // newHTTP2Client constructs a connected ClientTransport to addr based on HTTP2
 // and starts to receive messages on it. Non-nil error returns if construction
 // fails.
-func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onGoAway func(GoAwayReason), onClose func()) (_ *http2Client, err error) {
+func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts ConnectOptions, onClose func(GoAwayReason)) (_ *http2Client, err error) {
 	scheme := "http"
 	ctx, cancel := context.WithCancel(ctx)
 	defer func() {
@@ -343,7 +342,6 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		streamQuota:           defaultMaxStreamsClient,
 		streamsQuotaAvailable: make(chan struct{}, 1),
 		czData:                new(channelzData),
-		onGoAway:              onGoAway,
 		keepaliveEnabled:      keepaliveEnabled,
 		bufferPool:            newBufferPool(),
 		onClose:               onClose,
@@ -957,7 +955,9 @@ func (t *http2Client) Close(err error) {
 	}
 	// Call t.onClose ASAP to prevent the client from attempting to create new
 	// streams.
-	t.onClose()
+	if t.state != draining {
+		t.onClose(GoAwayInvalid)
+	}
 	t.state = closing
 	streams := t.activeStreams
 	t.activeStreams = nil
@@ -1010,6 +1010,7 @@ func (t *http2Client) GracefulClose() {
 	if logger.V(logLevel) {
 		logger.Infof("transport: GracefulClose called")
 	}
+	t.onClose(GoAwayInvalid)
 	t.state = draining
 	active := len(t.activeStreams)
 	t.mu.Unlock()
@@ -1290,8 +1291,10 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		// Notify the clientconn about the GOAWAY before we set the state to
 		// draining, to allow the client to stop attempting to create streams
 		// before disallowing new streams on this connection.
-		t.onGoAway(t.goAwayReason)
-		t.state = draining
+		if t.state != draining {
+			t.onClose(t.goAwayReason)
+			t.state = draining
+		}
 	}
 	// All streams with IDs greater than the GoAwayId
 	// and smaller than the previous GoAway ID should be killed.
