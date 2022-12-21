@@ -21,7 +21,6 @@ package rls
 import (
 	"context"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +29,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/balancergroup"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	rlspb "google.golang.org/grpc/internal/proto/grpc_lookup_v1"
 	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
@@ -104,18 +104,14 @@ func neverThrottlingThrottler() *fakeThrottler {
 	}
 }
 
-// oneTimeAllowingThrottler returns a fake throttler which does not throttle the
-// first request, but throttles everything that comes after. This is useful for
-// tests which need to set up a valid cache entry before testing other cases.
-func oneTimeAllowingThrottler() *fakeThrottler {
-	var once sync.Once
+// oneTimeAllowingThrottler returns a fake throttler which does not throttle
+// requests until the client RPC succeeds, but throttles everything that comes
+// after. This is useful for tests which need to set up a valid cache entry
+// before testing other cases.
+func oneTimeAllowingThrottler(firstRPCDone *grpcsync.Event) *fakeThrottler {
 	return &fakeThrottler{
-		throttleFunc: func() bool {
-			throttle := true
-			once.Do(func() { throttle = false })
-			return throttle
-		},
-		throttleCh: make(chan struct{}, 1),
+		throttleFunc: firstRPCDone.HasFired,
+		throttleCh:   make(chan struct{}, 1),
 	}
 }
 
