@@ -825,10 +825,10 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 			return nil, &NewStreamError{Err: err, AllowTransparentRetry: true}
 		}
 		if success {
-			// gracefully close transport before next RPC if nextID is greater than
-			// MaxStreamID, which is set to 75% of math.MaxUint32, then gracefully close
-			// the transport which forces attempt to create new transport for next RPCs.
-			if t.nextID > MaxStreamIdForTesting {
+			// drain client transport if nextID > MaxStreamID, which is set to
+			// 75% of math.MaxUint32, which then signals gRPC to restart transport
+			// for subsequent RPCs.
+			if t.nextID > MaxStreamIDForTesting {
 				transportDrainRequired = true
 			}
 			break

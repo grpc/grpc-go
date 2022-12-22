@@ -546,11 +546,11 @@ func (s) TestClientStreamIdReset(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo.Small",
 	}
-	// override MaxStreamIdForTesting.
-	originalMaxStreamId := MaxStreamIdForTesting
-	MaxStreamIdForTesting = 1
+	// override MaxStreamIDForTesting.
+	originalMaxStreamId := MaxStreamIDForTesting
+	MaxStreamIDForTesting = 1
 	defer func() {
-		MaxStreamIdForTesting = originalMaxStreamId
+		MaxStreamIDForTesting = originalMaxStreamId
 	}()
 
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)

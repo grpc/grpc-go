@@ -6885,11 +6885,11 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 // verifies that subsequent RPCs use a new client transport and the old transport
 // is closed.
 func (s) TestClientTransportDrainsAfterStreamIdExhausted(t *testing.T) {
-	// overriding MaxStreamIdForTesting.
-	originalMaxStreamId := transport.MaxStreamIdForTesting
-	transport.MaxStreamIdForTesting = 5
+	// overriding MaxStreamIDForTesting.
+	originalMaxStreamID := transport.MaxStreamIDForTesting
+	transport.MaxStreamIDForTesting = 5
 	defer func() {
-		transport.MaxStreamIdForTesting = originalMaxStreamId
+		transport.MaxStreamIDForTesting = originalMaxStreamID
 	}()
 
 	// setting up StubServer.
