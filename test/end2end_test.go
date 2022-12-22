@@ -6880,11 +6880,11 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 	}()
 }
 
-// TestClientTransportDrainsAfterStreamIdExhausted tests that the client transport
+// TestClientTransportRestartsAfterStreamIdExhausted tests that the client transport
 // drains and restarts when next stream ID exceeds MaxStreamID. This test also
 // verifies that subsequent RPCs use a new client transport and the old transport
 // is closed.
-func (s) TestClientTransportDrainsAfterStreamIdExhausted(t *testing.T) {
+func (s) TestClientTransportRestartsAfterStreamIdExhausted(t *testing.T) {
 	// overriding MaxStreamIDForTesting.
 	originalMaxStreamID := transport.MaxStreamIDForTesting
 	transport.MaxStreamIDForTesting = 5

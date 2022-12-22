@@ -536,9 +536,9 @@ func (s) TestInflightStreamClosing(t *testing.T) {
 	}
 }
 
-// TestClientStreamIdReset tests that when streamID > MaxStreamId, the current
-// client transport is marked draining.
-func (s) TestClientStreamIdReset(t *testing.T) {
+// TestClientTransportDrainsAfterStreamIdExhausted tests that when
+// streamID > MaxStreamId, the current client transport drains.
+func (s) TestClientTransportDrainsAfterStreamIdExhausted(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
 	defer cancel()
 	defer server.stop()
