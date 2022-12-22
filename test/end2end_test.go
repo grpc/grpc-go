@@ -6947,8 +6947,7 @@ func (s) TestClientTransportRestartsAfterStreamIdExhausted(t *testing.T) {
 	createStreamAndRecv(ctx)
 
 	// verifying a new conn channel is created.
-	_, err = lisWrap.NewConnCh.Receive(ctx)
-	if err != nil {
+	if _, err = lisWrap.NewConnCh.Receive(ctx); err != nil {
 		t.Fatal("timeout expired when waiting to create new conn channel")
 	}
 
