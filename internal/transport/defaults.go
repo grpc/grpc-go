@@ -47,3 +47,8 @@ const (
 	defaultClientMaxHeaderListSize = uint32(16 << 20)
 	defaultServerMaxHeaderListSize = uint32(16 << 20)
 )
+
+// MaxStreamIdForTesting is the upper bound for the stream ID before the current
+// transport gracefully closes and a new transport is created for subsequent RPCs.
+// This is set to 75% of math.MaxUint32. It's exported so that tests can override it.
+var MaxStreamIdForTesting = uint32(float32(math.MaxUint32) * 0.75)

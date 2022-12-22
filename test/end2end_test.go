@@ -6880,6 +6880,85 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 	}()
 }
 
+// TestClientTransportRestartsAfterExceedingMaxStreamId tests that the client
+// transport restarts when next stream ID exceeds MaxStreamID. This test also
+// verifies that subsequent RPCs use a new client transport and the old transport
+// is closed.
+func (s) TestClientTransportRestartsAfterExceedingMaxStreamId(t *testing.T) {
+	// overriding MaxStreamIdForTesting.
+	originalMaxStreamId := transport.MaxStreamIdForTesting
+	transport.MaxStreamIdForTesting = 5
+	defer func() {
+		transport.MaxStreamIdForTesting = originalMaxStreamId
+	}()
+
+	// setting up StubServer.
+	s := grpc.NewServer()
+	ss := &stubserver.StubServer{
+		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
+			for i := 0; i < 10; i++ {
+				m := &grpc.PreparedMsg{}
+				stream.SendMsg(m)
+			}
+			return nil
+		},
+	}
+	testpb.RegisterTestServiceServer(s, ss)
+
+	// setting up gRPC server with ListenerWrapper.
+	lisWrap := testutils.NewListenerWrapper(t, nil)
+	go s.Serve(lisWrap)
+	defer s.Stop()
+
+	cc, err := grpc.Dial(lisWrap.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("dial(%q): %v", lisWrap.Addr().String(), err)
+	}
+	defer cc.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	client := testpb.NewTestServiceClient(cc)
+
+	createStreamAndRecv := func(ctx context.Context) {
+		stream, err := client.FullDuplexCall(ctx)
+		if err != nil {
+			t.Fatalf("creating FullDuplex stream: %v", err)
+		}
+		if _, err = stream.Recv(); err != nil && err != io.EOF {
+			t.Fatalf("stream.Recv() = _, %v want: nil or EOF", err)
+		}
+	}
+
+	// creating FullDuplexCall stream #1.
+	createStreamAndRecv(ctx)
+	// creating FullDuplexCall stream #2.
+	createStreamAndRecv(ctx)
+
+	// verifying creation of new conn channel.
+	val, err := lisWrap.NewConnCh.Receive(ctx)
+	if err != nil {
+		t.Fatal("timeout expired when waiting to create new conn channel")
+	}
+	conn1 := val.(*testutils.ConnWrapper)
+
+	// this stream should be created in a new conn channel.
+	createStreamAndRecv(ctx)
+
+	// verifying a new conn channel is created.
+	_, err = lisWrap.NewConnCh.Receive(ctx)
+	if err != nil {
+		t.Fatal("timeout expired when waiting to create new conn channel")
+	}
+
+	// verifying the connection to the old one is closed.
+	if _, err := conn1.CloseCh.Receive(ctx); err != nil {
+		t.Fatal("timeout expired when waiting for first client transport to close")
+	}
+
+}
+
 func (s) TestClientCancellationPropagatesUnary(t *testing.T) {
 	wg := &sync.WaitGroup{}
 	called, done := make(chan struct{}), make(chan struct{})

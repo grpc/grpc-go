@@ -536,6 +536,40 @@ func (s) TestInflightStreamClosing(t *testing.T) {
 	}
 }
 
+// TestClientStreamIdReset tests that when streamID > MaxStreamId, the current
+// client transport is marked draining.
+func (s) TestClientStreamIdReset(t *testing.T) {
+	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
+	defer cancel()
+	defer server.stop()
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo.Small",
+	}
+	// override MaxStreamIdForTesting.
+	originalMaxStreamId := MaxStreamIdForTesting
+	MaxStreamIdForTesting = 1
+	defer func() {
+		MaxStreamIdForTesting = originalMaxStreamId
+	}()
+
+	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer ctxCancel()
+
+	s, err := ct.NewStream(ctx, callHdr)
+	if err != nil {
+		t.Fatalf("ct.NewStream() = %v", err)
+	}
+	if s.id != 1 {
+		t.Fatalf("stream id: %d, want: 1", s.id)
+	}
+
+	// verifying that ct.state is draining when next stream ID > MaxStreamId.
+	if ct.state != draining {
+		t.Fatalf("ct.state: %v, want: %v", ct.state, draining)
+	}
+}
+
 func (s) TestClientSendAndReceive(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
 	defer cancel()
