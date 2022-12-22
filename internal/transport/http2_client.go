@@ -815,7 +815,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		}
 		return true
 	}
-	transportRestartRequired := false
+	transportDrainRequired := false
 	for {
 		success, err := t.controlBuf.executeAndPut(func(it interface{}) bool {
 			return checkForHeaderListSize(it) && checkForStreamQuota(it)
@@ -829,7 +829,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 			// MaxStreamID, which is set to 75% of math.MaxUint32, then gracefully close
 			// the transport which forces attempt to create new transport for next RPCs.
 			if t.nextID > MaxStreamIdForTesting {
-				transportRestartRequired = true
+				transportDrainRequired = true
 			}
 			break
 		}
@@ -869,9 +869,9 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 			sh.HandleRPC(s.ctx, outHeader)
 		}
 	}
-	if transportRestartRequired {
+	if transportDrainRequired {
 		if logger.V(logLevel) {
-			logger.Infof("t.nextID > MaxStreamID. transport: gracefully closing")
+			logger.Infof("t.nextID > MaxStreamID. transport: draining")
 		}
 		t.GracefulClose()
 	}

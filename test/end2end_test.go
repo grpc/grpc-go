@@ -6880,11 +6880,11 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 	}()
 }
 
-// TestClientTransportRestartsAfterExceedingMaxStreamId tests that the client
-// transport restarts when next stream ID exceeds MaxStreamID. This test also
+// TestClientTransportDrainsAfterStreamIdExhausted tests that the client transport
+// drains and restarts when next stream ID exceeds MaxStreamID. This test also
 // verifies that subsequent RPCs use a new client transport and the old transport
 // is closed.
-func (s) TestClientTransportRestartsAfterExceedingMaxStreamId(t *testing.T) {
+func (s) TestClientTransportDrainsAfterStreamIdExhausted(t *testing.T) {
 	// overriding MaxStreamIdForTesting.
 	originalMaxStreamId := transport.MaxStreamIdForTesting
 	transport.MaxStreamIdForTesting = 5
@@ -6952,7 +6952,7 @@ func (s) TestClientTransportRestartsAfterExceedingMaxStreamId(t *testing.T) {
 		t.Fatal("timeout expired when waiting to create new conn channel")
 	}
 
-	// verifying the connection to the old one is closed.
+	// verifying the connection to the old one is drained and closed.
 	if _, err := conn1.CloseCh.Receive(ctx); err != nil {
 		t.Fatal("timeout expired when waiting for first client transport to close")
 	}
