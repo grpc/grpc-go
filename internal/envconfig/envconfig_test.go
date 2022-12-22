@@ -34,7 +34,6 @@ func Test(t *testing.T) {
 }
 
 func (s) TestUint64FromEnv(t *testing.T) {
-
 	var testCases = []struct {
 		name          string
 		val           string
@@ -68,6 +67,36 @@ func (s) TestUint64FromEnv(t *testing.T) {
 			}
 			if got := uint64FromEnv(testVar, tc.def, tc.min, tc.max); got != tc.want {
 				t.Errorf("uint64FromEnv(%q(=%q), %v, %v, %v) = %v; want %v", testVar, tc.val, tc.def, tc.min, tc.max, got, tc.want)
+			}
+		})
+	}
+}
+
+func (s) TestBoolFromEnv(t *testing.T) {
+	var testCases = []struct {
+		val  string
+		def  bool
+		want bool
+	}{
+		{val: "", def: true, want: true},
+		{val: "", def: false, want: false},
+		{val: "true", def: true, want: true},
+		{val: "true", def: false, want: true},
+		{val: "false", def: true, want: false},
+		{val: "false", def: false, want: false},
+		{val: "asdf", def: true, want: true},
+		{val: "asdf", def: false, want: false},
+	}
+	for _, tc := range testCases {
+		t.Run("", func(t *testing.T) {
+			const testVar = "testvar"
+			if tc.val == "" {
+				os.Unsetenv(testVar)
+			} else {
+				os.Setenv(testVar, tc.val)
+			}
+			if got := boolFromEnv(testVar, tc.def); got != tc.want {
+				t.Errorf("boolFromEnv(%q(=%q), %v) = %v; want %v", testVar, tc.val, tc.def, got, tc.want)
 			}
 		})
 	}
