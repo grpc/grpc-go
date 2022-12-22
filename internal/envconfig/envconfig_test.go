@@ -42,19 +42,19 @@ func (s) TestUint64FromEnv(t *testing.T) {
 		want          uint64
 	}{
 		{
-			name: "error parsing; want default",
+			name: "error parsing",
 			val:  "asdf", def: 5, want: 5,
 		}, {
-			name: "unset; want default",
+			name: "unset",
 			val:  "", def: 5, want: 5,
 		}, {
-			name: "too low; want min",
+			name: "too low",
 			val:  "5", min: 10, want: 10,
 		}, {
-			name: "too high; want max",
+			name: "too high",
 			val:  "5", max: 2, want: 2,
 		}, {
-			name: "in range; good",
+			name: "in range",
 			val:  "17391", def: 13000, min: 12000, max: 18000, want: 17391,
 		},
 	}
