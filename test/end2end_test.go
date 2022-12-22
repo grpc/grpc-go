@@ -6921,7 +6921,7 @@ func (s) TestClientTransportRestartsAfterStreamIdExhausted(t *testing.T) {
 
 	client := testpb.NewTestServiceClient(cc)
 
-	createStreamAndRecv := func(ctx context.Context) {
+	createStreamAndRecv := func() {
 		stream, err := client.FullDuplexCall(ctx)
 		if err != nil {
 			t.Fatalf("creating FullDuplex stream: %v", err)
@@ -6932,9 +6932,9 @@ func (s) TestClientTransportRestartsAfterStreamIdExhausted(t *testing.T) {
 	}
 
 	// creating FullDuplexCall stream #1.
-	createStreamAndRecv(ctx)
+	createStreamAndRecv()
 	// creating FullDuplexCall stream #2.
-	createStreamAndRecv(ctx)
+	createStreamAndRecv()
 
 	// verifying creation of new conn channel.
 	val, err := lisWrap.NewConnCh.Receive(ctx)
@@ -6944,7 +6944,7 @@ func (s) TestClientTransportRestartsAfterStreamIdExhausted(t *testing.T) {
 	conn1 := val.(*testutils.ConnWrapper)
 
 	// this stream should be created in a new conn channel.
-	createStreamAndRecv(ctx)
+	createStreamAndRecv()
 
 	// verifying a new conn channel is created.
 	if _, err = lisWrap.NewConnCh.Receive(ctx); err != nil {

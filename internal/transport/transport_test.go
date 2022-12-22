@@ -547,10 +547,10 @@ func (s) TestClientTransportDrainsAfterStreamIdExhausted(t *testing.T) {
 		Method: "foo.Small",
 	}
 	// override MaxStreamIDForTesting.
-	originalMaxStreamId := MaxStreamIDForTesting
+	originalMaxStreamID := MaxStreamIDForTesting
 	MaxStreamIDForTesting = 1
 	defer func() {
-		MaxStreamIDForTesting = originalMaxStreamId
+		MaxStreamIDForTesting = originalMaxStreamID
 	}()
 
 	ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
