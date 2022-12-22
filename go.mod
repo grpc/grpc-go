@@ -22,6 +22,4 @@ require (
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.4.1 // indirect
 	github.com/envoyproxy/protoc-gen-validate v0.9.1 // indirect
-	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
-	go.opencensus.io v0.24.0
 )
