@@ -40,8 +40,10 @@ var (
 
 func boolFromEnv(envVar string, def bool) bool {
 	if def {
+		// The default is true; return true unless the variable is "false".
 		return !strings.EqualFold(os.Getenv(envVar), "false")
 	}
+	// The default is false; return false unless the variable is "true".
 	return strings.EqualFold(os.Getenv(envVar), "true")
 }
 
