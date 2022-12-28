@@ -768,6 +768,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 	}
 	firstTry := true
 	var ch chan struct{}
+	transportDrainRequired := false
 	checkForStreamQuota := func(it interface{}) bool {
 		if t.streamQuota <= 0 { // Can go negative if server decreases it.
 			if firstTry {
@@ -783,6 +784,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		h := it.(*headerFrame)
 		h.streamID = t.nextID
 		t.nextID += 2
+
+		// drain client transport if nextID > MaxStreamID, which is set to
+		// 75% of math.MaxUint32, which signals gRPC that the connection is closed
+		// and a new one must be created for subsequent RPCs.
+		transportDrainRequired = t.nextID > MaxStreamID
+
 		s.id = h.streamID
 		s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
 		t.mu.Lock()
@@ -815,7 +822,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		}
 		return true
 	}
-	transportDrainRequired := false
 	for {
 		success, err := t.controlBuf.executeAndPut(func(it interface{}) bool {
 			return checkForHeaderListSize(it) && checkForStreamQuota(it)
@@ -825,12 +831,6 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 			return nil, &NewStreamError{Err: err, AllowTransparentRetry: true}
 		}
 		if success {
-			// drain client transport if nextID > MaxStreamID, which is set to
-			// 75% of math.MaxUint32, which then signals gRPC to restart transport
-			// for subsequent RPCs.
-			if t.nextID > MaxStreamIDForTesting {
-				transportDrainRequired = true
-			}
 			break
 		}
 		if hdrListSizeErr != nil {
@@ -871,7 +871,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 	}
 	if transportDrainRequired {
 		if logger.V(logLevel) {
-			logger.Infof("t.nextID > MaxStreamID. transport: draining")
+			logger.Infof("transport: t.nextID > MaxStreamID. Draining")
 		}
 		t.GracefulClose()
 	}
@@ -1795,4 +1795,14 @@ func (t *http2Client) getOutFlowWindow() int64 {
 	case <-timer.C:
 		return -2
 	}
+}
+
+func (t *http2Client) compareStateForTesting(s transportState) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.state != s {
+		return fmt.Errorf("clientTransport.state: %v, want: %v", t.state, s)
+	}
+
+	return nil
 }
