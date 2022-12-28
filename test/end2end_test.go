@@ -1085,7 +1085,7 @@ func testFailFast(t *testing.T, e env) {
 	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
 	}
-	// Stop the server and tear down all the existing connection.
+	// Stop the server and tear down all the existing connections.
 	te.srv.Stop()
 	// Loop until the server teardown is propagated to the client.
 	for {
