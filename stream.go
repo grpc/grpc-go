@@ -1483,6 +1483,9 @@ type ServerStream interface {
 	// It is safe to have a goroutine calling SendMsg and another goroutine
 	// calling RecvMsg on the same stream at the same time, but it is not safe
 	// to call SendMsg on the same stream in different goroutines.
+	//
+	// It is not safe to modify the message after calling SendMsg. Tracing
+	// libraries and stats handlers may use the message lazily.
 	SendMsg(m interface{}) error
 	// RecvMsg blocks until it receives a message into m or the stream is
 	// done. It returns io.EOF when the client has performed a CloseSend. On
