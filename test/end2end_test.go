@@ -7440,7 +7440,7 @@ func (s) TestAuthorityHeader(t *testing.T) {
 }
 
 // wrapCloseListener tracks Accepts/Closes and maintains a counter of the
-// number of open connection.
+// number of open connections.
 type wrapCloseListener struct {
 	net.Listener
 	connsOpen int32
