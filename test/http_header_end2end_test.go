@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"net"
 	"testing"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -248,7 +247,7 @@ func doHTTPHeaderTest(lisAddr string, errCode codes.Code) error {
 		return fmt.Errorf("dial(%q): %v", lisAddr, err)
 	}
 	defer cc.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	client := testpb.NewTestServiceClient(cc)
 	stream, err := client.FullDuplexCall(ctx)
