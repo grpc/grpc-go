@@ -33,38 +33,66 @@ import (
 )
 
 func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
+
+	type test struct {
+		name    string
+		header  []string
+		errCode codes.Code
+	}
+
+	var tests []test
+
 	// Non-gRPC content-type fallback path.
 	for httpCode := range transport.HTTPStatusConvTab {
-		if err := doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
-			":status", fmt.Sprintf("%d", httpCode),
-			"content-type", "text/html", // non-gRPC content type to switch to HTTP mode.
-			"grpc-status", "1", // Make up a gRPC status error
-			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
-		}); err != nil {
-			t.Error(err)
-		}
+		tests = append(tests, test{
+			name: fmt.Sprintf("Non-gRPC content-type fallback path with httpCode: %v", httpCode),
+			header: []string{
+				":status", fmt.Sprintf("%d", httpCode),
+				"content-type", "text/html", // non-gRPC content type to switch to HTTP mode.
+				"grpc-status", "1", // Make up a gRPC status error
+				"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
+			},
+			errCode: transport.HTTPStatusConvTab[int(httpCode)],
+		})
 	}
 
 	// Missing content-type fallback path.
 	for httpCode := range transport.HTTPStatusConvTab {
-		if err := doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
-			":status", fmt.Sprintf("%d", httpCode),
-			// Omitting content type to switch to HTTP mode.
-			"grpc-status", "1", // Make up a gRPC status error
-			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
-		}); err != nil {
-			t.Error(err)
-		}
+		tests = append(tests, test{
+			name: fmt.Sprintf("Missing content-type fallback path with httpCode: %v", httpCode),
+			header: []string{
+				":status", fmt.Sprintf("%d", httpCode),
+				// Omitting content type to switch to HTTP mode.
+				"grpc-status", "1", // Make up a gRPC status error
+				"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
+			},
+			errCode: transport.HTTPStatusConvTab[int(httpCode)],
+		})
 	}
 
 	// Malformed HTTP status when fallback.
-	if err := doHTTPHeaderTest(t, codes.Internal, []string{
-		":status", "abc",
-		// Omitting content type to switch to HTTP mode.
-		"grpc-status", "1", // Make up a gRPC status error
-		"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
-	}); err != nil {
-		t.Error(err)
+	tests = append(tests, test{
+		name: "Malformed HTTP status when fallback",
+		header: []string{
+			":status", "abc",
+			// Omitting content type to switch to HTTP mode.
+			"grpc-status", "1", // Make up a gRPC status error
+			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
+		},
+		errCode: codes.Internal,
+	})
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			listAddr, cleanup, err := startServer(t, test.header)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			if err := doHTTPHeaderTest(listAddr, test.errCode); err != nil {
+				t.Error(err)
+			}
+		})
 	}
 }
 
@@ -113,7 +141,12 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			if err := doHTTPHeaderTest(t, test.errCode, test.header); err != nil {
+			listAddr, cleanup, err := startServer(t, test.header)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			if err := doHTTPHeaderTest(listAddr, test.errCode); err != nil {
 				t.Error(err)
 			}
 		})
@@ -169,7 +202,12 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if err := doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer); err != nil {
+			listAddr, cleanup, err := startServer(t, test.responseHeader, test.trailer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			if err := doHTTPHeaderTest(listAddr, test.errCode); err != nil {
 				t.Error(err)
 			}
 		})
@@ -182,24 +220,32 @@ func (s) TestHTTPHeaderFrameErrorHandlingMoreThanTwoHeaders(t *testing.T) {
 		":status", "200",
 		"content-type", "application/grpc",
 	}
-	if err := doHTTPHeaderTest(t, codes.Internal, header, header, header); err != nil {
+	listAddr, cleanup, err := startServer(t, header, header, header)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := doHTTPHeaderTest(listAddr, codes.Internal); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string) error {
+func startServer(t *testing.T, headerFields ...[]string) (serverAddr string, cleanup func(), err error) {
+	t.Helper()
+
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		return fmt.Errorf("listening on %q: %v", "localhost:0", err)
+		return "", nil, fmt.Errorf("listening on %q: %v", "localhost:0", err)
 	}
-	defer lis.Close()
-	server := &httpServer{
-		responses: []httpServerResponse{{trailers: headerFields}},
-	}
+	server := &httpServer{responses: []httpServerResponse{{trailers: headerFields}}}
 	server.start(t, lis)
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	return lis.Addr().String(), func() { lis.Close() }, nil
+}
+
+func doHTTPHeaderTest(lisAddr string, errCode codes.Code) error {
+	cc, err := grpc.Dial(lisAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return fmt.Errorf("dial(%q): %v", lis.Addr().String(), err)
+		return fmt.Errorf("dial(%q): %v", lisAddr, err)
 	}
 	defer cc.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
