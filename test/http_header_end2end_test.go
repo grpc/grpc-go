@@ -32,7 +32,6 @@ import (
 )
 
 func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
-
 	type test struct {
 		name    string
 		header  []string
@@ -83,12 +82,12 @@ func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			listAddr, cleanup, err := startServer(t, test.header)
+			serverAddr, cleanup, err := startServer(t, test.header)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer cleanup()
-			if err := doHTTPHeaderTest(listAddr, test.errCode); err != nil {
+			if err := doHTTPHeaderTest(serverAddr, test.errCode); err != nil {
 				t.Error(err)
 			}
 		})
@@ -140,12 +139,12 @@ func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			listAddr, cleanup, err := startServer(t, test.header)
+			serverAddr, cleanup, err := startServer(t, test.header)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer cleanup()
-			if err := doHTTPHeaderTest(listAddr, test.errCode); err != nil {
+			if err := doHTTPHeaderTest(serverAddr, test.errCode); err != nil {
 				t.Error(err)
 			}
 		})
@@ -201,12 +200,12 @@ func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			listAddr, cleanup, err := startServer(t, test.responseHeader, test.trailer)
+			serverAddr, cleanup, err := startServer(t, test.responseHeader, test.trailer)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer cleanup()
-			if err := doHTTPHeaderTest(listAddr, test.errCode); err != nil {
+			if err := doHTTPHeaderTest(serverAddr, test.errCode); err != nil {
 				t.Error(err)
 			}
 		})
@@ -219,12 +218,12 @@ func (s) TestHTTPHeaderFrameErrorHandlingMoreThanTwoHeaders(t *testing.T) {
 		":status", "200",
 		"content-type", "application/grpc",
 	}
-	listAddr, cleanup, err := startServer(t, header, header, header)
+	serverAddr, cleanup, err := startServer(t, header, header, header)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer cleanup()
-	if err := doHTTPHeaderTest(listAddr, codes.Internal); err != nil {
+	if err := doHTTPHeaderTest(serverAddr, codes.Internal); err != nil {
 		t.Fatal(err)
 	}
 }
