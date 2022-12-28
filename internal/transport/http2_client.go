@@ -785,9 +785,8 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		h.streamID = t.nextID
 		t.nextID += 2
 
-		// drain client transport if nextID > MaxStreamID, which is set to
-		// 75% of math.MaxUint32, which signals gRPC that the connection is closed
-		// and a new one must be created for subsequent RPCs.
+		// Drain client transport if nextID > MaxStreamID which signals gRPC that
+		// the connection is closed and a new one must be created for subsequent RPCs.
 		transportDrainRequired = t.nextID > MaxStreamID
 
 		s.id = h.streamID
@@ -1797,12 +1796,8 @@ func (t *http2Client) getOutFlowWindow() int64 {
 	}
 }
 
-func (t *http2Client) compareStateForTesting(s transportState) error {
+func (t *http2Client) stateForTesting() transportState {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.state != s {
-		return fmt.Errorf("clientTransport.state: %v, want: %v", t.state, s)
-	}
-
-	return nil
+	return t.state
 }

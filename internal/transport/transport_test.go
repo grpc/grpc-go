@@ -536,7 +536,7 @@ func (s) TestInflightStreamClosing(t *testing.T) {
 	}
 }
 
-// tests that when streamID > MaxStreamId, the current client transport drains.
+// Tests that when streamID > MaxStreamId, the current client transport drains.
 func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 	server, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
 	defer cancel()
@@ -545,7 +545,7 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 		Host:   "localhost",
 		Method: "foo.Small",
 	}
-	// override MaxStreamID.
+
 	originalMaxStreamID := MaxStreamID
 	MaxStreamID = 3
 	defer func() {
@@ -563,10 +563,11 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 		t.Fatalf("stream id: %d, want: 1", s.id)
 	}
 
-	if err := ct.compareStateForTesting(reachable); err != nil {
-		t.Fatal(err)
+	if got, want := ct.stateForTesting(), reachable; got != want {
+		t.Fatalf("client transport state %v, want %v", got, want)
 	}
 
+	// The expected stream ID here is 3 since stream IDs are incremented by 2.
 	s, err = ct.NewStream(ctx, callHdr)
 	if err != nil {
 		t.Fatalf("ct.NewStream() = %v", err)
@@ -575,11 +576,10 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 		t.Fatalf("stream id: %d, want: 3", s.id)
 	}
 
-	// verifying that ct.state is draining when next stream ID > MaxStreamId.
-	if err := ct.compareStateForTesting(draining); err != nil {
-		t.Fatal(err)
+	// Verifying that ct.state is draining when next stream ID > MaxStreamId.
+	if got, want := ct.stateForTesting(), draining; got != want {
+		t.Fatalf("client transport state %v, want %v", got, want)
 	}
-
 }
 
 func (s) TestClientSendAndReceive(t *testing.T) {
