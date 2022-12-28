@@ -121,6 +121,8 @@ type oauthAccess struct {
 }
 
 // NewOauthAccess constructs the PerRPCCredentials using a given token.
+//
+// Deprecated: use oauth.TokenSource instead.
 func NewOauthAccess(token *oauth2.Token) credentials.PerRPCCredentials {
 	return oauthAccess{token: *token}
 }
