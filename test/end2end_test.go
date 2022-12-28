@@ -7019,7 +7019,7 @@ func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
 		}
 		for {
 			_, err := streams[i].stream.Recv()
-			if err == io.EOF {
+			if strings.Contains(err.Error(), "EOF") {
 				break
 			}
 			if err != nil {
