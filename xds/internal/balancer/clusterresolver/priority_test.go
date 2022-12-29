@@ -78,17 +78,14 @@ func setupTestEDS(t *testing.T, initChild *internalserviceconfig.BalancerConfig)
 		},
 	}); err != nil {
 		edsb.Close()
-		xdsC.Close()
 		t.Fatal(err)
 	}
 	if _, err := xdsC.WaitForWatchEDS(ctx); err != nil {
 		edsb.Close()
-		xdsC.Close()
 		t.Fatalf("xdsClient.WatchEndpoints failed with error: %v", err)
 	}
 	return edsb, cc, xdsC, func() {
 		edsb.Close()
-		xdsC.Close()
 	}
 }
 

@@ -50,7 +50,7 @@ func (s) TestLRSClient(t *testing.T) {
 	}
 	defer sCleanup()
 
-	xdsC, err := NewWithConfigForTesting(&bootstrap.Config{
+	xdsC, close, err := NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI:    fs.Address,
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -61,9 +61,7 @@ func (s) TestLRSClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
-	defer xdsC.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+	defer close()
 
 	// Report to the same address should not create new ClientConn.
 	store1, lrsCancel1 := xdsC.ReportLoad(
@@ -77,6 +75,8 @@ func (s) TestLRSClient(t *testing.T) {
 	)
 	defer lrsCancel1()
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if u, err := fs.NewConnChan.Receive(ctx); err != nil {
 		t.Errorf("unexpected timeout: %v, %v, want NewConn", u, err)
 	}

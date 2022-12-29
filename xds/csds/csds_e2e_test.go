@@ -108,11 +108,11 @@ func (s) TestCSDS(t *testing.T) {
 
 	// Create an xDS client. This will end up using the same singleton as used
 	// by the CSDS service.
-	xdsC, err := xdsclient.New()
+	xdsC, close, err := xdsclient.New()
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer xdsC.Close()
+	defer close()
 
 	// Initialize an gRPC server and register CSDS on it.
 	server := grpc.NewServer()

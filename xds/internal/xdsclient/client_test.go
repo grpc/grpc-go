@@ -34,9 +34,6 @@ func Test(t *testing.T) {
 }
 
 const (
-	testXDSServer          = "xds-server"
-	testXDSServerAuthority = "xds-server-authority"
-
 	defaultTestWatchExpiryTimeout = 500 * time.Millisecond
 	defaultTestTimeout            = 5 * time.Second
 	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.

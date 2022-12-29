@@ -66,8 +66,8 @@ var (
 // default and the third one pointing to the non-default).
 //
 // Returns two listeners used by the default and non-default management servers
-// respectively, and the xDS client.
-func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.Duration) (*testutils.ListenerWrapper, *testutils.ListenerWrapper, xdsclient.XDSClient) {
+// respectively, and the xDS client and its close function.
+func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.Duration) (*testutils.ListenerWrapper, *testutils.ListenerWrapper, xdsclient.XDSClient, func()) {
 	overrideFedEnvVar(t)
 
 	// Create listener wrappers which notify on to a channel whenever a new
@@ -94,7 +94,7 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	// have empty server configs, and therefore end up using the default server
 	// config, which points to the above management server.
 	nodeID := uuid.New().String()
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI:    defaultAuthorityServer.Address,
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -117,7 +117,6 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
-	t.Cleanup(func() { client.Close() })
 
 	resources := e2e.UpdateOptions{
 		NodeID: nodeID,
@@ -132,7 +131,7 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	if err := defaultAuthorityServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
-	return lisDefault, lisNonDefault, client
+	return lisDefault, lisNonDefault, client, close
 }
 
 // TestAuthorityShare tests the authority sharing logic. The test verifies the
@@ -145,7 +144,8 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 func (s) TestAuthorityShare(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	lis, _, client := setupForAuthorityTests(ctx, t, time.Duration(0))
+	lis, _, client, close := setupForAuthorityTests(ctx, t, time.Duration(0))
+	defer close()
 
 	// Verify that no connection is established to the management server at this
 	// point. A transport is created only when a resource (which belongs to that
@@ -189,7 +189,8 @@ func (s) TestAuthorityShare(t *testing.T) {
 func (s) TestAuthorityIdleTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	lis, _, client := setupForAuthorityTests(ctx, t, defaultTestIdleAuthorityTimeout)
+	lis, _, client, close := setupForAuthorityTests(ctx, t, defaultTestIdleAuthorityTimeout)
+	defer close()
 
 	// Request the first resource. Verify that a new transport is created.
 	cdsCancel1 := client.WatchCluster(authorityTestResourceName11, func(u xdsresource.ClusterUpdate, err error) {})
@@ -234,7 +235,7 @@ func (s) TestAuthorityClientClose(t *testing.T) {
 	// test, until explicitly closed.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	lisDefault, lisNonDefault, client := setupForAuthorityTests(ctx, t, time.Duration(2*defaultTestTimeout))
+	lisDefault, lisNonDefault, client, close := setupForAuthorityTests(ctx, t, time.Duration(2*defaultTestTimeout))
 
 	// Request the first resource. Verify that a new transport is created to the
 	// default management server.
@@ -267,7 +268,7 @@ func (s) TestAuthorityClientClose(t *testing.T) {
 
 	// Closing the xDS client should close the connection to both management
 	// servers, even though we have an open watch to one of them.
-	client.Close()
+	close()
 	if _, err := connDefault.CloseCh.Receive(ctx); err != nil {
 		t.Fatal("Connection to management server not closed after client close")
 	}
@@ -281,7 +282,8 @@ func (s) TestAuthorityClientClose(t *testing.T) {
 func (s) TestAuthorityRevive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	lis, _, client := setupForAuthorityTests(ctx, t, defaultTestIdleAuthorityTimeout)
+	lis, _, client, close := setupForAuthorityTests(ctx, t, defaultTestIdleAuthorityTimeout)
+	defer close()
 
 	// Request the first resource. Verify that a new transport is created.
 	cdsCancel1 := client.WatchCluster(authorityTestResourceName11, func(u xdsresource.ClusterUpdate, err error) {})

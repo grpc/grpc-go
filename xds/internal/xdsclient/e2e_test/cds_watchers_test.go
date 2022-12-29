@@ -148,11 +148,11 @@ func (s) TestCDSWatch(t *testing.T) {
 			defer cleanup()
 
 			// Create an xDS client with the above bootstrap contents.
-			client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+			client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
-			defer client.Close()
+			defer close()
 
 			// Register a watch for a cluster resource and have the watch
 			// callback push the received update on to a channel.
@@ -278,11 +278,11 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 			defer cleanup()
 
 			// Create an xDS client with the above bootstrap contents.
-			client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+			client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
-			defer client.Close()
+			defer close()
 
 			// Register two watches for the same cluster resource and have the
 			// callbacks push the received updates on to a channel.
@@ -363,11 +363,11 @@ func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register two watches for the same cluster resource and have the
 	// callbacks push the received updates on to a channel.
@@ -460,11 +460,11 @@ func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
@@ -532,7 +532,7 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// receive a response for the watch being registered by the test.
 
 	// Create an xDS client talking to a non-existent management server.
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI:    "dummy management server address",
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -543,7 +543,7 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register a watch for a resource which is expected to be invoked with an
 	// error after the watch expiry timer fires.
@@ -579,7 +579,7 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 
 	// Create an xDS client talking to the above management server.
 	nodeID := uuid.New().String()
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI:    mgmtServer.Address,
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -590,7 +590,7 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
@@ -648,11 +648,11 @@ func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register two watches for two cluster resources and have the
 	// callbacks push the received updates on to a channel.
@@ -757,11 +757,11 @@ func (s) TestCDSWatch_NACKError(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
@@ -806,11 +806,11 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register two watches for cluster resources. The first watch is expected
 	// to receive an error because the received resource is NACK'ed. The second
@@ -880,11 +880,11 @@ func (s) TestCDSWatch_PartialResponse(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register two watches for two cluster resources and have the
 	// callbacks push the received updates on to a channel.

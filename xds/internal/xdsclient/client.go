@@ -56,6 +56,4 @@ type XDSClient interface {
 	ReportLoad(*bootstrap.ServerConfig) (*load.Store, func())
 
 	BootstrapConfig() *bootstrap.Config
-
-	Close()
 }

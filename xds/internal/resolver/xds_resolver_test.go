@@ -30,11 +30,13 @@ import (
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/grpcrand"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
@@ -43,7 +45,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
 	"google.golang.org/grpc/status"
-	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 	"google.golang.org/grpc/xds/internal/balancer/clustermanager"
 	"google.golang.org/grpc/xds/internal/balancer/ringhash"
 	"google.golang.org/grpc/xds/internal/httpfilter"
@@ -52,13 +53,15 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+
+	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 )
 
 const (
 	targetStr               = "target"
 	routeStr                = "route"
 	cluster                 = "cluster"
-	defaultTestTimeout      = 1 * time.Second
+	defaultTestTimeout      = 10 * time.Second
 	defaultTestShortTimeout = 100 * time.Microsecond
 )
 
@@ -76,15 +79,14 @@ func Test(t *testing.T) {
 }
 
 func (s) TestRegister(t *testing.T) {
-	b := resolver.Get(xdsScheme)
-	if b == nil {
+	if resolver.Get(xdsScheme) == nil {
 		t.Errorf("scheme %v is not registered", xdsScheme)
 	}
 }
 
-// testClientConn is a fake implemetation of resolver.ClientConn. All is does
-// is to store the state received from the resolver locally and signal that
-// event through a channel.
+// testClientConn is a fake implemetation of resolver.ClientConn that pushes
+// state updates and errors returned by the resolver on to channels for
+// consumption by tests.
 type testClientConn struct {
 	resolver.ClientConn
 	stateCh *testutils.Channel
@@ -111,34 +113,35 @@ func newTestClientConn() *testClientConn {
 	}
 }
 
-// TestResolverBuilder tests the xdsResolverBuilder's Build method with
+// TestResolverBuilder tests the resolver builder's Build() method with
 // different parameters.
 func (s) TestResolverBuilder(t *testing.T) {
 	tests := []struct {
 		name          string
-		xdsClientFunc func() (xdsclient.XDSClient, error)
+		xdsClientFunc func(closeCh chan struct{}) (xdsclient.XDSClient, func(), error)
 		target        resolver.Target
+		buildOpts     resolver.BuildOptions
 		wantErr       bool
 	}{
 		{
-			name: "simple-good",
-			xdsClientFunc: func() (xdsclient.XDSClient, error) {
-				return fakeclient.NewClient(), nil
+			name: "good",
+			xdsClientFunc: func(closeCh chan struct{}) (xdsclient.XDSClient, func(), error) {
+				return fakeclient.NewClient(), func() { close(closeCh) }, nil
 			},
 			target:  target,
 			wantErr: false,
 		},
 		{
-			name: "newXDSClient-throws-error",
-			xdsClientFunc: func() (xdsclient.XDSClient, error) {
-				return nil, errors.New("newXDSClient-throws-error")
+			name: "xDS client creation fails",
+			xdsClientFunc: func(closeCh chan struct{}) (xdsclient.XDSClient, func(), error) {
+				return nil, func() { close(closeCh) }, errors.New("failed to create xDS client")
 			},
 			target:  target,
 			wantErr: true,
 		},
 		{
 			name: "authority not defined in bootstrap",
-			xdsClientFunc: func() (xdsclient.XDSClient, error) {
+			xdsClientFunc: func(closeCh chan struct{}) (xdsclient.XDSClient, func(), error) {
 				c := fakeclient.NewClient()
 				c.SetBootstrapConfig(&bootstrap.Config{
 					ClientDefaultListenerResourceNameTemplate: "%s",
@@ -148,7 +151,7 @@ func (s) TestResolverBuilder(t *testing.T) {
 						},
 					},
 				})
-				return c, nil
+				return c, func() { close(closeCh) }, nil
 			},
 			target: resolver.Target{
 				URL: url.URL{
@@ -158,12 +161,32 @@ func (s) TestResolverBuilder(t *testing.T) {
 			},
 			wantErr: true,
 		},
+		{
+			name: "xDS creds specified without certificate providers in bootstrap",
+			xdsClientFunc: func(closeCh chan struct{}) (xdsclient.XDSClient, func(), error) {
+				c := fakeclient.NewClient()
+				c.SetBootstrapConfig(&bootstrap.Config{})
+				return c, func() { close(closeCh) }, nil
+			},
+			target: target,
+			buildOpts: resolver.BuildOptions{
+				DialCreds: func() credentials.TransportCredentials {
+					creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
+					if err != nil {
+						t.Fatalf("xds.NewClientCredentials() failed: %v", err)
+					}
+					return creds
+				}(),
+			},
+			wantErr: true,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// Fake out the xdsClient creation process by providing a fake.
+			// Use a fake xDS client that closes the below channel when closed.
+			closeCh := make(chan struct{})
 			oldClientMaker := newXDSClient
-			newXDSClient = test.xdsClientFunc
+			newXDSClient = func() (xdsclient.XDSClient, func(), error) { return test.xdsClientFunc(closeCh) }
 			defer func() {
 				newXDSClient = oldClientMaker
 			}()
@@ -173,7 +196,7 @@ func (s) TestResolverBuilder(t *testing.T) {
 				t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
 			}
 
-			r, err := builder.Build(test.target, newTestClientConn(), resolver.BuildOptions{})
+			r, err := builder.Build(test.target, newTestClientConn(), test.buildOpts)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("builder.Build(%v) returned err: %v, wantErr: %v", target, err, test.wantErr)
 			}
@@ -182,48 +205,13 @@ func (s) TestResolverBuilder(t *testing.T) {
 				return
 			}
 			r.Close()
+
+			select {
+			case <-closeCh:
+			case <-time.After(defaultTestTimeout):
+				t.Fatal("Timeout when waiting for xDS client to be closed")
+			}
 		})
-	}
-}
-
-// TestResolverBuilder_xdsCredsBootstrapMismatch tests the case where an xds
-// resolver is built with xds credentials being specified by the user. The
-// bootstrap file does not contain any certificate provider configuration
-// though, and therefore we expect the resolver build to fail.
-func (s) TestResolverBuilder_xdsCredsBootstrapMismatch(t *testing.T) {
-	// Fake out the xdsClient creation process by providing a fake, which does
-	// not have any certificate provider configuration.
-	fc := fakeclient.NewClient()
-	fc.SetBootstrapConfig(&bootstrap.Config{})
-	oldClientMaker := newXDSClient
-	newXDSClient = func() (xdsclient.XDSClient, error) {
-		return fc, nil
-	}
-	defer func() { newXDSClient = oldClientMaker }()
-	defer func() {
-		select {
-		case <-time.After(defaultTestTimeout):
-			t.Fatalf("timeout waiting for close")
-		case <-fc.Closed.Done():
-		}
-	}()
-
-	builder := resolver.Get(xdsScheme)
-	if builder == nil {
-		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
-	}
-
-	// Create xds credentials to be passed to resolver.Build().
-	creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
-	if err != nil {
-		t.Fatalf("xds.NewClientCredentials() failed: %v", err)
-	}
-
-	// Since the fake xds client is not configured with any certificate provider
-	// configs, and we are specifying xds credentials in the call to
-	// resolver.Build(), we expect it to fail.
-	if _, err := builder.Build(target, newTestClientConn(), resolver.BuildOptions{DialCreds: creds}); err == nil {
-		t.Fatal("builder.Build() succeeded when expected to fail")
 	}
 }
 
@@ -240,8 +228,9 @@ func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *fakeclient.Client, 
 		fc.SetBootstrapConfig(opts.bootstrapC)
 	}
 	oldClientMaker := newXDSClient
-	newXDSClient = func() (xdsclient.XDSClient, error) {
-		return fc, nil
+	closeCh := make(chan struct{})
+	newXDSClient = func() (xdsclient.XDSClient, func(), error) {
+		return fc, grpcsync.OnceFunc(func() { close(closeCh) }), nil
 	}
 	cancel := func() {
 		// Make sure the xDS client is closed, in all (successful or failed)
@@ -249,7 +238,7 @@ func testSetup(t *testing.T, opts setupOpts) (*xdsResolver, *fakeclient.Client, 
 		select {
 		case <-time.After(defaultTestTimeout):
 			t.Fatalf("timeout waiting for close")
-		case <-fc.Closed.Done():
+		case <-closeCh:
 		}
 		newXDSClient = oldClientMaker
 	}
@@ -410,7 +399,9 @@ func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 		},
 	}, nil)
 
-	if gotVal, gotErr := tcc.stateCh.Receive(ctx); gotErr != context.DeadlineExceeded {
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if gotVal, gotErr := tcc.stateCh.Receive(sCtx); gotErr != context.DeadlineExceeded {
 		t.Fatalf("ClientConn.UpdateState called after xdsResolver is closed: %v", gotVal)
 	}
 }
@@ -418,12 +409,9 @@ func (s) TestXDSResolverWatchCallbackAfterClose(t *testing.T) {
 // TestXDSResolverCloseClosesXDSClient tests that the XDS resolver's Close
 // method closes the XDS client.
 func (s) TestXDSResolverCloseClosesXDSClient(t *testing.T) {
-	xdsR, xdsC, _, cancel := testSetup(t, setupOpts{target: target})
-	defer cancel()
+	xdsR, _, _, cancel := testSetup(t, setupOpts{target: target})
 	xdsR.Close()
-	if !xdsC.Closed.HasFired() {
-		t.Fatalf("xds client not closed by xds resolver Close method")
-	}
+	cancel() // Blocks until the xDS client is closed.
 }
 
 // TestXDSResolverBadServiceUpdate tests the case the xdsClient returns a bad
@@ -471,13 +459,13 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 		{
 			routes: []*xdsresource.Route{{Prefix: newStringP(""), WeightedClusters: map[string]xdsresource.WeightedCluster{"test-cluster-1": {Weight: 1}}}},
 			wantJSON: `{"loadBalancingConfig":[{
-    "xds_cluster_manager_experimental":{
-      "children":{
-        "cluster:test-cluster-1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
-        }
-      }
-    }}]}`,
+	 "xds_cluster_manager_experimental":{
+	   "children":{
+		 "cluster:test-cluster-1":{
+		   "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+		 }
+	   }
+	 }}]}`,
 			wantClusters: map[string]bool{"cluster:test-cluster-1": true},
 		},
 		{
@@ -489,19 +477,19 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			// well as this update, as the previous config selector still
 			// references the old cluster when the new one is pushed.
 			wantJSON: `{"loadBalancingConfig":[{
-    "xds_cluster_manager_experimental":{
-      "children":{
-        "cluster:test-cluster-1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
-        },
-        "cluster:cluster_1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
-        },
-        "cluster:cluster_2":{
-          "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
-        }
-      }
-    }}]}`,
+	 "xds_cluster_manager_experimental":{
+	   "children":{
+		 "cluster:test-cluster-1":{
+		   "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+		 },
+		 "cluster:cluster_1":{
+		   "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
+		 },
+		 "cluster:cluster_2":{
+		   "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
+		 }
+	   }
+	 }}]}`,
 			wantClusters: map[string]bool{"cluster:cluster_1": true, "cluster:cluster_2": true},
 		},
 		{
@@ -513,16 +501,16 @@ func (s) TestXDSResolverGoodServiceUpdate(t *testing.T) {
 			// stopped, so there are no more references to the first cluster.
 			// Only the second update's clusters should remain.
 			wantJSON: `{"loadBalancingConfig":[{
-    "xds_cluster_manager_experimental":{
-      "children":{
-        "cluster:cluster_1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
-        },
-        "cluster:cluster_2":{
-          "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
-        }
-      }
-    }}]}`,
+	 "xds_cluster_manager_experimental":{
+	   "children":{
+		 "cluster:cluster_1":{
+		   "childPolicy":[{"cds_experimental":{"cluster":"cluster_1"}}]
+		 },
+		 "cluster:cluster_2":{
+		   "childPolicy":[{"cds_experimental":{"cluster":"cluster_2"}}]
+		 }
+	   }
+	 }}]}`,
 			wantClusters: map[string]bool{"cluster:cluster_1": true, "cluster:cluster_2": true},
 		},
 	} {
@@ -723,13 +711,13 @@ func (s) TestXDSResolverRemovedResource(t *testing.T) {
 		},
 	}, nil)
 	wantJSON := `{"loadBalancingConfig":[{
-    "xds_cluster_manager_experimental":{
-      "children":{
-        "cluster:test-cluster-1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
-        }
-      }
-    }}]}`
+	 "xds_cluster_manager_experimental":{
+	   "children":{
+		 "cluster:test-cluster-1":{
+		   "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+		 }
+	   }
+	 }}]}`
 	wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON)
 
 	gotState, err := tcc.stateCh.Receive(ctx)
@@ -985,13 +973,13 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 	}
 
 	wantJSON := `{"loadBalancingConfig":[{
-    "xds_cluster_manager_experimental":{
-      "children":{
-        "cluster:test-cluster-1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
-        }
-      }
-    }}]}`
+	 "xds_cluster_manager_experimental":{
+	   "children":{
+		 "cluster:test-cluster-1":{
+		   "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+		 }
+	   }
+	 }}]}`
 	wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
@@ -1044,16 +1032,16 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
 	}
 	wantJSON2 := `{"loadBalancingConfig":[{
-    "xds_cluster_manager_experimental":{
-      "children":{
-        "cluster:test-cluster-1":{
-          "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
-        },
-        "cluster:NEW":{
-          "childPolicy":[{"cds_experimental":{"cluster":"NEW"}}]
-        }
-      }
-    }}]}`
+	 "xds_cluster_manager_experimental":{
+	   "children":{
+		 "cluster:test-cluster-1":{
+		   "childPolicy":[{"cds_experimental":{"cluster":"test-cluster-1"}}]
+		 },
+		 "cluster:NEW":{
+		   "childPolicy":[{"cds_experimental":{"cluster":"NEW"}}]
+		 }
+	   }
+	 }}]}`
 	wantSCParsed2 := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON2)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed2.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
@@ -1082,13 +1070,13 @@ func (s) TestXDSResolverDelayedOnCommitted(t *testing.T) {
 		t.Fatalf("ClientConn.UpdateState received error in service config: %v", rState.ServiceConfig.Err)
 	}
 	wantJSON3 := `{"loadBalancingConfig":[{
-    "xds_cluster_manager_experimental":{
-      "children":{
-        "cluster:NEW":{
-          "childPolicy":[{"cds_experimental":{"cluster":"NEW"}}]
-        }
-      }
-    }}]}`
+	 "xds_cluster_manager_experimental":{
+	   "children":{
+		 "cluster:NEW":{
+		   "childPolicy":[{"cds_experimental":{"cluster":"NEW"}}]
+		 }
+	   }
+	 }}]}`
 	wantSCParsed3 := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(wantJSON3)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed3.Config) {
 		t.Errorf("ClientConn.UpdateState received different service config")
@@ -1166,7 +1154,9 @@ func (s) TestXDSResolverResourceNotFoundError(t *testing.T) {
 	suErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource removed error")
 	xdsC.InvokeWatchRouteConfigCallback("", xdsresource.RouteConfigUpdate{}, suErr)
 
-	if gotErrVal, gotErr := tcc.errorCh.Receive(ctx); gotErr != context.DeadlineExceeded {
+	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
+	defer sCancel()
+	if gotErrVal, gotErr := tcc.errorCh.Receive(sCtx); gotErr != context.DeadlineExceeded {
 		t.Fatalf("ClientConn.ReportError() received %v, %v, want channel recv timeout", gotErrVal, gotErr)
 	}
 

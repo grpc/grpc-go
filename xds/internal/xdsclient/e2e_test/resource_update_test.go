@@ -243,7 +243,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+			client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 				XDSServer: &bootstrap.ServerConfig{
 					ServerURI:    mgmtServer.Address,
 					Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -255,7 +255,7 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create xds client: %v", err)
 			}
-			defer client.Close()
+			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
 			// A wrapper struct to wrap the update and the associated error, as
@@ -510,7 +510,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+			client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 				XDSServer: &bootstrap.ServerConfig{
 					ServerURI:    mgmtServer.Address,
 					Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -522,7 +522,7 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create xds client: %v", err)
 			}
-			defer client.Close()
+			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
 			// A wrapper struct to wrap the update and the associated error, as
@@ -753,7 +753,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+			client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 				XDSServer: &bootstrap.ServerConfig{
 					ServerURI:    mgmtServer.Address,
 					Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -765,7 +765,7 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create xds client: %v", err)
 			}
-			defer client.Close()
+			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
 			// A wrapper struct to wrap the update and the associated error, as
@@ -1079,7 +1079,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 
 			// Create an xDS client talking to the above management server.
 			nodeID := uuid.New().String()
-			client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+			client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 				XDSServer: &bootstrap.ServerConfig{
 					ServerURI:    mgmtServer.Address,
 					Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -1091,7 +1091,7 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to create xds client: %v", err)
 			}
-			defer client.Close()
+			defer close()
 			t.Logf("Created xDS client to %s", mgmtServer.Address)
 
 			// A wrapper struct to wrap the update and the associated error, as

@@ -88,7 +88,6 @@ func (s) TestDropByCategory(t *testing.T) {
 
 	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
 	xdsC := fakeclient.NewClient()
-	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
@@ -248,7 +247,6 @@ func (s) TestDropByCategory(t *testing.T) {
 func (s) TestDropCircuitBreaking(t *testing.T) {
 	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
 	xdsC := fakeclient.NewClient()
-	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
@@ -361,7 +359,6 @@ func (s) TestDropCircuitBreaking(t *testing.T) {
 func (s) TestPickerUpdateAfterClose(t *testing.T) {
 	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
 	xdsC := fakeclient.NewClient()
-	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
@@ -430,7 +427,6 @@ func (s) TestClusterNameInAddressAttributes(t *testing.T) {
 
 	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
 	xdsC := fakeclient.NewClient()
-	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
@@ -506,7 +502,6 @@ func (s) TestReResolution(t *testing.T) {
 
 	defer xdsclient.ClearCounterForTesting(testClusterName, testServiceName)
 	xdsC := fakeclient.NewClient()
-	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
@@ -574,7 +569,6 @@ func (s) TestLoadReporting(t *testing.T) {
 	}
 
 	xdsC := fakeclient.NewClient()
-	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)
@@ -689,7 +683,6 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 	}
 
 	xdsC := fakeclient.NewClient()
-	defer xdsC.Close()
 
 	builder := balancer.Get(Name)
 	cc := testutils.NewTestClientConn(t)

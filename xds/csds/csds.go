@@ -62,18 +62,19 @@ func prefixLogger(s *ClientStatusDiscoveryServer) *internalgrpclog.PrefixLogger 
 type ClientStatusDiscoveryServer struct {
 	logger *internalgrpclog.PrefixLogger
 
-	mu        sync.Mutex
-	xdsClient xdsclient.XDSClient
+	mu             sync.Mutex
+	xdsClient      xdsclient.XDSClient
+	xdsClientClose func()
 }
 
 // NewClientStatusDiscoveryServer returns an implementation of the CSDS server
 // that can be registered on a gRPC server.
 func NewClientStatusDiscoveryServer() (*ClientStatusDiscoveryServer, error) {
-	c, err := xdsclient.New()
+	c, close, err := xdsclient.New()
 	if err != nil {
 		logger.Warningf("Failed to create xDS client: %v", err)
 	}
-	s := &ClientStatusDiscoveryServer{xdsClient: c}
+	s := &ClientStatusDiscoveryServer{xdsClient: c, xdsClientClose: close}
 	s.logger = prefixLogger(s)
 	s.logger.Infof("Created CSDS server, with xdsClient %p", c)
 	return s, nil
@@ -136,8 +137,8 @@ func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statusp
 // Close cleans up the resources.
 func (s *ClientStatusDiscoveryServer) Close() {
 	s.mu.Lock()
-	if s.xdsClient != nil {
-		s.xdsClient.Close()
+	if s.xdsClientClose != nil {
+		s.xdsClientClose()
 	}
 	s.mu.Unlock()
 }

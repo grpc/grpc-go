@@ -98,11 +98,11 @@ func (s) TestDumpResources(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Dump resources and expect empty configs.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
