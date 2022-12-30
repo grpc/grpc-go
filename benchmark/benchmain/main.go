@@ -96,6 +96,7 @@ var (
 	readRespSizeBytes     = flags.IntSlice("respSizeBytes", nil, "Response size in bytes - may be a comma-separated list")
 	reqPayloadCurveFiles  = flags.StringSlice("reqPayloadCurveFiles", nil, "comma-separated list of CSV files describing the shape a random distribution of request payload sizes")
 	respPayloadCurveFiles = flags.StringSlice("respPayloadCurveFiles", nil, "comma-separated list of CSV files describing the shape a random distribution of response payload sizes")
+	streamCounts          = flags.IntSlice("streamCounts", nil, "Stream counts in a single stream - may be a comma-separated list")
 	benchTime             = flag.Duration("benchtime", time.Second, "Configures the amount of time to run each benchmark")
 	memProfile            = flag.String("memProfile", "", "Enables memory profiling output to the filename provided.")
 	memProfileRate        = flag.Int("memProfileRate", 512*1024, "Configures the memory profiling rate. \n"+
@@ -151,6 +152,7 @@ var (
 	defaultMaxConcurrentCalls = []int{1, 8, 64, 512}
 	defaultReqSizeBytes       = []int{1, 1024, 1024 * 1024}
 	defaultRespSizeBytes      = []int{1, 1024, 1024 * 1024}
+	defaultStreamCounts       = []int{1, 8}
 	networks                  = map[string]latency.Network{
 		networkModeLocal: latency.Local,
 		networkModeLAN:   latency.LAN,
@@ -384,13 +386,14 @@ func makeFuncStream(bf stats.Features) (rpcCallFunc, rpcCleanupFunc) {
 	return func(pos int) {
 		reqSizeBytes := bf.ReqSizeBytes
 		respSizeBytes := bf.RespSizeBytes
+		streamCount := bf.StreamCount
 		if bf.ReqPayloadCurve != nil {
 			reqSizeBytes = bf.ReqPayloadCurve.ChooseRandom()
 		}
 		if bf.RespPayloadCurve != nil {
 			respSizeBytes = bf.RespPayloadCurve.ChooseRandom()
 		}
-		streamCaller(streams[pos], reqSizeBytes, respSizeBytes)
+		streamCaller(streams[pos], reqSizeBytes, respSizeBytes, streamCount)
 	}, cleanup
 }
 
@@ -455,8 +458,8 @@ func unaryCaller(client testgrpc.BenchmarkServiceClient, reqSize, respSize int) 
 	}
 }
 
-func streamCaller(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, respSize int) {
-	if err := bm.DoStreamingRoundTrip(stream, reqSize, respSize); err != nil {
+func streamCaller(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, respSize, streamCount int) {
+	if err := bm.DoStreamingRoundTrip(stream, reqSize, respSize, streamCount); err != nil {
 		logger.Fatalf("DoStreamingRoundTrip failed: %v", err)
 	}
 }
@@ -522,6 +525,7 @@ type featureOpts struct {
 	respSizeBytes         []int
 	reqPayloadCurves      []*stats.PayloadCurve
 	respPayloadCurves     []*stats.PayloadCurve
+	streamCounts          []int
 	compModes             []string
 	enableChannelz        []bool
 	enablePreloader       []bool
@@ -559,6 +563,8 @@ func makeFeaturesNum(b *benchOpts) []int {
 			featuresNum[i] = len(b.features.reqPayloadCurves)
 		case stats.RespPayloadCurveIndex:
 			featuresNum[i] = len(b.features.respPayloadCurves)
+		case stats.StreamCountsIndex:
+			featuresNum[i] = len(b.features.streamCounts)
 		case stats.CompModesIndex:
 			featuresNum[i] = len(b.features.compModes)
 		case stats.EnableChannelzIndex:
@@ -632,6 +638,7 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 			Kbps:                  b.features.readKbps[curPos[stats.ReadKbpsIndex]],
 			MTU:                   b.features.readMTU[curPos[stats.ReadMTUIndex]],
 			MaxConcurrentCalls:    b.features.maxConcurrentCalls[curPos[stats.MaxConcurrentCallsIndex]],
+			StreamCount:           b.features.streamCounts[curPos[stats.StreamCountsIndex]],
 			ModeCompressor:        b.features.compModes[curPos[stats.CompModesIndex]],
 			EnableChannelz:        b.features.enableChannelz[curPos[stats.EnableChannelzIndex]],
 			EnablePreloader:       b.features.enablePreloader[curPos[stats.EnablePreloaderIndex]],
@@ -702,6 +709,7 @@ func processFlags() *benchOpts {
 			maxConcurrentCalls:    append([]int(nil), *maxConcurrentCalls...),
 			reqSizeBytes:          append([]int(nil), *readReqSizeBytes...),
 			respSizeBytes:         append([]int(nil), *readRespSizeBytes...),
+			streamCounts:          append([]int(nil), *streamCounts...),
 			compModes:             setCompressorMode(*compressorMode),
 			enableChannelz:        setToggleMode(*channelzOn),
 			enablePreloader:       setToggleMode(*preloaderMode),
@@ -745,6 +753,9 @@ func processFlags() *benchOpts {
 			opts.features.respPayloadCurves = append(opts.features.respPayloadCurves, pc)
 		}
 		opts.features.respSizeBytes = nil
+	}
+	if len(opts.features.streamCounts) == 0 {
+		opts.features.streamCounts = defaultStreamCounts
 	}
 
 	// Re-write latency, kpbs and mtu if network mode is set.

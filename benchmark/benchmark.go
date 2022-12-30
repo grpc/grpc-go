@@ -27,6 +27,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"sync"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -232,40 +233,60 @@ func DoUnaryCall(tc testgrpc.BenchmarkServiceClient, reqSize, respSize int) erro
 }
 
 // DoStreamingRoundTrip performs a round trip for a single streaming rpc.
-func DoStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
+func DoStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, respSize, streamCount int) error {
 	pl := NewPayload(testpb.PayloadType_COMPRESSABLE, reqSize)
 	req := &testpb.SimpleRequest{
 		ResponseType: pl.Type,
 		ResponseSize: int32(respSize),
 		Payload:      pl,
 	}
-	if err := stream.Send(req); err != nil {
-		return fmt.Errorf("/BenchmarkService/StreamingCall.Send(_) = %v, want <nil>", err)
-	}
-	if _, err := stream.Recv(); err != nil {
-		// EOF is a valid error here.
-		if err == io.EOF {
-			return nil
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < streamCount; i++ {
+			if err := stream.Send(req); err != nil {
+				log.Fatalf("/BenchmarkService/StreamingCall.Send(_) = %v, want <nil>", err)
+			}
 		}
-		return fmt.Errorf("/BenchmarkService/StreamingCall.Recv(_) = %v, want <nil>", err)
+	}()
+	for i := 0; i < streamCount; i++ {
+		if _, err := stream.Recv(); err != nil {
+			// EOF is a valid error here.
+			if err == io.EOF {
+				return nil
+			}
+			return fmt.Errorf("/BenchmarkService/StreamingCall.Recv(_) = %v, want <nil>", err)
+		}
 	}
+	wg.Wait()
 	return nil
 }
 
 // DoByteBufStreamingRoundTrip performs a round trip for a single streaming rpc, using a custom codec for byte buffer.
-func DoByteBufStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, respSize int) error {
-	out := make([]byte, reqSize)
-	if err := stream.(grpc.ClientStream).SendMsg(&out); err != nil {
-		return fmt.Errorf("/BenchmarkService/StreamingCall.(ClientStream).SendMsg(_) = %v, want <nil>", err)
-	}
-	var in []byte
-	if err := stream.(grpc.ClientStream).RecvMsg(&in); err != nil {
-		// EOF is a valid error here.
-		if err == io.EOF {
-			return nil
+func DoByteBufStreamingRoundTrip(stream testgrpc.BenchmarkService_StreamingCallClient, reqSize, respSize, streamCount int) error {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		out := make([]byte, reqSize)
+		for i := 0; i < streamCount; i++ {
+			if err := stream.(grpc.ClientStream).SendMsg(&out); err != nil {
+				log.Fatalf("/BenchmarkService/StreamingCall.(ClientStream).SendMsg(_) = %v, want <nil>", err)
+			}
 		}
-		return fmt.Errorf("/BenchmarkService/StreamingCall.(ClientStream).RecvMsg(_) = %v, want <nil>", err)
+	}()
+	var in []byte
+	for i := 0; i < streamCount; i++ {
+		if err := stream.(grpc.ClientStream).RecvMsg(&in); err != nil {
+			// EOF is a valid error here.
+			if err == io.EOF {
+				return nil
+			}
+			return fmt.Errorf("/BenchmarkService/StreamingCall.(ClientStream).RecvMsg(_) = %v, want <nil>", err)
+		}
 	}
+	wg.Wait()
 	return nil
 }
 

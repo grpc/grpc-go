@@ -201,7 +201,7 @@ func performRPCs(config *testpb.ClientConfig, conns []*grpc.ClientConn, bc *benc
 		bc.doCloseLoopUnary(conns, rpcCountPerConn, payloadReqSize, payloadRespSize)
 		// TODO open loop.
 	case testpb.RpcType_STREAMING:
-		bc.doCloseLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, payloadType)
+		bc.doCloseLoopStreaming(conns, rpcCountPerConn, payloadReqSize, payloadRespSize, 1, payloadType)
 		// TODO open loop.
 	default:
 		return status.Errorf(codes.InvalidArgument, "unknown rpc type: %v", config.RpcType)
@@ -289,8 +289,8 @@ func (bc *benchmarkClient) doCloseLoopUnary(conns []*grpc.ClientConn, rpcCountPe
 	}
 }
 
-func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, payloadType string) {
-	var doRPC func(testgrpc.BenchmarkService_StreamingCallClient, int, int) error
+func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCountPerConn int, reqSize int, respSize int, streamCount int, payloadType string) {
+	var doRPC func(testgrpc.BenchmarkService_StreamingCallClient, int, int, int) error
 	if payloadType == "bytebuf" {
 		doRPC = benchmark.DoByteBufStreamingRoundTrip
 	} else {
@@ -315,7 +315,7 @@ func (bc *benchmarkClient) doCloseLoopStreaming(conns []*grpc.ClientConn, rpcCou
 				// before starting benchmark.
 				for {
 					start := time.Now()
-					if err := doRPC(stream, reqSize, respSize); err != nil {
+					if err := doRPC(stream, reqSize, respSize, streamCount); err != nil {
 						return
 					}
 					elapse := time.Since(start)

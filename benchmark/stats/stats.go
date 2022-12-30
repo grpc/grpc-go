@@ -49,6 +49,7 @@ const (
 	RespSizeBytesIndex
 	ReqPayloadCurveIndex
 	RespPayloadCurveIndex
+	StreamCountsIndex
 	CompModesIndex
 	EnableChannelzIndex
 	EnablePreloaderIndex
@@ -107,6 +108,8 @@ type Features struct {
 	// RespPayloadCurve is a histogram representing the shape a random
 	// distribution request payloads should take.
 	RespPayloadCurve *PayloadCurve
+	// StreamCount is the number request and response in a single stream.
+	StreamCount int
 	// ModeCompressor represents the compressor mode used.
 	ModeCompressor string
 	// EnableChannelz indicates if channelz was turned on.
