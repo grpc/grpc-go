@@ -1,0 +1,12 @@
+go 1.19
+
+use (
+	.
+	./cmd/protoc-gen-go-grpc
+	./examples
+	./gcp/observability
+	./security/advancedtls
+	./security/advancedtls/examples
+	./security/authorization
+	./test/tools
+)
