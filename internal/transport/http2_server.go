@@ -1048,9 +1048,18 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		if err != nil {
 			return err
 		}
+		// retry with a smaller error message, otherwise the client will get just RST_STREAM
+		trailingHeader.hf = t.replaceStatusInHeaders(trailingHeader.hf)
+		success, err = t.controlBuf.execute(t.checkForHeaderListSize, trailingHeader)
+	}
+	if !success {
+		if err != nil {
+			return err
+		}
 		t.closeStream(s, true, http2.ErrCodeInternal, false)
 		return ErrHeaderListSizeLimitViolation
 	}
+
 	// Send a RST_STREAM after the trailers if the client has not already half-closed.
 	rst := s.getState() == streamActive
 	t.finishStream(s, rst, http2.ErrCodeNo, trailingHeader, true)
@@ -1062,6 +1071,20 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		})
 	}
 	return nil
+}
+
+// replaceStatusInHeaders replaces "grpc-message" and "grpc-status-details-bin" fields.
+// This is usefull in cases when error message is too large and can't feet into the liit set by the client.
+// In such cases we still want the client to recieve some error message instead of just RST_STREAM, which is impossible to debug.
+func (t *http2Server) replaceStatusInHeaders(hf []hpack.HeaderField) []hpack.HeaderField {
+	var headerFields = make([]hpack.HeaderField, 0, 2)
+	for _, f := range hf {
+		if f.Name != "grpc-message" && f.Name != "grpc-status-details-bin" {
+			headerFields = append(headerFields, f)
+		}
+	}
+	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-message", Value: encodeGrpcMessage("client header size limit exceeded, see SETTINGS_MAX_HEADER_LIST_SIZE")})
+	return headerFields
 }
 
 // Write converts the data into HTTP2 data frame and sends it out. Non-nil error
