@@ -22,7 +22,6 @@ package bootstrap
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 
 	"google.golang.org/grpc/grpclog"
@@ -81,7 +80,7 @@ func CreateFile(opts Options) (func(), error) {
 	if err != nil {
 		return nil, err
 	}
-	f, err := ioutil.TempFile("", "test_xds_bootstrap_*")
+	f, err := os.CreateTemp("", "test_xds_bootstrap_*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to created bootstrap file: %v", err)
 	}

@@ -188,7 +188,7 @@ func (s) TestRefuseStartWithExcludeAndWildCardAll(t *testing.T) {
 // also sets the environment variable GRPC_CONFIG_OBSERVABILITY_JSON to point to
 // this created config.
 func createTmpConfigInFileSystem(rawJSON string) (func(), error) {
-	configJSONFile, err := ioutil.TempFile(os.TempDir(), "configJSON-")
+	configJSONFile, err := os.CreateTemp(os.TempDir(), "configJSON-")
 	if err != nil {
 		return nil, fmt.Errorf("cannot create file %v: %v", configJSONFile.Name(), err)
 	}
