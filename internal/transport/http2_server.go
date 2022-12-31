@@ -1076,8 +1076,8 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 }
 
 // replaceStatusInHeaders replaces "grpc-status", "grpc-message" and "grpc-status-details-bin" fields.
-// This is usefull in cases when error message is too large and can't feet into the liit set by the client.
-// In such cases we still want the client to recieve some error message instead of just RST_STREAM, which is impossible to debug.
+// This is usefull in cases when error message is too large and can't fit into the liit set by the client.
+// In such cases we still want the client to recieve an error message instead of just RST_STREAM, which is impossible to debug.
 func (t *http2Server) replaceStatusInHeaders(hf []hpack.HeaderField) []hpack.HeaderField {
 	var headerFields = make([]hpack.HeaderField, 0, 2)
 	for _, f := range hf {
