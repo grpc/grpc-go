@@ -36,6 +36,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"sync"
 	"time"
 
@@ -58,8 +59,8 @@ const (
 var (
 	loadSystemCertPool   = x509.SystemCertPool
 	makeHTTPDoer         = makeHTTPClient
-	readSubjectTokenFrom = ioutil.ReadFile
-	readActorTokenFrom   = ioutil.ReadFile
+	readSubjectTokenFrom = os.ReadFile
+	readActorTokenFrom   = os.ReadFile
 	logger               = grpclog.Component("credentials")
 )
 

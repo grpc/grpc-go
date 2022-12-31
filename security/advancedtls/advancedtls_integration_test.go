@@ -496,7 +496,7 @@ func (tmpFiles *tmpCredsFiles) removeFiles() {
 }
 
 func copyFileContents(sourceFile, destinationFile string) error {
-	input, err := ioutil.ReadFile(sourceFile)
+	input, err := os.ReadFile(sourceFile)
 	if err != nil {
 		return err
 	}

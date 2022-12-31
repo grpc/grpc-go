@@ -320,9 +320,9 @@ func makeChain(t *testing.T, name string) []*x509.Certificate {
 
 	certChain := make([]*x509.Certificate, 0)
 
-	rest, err := ioutil.ReadFile(name)
+	rest, err := os.ReadFile(name)
 	if err != nil {
-		t.Fatalf("ioutil.ReadFile(%v) failed %v", name, err)
+		t.Fatalf("os.ReadFile(%v) failed %v", name, err)
 	}
 	for len(rest) > 0 {
 		var block *pem.Block
@@ -338,7 +338,7 @@ func makeChain(t *testing.T, name string) []*x509.Certificate {
 }
 
 func loadCRL(t *testing.T, path string) *certificateListExt {
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("readFile(%v) failed err = %v", path, err)
 	}

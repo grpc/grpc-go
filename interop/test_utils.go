@@ -24,7 +24,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -279,7 +278,7 @@ func DoComputeEngineCreds(tc testgrpc.TestServiceClient, serviceAccount, oauthSc
 }
 
 func getServiceAccountJSONKey(keyFile string) []byte {
-	jsonKey, err := ioutil.ReadFile(keyFile)
+	jsonKey, err := os.ReadFile(keyFile)
 	if err != nil {
 		logger.Fatalf("Failed to read the service account key file: %v", err)
 	}

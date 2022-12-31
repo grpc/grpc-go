@@ -24,8 +24,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/golang/protobuf/jsonpb"
@@ -64,7 +64,7 @@ func init() {
 var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 
 // For overriding in unit tests.
-var bootstrapFileReadFunc = ioutil.ReadFile
+var bootstrapFileReadFunc = os.ReadFile
 
 // insecureCredsBuilder implements the `Credentials` interface defined in
 // package `xds/bootstrap` and encapsulates an insecure credential.

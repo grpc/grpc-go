@@ -23,8 +23,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"flag"
-	"io/ioutil"
 	"net"
+	"os"
 	"strconv"
 	"time"
 
@@ -154,7 +154,7 @@ func main() {
 			if *caFile == "" {
 				*caFile = testdata.Path("ca.pem")
 			}
-			b, err := ioutil.ReadFile(*caFile)
+			b, err := os.ReadFile(*caFile)
 			if err != nil {
 				logger.Fatalf("Failed to read root certificate file %q: %v", *caFile, err)
 			}

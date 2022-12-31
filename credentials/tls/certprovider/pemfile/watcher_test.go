@@ -161,9 +161,9 @@ func (wd *wrappedDistributor) Set(km *certprovider.KeyMaterial, err error) {
 func createTmpFile(t *testing.T, src, dst string) {
 	t.Helper()
 
-	data, err := ioutil.ReadFile(src)
+	data, err := os.ReadFile(src)
 	if err != nil {
-		t.Fatalf("ioutil.ReadFile(%q) failed: %v", src, err)
+		t.Fatalf("os.ReadFile(%q) failed: %v", src, err)
 	}
 	if err := ioutil.WriteFile(dst, data, os.ModePerm); err != nil {
 		t.Fatalf("ioutil.WriteFile(%q) failed: %v", dst, err)

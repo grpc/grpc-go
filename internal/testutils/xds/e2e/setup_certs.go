@@ -39,9 +39,9 @@ const (
 )
 
 func createTmpFile(src, dst string) error {
-	data, err := ioutil.ReadFile(src)
+	data, err := os.ReadFile(src)
 	if err != nil {
-		return fmt.Errorf("ioutil.ReadFile(%q) failed: %v", src, err)
+		return fmt.Errorf("os.ReadFile(%q) failed: %v", src, err)
 	}
 	if err := ioutil.WriteFile(dst, data, os.ModePerm); err != nil {
 		return fmt.Errorf("ioutil.WriteFile(%q) failed: %v", dst, err)
@@ -82,9 +82,9 @@ func CreateClientTLSCredentials(t *testing.T) credentials.TransportCredentials {
 	if err != nil {
 		t.Fatalf("tls.LoadX509KeyPair(x509/client1_cert.pem, x509/client1_key.pem) failed: %v", err)
 	}
-	b, err := ioutil.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
+	b, err := os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
 	if err != nil {
-		t.Fatalf("ioutil.ReadFile(x509/server_ca_cert.pem) failed: %v", err)
+		t.Fatalf("os.ReadFile(x509/server_ca_cert.pem) failed: %v", err)
 	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(b) {
