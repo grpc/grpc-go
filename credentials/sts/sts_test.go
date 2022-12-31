@@ -25,7 +25,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"strings"
@@ -123,7 +123,7 @@ func makeGoodResponse() *http.Response {
 		TokenType:       "Bearer",
 		ExpiresIn:       3600,
 	})
-	respBody := ioutil.NopCloser(bytes.NewReader(respJSON))
+	respBody := io.NopCloser(bytes.NewReader(respJSON))
 	return &http.Response{
 		Status:     "200 OK",
 		StatusCode: http.StatusOK,
@@ -330,7 +330,7 @@ func (s) TestGetRequestMetadataCacheExpiry(t *testing.T) {
 			TokenType:       "Bearer",
 			ExpiresIn:       expiresInSecs,
 		})
-		respBody := ioutil.NopCloser(bytes.NewReader(respJSON))
+		respBody := io.NopCloser(bytes.NewReader(respJSON))
 		resp := &http.Response{
 			Status:     "200 OK",
 			StatusCode: http.StatusOK,
@@ -366,7 +366,7 @@ func (s) TestGetRequestMetadataBadResponses(t *testing.T) {
 			response: &http.Response{
 				Status:     "200 OK",
 				StatusCode: http.StatusOK,
-				Body:       ioutil.NopCloser(strings.NewReader("not JSON")),
+				Body:       io.NopCloser(strings.NewReader("not JSON")),
 			},
 		},
 		{
@@ -374,7 +374,7 @@ func (s) TestGetRequestMetadataBadResponses(t *testing.T) {
 			response: &http.Response{
 				Status:     "200 OK",
 				StatusCode: http.StatusOK,
-				Body:       ioutil.NopCloser(strings.NewReader("{}")),
+				Body:       io.NopCloser(strings.NewReader("{}")),
 			},
 		},
 	}
@@ -669,7 +669,7 @@ func (s) TestSendRequest(t *testing.T) {
 			resp: &http.Response{
 				Status:     "200 OK",
 				StatusCode: http.StatusOK,
-				Body:       ioutil.NopCloser(errReader{}),
+				Body:       io.NopCloser(errReader{}),
 			},
 			wantErr: true,
 		},
@@ -678,7 +678,7 @@ func (s) TestSendRequest(t *testing.T) {
 			resp: &http.Response{
 				Status:     "400 BadRequest",
 				StatusCode: http.StatusBadRequest,
-				Body:       ioutil.NopCloser(strings.NewReader("")),
+				Body:       io.NopCloser(strings.NewReader("")),
 			},
 			wantErr: true,
 		},
