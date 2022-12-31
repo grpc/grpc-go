@@ -21,7 +21,6 @@ package pemfile
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -181,9 +180,9 @@ func createTmpDirWithFiles(t *testing.T, dirSuffix, certSrc, keySrc, rootSrc str
 
 	// Create a temp directory. Passing an empty string for the first argument
 	// uses the system temp directory.
-	dir, err := ioutil.TempDir("", dirSuffix)
+	dir, err := os.MkdirTemp("", dirSuffix)
 	if err != nil {
-		t.Fatalf("ioutil.TempDir() failed: %v", err)
+		t.Fatalf("os.MkdirTemp() failed: %v", err)
 	}
 	t.Logf("Using tmpdir: %s", dir)
 
@@ -323,9 +322,9 @@ func (s) TestProvider_UpdateSuccessWithSymlink(t *testing.T) {
 	dir2 := createTmpDirWithFiles(t, "update_with_symlink2_*", "x509/server1_cert.pem", "x509/server1_key.pem", "x509/server_ca_cert.pem")
 
 	// Create a symlink under a new tempdir, and make it point to dir1.
-	tmpdir, err := ioutil.TempDir("", "test_symlink_*")
+	tmpdir, err := os.MkdirTemp("", "test_symlink_*")
 	if err != nil {
-		t.Fatalf("ioutil.TempDir() failed: %v", err)
+		t.Fatalf("os.MkdirTemp() failed: %v", err)
 	}
 	symLinkName := path.Join(tmpdir, "test_symlink")
 	if err := os.Symlink(dir1, symLinkName); err != nil {

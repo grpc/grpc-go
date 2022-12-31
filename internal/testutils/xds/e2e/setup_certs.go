@@ -22,7 +22,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -56,9 +55,9 @@ func createTmpFile(src, dst string) error {
 func createTmpDirWithFiles(dirSuffix, certSrc, keySrc, rootSrc string) (string, error) {
 	// Create a temp directory. Passing an empty string for the first argument
 	// uses the system temp directory.
-	dir, err := ioutil.TempDir("", dirSuffix)
+	dir, err := os.MkdirTemp("", dirSuffix)
 	if err != nil {
-		return "", fmt.Errorf("ioutil.TempDir() failed: %v", err)
+		return "", fmt.Errorf("os.MkdirTemp() failed: %v", err)
 	}
 
 	if err := createTmpFile(testdata.Path(certSrc), path.Join(dir, certFile)); err != nil {

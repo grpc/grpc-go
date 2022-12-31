@@ -682,9 +682,9 @@ func TestVerifyConnection(t *testing.T) {
 				}
 			}()
 
-			dir, err := ioutil.TempDir("", "crl_dir")
+			dir, err := os.MkdirTemp("", "crl_dir")
 			if err != nil {
-				t.Fatalf("ioutil.TempDir failed err = %v", err)
+				t.Fatalf("os.MkdirTemp failed err = %v", err)
 			}
 			defer os.RemoveAll(dir)
 
