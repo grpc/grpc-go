@@ -33,7 +33,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -307,7 +307,7 @@ func sendRequest(client httpDoer, req *http.Request) ([]byte, error) {
 	// When the http.Client returns a non-nil error, it is the
 	// responsibility of the caller to read the response body till an EOF is
 	// encountered and to close it.
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	resp.Body.Close()
 	if err != nil {
 		return nil, err
