@@ -36,6 +36,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/peer"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/http2"
@@ -91,6 +92,7 @@ const (
 	invalidHeaderField
 	delayRead
 	pingpong
+	largeErrorStatus
 )
 
 func (h *testStreamHandler) handleStreamAndNotify(s *Stream) {
@@ -292,6 +294,11 @@ func (h *testStreamHandler) handleStreamDelayRead(t *testing.T, s *Stream) {
 	}
 }
 
+func (h *testStreamHandler) handleStreamLargeErrorStatus(s *Stream) {
+	st := status.New(codes.Unknown, strings.Repeat("a", 10000))
+	h.t.WriteStatus(s, st)
+}
+
 type server struct {
 	lis        net.Listener
 	port       string
@@ -393,6 +400,12 @@ func (s *server) start(t *testing.T, port int, serverConfig *ServerConfig, ht hT
 		case pingpong:
 			go transport.HandleStreams(func(s *Stream) {
 				go h.handleStreamPingPong(t, s)
+			}, func(ctx context.Context, method string) context.Context {
+				return ctx
+			})
+		case largeErrorStatus:
+			go transport.HandleStreams(func(s *Stream) {
+				go h.handleStreamLargeErrorStatus(s)
 			}, func(ctx context.Context, method string) context.Context {
 				return ctx
 			})
@@ -1425,6 +1438,39 @@ func (s) TestEncodingRequiredStatus(t *testing.T) {
 	}
 	if !testutils.StatusErrEqual(s.Status().Err(), encodingTestStatus.Err()) {
 		t.Fatalf("stream with status %v, want %v", s.Status(), encodingTestStatus)
+	}
+	ct.Close(fmt.Errorf("closed manually by test"))
+	server.stop()
+}
+
+func (s) TestLargeErrorStatus(t *testing.T) {
+	maxHeaderListSize := uint32(8192)
+	server, ct, cancel := setUpWithOptions(t, 0, &ServerConfig{
+		MaxStreams: math.MaxUint32,
+	}, largeErrorStatus, ConnectOptions{
+		MaxHeaderListSize: &maxHeaderListSize,
+	})
+	defer cancel()
+	callHdr := &CallHdr{
+		Host:   "localhost",
+		Method: "foo",
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	s, err := ct.NewStream(ctx, callHdr)
+	if err != nil {
+		return
+	}
+	opts := Options{Last: true}
+	if err := ct.Write(s, nil, expectedRequest, &opts); err != nil && err != errStreamDone {
+		t.Fatalf("Failed to write the request: %v", err)
+	}
+	p := make([]byte, http2MaxFrameLen)
+	if _, err := s.trReader.(*transportReader).Read(p); err != io.EOF {
+		t.Fatalf("Read got error %v, want %v", err, io.EOF)
+	}
+	if !proto.Equal(s.Status().Proto(), statusHeaderListSizeLimitViolation.Proto()) {
+		t.Fatalf("stream with status %v, want %v", s.Status(), statusHeaderListSizeLimitViolation)
 	}
 	ct.Close(fmt.Errorf("closed manually by test"))
 	server.stop()

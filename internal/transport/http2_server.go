@@ -57,7 +57,8 @@ var (
 	ErrIllegalHeaderWrite = status.Error(codes.Internal, "transport: SendHeader called multiple times")
 	// ErrHeaderListSizeLimitViolation indicates that the header list size is larger
 	// than the limit set by peer.
-	ErrHeaderListSizeLimitViolation = status.Error(codes.Internal, "transport: trying to send header list size larger than the limit set by peer")
+	statusHeaderListSizeLimitViolation = status.New(codes.Internal, "transport: trying to send header list size larger than the limit set by peer")
+	ErrHeaderListSizeLimitViolation    = statusHeaderListSizeLimitViolation.Err()
 )
 
 // serverConnectionCounter counts the number of connections a server has seen
@@ -1052,6 +1053,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 		trailingHeader.hf = t.replaceStatusInHeaders(trailingHeader.hf)
 		success, err = t.controlBuf.execute(t.checkForHeaderListSize, trailingHeader)
 	}
+
 	if !success {
 		if err != nil {
 			return err
@@ -1073,17 +1075,19 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	return nil
 }
 
-// replaceStatusInHeaders replaces "grpc-message" and "grpc-status-details-bin" fields.
+// replaceStatusInHeaders replaces "grpc-status", "grpc-message" and "grpc-status-details-bin" fields.
 // This is usefull in cases when error message is too large and can't feet into the liit set by the client.
 // In such cases we still want the client to recieve some error message instead of just RST_STREAM, which is impossible to debug.
 func (t *http2Server) replaceStatusInHeaders(hf []hpack.HeaderField) []hpack.HeaderField {
 	var headerFields = make([]hpack.HeaderField, 0, 2)
 	for _, f := range hf {
-		if f.Name != "grpc-message" && f.Name != "grpc-status-details-bin" {
+		if f.Name != "grpc-status" && f.Name != "grpc-message" && f.Name != "grpc-status-details-bin" {
 			headerFields = append(headerFields, f)
 		}
 	}
-	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-message", Value: encodeGrpcMessage("client header size limit exceeded, see SETTINGS_MAX_HEADER_LIST_SIZE")})
+
+	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-status", Value: strconv.Itoa(int(statusHeaderListSizeLimitViolation.Code()))})
+	headerFields = append(headerFields, hpack.HeaderField{Name: "grpc-message", Value: encodeGrpcMessage(statusHeaderListSizeLimitViolation.Message())})
 	return headerFields
 }
 
