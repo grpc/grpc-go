@@ -500,7 +500,7 @@ func copyFileContents(sourceFile, destinationFile string) error {
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(destinationFile, input, 0644)
+	err = os.WriteFile(destinationFile, input, 0644)
 	if err != nil {
 		return err
 	}

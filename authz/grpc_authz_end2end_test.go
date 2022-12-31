@@ -23,7 +23,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"testing"
@@ -602,8 +601,8 @@ func (s) TestFileWatcher_ValidPolicyRefresh(t *testing.T) {
 
 	// Rewrite the file with a different valid authorization policy.
 	valid2 := authzTests["AllowsRPCEmptyDenyMatchInAllow"]
-	if err := ioutil.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
+	if err := os.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
 
 	// Verifying authorization decision.
@@ -649,8 +648,8 @@ func (s) TestFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	}
 
 	// Skips the invalid policy update, and continues to use the valid policy.
-	if err := ioutil.WriteFile(file, []byte("{}"), os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
+	if err := os.WriteFile(file, []byte("{}"), os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
 
 	// Wait 40 ms for background go routine to read updated files.
@@ -700,8 +699,8 @@ func (s) TestFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	}
 
 	// Skips the invalid policy update, and continues to use the valid policy.
-	if err := ioutil.WriteFile(file, []byte("{}"), os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
+	if err := os.WriteFile(file, []byte("{}"), os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
 
 	// Wait 120 ms for background go routine to read updated files.
@@ -715,8 +714,8 @@ func (s) TestFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 
 	// Rewrite the file with a different valid authorization policy.
 	valid2 := authzTests["AllowsRPCEmptyDenyMatchInAllow"]
-	if err := ioutil.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
+	if err := os.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
 
 	// Verifying authorization decision.

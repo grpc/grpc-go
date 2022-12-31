@@ -165,8 +165,8 @@ func createTmpFile(t *testing.T, src, dst string) {
 	if err != nil {
 		t.Fatalf("os.ReadFile(%q) failed: %v", src, err)
 	}
-	if err := ioutil.WriteFile(dst, data, os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", dst, err)
+	if err := os.WriteFile(dst, data, os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", dst, err)
 	}
 	t.Logf("Wrote file at: %s", dst)
 	t.Logf("%s", string(data))

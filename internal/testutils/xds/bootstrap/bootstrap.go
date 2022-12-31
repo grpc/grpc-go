@@ -86,7 +86,7 @@ func CreateFile(opts Options) (func(), error) {
 		return nil, fmt.Errorf("failed to created bootstrap file: %v", err)
 	}
 
-	if err := ioutil.WriteFile(f.Name(), bootstrapContents, 0644); err != nil {
+	if err := os.WriteFile(f.Name(), bootstrapContents, 0644); err != nil {
 		return nil, fmt.Errorf("failed to created bootstrap file: %v", err)
 	}
 	logger.Infof("Created bootstrap file at %q with contents: %s\n", f.Name(), bootstrapContents)

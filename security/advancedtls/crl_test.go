@@ -693,9 +693,9 @@ func TestVerifyConnection(t *testing.T) {
 				t.Fatalf("templ.CreateCRL failed err = %v", err)
 			}
 
-			err = ioutil.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", x509NameHash(cert.Subject.ToRDNSequence()))), crl, 0777)
+			err = os.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", x509NameHash(cert.Subject.ToRDNSequence()))), crl, 0777)
 			if err != nil {
-				t.Fatalf("ioutil.WriteFile failed err = %v", err)
+				t.Fatalf("os.WriteFile failed err = %v", err)
 			}
 
 			cp := x509.NewCertPool()

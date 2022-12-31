@@ -43,8 +43,8 @@ func createTmpFile(src, dst string) error {
 	if err != nil {
 		return fmt.Errorf("os.ReadFile(%q) failed: %v", src, err)
 	}
-	if err := ioutil.WriteFile(dst, data, os.ModePerm); err != nil {
-		return fmt.Errorf("ioutil.WriteFile(%q) failed: %v", dst, err)
+	if err := os.WriteFile(dst, data, os.ModePerm); err != nil {
+		return fmt.Errorf("os.WriteFile(%q) failed: %v", dst, err)
 	}
 	return nil
 }
