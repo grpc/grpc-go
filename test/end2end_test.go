@@ -3036,7 +3036,7 @@ func (s) TestMultipleSetHeaderUnaryRPCError(t *testing.T) {
 	}
 }
 
-// To test header metadata is sent when sending status.
+// To test if a trailers-only response is sent if no messages are sent.
 func testMultipleSetHeaderUnaryRPCError(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security, setHeaderOnly: true})
@@ -3058,16 +3058,17 @@ func testMultipleSetHeaderUnaryRPCError(t *testing.T, e env) {
 		Payload:      payload,
 	}
 	var header metadata.MD
+	var trailer metadata.MD
 	ctx := metadata.NewOutgoingContext(context.Background(), testMetadata)
-	if _, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.WaitForReady(true)); err == nil {
+	if _, err := tc.UnaryCall(ctx, req, grpc.Header(&header), grpc.Trailer(&trailer), grpc.WaitForReady(true)); err == nil {
 		t.Fatalf("TestService.UnaryCall(%v, _, _, _) = _, %v; want _, <non-nil>", ctx, err)
 	}
-	delete(header, "user-agent")
-	delete(header, "content-type")
-	delete(header, "grpc-accept-encoding")
-	expectedHeader := metadata.Join(testMetadata, testMetadata2)
-	if !reflect.DeepEqual(header, expectedHeader) {
-		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
+	if header != nil {
+		t.Fatalf("Received header metadata %v, want %v", header, nil)
+	}
+	delete(trailer, "content-type")
+	if !reflect.DeepEqual(trailer, testTrailerMetadata) {
+		t.Fatalf("Received trailer metadata %v, want %v", trailer, testTrailerMetadata)
 	}
 }
 
@@ -3186,7 +3187,7 @@ func (s) TestMultipleSetHeaderStreamingRPCError(t *testing.T) {
 	}
 }
 
-// To test header metadata is sent when sending status.
+// To test if a trailers-only response is sent if no messages are sent.
 func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 	te := newTest(t, e)
 	te.startServer(&testServer{security: e.security, setHeaderOnly: true})
@@ -3228,12 +3229,13 @@ func testMultipleSetHeaderStreamingRPCError(t *testing.T, e env) {
 	if err != nil {
 		t.Fatalf("%v.Header() = _, %v, want _, <nil>", stream, err)
 	}
-	delete(header, "user-agent")
-	delete(header, "content-type")
-	delete(header, "grpc-accept-encoding")
-	expectedHeader := metadata.Join(testMetadata, testMetadata2)
-	if !reflect.DeepEqual(header, expectedHeader) {
-		t.Fatalf("Received header metadata %v, want %v", header, expectedHeader)
+	if header != nil {
+		t.Fatalf("%v.Header() = %v, _, want <nil>, _", stream, header)
+	}
+	trailer := stream.Trailer()
+	delete(trailer, "content-type")
+	if !reflect.DeepEqual(trailer, testTrailerMetadata) {
+		t.Fatalf("Received trailer metadata %v, want %v", trailer, testTrailerMetadata)
 	}
 	if err := stream.CloseSend(); err != nil {
 		t.Fatalf("%v.CloseSend() got %v, want %v", stream, err, nil)

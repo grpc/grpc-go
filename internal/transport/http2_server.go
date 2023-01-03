@@ -1012,7 +1012,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 	// first and create a slice of that exact size.
 	headerFields := make([]hpack.HeaderField, 0, 2) // grpc-status and grpc-message will be there if none else.
 	if !s.updateHeaderSent() {                      // No headers have been sent.
-		if len(s.header) > 0 { // Send a separate header frame.
+		if len(s.header) > 0 && st.Err() == nil { // Send a separate header frame if the stream is closed without an error.
 			if err := t.writeHeaderLocked(s); err != nil {
 				return err
 			}
