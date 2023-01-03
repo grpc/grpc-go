@@ -34,6 +34,7 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -6880,7 +6881,8 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 	}()
 }
 
-// Implementing AuthInfo with net.Conn to send conn info up to Peer.
+// authInfoWithConn wraps the underlying net.Conn, and makes it available
+// to the test as part of the Peer call option.
 type authInfoWithConn struct {
 	credentials.CommonAuthInfo
 	connection net.Conn
@@ -6974,24 +6976,23 @@ func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
 
 	creds := &transportRestartCheckCreds{}
 	if err := ss.Start(nil, grpc.WithTransportCredentials(creds)); err != nil {
-		t.Fatalf("starting stubServer: %v", err)
+		t.Fatalf("Starting stubServer: %v", err)
 	}
 	defer ss.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	var streams []streamWithPeer
 
 	// Setting up 3 streams and calling Send() and Recv() once on each.
 	for i := 0; i < 3; i++ {
-		var p peer.Peer
-		s, err := ss.Client.FullDuplexCall(ctx, grpc.Peer(&p))
+		p := new(peer.Peer)
+		s, err := ss.Client.FullDuplexCall(ctx, grpc.Peer(p))
 		if err != nil {
-			t.Fatalf("creating FullDuplex stream: %v", err)
+			t.Fatalf("Creating FullDuplex stream: %v", err)
 		}
-		streamID := fmt.Sprintf("stream %v", i)
-		sp := streamWithPeer{stream: s, peer: &p, id: streamID}
+		sp := streamWithPeer{stream: s, peer: p, id: "stream " + strconv.Itoa(i)}
 		streams = append(streams, sp)
 
 		if err := sp.sendAndReceive(); err != nil {
@@ -7000,7 +7001,7 @@ func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
 	}
 	// Verifying only 2 connections are created so far.
 	if len(creds.connections) != 2 {
-		t.Fatalf("number of connections created: %v, want: 2", len(creds.connections))
+		t.Fatalf("Number of connections created: %v, want: 2", len(creds.connections))
 	}
 
 	// Verifying that streams on the first conn still works.
@@ -7023,7 +7024,7 @@ func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
 				break
 			}
 			if err != nil {
-				t.Fatalf("receiving on %s got: %v, want: EOF", streams[i].id, err)
+				t.Fatalf("Receiving on %s got: %v, want: EOF", streams[i].id, err)
 			}
 		}
 		streams[i].conn = streams[i].peer.AuthInfo.(*authInfoWithConn).connection
@@ -7031,16 +7032,16 @@ func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
 
 	// Verifying the first and second RPCs were made on the same connection.
 	if streams[0].conn != streams[1].conn {
-		t.Fatal("got streams using different connections; want same.")
+		t.Fatal("Got streams using different connections; want same.")
 	}
 	// Verifying the third and first/second RPCs were made on different connections.
 	if streams[2].conn == streams[0].conn {
-		t.Fatal("got streams using same connections; want different.")
+		t.Fatal("Got streams using same connections; want different.")
 	}
 
 	// Verifying first connection was closed.
 	if _, err := creds.connections[0].CloseCh.Receive(ctx); err != nil {
-		t.Fatal("timeout expired when waiting for first client transport to close")
+		t.Fatal("Timeout expired when waiting for first client transport to close")
 	}
 }
 

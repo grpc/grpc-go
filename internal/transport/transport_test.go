@@ -560,11 +560,11 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 		t.Fatalf("ct.NewStream() = %v", err)
 	}
 	if s.id != 1 {
-		t.Fatalf("stream id: %d, want: 1", s.id)
+		t.Fatalf("Stream id: %d, want: 1", s.id)
 	}
 
 	if got, want := ct.stateForTesting(), reachable; got != want {
-		t.Fatalf("client transport state %v, want %v", got, want)
+		t.Fatalf("Client transport state %v, want %v", got, want)
 	}
 
 	// The expected stream ID here is 3 since stream IDs are incremented by 2.
@@ -573,12 +573,12 @@ func (s) TestClientTransportDrainsAfterStreamIDExhausted(t *testing.T) {
 		t.Fatalf("ct.NewStream() = %v", err)
 	}
 	if s.id != 3 {
-		t.Fatalf("stream id: %d, want: 3", s.id)
+		t.Fatalf("Stream id: %d, want: 3", s.id)
 	}
 
 	// Verifying that ct.state is draining when next stream ID > MaxStreamId.
 	if got, want := ct.stateForTesting(), draining; got != want {
-		t.Fatalf("client transport state %v, want %v", got, want)
+		t.Fatalf("Client transport state %v, want %v", got, want)
 	}
 }
 
