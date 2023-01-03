@@ -24,7 +24,7 @@ package binarylog
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	pb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
 	iblog "google.golang.org/grpc/internal/binarylog"
@@ -60,7 +60,7 @@ func NewTempFileSink() (Sink, error) {
 	// Two other options to replace this function:
 	// 1. take filename as input.
 	// 2. export NewBufferedSink().
-	tempFile, err := ioutil.TempFile("/tmp", "grpcgo_binarylog_*.txt")
+	tempFile, err := os.CreateTemp("/tmp", "grpcgo_binarylog_*.txt")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp file: %v", err)
 	}

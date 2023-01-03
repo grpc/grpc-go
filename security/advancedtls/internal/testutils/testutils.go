@@ -22,7 +22,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
+	"os"
 
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
@@ -58,7 +58,7 @@ type CertStore struct {
 }
 
 func readTrustCert(fileName string) (*x509.CertPool, error) {
-	trustData, err := ioutil.ReadFile(fileName)
+	trustData, err := os.ReadFile(fileName)
 	if err != nil {
 		return nil, err
 	}

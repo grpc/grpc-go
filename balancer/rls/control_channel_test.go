@@ -24,7 +24,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"regexp"
 	"testing"
 	"time"
@@ -215,9 +215,9 @@ func makeTLSCreds(t *testing.T, certPath, keyPath, rootsPath string) credentials
 	if err != nil {
 		t.Fatalf("tls.LoadX509KeyPair(%q, %q) failed: %v", certPath, keyPath, err)
 	}
-	b, err := ioutil.ReadFile(testdata.Path(rootsPath))
+	b, err := os.ReadFile(testdata.Path(rootsPath))
 	if err != nil {
-		t.Fatalf("ioutil.ReadFile(%q) failed: %v", rootsPath, err)
+		t.Fatalf("os.ReadFile(%q) failed: %v", rootsPath, err)
 	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(b) {

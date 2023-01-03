@@ -24,8 +24,8 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -159,7 +159,7 @@ func testServerMutualTLSHandshake(rawConn net.Conn) handshakeResult {
 	if err != nil {
 		return handshakeResult{err: err}
 	}
-	pemData, err := ioutil.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
+	pemData, err := os.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
 	if err != nil {
 		return handshakeResult{err: err}
 	}
@@ -204,7 +204,7 @@ func makeIdentityProvider(t *testing.T, certPath, keyPath string) certprovider.P
 // makeRootProvider creates a new instance of the fakeProvider returning the
 // root key material specified in the provider file paths.
 func makeRootProvider(t *testing.T, caPath string) *fakeProvider {
-	pemData, err := ioutil.ReadFile(testdata.Path(caPath))
+	pemData, err := os.ReadFile(testdata.Path(caPath))
 	if err != nil {
 		t.Fatal(err)
 	}

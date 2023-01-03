@@ -23,7 +23,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"testing"
@@ -434,9 +433,9 @@ func (s) TestAllowsRPCRequestWithPrincipalsFieldOnMTLSAuthenticatedConnection(t 
 	if err != nil {
 		t.Fatalf("tls.LoadX509KeyPair(x509/server1_cert.pem, x509/server1_key.pem) failed: %v", err)
 	}
-	ca, err := ioutil.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
+	ca, err := os.ReadFile(testdata.Path("x509/client_ca_cert.pem"))
 	if err != nil {
-		t.Fatalf("ioutil.ReadFile(x509/client_ca_cert.pem) failed: %v", err)
+		t.Fatalf("os.ReadFile(x509/client_ca_cert.pem) failed: %v", err)
 	}
 	certPool := x509.NewCertPool()
 	if !certPool.AppendCertsFromPEM(ca) {
@@ -464,9 +463,9 @@ func (s) TestAllowsRPCRequestWithPrincipalsFieldOnMTLSAuthenticatedConnection(t 
 	if err != nil {
 		t.Fatalf("tls.LoadX509KeyPair(x509/client1_cert.pem, x509/client1_key.pem) failed: %v", err)
 	}
-	ca, err = ioutil.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
+	ca, err = os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
 	if err != nil {
-		t.Fatalf("ioutil.ReadFile(x509/server_ca_cert.pem) failed: %v", err)
+		t.Fatalf("os.ReadFile(x509/server_ca_cert.pem) failed: %v", err)
 	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(ca) {
@@ -602,8 +601,8 @@ func (s) TestFileWatcher_ValidPolicyRefresh(t *testing.T) {
 
 	// Rewrite the file with a different valid authorization policy.
 	valid2 := authzTests["AllowsRPCEmptyDenyMatchInAllow"]
-	if err := ioutil.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
+	if err := os.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
 
 	// Verifying authorization decision.
@@ -649,8 +648,8 @@ func (s) TestFileWatcher_InvalidPolicySkipReload(t *testing.T) {
 	}
 
 	// Skips the invalid policy update, and continues to use the valid policy.
-	if err := ioutil.WriteFile(file, []byte("{}"), os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
+	if err := os.WriteFile(file, []byte("{}"), os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
 
 	// Wait 40 ms for background go routine to read updated files.
@@ -700,8 +699,8 @@ func (s) TestFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 	}
 
 	// Skips the invalid policy update, and continues to use the valid policy.
-	if err := ioutil.WriteFile(file, []byte("{}"), os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
+	if err := os.WriteFile(file, []byte("{}"), os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
 
 	// Wait 120 ms for background go routine to read updated files.
@@ -715,8 +714,8 @@ func (s) TestFileWatcher_RecoversFromReloadFailure(t *testing.T) {
 
 	// Rewrite the file with a different valid authorization policy.
 	valid2 := authzTests["AllowsRPCEmptyDenyMatchInAllow"]
-	if err := ioutil.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
-		t.Fatalf("ioutil.WriteFile(%q) failed: %v", file, err)
+	if err := os.WriteFile(file, []byte(valid2.authzPolicy), os.ModePerm); err != nil {
+		t.Fatalf("os.WriteFile(%q) failed: %v", file, err)
 	}
 
 	// Verifying authorization decision.

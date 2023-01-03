@@ -24,8 +24,8 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -39,7 +39,7 @@ import (
 func makeClientTLSConfig(t *testing.T, mTLS bool) *tls.Config {
 	t.Helper()
 
-	pemData, err := ioutil.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
+	pemData, err := os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
 	if err != nil {
 		t.Fatal(err)
 	}

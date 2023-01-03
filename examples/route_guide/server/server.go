@@ -28,10 +28,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"math"
 	"net"
+	"os"
 	"sync"
 	"time"
 
@@ -155,7 +155,7 @@ func (s *routeGuideServer) loadFeatures(filePath string) {
 	var data []byte
 	if filePath != "" {
 		var err error
-		data, err = ioutil.ReadFile(filePath)
+		data, err = os.ReadFile(filePath)
 		if err != nil {
 			log.Fatalf("Failed to load default features: %v", err)
 		}

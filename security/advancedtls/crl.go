@@ -30,7 +30,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -434,7 +434,7 @@ func fetchCRL(rawIssuer []byte, cfg RevocationConfig) (*certificateListExt, erro
 			return nil, fmt.Errorf("asn1.Unmarshal(Issuer) len(rest) = %v, err = %v", len(rest), err)
 		}
 		crlPath := fmt.Sprintf("%s.r%d", filepath.Join(cfg.RootDir, x509NameHash(r)), i)
-		crlBytes, err := ioutil.ReadFile(crlPath)
+		crlBytes, err := os.ReadFile(crlPath)
 		if err != nil {
 			// Break when we can't read a CRL file.
 			grpclogLogger.Infof("readFile: %v", err)

@@ -29,7 +29,6 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"net"
 	"os"
@@ -320,9 +319,9 @@ func makeChain(t *testing.T, name string) []*x509.Certificate {
 
 	certChain := make([]*x509.Certificate, 0)
 
-	rest, err := ioutil.ReadFile(name)
+	rest, err := os.ReadFile(name)
 	if err != nil {
-		t.Fatalf("ioutil.ReadFile(%v) failed %v", name, err)
+		t.Fatalf("os.ReadFile(%v) failed %v", name, err)
 	}
 	for len(rest) > 0 {
 		var block *pem.Block
@@ -338,7 +337,7 @@ func makeChain(t *testing.T, name string) []*x509.Certificate {
 }
 
 func loadCRL(t *testing.T, path string) *certificateListExt {
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("readFile(%v) failed err = %v", path, err)
 	}
@@ -682,9 +681,9 @@ func TestVerifyConnection(t *testing.T) {
 				}
 			}()
 
-			dir, err := ioutil.TempDir("", "crl_dir")
+			dir, err := os.MkdirTemp("", "crl_dir")
 			if err != nil {
-				t.Fatalf("ioutil.TempDir failed err = %v", err)
+				t.Fatalf("os.MkdirTemp failed err = %v", err)
 			}
 			defer os.RemoveAll(dir)
 
@@ -693,9 +692,9 @@ func TestVerifyConnection(t *testing.T) {
 				t.Fatalf("templ.CreateCRL failed err = %v", err)
 			}
 
-			err = ioutil.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", x509NameHash(cert.Subject.ToRDNSequence()))), crl, 0777)
+			err = os.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", x509NameHash(cert.Subject.ToRDNSequence()))), crl, 0777)
 			if err != nil {
-				t.Fatalf("ioutil.WriteFile failed err = %v", err)
+				t.Fatalf("os.WriteFile failed err = %v", err)
 			}
 
 			cp := x509.NewCertPool()

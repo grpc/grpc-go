@@ -24,7 +24,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -126,7 +126,7 @@ func loadKeyMaterials(t *testing.T, cert, key, ca string) *KeyMaterial {
 		t.Fatalf("Failed to load keyPair: %v", err)
 	}
 
-	pemData, err := ioutil.ReadFile(testdata.Path(ca))
+	pemData, err := os.ReadFile(testdata.Path(ca))
 	if err != nil {
 		t.Fatal(err)
 	}

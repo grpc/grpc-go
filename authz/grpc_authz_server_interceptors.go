@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -140,7 +140,7 @@ func (i *FileWatcherInterceptor) run(ctx context.Context) {
 // constructor, if there is an error in reading the file or parsing the policy, the
 // previous internalInterceptors will not be replaced.
 func (i *FileWatcherInterceptor) updateInternalInterceptor() error {
-	policyContents, err := ioutil.ReadFile(i.policyFile)
+	policyContents, err := os.ReadFile(i.policyFile)
 	if err != nil {
 		return fmt.Errorf("policyFile(%s) read failed: %v", i.policyFile, err)
 	}

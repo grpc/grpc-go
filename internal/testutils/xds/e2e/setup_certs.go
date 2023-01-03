@@ -22,7 +22,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"testing"
@@ -39,12 +38,12 @@ const (
 )
 
 func createTmpFile(src, dst string) error {
-	data, err := ioutil.ReadFile(src)
+	data, err := os.ReadFile(src)
 	if err != nil {
-		return fmt.Errorf("ioutil.ReadFile(%q) failed: %v", src, err)
+		return fmt.Errorf("os.ReadFile(%q) failed: %v", src, err)
 	}
-	if err := ioutil.WriteFile(dst, data, os.ModePerm); err != nil {
-		return fmt.Errorf("ioutil.WriteFile(%q) failed: %v", dst, err)
+	if err := os.WriteFile(dst, data, os.ModePerm); err != nil {
+		return fmt.Errorf("os.WriteFile(%q) failed: %v", dst, err)
 	}
 	return nil
 }
@@ -56,9 +55,9 @@ func createTmpFile(src, dst string) error {
 func createTmpDirWithFiles(dirSuffix, certSrc, keySrc, rootSrc string) (string, error) {
 	// Create a temp directory. Passing an empty string for the first argument
 	// uses the system temp directory.
-	dir, err := ioutil.TempDir("", dirSuffix)
+	dir, err := os.MkdirTemp("", dirSuffix)
 	if err != nil {
-		return "", fmt.Errorf("ioutil.TempDir() failed: %v", err)
+		return "", fmt.Errorf("os.MkdirTemp() failed: %v", err)
 	}
 
 	if err := createTmpFile(testdata.Path(certSrc), path.Join(dir, certFile)); err != nil {
@@ -82,9 +81,9 @@ func CreateClientTLSCredentials(t *testing.T) credentials.TransportCredentials {
 	if err != nil {
 		t.Fatalf("tls.LoadX509KeyPair(x509/client1_cert.pem, x509/client1_key.pem) failed: %v", err)
 	}
-	b, err := ioutil.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
+	b, err := os.ReadFile(testdata.Path("x509/server_ca_cert.pem"))
 	if err != nil {
-		t.Fatalf("ioutil.ReadFile(x509/server_ca_cert.pem) failed: %v", err)
+		t.Fatalf("os.ReadFile(x509/server_ca_cert.pem) failed: %v", err)
 	}
 	roots := x509.NewCertPool()
 	if !roots.AppendCertsFromPEM(b) {
