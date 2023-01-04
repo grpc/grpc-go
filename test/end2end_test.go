@@ -6895,18 +6895,18 @@ func (ai *authInfoWithConn) AuthType() string {
 // connWrapperWithCloseCh wraps a net.Conn and pushes on a channel when closed.
 type connWrapperWithCloseCh struct {
 	net.Conn
-	CloseCh *testutils.Channel
+	closeCh *testutils.Channel
 }
 
 // Close closes the connection and sends a value on the close channel.
 func (cw *connWrapperWithCloseCh) Close() error {
 	err := cw.Conn.Close()
-	cw.CloseCh.Replace(nil)
+	cw.closeCh.Replace(nil)
 	return err
 }
 
 // This custom creds are used for storing the connections made by the client.
-// The CloseCh in conn can be used to detect when conn is closed.
+// The closeCh in conn can be used to detect when conn is closed.
 type transportRestartCheckCreds struct {
 	mu          sync.Mutex
 	connections []connWrapperWithCloseCh
@@ -6918,7 +6918,7 @@ func (c *transportRestartCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn
 func (c *transportRestartCheckCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	conn := &connWrapperWithCloseCh{Conn: rawConn, CloseCh: testutils.NewChannel()}
+	conn := &connWrapperWithCloseCh{Conn: rawConn, closeCh: testutils.NewChannel()}
 	c.connections = append(c.connections, *conn)
 	authInfo := &authInfoWithConn{CommonAuthInfo: credentials.CommonAuthInfo{SecurityLevel: credentials.NoSecurity}, connection: conn}
 	return conn, authInfo, nil
@@ -6964,7 +6964,11 @@ func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			for {
-				if _, err := stream.Recv(); err != nil {
+				_, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+				if err != nil {
 					return err
 				}
 				if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
@@ -7020,7 +7024,7 @@ func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
 		}
 		for {
 			_, err := streams[i].stream.Recv()
-			if strings.Contains(err.Error(), "EOF") {
+			if err == io.EOF {
 				break
 			}
 			if err != nil {
@@ -7040,7 +7044,7 @@ func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
 	}
 
 	// Verifying first connection was closed.
-	if _, err := creds.connections[0].CloseCh.Receive(ctx); err != nil {
+	if _, err := creds.connections[0].closeCh.Receive(ctx); err != nil {
 		t.Fatal("Timeout expired when waiting for first client transport to close")
 	}
 }
