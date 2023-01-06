@@ -870,7 +870,7 @@ func (nopCompressor) Do(w io.Writer, p []byte) error {
 		return err
 	}
 	if n != len(p) {
-		return fmt.Errorf("nopCompressor.Write: wrote %v bytes; want %v", n, len(p))
+		return fmt.Errorf("nopCompressor.Write: wrote %d bytes; want %d", n, len(p))
 	}
 	return nil
 }

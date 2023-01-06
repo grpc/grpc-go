@@ -81,7 +81,7 @@ func rstAfterHeader(tc testgrpc.TestServiceClient) {
 	req := largeSimpleRequest()
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if reply != nil {
-		logger.Fatalf("Client received reply despite server sending rst stream after header")
+		logger.Fatal("Client received reply despite server sending rst stream after header")
 	}
 	if status.Code(err) != codes.Internal {
 		logger.Fatalf("%v.UnaryCall() = _, %v, want _, %v", tc, status.Code(err), codes.Internal)
@@ -92,7 +92,7 @@ func rstDuringData(tc testgrpc.TestServiceClient) {
 	req := largeSimpleRequest()
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if reply != nil {
-		logger.Fatalf("Client received reply despite server sending rst stream during data")
+		logger.Fatal("Client received reply despite server sending rst stream during data")
 	}
 	if status.Code(err) != codes.Unknown {
 		logger.Fatalf("%v.UnaryCall() = _, %v, want _, %v", tc, status.Code(err), codes.Unknown)
@@ -103,7 +103,7 @@ func rstAfterData(tc testgrpc.TestServiceClient) {
 	req := largeSimpleRequest()
 	reply, err := tc.UnaryCall(context.Background(), req)
 	if reply != nil {
-		logger.Fatalf("Client received reply despite server sending rst stream after data")
+		logger.Fatal("Client received reply despite server sending rst stream after data")
 	}
 	if status.Code(err) != codes.Internal {
 		logger.Fatalf("%v.UnaryCall() = _, %v, want _, %v", tc, status.Code(err), codes.Internal)

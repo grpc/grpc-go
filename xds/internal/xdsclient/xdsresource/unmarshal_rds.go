@@ -83,7 +83,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, l
 		var err error
 		csps, err = processClusterSpecifierPlugins(rc.ClusterSpecifierPlugins)
 		if err != nil {
-			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid %v", err)
+			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
 		}
 	}
 	// cspNames represents all the cluster specifiers referenced by Route

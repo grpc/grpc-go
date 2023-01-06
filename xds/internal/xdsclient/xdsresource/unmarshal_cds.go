@@ -503,7 +503,7 @@ func outlierConfigFromCluster(cluster *v3clusterpb.Cluster) (*OutlierDetection, 
 	interval := defaultInterval
 	if i := od.GetInterval(); i != nil {
 		if err := i.CheckValid(); err != nil {
-			return nil, fmt.Errorf("outlier_detection.interval is invalid with error %v", err)
+			return nil, fmt.Errorf("outlier_detection.interval is invalid with error: %v", err)
 		}
 		if interval = i.AsDuration(); interval < 0 {
 			return nil, fmt.Errorf("outlier_detection.interval = %v; must be a valid duration and >= 0", interval)
@@ -513,7 +513,7 @@ func outlierConfigFromCluster(cluster *v3clusterpb.Cluster) (*OutlierDetection, 
 	baseEjectionTime := defaultBaseEjectionTime
 	if bet := od.GetBaseEjectionTime(); bet != nil {
 		if err := bet.CheckValid(); err != nil {
-			return nil, fmt.Errorf("outlier_detection.base_ejection_time is invalid with error %v", err)
+			return nil, fmt.Errorf("outlier_detection.base_ejection_time is invalid with error: %v", err)
 		}
 		if baseEjectionTime = bet.AsDuration(); baseEjectionTime < 0 {
 			return nil, fmt.Errorf("outlier_detection.base_ejection_time = %v; must be >= 0", baseEjectionTime)
@@ -523,7 +523,7 @@ func outlierConfigFromCluster(cluster *v3clusterpb.Cluster) (*OutlierDetection, 
 	maxEjectionTime := defaultMaxEjectionTime
 	if met := od.GetMaxEjectionTime(); met != nil {
 		if err := met.CheckValid(); err != nil {
-			return nil, fmt.Errorf("outlier_detection.max_ejection_time is invalid with error %v", err)
+			return nil, fmt.Errorf("outlier_detection.max_ejection_time is invalid: %v", err)
 		}
 		if maxEjectionTime = met.AsDuration(); maxEjectionTime < 0 {
 			return nil, fmt.Errorf("outlier_detection.max_ejection_time = %v; must be >= 0", maxEjectionTime)

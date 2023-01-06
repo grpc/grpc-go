@@ -48,7 +48,7 @@ var (
 func main() {
 	flag.Parse()
 	if *useTLS && *useALTS {
-		logger.Fatalf("use_tls and use_alts cannot be both set to true")
+		logger.Fatal("-use_tls and -use_alts cannot be both set to true")
 	}
 	p := strconv.Itoa(*port)
 	lis, err := net.Listen("tcp", ":"+p)
@@ -66,7 +66,7 @@ func main() {
 		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			logger.Fatalf("Failed to generate credentials %v", err)
+			logger.Fatalf("Failed to generate credentials: %v", err)
 		}
 		opts = append(opts, grpc.Creds(creds))
 	} else if *useALTS {

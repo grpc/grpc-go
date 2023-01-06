@@ -101,7 +101,7 @@ func startBenchmarkServer(config *testpb.ServerConfig, serverPort int) (*benchma
 		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			logger.Fatalf("failed to generate credentials %v", err)
+			logger.Fatalf("failed to generate credentials: %v", err)
 		}
 		opts = append(opts, grpc.Creds(creds))
 	}
