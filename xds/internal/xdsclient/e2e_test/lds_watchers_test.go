@@ -919,7 +919,7 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 
 // TestLDSWatch_PartialResponse covers the case where a response from the
 // management server does not contain all requested resources. LDS responses are
-// supposed to contain all requested resources, and the absense of one usually
+// supposed to contain all requested resources, and the absence of one usually
 // indicates that the management server does not know about it. In cases where
 // the server has never responded with this resource before, the xDS client is
 // expected to wait for the watch timeout to expire before concluding that the
