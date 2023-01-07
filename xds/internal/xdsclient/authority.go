@@ -200,6 +200,24 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 		return
 	}
 	for name, state := range resourceStates {
+		if state.cache == nil {
+			// If the resource state does not contain a cached update, which can
+			// happen when:
+			// - resource was newly requested but has not yet been received, or,
+			// - resource was removed as part of a previous update,
+			// we don't want to generate an error for the watchers.
+			//
+			// For the first of the above two conditions, this ADS response may
+			// be in reaction to an earlier request that did not yet request the
+			// new resource, so its absence from the response does not
+			// necessarily indicate that the resource does not exist. For that
+			// case, we rely on the request timeout instead.
+			//
+			// For the second of the above two conditions, we already generated
+			// an error when we received the first response which removed this
+			// resource. So, there is no need to generate another one.
+			continue
+		}
 		if _, ok := updates[name]; !ok {
 			// The metadata status is set to "ServiceStatusNotExist" if a
 			// previous update deleted this resource, in which case we do not
@@ -338,7 +356,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			wState:   watchStateStarted,
 		}
 		state.wTimer = time.AfterFunc(a.watchExpiryTimeout, func() {
-			a.handleWatchTimerExpiry(state, fmt.Errorf("watch for resource %q of type %s timed out", resourceName, rType.TypeEnum().String()))
+			a.handleWatchTimerExpiry(rType, resourceName, state)
 		})
 		resources[resourceName] = state
 		a.sendDiscoveryRequestLocked(rType, resources)
@@ -376,7 +394,8 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 	}
 }
 
-func (a *authority) handleWatchTimerExpiry(state *resourceState, err error) {
+func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName string, state *resourceState) {
+	a.logger.Warningf("Watch for resource %q of type %s timed out", resourceName, rType.TypeEnum().String())
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 
@@ -385,9 +404,13 @@ func (a *authority) handleWatchTimerExpiry(state *resourceState, err error) {
 	}
 
 	state.wState = watchStateTimeout
+	// With the watch timer firing, it is safe to assume that the resource does
+	// not exist on the management server.
+	state.cache = nil
+	state.md = xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}
 	for watcher := range state.watchers {
 		watcher := watcher
-		a.serializer.Schedule(func(context.Context) { watcher.OnError(err) })
+		a.serializer.Schedule(func(context.Context) { watcher.OnResourceDoesNotExist() })
 	}
 }
 

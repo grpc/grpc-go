@@ -616,7 +616,7 @@ func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// Verify that an empty update with the expected error is received.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	wantErr := fmt.Errorf("watch for resource %q of type ClusterLoadAssignment timed out", rdsName)
+	wantErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")
 	if err := verifyEndpointsUpdate(ctx, updateCh, xdsresource.EndpointsUpdateErrTuple{Err: wantErr}); err != nil {
 		t.Fatal(err)
 	}

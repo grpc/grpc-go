@@ -608,7 +608,7 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// Verify that an empty update with the expected error is received.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	wantErr := fmt.Errorf("watch for resource %q of type Listener timed out", ldsName)
+	wantErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")
 	if err := verifyListenerUpdate(ctx, updateCh, xdsresource.ListenerUpdateErrTuple{Err: wantErr}); err != nil {
 		t.Fatal(err)
 	}
@@ -913,6 +913,104 @@ func (s) TestLDSWatch_PartialValid(t *testing.T) {
 		},
 	}
 	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestLDSWatch_PartialResponse covers the case where a response from the
+// management server does not contain all requested resources. LDS responses are
+// supposed to contain all requested resources, and the absense of one usually
+// indicates that the management server does not know about it. In cases where
+// the server has never responded with this resource before, the xDS client is
+// expected to wait for the watch timeout to expire before concluding that the
+// resource does not exist on the server
+func (s) TestLDSWatch_PartialResponse(t *testing.T) {
+	overrideFedEnvVar(t)
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	defer cleanup()
+
+	// Create an xDS client with the above bootstrap contents.
+	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer client.Close()
+
+	// Register two watches for two listener resources and have the
+	// callbacks push the received updates on to a channel.
+	resourceName1 := ldsName
+	updateCh1 := testutils.NewChannel()
+	ldsCancel1 := client.WatchListener(resourceName1, func(u xdsresource.ListenerUpdate, err error) {
+		updateCh1.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	})
+	defer ldsCancel1()
+
+	resourceName2 := ldsNameNewStyle
+	updateCh2 := testutils.NewChannel()
+	ldsCancel2 := client.WatchListener(resourceName2, func(u xdsresource.ListenerUpdate, err error) {
+		updateCh2.Send(xdsresource.ListenerUpdateErrTuple{Update: u, Err: err})
+	})
+	defer ldsCancel2()
+
+	// Configure the management server to return only one of the two listener
+	// resources, corresponding to the registered watches.
+	resources := e2e.UpdateOptions{
+		NodeID: nodeID,
+		Listeners: []*v3listenerpb.Listener{
+			e2e.DefaultClientListener(resourceName1, rdsName),
+		},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
+	}
+
+	// Verify the contents of the received update for first watcher.
+	wantUpdate1 := xdsresource.ListenerUpdateErrTuple{
+		Update: xdsresource.ListenerUpdate{
+			RouteConfigName: rdsName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+	}
+	if err := verifyListenerUpdate(ctx, updateCh1, wantUpdate1); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that the second watcher does not get an update with an error.
+	if err := verifyNoListenerUpdate(ctx, updateCh2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure the management server to return two listener resources,
+	// corresponding to the registered watches.
+	resources = e2e.UpdateOptions{
+		NodeID: nodeID,
+		Listeners: []*v3listenerpb.Listener{
+			e2e.DefaultClientListener(resourceName1, rdsName),
+			e2e.DefaultClientListener(resourceName2, rdsName),
+		},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
+	}
+
+	// Verify the contents of the received update for th second watcher.
+	wantUpdate2 := xdsresource.ListenerUpdateErrTuple{
+		Update: xdsresource.ListenerUpdate{
+			RouteConfigName: rdsName,
+			HTTPFilters:     []xdsresource.HTTPFilter{{Name: "router"}},
+		},
+	}
+	if err := verifyListenerUpdate(ctx, updateCh2, wantUpdate2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that the first watcher gets no update, as the first resource did
+	// not change.
+	if err := verifyNoListenerUpdate(ctx, updateCh1); err != nil {
 		t.Fatal(err)
 	}
 }
