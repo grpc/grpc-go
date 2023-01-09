@@ -55,10 +55,11 @@ var (
 	// ErrIllegalHeaderWrite indicates that setting header is illegal because of
 	// the stream's state.
 	ErrIllegalHeaderWrite = status.Error(codes.Internal, "transport: SendHeader called multiple times")
+
+	statusHeaderListSizeLimitViolation = status.New(codes.Internal, "transport: trying to send header list size larger than the limit set by peer")
 	// ErrHeaderListSizeLimitViolation indicates that the header list size is larger
 	// than the limit set by peer.
-	statusHeaderListSizeLimitViolation = status.New(codes.Internal, "transport: trying to send header list size larger than the limit set by peer")
-	ErrHeaderListSizeLimitViolation    = statusHeaderListSizeLimitViolation.Err()
+	ErrHeaderListSizeLimitViolation = statusHeaderListSizeLimitViolation.Err()
 )
 
 // serverConnectionCounter counts the number of connections a server has seen
@@ -1076,7 +1077,7 @@ func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
 }
 
 // replaceStatusInHeaders replaces "grpc-status", "grpc-message" and "grpc-status-details-bin" fields.
-// This is useful in cases when error message is too large and can't fit into the liit set by the client.
+// This is useful in cases when error message is too large and can't fit into the limit set by the client.
 // In such cases we still want the client to receive an error message instead of just RST_STREAM, which is impossible to debug.
 func (t *http2Server) replaceStatusInHeaders(hf []hpack.HeaderField) []hpack.HeaderField {
 	var headerFields = make([]hpack.HeaderField, 0, 2)
