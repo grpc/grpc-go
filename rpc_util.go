@@ -296,7 +296,7 @@ func (o FailFastCallOption) before(c *callInfo) error {
 func (o FailFastCallOption) after(c *callInfo, attempt *csAttempt) {}
 
 // MaxCallRecvMsgSize returns a CallOption which sets the maximum message size
-// in bytes the client can receive. If this is not set, gRPC uses the default 
+// in bytes the client can receive. If this is not set, gRPC uses the default
 // 4MB.
 func MaxCallRecvMsgSize(bytes int) CallOption {
 	return MaxRecvMsgSizeCallOption{MaxRecvMsgSize: bytes}
@@ -320,7 +320,7 @@ func (o MaxRecvMsgSizeCallOption) before(c *callInfo) error {
 func (o MaxRecvMsgSizeCallOption) after(c *callInfo, attempt *csAttempt) {}
 
 // MaxCallSendMsgSize returns a CallOption which sets the maximum message size
-// in bytes the client can send. If this is not set, gRPC uses the default 
+// in bytes the client can send. If this is not set, gRPC uses the default
 // `math.MaxInt32`.
 func MaxCallSendMsgSize(bytes int) CallOption {
 	return MaxSendMsgSizeCallOption{MaxSendMsgSize: bytes}
