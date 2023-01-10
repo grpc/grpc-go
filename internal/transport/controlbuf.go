@@ -653,11 +653,9 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 	return l.originateStream(str, h)
 }
 
-// originateStreamWithHeaderFrame calls the initStream function on the headerFrame and
-// called writeHeader. If write succeeds the streamID is added to l.estdStreams
 func (l *loopyWriter) originateStream(str *outStream, hdr *headerFrame) error {
-	// l.draining is set for an incomingGoAway. In which case, we want to avoid further
-	// writes
+	// l.draining is set when handling GoAway. In which case, we want to avoid further
+	// writes to the wire.
 	if l.draining {
 		hdr.onOrphaned(errStreamDrain)
 		return nil
