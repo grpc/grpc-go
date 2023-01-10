@@ -30,6 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
+	"go.opencensus.io/trace"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal/grpctest"
@@ -61,6 +62,7 @@ type fakeExporter struct {
 
 	mu        sync.RWMutex
 	seenViews map[string]*viewInformation
+	seenSpans []spanInformation
 }
 
 // viewInformation is information Exported from the view package through
@@ -935,6 +937,376 @@ func (s) TestOpenCensusTags(t *testing.T) {
 			t.Fatalf("Should have received a nil error from channel, instead received: %v", chErr)
 		}
 	}
-
 	wg.Wait()
+}
+
+// compareSpanContext only checks the equality of the trace options, which
+// represent whether the span should be sampled. The other fields are checked
+// for presence in later assertions.
+func compareSpanContext(sc trace.SpanContext, sc2 trace.SpanContext) bool {
+	return sc.TraceOptions.IsSampled() == sc2.TraceOptions.IsSampled()
+}
+
+func compareMessageEvents(me []trace.MessageEvent, me2 []trace.MessageEvent) bool {
+	if len(me) != len(me2) {
+		return false
+	}
+	// Order matters here, message events are deterministic so no flakiness to
+	// test.
+	for i, e := range me {
+		e2 := me2[i]
+		if e.EventType != e2.EventType {
+			return false
+		}
+		if e.MessageID != e2.MessageID {
+			return false
+		}
+		if e.UncompressedByteSize != e2.UncompressedByteSize {
+			return false
+		}
+		if e.CompressedByteSize != e2.CompressedByteSize {
+			return false
+		}
+	}
+	return true
+}
+
+// compareLinks compares the type of link received compared to the wanted link.
+func compareLinks(ls []trace.Link, ls2 []trace.Link) bool {
+	if ls == nil && ls2 == nil {
+		return true
+	}
+	if ls == nil || ls2 == nil {
+		return false
+	}
+	if len(ls) != len(ls2) {
+		return false
+	}
+	for i, l := range ls {
+		l2 := ls2[i]
+		if l.Type != l2.Type {
+			return false
+		}
+	}
+	return true
+}
+
+// spanInformation is the information received about the span. This is a subset
+// of information that is important to verify that gRPC has knobs over, which
+// goes through a stable OpenCensus API with well defined behavior. This keeps
+// the robustness of assertions over time.
+type spanInformation struct {
+	// SpanContext either gets pulled off the wire in certain cases server side
+	// or created.
+	sc              trace.SpanContext
+	parentSpanID    trace.SpanID
+	spanKind        int
+	name            string
+	message         string
+	messageEvents   []trace.MessageEvent
+	status          trace.Status
+	links           []trace.Link
+	hasRemoteParent bool
+	childSpanCount  int
+}
+
+// presenceAndRelationshipAssertionsClientServerSpan checks for consistent trace
+// ID across the full trace. It also asserts each span has a corresponding
+// generated SpanID, and makes sure in the case of a server span and a client
+// span, the server span points to the client span as it's parent. This is
+// assumed to be called with spans from the same RPC (thus the same trace).
+// These assertions are orthogonal to pure equality assertions, as this data is
+// generated at runtime, so can only test relations between IDs (i.e. this part
+// of the data has the same ID as this part of the data).
+//
+// Returns an error in the case of a failing assertion, non nil error otherwise.
+func presenceAndRelationshipAssertionsClientServerSpan(sis []spanInformation) error {
+	var traceID trace.TraceID
+	for i, si := range sis {
+		// Trace IDs should all be consistent across every span, since this
+		// function assumes called with Span from one RPC, which all fall under
+		// one trace.
+		if i == 0 {
+			traceID = si.sc.TraceID
+		} else {
+			if !cmp.Equal(si.sc.TraceID, traceID) {
+				return fmt.Errorf("TraceIDs should all be consistent: %v, %v", si.sc.TraceID, traceID)
+			}
+		}
+		// Due to the span IDs being 8 bytes, the documentation states that it
+		// is practically a mathematical uncertainty in practice to create two
+		// colliding IDs. Thus, for a presence check (the ID was actually
+		// generated, I will simply compare to the zero value, even though a
+		// zero value is a theoretical possibility of generation). This is
+		// because in practice, this zero value defined by this test will never
+		// collide with the generated ID.
+		if cmp.Equal(si.sc.SpanID, trace.SpanID{}) {
+			return errors.New("span IDs should be populated from the creation of the span")
+		}
+	}
+	// If the length of spans of an RPC is 2, it means there is a server span
+	// which exports first and a client span which exports second. Thus, the
+	// server span should point to the client span as it's parent, represented
+	// by it's ID.
+	if len(sis) == 2 {
+		if !cmp.Equal(sis[0].parentSpanID, sis[1].sc.SpanID) {
+			return fmt.Errorf("server span should point to the client span as it's parent. parentSpanID: %v, clientSpanID: %v", sis[0].parentSpanID, sis[1].sc.SpanID)
+		}
+	}
+	return nil
+}
+
+// Equal compares the constant data of the exported span information that is
+// important for correctness known before runtime.
+func (si spanInformation) Equal(si2 spanInformation) bool {
+	if !compareSpanContext(si.sc, si2.sc) {
+		return false
+	}
+
+	if si.spanKind != si2.spanKind {
+		return false
+	}
+	if si.name != si2.name {
+		return false
+	}
+	if si.message != si2.message {
+		return false
+	}
+	// Ignore attribute comparison because Java doesn't even populate any so not
+	// important for correctness.
+	if !compareMessageEvents(si.messageEvents, si2.messageEvents) {
+		return false
+	}
+	if !cmp.Equal(si.status, si2.status) {
+		return false
+	}
+	// compare link type as link type child is important.
+	if !compareLinks(si.links, si2.links) {
+		return false
+	}
+	if si.hasRemoteParent != si2.hasRemoteParent {
+		return false
+	}
+	return si.childSpanCount == si2.childSpanCount
+}
+
+func (fe *fakeExporter) ExportSpan(sd *trace.SpanData) {
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+
+	// Persist the subset of data received that is important for correctness and
+	// to make various assertions on later. Keep the ordering as ordering of
+	// spans is deterministic in the context of one RPC.
+	gotSI := spanInformation{
+		sc:           sd.SpanContext,
+		parentSpanID: sd.ParentSpanID,
+		spanKind:     sd.SpanKind,
+		name:         sd.Name,
+		message:      sd.Message,
+		// annotations - ignore
+		// attributes - ignore, I just left them in from previous but no spec
+		// for correctness so no need to test. Java doesn't even have any
+		// attributes.
+		messageEvents:   sd.MessageEvents,
+		status:          sd.Status,
+		links:           sd.Links,
+		hasRemoteParent: sd.HasRemoteParent,
+		childSpanCount:  sd.ChildSpanCount,
+	}
+	fe.seenSpans = append(fe.seenSpans, gotSI)
+}
+
+// TestSpan tests emitted spans from gRPC. It configures a system with a gRPC
+// Client and gRPC server with the OpenCensus Dial and Server Option configured,
+// and makes a Unary RPC and a Streaming RPC. This should cause spans with
+// certain information to be emitted from client and server side for each RPC.
+func (s) TestSpan(t *testing.T) {
+	fe := &fakeExporter{
+		t: t,
+	}
+	trace.RegisterExporter(fe)
+	defer trace.UnregisterExporter(fe)
+
+	so := TraceOptions{
+		TS:           trace.ProbabilitySampler(1),
+		DisableTrace: false,
+	}
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
+			return &grpc_testing.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+			for {
+				_, err := stream.Recv()
+				if err == io.EOF {
+					return nil
+				}
+			}
+		},
+	}
+	if err := ss.Start([]grpc.ServerOption{ServerOption(so)}, DialOption(so)); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Make a Unary RPC. This should cause a span with message events
+	// corresponding to the request message and response message to be emitted
+	// both from the client and the server. Note that RPCs trigger exports of
+	// corresponding span data synchronously, thus the Span Data is guaranteed
+	// to have been read by exporter and is ready to make assertions on.
+	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{}}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+
+	// The spans received are server first, then client. This is due to the RPC
+	// finishing on the server first. The ordering of message events for a Unary
+	// Call is as follows: (client send, server recv), (server send (server span
+	// end), client recv (client span end)).
+	wantSI := []spanInformation{
+		{
+			// Sampling rate of 100 percent, so this should populate every span
+			// with the information that this span is being sampled. Here and
+			// every other span emitted in this test.
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
+			spanKind: trace.SpanKindServer,
+			name:     "grpc.testing.TestService.UnaryCall",
+			// message id - "must be calculated as two different counters
+			// starting from 1 one for sent messages and one for received
+			// message. This way we guarantee that the values will be consistent
+			// between different implementations. In case of unary calls only
+			// one sent and one received message will be recorded for both
+			// client and server spans."
+			messageEvents: []trace.MessageEvent{
+				{
+					EventType:            trace.MessageEventTypeRecv,
+					MessageID:            1, // First msg recv so 1 (see comment above)
+					UncompressedByteSize: 2,
+					CompressedByteSize:   7,
+				},
+				{
+					EventType:          trace.MessageEventTypeSent,
+					MessageID:          1, // First msg send so 1 (see comment above)
+					CompressedByteSize: 5,
+				},
+			},
+			links: []trace.Link{
+				{
+					Type: trace.LinkTypeChild,
+				},
+			},
+			// For some reason, status isn't populated in the data sent to the
+			// exporter. This seems wrong, but it didn't send status in old
+			// instrumentation code, so I'm iffy on it but fine.
+			hasRemoteParent: true,
+		},
+		{
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
+			spanKind: trace.SpanKindClient,
+			name:     "grpc.testing.TestService.UnaryCall",
+			messageEvents: []trace.MessageEvent{
+				{
+					EventType:            trace.MessageEventTypeSent,
+					MessageID:            1, // First msg send so 1 (see comment above)
+					UncompressedByteSize: 2,
+					CompressedByteSize:   7,
+				},
+				{
+					EventType:          trace.MessageEventTypeRecv,
+					MessageID:          1, // First msg recv so 1 (see comment above)
+					CompressedByteSize: 5,
+				},
+			},
+			hasRemoteParent: false,
+		},
+	}
+	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
+		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
+	}
+	fe.mu.Lock()
+	if err := presenceAndRelationshipAssertionsClientServerSpan(fe.seenSpans); err != nil {
+		fe.mu.Unlock()
+		t.Fatalf("Error in runtime data assertions: %v", err)
+	}
+	fe.seenSpans = nil
+	fe.mu.Unlock()
+
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("ss.Client.FullDuplexCall failed: %v", err)
+	}
+	// Send two messages. This should be recorded in the emitted spans message
+	// events, with message IDs which increase for each message.
+	if err := stream.Send(&grpc_testing.StreamingOutputCallRequest{}); err != nil {
+		t.Fatalf("stream.Send failed: %v", err)
+	}
+	if err := stream.Send(&grpc_testing.StreamingOutputCallRequest{}); err != nil {
+		t.Fatalf("stream.Send failed: %v", err)
+	}
+
+	stream.CloseSend()
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("unexpected error: %v, expected an EOF error", err)
+	}
+
+	wantSI = []spanInformation{
+		{
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
+			spanKind: trace.SpanKindServer,
+			name:     "grpc.testing.TestService.FullDuplexCall",
+			links: []trace.Link{
+				{
+					Type: trace.LinkTypeChild,
+				},
+			},
+			messageEvents: []trace.MessageEvent{
+				{
+					EventType:          trace.MessageEventTypeRecv,
+					MessageID:          1, // First msg recv so 1
+					CompressedByteSize: 5,
+				},
+				{
+					EventType:          trace.MessageEventTypeRecv,
+					MessageID:          2, // Second msg recv so 2
+					CompressedByteSize: 5,
+				},
+			},
+			hasRemoteParent: true,
+		},
+		{
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
+			spanKind: trace.SpanKindClient,
+			name:     "grpc.testing.TestService.FullDuplexCall",
+			messageEvents: []trace.MessageEvent{
+				{
+					EventType:          trace.MessageEventTypeSent,
+					MessageID:          1, // First msg send so 1
+					CompressedByteSize: 5,
+				},
+				{
+					EventType:          trace.MessageEventTypeSent,
+					MessageID:          2, // Second msg send so 2
+					CompressedByteSize: 5,
+				},
+			},
+			hasRemoteParent: false,
+		},
+	}
+	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
+		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
+	}
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
+	if err := presenceAndRelationshipAssertionsClientServerSpan(fe.seenSpans); err != nil {
+		t.Fatalf("Error in runtime data assertions: %v", err)
+	}
 }
