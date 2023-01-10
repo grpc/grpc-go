@@ -997,7 +997,7 @@ func (s) TestLDSWatch_PartialResponse(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	// Verify the contents of the received update for th second watcher.
+	// Verify the contents of the received update for the second watcher.
 	wantUpdate2 := xdsresource.ListenerUpdateErrTuple{
 		Update: xdsresource.ListenerUpdate{
 			RouteConfigName: rdsName,
