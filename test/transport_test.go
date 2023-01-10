@@ -1,6 +1,6 @@
 /*
 *
-* Copyright 2022 gRPC authors.
+* Copyright 2023 gRPC authors.
 *
 * Licensed under the Apache License, Version 2.0 (the "License");
 * you may not use this file except in compliance with the License.
@@ -27,47 +27,31 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/transport"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-// authInfoWithConn wraps the underlying net.Conn, and makes it available
-// to the test as part of the Peer call option.
-type authInfoWithConn struct {
-	credentials.CommonAuthInfo
-	conn net.Conn
-}
-
-func (ai *authInfoWithConn) AuthType() string {
-	return ""
-}
-
 // connWrapperWithCloseCh wraps a net.Conn and pushes on a channel when closed.
 type connWrapperWithCloseCh struct {
 	net.Conn
-	closeCh chan interface{}
+	close *grpcsync.Event
 }
 
 // Close closes the connection and sends a value on the close channel.
 func (cw *connWrapperWithCloseCh) Close() error {
 	err := cw.Conn.Close()
-	for {
-		select {
-		case cw.closeCh <- nil:
-			return err
-		case <-cw.closeCh:
-		}
-	}
+	cw.close.Fire()
+	return err
 }
 
 // These custom creds are used for storing the connections made by the client.
 // The closeCh in conn can be used to detect when conn is closed.
 type transportRestartCheckCreds struct {
 	mu          sync.Mutex
-	connections []connWrapperWithCloseCh
+	connections []*connWrapperWithCloseCh
 }
 
 func (c *transportRestartCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
@@ -76,17 +60,15 @@ func (c *transportRestartCheckCreds) ServerHandshake(rawConn net.Conn) (net.Conn
 func (c *transportRestartCheckCreds) ClientHandshake(ctx context.Context, authority string, rawConn net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	conn := &connWrapperWithCloseCh{Conn: rawConn, closeCh: make(chan interface{}, 1)}
-	c.connections = append(c.connections, *conn)
-	commonAuthInfo := credentials.CommonAuthInfo{SecurityLevel: credentials.NoSecurity}
-	authInfo := &authInfoWithConn{commonAuthInfo, conn}
-	return conn, authInfo, nil
+	conn := &connWrapperWithCloseCh{Conn: rawConn, close: grpcsync.NewEvent()}
+	c.connections = append(c.connections, conn)
+	return conn, nil, nil
 }
 func (c *transportRestartCheckCreds) Info() credentials.ProtocolInfo {
 	return credentials.ProtocolInfo{}
 }
 func (c *transportRestartCheckCreds) Clone() credentials.TransportCredentials {
-	return &transportRestartCheckCreds{}
+	return c
 }
 func (c *transportRestartCheckCreds) OverrideServerName(s string) error {
 	return nil
@@ -96,22 +78,20 @@ func (c *transportRestartCheckCreds) OverrideServerName(s string) error {
 // MaxStreamID. This test also verifies that subsequent RPCs use a new client
 // transport and the old transport is closed.
 func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
-	// Set the transport's MaxStreamID to 5 to cause connection to drain after 2 RPCs.
+	// Set the transport's MaxStreamID to 4 to cause connection to drain after 2 RPCs.
 	originalMaxStreamID := transport.MaxStreamID
-	transport.MaxStreamID = 5
+	transport.MaxStreamID = 4
 	defer func() {
 		transport.MaxStreamID = originalMaxStreamID
 	}()
 
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			for i := 0; i < 2; i++ {
-				if _, err := stream.Recv(); err != nil {
-					return status.Errorf(codes.Internal, "unexpected error receiving: %v", err)
-				}
-				if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
-					return status.Errorf(codes.Internal, "unexpected error sending: %v", err)
-				}
+			if _, err := stream.Recv(); err != nil {
+				return status.Errorf(codes.Internal, "unexpected error receiving: %v", err)
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
+				return status.Errorf(codes.Internal, "unexpected error sending: %v", err)
 			}
 			if recv, err := stream.Recv(); err != io.EOF {
 				return status.Errorf(codes.Internal, "Recv = %v, %v; want _, io.EOF", recv, err)
@@ -131,27 +111,21 @@ func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
 
 	var streams []testpb.TestService_FullDuplexCallClient
 
-	// expectedNumConns when each stream is created.
-	expectedNumConns := []int{1, 1, 2}
+	const numStreams = 3
+	// expected number of conns when each stream is created i.e., 3rd stream is created
+	// on a new connection.
+	expectedNumConns := [numStreams]int{1, 1, 2}
 
-	// Set up 3 streams and call sendAndReceive() once on each.
-	for i := 0; i < 3; i++ {
+	// Set up 3 streams.
+	for i := 0; i < numStreams; i++ {
 		s, err := ss.Client.FullDuplexCall(ctx)
 		if err != nil {
 			t.Fatalf("Creating FullDuplex stream: %v", err)
 		}
-
 		streams = append(streams, s)
-		if err := s.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
-			t.Fatalf("Sending on stream %d: %v", i, err)
-		}
-		if _, err := s.Recv(); err != nil {
-			t.Fatalf("Receiving on stream %d: %v", i, err)
-		}
-
-		// Verify expected num of conns.
+		// Verify expected num of conns after each stream is created.
 		if len(creds.connections) != expectedNumConns[i] {
-			t.Fatalf("Number of connections created: %v, want: %v", len(creds.connections), expectedNumConns[i])
+			t.Fatalf("Got number of connections created: %v, want: %v", len(creds.connections), expectedNumConns[i])
 		}
 	}
 
@@ -165,33 +139,15 @@ func (s) TestClientTransportRestartsAfterStreamIDExhausted(t *testing.T) {
 		}
 	}
 
-	var connPerStream []net.Conn
-
-	// The peer passed via the call option is set up only after the RPC is complete.
-	// Conn used by the stream is available in authInfo.
 	for i, stream := range streams {
 		if err := stream.CloseSend(); err != nil {
 			t.Fatalf("CloseSend() on stream %d: %v", i, err)
 		}
-		p, ok := peer.FromContext(stream.Context())
-		if !ok {
-			t.Fatalf("Getting peer from stream context for stream %d", i)
-		}
-		connPerStream = append(connPerStream, p.AuthInfo.(*authInfoWithConn).conn)
-	}
-
-	// Verifying the first and second RPCs were made on the same connection.
-	if connPerStream[0] != connPerStream[1] {
-		t.Fatal("Got streams using different connections; want same.")
-	}
-	// Verifying the third and first/second RPCs were made on different connections.
-	if connPerStream[2] == connPerStream[0] {
-		t.Fatal("Got streams using same connections; want different.")
 	}
 
 	// Verifying first connection was closed.
 	select {
-	case <-creds.connections[0].closeCh:
+	case <-creds.connections[0].close.Done():
 	case <-ctx.Done():
 		t.Fatal("Timeout expired when waiting for first client transport to close")
 	}

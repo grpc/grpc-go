@@ -650,16 +650,19 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 		itl:   &itemList{},
 		wq:    h.wq,
 	}
-	str.itl.enqueue(h)
-	return l.originateStream(str)
+	return l.originateStream(str, h)
 }
 
-func (l *loopyWriter) originateStream(str *outStream) error {
-	hdr := str.itl.dequeue().(*headerFrame)
+// originateStreamWithHeaderFrame calls the initStream function on the headerFrame and
+// called writeHeader. If write succeeds the streamID is added to l.estdStreams
+func (l *loopyWriter) originateStream(str *outStream, hdr *headerFrame) error {
+	// l.draining is set for an incomingGoAway. In which case, we want to avoid further
+	// writes
+	if l.draining {
+		hdr.onOrphaned(errStreamDrain)
+		return nil
+	}
 	if err := hdr.initStream(str.id); err != nil {
-		if err == errStreamDrain { // errStreamDrain need not close transport
-			return nil
-		}
 		return err
 	}
 	if err := l.writeHeader(str.id, hdr.endStream, hdr.hf, hdr.onWrite); err != nil {

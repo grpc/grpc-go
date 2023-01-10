@@ -742,15 +742,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		endStream: false,
 		initStream: func(id uint32) error {
 			t.mu.Lock()
-			if state := t.state; state != reachable {
+			// we want initStream to cleanup and return an error when transport is closing.
+			// initStream is never called when transport is draining.
+			if t.state == closing {
 				t.mu.Unlock()
-				// Do a quick cleanup.
-				err := error(errStreamDrain)
-				if state == closing {
-					err = ErrConnClosing
-				}
-				cleanup(err)
-				return err
+				cleanup(ErrConnClosing)
+				return ErrConnClosing
 			}
 			if channelz.IsOn() {
 				atomic.AddInt64(&t.czData.streamsStarted, 1)
