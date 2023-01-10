@@ -742,6 +742,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		endStream: false,
 		initStream: func(id uint32) error {
 			t.mu.Lock()
+			// TODO: handle transport closure in loopy instead and remove this
 			// initStream is never called when transport is draining.
 			if t.state == closing {
 				t.mu.Unlock()

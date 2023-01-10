@@ -654,9 +654,10 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 }
 
 func (l *loopyWriter) originateStream(str *outStream, hdr *headerFrame) error {
-	// l.draining is set when handling GoAway. In which case, we want to avoid further
-	// writes to the wire.
+	// l.draining is set when handling GoAway. In which case, we want to avoid
+	// creating new streams.
 	if l.draining {
+		// TODO: provide a better error with the reason we are in draining.
 		hdr.onOrphaned(errStreamDrain)
 		return nil
 	}

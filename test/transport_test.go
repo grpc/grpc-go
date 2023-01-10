@@ -34,7 +34,7 @@ import (
 	testpb "google.golang.org/grpc/test/grpc_testing"
 )
 
-// connWrapperWithCloseCh wraps a net.Conn and pushes on a channel when closed.
+// connWrapperWithCloseCh wraps a net.Conn and fires an event when closed.
 type connWrapperWithCloseCh struct {
 	net.Conn
 	close *grpcsync.Event
@@ -42,9 +42,8 @@ type connWrapperWithCloseCh struct {
 
 // Close closes the connection and sends a value on the close channel.
 func (cw *connWrapperWithCloseCh) Close() error {
-	err := cw.Conn.Close()
 	cw.close.Fire()
-	return err
+	return cw.Conn.Close()
 }
 
 // These custom creds are used for storing the connections made by the client.
