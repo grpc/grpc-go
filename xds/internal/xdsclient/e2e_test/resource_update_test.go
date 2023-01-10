@@ -387,9 +387,9 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 					Value:   []byte{1, 2, 3, 4},
 				}},
 			},
-			wantErr: fmt.Sprintf("watch for resource %q of type RouteConfigResource timed out", resourceName1),
+			wantErr: "RouteConfiguration not found in received response",
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
+				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
 			},
 		},
 		{
@@ -399,9 +399,9 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
 				VersionInfo: "1",
 			},
-			wantErr: fmt.Sprintf("watch for resource %q of type RouteConfigResource timed out", resourceName1),
+			wantErr: "RouteConfiguration not found in received response",
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
+				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
 			},
 		},
 		{
@@ -412,9 +412,9 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(&v3clusterpb.Cluster{})},
 			},
-			wantErr: fmt.Sprintf("watch for resource %q of type RouteConfigResource timed out", resourceName1),
+			wantErr: "RouteConfiguration not found in received response",
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
+				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
 			},
 		},
 		{
@@ -926,9 +926,9 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 					Value:   []byte{1, 2, 3, 4},
 				}},
 			},
-			wantErr: fmt.Sprintf("watch for resource %q of type EndpointsResource timed out", resourceName1),
+			wantErr: "Endpoints not found in received response",
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
+				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
 			},
 		},
 		{
@@ -938,9 +938,9 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				TypeUrl:     "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
 				VersionInfo: "1",
 			},
-			wantErr: fmt.Sprintf("watch for resource %q of type EndpointsResource timed out", resourceName1),
+			wantErr: "Endpoints not found in received response",
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
+				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
 			},
 		},
 		{
@@ -951,9 +951,9 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 				VersionInfo: "1",
 				Resources:   []*anypb.Any{testutils.MarshalAny(&v3listenerpb.Listener{})},
 			},
-			wantErr: fmt.Sprintf("watch for resource %q of type EndpointsResource timed out", resourceName1),
+			wantErr: "Endpoints not found in received response",
 			wantUpdateMetadata: map[string]xdsresource.UpdateWithMD{
-				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested}},
+				"resource-name-1": {MD: xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusNotExist}},
 			},
 		},
 		{

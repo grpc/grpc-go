@@ -42,7 +42,7 @@ func (l *listenerWatcher) OnError(err error) {
 }
 
 func (l *listenerWatcher) OnResourceDoesNotExist() {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Resource name %q of type Listener not found in received response", l.resourceName)
+	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Listener not found in received response", l.resourceName)
 	l.cb(xdsresource.ListenerUpdate{}, err)
 }
 
@@ -74,7 +74,7 @@ func (r *routeConfigWatcher) OnError(err error) {
 }
 
 func (r *routeConfigWatcher) OnResourceDoesNotExist() {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Resource name %q of type RouteConfiguration not found in received response", r.resourceName)
+	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type RouteConfiguration not found in received response", r.resourceName)
 	r.cb(xdsresource.RouteConfigUpdate{}, err)
 }
 
@@ -106,7 +106,7 @@ func (c *clusterWatcher) OnError(err error) {
 }
 
 func (c *clusterWatcher) OnResourceDoesNotExist() {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Resource name %q of type Cluster not found in received response", c.resourceName)
+	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Cluster not found in received response", c.resourceName)
 	c.cb(xdsresource.ClusterUpdate{}, err)
 }
 
@@ -141,7 +141,7 @@ func (c *endpointsWatcher) OnError(err error) {
 }
 
 func (c *endpointsWatcher) OnResourceDoesNotExist() {
-	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "Resource name %q of type Endpoints not found in received response", c.resourceName)
+	err := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "resource name %q of type Endpoints not found in received response", c.resourceName)
 	c.cb(xdsresource.EndpointsUpdate{}, err)
 }
 

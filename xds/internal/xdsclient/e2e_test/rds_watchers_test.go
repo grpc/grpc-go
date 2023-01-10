@@ -649,7 +649,7 @@ func (s) TestRDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// Verify that an empty update with the expected error is received.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	wantErr := fmt.Errorf("watch for resource %q of type RouteConfiguration timed out", rdsName)
+	wantErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")
 	if err := verifyRouteConfigUpdate(ctx, updateCh, xdsresource.RouteConfigUpdateErrTuple{Err: wantErr}); err != nil {
 		t.Fatal(err)
 	}
