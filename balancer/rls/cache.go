@@ -91,8 +91,6 @@ type cacheEntry struct {
 	// size stores the size of this cache entry. Used to enforce the cache size
 	// specified in the LB policy configuration.
 	size int64
-	// onEvict is the callback to be invoked when this cache entry is evicted.
-	onEvict func()
 }
 
 // backoffState wraps all backoff related state associated with a cache entry.
@@ -154,20 +152,6 @@ func (l *lru) getLeastRecentlyUsed() cacheKey {
 		return cacheKey{}
 	}
 	return e.Value.(cacheKey)
-}
-
-// iterateAndRun traverses the lru in least-recently-used order and calls the
-// provided function for every element.
-//
-// Callers may delete the cache entry associated with the cacheKey passed into
-// f, but they may not perform any other operation which reorders the elements
-// in the lru.
-func (l *lru) iterateAndRun(f func(cacheKey)) {
-	var next *list.Element
-	for e := l.ll.Front(); e != nil; e = next {
-		next = e.Next()
-		f(e.Value.(cacheKey))
-	}
 }
 
 // dataCache contains a cache of RLS data used by the LB policy to make routing
@@ -252,29 +236,22 @@ func (dc *dataCache) resize(size int64) (backoffCancelled bool) {
 // The return value indicates if any expired entries were evicted.
 //
 // The LB policy invokes this method periodically to purge expired entries.
-func (dc *dataCache) evictExpiredEntries() (evicted bool) {
+func (dc *dataCache) evictExpiredEntries() bool {
 	if dc.shutdown.HasFired() {
 		return false
 	}
 
-	evicted = false
-	dc.keys.iterateAndRun(func(key cacheKey) {
-		entry, ok := dc.entries[key]
-		if !ok {
-			// This should never happen.
-			dc.logger.Errorf("cacheKey %+v not found in the cache while attempting to perform periodic cleanup of expired entries", key)
-			return
-		}
-
+	evicted := false
+	for key, entry := range dc.entries {
 		// Only evict entries for which both the data expiration time and
 		// backoff expiration time fields are in the past.
 		now := time.Now()
 		if entry.expiryTime.After(now) || entry.backoffExpiryTime.After(now) {
-			return
+			continue
 		}
-		evicted = true
 		dc.deleteAndcleanup(key, entry)
-	})
+		evicted = true
+	}
 	return evicted
 }
 
@@ -285,22 +262,15 @@ func (dc *dataCache) evictExpiredEntries() (evicted bool) {
 // The LB policy invokes this method when the control channel moves from READY
 // to TRANSIENT_FAILURE back to READY. See `monitorConnectivityState` method on
 // the `controlChannel` type for more details.
-func (dc *dataCache) resetBackoffState(newBackoffState *backoffState) (backoffReset bool) {
+func (dc *dataCache) resetBackoffState(newBackoffState *backoffState) bool {
 	if dc.shutdown.HasFired() {
 		return false
 	}
 
-	backoffReset = false
-	dc.keys.iterateAndRun(func(key cacheKey) {
-		entry, ok := dc.entries[key]
-		if !ok {
-			// This should never happen.
-			dc.logger.Errorf("cacheKey %+v not found in the cache while attempting to perform periodic cleanup of expired entries", key)
-			return
-		}
-
+	backoffReset := false
+	for _, entry := range dc.entries {
 		if entry.backoffState == nil {
-			return
+			continue
 		}
 		if entry.backoffState.timer != nil {
 			entry.backoffState.timer.Stop()
@@ -310,7 +280,7 @@ func (dc *dataCache) resetBackoffState(newBackoffState *backoffState) (backoffRe
 		entry.backoffTime = time.Time{}
 		entry.backoffExpiryTime = time.Time{}
 		backoffReset = true
-	})
+	}
 	return backoffReset
 }
 
@@ -377,25 +347,15 @@ func (dc *dataCache) removeEntryForTesting(key cacheKey) {
 // - the entry is removed from the map of entries
 // - current size of the data cache is update
 // - the key is removed from the LRU
-// - onEvict is invoked in a separate goroutine
 func (dc *dataCache) deleteAndcleanup(key cacheKey, entry *cacheEntry) {
 	delete(dc.entries, key)
 	dc.currentSize -= entry.size
 	dc.keys.removeEntry(key)
-	if entry.onEvict != nil {
-		go entry.onEvict()
-	}
 }
 
 func (dc *dataCache) stop() {
-	dc.keys.iterateAndRun(func(key cacheKey) {
-		entry, ok := dc.entries[key]
-		if !ok {
-			// This should never happen.
-			dc.logger.Errorf("cacheKey %+v not found in the cache while shutting down", key)
-			return
-		}
+	for key, entry := range dc.entries {
 		dc.deleteAndcleanup(key, entry)
-	})
+	}
 	dc.shutdown.Fire()
 }

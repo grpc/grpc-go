@@ -117,39 +117,6 @@ func (s) TestLRU_BasicOperations(t *testing.T) {
 	}
 }
 
-func (s) TestLRU_IterateAndRun(t *testing.T) {
-	initCacheEntries()
-	// Create an LRU and add some entries to it.
-	lru := newLRU()
-	for _, k := range cacheKeys {
-		lru.addEntry(k)
-	}
-
-	// Iterate through the lru to make sure that entries are returned in the
-	// least recently used order.
-	var gotKeys []cacheKey
-	lru.iterateAndRun(func(key cacheKey) {
-		gotKeys = append(gotKeys, key)
-	})
-	if !cmp.Equal(gotKeys, cacheKeys, cmp.AllowUnexported(cacheKey{})) {
-		t.Fatalf("lru.iterateAndRun returned %v, want %v", gotKeys, cacheKeys)
-	}
-
-	// Make sure that removing entries from the lru while iterating through it
-	// is a safe operation.
-	lru.iterateAndRun(func(key cacheKey) {
-		lru.removeEntry(key)
-	})
-
-	// Check the lru internals to make sure we freed up all the memory.
-	if len := lru.ll.Len(); len != 0 {
-		t.Fatalf("Number of entries in the lru's underlying list is %d, want 0", len)
-	}
-	if len := len(lru.m); len != 0 {
-		t.Fatalf("Number of entries in the lru's underlying map is %d, want 0", len)
-	}
-}
-
 func (s) TestDataCache_BasicOperations(t *testing.T) {
 	initCacheEntries()
 	dc := newDataCache(5, nil)
