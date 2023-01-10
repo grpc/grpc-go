@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
@@ -64,6 +65,23 @@ func (sm StringMatcher) Match(input string) bool {
 		return strings.Contains(input, *sm.containsMatch)
 	}
 	return false
+}
+
+func (sm StringMatcher) String() string {
+	m := ""
+	switch {
+	case sm.exactMatch != nil:
+		m = fmt.Sprintf("exactMatch:%v", *sm.exactMatch)
+	case sm.prefixMatch != nil:
+		m = fmt.Sprintf("prefixMatch:%v", *sm.prefixMatch)
+	case sm.suffixMatch != nil:
+		m = fmt.Sprintf("suffixMatch:%v", *sm.suffixMatch)
+	case sm.regexMatch != nil:
+		m = fmt.Sprintf("regexMatch:%v", sm.regexMatch.String())
+	case sm.containsMatch != nil:
+		m = fmt.Sprintf("containsMatch:%v", *sm.containsMatch)
+	}
+	return fmt.Sprintf("StringMatch:%v:%s", strconv.FormatBool(sm.ignoreCase), m)
 }
 
 // StringMatcherFromProto is a helper function to create a StringMatcher from

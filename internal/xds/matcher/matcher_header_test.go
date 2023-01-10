@@ -93,6 +93,12 @@ func TestHeaderExactMatcherMatch(t *testing.T) {
 			if got := hem.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
+
+			// StringMatcher match result should be same
+			hsm := NewHeaderStringMatcher(tt.key, StringMatcher{exactMatch: &tt.exact}, tt.invert)
+			if got := hsm.Match(tt.md); got != tt.want {
+				t.Errorf("StringMatcher match() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }
@@ -177,6 +183,12 @@ func TestHeaderRegexMatcherMatch(t *testing.T) {
 			hrm := NewHeaderRegexMatcher(tt.key, regexp.MustCompile(tt.regexStr), tt.invert)
 			if got := hrm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
+			}
+
+			// StringMatcher match result should be same
+			hsm := NewHeaderStringMatcher(tt.key, StringMatcher{regexMatch: regexp.MustCompile(tt.regexStr)}, tt.invert)
+			if got := hsm.Match(tt.md); got != tt.want {
+				t.Errorf("StringMatcher match() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -393,6 +405,12 @@ func TestHeaderPrefixMatcherMatch(t *testing.T) {
 			if got := hpm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}
+
+			// StringMatcher match result should be same
+			hsm := NewHeaderStringMatcher(tt.key, StringMatcher{prefixMatch: &tt.prefix}, tt.invert)
+			if got := hsm.Match(tt.md); got != tt.want {
+				t.Errorf("StringMatcher match() = %v, want %v", got, tt.want)
+			}
 		})
 	}
 }
@@ -463,6 +481,98 @@ func TestHeaderSuffixMatcherMatch(t *testing.T) {
 			hsm := NewHeaderSuffixMatcher(tt.key, tt.suffix, tt.invert)
 			if got := hsm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
+			}
+
+			// StringMatcher match result should be same
+			sm := NewHeaderStringMatcher(tt.key, StringMatcher{suffixMatch: &tt.suffix}, tt.invert)
+			if got := sm.Match(tt.md); got != tt.want {
+				t.Errorf("StringMatcher match() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHeaderContainsMatcherMatch(t *testing.T) {
+	tests := []struct {
+		name          string
+		key, contains string
+		md            metadata.MD
+		want          bool
+		invert        bool
+	}{
+		{
+			name:     "not contains",
+			key:      "th",
+			contains: "tv",
+			md:       metadata.Pairs("th", ""),
+			want:     false,
+		},
+		{
+			name:     "prefix contains",
+			key:      "th",
+			contains: "tv",
+			md:       metadata.Pairs("th", "tv123"),
+			want:     true,
+		},
+		{
+			name:     "suffix contains",
+			key:      "th",
+			contains: "tv",
+			md:       metadata.Pairs("th", "123tv"),
+			want:     true,
+		},
+		{
+			name:     "middle contains",
+			key:      "th",
+			contains: "tv",
+			md:       metadata.Pairs("th", "123tv123"),
+			want:     true,
+		},
+
+		{
+			name:     "not contains invert",
+			key:      "th",
+			contains: "tv",
+			md:       metadata.Pairs("th", ""),
+			want:     true,
+			invert:   true,
+		},
+		{
+			name:     "prefix contains invert",
+			key:      "th",
+			contains: "tv",
+			md:       metadata.Pairs("th", "tv123"),
+			want:     false,
+			invert:   true,
+		},
+		{
+			name:     "suffix contains invert",
+			key:      "th",
+			contains: "tv",
+			md:       metadata.Pairs("th", "123tv"),
+			want:     false,
+			invert:   true,
+		},
+		{
+			name:     "middle contains invert",
+			key:      "th",
+			contains: "tv",
+			md:       metadata.Pairs("th", "123tv123"),
+			want:     false,
+			invert:   true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hsm := NewHeaderContainsMatcher(tt.key, tt.contains, tt.invert)
+			if got := hsm.Match(tt.md); got != tt.want {
+				t.Errorf("match() = %v, want %v", got, tt.want)
+			}
+
+			// StringMatcher match result should be same
+			sm := NewHeaderStringMatcher(tt.key, StringMatcher{containsMatch: &tt.contains}, tt.invert)
+			if got := sm.Match(tt.md); got != tt.want {
+				t.Errorf("StringMatcher match() = %v, want %v", got, tt.want)
 			}
 		})
 	}

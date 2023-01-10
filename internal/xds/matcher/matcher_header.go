@@ -241,3 +241,28 @@ func (hcm *HeaderContainsMatcher) Match(md metadata.MD) bool {
 func (hcm *HeaderContainsMatcher) String() string {
 	return fmt.Sprintf("headerContains:%v%v", hcm.key, hcm.contains)
 }
+
+// HeaderStringMatcher performed based on the StringMatcher of the header value.
+type HeaderStringMatcher struct {
+	key     string
+	matcher StringMatcher
+	invert  bool
+}
+
+// NewHeaderStringMatcher returns a new HeaderStringMatcher.
+func NewHeaderStringMatcher(key string, matcher StringMatcher, invert bool) *HeaderStringMatcher {
+	return &HeaderStringMatcher{key: key, matcher: matcher, invert: invert}
+}
+
+// Match will be performed based on the string match of the header value.
+func (hsm *HeaderStringMatcher) Match(md metadata.MD) bool {
+	v, ok := mdValuesFromOutgoingCtx(md, hsm.key)
+	if !ok {
+		return false
+	}
+	return hsm.matcher.Match(v) != hsm.invert
+}
+
+func (hsm *HeaderStringMatcher) String() string {
+	return fmt.Sprintf("headerStringMatch:%v:[%v]", hsm.key, hsm.matcher.String())
+}

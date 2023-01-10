@@ -310,6 +310,65 @@ func TestMatch(t *testing.T) {
 	}
 }
 
+func TestStringMatcher_String(t *testing.T) {
+	var (
+		exactMatcher, _           = StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "exact"}})
+		prefixMatcher, _          = StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "prefix"}})
+		suffixMatcher, _          = StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "suffix"}})
+		regexMatcher, _           = StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: "good?regex?"}}})
+		containsMatcher, _        = StringMatcherFromProto(&v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "contains"}})
+		exactMatcherIgnoreCase, _ = StringMatcherFromProto(&v3matcherpb.StringMatcher{
+			MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "exact"},
+			IgnoreCase:   true,
+		})
+	)
+
+	tests := []struct {
+		name    string
+		matcher StringMatcher
+		want    string
+	}{
+		{
+			name:    "exact match",
+			matcher: exactMatcher,
+			want:    "StringMatch:false:exactMatch:exact",
+		},
+		{
+			name:    "exact match ignore case",
+			matcher: exactMatcherIgnoreCase,
+			want:    "StringMatch:true:exactMatch:exact",
+		},
+		{
+			name:    "prefix match",
+			matcher: prefixMatcher,
+			want:    "StringMatch:false:prefixMatch:prefix",
+		},
+		{
+			name:    "suffix match",
+			matcher: suffixMatcher,
+			want:    "StringMatch:false:suffixMatch:suffix",
+		},
+		{
+			name:    "regex match",
+			matcher: regexMatcher,
+			want:    "StringMatch:false:regexMatch:good?regex?",
+		},
+		{
+			name:    "contains match",
+			matcher: containsMatcher,
+			want:    "StringMatch:false:containsMatch:contains",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := test.matcher.String(); test.want != got {
+				t.Errorf("want %v, but got %v", test.want, got)
+			}
+		})
+	}
+}
+
 func newStringP(s string) *string {
 	return &s
 }
