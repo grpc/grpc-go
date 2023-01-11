@@ -346,7 +346,7 @@ func (s *Stream) RecvCompress() string {
 // SetSendCompress sets the compression algorithm to the stream.
 func (s *Stream) SetSendCompress(name string) error {
 	if s.isHeaderSent() || s.getState() == streamDone {
-		return status.Error(codes.Internal, "transport: set send compressor called after headers sent or stream done")
+		return errors.New("transport: set send compressor called after headers sent or stream done")
 	}
 
 	s.sendCompress = name
@@ -359,7 +359,7 @@ func (s *Stream) SendCompress() string {
 }
 
 // ClientAdvertisedCompressors returns the compressor names advertised by the
-// client via :grpc-accept-encoding header.
+// client via grpc-accept-encoding header.
 func (s *Stream) ClientAdvertisedCompressors() string {
 	return s.clientAdvertisedCompressors
 }

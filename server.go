@@ -1299,8 +1299,9 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	}
 
 	if sendCompressorName != "" {
-		// Safe to ignore returned error value as we are guaranteed to succeed here
-		_ = stream.SetSendCompress(sendCompressorName)
+		if err := stream.SetSendCompress(sendCompressorName); err != nil {
+			return status.Errorf(codes.Internal, "grpc: failed to set send compressor: %v", err)
+		}
 	}
 
 	var payInfo *payloadInfo
@@ -1628,8 +1629,9 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	}
 
 	if ss.sendCompressorName != "" {
-		// Safe to ignore returned error value as we are guaranteed to succeed here
-		_ = stream.SetSendCompress(ss.sendCompressorName)
+		if err := stream.SetSendCompress(ss.sendCompressorName); err != nil {
+			return status.Errorf(codes.Internal, "grpc: failed to set send compressor: %v", err)
+		}
 	}
 
 	ss.ctx = newContextWithRPCInfo(ss.ctx, false, ss.codec, ss.cp, ss.comp)
@@ -1963,36 +1965,55 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 
 // SetSendCompressor sets a compressor for outbound messages.
 // It must not be called after any event that causes headers to be sent
-// (see SetHeader for a complete list). Provided compressor is used when below
+// (see _ServerStream_.SetHeader for a complete list). Provided compressor is used when below
 // conditions are met:
 //
 //   - compressor is registered via encoding.RegisterCompressor
 //   - compressor name exists in the client advertised compressor names sent in
-//     :grpc-accept-encoding header.
+//     grpc-accept-encoding header. Use _ServerStream_.ClientAdvertisedCompressors
+//     to get client advertised compressor names.
 //
 // The context provided must be the context passed to the server's handler.
+// It must be noted that compressor name "identity" disables the outbound compression.
+// By default, server messages will be sent using the same compressor with which
+// request messages were sent.
 //
-// The error returned is compatible with the status package.  However, the
-// status code will often not match the RPC status as seen by the client
-// application, and therefore, should not be relied upon for this purpose.
 // It is not safe to call SetSendCompressor concurrently with SendHeader and
 // SendMsg.
 //
 // # Experimental
 //
-// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// Notice: This _function_ is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func SetSendCompressor(ctx context.Context, name string) error {
 	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.Stream)
 	if !ok || stream == nil {
-		return status.Errorf(codes.Internal, "grpc: failed to fetch the stream from the context %v", ctx)
+		return fmt.Errorf("failed to fetch the stream from the given context")
 	}
 
 	if err := validateSendCompressor(name, stream.ClientAdvertisedCompressors()); err != nil {
-		return status.Errorf(codes.Internal, "grpc: unable to set send compressor: %v", err)
+		return fmt.Errorf("unable to set send compressor: %w", err)
 	}
 
 	return stream.SetSendCompress(name)
+}
+
+// ClientAdvertisedCompressors returns compressor names advertised by the client
+// via grpc-accept-encoding header.
+//
+// The context provided must be the context passed to the server's handler.
+//
+// # Experimental
+//
+// Notice: This _function_ is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func ClientAdvertisedCompressors(ctx context.Context) ([]string, error) {
+	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.Stream)
+	if !ok || stream == nil {
+		return nil, fmt.Errorf("failed to fetch the stream from the given context %v", ctx)
+	}
+
+	return strings.Split(stream.ClientAdvertisedCompressors(), ","), nil
 }
 
 // SetTrailer sets the trailer metadata that will be sent when an RPC returns.
@@ -2033,7 +2054,7 @@ func (c *channelzServer) ChannelzMetric() *channelz.ServerInternalMetric {
 // validateSendCompressor returns an error when given compressor name cannot be
 // handled by the server or the client based on the advertised compressors.
 func validateSendCompressor(name, clientCompressors string) error {
-	if name == "identity" {
+	if name == encoding.Identity {
 		return nil
 	}
 
