@@ -153,7 +153,7 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 	envconfig.XDSFederation = true
 	defer func() { envconfig.XDSFederation = oldXDSFederation }()
 
-	// Setting up the management server it not *really* required for this test
+	// Setting up the management server is not *really* required for this test
 	// case. All we need is a bootstrap configuration which does not contain the
 	// authority mentioned in the dial target. But setting up the management
 	// server and actually making an RPC ensures that the xDS client is
@@ -196,9 +196,10 @@ func (s) TestFederation_UnknownAuthorityInDialTarget(t *testing.T) {
 
 	target = fmt.Sprintf("xds://unknown-authority/%s", serviceName)
 	t.Logf("Dialing target %q with unknown authority which is expected to fail", target)
+	const wantErr = `authority "unknown-authority" is not found in the bootstrap file`
 	_, err = grpc.Dial(target, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
-	if err == nil || !strings.Contains(err.Error(), `authority "unknown-authority" is not found in the bootstrap file`) {
-		t.Fatal("grpc.Dial() for target with unknown authority succeeded when expected to fail")
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("grpc.Dial(%q) returned %v, want: %s", target, err, wantErr)
 	}
 }
 
