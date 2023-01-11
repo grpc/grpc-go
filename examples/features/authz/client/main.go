@@ -39,6 +39,8 @@ var addr = flag.String("addr", "localhost:50051", "the address to connect to")
 
 const fallbackToken = "some-secret-token"
 
+var token = oauth2.Token{AccessToken: fallbackToken}
+
 // logger is to mock a sophisticated logging system. To simplify the example, we just print out the content.
 func logger(format string, a ...interface{}) {
 	fmt.Printf("LOG:\t"+format+"\n", a...)
@@ -46,19 +48,7 @@ func logger(format string, a ...interface{}) {
 
 // unaryInterceptor is an example unary interceptor.
 func unaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	var credsConfigured bool
-	for _, o := range opts {
-		_, ok := o.(grpc.PerRPCCredsCallOption)
-		if ok {
-			credsConfigured = true
-			break
-		}
-	}
-	if !credsConfigured {
-		opts = append(opts, grpc.PerRPCCredentials(oauth.NewOauthAccess(&oauth2.Token{
-			AccessToken: fallbackToken,
-		})))
-	}
+	opts = append(opts, grpc.PerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&token)}))
 	start := time.Now()
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	end := time.Now()
@@ -88,19 +78,7 @@ func newWrappedStream(s grpc.ClientStream) grpc.ClientStream {
 
 // streamInterceptor is an example stream interceptor.
 func streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	var credsConfigured bool
-	for _, o := range opts {
-		_, ok := o.(*grpc.PerRPCCredsCallOption)
-		if ok {
-			credsConfigured = true
-			break
-		}
-	}
-	if !credsConfigured {
-		opts = append(opts, grpc.PerRPCCredentials(oauth.NewOauthAccess(&oauth2.Token{
-			AccessToken: fallbackToken,
-		})))
-	}
+	opts = append(opts, grpc.PerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&token)}))
 	s, err := streamer(ctx, desc, cc, method, opts...)
 	if err != nil {
 		return nil, err
@@ -111,7 +89,7 @@ func streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.Clie
 func callUnaryEcho(ctx context.Context, client ecpb.EchoClient, message string) {
 	resp, err := client.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message})
 	if err != nil {
-		log.Fatalf("client.UnaryEcho(_) = _, %v: ", err)
+		log.Fatalf("UnaryEcho RPC failed: %v", err)
 	}
 	fmt.Println("UnaryEcho: ", resp.Message)
 }
@@ -124,7 +102,7 @@ func callBidiStreamingEcho(ctx context.Context, client ecpb.EchoClient) {
 	}
 	for i := 0; i < 5; i++ {
 		if err := c.Send(&ecpb.EchoRequest{Message: fmt.Sprintf("Request %d", i+1)}); err != nil {
-			log.Fatalf("failed to send request due to error: %v", err)
+			log.Fatalf("Sending StreamingEcho message: %v", err)
 		}
 	}
 	c.CloseSend()
@@ -134,7 +112,7 @@ func callBidiStreamingEcho(ctx context.Context, client ecpb.EchoClient) {
 			break
 		}
 		if err != nil {
-			log.Fatalf("failed to receive response due to error: %v", err)
+			log.Fatalf("Receiving StreamingEcho message: %v", err)
 		}
 		fmt.Println("BidiStreaming Echo: ", resp.Message)
 	}

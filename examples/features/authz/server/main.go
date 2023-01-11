@@ -53,15 +53,62 @@ var (
 	errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
 	errInvalidToken    = status.Errorf(codes.Unauthenticated, "invalid token")
 
-	authzPolicy = newPolicy("authz",
-		[]string{
-			newHeaderRule("allow_UnaryEcho", "/grpc.examples.echo.Echo/UnaryEcho", unaryEchoWriterRole),
-			newHeaderRule("allow_ClientStreamingEcho", "/grpc.examples.echo.Echo/ClientStreamingEcho", streamEchoWriterRole),
-			newHeaderRule("allow_ServerStreamingEcho", "/grpc.examples.echo.Echo/ServerStreamingEcho", streamEchoReaderRole),
-			newHeaderRule("allow_BidirectionalStreamingEcho", "/grpc.examples.echo.Echo/BidirectionalStreamingEcho", streamEchoReadWriterRole),
-		},
-		nil,
-	)
+	authzPolicy = `
+	{
+		"name": "authz",
+		"allow_rules": [
+			{
+				"name": "allow_UnaryEcho",
+				"request": {
+					"paths": ["/grpc.examples.echo.Echo/UnaryEcho"],
+					"headers": [
+						{
+							"key": "UNARY_ECHO:W",
+							"values": ["true"]
+						}
+					]
+				}
+			},
+			{
+				"name": "allow_ClientStreamingEcho",
+				"request": {
+					"paths": ["/grpc.examples.echo.Echo/ClientStreamingEcho"],
+					"headers": [
+						{
+							"key": "STREAM_ECHO:W",
+							"values": ["true"]
+						}
+					]
+				}
+			},
+			{
+				"name": "allow_ServerStreamingEcho",
+				"request": {
+					"paths": ["/grpc.examples.echo.Echo/ServerStreamingEcho"],
+					"headers": [
+						{
+							"key": "STREAM_ECHO:R",
+							"values": ["true"]
+						}
+					]
+				}
+			},
+			{
+				"name": "allow_BidirectionalStreamingEcho",
+				"request": {
+					"paths": ["/grpc.examples.echo.Echo/BidirectionalStreamingEcho"],
+					"headers": [
+						{
+							"key": "STREAM_ECHO:RW",
+							"values": ["true"]
+						}
+					]
+				}
+			}
+		],
+		"deny_rules": []
+	}
+	`
 	mockedMetadata = newMockedMetadata()
 )
 
@@ -75,32 +122,6 @@ func newMockedMetadata() metadata.MD {
 		md.Set(role, "true")
 	}
 	return md
-}
-
-func newPolicy(name string, allowRules, denyRules []string) string {
-	return fmt.Sprintf(`{
-		"name": "%s",
-		"allow_rules":[%s],
-		"deny_rules":[%s]
-	}`, name,
-		strings.Join(allowRules, ","),
-		strings.Join(denyRules, ","),
-	)
-}
-
-func newHeaderRule(name, path, role string) string {
-	return fmt.Sprintf(`{
-		"name": "%s",
-		"request": {
-			"paths":["%s"],
-			"headers": [
-				{
-					"key": "%s",
-					"values": ["true"]
-				}
-			]
-		}
-	}`, name, path, role)
 }
 
 // logger is to mock a sophisticated logging system. To simplify the example, we just print out the content.
@@ -124,7 +145,7 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 			if err == io.EOF {
 				return nil
 			}
-			fmt.Printf("server: error receiving from stream: %v\n", err)
+			fmt.Printf("Receiving message from stream: %v\n", err)
 			return err
 		}
 		fmt.Printf("bidi echoing message %q\n", in.Message)
@@ -227,7 +248,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Loading credentials: %v", err)
 	}
-
 	staticInteceptor, err := authz.NewStatic(authzPolicy)
 	if err != nil {
 		log.Fatalf("Creating a static authz interceptor: %v", err)
