@@ -70,6 +70,7 @@ func startTestService(t *testing.T, server *stubserver.StubServer) (uint32, func
 	if err != nil {
 		t.Fatalf("invalid serving port for stub server: %v", err)
 	}
+	t.Logf("Started test service backend at %q", server.Address)
 	return uint32(port), server.Stop
 }
 
