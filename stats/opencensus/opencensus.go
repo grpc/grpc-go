@@ -22,6 +22,7 @@ import (
 	"context"
 
 	"go.opencensus.io/trace"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/stats"
@@ -33,8 +34,8 @@ var (
 
 // TraceOptions are the tracing options for opencensus instrumentation.
 type TraceOptions struct {
-	// Ts is the Sampler used for tracing.
-	Ts trace.Sampler
+	// TS is the Sampler used for tracing.
+	TS trace.Sampler
 	// DisableTrace determines whether traces are disabled for an OpenCensus
 	// Dial or Server option. will overwrite any global option setting.
 	DisableTrace bool
@@ -43,17 +44,18 @@ type TraceOptions struct {
 // DialOption returns a dial option which enables OpenCensus instrumentation
 // code for a grpc.ClientConn.
 //
-// Client Applications interested in instrumenting their grpc.ClientConn should
+// Client applications interested in instrumenting their grpc.ClientConn should
 // pass the dial option returned from this function as the first dial option to
 // grpc.Dial().
 //
 // Using this option will always lead to instrumentation, however in order to
 // use the data an exporter must be registered with the OpenCensus trace package
-// for traces and the OpenCensus view package for metrics. Client Side has
+// for traces and the OpenCensus view package for metrics. Client side has
 // retries, so a Unary and Streaming Interceptor are registered to handle per
 // RPC traces/metrics, and a Stats Handler is registered to handle per RPC
 // attempt trace/metrics. These three components registered work together in
-// conjunction, and do not work standalone.
+// conjunction, and do not work standalone. It is not supported to use this
+// alongside another stats handler dial option.
 func DialOption(to TraceOptions) grpc.DialOption {
 	return joinDialOptions(grpc.WithChainUnaryInterceptor(unaryInterceptor), grpc.WithChainStreamInterceptor(streamInterceptor), grpc.WithStatsHandler(&clientStatsHandler{to: to}))
 }
@@ -67,9 +69,10 @@ func DialOption(to TraceOptions) grpc.DialOption {
 //
 // Using this option will always lead to instrumentation, however in order to
 // use the data an exporter must be registered with the OpenCensus trace package
-// for traces and the OpenCensus view package for metrics. Server Side does not
-// have retries, so a registered Stats Handler is the only component you need
-// for RPC traces/metrics.
+// for traces and the OpenCensus view package for metrics. Server side does not
+// have retries, so a registered Stats Handler is the only option that is
+// returned. It is not supported to use this alongside another stats handler
+// server option.
 func ServerOption(to TraceOptions) grpc.ServerOption {
 	return grpc.StatsHandler(&serverStatsHandler{to: to})
 }
