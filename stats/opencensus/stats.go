@@ -26,6 +26,7 @@ import (
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/tag"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
@@ -72,30 +73,36 @@ type rpcData struct {
 
 // statsTagRPC creates a recording object to derive measurements from in the
 // context, scoping the recordings to per RPC Attempt client side (scope of the
-// context).
-// TODO: It also populates the gRPC Metadata within the context with opencensus
-// specific tags set by the application in the context, binary encoded.
+// context). It also populates the gRPC Metadata within the context with any
+// opencensus specific tags set by the application in the context, binary
+// encoded to send across the wire.
 func (csh *clientStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	d := &rpcData{
 		startTime: time.Now(),
 		method:    info.FullMethodName,
 	}
-	// TODO: serialize opencensus tags from context into gRPC Metadata in
-	// context.
+	// Populate gRPC Metadata with OpenCensus tag map if set by application.
+	if tm := tag.FromContext(ctx); tm != nil {
+		ctx = stats.SetTags(ctx, tag.Encode(tm))
+	}
 	return setRPCData(ctx, d)
 }
 
 // statsTagRPC creates a recording object to derive measurements from in the
 // context, scoping the recordings to per RPC server side (scope of the
-// context).
-// TODO: It also deserializes the opencensus tags set in the context's gRPC
-// Metadata.
+// context). It also deserializes the opencensus tags set in the context's gRPC
+// Metadata, and adds a server method tag to the opencensus tags.
 func (ssh *serverStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
 	d := &rpcData{
 		startTime: time.Now(),
 		method:    info.FullMethodName,
 	}
-	// TODO: deserialize opencensus tags from gRPC Metadata in context.
+	if tagsBin := stats.Tags(ctx); tagsBin != nil {
+		if tags, err := tag.Decode(tagsBin); err != nil {
+			ctx = tag.NewContext(ctx, tags)
+		}
+	}
+	ctx, _ = tag.New(ctx, tag.Upsert(keyServerMethod, removeLeadingSlash(info.FullMethodName)))
 	return setRPCData(ctx, d)
 }
 
@@ -184,10 +191,7 @@ func recordDataEnd(ctx context.Context, e *stats.End) {
 	var st string
 	if e.Error != nil {
 		s, _ := status.FromError(e.Error) // ignore second argument because codes.Unknown is fine
-		if ok {
-			// TODO: Switch to uppercase, perhaps an UnmarshalJSON + inverse map on code type.
-			st = s.Code().String()
-		}
+		st = codes.CodeToStr[s.Code()]
 	} else {
 		st = "OK"
 	}

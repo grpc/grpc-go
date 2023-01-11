@@ -195,6 +195,27 @@ const (
 	_maxCode = 17
 )
 
+// CodeToStr maps from the code type to strings with only uppercase letters.
+var CodeToStr = map[Code]string{
+	OK:                 `"OK"`,
+	Canceled:           `"CANCELLED"`,
+	Unknown:            `"UNKNOWN"`,
+	InvalidArgument:    `"INVALID_ARGUMENT"`,
+	DeadlineExceeded:   `"DEADLINE_EXCEEDED"`,
+	NotFound:           `"NOT_FOUND"`,
+	AlreadyExists:      `"ALREADY_EXISTS"`,
+	PermissionDenied:   `"PERMISSION_DENIED"`,
+	ResourceExhausted:  `"RESOURCE_EXHAUSTED"`,
+	FailedPrecondition: `"FAILED_PRECONDITION"`,
+	Aborted:            `"ABORTED"`,
+	OutOfRange:         `"OUT_OF_RANGE"`,
+	Unimplemented:      `"UNIMPLEMENTED"`,
+	Internal:           `"INTERNAL"`,
+	Unavailable:        `"UNAVAILABLE"`,
+	DataLoss:           `"DATA_LOSS"`,
+	Unauthenticated:    `"UNAUTHENTICATED"`,
+}
+
 var strToCode = map[string]Code{
 	`"OK"`: OK,
 	`"CANCELLED"`:/* [sic] */ Canceled,
