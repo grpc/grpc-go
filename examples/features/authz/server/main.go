@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2022 gRPC authors.
+ * Copyright 2023 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -219,37 +219,27 @@ func main() {
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
-		log.Fatalf("failed to listen: %v", err)
+		log.Fatalf("Listening on local port %q: %v", *port, err)
 	}
 
 	// Create tls based credential.
 	creds, err := credentials.NewServerTLSFromFile(data.Path("x509/server_cert.pem"), data.Path("x509/server_key.pem"))
 	if err != nil {
-		log.Fatalf("failed to create credentials: %v", err)
+		log.Fatalf("Loading credentials: %v", err)
 	}
 
 	staticInteceptor, err := authz.NewStatic(authzPolicy)
 	if err != nil {
-		log.Fatalf("failed to create static authz interceptor: %v", err)
+		log.Fatalf("Creating a static authz interceptor: %v", err)
 	}
-	s := grpc.NewServer(
-		grpc.Creds(creds),
-		grpc.ChainUnaryInterceptor(
-			authUnaryInterceptor,
-			injectResourceAccessUnaryInterceptor,
-			staticInteceptor.UnaryInterceptor,
-		),
-		grpc.ChainStreamInterceptor(
-			authStreamInterceptor,
-			injectResourceAccessStreamInterceptor,
-			staticInteceptor.StreamInterceptor,
-		),
-	)
+	unaryInt := grpc.ChainUnaryInterceptor(authUnaryInterceptor, injectResourceAccessUnaryInterceptor, staticInteceptor.UnaryInterceptor)
+	streamInt := grpc.ChainStreamInterceptor(authStreamInterceptor, injectResourceAccessStreamInterceptor, staticInteceptor.StreamInterceptor)
+	s := grpc.NewServer(grpc.Creds(creds), unaryInt, streamInt)
 
 	// Register EchoServer on the server.
 	pb.RegisterEchoServer(s, &server{})
 
 	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+		log.Fatalf("Serving Echo service on local port: %v", err)
 	}
 }

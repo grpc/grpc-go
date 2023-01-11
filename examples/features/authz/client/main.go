@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2022 gRPC authors.
+ * Copyright 2023 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,9 +108,7 @@ func streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.Clie
 	return newWrappedStream(s), nil
 }
 
-func callUnaryEcho(client ecpb.EchoClient, message string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func callUnaryEcho(ctx context.Context, client ecpb.EchoClient, message string) {
 	resp, err := client.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message})
 	if err != nil {
 		log.Fatalf("client.UnaryEcho(_) = _, %v: ", err)
@@ -118,9 +116,8 @@ func callUnaryEcho(client ecpb.EchoClient, message string) {
 	fmt.Println("UnaryEcho: ", resp.Message)
 }
 
-func callBidiStreamingEcho(client ecpb.EchoClient) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func callBidiStreamingEcho(ctx context.Context, client ecpb.EchoClient) {
+
 	c, err := client.BidirectionalStreamingEcho(ctx)
 	if err != nil {
 		return
@@ -155,12 +152,14 @@ func main() {
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(creds), grpc.WithUnaryInterceptor(unaryInterceptor), grpc.WithStreamInterceptor(streamInterceptor))
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		log.Fatalf("grpc.Dial(%q): %v", *addr, err)
 	}
 	defer conn.Close()
 
 	// Make a echo client and send RPCs.
-	rgc := ecpb.NewEchoClient(conn)
-	callUnaryEcho(rgc, "hello world")
-	callBidiStreamingEcho(rgc)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client := ecpb.NewEchoClient(conn)
+	callUnaryEcho(ctx, client, "hello world")
+	callBidiStreamingEcho(ctx, client)
 }
