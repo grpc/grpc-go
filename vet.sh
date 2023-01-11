@@ -115,7 +115,7 @@ for MOD_FILE in $(find . -name 'go.mod'); do
   goimports -l . 2>&1 | not grep -vE "\.pb\.go"
   golint ./... 2>&1 | not grep -vE "/grpc_testing_not_regenerate/.*\.pb\.go:"
 
-  go mod tidy
+  go mod tidy -compat=1.17
   git status --porcelain 2>&1 | fail_on_output || \
     (git status; git --no-pager diff; exit 1)
   popd
