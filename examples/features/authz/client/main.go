@@ -39,8 +39,6 @@ var addr = flag.String("addr", "localhost:50051", "the address to connect to")
 
 const fallbackToken = "some-secret-token"
 
-var token = oauth2.Token{AccessToken: fallbackToken}
-
 // logger is to mock a sophisticated logging system. To simplify the example, we just print out the content.
 func logger(format string, a ...interface{}) {
 	fmt.Printf("LOG:\t"+format+"\n", a...)
@@ -48,6 +46,7 @@ func logger(format string, a ...interface{}) {
 
 // unaryInterceptor is an example unary interceptor.
 func unaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	token := oauth2.Token{AccessToken: fallbackToken}
 	opts = append(opts, grpc.PerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&token)}))
 	start := time.Now()
 	err := invoker(ctx, method, req, reply, cc, opts...)
@@ -62,22 +61,13 @@ type wrappedStream struct {
 	grpc.ClientStream
 }
 
-func (w *wrappedStream) RecvMsg(m interface{}) error {
-	logger("Receive a message (Type: %T) at %v", m, time.Now().Format(time.RFC3339))
-	return w.ClientStream.RecvMsg(m)
-}
-
-func (w *wrappedStream) SendMsg(m interface{}) error {
-	logger("Send a message (Type: %T) at %v", m, time.Now().Format(time.RFC3339))
-	return w.ClientStream.SendMsg(m)
-}
-
 func newWrappedStream(s grpc.ClientStream) grpc.ClientStream {
 	return &wrappedStream{s}
 }
 
 // streamInterceptor is an example stream interceptor.
 func streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	token := oauth2.Token{AccessToken: fallbackToken}
 	opts = append(opts, grpc.PerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&token)}))
 	s, err := streamer(ctx, desc, cc, method, opts...)
 	if err != nil {
