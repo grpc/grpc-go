@@ -207,7 +207,10 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 			t.Errorf("%s: error = %q; want %q", tt.name, gotErr.Error(), tt.wantErr)
 			continue
 		}
-		if tt.wantErr != "" && rrec.Code != tt.wantErrCode {
+		if tt.wantErrCode == 0 {
+			tt.wantErrCode = http.StatusOK
+		}
+		if rrec.Code != tt.wantErrCode {
 			t.Errorf("%s: code = %d; want %d", tt.name, rrec.Code, tt.wantErrCode)
 			continue
 		}
