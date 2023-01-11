@@ -742,15 +742,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		endStream: false,
 		initStream: func(id uint32) error {
 			t.mu.Lock()
-			if state := t.state; state != reachable {
+			// TODO: handle transport closure in loopy instead and remove this
+			// initStream is never called when transport is draining.
+			if t.state == closing {
 				t.mu.Unlock()
-				// Do a quick cleanup.
-				err := error(errStreamDrain)
-				if state == closing {
-					err = ErrConnClosing
-				}
-				cleanup(err)
-				return err
+				cleanup(ErrConnClosing)
+				return ErrConnClosing
 			}
 			if channelz.IsOn() {
 				atomic.AddInt64(&t.czData.streamsStarted, 1)
@@ -768,6 +765,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 	}
 	firstTry := true
 	var ch chan struct{}
+	transportDrainRequired := false
 	checkForStreamQuota := func(it interface{}) bool {
 		if t.streamQuota <= 0 { // Can go negative if server decreases it.
 			if firstTry {
@@ -783,6 +781,11 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 		h := it.(*headerFrame)
 		h.streamID = t.nextID
 		t.nextID += 2
+
+		// Drain client transport if nextID > MaxStreamID which signals gRPC that
+		// the connection is closed and a new one must be created for subsequent RPCs.
+		transportDrainRequired = t.nextID > MaxStreamID
+
 		s.id = h.streamID
 		s.fc = &inFlow{limit: uint32(t.initialWindowSize)}
 		t.mu.Lock()
@@ -861,6 +864,12 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 			}
 			sh.HandleRPC(s.ctx, outHeader)
 		}
+	}
+	if transportDrainRequired {
+		if logger.V(logLevel) {
+			logger.Infof("transport: t.nextID > MaxStreamID. Draining")
+		}
+		t.GracefulClose()
 	}
 	return s, nil
 }
@@ -1782,4 +1791,10 @@ func (t *http2Client) getOutFlowWindow() int64 {
 	case <-timer.C:
 		return -2
 	}
+}
+
+func (t *http2Client) stateForTesting() transportState {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.state
 }
