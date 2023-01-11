@@ -45,15 +45,7 @@ const (
 	streamEchoReaderRole     = "STREAM_ECHO:R"
 	streamEchoWriterRole     = "STREAM_ECHO:W"
 	streamEchoReadWriterRole = "STREAM_ECHO:RW"
-)
-
-var (
-	port = flag.Int("port", 50051, "the port to serve on")
-
-	errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
-	errInvalidToken    = status.Errorf(codes.Unauthenticated, "invalid token")
-
-	authzPolicy = `
+	authzPolicy              = `
 	{
 		"name": "authz",
 		"allow_rules": [
@@ -109,6 +101,14 @@ var (
 		"deny_rules": []
 	}
 	`
+)
+
+var (
+	port = flag.Int("port", 50051, "the port to serve on")
+
+	errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
+	errInvalidToken    = status.Errorf(codes.Unauthenticated, "invalid token")
+
 	mockedMetadata = newMockedMetadata()
 )
 
