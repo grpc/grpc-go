@@ -126,7 +126,7 @@ type rlsBalancer struct {
 	// start off reading the cache.
 
 	// cacheMu guards access to the data cache and pending requests map. We
-	// cannot use an RWMutex here since even a operation like
+	// cannot use an RWMutex here since even an operation like
 	// dataCache.getEntry() modifies the underlying LRU, which is implemented as
 	// a doubly linked list.
 	cacheMu    sync.Mutex
@@ -271,10 +271,8 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	b.resolverState = ccs.ResolverState
 	b.handleChildPolicyConfigUpdate(newCfg, &ccs)
 
-	resizeCache := false
-	if newCfg.cacheSizeBytes != b.lbCfg.cacheSizeBytes {
-		resizeCache = true
-	}
+	// Resize the cache if the size in the config has changed.
+	resizeCache := newCfg.cacheSizeBytes != b.lbCfg.cacheSizeBytes
 
 	// Update the copy of the config in the LB policy before releasing the lock.
 	b.lbCfg = newCfg
@@ -288,8 +286,13 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	<-done
 
 	if resizeCache {
-		// If the new config changes the size of the data cache, we might have to
-		// evict entries to get the cache size down to the newly specified size.
+		// If the new config changes reduces the size of the data cache, we
+		// might have to evict entries to get the cache size down to the newly
+		// specified size.
+		//
+		// And we cannot do this operation above (where we compute the
+		// `resizeCache` boolean) because `cacheMu` needs to be grabbed before
+		// `stateMu` if we are to hold both locks at the same time.
 		b.cacheMu.Lock()
 		b.dataCache.resize(newCfg.cacheSizeBytes)
 		b.cacheMu.Unlock()

@@ -96,7 +96,7 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	switch {
 	// No data cache entry. No pending request.
 	case dcEntry == nil && pendingEntry == nil:
-		throttled := p.sendRouteLookupRequest(cacheKey, &backoffState{bs: defaultBackoffStrategy}, reqKeys.Map, rlspb.RouteLookupRequest_REASON_MISS, "")
+		throttled := p.sendRouteLookupRequestLocked(cacheKey, &backoffState{bs: defaultBackoffStrategy}, reqKeys.Map, rlspb.RouteLookupRequest_REASON_MISS, "")
 		if throttled {
 			return p.useDefaultPickIfPossible(info, errRLSThrottled)
 		}
@@ -110,7 +110,7 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	case dcEntry != nil && pendingEntry == nil:
 		if dcEntry.expiryTime.After(now) {
 			if !dcEntry.staleTime.IsZero() && dcEntry.staleTime.Before(now) && dcEntry.backoffTime.Before(now) {
-				p.sendRouteLookupRequest(cacheKey, dcEntry.backoffState, reqKeys.Map, rlspb.RouteLookupRequest_REASON_STALE, dcEntry.headerData)
+				p.sendRouteLookupRequestLocked(cacheKey, dcEntry.backoffState, reqKeys.Map, rlspb.RouteLookupRequest_REASON_STALE, dcEntry.headerData)
 			}
 			// Delegate to child policies.
 			res, err := p.delegateToChildPoliciesLocked(dcEntry, info)
@@ -130,7 +130,7 @@ func (p *rlsPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 		}
 
 		// We get here only if the entry has expired and is not in backoff.
-		throttled := p.sendRouteLookupRequest(cacheKey, dcEntry.backoffState, reqKeys.Map, rlspb.RouteLookupRequest_REASON_MISS, "")
+		throttled := p.sendRouteLookupRequestLocked(cacheKey, dcEntry.backoffState, reqKeys.Map, rlspb.RouteLookupRequest_REASON_MISS, "")
 		if throttled {
 			return p.useDefaultPickIfPossible(info, errRLSThrottled)
 		}
@@ -189,12 +189,11 @@ func (p *rlsPicker) useDefaultPickIfPossible(info balancer.PickInfo, errOnNoDefa
 	return balancer.PickResult{}, errOnNoDefault
 }
 
-// sendRouteLookupRequest adds an entry to the pending request map and sends out
-// an RLS request using the passed in arguments. Returns a value indicating if
-// the request was throttled by the client-side adaptive throttler.
-//
-// Caller must hold a write-lock on p.lb.cacheMu.
-func (p *rlsPicker) sendRouteLookupRequest(cacheKey cacheKey, bs *backoffState, reqKeys map[string]string, reason rlspb.RouteLookupRequest_Reason, staleHeaders string) bool {
+// sendRouteLookupRequestLocked adds an entry to the pending request map and
+// sends out an RLS request using the passed in arguments. Returns a value
+// indicating if the request was throttled by the client-side adaptive
+// throttler.
+func (p *rlsPicker) sendRouteLookupRequestLocked(cacheKey cacheKey, bs *backoffState, reqKeys map[string]string, reason rlspb.RouteLookupRequest_Reason, staleHeaders string) bool {
 	if p.lb.pendingMap[cacheKey] != nil {
 		return false
 	}
