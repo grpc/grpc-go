@@ -125,8 +125,11 @@ type rlsBalancer struct {
 	// fact that in places where we need to acquire both the locks, we always
 	// start off reading the cache.
 
-	// cacheMu guards access to the data cache and pending requests map.
-	cacheMu    sync.RWMutex
+	// cacheMu guards access to the data cache and pending requests map. We
+	// cannot use an RWMutex here since even an operation like
+	// dataCache.getEntry() modifies the underlying LRU, which is implemented as
+	// a doubly linked list.
+	cacheMu    sync.Mutex
 	dataCache  *dataCache                 // Cache of RLS data.
 	pendingMap map[cacheKey]*backoffState // Map of pending RLS requests.
 
@@ -263,16 +266,13 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	// channels, we also swap out the throttling state.
 	b.handleControlChannelUpdate(newCfg)
 
-	// If the new config changes the size of the data cache, we might have to
-	// evict entries to get the cache size down to the newly specified size.
-	if newCfg.cacheSizeBytes != b.lbCfg.cacheSizeBytes {
-		b.dataCache.resize(newCfg.cacheSizeBytes)
-	}
-
 	// Any changes to child policy name or configuration needs to be handled by
 	// either creating new child policies or pushing updates to existing ones.
 	b.resolverState = ccs.ResolverState
 	b.handleChildPolicyConfigUpdate(newCfg, &ccs)
+
+	// Resize the cache if the size in the config has changed.
+	resizeCache := newCfg.cacheSizeBytes != b.lbCfg.cacheSizeBytes
 
 	// Update the copy of the config in the LB policy before releasing the lock.
 	b.lbCfg = newCfg
@@ -284,6 +284,19 @@ func (b *rlsBalancer) UpdateClientConnState(ccs balancer.ClientConnState) error 
 	b.updateCh.Put(resumePickerUpdates{done: done})
 	b.stateMu.Unlock()
 	<-done
+
+	if resizeCache {
+		// If the new config changes reduces the size of the data cache, we
+		// might have to evict entries to get the cache size down to the newly
+		// specified size.
+		//
+		// And we cannot do this operation above (where we compute the
+		// `resizeCache` boolean) because `cacheMu` needs to be grabbed before
+		// `stateMu` if we are to hold both locks at the same time.
+		b.cacheMu.Lock()
+		b.dataCache.resize(newCfg.cacheSizeBytes)
+		b.cacheMu.Unlock()
+	}
 	return nil
 }
 
