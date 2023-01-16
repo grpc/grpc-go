@@ -1269,9 +1269,8 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		// data equal to ASCII "too_many_pings", it should log the occurrence at a log level that is
 		// enabled by default and double the configure KEEPALIVE_TIME used for new connections
 		// on that channel.
-		logger.Infof("Client received GoAway with http2.ErrCodeEnhanceYourCalm.")
-
 		if string(f.DebugData()) == "too_many_pings" {
+			logger.Infof("Client received GoAway with http2.ErrCodeEnhanceYourCalm.")
 			t.kp.Time = 2 * t.kp.Time
 		}
 	}
