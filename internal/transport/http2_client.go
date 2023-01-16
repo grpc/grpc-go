@@ -1670,9 +1670,7 @@ func (t *http2Client) keepalive() {
 	// Records the last value of t.lastRead before we go block on the timer.
 	// This is required to check for read activity since then.
 	prevNano := time.Now().UnixNano()
-
 	timer := time.NewTimer(t.kp.Time)
-
 	for {
 		select {
 		case <-timer.C:
