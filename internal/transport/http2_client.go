@@ -1675,28 +1675,28 @@ func (t *http2Client) keepalive() {
 	prevNano := time.Now().UnixNano()
 
 	t.mu.Lock()
-	timer := time.NewTimer(t.kp.Time)
+	keepalive := t.kp
 	t.mu.Unlock()
+
+	timer := time.NewTimer(keepalive.Time)
 
 	for {
 		select {
 		case <-timer.C:
-			t.mu.Lock()
 			lastRead := atomic.LoadInt64(&t.lastRead)
 			if lastRead > prevNano {
 				// There has been read activity since the last time we were here.
 				outstandingPing = false
 				// Next timer should fire at kp.Time seconds from lastRead time.
-				timer.Reset(time.Duration(lastRead) + t.kp.Time - time.Duration(time.Now().UnixNano()))
+				timer.Reset(time.Duration(lastRead) + keepalive.Time - time.Duration(time.Now().UnixNano()))
 				prevNano = lastRead
-				t.mu.Unlock()
 				continue
 			}
 			if outstandingPing && timeoutLeft <= 0 {
 				t.Close(connectionErrorf(true, nil, "keepalive ping failed to receive ACK within timeout"))
-				t.mu.Unlock()
 				return
 			}
+			t.mu.Lock()
 			if t.state == closing {
 				// If the transport is closing, we should exit from the
 				// keepalive goroutine here. If not, we could have a race
@@ -1707,7 +1707,7 @@ func (t *http2Client) keepalive() {
 				t.mu.Unlock()
 				return
 			}
-			if len(t.activeStreams) < 1 && !t.kp.PermitWithoutStream {
+			if len(t.activeStreams) < 1 && !keepalive.PermitWithoutStream {
 				// If a ping was sent out previously (because there were active
 				// streams at that point) which wasn't acked and its timeout
 				// hadn't fired, but we got here and are about to go dormant,
@@ -1718,6 +1718,7 @@ func (t *http2Client) keepalive() {
 				t.kpDormancyCond.Wait()
 			}
 			t.kpDormant = false
+			t.mu.Unlock()
 
 			// We get here either because we were dormant and a new stream was
 			// created which unblocked the Wait() call, or because the
@@ -1727,17 +1728,16 @@ func (t *http2Client) keepalive() {
 					atomic.AddInt64(&t.czData.kpCount, 1)
 				}
 				t.controlBuf.put(p)
-				timeoutLeft = t.kp.Timeout
+				timeoutLeft = keepalive.Timeout
 				outstandingPing = true
 			}
 			// The amount of time to sleep here is the minimum of kp.Time and
 			// timeoutLeft. This will ensure that we wait only for kp.Time
 			// before sending out the next ping (for cases where the ping is
 			// acked).
-			sleepDuration := minTime(t.kp.Time, timeoutLeft)
+			sleepDuration := minTime(keepalive.Time, timeoutLeft)
 			timeoutLeft -= sleepDuration
 			timer.Reset(sleepDuration)
-			t.mu.Unlock()
 		case <-t.ctx.Done():
 			if !timer.Stop() {
 				<-timer.C
