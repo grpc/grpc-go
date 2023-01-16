@@ -94,7 +94,6 @@ type http2Client struct {
 
 	perRPCCreds []credentials.PerRPCCredentials
 
-	kp               keepalive.ClientParameters
 	keepaliveEnabled bool
 
 	statsHandlers []stats.Handler
@@ -139,6 +138,9 @@ type http2Client struct {
 	// Fields below are for channelz metric collection.
 	channelzID *channelz.Identifier
 	czData     *channelzData
+
+	// keepalive parameters on the client-side.
+	kp keepalive.ClientParameters
 
 	onClose func(GoAwayReason)
 
@@ -1671,7 +1673,11 @@ func (t *http2Client) keepalive() {
 	// Records the last value of t.lastRead before we go block on the timer.
 	// This is required to check for read activity since then.
 	prevNano := time.Now().UnixNano()
+
+	t.mu.Lock()
 	timer := time.NewTimer(t.kp.Time)
+	t.mu.Unlock()
+
 	for {
 		select {
 		case <-timer.C:
