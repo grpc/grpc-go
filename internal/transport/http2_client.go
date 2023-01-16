@@ -94,6 +94,7 @@ type http2Client struct {
 
 	perRPCCreds []credentials.PerRPCCredentials
 
+	kp               keepalive.ClientParameters
 	keepaliveEnabled bool
 
 	statsHandlers []stats.Handler
@@ -138,9 +139,6 @@ type http2Client struct {
 	// Fields below are for channelz metric collection.
 	channelzID *channelz.Identifier
 	czData     *channelzData
-
-	// keepalive parameters on the client-side.
-	kp keepalive.ClientParameters
 
 	onClose func(GoAwayReason)
 
@@ -1273,7 +1271,6 @@ func (t *http2Client) handleGoAway(f *http2.GoAwayFrame) {
 		// on that channel.
 		if string(f.DebugData()) == "too_many_pings" {
 			logger.Infof("Client received GoAway with http2.ErrCodeEnhanceYourCalm.")
-			t.kp.Time = 2 * t.kp.Time
 		}
 	}
 	id := f.LastStreamID
@@ -1674,11 +1671,7 @@ func (t *http2Client) keepalive() {
 	// This is required to check for read activity since then.
 	prevNano := time.Now().UnixNano()
 
-	t.mu.Lock()
-	keepalive := t.kp
-	t.mu.Unlock()
-
-	timer := time.NewTimer(keepalive.Time)
+	timer := time.NewTimer(t.kp.Time)
 
 	for {
 		select {
@@ -1688,7 +1681,7 @@ func (t *http2Client) keepalive() {
 				// There has been read activity since the last time we were here.
 				outstandingPing = false
 				// Next timer should fire at kp.Time seconds from lastRead time.
-				timer.Reset(time.Duration(lastRead) + keepalive.Time - time.Duration(time.Now().UnixNano()))
+				timer.Reset(time.Duration(lastRead) + t.kp.Time - time.Duration(time.Now().UnixNano()))
 				prevNano = lastRead
 				continue
 			}
@@ -1707,7 +1700,7 @@ func (t *http2Client) keepalive() {
 				t.mu.Unlock()
 				return
 			}
-			if len(t.activeStreams) < 1 && !keepalive.PermitWithoutStream {
+			if len(t.activeStreams) < 1 && !t.kp.PermitWithoutStream {
 				// If a ping was sent out previously (because there were active
 				// streams at that point) which wasn't acked and its timeout
 				// hadn't fired, but we got here and are about to go dormant,
@@ -1728,14 +1721,14 @@ func (t *http2Client) keepalive() {
 					atomic.AddInt64(&t.czData.kpCount, 1)
 				}
 				t.controlBuf.put(p)
-				timeoutLeft = keepalive.Timeout
+				timeoutLeft = t.kp.Timeout
 				outstandingPing = true
 			}
 			// The amount of time to sleep here is the minimum of kp.Time and
 			// timeoutLeft. This will ensure that we wait only for kp.Time
 			// before sending out the next ping (for cases where the ping is
 			// acked).
-			sleepDuration := minTime(keepalive.Time, timeoutLeft)
+			sleepDuration := minTime(t.kp.Time, timeoutLeft)
 			timeoutLeft -= sleepDuration
 			timer.Reset(sleepDuration)
 		case <-t.ctx.Done():
