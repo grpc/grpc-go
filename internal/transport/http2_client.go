@@ -1681,6 +1681,7 @@ func (t *http2Client) keepalive() {
 	for {
 		select {
 		case <-timer.C:
+			t.mu.Lock()
 			lastRead := atomic.LoadInt64(&t.lastRead)
 			if lastRead > prevNano {
 				// There has been read activity since the last time we were here.
@@ -1688,13 +1689,14 @@ func (t *http2Client) keepalive() {
 				// Next timer should fire at kp.Time seconds from lastRead time.
 				timer.Reset(time.Duration(lastRead) + t.kp.Time - time.Duration(time.Now().UnixNano()))
 				prevNano = lastRead
+				t.mu.Unlock()
 				continue
 			}
 			if outstandingPing && timeoutLeft <= 0 {
 				t.Close(connectionErrorf(true, nil, "keepalive ping failed to receive ACK within timeout"))
+				t.mu.Unlock()
 				return
 			}
-			t.mu.Lock()
 			if t.state == closing {
 				// If the transport is closing, we should exit from the
 				// keepalive goroutine here. If not, we could have a race
@@ -1716,7 +1718,6 @@ func (t *http2Client) keepalive() {
 				t.kpDormancyCond.Wait()
 			}
 			t.kpDormant = false
-			t.mu.Unlock()
 
 			// We get here either because we were dormant and a new stream was
 			// created which unblocked the Wait() call, or because the
@@ -1736,6 +1737,7 @@ func (t *http2Client) keepalive() {
 			sleepDuration := minTime(t.kp.Time, timeoutLeft)
 			timeoutLeft -= sleepDuration
 			timer.Reset(sleepDuration)
+			t.mu.Unlock()
 		case <-t.ctx.Done():
 			if !timer.Stop() {
 				<-timer.C
