@@ -119,32 +119,10 @@ func NewWithBootstrapContentsForTesting(contents []byte) (XDSClient, func(), err
 	}
 	contents = bytes.TrimSpace(buf.Bytes())
 
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
-	if c := clients[string(contents)]; c != nil {
-		c.incrRef()
-		return c, grpcsync.OnceFunc(func() {
-			clientsMu.Lock()
-			defer clientsMu.Unlock()
-			if c.decrRef() == 0 {
-				c.close()
-				delete(clients, string(contents))
-			}
-		}), nil
-	}
-
-	bcfg, err := bootstrap.NewConfigFromContentsForTesting(contents)
-	if err != nil {
-		return nil, nil, fmt.Errorf("xds: error with bootstrap config: %v", err)
-	}
-
-	cImpl, err := newWithConfig(bcfg, defaultWatchExpiryTimeout, defaultIdleAuthorityDeleteTimeout)
+	c, err := getOrMakeClient(contents)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	c := &clientRefCounted{clientImpl: cImpl, refCount: 1}
-	clients[string(contents)] = c
 	return c, grpcsync.OnceFunc(func() {
 		clientsMu.Lock()
 		defer clientsMu.Unlock()
@@ -153,6 +131,28 @@ func NewWithBootstrapContentsForTesting(contents []byte) (XDSClient, func(), err
 			delete(clients, string(contents))
 		}
 	}), nil
+}
+
+func getOrMakeClient(config []byte) (*clientRefCounted, error) {
+	clientsMu.Lock()
+	defer clientsMu.Unlock()
+
+	if c := clients[string(config)]; c != nil {
+		c.incrRef()
+		return c, nil
+	}
+
+	bcfg, err := bootstrap.NewConfigFromContentsForTesting(config)
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap config %s: %v", string(config), err)
+	}
+	cImpl, err := newWithConfig(bcfg, defaultWatchExpiryTimeout, defaultIdleAuthorityDeleteTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("creating xDS client: %v", err)
+	}
+	c := &clientRefCounted{clientImpl: cImpl, refCount: 1}
+	clients[string(config)] = c
+	return c, nil
 }
 
 var (
