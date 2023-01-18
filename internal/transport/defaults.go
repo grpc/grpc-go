@@ -52,4 +52,4 @@ const (
 // transport gracefully closes and new transport is created for subsequent RPCs.
 // This is set to 75% of 2^31-1. Streams are identified with an unsigned 31-bit
 // integer. It's exported so that tests can override it.
-var MaxStreamID = uint32(1_610_612_735)
+var MaxStreamID = uint32(math.MaxInt32 * 3 / 4)
