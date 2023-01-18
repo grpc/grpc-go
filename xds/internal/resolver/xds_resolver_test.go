@@ -366,7 +366,7 @@ func (s) TestResolverResourceName(t *testing.T) {
 			// on to a channel. No resources are configured on the management
 			// server as part of this test, as we are only interested in the
 			// resource name being requested.
-			resourceNameCh := make(chan string)
+			resourceNameCh := make(chan string, 1)
 			mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 				OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 					// When the resolver is being closed, the watch associated
