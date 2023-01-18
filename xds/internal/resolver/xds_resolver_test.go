@@ -29,6 +29,7 @@ import (
 
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -40,6 +41,8 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/testutils"
+	xdsbootstrap "google.golang.org/grpc/internal/testutils/xds/bootstrap"
+	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/internal/wrr"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/resolver"
@@ -53,6 +56,9 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 
 	_ "google.golang.org/grpc/xds/internal/balancer/cdsbalancer" // To parse LB config
 )
@@ -113,45 +119,52 @@ func newTestClientConn() *testClientConn {
 	}
 }
 
-// TestResolverBuilder tests the resolver builder's Build() method with
-// different parameters.
-func (s) TestResolverBuilder(t *testing.T) {
+// TestResolverBuilder_ClientCreationFails tests the case where xDS client
+// creation fails, and verifies that xDS resolver build fails as well.
+func (s) TestResolverBuilder_ClientCreationFails(t *testing.T) {
+	// Override xDS client creation function and return an error.
+	origNewClient := newXDSClient
+	newXDSClient = func() (xdsclient.XDSClient, func(), error) {
+		return nil, nil, errors.New("failed to create xDS client")
+	}
+	defer func() {
+		newXDSClient = origNewClient
+	}()
+
+	// Build an xDS resolver and expect it to fail.
+	builder := resolver.Get(xdsScheme)
+	if builder == nil {
+		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
+	}
+	if _, err := builder.Build(target, newTestClientConn(), resolver.BuildOptions{}); err == nil {
+		t.Fatalf("builder.Build(%v) succeeded when expected to fail", target)
+	}
+}
+
+// TestResolverBuilder_DifferentBootstrapConfigs tests the resolver builder's
+// Build() method with different xDS bootstrap configurations.
+func (s) TestResolverBuilder_DifferentBootstrapConfigs(t *testing.T) {
 	tests := []struct {
-		name          string
-		xdsClientFunc func(closeCh chan struct{}) (xdsclient.XDSClient, func(), error)
-		target        resolver.Target
-		buildOpts     resolver.BuildOptions
-		wantErr       bool
+		name         string
+		bootstrapCfg *bootstrap.Config // Empty top-level xDS server config, will be set by test logic.
+		target       resolver.Target
+		buildOpts    resolver.BuildOptions
+		wantErr      string
 	}{
 		{
-			name: "good",
-			xdsClientFunc: func(closeCh chan struct{}) (xdsclient.XDSClient, func(), error) {
-				return fakeclient.NewClient(), func() { close(closeCh) }, nil
-			},
-			target:  target,
-			wantErr: false,
-		},
-		{
-			name: "xDS client creation fails",
-			xdsClientFunc: func(closeCh chan struct{}) (xdsclient.XDSClient, func(), error) {
-				return nil, func() { close(closeCh) }, errors.New("failed to create xDS client")
-			},
-			target:  target,
-			wantErr: true,
+			name:         "good",
+			bootstrapCfg: &bootstrap.Config{},
+			target:       target,
 		},
 		{
 			name: "authority not defined in bootstrap",
-			xdsClientFunc: func(closeCh chan struct{}) (xdsclient.XDSClient, func(), error) {
-				c := fakeclient.NewClient()
-				c.SetBootstrapConfig(&bootstrap.Config{
-					ClientDefaultListenerResourceNameTemplate: "%s",
-					Authorities: map[string]*bootstrap.Authority{
-						"test-authority": {
-							ClientListenerResourceNameTemplate: "xdstp://test-authority/%s",
-						},
+			bootstrapCfg: &bootstrap.Config{
+				ClientDefaultListenerResourceNameTemplate: "%s",
+				Authorities: map[string]*bootstrap.Authority{
+					"test-authority": {
+						ClientListenerResourceNameTemplate: "xdstp://test-authority/%s",
 					},
-				})
-				return c, func() { close(closeCh) }, nil
+				},
 			},
 			target: resolver.Target{
 				URL: url.URL{
@@ -159,16 +172,12 @@ func (s) TestResolverBuilder(t *testing.T) {
 					Path: "/" + targetStr,
 				},
 			},
-			wantErr: true,
+			wantErr: `authority "non-existing-authority" is not found in the bootstrap file`,
 		},
 		{
-			name: "xDS creds specified without certificate providers in bootstrap",
-			xdsClientFunc: func(closeCh chan struct{}) (xdsclient.XDSClient, func(), error) {
-				c := fakeclient.NewClient()
-				c.SetBootstrapConfig(&bootstrap.Config{})
-				return c, func() { close(closeCh) }, nil
-			},
-			target: target,
+			name:         "xDS creds specified without certificate providers in bootstrap",
+			bootstrapCfg: &bootstrap.Config{},
+			target:       target,
 			buildOpts: resolver.BuildOptions{
 				DialCreds: func() credentials.TransportCredentials {
 					creds, err := xdscreds.NewClientCredentials(xdscreds.ClientOptions{FallbackCreds: insecure.NewCredentials()})
@@ -178,17 +187,36 @@ func (s) TestResolverBuilder(t *testing.T) {
 					return creds
 				}(),
 			},
-			wantErr: true,
+			wantErr: `xdsCreds specified but certificate_providers config missing in bootstrap file`,
 		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			// Use a fake xDS client that closes the below channel when closed.
-			closeCh := make(chan struct{})
-			oldClientMaker := newXDSClient
-			newXDSClient = func() (xdsclient.XDSClient, func(), error) { return test.xdsClientFunc(closeCh) }
+			mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
+			if err != nil {
+				t.Fatalf("Starting xDS management server: %v", err)
+			}
+			defer mgmtServer.Stop()
+
+			// Add top-level xDS server config corresponding to the above
+			// management server.
+			test.bootstrapCfg.XDSServer = &bootstrap.ServerConfig{
+				ServerURI:    mgmtServer.Address,
+				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
+				TransportAPI: version.TransportV3,
+			}
+
+			// Override xDS client creation to use bootstrap configuration
+			// specified by the test.
+			origNewClient := newXDSClient
+			newXDSClient = func() (xdsclient.XDSClient, func(), error) {
+				// The watch timeout and idle authority timeout values passed to
+				// NewWithConfigForTesing() are immaterial for this test, as we
+				// are only testing the resolver build functionality.
+				return xdsclient.NewWithConfigForTesting(test.bootstrapCfg, defaultTestTimeout, defaultTestTimeout)
+			}
 			defer func() {
-				newXDSClient = oldClientMaker
+				newXDSClient = origNewClient
 			}()
 
 			builder := resolver.Get(xdsScheme)
@@ -197,7 +225,10 @@ func (s) TestResolverBuilder(t *testing.T) {
 			}
 
 			r, err := builder.Build(test.target, newTestClientConn(), test.buildOpts)
-			if (err != nil) != test.wantErr {
+			if gotErr, wantErr := err != nil, test.wantErr != ""; gotErr != wantErr {
+				t.Fatalf("builder.Build(%v) returned err: %v, wantErr: %v", target, err, test.wantErr)
+			}
+			if test.wantErr != "" && !strings.Contains(err.Error(), test.wantErr) {
 				t.Fatalf("builder.Build(%v) returned err: %v, wantErr: %v", target, err, test.wantErr)
 			}
 			if err != nil {
@@ -205,12 +236,6 @@ func (s) TestResolverBuilder(t *testing.T) {
 				return
 			}
 			r.Close()
-
-			select {
-			case <-closeCh:
-			case <-time.After(defaultTestTimeout):
-				t.Fatal("Timeout when waiting for xDS client to be closed")
-			}
 		})
 	}
 }
@@ -288,89 +313,128 @@ func waitForWatchRouteConfig(ctx context.Context, t *testing.T, xdsC *fakeclient
 	}
 }
 
-// TestXDSResolverResourceNameToWatch tests that the correct resource name is
-// used to watch for the service. This covers cases with different bootstrap
-// config, and different authority.
-func (s) TestXDSResolverResourceNameToWatch(t *testing.T) {
+// TestResolverResourceName builds an xDS resolver and verifies that the
+// resource name specified in the discovery request matches expectations.
+func (s) TestResolverResourceName(t *testing.T) {
+	// Federation support is required when new style names are used.
+	oldXDSFederation := envconfig.XDSFederation
+	envconfig.XDSFederation = true
+	defer func() { envconfig.XDSFederation = oldXDSFederation }()
+
 	tests := []struct {
-		name   string
-		bc     *bootstrap.Config
-		target resolver.Target
-		want   string
+		name                         string
+		listenerResourceNameTemplate string
+		extraAuthority               string
+		dialTarget                   string
+		wantResourceName             string
 	}{
 		{
-			name: "default %s old style",
-			bc: &bootstrap.Config{
-				ClientDefaultListenerResourceNameTemplate: "%s",
-			},
-			target: resolver.Target{
-				URL: url.URL{Path: "/" + targetStr},
-			},
-			want: targetStr,
+			name:                         "default %s old style",
+			listenerResourceNameTemplate: "%s",
+			dialTarget:                   "xds:///target",
+			wantResourceName:             "target",
 		},
 		{
-			name: "old style no percent encoding",
-			bc: &bootstrap.Config{
-				ClientDefaultListenerResourceNameTemplate: "/path/to/%s",
-			},
-			target: resolver.Target{
-				URL: url.URL{Path: "/" + targetStr},
-			},
-			want: "/path/to/" + targetStr,
+			name:                         "old style no percent encoding",
+			listenerResourceNameTemplate: "/path/to/%s",
+			dialTarget:                   "xds:///target",
+			wantResourceName:             "/path/to/target",
 		},
 		{
-			name: "new style with %s",
-			bc: &bootstrap.Config{
-				ClientDefaultListenerResourceNameTemplate: "xdstp://authority.com/%s",
-				Authorities: nil,
-			},
-			target: resolver.Target{
-				URL: url.URL{Path: "/0.0.0.0:8080"},
-			},
-			want: "xdstp://authority.com/0.0.0.0:8080",
+			name:                         "new style with %s",
+			listenerResourceNameTemplate: "xdstp://authority.com/%s",
+			dialTarget:                   "xds:///0.0.0.0:8080",
+			wantResourceName:             "xdstp://authority.com/0.0.0.0:8080",
 		},
 		{
-			name: "new style percent encoding",
-			bc: &bootstrap.Config{
-				ClientDefaultListenerResourceNameTemplate: "xdstp://authority.com/%s",
-				Authorities: nil,
-			},
-			target: resolver.Target{
-				URL: url.URL{Path: "/[::1]:8080"},
-			},
-			want: "xdstp://authority.com/%5B::1%5D:8080",
+			name:                         "new style percent encoding",
+			listenerResourceNameTemplate: "xdstp://authority.com/%s",
+			dialTarget:                   "xds:///[::1]:8080",
+			wantResourceName:             "xdstp://authority.com/%5B::1%5D:8080",
 		},
 		{
-			name: "new style different authority",
-			bc: &bootstrap.Config{
-				ClientDefaultListenerResourceNameTemplate: "xdstp://authority.com/%s",
-				Authorities: map[string]*bootstrap.Authority{
-					"test-authority": {
-						ClientListenerResourceNameTemplate: "xdstp://test-authority/%s",
-					},
-				},
-			},
-			target: resolver.Target{
-				URL: url.URL{
-					Host: "test-authority",
-					Path: "/" + targetStr,
-				},
-			},
-			want: "xdstp://test-authority/" + targetStr,
+			name:                         "new style different authority",
+			listenerResourceNameTemplate: "xdstp://authority.com/%s",
+			extraAuthority:               "test-authority",
+			dialTarget:                   "xds://test-authority/target",
+			wantResourceName:             "xdstp://test-authority/envoy.config.listener.v3.Listener/target",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			xdsR, xdsC, _, cancel := testSetup(t, setupOpts{
-				bootstrapC: tt.bc,
-				target:     tt.target,
+			// Setup the management server to push the requested resource name
+			// on to a channel. No resources are configured on the management
+			// server as part of this test, as we are only interested in the
+			// resource name being requested.
+			resourceNameCh := make(chan string)
+			mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
+				OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
+					// When the resolver is being closed, the watch associated
+					// with the listener resource will be cancelled, and it
+					// might result in a discovery request with no resource
+					// names. Hence, we only consider requests which contain a
+					// resource name.
+					var name string
+					if len(req.GetResourceNames()) == 1 {
+						name = req.GetResourceNames()[0]
+					}
+					select {
+					case resourceNameCh <- name:
+					default:
+					}
+					return nil
+				},
 			})
-			defer cancel()
-			defer xdsR.Close()
+			if err != nil {
+				t.Fatalf("Failed to start xDS management server: %v", err)
+			}
+			defer mgmtServer.Stop()
 
-			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-			defer cancel()
-			waitForWatchListener(ctx, t, xdsC, tt.want)
+			// Create a bootstrap configuration with test options.
+			opts := xdsbootstrap.Options{
+				ServerURI: mgmtServer.Address,
+				Version:   xdsbootstrap.TransportV3,
+				ClientDefaultListenerResourceNameTemplate: tt.listenerResourceNameTemplate,
+			}
+			if tt.extraAuthority != "" {
+				// In this test, we really don't care about having multiple
+				// management servers. All we need to verify is whether the
+				// resource name matches expectation.
+				opts.Authorities = map[string]string{
+					tt.extraAuthority: mgmtServer.Address,
+				}
+			}
+			bootstrapContents, err := xdsbootstrap.Contents(opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			// Build an xDS resolver that uses the above bootstrap configuration
+			// and pass it to grpc.Dial(). Creating the xDS resolver should
+			// result in creation of the xDS client.
+			newResolver := internal.NewXDSResolverWithConfigForTesting
+			if newResolver == nil {
+				t.Fatal("internal.NewXDSResolverWithConfigForTesting is nil")
+			}
+			resolver, err := newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)
+			if err != nil {
+				t.Fatalf("Failed to create xDS resolver for testing: %v", err)
+			}
+			cc, err := grpc.Dial(tt.dialTarget, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
+			if err != nil {
+				t.Fatalf("failed to dial local test server: %v", err)
+			}
+			defer cc.Close()
+
+			// Verify the resource name in the discovery request being sent out.
+			select {
+			case gotResourceName := <-resourceNameCh:
+				if gotResourceName != tt.wantResourceName {
+					t.Fatalf("Received discovery request with resource name: %v, want %v", gotResourceName, tt.wantResourceName)
+				}
+			case <-time.After(defaultTestTimeout):
+				t.Fatalf("Timeout when waiting for discovery request")
+			}
 		})
 	}
 }
