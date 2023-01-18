@@ -53,7 +53,7 @@ func main() {
 		keyFile := testdata.Path("server1.key")
 		creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
 		if err != nil {
-			logger.Fatalf("Failed to generate credentials %v", err)
+			logger.Fatalf("Failed to generate credentials: %v", err)
 		}
 		opts = append(opts, grpc.Creds(creds))
 	} else if *useALTS {

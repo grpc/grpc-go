@@ -86,7 +86,7 @@ var (
 func main() {
 	flag.Parse()
 	if *testName == "" {
-		logger.Fatalf("test_name not set")
+		logger.Fatal("-test_name not set")
 	}
 	req := &testpb.SimpleRequest{
 		ResponseType: testpb.PayloadType_COMPRESSABLE,

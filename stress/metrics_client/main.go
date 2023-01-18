@@ -72,7 +72,7 @@ func printMetrics(client metricspb.MetricsServiceClient, totalOnly bool) {
 func main() {
 	flag.Parse()
 	if *metricsServerAddress == "" {
-		logger.Fatalf("Metrics server address is empty.")
+		logger.Fatal("-metrics_server_address is unset")
 	}
 
 	conn, err := grpc.Dial(*metricsServerAddress, grpc.WithTransportCredentials(insecure.NewCredentials()))

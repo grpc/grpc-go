@@ -216,7 +216,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		if opts.FailOnNonTempDialError {
 			return nil, connectionErrorf(isTemporary(err), err, "transport: error while dialing: %v", err)
 		}
-		return nil, connectionErrorf(true, err, "transport: Error while dialing %v", err)
+		return nil, connectionErrorf(true, err, "transport: Error while dialing: %v", err)
 	}
 
 	// Any further errors will close the underlying connection
@@ -1182,7 +1182,7 @@ func (t *http2Client) handleRSTStream(f *http2.RSTStreamFrame) {
 	statusCode, ok := http2ErrConvTab[f.ErrCode]
 	if !ok {
 		if logger.V(logLevel) {
-			logger.Warningf("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error %v", f.ErrCode)
+			logger.Warningf("transport: http2Client.handleRSTStream found no mapped gRPC status for the received http2 error: %v", f.ErrCode)
 		}
 		statusCode = codes.Unknown
 	}

@@ -287,7 +287,7 @@ func newConn(address string, useTLS, testCA bool, tlsServerName string) (*grpc.C
 			}
 			creds, err = credentials.NewClientTLSFromFile(*caFile, sn)
 			if err != nil {
-				logger.Fatalf("Failed to create TLS credentials %v", err)
+				logger.Fatalf("Failed to create TLS credentials: %v", err)
 			}
 		} else {
 			creds = credentials.NewClientTLSFromCert(nil, sn)

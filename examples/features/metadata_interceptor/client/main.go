@@ -38,7 +38,7 @@ var addr = flag.String("addr", "localhost:50051", "the address to connect to")
 func callUnaryEcho(ctx context.Context, client pb.EchoClient) {
 	resp, err := client.UnaryEcho(ctx, &pb.EchoRequest{Message: "hello world"})
 	if err != nil {
-		log.Fatalf("UnaryEcho %v", err)
+		log.Fatalf("UnaryEcho: %v", err)
 	}
 	fmt.Println("UnaryEcho: ", resp.Message)
 }
@@ -46,7 +46,7 @@ func callUnaryEcho(ctx context.Context, client pb.EchoClient) {
 func callBidiStreamingEcho(ctx context.Context, client pb.EchoClient) {
 	c, err := client.BidirectionalStreamingEcho(ctx)
 	if err != nil {
-		log.Fatalf("BidiStreamingEcho %v", err)
+		log.Fatalf("BidiStreamingEcho: %v", err)
 	}
 
 	if err := c.Send(&pb.EchoRequest{Message: "hello world"}); err != nil {

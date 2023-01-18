@@ -74,7 +74,7 @@ func main() {
 
 	conn, err := grpc.Dial(address, options...)
 	if err != nil {
-		log.Fatalf("did not connect %v", err)
+		log.Fatalf("grpc.Dial(%q): %v", address, err)
 	}
 	defer conn.Close()
 

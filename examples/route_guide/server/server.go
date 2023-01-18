@@ -233,7 +233,7 @@ func main() {
 		}
 		creds, err := credentials.NewServerTLSFromFile(*certFile, *keyFile)
 		if err != nil {
-			log.Fatalf("Failed to generate credentials %v", err)
+			log.Fatalf("Failed to generate credentials: %v", err)
 		}
 		opts = []grpc.ServerOption{grpc.Creds(creds)}
 	}

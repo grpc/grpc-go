@@ -118,9 +118,10 @@ func main() {
 	// If -secure_mode is not set, expose all services on -port with a regular
 	// gRPC server.
 	if !*secureMode {
-		lis, err := net.Listen("tcp4", fmt.Sprintf(":%d", *port))
+		addr := fmt.Sprintf(":%d", *port)
+		lis, err := net.Listen("tcp4", addr)
 		if err != nil {
-			logger.Fatalf("net.Listen(%s) failed: %v", fmt.Sprintf(":%d", *port), err)
+			logger.Fatalf("net.Listen(%s) failed: %v", addr, err)
 		}
 
 		server := grpc.NewServer()
@@ -141,9 +142,10 @@ func main() {
 	}
 
 	// Create a listener on -port to expose the test service.
-	testLis, err := net.Listen("tcp4", fmt.Sprintf(":%d", *port))
+	addr := fmt.Sprintf(":%d", *port)
+	testLis, err := net.Listen("tcp4", addr)
 	if err != nil {
-		logger.Fatalf("net.Listen(%s) failed: %v", fmt.Sprintf(":%d", *port), err)
+		logger.Fatalf("net.Listen(%s) failed: %v", addr, err)
 	}
 
 	// Create server-side xDS credentials with a plaintext fallback.
@@ -164,9 +166,10 @@ func main() {
 	defer testServer.Stop()
 
 	// Create a listener on -maintenance_port to expose other services.
-	maintenanceLis, err := net.Listen("tcp4", fmt.Sprintf(":%d", *maintenancePort))
+	addr = fmt.Sprintf(":%d", *maintenancePort)
+	maintenanceLis, err := net.Listen("tcp4", addr)
 	if err != nil {
-		logger.Fatalf("net.Listen(%s) failed: %v", fmt.Sprintf(":%d", *maintenancePort), err)
+		logger.Fatalf("net.Listen(%s) failed: %v", addr, err)
 	}
 
 	// Create a regular gRPC server and register the maintenance services on
