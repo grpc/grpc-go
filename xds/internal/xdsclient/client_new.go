@@ -119,7 +119,7 @@ func NewWithBootstrapContentsForTesting(contents []byte) (XDSClient, func(), err
 	}
 	contents = bytes.TrimSpace(buf.Bytes())
 
-	c, err := getOrMakeClient(contents)
+	c, err := getOrMakeClientForTesting(contents)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -133,7 +133,12 @@ func NewWithBootstrapContentsForTesting(contents []byte) (XDSClient, func(), err
 	}), nil
 }
 
-func getOrMakeClient(config []byte) (*clientRefCounted, error) {
+// getOrMakeClientForTesting creates a new reference counted client (separate
+// from the global singleton) for the given config, or returns an existing one.
+// It takes care of incrementing the reference count for the returned client,
+// and leaves the caller responsible for decrementing the reference count once
+// the client is no longer needed.
+func getOrMakeClientForTesting(config []byte) (*clientRefCounted, error) {
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
 
