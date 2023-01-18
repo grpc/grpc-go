@@ -447,7 +447,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		if logger.V(logLevel) {
 			logger.Errorf("transport: %v", errMsg)
 		}
-		_ = t.controlBuf.put(&earlyAbortStream{
+		t.controlBuf.put(&earlyAbortStream{
 			httpStatus:     http.StatusBadRequest,
 			streamID:       streamID,
 			contentSubtype: s.contentSubtype,
@@ -458,7 +458,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 
 	if protocolError {
-		_ = t.controlBuf.put(&cleanupStream{
+		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
 			rst:      true,
 			rstCode:  http2.ErrCodeProtocol,
@@ -467,7 +467,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return nil
 	}
 	if headerError != nil {
-		_ = t.controlBuf.put(&earlyAbortStream{
+		t.controlBuf.put(&earlyAbortStream{
 			httpStatus:     http.StatusBadRequest,
 			streamID:       streamID,
 			contentSubtype: s.contentSubtype,
@@ -477,7 +477,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		return nil
 	}
 	if !isGRPC {
-		_ = t.controlBuf.put(&earlyAbortStream{
+		t.controlBuf.put(&earlyAbortStream{
 			httpStatus:     http.StatusUnsupportedMediaType,
 			streamID:       streamID,
 			contentSubtype: s.contentSubtype,
