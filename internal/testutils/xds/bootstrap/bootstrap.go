@@ -49,7 +49,11 @@ type Options struct {
 	NodeID string
 	// ServerURI is the address of the management server.
 	ServerURI string
-	// ServerListenerResourceNameTemplate is the Listener resource name to fetch.
+	// ClientDefaultListenerResourceNameTemplate is the default listener
+	// resource name template to be used on the gRPC client.
+	ClientDefaultListenerResourceNameTemplate string
+	// ServerListenerResourceNameTemplate is the listener resource name template
+	// to be used on the gRPC server.
 	ServerListenerResourceNameTemplate string
 	// CertificateProviders is the certificate providers configuration.
 	CertificateProviders map[string]json.RawMessage
@@ -111,8 +115,9 @@ func Contents(opts Options) ([]byte, error) {
 		Node: node{
 			ID: opts.NodeID,
 		},
-		CertificateProviders:               opts.CertificateProviders,
-		ServerListenerResourceNameTemplate: opts.ServerListenerResourceNameTemplate,
+		CertificateProviders:                      opts.CertificateProviders,
+		ClientDefaultListenerResourceNameTemplate: opts.ClientDefaultListenerResourceNameTemplate,
+		ServerListenerResourceNameTemplate:        opts.ServerListenerResourceNameTemplate,
 	}
 	switch opts.Version {
 	case TransportV2:
@@ -146,11 +151,12 @@ func Contents(opts Options) ([]byte, error) {
 }
 
 type bootstrapConfig struct {
-	XdsServers                         []server                   `json:"xds_servers,omitempty"`
-	Node                               node                       `json:"node,omitempty"`
-	CertificateProviders               map[string]json.RawMessage `json:"certificate_providers,omitempty"`
-	ServerListenerResourceNameTemplate string                     `json:"server_listener_resource_name_template,omitempty"`
-	Authorities                        map[string]authority       `json:"authorities,omitempty"`
+	XdsServers                                []server                   `json:"xds_servers,omitempty"`
+	Node                                      node                       `json:"node,omitempty"`
+	CertificateProviders                      map[string]json.RawMessage `json:"certificate_providers,omitempty"`
+	ClientDefaultListenerResourceNameTemplate string                     `json:"client_default_listener_resource_name_template,omitempty"`
+	ServerListenerResourceNameTemplate        string                     `json:"server_listener_resource_name_template,omitempty"`
+	Authorities                               map[string]authority       `json:"authorities,omitempty"`
 }
 
 type authority struct {

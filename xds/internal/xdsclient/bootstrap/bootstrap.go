@@ -366,7 +366,7 @@ func newConfigFromContents(data []byte) (*Config, error) {
 
 	var jsonData map[string]json.RawMessage
 	if err := json.Unmarshal(data, &jsonData); err != nil {
-		return nil, fmt.Errorf("xds: Failed to parse bootstrap config: %v", err)
+		return nil, fmt.Errorf("xds: failed to parse bootstrap config: %v", err)
 	}
 
 	var node *v3corepb.Node
@@ -414,7 +414,7 @@ func newConfigFromContents(data []byte) (*Config, error) {
 				}
 				bc, err := parser.ParseConfig(nameAndConfig.Config)
 				if err != nil {
-					return nil, fmt.Errorf("xds: Config parsing for plugin %q failed: %v", name, err)
+					return nil, fmt.Errorf("xds: config parsing for plugin %q failed: %v", name, err)
 				}
 				configs[instance] = bc
 			}
@@ -452,13 +452,13 @@ func newConfigFromContents(data []byte) (*Config, error) {
 		config.ClientDefaultListenerResourceNameTemplate = "%s"
 	}
 	if config.XDSServer == nil {
-		return nil, fmt.Errorf("xds: Required field %q not found in bootstrap %s", "xds_servers", jsonData["xds_servers"])
+		return nil, fmt.Errorf("xds: required field %q not found in bootstrap %s", "xds_servers", jsonData["xds_servers"])
 	}
 	if config.XDSServer.ServerURI == "" {
-		return nil, fmt.Errorf("xds: Required field %q not found in bootstrap %s", "xds_servers.server_uri", jsonData["xds_servers"])
+		return nil, fmt.Errorf("xds: required field %q not found in bootstrap %s", "xds_servers.server_uri", jsonData["xds_servers"])
 	}
 	if config.XDSServer.Creds == nil {
-		return nil, fmt.Errorf("xds: Required field %q doesn't contain valid value in bootstrap %s", "xds_servers.channel_creds", jsonData["xds_servers"])
+		return nil, fmt.Errorf("xds: required field %q doesn't contain valid value in bootstrap %s", "xds_servers.channel_creds", jsonData["xds_servers"])
 	}
 	// Post-process the authorities' client listener resource template field:
 	// - if set, it must start with "xdstp://<authority_name>/"

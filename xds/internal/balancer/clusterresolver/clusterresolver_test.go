@@ -215,10 +215,7 @@ func setup(childLBCh *testutils.Channel) (*fakeclient.Client, func()) {
 		defer func() { childLBCh.Send(childLB) }()
 		return childLB
 	}
-	return xdsC, func() {
-		newChildBalancer = origNewChildBalancer
-		xdsC.Close()
-	}
+	return xdsC, func() { newChildBalancer = origNewChildBalancer }
 }
 
 // TestSubConnStateChange verifies if the top-level clusterResolverBalancer passes on

@@ -117,7 +117,7 @@ func StartManagementServer(opts ManagementServerOptions) (*ManagementServer, err
 		var err error
 		lis, err = net.Listen("tcp", "localhost:0")
 		if err != nil {
-			return nil, fmt.Errorf("failed to start xDS management server: %v", err)
+			return nil, fmt.Errorf("listening on local host and port: %v", err)
 		}
 	}
 

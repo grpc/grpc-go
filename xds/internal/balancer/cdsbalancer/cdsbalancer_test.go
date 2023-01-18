@@ -255,7 +255,6 @@ func setup(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBalancer, *t
 
 	return xdsC, cdsB.(*cdsBalancer), edsB, tcc, func() {
 		newChildBalancer = oldEDSBalancerBuilder
-		xdsC.Close()
 	}
 }
 
@@ -286,7 +285,6 @@ func setupWithWatch(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDSBal
 // provided xdsClient is invoked appropriately.
 func (s) TestUpdateClientConnState(t *testing.T) {
 	xdsC := fakeclient.NewClient()
-	defer xdsC.Close()
 
 	tests := []struct {
 		name        string

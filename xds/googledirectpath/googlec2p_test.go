@@ -180,9 +180,9 @@ func TestBuildXDS(t *testing.T) {
 
 			configCh := make(chan *bootstrap.Config, 1)
 			oldNewClient := newClientWithConfig
-			newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, error) {
+			newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
 				configCh <- config
-				return tXDSClient, nil
+				return tXDSClient, func() { tXDSClient.Close() }, nil
 			}
 			defer func() { newClientWithConfig = oldNewClient }()
 
