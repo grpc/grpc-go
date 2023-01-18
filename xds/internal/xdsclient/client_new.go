@@ -119,23 +119,18 @@ func NewWithBootstrapContentsForTesting(contents []byte) (XDSClient, func(), err
 	}
 	contents = bytes.TrimSpace(buf.Bytes())
 
-	// closeFunc returned to callers decrements the reference count on the
-	// returned client, and when it reaches zero, removed it from the map.
-	closeFunc := func(c *clientRefCounted, key string) func() {
-		return grpcsync.OnceFunc(func() {
-			clientsMu.Lock()
-			defer clientsMu.Unlock()
-			if c.decrRef() == 0 {
-				c.close()
-				delete(clients, key)
-			}
-		})
-	}
 	clientsMu.Lock()
 	defer clientsMu.Unlock()
 	if c := clients[string(contents)]; c != nil {
 		c.incrRef()
-		return c, closeFunc(c, string(contents)), nil
+		return c, grpcsync.OnceFunc(func() {
+			clientsMu.Lock()
+			defer clientsMu.Unlock()
+			if c.decrRef() == 0 {
+				c.close()
+				delete(clients, string(contents))
+			}
+		}), nil
 	}
 
 	bcfg, err := bootstrap.NewConfigFromContentsForTesting(contents)
@@ -150,7 +145,14 @@ func NewWithBootstrapContentsForTesting(contents []byte) (XDSClient, func(), err
 
 	c := &clientRefCounted{clientImpl: cImpl, refCount: 1}
 	clients[string(contents)] = c
-	return c, closeFunc(c, string(contents)), nil
+	return c, grpcsync.OnceFunc(func() {
+		clientsMu.Lock()
+		defer clientsMu.Unlock()
+		if c.decrRef() == 0 {
+			c.close()
+			delete(clients, string(contents))
+		}
+	}), nil
 }
 
 var (

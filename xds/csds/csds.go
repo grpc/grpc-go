@@ -136,11 +136,9 @@ func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statusp
 
 // Close cleans up the resources.
 func (s *ClientStatusDiscoveryServer) Close() {
-	s.mu.Lock()
 	if s.xdsClientClose != nil {
 		s.xdsClientClose()
 	}
-	s.mu.Unlock()
 }
 
 // nodeProtoToV3 converts the given proto into a v3.Node. n is from bootstrap
