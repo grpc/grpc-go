@@ -221,7 +221,7 @@ func init() {
 }
 func parseServiceConfig(js string) *serviceconfig.ParseResult {
 	if len(js) == 0 {
-		return &serviceconfig.ParseResult{Err: fmt.Errorf("no JSON service config provided")}
+		return &serviceconfig.ParseResult{Err: errors.New("no JSON service config provided")}
 	}
 	var rsc jsonSC
 	err := json.Unmarshal([]byte(js), &rsc)

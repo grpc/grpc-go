@@ -20,7 +20,7 @@ package grpc
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -57,7 +57,7 @@ type testingPicker struct {
 
 func (p *testingPicker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	if atomic.AddInt64(&p.maxCalled, -1) < 0 {
-		return balancer.PickResult{}, fmt.Errorf("pick called to many times (> goroutineCount)")
+		return balancer.PickResult{}, errors.New("pick called to many times (> goroutineCount)")
 	}
 	if p.err != nil {
 		return balancer.PickResult{}, p.err

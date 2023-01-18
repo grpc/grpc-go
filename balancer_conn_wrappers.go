@@ -20,7 +20,7 @@ package grpc
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"strings"
 	"sync"
 
@@ -301,7 +301,7 @@ func (ccb *ccBalancerWrapper) handleClose() {
 
 func (ccb *ccBalancerWrapper) NewSubConn(addrs []resolver.Address, opts balancer.NewSubConnOptions) (balancer.SubConn, error) {
 	if len(addrs) <= 0 {
-		return nil, fmt.Errorf("grpc: cannot create SubConn with empty address list")
+		return nil, errors.New("grpc: cannot create SubConn with empty address list")
 	}
 	ac, err := ccb.cc.newAddrConn(addrs, opts)
 	if err != nil {

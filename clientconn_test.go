@@ -854,7 +854,7 @@ func (s) TestBackoffCancel(t *testing.T) {
 	dialStrCh := make(chan string)
 	cc, err := Dial("any", WithTransportCredentials(insecure.NewCredentials()), WithDialer(func(t string, _ time.Duration) (net.Conn, error) {
 		dialStrCh <- t
-		return nil, fmt.Errorf("test dialer, always error")
+		return nil, errors.New("test dialer, always error")
 	}))
 	if err != nil {
 		t.Fatalf("Failed to create ClientConn: %v", err)
