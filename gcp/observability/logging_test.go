@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 
@@ -99,13 +100,14 @@ func setupObservabilitySystemWithConfig(cfg *config) (func(), error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	err = Start(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error in Start: %v", err)
-	}
-	return func() {
+	cleanup := func() {
 		End()
 		envconfig.ObservabilityConfig = oldObservabilityConfig
-	}, nil
+	}
+	if err != nil {
+		return cleanup, fmt.Errorf("error in Start: %v", err)
+	}
+	return cleanup, nil
 }
 
 // TestClientRPCEventsLogAll tests the observability system configured with a
@@ -777,18 +779,18 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 		CloudLogging: &cloudLogging{
 			ClientRPCEvents: []clientRPCEvents{
 				{
-					Methods:          []string{"/grpc.testing.TestService/UnaryCall"},
+					Methods:          []string{"grpc.testing.TestService/UnaryCall"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
 				{
-					Methods:          []string{"/grpc.testing.TestService/EmptyCall"},
+					Methods:          []string{"grpc.testing.TestService/EmptyCall"},
 					Exclude:          true,
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
 				{
-					Methods:          []string{"/grpc.testing.TestService/*"},
+					Methods:          []string{"grpc.testing.TestService/*"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
@@ -1272,4 +1274,112 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 		t.Fatalf("error in logging entry list comparison %v", err)
 	}
 	fle.mu.Unlock()
+}
+
+// TestMethodInConfiguration tests different method names with an expectation on
+// whether they should error or not.
+func (s) TestMethodInConfiguration(t *testing.T) {
+	// To skip creating a stackdriver exporter.
+	fle := &fakeLoggingExporter{
+		t: t,
+	}
+
+	defer func(ne func(ctx context.Context, config *config) (loggingExporter, error)) {
+		newLoggingExporter = ne
+	}(newLoggingExporter)
+
+	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+		return fle, nil
+	}
+
+	tests := []struct {
+		name    string
+		config  *config
+		wantErr string
+	}{
+		{
+			name: "leading-slash",
+			config: &config{
+				ProjectID: "fake",
+				CloudLogging: &cloudLogging{
+					ClientRPCEvents: []clientRPCEvents{
+						{
+							Methods: []string{"/service/method"},
+						},
+					},
+				},
+			},
+			wantErr: "cannot have a leading slash",
+		},
+		{
+			name: "wildcard service/method",
+			config: &config{
+				ProjectID: "fake",
+				CloudLogging: &cloudLogging{
+					ClientRPCEvents: []clientRPCEvents{
+						{
+							Methods: []string{"*/method"},
+						},
+					},
+				},
+			},
+			wantErr: "cannot have service wildcard *",
+		},
+		{
+			name: "/ in service name",
+			config: &config{
+				ProjectID: "fake",
+				CloudLogging: &cloudLogging{
+					ClientRPCEvents: []clientRPCEvents{
+						{
+							Methods: []string{"ser/vice/method"},
+						},
+					},
+				},
+			},
+			wantErr: "only one /",
+		},
+		{
+			name: "empty method name",
+			config: &config{
+				ProjectID: "fake",
+				CloudLogging: &cloudLogging{
+					ClientRPCEvents: []clientRPCEvents{
+						{
+							Methods: []string{"service/"},
+						},
+					},
+				},
+			},
+			wantErr: "method name must be non empty",
+		},
+		{
+			name: "normal",
+			config: &config{
+				ProjectID: "fake",
+				CloudLogging: &cloudLogging{
+					ClientRPCEvents: []clientRPCEvents{
+						{
+							Methods: []string{"service/method"},
+						},
+					},
+				},
+			},
+			wantErr: "",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cleanup, gotErr := setupObservabilitySystemWithConfig(test.config)
+			if cleanup != nil {
+				defer cleanup()
+			}
+			if gotErr != nil && !strings.Contains(gotErr.Error(), test.wantErr) {
+				t.Fatalf("Start(%v) = %v, wantErr %v", test.config, gotErr, test.wantErr)
+			}
+			if (gotErr != nil) != (test.wantErr != "") {
+				t.Fatalf("Start(%v) = %v, wantErr %v", test.config, gotErr, test.wantErr)
+			}
+		})
+	}
 }
