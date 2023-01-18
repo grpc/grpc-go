@@ -466,22 +466,22 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		})
 		return nil
 	}
-	if headerError != nil {
-		t.controlBuf.put(&earlyAbortStream{
-			httpStatus:     http.StatusBadRequest,
-			streamID:       streamID,
-			contentSubtype: s.contentSubtype,
-			status:         headerError,
-			rst:            !frame.StreamEnded(),
-		})
-		return nil
-	}
 	if !isGRPC {
 		t.controlBuf.put(&earlyAbortStream{
 			httpStatus:     http.StatusUnsupportedMediaType,
 			streamID:       streamID,
 			contentSubtype: s.contentSubtype,
 			status:         status.Newf(codes.InvalidArgument, "invalid gRPC request content-type %q", contentType),
+			rst:            !frame.StreamEnded(),
+		})
+		return nil
+	}
+	if headerError != nil {
+		t.controlBuf.put(&earlyAbortStream{
+			httpStatus:     http.StatusBadRequest,
+			streamID:       streamID,
+			contentSubtype: s.contentSubtype,
+			status:         headerError,
 			rst:            !frame.StreamEnded(),
 		})
 		return nil

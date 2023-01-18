@@ -1976,6 +1976,7 @@ func (s) TestHeadersHTTPStatusGRPCStatus(t *testing.T) {
 				{name: ":method", values: []string{"POST"}},
 				{name: ":path", values: []string{"foo"}},
 				{name: ":authority", values: []string{"localhost"}},
+				{name: "content-type", values: []string{"application/grpc"}},
 				{name: "grpc-timeout", values: []string{"18f6n"}},
 			},
 			httpStatusWant:  "400",
