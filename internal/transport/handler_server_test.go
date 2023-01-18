@@ -41,11 +41,12 @@ import (
 
 func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 	type testCase struct {
-		name    string
-		req     *http.Request
-		wantErr string
-		modrw   func(http.ResponseWriter) http.ResponseWriter
-		check   func(*serverHandlerTransport, *testCase) error
+		name        string
+		req         *http.Request
+		wantErr     string
+		wantErrCode int
+		modrw       func(http.ResponseWriter) http.ResponseWriter
+		check       func(*serverHandlerTransport, *testCase) error
 	}
 	tests := []testCase{
 		{
@@ -54,7 +55,8 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				ProtoMajor: 1,
 				ProtoMinor: 1,
 			},
-			wantErr: "gRPC requires HTTP/2",
+			wantErr:     "gRPC requires HTTP/2",
+			wantErrCode: http.StatusBadRequest,
 		},
 		{
 			name: "bad method",
@@ -63,7 +65,8 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				Method:     "GET",
 				Header:     http.Header{},
 			},
-			wantErr: `invalid gRPC request method "GET"`,
+			wantErr:     `invalid gRPC request method "GET"`,
+			wantErrCode: http.StatusBadRequest,
 		},
 		{
 			name: "bad content type",
@@ -74,7 +77,8 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 					"Content-Type": {"application/foo"},
 				},
 			},
-			wantErr: `invalid gRPC request content-type "application/foo"`,
+			wantErr:     `invalid gRPC request content-type "application/foo"`,
+			wantErrCode: http.StatusUnsupportedMediaType,
 		},
 		{
 			name: "not flusher",
@@ -93,7 +97,8 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 				}
 				return struct{ onlyCloseNotifier }{w.(onlyCloseNotifier)}
 			},
-			wantErr: "gRPC requires a ResponseWriter supporting http.Flusher",
+			wantErr:     "gRPC requires a ResponseWriter supporting http.Flusher",
+			wantErrCode: http.StatusInternalServerError,
 		},
 		{
 			name: "valid",
@@ -153,7 +158,8 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 					Path: "/service/foo.bar",
 				},
 			},
-			wantErr: `rpc error: code = Internal desc = malformed time-out: transport: timeout unit is not recognized: "tomorrow"`,
+			wantErr:     `rpc error: code = Internal desc = malformed grpc-timeout: transport: timeout unit is not recognized: "tomorrow"`,
+			wantErrCode: http.StatusBadRequest,
 		},
 		{
 			name: "with metadata",
@@ -187,13 +193,25 @@ func (s) TestHandlerTransport_NewServerHandlerTransport(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		rw := newTestHandlerResponseWriter()
+		rrec := httptest.NewRecorder()
+		rw := http.ResponseWriter(testHandlerResponseWriter{
+			ResponseRecorder: rrec,
+			closeNotify:      make(chan bool, 1),
+		})
+
 		if tt.modrw != nil {
 			rw = tt.modrw(rw)
 		}
 		got, gotErr := NewServerHandlerTransport(rw, tt.req, nil)
 		if (gotErr != nil) != (tt.wantErr != "") || (gotErr != nil && gotErr.Error() != tt.wantErr) {
 			t.Errorf("%s: error = %q; want %q", tt.name, gotErr.Error(), tt.wantErr)
+			continue
+		}
+		if tt.wantErrCode == 0 {
+			tt.wantErrCode = http.StatusOK
+		}
+		if rrec.Code != tt.wantErrCode {
+			t.Errorf("%s: code = %d; want %d", tt.name, rrec.Code, tt.wantErrCode)
 			continue
 		}
 		if gotErr != nil {
