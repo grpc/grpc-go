@@ -317,6 +317,23 @@ func waitForWatchRouteConfig(ctx context.Context, t *testing.T, xdsC *fakeclient
 	}
 }
 
+// buildResolverForTarget builds an xDS resolver for the given target. It
+// returns a testClientConn which allows inspection of resolver updates, and a
+// function to close the resolver once the test is complete.
+func buildResolverForTarget(t *testing.T, target resolver.Target) (*testClientConn, func()) {
+	builder := resolver.Get(xdsScheme)
+	if builder == nil {
+		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
+	}
+
+	tcc := newTestClientConn()
+	r, err := builder.Build(target, tcc, resolver.BuildOptions{})
+	if err != nil {
+		t.Fatalf("builder.Build(%v) returned err: %v", target, err)
+	}
+	return tcc, r.Close
+}
+
 // TestResolverResourceName builds an xDS resolver and verifies that the
 // resource name specified in the discovery request matches expectations.
 func (s) TestResolverResourceName(t *testing.T) {
@@ -408,27 +425,14 @@ func (s) TestResolverResourceName(t *testing.T) {
 					tt.extraAuthority: mgmtServer.Address,
 				}
 			}
-			bootstrapContents, err := xdsbootstrap.Contents(opts)
+			cleanup, err := xdsbootstrap.CreateFile(opts)
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer cleanup()
 
-			// Build an xDS resolver that uses the above bootstrap configuration
-			// and pass it to grpc.Dial(). Creating the xDS resolver should
-			// result in creation of the xDS client.
-			newResolver := internal.NewXDSResolverWithConfigForTesting
-			if newResolver == nil {
-				t.Fatal("internal.NewXDSResolverWithConfigForTesting is nil")
-			}
-			resolver, err := newResolver.(func([]byte) (resolver.Builder, error))(bootstrapContents)
-			if err != nil {
-				t.Fatalf("Failed to create xDS resolver for testing: %v", err)
-			}
-			cc, err := grpc.Dial(tt.dialTarget, grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithResolvers(resolver))
-			if err != nil {
-				t.Fatalf("failed to dial local test server: %v", err)
-			}
-			defer cc.Close()
+			_, rClose := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL(tt.dialTarget)})
+			defer rClose()
 
 			// Verify the resource name in the discovery request being sent out.
 			select {
@@ -662,26 +666,12 @@ func (s) TestResolverRequestHash(t *testing.T) {
 	}
 	defer cleanup()
 
-	// Build an xDS resolver that uses the above bootstrap configuration
-	// Creating the xDS resolver should result in creation of the xDS client.
-	builder := resolver.Get(xdsScheme)
-	if builder == nil {
-		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
-	}
 	const serviceName = "my-service-client-side-xds"
+	tcc, rClose := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
+	defer rClose()
+
 	ldsName := serviceName
 	rdsName := "route-" + serviceName
-	u, err := url.Parse("xds:///" + serviceName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tcc := newTestClientConn()
-	r, err := builder.Build(resolver.Target{URL: *u}, tcc, resolver.BuildOptions{})
-	if err != nil {
-		t.Fatalf("builder.Build(%v) returned err: %v", target, err)
-	}
-	defer r.Close()
-
 	// Configure the management server with a good listener resource and a
 	// route configuration resource that specifies a hash policy.
 	resources := e2e.UpdateOptions{
@@ -697,12 +687,8 @@ func (s) TestResolverRequestHash(t *testing.T) {
 						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
 							Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
 								{
-									Name:   "cluster_1",
-									Weight: &wrapperspb.UInt32Value{Value: 75},
-								},
-								{
-									Name:   "cluster_2",
-									Weight: &wrapperspb.UInt32Value{Value: 25},
+									Name:   "test-cluster-1",
+									Weight: &wrapperspb.UInt32Value{Value: 100},
 								},
 							},
 						}},
@@ -779,26 +765,12 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	}
 	defer cleanup()
 
-	// Build an xDS resolver that uses the above bootstrap configuration
-	// Creating the xDS resolver should result in creation of the xDS client.
-	builder := resolver.Get(xdsScheme)
-	if builder == nil {
-		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
-	}
 	const serviceName = "my-service-client-side-xds"
+	tcc, rClose := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
+	defer rClose()
+
 	ldsName := serviceName
 	rdsName := "route-" + serviceName
-	u, err := url.Parse("xds:///" + serviceName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tcc := newTestClientConn()
-	r, err := builder.Build(resolver.Target{URL: *u}, tcc, resolver.BuildOptions{})
-	if err != nil {
-		t.Fatalf("builder.Build(%v) returned err: %v", target, err)
-	}
-	defer r.Close()
-
 	// Configure the management server with a good listener and route
 	// configuration resource.
 	resources := e2e.UpdateOptions{
@@ -1062,26 +1034,12 @@ func (s) TestResolverWRR(t *testing.T) {
 	}
 	defer cleanup()
 
-	// Build an xDS resolver that uses the above bootstrap configuration
-	// Creating the xDS resolver should result in creation of the xDS client.
-	builder := resolver.Get(xdsScheme)
-	if builder == nil {
-		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
-	}
 	const serviceName = "my-service-client-side-xds"
+	tcc, rClose := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
+	defer rClose()
+
 	ldsName := serviceName
 	rdsName := "route-" + serviceName
-	u, err := url.Parse("xds:///" + serviceName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tcc := newTestClientConn()
-	r, err := builder.Build(resolver.Target{URL: *u}, tcc, resolver.BuildOptions{})
-	if err != nil {
-		t.Fatalf("builder.Build(%v) returned err: %v", target, err)
-	}
-	defer r.Close()
-
 	// Configure the management server with a good listener resource and a
 	// route configuration resource.
 	resources := e2e.UpdateOptions{
