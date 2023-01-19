@@ -5741,45 +5741,60 @@ func (s) TestStreamSetSendCompressorAfterHeaderSendFailure(t *testing.T) {
 }
 
 func (s) TestClientSupportedCompressors(t *testing.T) {
-	t.Run("No repeated grpc-accept-encoding header", func(t *testing.T) {
-		testClientSupportedCompressors(t, context.Background(), []string{"gzip"})
-	})
-
-	t.Run("Repeated grpc-accept-encoding header", func(t *testing.T) {
-		ctx := metadata.AppendToOutgoingContext(context.Background(),
-			"grpc-accept-encoding", "test-compressor-1",
-			"grpc-accept-encoding", "test-compressor-2",
-		)
-		testClientSupportedCompressors(t, ctx, []string{"gzip", "test-compressor-1", "test-compressor-2"})
-	})
-}
-
-func testClientSupportedCompressors(t *testing.T, ctx context.Context, want []string) {
-	ss := &stubserver.StubServer{
-		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			got, err := grpc.ClientSupportedCompressors(ctx)
-			if err != nil {
-				return nil, err
-			}
-
-			if !reflect.DeepEqual(got, want) {
-				t.Errorf("unexpected client compressors got: %v, want: %v", got, want)
-			}
-
-			return &testpb.Empty{}, nil
+	for _, tt := range []struct {
+		desc string
+		ctx  context.Context
+		want []string
+	}{
+		{
+			desc: "No additional grpc-accept-encoding header",
+			ctx:  context.Background(),
+			want: []string{"gzip"},
 		},
-	}
-	if err := ss.Start(nil); err != nil {
-		t.Fatalf("Error starting endpoint server: %v, want: nil", err)
-	}
-	defer ss.Stop()
+		{
+			desc: "With additional grpc-accept-encoding header",
+			ctx: metadata.AppendToOutgoingContext(context.Background(),
+				"grpc-accept-encoding", "test-compressor-1",
+				"grpc-accept-encoding", "test-compressor-2",
+			),
+			want: []string{"gzip", "test-compressor-1", "test-compressor-2"},
+		},
+		{
+			desc: "With additional empty grpc-accept-encoding header",
+			ctx: metadata.AppendToOutgoingContext(context.Background(),
+				"grpc-accept-encoding", "",
+			),
+			want: []string{"gzip"},
+		},
+	} {
+		t.Run(tt.desc, func(t *testing.T) {
+			ss := &stubserver.StubServer{
+				EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
+					got, err := grpc.ClientSupportedCompressors(ctx)
+					if err != nil {
+						return nil, err
+					}
 
-	ctx, cancel := context.WithTimeout(ctx, defaultTestTimeout)
-	defer cancel()
+					if !reflect.DeepEqual(got, tt.want) {
+						t.Errorf("unexpected client compressors got: %v, want: %v", got, tt.want)
+					}
 
-	_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
-	if err != nil {
-		t.Fatalf("Unexpected unary call error, got: %v, want: nil", err)
+					return &testpb.Empty{}, nil
+				},
+			}
+			if err := ss.Start(nil); err != nil {
+				t.Fatalf("Error starting endpoint server: %v, want: nil", err)
+			}
+			defer ss.Stop()
+
+			ctx, cancel := context.WithTimeout(tt.ctx, defaultTestTimeout)
+			defer cancel()
+
+			_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})
+			if err != nil {
+				t.Fatalf("Unexpected unary call error, got: %v, want: nil", err)
+			}
+		})
 	}
 }
 
