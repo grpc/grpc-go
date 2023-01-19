@@ -5740,17 +5740,30 @@ func (s) TestStreamSetSendCompressorAfterHeaderSendFailure(t *testing.T) {
 	}
 }
 
-func (s) TestClientAdvertisedCompressors(t *testing.T) {
-	expectedCompressors := []string{"gzip"}
+func (s) TestClientSupportedCompressors(t *testing.T) {
+	t.Run("No repeated grpc-accept-encoding header", func(t *testing.T) {
+		testClientSupportedCompressors(t, context.Background(), []string{"gzip"})
+	})
+
+	t.Run("Repeated grpc-accept-encoding header", func(t *testing.T) {
+		ctx := metadata.AppendToOutgoingContext(context.Background(),
+			"grpc-accept-encoding", "test-compressor-1",
+			"grpc-accept-encoding", "test-compressor-2",
+		)
+		testClientSupportedCompressors(t, ctx, []string{"gzip", "test-compressor-1", "test-compressor-2"})
+	})
+}
+
+func testClientSupportedCompressors(t *testing.T, ctx context.Context, want []string) {
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
-			compressors, err := grpc.ClientAdvertisedCompressors(ctx)
+			got, err := grpc.ClientSupportedCompressors(ctx)
 			if err != nil {
 				return nil, err
 			}
 
-			if !reflect.DeepEqual(compressors, expectedCompressors) {
-				t.Errorf("unexpected client compressors got: %v, want: %v", compressors, expectedCompressors)
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("unexpected client compressors got: %v, want: %v", got, want)
 			}
 
 			return &testpb.Empty{}, nil
@@ -5761,7 +5774,7 @@ func (s) TestClientAdvertisedCompressors(t *testing.T) {
 	}
 	defer ss.Stop()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, defaultTestTimeout)
 	defer cancel()
 
 	_, err := ss.Client.EmptyCall(ctx, &testpb.Empty{})

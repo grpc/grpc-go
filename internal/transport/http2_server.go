@@ -405,8 +405,12 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			isGRPC = true
 
 		case "grpc-accept-encoding":
-			s.clientAdvertisedCompressors = hf.Value
 			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
+			compressors := hf.Value
+			if s.clientAdvertisedCompressors != "" {
+				compressors = s.clientAdvertisedCompressors + "," + compressors
+			}
+			s.clientAdvertisedCompressors = compressors
 		case "grpc-encoding":
 			s.recvCompress = hf.Value
 		case ":method":

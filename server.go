@@ -1965,25 +1965,26 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 
 // SetSendCompressor sets a compressor for outbound messages.
 // It must not be called after any event that causes headers to be sent
-// (see _ServerStream_.SetHeader for a complete list). Provided compressor is used when below
-// conditions are met:
+// (see ServerStream.SetHeader for the complete list). Provided compressor is
+// used when below conditions are met:
 //
 //   - compressor is registered via encoding.RegisterCompressor
-//   - compressor name exists in the client advertised compressor names sent in
-//     grpc-accept-encoding header. Use _ServerStream_.ClientAdvertisedCompressors
-//     to get client advertised compressor names.
+//   - compressor name must exist in the client advertised compressor names
+//     sent in grpc-accept-encoding header. Use ClientSupportedCompressors to
+//     get client supported compressor names.
 //
 // The context provided must be the context passed to the server's handler.
-// It must be noted that compressor name "identity" disables the outbound compression.
-// By default, server messages will be sent using the same compressor with which
-// request messages were sent.
+// It must be noted that compressor name encoding.Identity disables the
+// outbound compression.
+// By default, server messages will be sent using the same compressor with
+// which request messages were sent.
 //
 // It is not safe to call SetSendCompressor concurrently with SendHeader and
 // SendMsg.
 //
 // # Experimental
 //
-// Notice: This _function_ is EXPERIMENTAL and may be changed or removed in a
+// Notice: This function_ is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func SetSendCompressor(ctx context.Context, name string) error {
 	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.Stream)
@@ -1998,16 +1999,16 @@ func SetSendCompressor(ctx context.Context, name string) error {
 	return stream.SetSendCompress(name)
 }
 
-// ClientAdvertisedCompressors returns compressor names advertised by the client
+// ClientSupportedCompressors returns compressor names advertised by the client
 // via grpc-accept-encoding header.
 //
 // The context provided must be the context passed to the server's handler.
 //
 // # Experimental
 //
-// Notice: This _function_ is EXPERIMENTAL and may be changed or removed in a
+// Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func ClientAdvertisedCompressors(ctx context.Context) ([]string, error) {
+func ClientSupportedCompressors(ctx context.Context) ([]string, error) {
 	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.Stream)
 	if !ok || stream == nil {
 		return nil, fmt.Errorf("failed to fetch the stream from the given context %v", ctx)
