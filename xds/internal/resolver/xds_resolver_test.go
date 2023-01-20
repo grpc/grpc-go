@@ -501,21 +501,8 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Build an xDS resolver that uses the above bootstrap configuration
-	// Creating the xDS resolver should result in creation of the xDS client.
-	builder := resolver.Get(xdsScheme)
-	if builder == nil {
-		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
-	}
-	tcc := newTestClientConn()
-	u, err := url.Parse("xds:///" + serviceName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := builder.Build(resolver.Target{URL: *u}, tcc, resolver.BuildOptions{})
-	if err != nil {
-		t.Fatalf("builder.Build(%v) returned err: %v", target, err)
-	}
+	tcc, rClose := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
+	defer rClose()
 
 	// Wait for a discovery request for a route configuration resource.
 	select {
@@ -525,7 +512,7 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 	}
 
 	// Close the resolver and unblock the management server.
-	r.Close()
+	rClose()
 	close(waitForCloseCh)
 
 	// Verify that the update from the management server is not propagated to
@@ -565,20 +552,8 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 		newXDSClient = origNewClient
 	}()
 
-	builder := resolver.Get(xdsScheme)
-	if builder == nil {
-		t.Fatalf("resolver.Get(%v) returned nil", xdsScheme)
-	}
-
-	u, err := url.Parse("xds:///" + "dummy")
-	if err != nil {
-		t.Fatal(err)
-	}
-	r, err := builder.Build(resolver.Target{URL: *u}, newTestClientConn(), resolver.BuildOptions{})
-	if err != nil {
-		t.Fatalf("builder.Build(%v): %v", u, err)
-	}
-	r.Close()
+	_, rClose := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///my-service-client-side-xds")})
+	rClose()
 
 	select {
 	case <-closeCh:
