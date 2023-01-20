@@ -109,12 +109,12 @@ type testClientConn struct {
 }
 
 func (t *testClientConn) UpdateState(s resolver.State) error {
-	t.stateCh.Send(s)
+	t.stateCh.Replace(s)
 	return nil
 }
 
 func (t *testClientConn) ReportError(err error) {
-	t.errorCh.Send(err)
+	t.errorCh.Replace(err)
 }
 
 func (t *testClientConn) ParseServiceConfig(jsonSC string) *serviceconfig.ParseResult {
