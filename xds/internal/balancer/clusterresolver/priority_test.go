@@ -62,8 +62,7 @@ func setupTestEDS(t *testing.T, initChild *internalserviceconfig.BalancerConfig)
 	xdsC := fakeclient.NewClientWithName(testBalancerNameFooBar)
 	cc := testutils.NewTestClientConn(t)
 	builder := balancer.Get(Name)
-	// TODO: @kylejb will fix typo for 'testEDSServcie' in another PR
-	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{URL: *testutils.MustParseURL("dns:///" + testEDSServcie)}})
+	edsb := builder.Build(cc, balancer.BuildOptions{Target: resolver.Target{URL: *testutils.MustParseURL("dns:///" + testEDSService)}})
 	if edsb == nil {
 		t.Fatalf("builder.Build(%s) failed and returned nil", Name)
 	}
