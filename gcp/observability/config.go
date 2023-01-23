@@ -57,9 +57,6 @@ func fetchDefaultProjectID(ctx context.Context) string {
 // validateMethodString validates whether the string passed in is a valid
 // pattern.
 func validateMethodString(method string) error {
-	if method == "*" {
-		return nil
-	}
 	if strings.HasPrefix(method, "/") {
 		return errors.New("cannot have a leading slash")
 	}

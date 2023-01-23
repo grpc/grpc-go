@@ -369,7 +369,7 @@ func (bl *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
 // parseMethod splits service and method from the input. It expects format
 // "service/method".
 func parseMethod(method string) (string, string, error) {
-	pos := strings.LastIndex(method, "/")
+	pos := strings.Index(method, "/")
 	if pos < 0 {
 		// Shouldn't happen, config already validated.
 		return "", "", errors.New("invalid method name: no / found")
