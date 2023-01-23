@@ -202,7 +202,6 @@ func New(opts Options) (*Transport, error) {
 		versions:        make(map[string]string),
 		nonces:          make(map[string]string),
 		adsRunnerDoneCh: make(chan struct{}),
-		lrsRunnerDoneCh: make(chan struct{}),
 	}
 
 	// This context is used for sending and receiving RPC requests and
