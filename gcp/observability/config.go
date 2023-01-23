@@ -24,19 +24,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
+	"strings"
 
 	gcplogging "cloud.google.com/go/logging"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/grpc/internal/envconfig"
 )
 
-const (
-	envProjectID          = "GOOGLE_CLOUD_PROJECT"
-	methodStringRegexpStr = `^([\w./]+)/((?:\w+)|[*])$`
-)
-
-var methodStringRegexp = regexp.MustCompile(methodStringRegexpStr)
+const envProjectID = "GOOGLE_CLOUD_PROJECT"
 
 // fetchDefaultProjectID fetches the default GCP project id from environment.
 func fetchDefaultProjectID(ctx context.Context) string {
@@ -59,6 +54,25 @@ func fetchDefaultProjectID(ctx context.Context) string {
 	return credentials.ProjectID
 }
 
+// validateMethodString validates whether the string passed in is a valid
+// pattern.
+func validateMethodString(method string) error {
+	if strings.HasPrefix(method, "/") {
+		return errors.New("cannot have a leading slash")
+	}
+	serviceMethod := strings.Split(method, "/")
+	if len(serviceMethod) != 2 {
+		return errors.New("/ must come in between service and method, only one /")
+	}
+	if serviceMethod[1] == "" {
+		return errors.New("method name must be non empty")
+	}
+	if serviceMethod[0] == "*" {
+		return errors.New("cannot have service wildcard * i.e. (*/m)")
+	}
+	return nil
+}
+
 func validateLogEventMethod(methods []string, exclude bool) error {
 	for _, method := range methods {
 		if method == "*" {
@@ -67,9 +81,8 @@ func validateLogEventMethod(methods []string, exclude bool) error {
 			}
 			continue
 		}
-		match := methodStringRegexp.FindStringSubmatch(method)
-		if match == nil {
-			return fmt.Errorf("invalid method string: %v", method)
+		if err := validateMethodString(method); err != nil {
+			return fmt.Errorf("invalid method string: %v, err: %v", method, err)
 		}
 	}
 	return nil
