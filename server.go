@@ -1963,7 +1963,7 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 	return nil
 }
 
-// SetSendCompressor sets a compressor for outbound messages.
+// SetSendCompressor sets a compressor for outbound messages from the server.
 // It must not be called after any event that causes headers to be sent
 // (see ServerStream.SetHeader for the complete list). Provided compressor is
 // used when below conditions are met:
@@ -1984,7 +1984,7 @@ func SendHeader(ctx context.Context, md metadata.MD) error {
 //
 // # Experimental
 //
-// Notice: This function_ is EXPERIMENTAL and may be changed or removed in a
+// Notice: This function is EXPERIMENTAL and may be changed or removed in a
 // later release.
 func SetSendCompressor(ctx context.Context, name string) error {
 	stream, ok := ServerTransportStreamFromContext(ctx).(*transport.Stream)

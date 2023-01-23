@@ -5510,34 +5510,64 @@ func (s) TestClientForwardsGrpcAcceptEncodingHeader(t *testing.T) {
 	}
 }
 
+// wrapCompressor is a wrapper of encoding.Compressor which maintains count of
+// Compressor method invokes.
+type wrapCompressor struct {
+	encoding.Compressor
+	compressInvokes int32
+}
+
+func (wc *wrapCompressor) Compress(w io.Writer) (io.WriteCloser, error) {
+	atomic.AddInt32(&wc.compressInvokes, 1)
+	return wc.Compressor.Compress(w)
+}
+
+func setupGzipWrapCompressor(t *testing.T) *wrapCompressor {
+	oldC := encoding.GetCompressor("gzip")
+	c := &wrapCompressor{Compressor: oldC}
+	encoding.RegisterCompressor(c)
+	t.Cleanup(func() {
+		encoding.RegisterCompressor(oldC)
+	})
+	return c
+}
+
 func (s) TestSetSendCompressorSuccess(t *testing.T) {
 	for _, tt := range []struct {
-		desc          string
-		resCompressor string
-		wantErr       error
+		name                string
+		desc                string
+		dialOpts            []grpc.DialOption
+		resCompressor       string
+		wantCompressInvokes int32
 	}{
 		{
-			desc:          "gzip_response_compressor",
-			resCompressor: "gzip",
+			name:                "identity_request_and_gzip_response",
+			desc:                "request is uncompressed and response is gzip compressed",
+			resCompressor:       "gzip",
+			wantCompressInvokes: 1,
 		},
 		{
-			desc:          "identity_response_compressor",
-			resCompressor: "identity",
+			name:                "gzip_request_and_identity_response",
+			desc:                "request is gzip compressed and response is uncompressed with identity",
+			resCompressor:       "identity",
+			dialOpts:            []grpc.DialOption{grpc.WithCompressor(grpc.NewGZIPCompressor())},
+			wantCompressInvokes: 0,
 		},
 	} {
-		t.Run(tt.desc, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Run("unary", func(t *testing.T) {
-				testUnarySetSendCompressorSuccess(t, tt.resCompressor)
+				testUnarySetSendCompressorSuccess(t, tt.resCompressor, tt.wantCompressInvokes, tt.dialOpts)
 			})
 
 			t.Run("stream", func(t *testing.T) {
-				testStreamSetSendCompressorSuccess(t, tt.resCompressor)
+				testStreamSetSendCompressorSuccess(t, tt.resCompressor, tt.wantCompressInvokes, tt.dialOpts)
 			})
 		})
 	}
 }
 
-func testUnarySetSendCompressorSuccess(t *testing.T, resCompressor string) {
+func testUnarySetSendCompressorSuccess(t *testing.T, resCompressor string, wantCompressInvokes int32, dialOpts []grpc.DialOption) {
+	wc := setupGzipWrapCompressor(t)
 	ss := &stubserver.StubServer{
 		EmptyCallF: func(ctx context.Context, in *testpb.Empty) (*testpb.Empty, error) {
 			if err := grpc.SetSendCompressor(ctx, resCompressor); err != nil {
@@ -5546,7 +5576,7 @@ func testUnarySetSendCompressorSuccess(t *testing.T, resCompressor string) {
 			return &testpb.Empty{}, nil
 		},
 	}
-	if err := ss.Start(nil); err != nil {
+	if err := ss.Start(nil, dialOpts...); err != nil {
 		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
@@ -5557,9 +5587,15 @@ func testUnarySetSendCompressorSuccess(t *testing.T, resCompressor string) {
 	if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 		t.Fatalf("Unexpected unary call error, got: %v, want: nil", err)
 	}
+
+	compressorInvokes := atomic.LoadInt32(&wc.compressInvokes)
+	if compressorInvokes != wantCompressInvokes {
+		t.Fatalf("Unexpected number of Compress calls, got:%d, want: %d", compressorInvokes, wantCompressInvokes)
+	}
 }
 
-func testStreamSetSendCompressorSuccess(t *testing.T, resCompressor string) {
+func testStreamSetSendCompressorSuccess(t *testing.T, resCompressor string, wantCompressInvokes int32, dialOpts []grpc.DialOption) {
+	wc := setupGzipWrapCompressor(t)
 	ss := &stubserver.StubServer{
 		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
 			if _, err := stream.Recv(); err != nil {
@@ -5573,8 +5609,8 @@ func testStreamSetSendCompressorSuccess(t *testing.T, resCompressor string) {
 			return stream.Send(&testpb.StreamingOutputCallResponse{})
 		},
 	}
-	if err := ss.Start(nil); err != nil {
-		t.Fatalf("Error starting endpoint server: %v, want: nil", err)
+	if err := ss.Start(nil, dialOpts...); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
 	}
 	defer ss.Stop()
 
@@ -5592,6 +5628,11 @@ func testStreamSetSendCompressorSuccess(t *testing.T, resCompressor string) {
 
 	if _, err := s.Recv(); err != nil {
 		t.Fatalf("Unexpected full duplex recv error, got: %v, want: nil", err)
+	}
+
+	compressorInvokes := atomic.LoadInt32(&wc.compressInvokes)
+	if compressorInvokes != wantCompressInvokes {
+		t.Fatalf("Unexpected number of Compress calls, got:%d, want: %d", compressorInvokes, wantCompressInvokes)
 	}
 }
 
@@ -5691,6 +5732,7 @@ func (s) TestUnarySetSendCompressorAfterHeaderSendFailure(t *testing.T) {
 			err := grpc.SetSendCompressor(ctx, "gzip")
 			if err == nil {
 				t.Error("Wanted set send compressor error")
+				return &testpb.Empty{}, nil
 			}
 			return nil, err
 		},
