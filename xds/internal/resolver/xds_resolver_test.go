@@ -456,13 +456,13 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 	// it receives a discovery request for a route configuration resource. And
 	// the test goroutine signals the management server when the resolver is
 	// closed.
-	waitForRouteConfigCh := make(chan struct{})
-	waitForCloseCh := make(chan struct{})
+	waitForRouteConfigDiscoveryReqCh := make(chan struct{})
+	waitForResolverCloseCh := make(chan struct{})
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3RouteConfigURL {
-				close(waitForRouteConfigCh)
-				<-waitForCloseCh
+				close(waitForRouteConfigDiscoveryReqCh)
+				<-waitForResolverCloseCh
 			}
 			return nil
 		},
@@ -506,14 +506,14 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 
 	// Wait for a discovery request for a route configuration resource.
 	select {
-	case <-waitForRouteConfigCh:
+	case <-waitForRouteConfigDiscoveryReqCh:
 	case <-ctx.Done():
-		t.Fatal("Timeout when waiting for a discovery request with a route configuration resource")
+		t.Fatal("Timeout when waiting for a discovery request for a route configuration resource")
 	}
 
 	// Close the resolver and unblock the management server.
 	rClose()
-	close(waitForCloseCh)
+	close(waitForResolverCloseCh)
 
 	// Verify that the update from the management server is not propagated to
 	// the ClientConn. The xDS resolver, once closed, is expected to drop
@@ -528,9 +528,6 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 // TestResolverCloseClosesXDSClient tests that the xDS resolver's Close method
 // closes the xDS client.
 func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
-	// Override xDS client creation to use bootstrap configuration pointing to a
-	// dummy management server. Also close a channel when the returned xDS
-	// client is closed.
 	bootstrapCfg := &bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI:    "dummy-management-server-address",
@@ -539,6 +536,9 @@ func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 		},
 	}
 
+	// Override xDS client creation to use bootstrap configuration pointing to a
+	// dummy management server. Also close a channel when the returned xDS
+	// client is closed.
 	closeCh := make(chan struct{})
 	origNewClient := newXDSClient
 	newXDSClient = func() (xdsclient.XDSClient, func(), error) {
