@@ -84,10 +84,9 @@ func (t *Transport) lrsStopStream() {
 	t.lrsCancelStream()
 	t.logger.Infof("Stopping LRS stream")
 
-	// Wait for the runner goroutine to exit, and set the done channel to nil.
-	// The done channel will be recreated when a new stream is created.
+	// Wait for the runner goroutine to exit. The done channel will be
+	// recreated when a new stream is created.
 	<-t.lrsRunnerDoneCh
-	t.lrsRunnerDoneCh = nil
 }
 
 // lrsRunner starts an LRS stream to report load data to the management server.
