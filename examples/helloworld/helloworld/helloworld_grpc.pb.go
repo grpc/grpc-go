@@ -119,3 +119,11 @@ var Greeter_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "examples/helloworld/helloworld/helloworld.proto",
 }
+
+const (
+	Greeter_SayHello_FullMethod = "/helloworld.Greeter/SayHello"
+)
+
+var Greeter_FullMethods = []string{
+	Greeter_SayHello_FullMethod,
+}

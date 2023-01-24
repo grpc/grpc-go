@@ -412,3 +412,19 @@ var BenchmarkService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "grpc/testing/benchmark_service.proto",
 }
+
+const (
+	BenchmarkService_UnaryCall_FullMethod           = "/grpc.testing.BenchmarkService/UnaryCall"
+	BenchmarkService_StreamingCall_FullMethod       = "/grpc.testing.BenchmarkService/StreamingCall"
+	BenchmarkService_StreamingFromClient_FullMethod = "/grpc.testing.BenchmarkService/StreamingFromClient"
+	BenchmarkService_StreamingFromServer_FullMethod = "/grpc.testing.BenchmarkService/StreamingFromServer"
+	BenchmarkService_StreamingBothWays_FullMethod   = "/grpc.testing.BenchmarkService/StreamingBothWays"
+)
+
+var BenchmarkService_FullMethods = []string{
+	BenchmarkService_UnaryCall_FullMethod,
+	BenchmarkService_StreamingCall_FullMethod,
+	BenchmarkService_StreamingFromClient_FullMethod,
+	BenchmarkService_StreamingFromServer_FullMethod,
+	BenchmarkService_StreamingBothWays_FullMethod,
+}

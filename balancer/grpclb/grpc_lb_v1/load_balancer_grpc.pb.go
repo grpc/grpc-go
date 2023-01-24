@@ -154,3 +154,11 @@ var LoadBalancer_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "grpc/lb/v1/load_balancer.proto",
 }
+
+const (
+	LoadBalancer_BalanceLoad_FullMethod = "/grpc.lb.v1.LoadBalancer/BalanceLoad"
+)
+
+var LoadBalancer_FullMethods = []string{
+	LoadBalancer_BalanceLoad_FullMethod,
+}

@@ -359,3 +359,17 @@ var RouteGuide_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "examples/route_guide/routeguide/route_guide.proto",
 }
+
+const (
+	RouteGuide_GetFeature_FullMethod   = "/routeguide.RouteGuide/GetFeature"
+	RouteGuide_ListFeatures_FullMethod = "/routeguide.RouteGuide/ListFeatures"
+	RouteGuide_RecordRoute_FullMethod  = "/routeguide.RouteGuide/RecordRoute"
+	RouteGuide_RouteChat_FullMethod    = "/routeguide.RouteGuide/RouteChat"
+)
+
+var RouteGuide_FullMethods = []string{
+	RouteGuide_GetFeature_FullMethod,
+	RouteGuide_ListFeatures_FullMethod,
+	RouteGuide_RecordRoute_FullMethod,
+	RouteGuide_RouteChat_FullMethod,
+}

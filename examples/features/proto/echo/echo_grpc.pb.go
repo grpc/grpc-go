@@ -330,3 +330,17 @@ var Echo_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "examples/features/proto/echo/echo.proto",
 }
+
+const (
+	Echo_UnaryEcho_FullMethod                  = "/grpc.examples.echo.Echo/UnaryEcho"
+	Echo_ServerStreamingEcho_FullMethod        = "/grpc.examples.echo.Echo/ServerStreamingEcho"
+	Echo_ClientStreamingEcho_FullMethod        = "/grpc.examples.echo.Echo/ClientStreamingEcho"
+	Echo_BidirectionalStreamingEcho_FullMethod = "/grpc.examples.echo.Echo/BidirectionalStreamingEcho"
+)
+
+var Echo_FullMethods = []string{
+	Echo_UnaryEcho_FullMethod,
+	Echo_ServerStreamingEcho_FullMethod,
+	Echo_ClientStreamingEcho_FullMethod,
+	Echo_BidirectionalStreamingEcho_FullMethod,
+}

@@ -164,3 +164,11 @@ var HandshakerService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "grpc/gcp/handshaker.proto",
 }
+
+const (
+	HandshakerService_DoHandshake_FullMethod = "/grpc.gcp.HandshakerService/DoHandshake"
+)
+
+var HandshakerService_FullMethods = []string{
+	HandshakerService_DoHandshake_FullMethod,
+}

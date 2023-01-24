@@ -123,3 +123,11 @@ var ReportQpsScenarioService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "grpc/testing/report_qps_scenario_service.proto",
 }
+
+const (
+	ReportQpsScenarioService_ReportScenario_FullMethod = "/grpc.testing.ReportQpsScenarioService/ReportScenario"
+)
+
+var ReportQpsScenarioService_FullMethods = []string{
+	ReportQpsScenarioService_ReportScenario_FullMethod,
+}

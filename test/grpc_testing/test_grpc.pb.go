@@ -454,3 +454,21 @@ var TestService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "test/grpc_testing/test.proto",
 }
+
+const (
+	TestService_EmptyCall_FullMethod           = "/grpc.testing.TestService/EmptyCall"
+	TestService_UnaryCall_FullMethod           = "/grpc.testing.TestService/UnaryCall"
+	TestService_StreamingOutputCall_FullMethod = "/grpc.testing.TestService/StreamingOutputCall"
+	TestService_StreamingInputCall_FullMethod  = "/grpc.testing.TestService/StreamingInputCall"
+	TestService_FullDuplexCall_FullMethod      = "/grpc.testing.TestService/FullDuplexCall"
+	TestService_HalfDuplexCall_FullMethod      = "/grpc.testing.TestService/HalfDuplexCall"
+)
+
+var TestService_FullMethods = []string{
+	TestService_EmptyCall_FullMethod,
+	TestService_UnaryCall_FullMethod,
+	TestService_StreamingOutputCall_FullMethod,
+	TestService_StreamingInputCall_FullMethod,
+	TestService_FullDuplexCall_FullMethod,
+	TestService_HalfDuplexCall_FullMethod,
+}

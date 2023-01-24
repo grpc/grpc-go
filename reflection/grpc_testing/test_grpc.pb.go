@@ -186,3 +186,13 @@ var SearchService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "reflection/grpc_testing/test.proto",
 }
+
+const (
+	SearchService_Search_FullMethod          = "/grpc.testing.SearchService/Search"
+	SearchService_StreamingSearch_FullMethod = "/grpc.testing.SearchService/StreamingSearch"
+)
+
+var SearchService_FullMethods = []string{
+	SearchService_Search_FullMethod,
+	SearchService_StreamingSearch_FullMethod,
+}

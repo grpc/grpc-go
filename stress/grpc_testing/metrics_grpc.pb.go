@@ -194,3 +194,13 @@ var MetricsService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "stress/grpc_testing/metrics.proto",
 }
+
+const (
+	MetricsService_GetAllGauges_FullMethod = "/grpc.testing.MetricsService/GetAllGauges"
+	MetricsService_GetGauge_FullMethod     = "/grpc.testing.MetricsService/GetGauge"
+)
+
+var MetricsService_FullMethods = []string{
+	MetricsService_GetAllGauges_FullMethod,
+	MetricsService_GetGauge_FullMethod,
+}

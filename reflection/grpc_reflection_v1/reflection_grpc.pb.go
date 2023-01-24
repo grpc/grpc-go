@@ -158,3 +158,11 @@ var ServerReflection_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "grpc/reflection/v1/reflection.proto",
 }
+
+const (
+	ServerReflection_ServerReflectionInfo_FullMethod = "/grpc.reflection.v1.ServerReflection/ServerReflectionInfo"
+)
+
+var ServerReflection_FullMethods = []string{
+	ServerReflection_ServerReflectionInfo_FullMethod,
+}

@@ -321,3 +321,17 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "grpc/testing/worker_service.proto",
 }
+
+const (
+	WorkerService_RunServer_FullMethod  = "/grpc.testing.WorkerService/RunServer"
+	WorkerService_RunClient_FullMethod  = "/grpc.testing.WorkerService/RunClient"
+	WorkerService_CoreCount_FullMethod  = "/grpc.testing.WorkerService/CoreCount"
+	WorkerService_QuitWorker_FullMethod = "/grpc.testing.WorkerService/QuitWorker"
+)
+
+var WorkerService_FullMethods = []string{
+	WorkerService_RunServer_FullMethod,
+	WorkerService_RunClient_FullMethod,
+	WorkerService_CoreCount_FullMethod,
+	WorkerService_QuitWorker_FullMethod,
+}

@@ -97,6 +97,8 @@ func (serviceGenerateHelper) generateServerFunctions(gen *protogen.Plugin, file 
 		handlerNames = append(handlerNames, hname)
 	}
 	genServiceDesc(file, g, serviceDescVar, serverType, service, handlerNames)
+
+	genFullMethods(g, service)
 }
 
 func (serviceGenerateHelper) formatHandlerFuncName(service *protogen.Service, hname string) string {
@@ -513,6 +515,25 @@ func genLeadingComments(g *protogen.GeneratedFile, loc protoreflect.SourceLocati
 		g.P(protogen.Comments(s))
 		g.P()
 	}
+}
+
+func genFullMethods(g *protogen.GeneratedFile, service *protogen.Service) {
+	g.P("const (")
+	cNames := make([]string, len(service.Methods))
+	for i, method := range service.Methods {
+		cName := fmt.Sprintf("%s_%s_FullMethod", service.GoName, method.GoName)
+		cNames[i] = cName
+		fmName := helper.formatFullMethodName(service, method)
+		g.P(cName, ` = "`, fmName, `"`)
+	}
+	g.P(")")
+	g.P()
+	g.P("var ", service.GoName, "_FullMethods = []string{")
+	for _, cName := range cNames {
+		g.P(cName, ",")
+	}
+	g.P("}")
+	g.P()
 }
 
 const deprecationComment = "// Deprecated: Do not use."

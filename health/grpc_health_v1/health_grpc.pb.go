@@ -216,3 +216,13 @@ var Health_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "grpc/health/v1/health.proto",
 }
+
+const (
+	Health_Check_FullMethod = "/grpc.health.v1.Health/Check"
+	Health_Watch_FullMethod = "/grpc.health.v1.Health/Watch"
+)
+
+var Health_FullMethods = []string{
+	Health_Check_FullMethod,
+	Health_Watch_FullMethod,
+}

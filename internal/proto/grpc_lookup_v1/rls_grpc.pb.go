@@ -119,3 +119,11 @@ var RouteLookupService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "grpc/lookup/v1/rls.proto",
 }
+
+const (
+	RouteLookupService_RouteLookup_FullMethod = "/grpc.lookup.v1.RouteLookupService/RouteLookup"
+)
+
+var RouteLookupService_FullMethods = []string{
+	RouteLookupService_RouteLookup_FullMethod,
+}

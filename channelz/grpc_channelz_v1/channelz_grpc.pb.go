@@ -354,3 +354,23 @@ var Channelz_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "grpc/channelz/v1/channelz.proto",
 }
+
+const (
+	Channelz_GetTopChannels_FullMethod   = "/grpc.channelz.v1.Channelz/GetTopChannels"
+	Channelz_GetServers_FullMethod       = "/grpc.channelz.v1.Channelz/GetServers"
+	Channelz_GetServer_FullMethod        = "/grpc.channelz.v1.Channelz/GetServer"
+	Channelz_GetServerSockets_FullMethod = "/grpc.channelz.v1.Channelz/GetServerSockets"
+	Channelz_GetChannel_FullMethod       = "/grpc.channelz.v1.Channelz/GetChannel"
+	Channelz_GetSubchannel_FullMethod    = "/grpc.channelz.v1.Channelz/GetSubchannel"
+	Channelz_GetSocket_FullMethod        = "/grpc.channelz.v1.Channelz/GetSocket"
+)
+
+var Channelz_FullMethods = []string{
+	Channelz_GetTopChannels_FullMethod,
+	Channelz_GetServers_FullMethod,
+	Channelz_GetServer_FullMethod,
+	Channelz_GetServerSockets_FullMethod,
+	Channelz_GetChannel_FullMethod,
+	Channelz_GetSubchannel_FullMethod,
+	Channelz_GetSocket_FullMethod,
+}

@@ -535,6 +535,28 @@ var TestService_ServiceDesc = grpc.ServiceDesc{
 	Metadata: "grpc/testing/test.proto",
 }
 
+const (
+	TestService_EmptyCall_FullMethod           = "/grpc.testing.TestService/EmptyCall"
+	TestService_UnaryCall_FullMethod           = "/grpc.testing.TestService/UnaryCall"
+	TestService_CacheableUnaryCall_FullMethod  = "/grpc.testing.TestService/CacheableUnaryCall"
+	TestService_StreamingOutputCall_FullMethod = "/grpc.testing.TestService/StreamingOutputCall"
+	TestService_StreamingInputCall_FullMethod  = "/grpc.testing.TestService/StreamingInputCall"
+	TestService_FullDuplexCall_FullMethod      = "/grpc.testing.TestService/FullDuplexCall"
+	TestService_HalfDuplexCall_FullMethod      = "/grpc.testing.TestService/HalfDuplexCall"
+	TestService_UnimplementedCall_FullMethod   = "/grpc.testing.TestService/UnimplementedCall"
+)
+
+var TestService_FullMethods = []string{
+	TestService_EmptyCall_FullMethod,
+	TestService_UnaryCall_FullMethod,
+	TestService_CacheableUnaryCall_FullMethod,
+	TestService_StreamingOutputCall_FullMethod,
+	TestService_StreamingInputCall_FullMethod,
+	TestService_FullDuplexCall_FullMethod,
+	TestService_HalfDuplexCall_FullMethod,
+	TestService_UnimplementedCall_FullMethod,
+}
+
 // UnimplementedServiceClient is the client API for UnimplementedService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -621,6 +643,14 @@ var UnimplementedService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "grpc/testing/test.proto",
+}
+
+const (
+	UnimplementedService_UnimplementedCall_FullMethod = "/grpc.testing.UnimplementedService/UnimplementedCall"
+)
+
+var UnimplementedService_FullMethods = []string{
+	UnimplementedService_UnimplementedCall_FullMethod,
 }
 
 // ReconnectServiceClient is the client API for ReconnectService service.
@@ -743,6 +773,16 @@ var ReconnectService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "grpc/testing/test.proto",
+}
+
+const (
+	ReconnectService_Start_FullMethod = "/grpc.testing.ReconnectService/Start"
+	ReconnectService_Stop_FullMethod  = "/grpc.testing.ReconnectService/Stop"
+)
+
+var ReconnectService_FullMethods = []string{
+	ReconnectService_Start_FullMethod,
+	ReconnectService_Stop_FullMethod,
 }
 
 // LoadBalancerStatsServiceClient is the client API for LoadBalancerStatsService service.
@@ -872,6 +912,16 @@ var LoadBalancerStatsService_ServiceDesc = grpc.ServiceDesc{
 	Metadata: "grpc/testing/test.proto",
 }
 
+const (
+	LoadBalancerStatsService_GetClientStats_FullMethod            = "/grpc.testing.LoadBalancerStatsService/GetClientStats"
+	LoadBalancerStatsService_GetClientAccumulatedStats_FullMethod = "/grpc.testing.LoadBalancerStatsService/GetClientAccumulatedStats"
+)
+
+var LoadBalancerStatsService_FullMethods = []string{
+	LoadBalancerStatsService_GetClientStats_FullMethod,
+	LoadBalancerStatsService_GetClientAccumulatedStats_FullMethod,
+}
+
 // XdsUpdateHealthServiceClient is the client API for XdsUpdateHealthService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -995,6 +1045,16 @@ var XdsUpdateHealthService_ServiceDesc = grpc.ServiceDesc{
 	Metadata: "grpc/testing/test.proto",
 }
 
+const (
+	XdsUpdateHealthService_SetServing_FullMethod    = "/grpc.testing.XdsUpdateHealthService/SetServing"
+	XdsUpdateHealthService_SetNotServing_FullMethod = "/grpc.testing.XdsUpdateHealthService/SetNotServing"
+)
+
+var XdsUpdateHealthService_FullMethods = []string{
+	XdsUpdateHealthService_SetServing_FullMethod,
+	XdsUpdateHealthService_SetNotServing_FullMethod,
+}
+
 // XdsUpdateClientConfigureServiceClient is the client API for XdsUpdateClientConfigureService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -1082,4 +1142,12 @@ var XdsUpdateClientConfigureService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "grpc/testing/test.proto",
+}
+
+const (
+	XdsUpdateClientConfigureService_Configure_FullMethod = "/grpc.testing.XdsUpdateClientConfigureService/Configure"
+)
+
+var XdsUpdateClientConfigureService_FullMethods = []string{
+	XdsUpdateClientConfigureService_Configure_FullMethod,
 }

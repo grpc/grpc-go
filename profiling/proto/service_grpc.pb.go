@@ -157,3 +157,13 @@ var Profiling_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "profiling/proto/service.proto",
 }
+
+const (
+	Profiling_Enable_FullMethod         = "/grpc.go.profiling.v1alpha.Profiling/Enable"
+	Profiling_GetStreamStats_FullMethod = "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats"
+)
+
+var Profiling_FullMethods = []string{
+	Profiling_Enable_FullMethod,
+	Profiling_GetStreamStats_FullMethod,
+}
