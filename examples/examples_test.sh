@@ -122,7 +122,7 @@ declare -A EXPECTED_CLIENT_OUTPUT=(
     ["helloworld"]="Greeting: Hello world"
     ["route_guide"]="Feature: name: \"\", point:(416851321, -742674555)"
     ["features/authentication"]="UnaryEcho:  hello world"
-    ["features/authorization"]="UnaryEcho:  hello world"
+    ["features/authz"]="UnaryEcho:  hello world"
     ["features/cancellation"]="cancelling context"
     ["features/compression"]="UnaryEcho call returned \"compress\", <nil>"
     ["features/deadline"]="wanted = DeadlineExceeded, got = DeadlineExceeded"
