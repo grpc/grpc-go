@@ -19,9 +19,9 @@
 package encoding
 
 import (
-	"reflect"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc/internal/grpcutil"
 )
 
@@ -49,7 +49,7 @@ func TestDuplicateCompressorRegister(t *testing.T) {
 	}
 
 	wantNames := []string{"mock-compressor"}
-	if !reflect.DeepEqual(wantNames, grpcutil.RegisteredCompressorNames) {
+	if !cmp.Equal(wantNames, grpcutil.RegisteredCompressorNames) {
 		t.Fatalf("Unexpected compressor names, got: %+v, want:%+v", grpcutil.RegisteredCompressorNames, wantNames)
 	}
 }
