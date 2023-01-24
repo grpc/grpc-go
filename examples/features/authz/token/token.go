@@ -23,11 +23,15 @@ import (
 	"encoding/json"
 )
 
+// Token is exchanges between client and server for user authorization against a policy
 type Token struct {
+	// Secret is used by the server to authenticate the user
+	Secret string `json:"secret"`
+	// Username is used by the server to assign roles in the metadata for authorization
 	Username string `json:"username"`
-	Secret   string `json:"secret"`
 }
 
+// Encode returns a base64 string of the token json representation
 func (t *Token) Encode() (string, error) {
 	barr, err := json.Marshal(t)
 	if err != nil {
@@ -37,6 +41,7 @@ func (t *Token) Encode() (string, error) {
 	return s, nil
 }
 
+// Decode sets a token from a base64 encoded string of the token json representation
 func (t *Token) Decode(s string) error {
 	barr, err := base64.StdEncoding.DecodeString(s)
 	if err != nil {
