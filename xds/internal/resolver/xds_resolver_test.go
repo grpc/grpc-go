@@ -1089,7 +1089,9 @@ func (s) TestResolverWRR(t *testing.T) {
 // TestResolverMaxStreamDuration tests the case where the resolver receives max
 // stream duration as part of the listener and route configuration resources.
 // The test verifies that the RPC timeout returned by the config selector
-// matches the value specified in the config.
+// matches expectations. A non-nil max stream duration (this includes an
+// explicit zero value) in a matching route overrides the value specified in the
+// listener resource.
 func (s) TestResolverMaxStreamDuration(t *testing.T) {
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
