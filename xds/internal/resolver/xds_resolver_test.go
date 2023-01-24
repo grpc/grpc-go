@@ -837,9 +837,7 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	  ] 
 }`)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
-		t.Errorf("Received unexpected service config")
-		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
-		t.Fatal("want: ", cmp.Diff(nil, wantSCParsed.Config))
+		t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, rState.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
 	}
 
 	cs := iresolver.GetConfigSelector(rState)
@@ -870,9 +868,7 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 		t.Fatalf("Received error in service config: %v", rState.ServiceConfig.Err)
 	}
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
-		t.Errorf("Received unexpected service config")
-		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
-		t.Fatal("want: ", cmp.Diff(nil, wantSCParsed.Config))
+		t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, rState.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
 	}
 	cs = iresolver.GetConfigSelector(rState)
 	if cs == nil {
@@ -899,9 +895,7 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	}
 	wantSCParsed = internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(`{}`)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
-		t.Errorf("Received unexpected service config")
-		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
-		t.Fatal("want: ", cmp.Diff(nil, wantSCParsed.Config))
+		t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, rState.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
 	}
 }
 
@@ -1323,7 +1317,7 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
 							Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
 								{
-									Name:   "OLD-CLUSTER",
+									Name:   "old-cluster",
 									Weight: &wrapperspb.UInt32Value{Value: 100},
 								},
 							},
@@ -1355,11 +1349,11 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		{
 		  "xds_cluster_manager_experimental": {
 			"children": {
-			  "cluster:OLD-CLUSTER": {
+			  "cluster:old-cluster": {
 				"childPolicy": [
 				  {
 					"cds_experimental": {
-					  "cluster": "OLD-CLUSTER"
+					  "cluster": "old-cluster"
 					} 
 				  } 
 				] 
@@ -1370,9 +1364,7 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	  ] 
 }`)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
-		t.Errorf("Received unexpected service config")
-		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
-		t.Fatal("want: ", cmp.Diff(nil, wantSCParsed.Config))
+		t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, rState.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
 	}
 
 	// Make an RPC, but do not commit it yet.
@@ -1384,10 +1376,12 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
-	if cluster := clustermanager.GetPickedClusterForTesting(resOld.Context); cluster != "cluster:OLD-CLUSTER" {
-		t.Fatalf("Picked cluster is %q, want %q", cluster, "cluster:OLD-CLUSTER")
+	if cluster := clustermanager.GetPickedClusterForTesting(resOld.Context); cluster != "cluster:old-cluster" {
+		t.Fatalf("Picked cluster is %q, want %q", cluster, "cluster:old-cluster")
 	}
-	// delay resOld.OnCommitted()
+
+	// Delay resOld.OnCommitted(). As long as there are pending RPCs to removed
+	// clusters, they still appear in the service config.
 
 	// Update the route configuration resource on the management server to
 	// return a new cluster.
@@ -1404,7 +1398,7 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
 							Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
 								{
-									Name:   "NEW-CLUSTER",
+									Name:   "new-cluster",
 									Weight: &wrapperspb.UInt32Value{Value: 100},
 								},
 							},
@@ -1436,20 +1430,20 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		{
 		  "xds_cluster_manager_experimental": {
 			"children": {
-			  "cluster:OLD-CLUSTER": {
+			  "cluster:old-cluster": {
 				"childPolicy": [
 				  {
 					"cds_experimental": {
-					  "cluster": "OLD-CLUSTER"
+					  "cluster": "old-cluster"
 					} 
 				  } 
 				] 
 			  }, 
-			  "cluster:NEW-CLUSTER": {
+			  "cluster:new-cluster": {
 				"childPolicy": [
 				  {
 					"cds_experimental": {
-					  "cluster": "NEW-CLUSTER"
+					  "cluster": "new-cluster"
 					} 
 				  } 
 				] 
@@ -1460,9 +1454,7 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	  ] 
 }`)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
-		t.Errorf("Received unexpected service config")
-		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
-		t.Fatal("want: ", cmp.Diff(nil, wantSCParsed.Config))
+		t.Fatalf("Got service config:\n%s\nWant service config:\n%s", cmp.Diff(nil, rState.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
 	}
 
 	cs = iresolver.GetConfigSelector(rState)
@@ -1473,12 +1465,13 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cs.SelectConfig(): %v", err)
 	}
-	if cluster := clustermanager.GetPickedClusterForTesting(resNew.Context); cluster != "cluster:NEW-CLUSTER" {
-		t.Fatalf("Picked cluster is %q, want %q", cluster, "cluster:NEW-CLUSTER")
+	if cluster := clustermanager.GetPickedClusterForTesting(resNew.Context); cluster != "cluster:new-cluster" {
+		t.Fatalf("Picked cluster is %q, want %q", cluster, "cluster:new-cluster")
 	}
 
 	// Invoke OnCommitted on the old RPC; should lead to a service config update
-	// that deletes the old cluster.
+	// that deletes the old cluster, as the old cluster no longer has any
+	// pending RPCs.
 	resOld.OnCommitted()
 
 	val, err = tcc.stateCh.Receive(ctx)
@@ -1495,11 +1488,11 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 		{
 		  "xds_cluster_manager_experimental": {
 			"children": {
-			  "cluster:NEW-CLUSTER": {
+			  "cluster:new-cluster": {
 				"childPolicy": [
 				  {
 					"cds_experimental": {
-					  "cluster": "NEW-CLUSTER"
+					  "cluster": "new-cluster"
 					} 
 				  } 
 				] 
@@ -1510,15 +1503,13 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	  ] 
 }`)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
-		t.Errorf("Received unexpected service config")
-		t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
-		t.Fatal("want: ", cmp.Diff(nil, wantSCParsed.Config))
+		t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, rState.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
 	}
 }
 
 // TestResolverMultipleLDSUpdates tests the case where two LDS updates with the
 // same RDS name to watch are received without an RDS in between. Those LDS
-// updates shouldn't trigger service config update.
+// updates shouldn't trigger a service config update.
 func (s) TestResolverMultipleLDSUpdates(t *testing.T) {
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
@@ -1544,7 +1535,7 @@ func (s) TestResolverMultipleLDSUpdates(t *testing.T) {
 	tcc, rClose := buildResolverForTarget(t, resolver.Target{URL: *testutils.MustParseURL("xds:///" + serviceName)})
 	defer rClose()
 
-	// Configure the management server with a listener resource, but not route
+	// Configure the management server with a listener resource, but no route
 	// configuration resource.
 	ldsName := serviceName
 	rdsName := "route-" + serviceName
@@ -1564,7 +1555,7 @@ func (s) TestResolverMultipleLDSUpdates(t *testing.T) {
 	defer sCancel()
 	gotState, err := tcc.stateCh.Receive(sCtx)
 	if err == nil {
-		t.Fatalf("Received update fro resolver %v when none expected", gotState)
+		t.Fatalf("Received update from resolver %v when none expected", gotState)
 	}
 
 	// Configure the management server with a listener resource that points to
@@ -1607,7 +1598,7 @@ func (s) TestResolverMultipleLDSUpdates(t *testing.T) {
 	defer sCancel()
 	gotState, err = tcc.stateCh.Receive(sCtx)
 	if err == nil {
-		t.Fatalf("Received update fro resolver %v when none expected", gotState)
+		t.Fatalf("Received update from resolver %v when none expected", gotState)
 	}
 }
 
