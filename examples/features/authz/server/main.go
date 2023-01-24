@@ -160,14 +160,6 @@ func (w *wrappedStream) Context() context.Context {
 	return w.ctx
 }
 
-func (w *wrappedStream) RecvMsg(m interface{}) error {
-	return w.ServerStream.RecvMsg(m)
-}
-
-func (w *wrappedStream) SendMsg(m interface{}) error {
-	return w.ServerStream.SendMsg(m)
-}
-
 func newWrappedStream(ctx context.Context, s grpc.ServerStream) grpc.ServerStream {
 	return &wrappedStream{s, ctx}
 }

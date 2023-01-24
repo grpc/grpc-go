@@ -38,22 +38,23 @@ import (
 
 var addr = flag.String("addr", "localhost:50051", "the address to connect to")
 
-func callUnaryEcho(ctx context.Context, client ecpb.EchoClient, message string) {
-	resp, err := client.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message})
+func callUnaryEcho(ctx context.Context, client ecpb.EchoClient, message string, opts ...grpc.CallOption) error {
+	resp, err := client.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message}, opts...)
 	if err != nil {
-		log.Fatalf("UnaryEcho RPC failed: %v", err)
+		return fmt.Errorf("UnaryEcho RPC failed: %w", err)
 	}
 	fmt.Println("UnaryEcho: ", resp.Message)
+	return nil
 }
 
-func callBidiStreamingEcho(ctx context.Context, client ecpb.EchoClient) {
-	c, err := client.BidirectionalStreamingEcho(ctx)
+func callBidiStreamingEcho(ctx context.Context, client ecpb.EchoClient, opts ...grpc.CallOption) error {
+	c, err := client.BidirectionalStreamingEcho(ctx, opts...)
 	if err != nil {
-		return
+		return fmt.Errorf("BidirectionalStreamingEcho RPC failed: %w", err)
 	}
 	for i := 0; i < 5; i++ {
 		if err := c.Send(&ecpb.EchoRequest{Message: fmt.Sprintf("Request %d", i+1)}); err != nil {
-			log.Fatalf("Sending StreamingEcho message: %v", err)
+			return fmt.Errorf("sending StreamingEcho message: %w", err)
 		}
 	}
 	c.CloseSend()
@@ -63,10 +64,20 @@ func callBidiStreamingEcho(ctx context.Context, client ecpb.EchoClient) {
 			break
 		}
 		if err != nil {
-			log.Fatalf("Receiving StreamingEcho message: %v", err)
+			return fmt.Errorf("receiving StreamingEcho message: %w", err)
 		}
 		fmt.Println("BidiStreaming Echo: ", resp.Message)
 	}
+	return nil
+}
+
+func newCredentialsCallOption(t token.Token) grpc.CallOption {
+	tokenBase64, err := t.Encode()
+	if err != nil {
+		log.Fatalf("encoding token: %v", err)
+	}
+	oath2Token := oauth2.Token{AccessToken: tokenBase64}
+	return grpc.PerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&oath2Token)})
 }
 
 func main() {
@@ -77,21 +88,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load credentials: %v", err)
 	}
-
-	// Set up token
-	token := token.Token{
-		Username: "super-user",
-		Secret:   "super-secret",
-	}
-	tokenBase64, err := token.Encode()
-	if err != nil {
-		log.Fatalf("encoding token: %v", err)
-	}
-	oath2Token := oauth2.Token{AccessToken: tokenBase64}
-	credentialsCallOption := grpc.PerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&oath2Token)})
-
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(creds), grpc.WithDefaultCallOptions(credentialsCallOption))
+	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(creds))
 	if err != nil {
 		log.Fatalf("grpc.Dial(%q): %v", *addr, err)
 	}
@@ -101,6 +99,18 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	client := ecpb.NewEchoClient(conn)
-	callUnaryEcho(ctx, client, "hello world")
-	callBidiStreamingEcho(ctx, client)
+	authorisedUserTokenCallOption := newCredentialsCallOption(token.Token{Username: "super-user", Secret: "super-secret"})
+	if err := callUnaryEcho(ctx, client, "hello world", authorisedUserTokenCallOption); err != nil {
+		log.Fatalf("callUnaryEcho failed with authorised user token: %v", err)
+	}
+	if err := callBidiStreamingEcho(ctx, client, authorisedUserTokenCallOption); err != nil {
+		log.Fatalf("callBidiStreamingEcho failed with authorised user token: %v", err)
+	}
+	unauthorisedUserTokenCallOption := newCredentialsCallOption(token.Token{Username: "bad-actor", Secret: "super-secret"})
+	if err := callUnaryEcho(ctx, client, "hello world", unauthorisedUserTokenCallOption); err != nil {
+		log.Printf("callUnaryEcho failed as expected with unauthorised user token: %v", err)
+	}
+	if err := callBidiStreamingEcho(ctx, client, unauthorisedUserTokenCallOption); err != nil {
+		log.Printf("callBidiStreamingEcho failed as expected with unauthorised user token: %v", err)
+	}
 }
