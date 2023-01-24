@@ -296,7 +296,14 @@ func DefaultRouteConfig(routeName, ldsTarget, clusterName string) *v3routepb.Rou
 			Routes: []*v3routepb.Route{{
 				Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
 				Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-					ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
+					ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
+						Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
+							{
+								Name:   clusterName,
+								Weight: &wrapperspb.UInt32Value{Value: 100},
+							},
+						},
+					}},
 				}},
 			}},
 		}},

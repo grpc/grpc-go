@@ -96,7 +96,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 						{
 							Prefix:           newStringP("/"),
 							ActionType:       xdsresource.RouteActionRoute,
-							WeightedClusters: map[string]xdsresource.WeightedCluster{cdsName: {Weight: 1}},
+							WeightedClusters: map[string]xdsresource.WeightedCluster{cdsName: {Weight: 100}},
 						},
 					},
 				},
@@ -112,7 +112,7 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 						{
 							Prefix:           newStringP("/"),
 							ActionType:       xdsresource.RouteActionRoute,
-							WeightedClusters: map[string]xdsresource.WeightedCluster{cdsName: {Weight: 1}},
+							WeightedClusters: map[string]xdsresource.WeightedCluster{cdsName: {Weight: 100}},
 						},
 					},
 				},
