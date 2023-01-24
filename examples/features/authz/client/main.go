@@ -39,43 +39,6 @@ var addr = flag.String("addr", "localhost:50051", "the address to connect to")
 
 const fallbackToken = "some-secret-token"
 
-// logger is to mock a sophisticated logging system. To simplify the example, we just print out the content.
-func logger(format string, a ...interface{}) {
-	fmt.Printf("LOG:\t"+format+"\n", a...)
-}
-
-// unaryInterceptor is an example unary interceptor.
-func unaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	token := oauth2.Token{AccessToken: fallbackToken}
-	opts = append(opts, grpc.PerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&token)}))
-	start := time.Now()
-	err := invoker(ctx, method, req, reply, cc, opts...)
-	end := time.Now()
-	logger("RPC: %s, start time: %s, end time: %s, err: %v", method, start.Format("Basic"), end.Format(time.RFC3339), err)
-	return err
-}
-
-// wrappedStream  wraps around the embedded grpc.ClientStream, and intercepts the RecvMsg and
-// SendMsg method call.
-type wrappedStream struct {
-	grpc.ClientStream
-}
-
-func newWrappedStream(s grpc.ClientStream) grpc.ClientStream {
-	return &wrappedStream{s}
-}
-
-// streamInterceptor is an example stream interceptor.
-func streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	token := oauth2.Token{AccessToken: fallbackToken}
-	opts = append(opts, grpc.PerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&token)}))
-	s, err := streamer(ctx, desc, cc, method, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return newWrappedStream(s), nil
-}
-
 func callUnaryEcho(ctx context.Context, client ecpb.EchoClient, message string) {
 	resp, err := client.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message})
 	if err != nil {
@@ -85,7 +48,6 @@ func callUnaryEcho(ctx context.Context, client ecpb.EchoClient, message string) 
 }
 
 func callBidiStreamingEcho(ctx context.Context, client ecpb.EchoClient) {
-
 	c, err := client.BidirectionalStreamingEcho(ctx)
 	if err != nil {
 		return
@@ -117,8 +79,12 @@ func main() {
 		log.Fatalf("failed to load credentials: %v", err)
 	}
 
+	// Set up token
+	token := oauth2.Token{AccessToken: fallbackToken}
+	credentialsCallOption := grpc.PerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&token)})
+
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(creds), grpc.WithUnaryInterceptor(unaryInterceptor), grpc.WithStreamInterceptor(streamInterceptor))
+	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(creds), grpc.WithDefaultCallOptions(credentialsCallOption))
 	if err != nil {
 		log.Fatalf("grpc.Dial(%q): %v", *addr, err)
 	}
