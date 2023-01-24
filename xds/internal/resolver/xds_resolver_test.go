@@ -778,27 +778,9 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	// Configure the management server with a good listener and route
 	// configuration resource.
 	resources := e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
-		Routes: []*v3routepb.RouteConfiguration{{
-			Name: rdsName,
-			VirtualHosts: []*v3routepb.VirtualHost{{
-				Domains: []string{ldsName},
-				Routes: []*v3routepb.Route{{
-					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
-					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
-							Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-								{
-									Name:   "test-cluster-1",
-									Weight: &wrapperspb.UInt32Value{Value: 100},
-								},
-							},
-						}},
-					}},
-				}},
-			}},
-		}},
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, ldsName, "test-cluster-1")},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1305,27 +1287,9 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	ldsName := serviceName
 	rdsName := "route-" + serviceName
 	resources := e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
-		Routes: []*v3routepb.RouteConfiguration{{
-			Name: rdsName,
-			VirtualHosts: []*v3routepb.VirtualHost{{
-				Domains: []string{ldsName},
-				Routes: []*v3routepb.Route{{
-					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
-					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
-							Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-								{
-									Name:   "old-cluster",
-									Weight: &wrapperspb.UInt32Value{Value: 100},
-								},
-							},
-						}},
-					}},
-				}},
-			}},
-		}},
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, ldsName, "old-cluster")},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1386,27 +1350,9 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	// Update the route configuration resource on the management server to
 	// return a new cluster.
 	resources = e2e.UpdateOptions{
-		NodeID:    nodeID,
-		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
-		Routes: []*v3routepb.RouteConfiguration{{
-			Name: rdsName,
-			VirtualHosts: []*v3routepb.VirtualHost{{
-				Domains: []string{ldsName},
-				Routes: []*v3routepb.Route{{
-					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
-					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
-							Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-								{
-									Name:   "new-cluster",
-									Weight: &wrapperspb.UInt32Value{Value: 100},
-								},
-							},
-						}},
-					}},
-				}},
-			}},
-		}},
+		NodeID:         nodeID,
+		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
+		Routes:         []*v3routepb.RouteConfiguration{e2e.DefaultRouteConfig(rdsName, ldsName, "new-cluster")},
 		SkipValidation: true,
 	}
 	if err := mgmtServer.Update(ctx, resources); err != nil {
