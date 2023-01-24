@@ -5588,9 +5588,9 @@ func testUnarySetSendCompressorSuccess(t *testing.T, resCompressor string, wantC
 		t.Fatalf("Unexpected unary call error, got: %v, want: nil", err)
 	}
 
-	compressorInvokes := atomic.LoadInt32(&wc.compressInvokes)
-	if compressorInvokes != wantCompressInvokes {
-		t.Fatalf("Unexpected number of Compress calls, got:%d, want: %d", compressorInvokes, wantCompressInvokes)
+	compressInvokes := atomic.LoadInt32(&wc.compressInvokes)
+	if compressInvokes != wantCompressInvokes {
+		t.Fatalf("Unexpected compress invokes, got:%d, want: %d", compressInvokes, wantCompressInvokes)
 	}
 }
 
@@ -5630,9 +5630,9 @@ func testStreamSetSendCompressorSuccess(t *testing.T, resCompressor string, want
 		t.Fatalf("Unexpected full duplex recv error, got: %v, want: nil", err)
 	}
 
-	compressorInvokes := atomic.LoadInt32(&wc.compressInvokes)
-	if compressorInvokes != wantCompressInvokes {
-		t.Fatalf("Unexpected number of Compress calls, got:%d, want: %d", compressorInvokes, wantCompressInvokes)
+	compressInvokes := atomic.LoadInt32(&wc.compressInvokes)
+	if compressInvokes != wantCompressInvokes {
+		t.Fatalf("Unexpected compress invokes, got:%d, want: %d", compressInvokes, wantCompressInvokes)
 	}
 }
 
