@@ -32,12 +32,11 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/examples/data"
+	"google.golang.org/grpc/examples/features/authz/token"
 	ecpb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 var addr = flag.String("addr", "localhost:50051", "the address to connect to")
-
-const fallbackToken = "some-secret-token"
 
 func callUnaryEcho(ctx context.Context, client ecpb.EchoClient, message string) {
 	resp, err := client.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message})
@@ -80,8 +79,16 @@ func main() {
 	}
 
 	// Set up token
-	token := oauth2.Token{AccessToken: fallbackToken}
-	credentialsCallOption := grpc.PerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&token)})
+	token := token.Token{
+		Username: "super-user",
+		Secret:   "super-secret",
+	}
+	tokenBase64, err := token.Encode()
+	if err != nil {
+		log.Fatalf("encoding token: %v", err)
+	}
+	oath2Token := oauth2.Token{AccessToken: tokenBase64}
+	credentialsCallOption := grpc.PerRPCCredentials(oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(&oath2Token)})
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(*addr, grpc.WithTransportCredentials(creds), grpc.WithDefaultCallOptions(credentialsCallOption))

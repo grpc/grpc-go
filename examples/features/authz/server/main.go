@@ -27,7 +27,6 @@ import (
 	"log"
 	"net"
 	"strings"
-	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/authz"
@@ -37,13 +36,12 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	"google.golang.org/grpc/examples/features/authz/token"
 	pb "google.golang.org/grpc/examples/features/proto/echo"
 )
 
 const (
 	unaryEchoWriterRole      = "UNARY_ECHO:W"
-	streamEchoReaderRole     = "STREAM_ECHO:R"
-	streamEchoWriterRole     = "STREAM_ECHO:W"
 	streamEchoReadWriterRole = "STREAM_ECHO:RW"
 	authzPolicy              = `
 	{
@@ -56,30 +54,6 @@ const (
 					"headers": [
 						{
 							"key": "UNARY_ECHO:W",
-							"values": ["true"]
-						}
-					]
-				}
-			},
-			{
-				"name": "allow_ClientStreamingEcho",
-				"request": {
-					"paths": ["/grpc.examples.echo.Echo/ClientStreamingEcho"],
-					"headers": [
-						{
-							"key": "STREAM_ECHO:W",
-							"values": ["true"]
-						}
-					]
-				}
-			},
-			{
-				"name": "allow_ServerStreamingEcho",
-				"request": {
-					"paths": ["/grpc.examples.echo.Echo/ServerStreamingEcho"],
-					"headers": [
-						{
-							"key": "STREAM_ECHO:R",
 							"values": ["true"]
 						}
 					]
@@ -108,25 +82,15 @@ var (
 
 	errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
 	errInvalidToken    = status.Errorf(codes.Unauthenticated, "invalid token")
-
-	mockedMetadata = newMockedMetadata()
 )
 
-func newMockedMetadata() metadata.MD {
+func newContextWithRoles(ctx context.Context, username string) context.Context {
 	md := metadata.MD{}
-	roles := []string{
-		unaryEchoWriterRole,
-		streamEchoReadWriterRole,
+	if username == "super-user" {
+		md.Set(unaryEchoWriterRole, "true")
+		md.Set(streamEchoReadWriterRole, "true")
 	}
-	for _, role := range roles {
-		md.Set(role, "true")
-	}
-	return md
-}
-
-// logger is to mock a sophisticated logging system. To simplify the example, we just print out the content.
-func logger(format string, a ...interface{}) {
-	fmt.Printf("LOG:\t"+format+"\n", a...)
+	return metadata.NewIncomingContext(ctx, md)
 }
 
 type server struct {
@@ -154,15 +118,23 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 }
 
 // valid validates the authorization.
-func valid(authorization []string) bool {
+func valid(authorization []string) (username string, valid bool) {
 	if len(authorization) < 1 {
-		return false
+		return "", false
 	}
-	token := strings.TrimPrefix(authorization[0], "Bearer ")
+	tokenBase64 := strings.TrimPrefix(authorization[0], "Bearer ")
 	// Perform the token validation here. For the sake of this example, the code
 	// here forgoes any of the usual OAuth2 token validation and instead checks
 	// for a token matching an arbitrary string.
-	return token == "some-secret-token"
+	var token token.Token
+	err := token.Decode(tokenBase64)
+	if err != nil {
+		return "", false
+	}
+	if token.Secret != "super-secret" {
+		return "", false
+	}
+	return token.Username, true
 }
 
 func authUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -171,18 +143,14 @@ func authUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.Unary
 	if !ok {
 		return nil, errMissingMetadata
 	}
-	if !valid(md["authorization"]) {
+	username, valid := valid(md["authorization"])
+	if !valid {
 		return nil, errInvalidToken
 	}
-	m, err := handler(ctx, req)
-	if err != nil {
-		logger("RPC failed with error %v", err)
-	}
-	return m, err
+	return handler(newContextWithRoles(ctx, username), req)
 }
 
-// wrappedStream wraps around the embedded grpc.ServerStream, and intercepts the RecvMsg and
-// SendMsg method call.
+// wrappedStream wraps around the embedded grpc.ServerStream, used to set the context
 type wrappedStream struct {
 	grpc.ServerStream
 	ctx context.Context
@@ -193,12 +161,10 @@ func (w *wrappedStream) Context() context.Context {
 }
 
 func (w *wrappedStream) RecvMsg(m interface{}) error {
-	logger("Receive a message (Type: %T) at %s", m, time.Now().Format(time.RFC3339))
 	return w.ServerStream.RecvMsg(m)
 }
 
 func (w *wrappedStream) SendMsg(m interface{}) error {
-	logger("Send a message (Type: %T) at %v", m, time.Now().Format(time.RFC3339))
 	return w.ServerStream.SendMsg(m)
 }
 
@@ -212,27 +178,11 @@ func authStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.Str
 	if !ok {
 		return errMissingMetadata
 	}
-	if !valid(md["authorization"]) {
+	username, valid := valid(md["authorization"])
+	if !valid {
 		return errInvalidToken
 	}
-
-	err := handler(srv, newWrappedStream(ss.Context(), ss))
-	if err != nil {
-		logger("RPC failed with error %v", err)
-	}
-	return err
-}
-
-func injectResourceAccessUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
-	// Assuming authentication was successful in the middleware chain, fetch the subject access, mocked here
-	mdCtx := metadata.NewIncomingContext(ctx, mockedMetadata)
-	return handler(mdCtx, req)
-}
-
-func injectResourceAccessStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	// Assuming authentication was successful in the middleware chain, fetch the subject access, mocked here
-	mdCtx := metadata.NewIncomingContext(ss.Context(), mockedMetadata)
-	return handler(srv, newWrappedStream(mdCtx, ss))
+	return handler(srv, newWrappedStream(newContextWithRoles(ss.Context(), username), ss))
 }
 
 func main() {
@@ -252,8 +202,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("Creating a static authz interceptor: %v", err)
 	}
-	unaryInt := grpc.ChainUnaryInterceptor(authUnaryInterceptor, injectResourceAccessUnaryInterceptor, staticInteceptor.UnaryInterceptor)
-	streamInt := grpc.ChainStreamInterceptor(authStreamInterceptor, injectResourceAccessStreamInterceptor, staticInteceptor.StreamInterceptor)
+	unaryInt := grpc.ChainUnaryInterceptor(authUnaryInterceptor, staticInteceptor.UnaryInterceptor)
+	streamInt := grpc.ChainStreamInterceptor(authStreamInterceptor, staticInteceptor.StreamInterceptor)
 	s := grpc.NewServer(grpc.Creds(creds), unaryInt, streamInt)
 
 	// Register EchoServer on the server.
