@@ -256,7 +256,7 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	if err != nil {
 		return nil, err
 	}
-	cc.authority, err = determineAuthority(cc.parsedTarget.Endpoint, cc.target, cc.dopts)
+	cc.authority, err = determineAuthority(cc.parsedTarget.Endpoint(), cc.target, cc.dopts)
 	if err != nil {
 		return nil, err
 	}
@@ -1587,30 +1587,17 @@ func (cc *ClientConn) parseTargetAndFindResolver() (resolver.Builder, error) {
 }
 
 // parseTarget uses RFC 3986 semantics to parse the given target into a
-// resolver.Target struct containing scheme, authority and endpoint. Query
+// resolver.Target struct containing scheme, authority and url. Query
 // params are stripped from the endpoint.
 func parseTarget(target string) (resolver.Target, error) {
 	u, err := url.Parse(target)
 	if err != nil {
 		return resolver.Target{}, err
 	}
-	// For targets of the form "[scheme]://[authority]/endpoint, the endpoint
-	// value returned from url.Parse() contains a leading "/". Although this is
-	// in accordance with RFC 3986, we do not want to break existing resolver
-	// implementations which expect the endpoint without the leading "/". So, we
-	// end up stripping the leading "/" here. But this will result in an
-	// incorrect parsing for something like "unix:///path/to/socket". Since we
-	// own the "unix" resolver, we can workaround in the unix resolver by using
-	// the `URL` field instead of the `Endpoint` field.
-	endpoint := u.Path
-	if endpoint == "" {
-		endpoint = u.Opaque
-	}
-	endpoint = strings.TrimPrefix(endpoint, "/")
+
 	return resolver.Target{
 		Scheme:    u.Scheme,
 		Authority: u.Host,
-		Endpoint:  endpoint,
 		URL:       *u,
 	}, nil
 }

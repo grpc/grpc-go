@@ -75,7 +75,7 @@ const (
 	defaultTestShortTimeout = 100 * time.Microsecond
 )
 
-var target = resolver.Target{Endpoint: targetStr, URL: url.URL{Scheme: "xds", Path: "/" + targetStr}}
+var target = resolver.Target{URL: *testutils.MustParseURL("xds:///" + targetStr)}
 
 var routerFilter = xdsresource.HTTPFilter{Name: "rtr", Filter: httpfilter.Get(router.TypeURL)}
 var routerFilterList = []xdsresource.HTTPFilter{routerFilter}
@@ -907,14 +907,14 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 				  {
 					"cds_experimental": {
 					  "cluster": "test-cluster-1"
-					} 
-				  } 
-				] 
-			  } 
-			} 
-		  } 
-		} 
-	  ] 
+					}
+				  }
+				]
+			  }
+			}
+		  }
+		}
+	  ]
 }`)
 	if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
 		t.Errorf("Received unexpected service config")
