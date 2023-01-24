@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -322,6 +323,7 @@ func (bml *binaryMethodLogger) Log(c iblog.LogEntryConfig) {
 }
 
 type eventConfig struct {
+	// ServiceMethod has /s/m syntax for fast matching.
 	ServiceMethod map[string]bool
 	Services      map[string]bool
 	MatchAll      bool
@@ -338,6 +340,11 @@ type binaryLogger struct {
 }
 
 func (bl *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
+	// Prevent logging from logging, traces, and metrics API calls.
+	if strings.HasPrefix(methodName, "/google.logging.v2.LoggingServiceV2/") || strings.HasPrefix(methodName, "/google.monitoring.v3.MetricService/") ||
+		strings.HasPrefix(methodName, "/google.devtools.cloudtrace.v2.TraceService/") {
+		return nil
+	}
 	s, _, err := grpcutil.ParseMethod(methodName)
 	if err != nil {
 		logger.Infof("binarylogging: failed to parse %q: %v", methodName, err)
@@ -359,6 +366,17 @@ func (bl *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
 	return nil
 }
 
+// parseMethod splits service and method from the input. It expects format
+// "service/method".
+func parseMethod(method string) (string, string, error) {
+	pos := strings.Index(method, "/")
+	if pos < 0 {
+		// Shouldn't happen, config already validated.
+		return "", "", errors.New("invalid method name: no / found")
+	}
+	return method[:pos], method[pos+1:], nil
+}
+
 func registerClientRPCEvents(clientRPCEvents []clientRPCEvents, exporter loggingExporter) {
 	if len(clientRPCEvents) == 0 {
 		return
@@ -377,7 +395,7 @@ func registerClientRPCEvents(clientRPCEvents []clientRPCEvents, exporter logging
 				eventConfig.MatchAll = true
 				continue
 			}
-			s, m, err := grpcutil.ParseMethod(method)
+			s, m, err := parseMethod(method)
 			if err != nil {
 				continue
 			}
@@ -385,7 +403,7 @@ func registerClientRPCEvents(clientRPCEvents []clientRPCEvents, exporter logging
 				eventConfig.Services[s] = true
 				continue
 			}
-			eventConfig.ServiceMethod[method] = true
+			eventConfig.ServiceMethod["/"+method] = true
 		}
 		eventConfigs = append(eventConfigs, eventConfig)
 	}
@@ -414,15 +432,15 @@ func registerServerRPCEvents(serverRPCEvents []serverRPCEvents, exporter logging
 				eventConfig.MatchAll = true
 				continue
 			}
-			s, m, err := grpcutil.ParseMethod(method)
-			if err != nil { // Shouldn't happen, already validated at this point.
+			s, m, err := parseMethod(method)
+			if err != nil {
 				continue
 			}
 			if m == "*" {
 				eventConfig.Services[s] = true
 				continue
 			}
-			eventConfig.ServiceMethod[method] = true
+			eventConfig.ServiceMethod["/"+method] = true
 		}
 		eventConfigs = append(eventConfigs, eventConfig)
 	}

@@ -54,7 +54,7 @@ var (
 func main() {
 	flag.Parse()
 	if *testName == "" {
-		logger.Fatalf("test name not set")
+		logger.Fatal("-test_name not set")
 	}
 	lis, err := net.Listen("tcp", ":"+*port)
 	if err != nil {

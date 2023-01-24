@@ -175,7 +175,6 @@ func setupWithXDSCreds(t *testing.T) (*fakeclient.Client, *cdsBalancer, *testEDS
 
 	return xdsC, cdsB.(*cdsBalancer), edsB, tcc, func() {
 		newChildBalancer = oldEDSBalancerBuilder
-		xdsC.Close()
 	}
 }
 

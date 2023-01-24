@@ -98,7 +98,7 @@ func unaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServ
 	}
 	m, err := handler(ctx, req)
 	if err != nil {
-		logger("RPC failed with error %v", err)
+		logger("RPC failed with error: %v", err)
 	}
 	return m, err
 }
@@ -135,7 +135,7 @@ func streamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamS
 
 	err := handler(srv, newWrappedStream(ss))
 	if err != nil {
-		logger("RPC failed with error %v", err)
+		logger("RPC failed with error: %v", err)
 	}
 	return err
 }

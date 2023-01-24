@@ -50,7 +50,7 @@ func main() {
 	flag.Parse()
 
 	// Set up the credentials for the connection.
-	perRPC := oauth.NewOauthAccess(fetchToken())
+	perRPC := oauth.TokenSource{TokenSource: oauth2.StaticTokenSource(fetchToken())}
 	creds, err := credentials.NewClientTLSFromFile(data.Path("x509/ca_cert.pem"), "x.test.example.com")
 	if err != nil {
 		log.Fatalf("failed to load credentials: %v", err)
@@ -61,7 +61,7 @@ func main() {
 		// itself.
 		// See: https://godoc.org/google.golang.org/grpc#PerRPCCredentials
 		grpc.WithPerRPCCredentials(perRPC),
-		// oauth.NewOauthAccess requires the configuration of transport
+		// oauth.TokenSource requires the configuration of transport
 		// credentials.
 		grpc.WithTransportCredentials(creds),
 	}

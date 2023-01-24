@@ -65,7 +65,6 @@ import (
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/transport"
-	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/resolver"
@@ -890,6 +889,32 @@ type lazyConn struct {
 	beLazy int32
 }
 
+// possible conn closed errors.
+const possibleConnResetMsg = "connection reset by peer"
+const possibleEOFMsg = "error reading from server: EOF"
+
+// isConnClosedErr checks the error msg for possible conn closed messages. There
+// is a raceyness in the timing of when TCP packets are sent from client to
+// server, and when we tell the server to stop, so we need to check for both of
+// these possible error messages:
+//  1. If the call to ss.S.Stop() causes the server's sockets to close while
+//     there's still in-fight data from the client on the TCP connection, then
+//     the kernel can send an RST back to the client (also see
+//     https://stackoverflow.com/questions/33053507/econnreset-in-send-linux-c).
+//     Note that while this condition is expected to be rare due to the
+//     test httpServer start synchronization, in theory it should be possible,
+//     e.g. if the client sends a BDP ping at the right time.
+//  2. If, for example, the call to ss.S.Stop() happens after the RPC headers
+//     have been received at the server, then the TCP connection can shutdown
+//     gracefully when the server's socket closes.
+//  3. If there is an actual io.EOF received because the client stopped the stream.
+func isConnClosedErr(err error) bool {
+	errContainsConnResetMsg := strings.Contains(err.Error(), possibleConnResetMsg)
+	errContainsEOFMsg := strings.Contains(err.Error(), possibleEOFMsg)
+
+	return errContainsConnResetMsg || errContainsEOFMsg || err == io.EOF
+}
+
 func (l *lazyConn) Write(b []byte) (int, error) {
 	if atomic.LoadInt32(&(l.beLazy)) == 1 {
 		time.Sleep(time.Second)
@@ -998,338 +1023,6 @@ func testServerGracefulStopIdempotent(t *testing.T, e env) {
 	}
 }
 
-func (s) TestServerGoAway(t *testing.T) {
-	for _, e := range listTestEnv() {
-		if e.name == "handler-tls" {
-			continue
-		}
-		testServerGoAway(t, e)
-	}
-}
-
-func testServerGoAway(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.userAgent = testAppUA
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
-
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-	// Finish an RPC to make sure the connection is good.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, <nil>", err)
-	}
-	ch := make(chan struct{})
-	go func() {
-		te.srv.GracefulStop()
-		close(ch)
-	}()
-	// Loop until the server side GoAway signal is propagated to the client.
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); err != nil && status.Code(err) != codes.DeadlineExceeded {
-			cancel()
-			break
-		}
-		cancel()
-	}
-	// A new RPC should fail.
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}); status.Code(err) != codes.Unavailable && status.Code(err) != codes.Internal {
-		t.Fatalf("TestService/EmptyCall(_, _) = _, %v, want _, %s or %s", err, codes.Unavailable, codes.Internal)
-	}
-	<-ch
-	awaitNewConnLogOutput()
-}
-
-func (s) TestServerGoAwayPendingRPC(t *testing.T) {
-	for _, e := range listTestEnv() {
-		if e.name == "handler-tls" {
-			continue
-		}
-		testServerGoAwayPendingRPC(t, e)
-	}
-}
-
-func testServerGoAwayPendingRPC(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.userAgent = testAppUA
-	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
-	)
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
-
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	stream, err := tc.FullDuplexCall(ctx, grpc.WaitForReady(true))
-	if err != nil {
-		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
-	}
-	// Finish an RPC to make sure the connection is good.
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("%v.EmptyCall(_, _, _) = _, %v, want _, <nil>", tc, err)
-	}
-	ch := make(chan struct{})
-	go func() {
-		te.srv.GracefulStop()
-		close(ch)
-	}()
-	// Loop until the server side GoAway signal is propagated to the client.
-	start := time.Now()
-	errored := false
-	for time.Since(start) < time.Second {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		_, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true))
-		cancel()
-		if err != nil {
-			errored = true
-			break
-		}
-	}
-	if !errored {
-		t.Fatalf("GoAway never received by client")
-	}
-	respParam := []*testpb.ResponseParameters{{Size: 1}}
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE,
-		ResponseParameters: respParam,
-		Payload:            payload,
-	}
-	// The existing RPC should be still good to proceed.
-	if err := stream.Send(req); err != nil {
-		t.Fatalf("%v.Send(_) = %v, want <nil>", stream, err)
-	}
-	if _, err := stream.Recv(); err != nil {
-		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
-	}
-	// The RPC will run until canceled.
-	cancel()
-	<-ch
-	awaitNewConnLogOutput()
-}
-
-func (s) TestServerMultipleGoAwayPendingRPC(t *testing.T) {
-	for _, e := range listTestEnv() {
-		if e.name == "handler-tls" {
-			continue
-		}
-		testServerMultipleGoAwayPendingRPC(t, e)
-	}
-}
-
-func testServerMultipleGoAwayPendingRPC(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.userAgent = testAppUA
-	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
-	)
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
-
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-	ctx, cancel := context.WithCancel(context.Background())
-	stream, err := tc.FullDuplexCall(ctx, grpc.WaitForReady(true))
-	if err != nil {
-		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
-	}
-	// Finish an RPC to make sure the connection is good.
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("%v.EmptyCall(_, _, _) = _, %v, want _, <nil>", tc, err)
-	}
-	ch1 := make(chan struct{})
-	go func() {
-		te.srv.GracefulStop()
-		close(ch1)
-	}()
-	ch2 := make(chan struct{})
-	go func() {
-		te.srv.GracefulStop()
-		close(ch2)
-	}()
-	// Loop until the server side GoAway signal is propagated to the client.
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-			cancel()
-			break
-		}
-		cancel()
-	}
-	select {
-	case <-ch1:
-		t.Fatal("GracefulStop() terminated early")
-	case <-ch2:
-		t.Fatal("GracefulStop() terminated early")
-	default:
-	}
-	respParam := []*testpb.ResponseParameters{
-		{
-			Size: 1,
-		},
-	}
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE,
-		ResponseParameters: respParam,
-		Payload:            payload,
-	}
-	// The existing RPC should be still good to proceed.
-	if err := stream.Send(req); err != nil {
-		t.Fatalf("%v.Send(%v) = %v, want <nil>", stream, req, err)
-	}
-	if _, err := stream.Recv(); err != nil {
-		t.Fatalf("%v.Recv() = _, %v, want _, <nil>", stream, err)
-	}
-	if err := stream.CloseSend(); err != nil {
-		t.Fatalf("%v.CloseSend() = %v, want <nil>", stream, err)
-	}
-	<-ch1
-	<-ch2
-	cancel()
-	awaitNewConnLogOutput()
-}
-
-func (s) TestConcurrentClientConnCloseAndServerGoAway(t *testing.T) {
-	for _, e := range listTestEnv() {
-		if e.name == "handler-tls" {
-			continue
-		}
-		testConcurrentClientConnCloseAndServerGoAway(t, e)
-	}
-}
-
-func testConcurrentClientConnCloseAndServerGoAway(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.userAgent = testAppUA
-	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
-	)
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
-
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("%v.EmptyCall(_, _, _) = _, %v, want _, <nil>", tc, err)
-	}
-	ch := make(chan struct{})
-	// Close ClientConn and Server concurrently.
-	go func() {
-		te.srv.GracefulStop()
-		close(ch)
-	}()
-	go func() {
-		cc.Close()
-	}()
-	<-ch
-}
-
-func (s) TestConcurrentServerStopAndGoAway(t *testing.T) {
-	for _, e := range listTestEnv() {
-		if e.name == "handler-tls" {
-			continue
-		}
-		testConcurrentServerStopAndGoAway(t, e)
-	}
-}
-
-func testConcurrentServerStopAndGoAway(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.userAgent = testAppUA
-	te.declareLogNoise(
-		"transport: http2Client.notifyError got notified that the client transport was broken EOF",
-		"grpc: addrConn.transportMonitor exits due to: grpc: the connection is closing",
-		"grpc: addrConn.resetTransport failed to create client transport: connection error",
-	)
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
-
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	stream, err := tc.FullDuplexCall(ctx, grpc.WaitForReady(true))
-	if err != nil {
-		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want <nil>", tc, err)
-	}
-
-	// Finish an RPC to make sure the connection is good.
-	if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-		t.Fatalf("%v.EmptyCall(_, _, _) = _, %v, want _, <nil>", tc, err)
-	}
-
-	ch := make(chan struct{})
-	go func() {
-		te.srv.GracefulStop()
-		close(ch)
-	}()
-	// Loop until the server side GoAway signal is propagated to the client.
-	for {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		if _, err := tc.EmptyCall(ctx, &testpb.Empty{}, grpc.WaitForReady(true)); err != nil {
-			cancel()
-			break
-		}
-		cancel()
-	}
-	// Stop the server and close all the connections.
-	te.srv.Stop()
-	respParam := []*testpb.ResponseParameters{
-		{
-			Size: 1,
-		},
-	}
-	payload, err := newPayload(testpb.PayloadType_COMPRESSABLE, int32(100))
-	if err != nil {
-		t.Fatal(err)
-	}
-	req := &testpb.StreamingOutputCallRequest{
-		ResponseType:       testpb.PayloadType_COMPRESSABLE,
-		ResponseParameters: respParam,
-		Payload:            payload,
-	}
-	sendStart := time.Now()
-	for {
-		if err := stream.Send(req); err == io.EOF {
-			// stream.Send should eventually send io.EOF
-			break
-		} else if err != nil {
-			// Send should never return a transport-level error.
-			t.Fatalf("stream.Send(%v) = %v; want <nil or io.EOF>", req, err)
-		}
-		if time.Since(sendStart) > 2*time.Second {
-			t.Fatalf("stream.Send(_) did not return io.EOF after 2s")
-		}
-		time.Sleep(time.Millisecond)
-	}
-	if _, err := stream.Recv(); err == nil || err == io.EOF {
-		t.Fatalf("%v.Recv() = _, %v, want _, <non-nil, non-EOF>", stream, err)
-	}
-	<-ch
-	awaitNewConnLogOutput()
-}
-
 func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	rpcStartedOnServer := make(chan struct{})
 	rpcDoneOnClient := make(chan struct{})
@@ -1347,18 +1040,7 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	// The precise behavior of this test is subject to raceyness around the timing of when TCP packets
-	// are sent from client to server, and when we tell the server to stop, so we need to account for both
-	// of these possible error messages:
-	// 1) If the call to ss.S.Stop() causes the server's sockets to close while there's still in-fight
-	//    data from the client on the TCP connection, then the kernel can send an RST back to the client (also
-	//    see https://stackoverflow.com/questions/33053507/econnreset-in-send-linux-c). Note that while this
-	//    condition is expected to be rare due to the rpcStartedOnServer synchronization, in theory it should
-	//    be possible, e.g. if the client sends a BDP ping at the right time.
-	// 2) If, for example, the call to ss.S.Stop() happens after the RPC headers have been received at the
-	//    server, then the TCP connection can shutdown gracefully when the server's socket closes.
-	const possibleConnResetMsg = "connection reset by peer"
-	const possibleEOFMsg = "error reading from server: EOF"
+
 	// Start an RPC. Then, while the RPC is still being accepted or handled at the server, abruptly
 	// stop the server, killing the connection. The RPC error message should include details about the specific
 	// connection error that was encountered.
@@ -1371,124 +1053,13 @@ func (s) TestDetailedConnectionCloseErrorPropagatesToRpcError(t *testing.T) {
 	// the RPC has been started on it.
 	<-rpcStartedOnServer
 	ss.S.Stop()
-	if _, err := stream.Recv(); err == nil || (!strings.Contains(err.Error(), possibleConnResetMsg) && !strings.Contains(err.Error(), possibleEOFMsg)) {
+	// The precise behavior of this test is subject to raceyness around the timing
+	// of when TCP packets are sent from client to server, and when we tell the
+	// server to stop, so we need to account for both possible error messages.
+	if _, err := stream.Recv(); err == io.EOF || !isConnClosedErr(err) {
 		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: %q OR %q", stream, err, possibleConnResetMsg, possibleEOFMsg)
 	}
 	close(rpcDoneOnClient)
-}
-
-func (s) TestDetailedGoawayErrorOnGracefulClosePropagatesToRPCError(t *testing.T) {
-	rpcDoneOnClient := make(chan struct{})
-	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			<-rpcDoneOnClient
-			return status.Error(codes.Internal, "arbitrary status")
-		},
-	}
-	sopts := []grpc.ServerOption{
-		grpc.KeepaliveParams(keepalive.ServerParameters{
-			MaxConnectionAge:      time.Millisecond * 100,
-			MaxConnectionAgeGrace: time.Millisecond,
-		}),
-	}
-	if err := ss.Start(sopts); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	stream, err := ss.Client.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("%v.FullDuplexCall = _, %v, want _, <nil>", ss.Client, err)
-	}
-	const expectedErrorMessageSubstring = "received prior goaway: code: NO_ERROR"
-	_, err = stream.Recv()
-	close(rpcDoneOnClient)
-	if err == nil || !strings.Contains(err.Error(), expectedErrorMessageSubstring) {
-		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: %q", stream, err, expectedErrorMessageSubstring)
-	}
-}
-
-func (s) TestDetailedGoawayErrorOnAbruptClosePropagatesToRPCError(t *testing.T) {
-	// set the min keepalive time very low so that this test can take
-	// a reasonable amount of time
-	prev := internal.KeepaliveMinPingTime
-	internal.KeepaliveMinPingTime = time.Millisecond
-	defer func() { internal.KeepaliveMinPingTime = prev }()
-
-	rpcDoneOnClient := make(chan struct{})
-	ss := &stubserver.StubServer{
-		FullDuplexCallF: func(stream testpb.TestService_FullDuplexCallServer) error {
-			<-rpcDoneOnClient
-			return status.Error(codes.Internal, "arbitrary status")
-		},
-	}
-	sopts := []grpc.ServerOption{
-		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
-			MinTime: time.Second * 1000, /* arbitrary, large value */
-		}),
-	}
-	dopts := []grpc.DialOption{
-		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                time.Millisecond,   /* should trigger "too many pings" error quickly */
-			Timeout:             time.Second * 1000, /* arbitrary, large value */
-			PermitWithoutStream: false,
-		}),
-	}
-	if err := ss.Start(sopts, dopts...); err != nil {
-		t.Fatalf("Error starting endpoint server: %v", err)
-	}
-	defer ss.Stop()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	stream, err := ss.Client.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("%v.FullDuplexCall = _, %v, want _, <nil>", ss.Client, err)
-	}
-	const expectedErrorMessageSubstring = `received prior goaway: code: ENHANCE_YOUR_CALM, debug data: "too_many_pings"`
-	_, err = stream.Recv()
-	close(rpcDoneOnClient)
-	if err == nil || !strings.Contains(err.Error(), expectedErrorMessageSubstring) {
-		t.Fatalf("%v.Recv() = _, %v, want _, rpc error containing substring: |%v|", stream, err, expectedErrorMessageSubstring)
-	}
-}
-
-func (s) TestClientConnCloseAfterGoAwayWithActiveStream(t *testing.T) {
-	for _, e := range listTestEnv() {
-		if e.name == "handler-tls" {
-			continue
-		}
-		testClientConnCloseAfterGoAwayWithActiveStream(t, e)
-	}
-}
-
-func testClientConnCloseAfterGoAwayWithActiveStream(t *testing.T, e env) {
-	te := newTest(t, e)
-	te.startServer(&testServer{security: e.security})
-	defer te.tearDown()
-	cc := te.clientConn()
-	tc := testpb.NewTestServiceClient(cc)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	if _, err := tc.FullDuplexCall(ctx); err != nil {
-		t.Fatalf("%v.FullDuplexCall(_) = _, %v, want _, <nil>", tc, err)
-	}
-	done := make(chan struct{})
-	go func() {
-		te.srv.GracefulStop()
-		close(done)
-	}()
-	time.Sleep(50 * time.Millisecond)
-	cc.Close()
-	timeout := time.NewTimer(time.Second)
-	select {
-	case <-done:
-	case <-timeout.C:
-		t.Fatalf("Test timed-out.")
-	}
 }
 
 func (s) TestFailFast(t *testing.T) {
@@ -7445,115 +7016,6 @@ func testLargeTimeout(t *testing.T, e env) {
 	}
 }
 
-// Proxies typically send GO_AWAY followed by connection closure a minute or so later. This
-// test ensures that the connection is re-created after GO_AWAY and not affected by the
-// subsequent (old) connection closure.
-func (s) TestGoAwayThenClose(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-
-	lis1, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Error while listening. Err: %v", err)
-	}
-	s1 := grpc.NewServer()
-	defer s1.Stop()
-	ts := &funcServer{
-		unaryCall: func(ctx context.Context, in *testpb.SimpleRequest) (*testpb.SimpleResponse, error) {
-			return &testpb.SimpleResponse{}, nil
-		},
-		fullDuplexCall: func(stream testpb.TestService_FullDuplexCallServer) error {
-			if err := stream.Send(&testpb.StreamingOutputCallResponse{}); err != nil {
-				t.Errorf("unexpected error from send: %v", err)
-				return err
-			}
-			// Wait forever.
-			_, err := stream.Recv()
-			if err == nil {
-				t.Error("expected to never receive any message")
-			}
-			return err
-		},
-	}
-	testpb.RegisterTestServiceServer(s1, ts)
-	go s1.Serve(lis1)
-
-	conn2Established := grpcsync.NewEvent()
-	lis2, err := listenWithNotifyingListener("tcp", "localhost:0", conn2Established)
-	if err != nil {
-		t.Fatalf("Error while listening. Err: %v", err)
-	}
-	s2 := grpc.NewServer()
-	defer s2.Stop()
-	testpb.RegisterTestServiceServer(s2, ts)
-
-	r := manual.NewBuilderWithScheme("whatever")
-	r.InitialState(resolver.State{Addresses: []resolver.Address{
-		{Addr: lis1.Addr().String()},
-		{Addr: lis2.Addr().String()},
-	}})
-	cc, err := grpc.DialContext(ctx, r.Scheme()+":///", grpc.WithResolvers(r), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Error creating client: %v", err)
-	}
-	defer cc.Close()
-
-	client := testpb.NewTestServiceClient(cc)
-
-	// We make a streaming RPC and do an one-message-round-trip to make sure
-	// it's created on connection 1.
-	//
-	// We use a long-lived RPC because it will cause GracefulStop to send
-	// GO_AWAY, but the connection doesn't get closed until the server stops and
-	// the client receives the error.
-	stream, err := client.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("FullDuplexCall(_) = _, %v; want _, nil", err)
-	}
-	if _, err = stream.Recv(); err != nil {
-		t.Fatalf("unexpected error from first recv: %v", err)
-	}
-
-	go s2.Serve(lis2)
-
-	// Send GO_AWAY to connection 1.
-	go s1.GracefulStop()
-
-	// Wait for the ClientConn to enter IDLE state.
-	state := cc.GetState()
-	for ; state != connectivity.Idle && cc.WaitForStateChange(ctx, state); state = cc.GetState() {
-	}
-	if state != connectivity.Idle {
-		t.Fatalf("timed out waiting for IDLE channel state; last state = %v", state)
-	}
-
-	// Initiate another RPC to create another connection.
-	if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
-		t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
-	}
-
-	// Assert that connection 2 has been established.
-	<-conn2Established.Done()
-
-	// Close the listener for server2 to prevent it from allowing new connections.
-	lis2.Close()
-
-	// Close connection 1.
-	s1.Stop()
-
-	// Wait for client to close.
-	if _, err = stream.Recv(); err == nil {
-		t.Fatal("expected the stream to die, but got a successful Recv")
-	}
-
-	// Do a bunch of RPCs, make sure it stays stable. These should go to connection 2.
-	for i := 0; i < 10; i++ {
-		if _, err := client.UnaryCall(ctx, &testpb.SimpleRequest{}); err != nil {
-			t.Fatalf("UnaryCall(_) = _, %v; want _, nil", err)
-		}
-	}
-}
-
 func listenWithNotifyingListener(network, address string, event *grpcsync.Event) (net.Listener, error) {
 	lis, err := net.Listen(network, address)
 	if err != nil {
@@ -7623,138 +7085,6 @@ func (s) TestRPCWaitsForResolver(t *testing.T) {
 	}
 }
 
-func (s) TestHTTPHeaderFrameErrorHandlingHTTPMode(t *testing.T) {
-	// Non-gRPC content-type fallback path.
-	for httpCode := range transport.HTTPStatusConvTab {
-		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
-			":status", fmt.Sprintf("%d", httpCode),
-			"content-type", "text/html", // non-gRPC content type to switch to HTTP mode.
-			"grpc-status", "1", // Make up a gRPC status error
-			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
-		})
-	}
-
-	// Missing content-type fallback path.
-	for httpCode := range transport.HTTPStatusConvTab {
-		doHTTPHeaderTest(t, transport.HTTPStatusConvTab[int(httpCode)], []string{
-			":status", fmt.Sprintf("%d", httpCode),
-			// Omitting content type to switch to HTTP mode.
-			"grpc-status", "1", // Make up a gRPC status error
-			"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
-		})
-	}
-
-	// Malformed HTTP status when fallback.
-	doHTTPHeaderTest(t, codes.Internal, []string{
-		":status", "abc",
-		// Omitting content type to switch to HTTP mode.
-		"grpc-status", "1", // Make up a gRPC status error
-		"grpc-status-details-bin", "???", // Make up a gRPC field parsing error
-	})
-}
-
-// Testing erroneous ResponseHeader or Trailers-only (delivered in the first HEADERS frame).
-func (s) TestHTTPHeaderFrameErrorHandlingInitialHeader(t *testing.T) {
-	for _, test := range []struct {
-		header  []string
-		errCode codes.Code
-	}{
-		{
-			// missing gRPC status.
-			header: []string{
-				":status", "403",
-				"content-type", "application/grpc",
-			},
-			errCode: codes.PermissionDenied,
-		},
-		{
-			// malformed grpc-status.
-			header: []string{
-				":status", "502",
-				"content-type", "application/grpc",
-				"grpc-status", "abc",
-			},
-			errCode: codes.Internal,
-		},
-		{
-			// Malformed grpc-tags-bin field.
-			header: []string{
-				":status", "502",
-				"content-type", "application/grpc",
-				"grpc-status", "0",
-				"grpc-tags-bin", "???",
-			},
-			errCode: codes.Unavailable,
-		},
-		{
-			// gRPC status error.
-			header: []string{
-				":status", "502",
-				"content-type", "application/grpc",
-				"grpc-status", "3",
-			},
-			errCode: codes.Unavailable,
-		},
-	} {
-		doHTTPHeaderTest(t, test.errCode, test.header)
-	}
-}
-
-// Testing non-Trailers-only Trailers (delivered in second HEADERS frame)
-func (s) TestHTTPHeaderFrameErrorHandlingNormalTrailer(t *testing.T) {
-	for _, test := range []struct {
-		responseHeader []string
-		trailer        []string
-		errCode        codes.Code
-	}{
-		{
-			responseHeader: []string{
-				":status", "200",
-				"content-type", "application/grpc",
-			},
-			trailer: []string{
-				// trailer missing grpc-status
-				":status", "502",
-			},
-			errCode: codes.Unavailable,
-		},
-		{
-			responseHeader: []string{
-				":status", "404",
-				"content-type", "application/grpc",
-			},
-			trailer: []string{
-				// malformed grpc-status-details-bin field
-				"grpc-status", "0",
-				"grpc-status-details-bin", "????",
-			},
-			errCode: codes.Unimplemented,
-		},
-		{
-			responseHeader: []string{
-				":status", "200",
-				"content-type", "application/grpc",
-			},
-			trailer: []string{
-				// malformed grpc-status-details-bin field
-				"grpc-status", "0",
-				"grpc-status-details-bin", "????",
-			},
-			errCode: codes.Internal,
-		},
-	} {
-		doHTTPHeaderTest(t, test.errCode, test.responseHeader, test.trailer)
-	}
-}
-
-func (s) TestHTTPHeaderFrameErrorHandlingMoreThanTwoHeaders(t *testing.T) {
-	header := []string{
-		":status", "200",
-		"content-type", "application/grpc",
-	}
-	doHTTPHeaderTest(t, codes.Internal, header, header, header)
-}
-
 type httpServerResponse struct {
 	headers  [][]string
 	payload  []byte
@@ -7817,14 +7147,14 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 		}
 		writer.Flush() // necessary since client is expecting preface before declaring connection fully setup.
 		var sid uint32
-		// Loop until conn is closed and framer returns io.EOF
+		// Loop until framer returns possible conn closed errors.
 		for requestNum := 0; ; requestNum = (requestNum + 1) % len(s.responses) {
 			// Read frames until a header is received.
 			for {
 				frame, err := framer.ReadFrame()
 				if err != nil {
-					if err != io.EOF {
-						t.Errorf("Error at server-side while reading frame. Err: %v", err)
+					if !isConnClosedErr(err) {
+						t.Errorf("Error at server-side while reading frame. got: %q, want: rpc error containing substring %q OR %q", err, possibleConnResetMsg, possibleEOFMsg)
 					}
 					return
 				}
@@ -7879,34 +7209,6 @@ func (s *httpServer) start(t *testing.T, lis net.Listener) {
 			}
 		}
 	}()
-}
-
-func doHTTPHeaderTest(t *testing.T, errCode codes.Code, headerFields ...[]string) {
-	t.Helper()
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("Failed to listen. Err: %v", err)
-	}
-	defer lis.Close()
-	server := &httpServer{
-		responses: []httpServerResponse{{trailers: headerFields}},
-	}
-	server.start(t, lis)
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("failed to dial due to err: %v", err)
-	}
-	defer cc.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	client := testpb.NewTestServiceClient(cc)
-	stream, err := client.FullDuplexCall(ctx)
-	if err != nil {
-		t.Fatalf("error creating stream due to err: %v", err)
-	}
-	if _, err := stream.Recv(); err == nil || status.Code(err) != errCode {
-		t.Fatalf("stream.Recv() = _, %v, want error code: %v", err, errCode)
-	}
 }
 
 func (s) TestClientCancellationPropagatesUnary(t *testing.T) {
@@ -8453,61 +7755,6 @@ func (s) TestRecvWhileReturningStatus(t *testing.T) {
 	}
 }
 
-// TestGoAwayStreamIDSmallerThanCreatedStreams tests the scenario where a server
-// sends a goaway with a stream id that is smaller than some created streams on
-// the client, while the client is simultaneously creating new streams. This
-// should not induce a deadlock.
-func (s) TestGoAwayStreamIDSmallerThanCreatedStreams(t *testing.T) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatalf("error listening: %v", err)
-	}
-
-	ctCh := testutils.NewChannel()
-	go func() {
-		conn, err := lis.Accept()
-		if err != nil {
-			t.Errorf("error in lis.Accept(): %v", err)
-		}
-		ct := newClientTester(t, conn)
-		ctCh.Send(ct)
-	}()
-
-	cc, err := grpc.Dial(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("error dialing: %v", err)
-	}
-	defer cc.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	val, err := ctCh.Receive(ctx)
-	if err != nil {
-		t.Fatalf("timeout waiting for client transport (should be given after http2 creation)")
-	}
-	ct := val.(*clientTester)
-
-	tc := testpb.NewTestServiceClient(cc)
-	someStreamsCreated := grpcsync.NewEvent()
-	goAwayWritten := grpcsync.NewEvent()
-	go func() {
-		for i := 0; i < 20; i++ {
-			if i == 10 {
-				<-goAwayWritten.Done()
-			}
-			tc.FullDuplexCall(ctx)
-			if i == 4 {
-				someStreamsCreated.Fire()
-			}
-		}
-	}()
-
-	<-someStreamsCreated.Done()
-	ct.writeGoAway(1, http2.ErrCodeNo, []byte{})
-	goAwayWritten.Fire()
-}
-
 type mockBinaryLogger struct {
 	mml *mockMethodLogger
 }
@@ -8590,8 +7837,8 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 		t.Fatalf("unexpected error: %v, expected an EOF error", err)
 	}
 
-	if csbl.mml.events != 9 {
-		t.Fatalf("want 9 client side binary logging events, got %v", csbl.mml.events)
+	if csbl.mml.events != 8 {
+		t.Fatalf("want 8 client side binary logging events, got %v", csbl.mml.events)
 	}
 	if ssbl.mml.events != 8 {
 		t.Fatalf("want 8 server side binary logging events, got %v", ssbl.mml.events)

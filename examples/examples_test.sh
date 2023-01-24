@@ -52,6 +52,7 @@ EXAMPLES=(
     "helloworld"
     "route_guide"
     "features/authentication"
+    "features/cancellation"
     "features/compression"
     "features/deadline"
     "features/encryption/TLS"
@@ -59,8 +60,10 @@ EXAMPLES=(
     "features/interceptor"
     "features/load_balancing"
     "features/metadata"
+    "features/metadata_interceptor"
     "features/multiplex"
     "features/name_resolving"
+    "features/retry"
     "features/unix_abstract"
 )
 
@@ -98,6 +101,7 @@ declare -A EXPECTED_SERVER_OUTPUT=(
     ["helloworld"]="Received: world"
     ["route_guide"]=""
     ["features/authentication"]="server starting on port 50051..."
+    ["features/cancellation"]="server: error receiving from stream: rpc error: code = Canceled desc = context canceled"
     ["features/compression"]="UnaryEcho called with message \"compress\""
     ["features/deadline"]=""
     ["features/encryption/TLS"]=""
@@ -105,8 +109,10 @@ declare -A EXPECTED_SERVER_OUTPUT=(
     ["features/interceptor"]="unary echoing message \"hello world\""
     ["features/load_balancing"]="serving on :50051"
     ["features/metadata"]="message:\"this is examples/metadata\", sending echo"
+    ["features/metadata_interceptor"]="key1 from metadata: "
     ["features/multiplex"]=":50051"
     ["features/name_resolving"]="serving on localhost:50051"
+    ["features/retry"]="request succeeded count: 4"
     ["features/unix_abstract"]="serving on @abstract-unix-socket"
 )
 
@@ -114,6 +120,7 @@ declare -A EXPECTED_CLIENT_OUTPUT=(
     ["helloworld"]="Greeting: Hello world"
     ["route_guide"]="Feature: name: \"\", point:(416851321, -742674555)"
     ["features/authentication"]="UnaryEcho:  hello world"
+    ["features/cancellation"]="cancelling context"
     ["features/compression"]="UnaryEcho call returned \"compress\", <nil>"
     ["features/deadline"]="wanted = DeadlineExceeded, got = DeadlineExceeded"
     ["features/encryption/TLS"]="UnaryEcho:  hello world"
@@ -121,8 +128,10 @@ declare -A EXPECTED_CLIENT_OUTPUT=(
     ["features/interceptor"]="UnaryEcho:  hello world"
     ["features/load_balancing"]="calling helloworld.Greeter/SayHello with pick_first"
     ["features/metadata"]="this is examples/metadata"
+    ["features/metadata_interceptor"]="BidiStreaming Echo:  hello world"
     ["features/multiplex"]="Greeting:  Hello multiplex"
     ["features/name_resolving"]="calling helloworld.Greeter/SayHello to \"example:///resolver.example.grpc.io\""
+    ["features/retry"]="UnaryEcho reply: message:\"Try and Success\""
     ["features/unix_abstract"]="calling echo.Echo/UnaryEcho to unix-abstract:abstract-unix-socket"
 )
 

@@ -140,9 +140,9 @@ func checkRoundRobinRPCs(ctx context.Context, client testpb.TestServiceClient, a
 // Balancer is configured as the top level LB Policy of the channel with a Round
 // Robin child, and connects to three upstreams. Two of the upstreams are healthy and
 // one is unhealthy. The two algorithms should at some point eject the failing
-// upstream, causing RPC's to not be routed to those two upstreams, and only be
+// upstream, causing RPC's to not be routed to that upstream, and only be
 // Round Robined across the two healthy upstreams. Other than the intervals the
-// two unhealthy upstreams are ejected, RPC's should regularly round robin
+// unhealthy upstream is ejected, RPC's should regularly round robin
 // across all three upstreams.
 func (s) TestOutlierDetectionAlgorithmsE2E(t *testing.T) {
 	tests := []struct {

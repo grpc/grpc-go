@@ -55,17 +55,29 @@ func Start(ctx context.Context) error {
 	}
 
 	// Set the project ID if it isn't configured manually.
-	if err := ensureProjectIDInObservabilityConfig(ctx, config); err != nil {
+	if err = ensureProjectIDInObservabilityConfig(ctx, config); err != nil {
 		return err
 	}
 
+	// Cleanup any created resources this function created in case this function
+	// errors.
+	defer func() {
+		if err != nil {
+			End()
+		}
+	}()
+
 	// Enabling tracing and metrics via OpenCensus
-	if err := startOpenCensus(config); err != nil {
+	if err = startOpenCensus(config); err != nil {
 		return fmt.Errorf("failed to instrument OpenCensus: %v", err)
 	}
 
+	if err = startLogging(ctx, config); err != nil {
+		return fmt.Errorf("failed to start logging: %v", err)
+	}
+
 	// Logging is controlled by the config at methods level.
-	return startLogging(ctx, config)
+	return nil
 }
 
 // End is the clean-up API for gRPC Observability plugin. It is expected to be

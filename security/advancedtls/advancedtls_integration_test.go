@@ -23,7 +23,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"sync"
@@ -436,27 +435,27 @@ type tmpCredsFiles struct {
 func createTmpFiles() (*tmpCredsFiles, error) {
 	tmpFiles := &tmpCredsFiles{}
 	var err error
-	tmpFiles.clientCertTmp, err = ioutil.TempFile(os.TempDir(), "pre-")
+	tmpFiles.clientCertTmp, err = os.CreateTemp(os.TempDir(), "pre-")
 	if err != nil {
 		return nil, err
 	}
-	tmpFiles.clientKeyTmp, err = ioutil.TempFile(os.TempDir(), "pre-")
+	tmpFiles.clientKeyTmp, err = os.CreateTemp(os.TempDir(), "pre-")
 	if err != nil {
 		return nil, err
 	}
-	tmpFiles.clientTrustTmp, err = ioutil.TempFile(os.TempDir(), "pre-")
+	tmpFiles.clientTrustTmp, err = os.CreateTemp(os.TempDir(), "pre-")
 	if err != nil {
 		return nil, err
 	}
-	tmpFiles.serverCertTmp, err = ioutil.TempFile(os.TempDir(), "pre-")
+	tmpFiles.serverCertTmp, err = os.CreateTemp(os.TempDir(), "pre-")
 	if err != nil {
 		return nil, err
 	}
-	tmpFiles.serverKeyTmp, err = ioutil.TempFile(os.TempDir(), "pre-")
+	tmpFiles.serverKeyTmp, err = os.CreateTemp(os.TempDir(), "pre-")
 	if err != nil {
 		return nil, err
 	}
-	tmpFiles.serverTrustTmp, err = ioutil.TempFile(os.TempDir(), "pre-")
+	tmpFiles.serverTrustTmp, err = os.CreateTemp(os.TempDir(), "pre-")
 	if err != nil {
 		return nil, err
 	}
@@ -496,11 +495,11 @@ func (tmpFiles *tmpCredsFiles) removeFiles() {
 }
 
 func copyFileContents(sourceFile, destinationFile string) error {
-	input, err := ioutil.ReadFile(sourceFile)
+	input, err := os.ReadFile(sourceFile)
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile(destinationFile, input, 0644)
+	err = os.WriteFile(destinationFile, input, 0644)
 	if err != nil {
 		return err
 	}

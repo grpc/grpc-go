@@ -25,9 +25,9 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net"
+	"os"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -56,7 +56,7 @@ func main() {
 
 	ca := x509.NewCertPool()
 	caFilePath := data.Path("x509/client_ca_cert.pem")
-	caBytes, err := ioutil.ReadFile(caFilePath)
+	caBytes, err := os.ReadFile(caFilePath)
 	if err != nil {
 		log.Fatalf("failed to read ca cert %q: %v", caFilePath, err)
 	}

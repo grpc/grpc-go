@@ -27,6 +27,7 @@ package googledirectpath
 
 import (
 	"fmt"
+	"net/url"
 	"time"
 
 	"google.golang.org/grpc"
@@ -49,6 +50,7 @@ import (
 const (
 	c2pScheme             = "google-c2p"
 	c2pExperimentalScheme = "google-c2p-experimental"
+	c2pAuthority          = "traffic-director-c2p.xds.googleapis.com"
 
 	tdURL          = "dns:///directpath-pa.googleapis.com"
 	httpReqTimeout = 10 * time.Second
@@ -68,7 +70,7 @@ const (
 var (
 	onGCE = googlecloud.OnGCE
 
-	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, error) {
+	newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
 		return xdsclient.NewWithConfig(config)
 	}
 
@@ -90,9 +92,14 @@ type c2pResolverBuilder struct {
 }
 
 func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts resolver.BuildOptions) (resolver.Resolver, error) {
+	if t.URL.Host != "" {
+		return nil, fmt.Errorf("google-c2p URI scheme does not support authorities")
+	}
+
 	if !runDirectPath() {
 		// If not xDS, fallback to DNS.
 		t.Scheme = dnsName
+		t.URL.Scheme = dnsName
 		return resolver.Get(dnsName).Build(t, cc, opts)
 	}
 
@@ -120,7 +127,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		XDSServer: serverConfig,
 		ClientDefaultListenerResourceNameTemplate: "%s",
 		Authorities: map[string]*bootstrap.Authority{
-			"traffic-director-c2p.xds.googleapis.com": {
+			c2pAuthority: {
 				XDSServer: serverConfig,
 			},
 		},
@@ -128,21 +135,31 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 
 	// Create singleton xds client with this config. The xds client will be
 	// used by the xds resolver later.
-	xdsC, err := newClientWithConfig(config)
+	_, close, err := newClientWithConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start xDS client: %v", err)
 	}
 
 	// Create and return an xDS resolver.
 	t.Scheme = xdsName
+	t.URL.Scheme = xdsName
+	if envconfig.XDSFederation {
+		t = resolver.Target{
+			URL: url.URL{
+				Scheme: xdsName,
+				Host:   c2pAuthority,
+				Path:   t.URL.Path,
+			},
+		}
+	}
 	xdsR, err := resolver.Get(xdsName).Build(t, cc, opts)
 	if err != nil {
-		xdsC.Close()
+		close()
 		return nil, err
 	}
 	return &c2pResolver{
-		Resolver: xdsR,
-		client:   xdsC,
+		Resolver:        xdsR,
+		clientCloseFunc: close,
 	}, nil
 }
 
@@ -152,12 +169,12 @@ func (b c2pResolverBuilder) Scheme() string {
 
 type c2pResolver struct {
 	resolver.Resolver
-	client xdsclient.XDSClient
+	clientCloseFunc func()
 }
 
 func (r *c2pResolver) Close() {
 	r.Resolver.Close()
-	r.client.Close()
+	r.clientCloseFunc()
 }
 
 var ipv6EnabledMetadata = &structpb.Struct{
@@ -189,7 +206,10 @@ func newNode(zone string, ipv6Capable bool) *v3corepb.Node {
 // runDirectPath returns whether this resolver should use direct path.
 //
 // direct path is enabled if this client is running on GCE, and the normal xDS
-// is not used (bootstrap env vars are not set).
+// is not used (bootstrap env vars are not set) or federation is enabled.
 func runDirectPath() bool {
-	return envconfig.XDSBootstrapFileName == "" && envconfig.XDSBootstrapFileContent == "" && onGCE()
+	if !onGCE() {
+		return false
+	}
+	return envconfig.XDSFederation || envconfig.XDSBootstrapFileName == "" && envconfig.XDSBootstrapFileContent == ""
 }

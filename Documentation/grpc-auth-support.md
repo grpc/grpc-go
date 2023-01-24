@@ -53,7 +53,7 @@ Alternatively, a client may also use the `grpc.CallOption`
 on each invocation of an RPC.
 
 To create a `credentials.PerRPCCredentials`, use
-[oauth.NewOauthAccess](https://godoc.org/google.golang.org/grpc/credentials/oauth#NewOauthAccess).
+[oauth.TokenSource](https://godoc.org/google.golang.org/grpc/credentials/oauth#TokenSource).
 Note, the OAuth2 implementation of `grpc.PerRPCCredentials` requires a client to use
 [grpc.WithTransportCredentials](https://godoc.org/google.golang.org/grpc#WithTransportCredentials)
 to prevent any insecure transmission of tokens.

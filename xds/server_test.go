@@ -320,7 +320,7 @@ func (p *fakeProvider) Close() {
 func setupOverrides() (*fakeGRPCServer, *testutils.Channel, func()) {
 	clientCh := testutils.NewChannel()
 	origNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsclient.XDSClient, error) {
+	newXDSClient = func() (xdsclient.XDSClient, func(), error) {
 		c := fakeclient.NewClient()
 		c.SetBootstrapConfig(&bootstrap.Config{
 			XDSServer: &bootstrap.ServerConfig{
@@ -332,7 +332,7 @@ func setupOverrides() (*fakeGRPCServer, *testutils.Channel, func()) {
 			CertProviderConfigs:                certProviderConfigs,
 		})
 		clientCh.Send(c)
-		return c, nil
+		return c, func() {}, nil
 	}
 
 	fs := newFakeGRPCServer()
@@ -352,7 +352,7 @@ func setupOverrides() (*fakeGRPCServer, *testutils.Channel, func()) {
 func setupOverridesForXDSCreds(includeCertProviderCfg bool) (*testutils.Channel, func()) {
 	clientCh := testutils.NewChannel()
 	origNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsclient.XDSClient, error) {
+	newXDSClient = func() (xdsclient.XDSClient, func(), error) {
 		c := fakeclient.NewClient()
 		bc := &bootstrap.Config{
 			XDSServer: &bootstrap.ServerConfig{
@@ -367,7 +367,7 @@ func setupOverridesForXDSCreds(includeCertProviderCfg bool) (*testutils.Channel,
 		}
 		c.SetBootstrapConfig(bc)
 		clientCh.Send(c)
-		return c, nil
+		return c, func() {}, nil
 	}
 
 	return clientCh, func() { newXDSClient = origNewXDSClient }
@@ -631,11 +631,11 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 			// xdsClient with the specified bootstrap configuration.
 			clientCh := testutils.NewChannel()
 			origNewXDSClient := newXDSClient
-			newXDSClient = func() (xdsclient.XDSClient, error) {
+			newXDSClient = func() (xdsclient.XDSClient, func(), error) {
 				c := fakeclient.NewClient()
 				c.SetBootstrapConfig(test.bootstrapConfig)
 				clientCh.Send(c)
-				return c, nil
+				return c, func() {}, nil
 			}
 			defer func() { newXDSClient = origNewXDSClient }()
 
@@ -674,8 +674,8 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 // verifies that Server() exits with a non-nil error.
 func (s) TestServeNewClientFailure(t *testing.T) {
 	origNewXDSClient := newXDSClient
-	newXDSClient = func() (xdsclient.XDSClient, error) {
-		return nil, errors.New("xdsClient creation failed")
+	newXDSClient = func() (xdsclient.XDSClient, func(), error) {
+		return nil, nil, errors.New("xdsClient creation failed")
 	}
 	defer func() { newXDSClient = origNewXDSClient }()
 

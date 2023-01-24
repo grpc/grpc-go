@@ -19,6 +19,8 @@ jobs:
   vet-proto:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      VET_ONLY_PROTO: 1
     steps:
       # Setup the environment.
       - name: Setup Go
@@ -43,7 +45,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - type: vet+tests
+          - type: vet
+            goversion: 1.19
+
+          - type: tests
             goversion: 1.19
 
           - type: tests
@@ -63,9 +68,6 @@ jobs:
 
           - type: tests
             goversion: 1.17
-
-          - type: tests
-            goversion: 1.16
 
           - type: extras
             goversion: 1.19
@@ -96,13 +98,13 @@ jobs:
 
       # Only run vet for 'vet' runs.
       - name: Run vet.sh
-        if: startsWith(matrix.type, 'vet')
+        if: matrix.type == 'vet'
         run: ./vet.sh -install && ./vet.sh
 
       # Main tests run for everything except when testing "extras"
       # (where we run a reduced set of tests).
       - name: Run tests
-        if: contains(matrix.type, 'tests')
+        if: matrix.type == 'tests'
         run: |
           go version
           go test ${{ matrix.testflags }} -cpu 1,4 -timeout 7m google.golang.org/grpc/...

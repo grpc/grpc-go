@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 	"testing"
 
@@ -43,6 +44,9 @@ func cmpLoggingEntryList(got []*grpcLogEntry, want []*grpcLogEntry) error {
 		cmp.Comparer(func(a map[string]string, b map[string]string) bool {
 			if len(a) > len(b) {
 				a, b = b, a
+			}
+			if len(a) == 0 && len(a) != len(b) { // No metadata for one and the other comparator wants metadata.
+				return false
 			}
 			for k, v := range a {
 				if b[k] != v {
@@ -96,13 +100,14 @@ func setupObservabilitySystemWithConfig(cfg *config) (func(), error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	err = Start(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("error in Start: %v", err)
-	}
-	return func() {
+	cleanup := func() {
 		End()
 		envconfig.ObservabilityConfig = oldObservabilityConfig
-	}, nil
+	}
+	if err != nil {
+		return cleanup, fmt.Errorf("error in Start: %v", err)
+	}
+	return cleanup, nil
 }
 
 // TestClientRPCEventsLogAll tests the observability system configured with a
@@ -166,6 +171,7 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{}); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
+
 	grpcLogEntriesWant := []*grpcLogEntry{
 		{
 			Type:        eventTypeClientHeader,
@@ -608,9 +614,9 @@ func (s) TestBothClientAndServerRPCEvents(t *testing.T) {
 		t.Fatalf("unexpected error: %v, expected an EOF error", err)
 	}
 	fle.mu.Lock()
-	if len(fle.entries) != 17 {
+	if len(fle.entries) != 16 {
 		fle.mu.Unlock()
-		t.Fatalf("Unexpected length of entries %v, want 17 (collective of client and server)", len(fle.entries))
+		t.Fatalf("Unexpected length of entries %v, want 16 (collective of client and server)", len(fle.entries))
 	}
 	fle.mu.Unlock()
 }
@@ -773,18 +779,18 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 		CloudLogging: &cloudLogging{
 			ClientRPCEvents: []clientRPCEvents{
 				{
-					Methods:          []string{"/grpc.testing.TestService/UnaryCall"},
+					Methods:          []string{"grpc.testing.TestService/UnaryCall"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
 				{
-					Methods:          []string{"/grpc.testing.TestService/EmptyCall"},
+					Methods:          []string{"grpc.testing.TestService/EmptyCall"},
 					Exclude:          true,
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
 				{
-					Methods:          []string{"/grpc.testing.TestService/*"},
+					Methods:          []string{"grpc.testing.TestService/*"},
 					MaxMetadataBytes: 30,
 					MaxMessageBytes:  30,
 				},
@@ -937,23 +943,12 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 			Authority:   ss.Address,
 		},
 		{
-			Type:        eventTypeServerHeader,
-			Logger:      loggerClient,
-			ServiceName: "grpc.testing.TestService",
-			MethodName:  "FullDuplexCall",
-			SequenceID:  3,
-			Authority:   ss.Address,
-			Payload: payload{
-				Metadata: map[string]string{},
-			},
-		},
-		{
 			Type:        eventTypeServerTrailer,
 			Logger:      loggerClient,
 			ServiceName: "grpc.testing.TestService",
 			MethodName:  "FullDuplexCall",
 			Authority:   ss.Address,
-			SequenceID:  4,
+			SequenceID:  3,
 			Payload: payload{
 				Metadata: map[string]string{},
 			},
@@ -1067,6 +1062,65 @@ func (s) TestTranslateMetadata(t *testing.T) {
 	}
 }
 
+// TestCloudLoggingAPICallsFiltered tests that the observability plugin does not
+// emit logs for cloud logging API calls.
+func (s) TestCloudLoggingAPICallsFiltered(t *testing.T) {
+	fle := &fakeLoggingExporter{
+		t: t,
+	}
+
+	defer func(ne func(ctx context.Context, config *config) (loggingExporter, error)) {
+		newLoggingExporter = ne
+	}(newLoggingExporter)
+
+	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+		return fle, nil
+	}
+	configLogAll := &config{
+		ProjectID: "fake",
+		CloudLogging: &cloudLogging{
+			ClientRPCEvents: []clientRPCEvents{
+				{
+					Methods:          []string{"*"},
+					MaxMetadataBytes: 30,
+					MaxMessageBytes:  30,
+				},
+			},
+		},
+	}
+	cleanup, err := setupObservabilitySystemWithConfig(configLogAll)
+	if err != nil {
+		t.Fatalf("error setting up observability %v", err)
+	}
+	defer cleanup()
+
+	ss := &stubserver.StubServer{}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Any of the three cloud logging API calls should not cause any logs to be
+	// emitted, even though the configuration specifies to log any rpc
+	// regardless of method.
+	req := &grpc_testing.SimpleRequest{}
+	resp := &grpc_testing.SimpleResponse{}
+
+	ss.CC.Invoke(ctx, "/google.logging.v2.LoggingServiceV2/some-method", req, resp)
+	ss.CC.Invoke(ctx, "/google.monitoring.v3.MetricService/some-method", req, resp)
+	ss.CC.Invoke(ctx, "/google.devtools.cloudtrace.v2.TraceService/some-method", req, resp)
+	// The exporter should have received no new log entries due to these three
+	// calls, as they should be filtered out.
+	fle.mu.Lock()
+	defer fle.mu.Unlock()
+	if len(fle.entries) != 0 {
+		t.Fatalf("Unexpected length of entries %v, want 0", len(fle.entries))
+	}
+}
+
 func (s) TestMarshalJSON(t *testing.T) {
 	logEntry := &grpcLogEntry{
 		CallID:     "300-300-300",
@@ -1094,5 +1148,238 @@ func (s) TestMarshalJSON(t *testing.T) {
 	}
 	if _, err := json.Marshal(logEntry); err != nil {
 		t.Fatalf("json.Marshal(%v) failed with error: %v", logEntry, err)
+	}
+}
+
+// TestMetadataTruncationAccountsKey tests that the metadata truncation takes
+// into account both the key and value of metadata. It configures an
+// observability system with a maximum byte length for metadata, which is
+// greater than just the byte length of the metadata value but less than the
+// byte length of the metadata key + metadata value. Thus, in the ClientHeader
+// logging event, no metadata should be logged.
+func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
+	fle := &fakeLoggingExporter{
+		t: t,
+	}
+	defer func(ne func(ctx context.Context, config *config) (loggingExporter, error)) {
+		newLoggingExporter = ne
+	}(newLoggingExporter)
+
+	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+		return fle, nil
+	}
+
+	const mdValue = "value"
+	configMetadataLimit := &config{
+		ProjectID: "fake",
+		CloudLogging: &cloudLogging{
+			ClientRPCEvents: []clientRPCEvents{
+				{
+					Methods:          []string{"*"},
+					MaxMetadataBytes: len(mdValue) + 1,
+				},
+			},
+		},
+	}
+
+	cleanup, err := setupObservabilitySystemWithConfig(configMetadataLimit)
+	if err != nil {
+		t.Fatalf("error setting up observability %v", err)
+	}
+	defer cleanup()
+
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
+			return &grpc_testing.SimpleResponse{}, nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// the set config MaxMetdataBytes is in between len(mdValue) and len("key")
+	// + len(mdValue), and thus shouldn't log this metadata entry.
+	md := metadata.MD{
+		"key": []string{mdValue},
+	}
+	ctx = metadata.NewOutgoingContext(ctx, md)
+	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: []byte("00000")}}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+
+	grpcLogEntriesWant := []*grpcLogEntry{
+		{
+			Type:        eventTypeClientHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			Authority:   ss.Address,
+			SequenceID:  1,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
+			PayloadTruncated: true,
+		},
+		{
+			Type:        eventTypeClientMessage,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  2,
+			Authority:   ss.Address,
+			Payload: payload{
+				MessageLength: 9,
+				Message:       []uint8{},
+			},
+			PayloadTruncated: true,
+		},
+		{
+			Type:        eventTypeServerHeader,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  3,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
+		},
+		{
+			Type:        eventTypeServerMessage,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			Authority:   ss.Address,
+			SequenceID:  4,
+		},
+		{
+			Type:        eventTypeServerTrailer,
+			Logger:      loggerClient,
+			ServiceName: "grpc.testing.TestService",
+			MethodName:  "UnaryCall",
+			SequenceID:  5,
+			Authority:   ss.Address,
+			Payload: payload{
+				Metadata: map[string]string{},
+			},
+		},
+	}
+	fle.mu.Lock()
+	if err := cmpLoggingEntryList(fle.entries, grpcLogEntriesWant); err != nil {
+		fle.mu.Unlock()
+		t.Fatalf("error in logging entry list comparison %v", err)
+	}
+	fle.mu.Unlock()
+}
+
+// TestMethodInConfiguration tests different method names with an expectation on
+// whether they should error or not.
+func (s) TestMethodInConfiguration(t *testing.T) {
+	// To skip creating a stackdriver exporter.
+	fle := &fakeLoggingExporter{
+		t: t,
+	}
+
+	defer func(ne func(ctx context.Context, config *config) (loggingExporter, error)) {
+		newLoggingExporter = ne
+	}(newLoggingExporter)
+
+	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+		return fle, nil
+	}
+
+	tests := []struct {
+		name    string
+		config  *config
+		wantErr string
+	}{
+		{
+			name: "leading-slash",
+			config: &config{
+				ProjectID: "fake",
+				CloudLogging: &cloudLogging{
+					ClientRPCEvents: []clientRPCEvents{
+						{
+							Methods: []string{"/service/method"},
+						},
+					},
+				},
+			},
+			wantErr: "cannot have a leading slash",
+		},
+		{
+			name: "wildcard service/method",
+			config: &config{
+				ProjectID: "fake",
+				CloudLogging: &cloudLogging{
+					ClientRPCEvents: []clientRPCEvents{
+						{
+							Methods: []string{"*/method"},
+						},
+					},
+				},
+			},
+			wantErr: "cannot have service wildcard *",
+		},
+		{
+			name: "/ in service name",
+			config: &config{
+				ProjectID: "fake",
+				CloudLogging: &cloudLogging{
+					ClientRPCEvents: []clientRPCEvents{
+						{
+							Methods: []string{"ser/vice/method"},
+						},
+					},
+				},
+			},
+			wantErr: "only one /",
+		},
+		{
+			name: "empty method name",
+			config: &config{
+				ProjectID: "fake",
+				CloudLogging: &cloudLogging{
+					ClientRPCEvents: []clientRPCEvents{
+						{
+							Methods: []string{"service/"},
+						},
+					},
+				},
+			},
+			wantErr: "method name must be non empty",
+		},
+		{
+			name: "normal",
+			config: &config{
+				ProjectID: "fake",
+				CloudLogging: &cloudLogging{
+					ClientRPCEvents: []clientRPCEvents{
+						{
+							Methods: []string{"service/method"},
+						},
+					},
+				},
+			},
+			wantErr: "",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cleanup, gotErr := setupObservabilitySystemWithConfig(test.config)
+			if cleanup != nil {
+				defer cleanup()
+			}
+			if gotErr != nil && !strings.Contains(gotErr.Error(), test.wantErr) {
+				t.Fatalf("Start(%v) = %v, wantErr %v", test.config, gotErr, test.wantErr)
+			}
+			if (gotErr != nil) != (test.wantErr != "") {
+				t.Fatalf("Start(%v) = %v, wantErr %v", test.config, gotErr, test.wantErr)
+			}
+		})
 	}
 }

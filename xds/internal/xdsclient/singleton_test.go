@@ -22,28 +22,26 @@ import (
 	"context"
 	"testing"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
-	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 )
 
 // Test that multiple New() returns the same Client. And only when the last
 // client is closed, the underlying client is closed.
 func (s) TestClientNewSingleton(t *testing.T) {
-	// Override bootstrap with a fake config.
-	oldBootstrapNewConfig := bootstrapNewConfig
-	bootstrapNewConfig = func() (*bootstrap.Config, error) {
-		return &bootstrap.Config{
-			XDSServer: &bootstrap.ServerConfig{
-				ServerURI: testXDSServer,
-				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				NodeProto: xdstestutils.EmptyNodeProtoV2,
-			},
-		}, nil
+	// Create a bootstrap configuration, place it in a file in the temp
+	// directory, and set the bootstrap env vars to point to it.
+	nodeID := uuid.New().String()
+	cleanup, err := bootstrap.CreateFile(bootstrap.Options{
+		NodeID:    nodeID,
+		ServerURI: "non-existent-server-address",
+		Version:   bootstrap.TransportV3,
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	defer func() { bootstrapNewConfig = oldBootstrapNewConfig }()
+	defer cleanup()
 
 	// Override the singleton creation hook to get notified.
 	origSingletonClientImplCreateHook := singletonClientImplCreateHook
@@ -62,7 +60,7 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	defer func() { singletonClientImplCloseHook = origSingletonClientImplCloseHook }()
 
 	// The first call to New() should create a new singleton client.
-	client, err := New()
+	_, closeFunc, err := New()
 	if err != nil {
 		t.Fatalf("failed to create xDS client: %v", err)
 	}
@@ -75,10 +73,10 @@ func (s) TestClientNewSingleton(t *testing.T) {
 
 	// Calling New() again should not create new singleton client implementations.
 	const count = 9
-	clients := make([]XDSClient, count)
+	closeFuncs := make([]func(), 9)
 	for i := 0; i < count; i++ {
 		func() {
-			clients[i], err = New()
+			_, closeFuncs[i], err = New()
 			if err != nil {
 				t.Fatalf("%d-th call to New() failed with error: %v", i, err)
 			}
@@ -97,8 +95,8 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	// acquired above, via the first call to New().
 	for i := 0; i < count; i++ {
 		func() {
-			clients[i].Close()
-			clients[i].Close()
+			closeFuncs[i]()
+			closeFuncs[i]()
 
 			sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
 			defer sCancel()
@@ -109,18 +107,18 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	}
 
 	// Call the last Close(). The underlying implementation should be closed.
-	client.Close()
+	closeFunc()
 	if _, err := singletonCloseCh.Receive(ctx); err != nil {
 		t.Fatalf("Timeout waiting for singleton client implementation to be closed: %v", err)
 	}
 
 	// Calling New() again, after the previous Client was actually closed, should
 	// create a new one.
-	client, err = New()
+	_, closeFunc, err = New()
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
-	defer client.Close()
+	defer closeFunc()
 	if _, err := singletonCreationCh.Receive(ctx); err != nil {
 		t.Fatalf("Timeout when waiting for singleton xDS client to be created: %v", err)
 	}

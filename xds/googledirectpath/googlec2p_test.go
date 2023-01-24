@@ -20,12 +20,14 @@ package googledirectpath
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
@@ -178,9 +180,9 @@ func TestBuildXDS(t *testing.T) {
 
 			configCh := make(chan *bootstrap.Config, 1)
 			oldNewClient := newClientWithConfig
-			newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, error) {
+			newClientWithConfig = func(config *bootstrap.Config) (xdsclient.XDSClient, func(), error) {
 				configCh <- config
-				return tXDSClient, nil
+				return tXDSClient, func() { tXDSClient.Close() }, nil
 			}
 			defer func() { newClientWithConfig = oldNewClient }()
 
@@ -249,5 +251,22 @@ func TestBuildXDS(t *testing.T) {
 				t.Fatalf("timeout waiting for client close")
 			}
 		})
+	}
+}
+
+// TestDialFailsWhenTargetContainsAuthority attempts to Dial a target URI of
+// google-c2p scheme with a non-empty authority and verifies that it fails with
+// an expected error.
+func TestBuildFailsWhenCalledWithAuthority(t *testing.T) {
+	uri := "google-c2p://an-authority/resource"
+	cc, err := grpc.Dial(uri, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	defer func() {
+		if cc != nil {
+			cc.Close()
+		}
+	}()
+	wantErr := "google-c2p URI scheme does not support authorities"
+	if err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("grpc.Dial(%s) returned error: %v, want: %v", uri, err, wantErr)
 	}
 }

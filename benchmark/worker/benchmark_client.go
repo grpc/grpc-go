@@ -132,7 +132,7 @@ func createConns(config *testpb.ClientConfig) ([]*grpc.ClientConn, func(), error
 		}
 		creds, err := credentials.NewClientTLSFromFile(*caFile, config.SecurityParams.ServerHostOverride)
 		if err != nil {
-			return nil, nil, status.Errorf(codes.InvalidArgument, "failed to create TLS credentials %v", err)
+			return nil, nil, status.Errorf(codes.InvalidArgument, "failed to create TLS credentials: %v", err)
 		}
 		opts = append(opts, grpc.WithTransportCredentials(creds))
 	} else {

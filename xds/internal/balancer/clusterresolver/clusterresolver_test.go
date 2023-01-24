@@ -41,8 +41,6 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils/fakeclient"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-
-	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2" // V2 client registration.
 )
 
 const (
@@ -190,6 +188,9 @@ type fakeSubConn struct{}
 
 func (*fakeSubConn) UpdateAddresses([]resolver.Address) { panic("implement me") }
 func (*fakeSubConn) Connect()                           { panic("implement me") }
+func (*fakeSubConn) GetOrBuildProducer(balancer.ProducerBuilder) (balancer.Producer, func()) {
+	panic("implement me")
+}
 
 // waitForNewChildLB makes sure that a new child LB is created by the top-level
 // clusterResolverBalancer.
@@ -214,10 +215,7 @@ func setup(childLBCh *testutils.Channel) (*fakeclient.Client, func()) {
 		defer func() { childLBCh.Send(childLB) }()
 		return childLB
 	}
-	return xdsC, func() {
-		newChildBalancer = origNewChildBalancer
-		xdsC.Close()
-	}
+	return xdsC, func() { newChildBalancer = origNewChildBalancer }
 }
 
 // TestSubConnStateChange verifies if the top-level clusterResolverBalancer passes on

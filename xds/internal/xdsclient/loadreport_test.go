@@ -23,10 +23,6 @@ import (
 	"testing"
 	"time"
 
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
-	endpointpb "github.com/envoyproxy/go-control-plane/envoy/api/v2/endpoint"
-	lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
-	durationpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -37,7 +33,10 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
 
-	_ "google.golang.org/grpc/xds/internal/xdsclient/controller/version/v2" // Register the v2 xDS API client.
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
+	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
+	durationpb "github.com/golang/protobuf/ptypes/duration"
 )
 
 const (
@@ -51,20 +50,18 @@ func (s) TestLRSClient(t *testing.T) {
 	}
 	defer sCleanup()
 
-	xdsC, err := NewWithConfigForTesting(&bootstrap.Config{
+	xdsC, close, err := NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI:    fs.Address,
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			TransportAPI: version.TransportV2,
-			NodeProto:    &v2corepb.Node{},
+			TransportAPI: version.TransportV3,
+			NodeProto:    &v3corepb.Node{},
 		},
 	}, defaultClientWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
-	defer xdsC.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+	defer close()
 
 	// Report to the same address should not create new ClientConn.
 	store1, lrsCancel1 := xdsC.ReportLoad(
@@ -72,12 +69,14 @@ func (s) TestLRSClient(t *testing.T) {
 			ServerURI:    fs.Address,
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 			CredsType:    "insecure",
-			TransportAPI: version.TransportV2,
-			NodeProto:    &v2corepb.Node{},
+			TransportAPI: version.TransportV3,
+			NodeProto:    &v3corepb.Node{},
 		},
 	)
 	defer lrsCancel1()
 
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	if u, err := fs.NewConnChan.Receive(ctx); err != nil {
 		t.Errorf("unexpected timeout: %v, %v, want NewConn", u, err)
 	}
@@ -101,7 +100,7 @@ func (s) TestLRSClient(t *testing.T) {
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 			CredsType:    "insecure",
 			TransportAPI: version.TransportV2,
-			NodeProto:    &v2corepb.Node{},
+			NodeProto:    &v3corepb.Node{},
 		},
 	)
 	defer lrsCancel2()
@@ -120,7 +119,7 @@ func (s) TestLRSClient(t *testing.T) {
 
 	// Send one resp to the client.
 	fs2.LRSResponseChan <- &fakeserver.Response{
-		Resp: &lrspb.LoadStatsResponse{
+		Resp: &v3lrspb.LoadStatsResponse{
 			SendAllClusters:       true,
 			LoadReportingInterval: &durationpb.Duration{Nanos: 50000000},
 		},
@@ -131,16 +130,16 @@ func (s) TestLRSClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected LRS request: %v, %v, want error canceled", u, err)
 	}
-	receivedLoad := u.(*fakeserver.Request).Req.(*lrspb.LoadStatsRequest).ClusterStats
+	receivedLoad := u.(*fakeserver.Request).Req.(*v3lrspb.LoadStatsRequest).ClusterStats
 	if len(receivedLoad) <= 0 {
 		t.Fatalf("unexpected load received, want load for cluster, eds, dropped for test")
 	}
 	receivedLoad[0].LoadReportInterval = nil
-	want := &endpointpb.ClusterStats{
+	want := &v3endpointpb.ClusterStats{
 		ClusterName:          "cluster",
 		ClusterServiceName:   "eds",
 		TotalDroppedRequests: 1,
-		DroppedRequests:      []*endpointpb.ClusterStats_DroppedRequests{{Category: "test", DroppedCount: 1}},
+		DroppedRequests:      []*v3endpointpb.ClusterStats_DroppedRequests{{Category: "test", DroppedCount: 1}},
 	}
 	if d := cmp.Diff(want, receivedLoad[0], protocmp.Transform()); d != "" {
 		t.Fatalf("unexpected load received, want load for cluster, eds, dropped for test, diff (-want +got):\n%s", d)

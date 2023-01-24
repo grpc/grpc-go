@@ -178,15 +178,15 @@ func (s) TestRDSWatch(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			overrideFedEnvVar(t)
-			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
+			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup()
 
 			// Create an xDS client with the above bootstrap contents.
-			client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+			client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
-			defer client.Close()
+			defer close()
 
 			// Register a watch for a route configuration resource and have the
 			// watch callback push the received update on to a channel.
@@ -348,15 +348,15 @@ func (s) TestRDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			overrideFedEnvVar(t)
-			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
+			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup()
 
 			// Create an xDS client with the above bootstrap contents.
-			client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+			client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
-			defer client.Close()
+			defer close()
 
 			// Register two watches for the same route configuration resource
 			// and have the callbacks push the received updates on to a channel.
@@ -434,15 +434,15 @@ func (s) TestRDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 // The test is run with both old and new style names.
 func (s) TestRDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	overrideFedEnvVar(t)
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register two watches for the same route configuration resource
 	// and have the callbacks push the received updates on to a channel.
@@ -520,7 +520,7 @@ func (s) TestRDSWatch_ResourceCaching(t *testing.T) {
 	firstAckReceived := grpcsync.NewEvent()
 	secondRequestReceived := grpcsync.NewEvent()
 
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, &e2e.ManagementServerOptions{
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
 			// The first request has an empty version string.
 			if !firstRequestReceived && req.GetVersionInfo() == "" {
@@ -540,11 +540,11 @@ func (s) TestRDSWatch_ResourceCaching(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register a watch for a route configuration resource and have the watch
 	// callback push the received update on to a channel.
@@ -622,7 +622,7 @@ func (s) TestRDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// receive a response for the watch being registered by the test.
 
 	// Create an xDS client talking to a non-existent management server.
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI:    "dummy management server address",
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -633,7 +633,7 @@ func (s) TestRDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register a watch for a resource which is expected to fail with an error
 	// after the watch expiry timer fires.
@@ -649,7 +649,7 @@ func (s) TestRDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// Verify that an empty update with the expected error is received.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	wantErr := fmt.Errorf("watch for resource %q of type RouteConfiguration timed out", rdsName)
+	wantErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")
 	if err := verifyRouteConfigUpdate(ctx, updateCh, xdsresource.RouteConfigUpdateErrTuple{Err: wantErr}); err != nil {
 		t.Fatal(err)
 	}
@@ -661,7 +661,7 @@ func (s) TestRDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 // invocation with error) does not take place.
 func (s) TestRDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	overrideFedEnvVar(t)
-	mgmtServer, err := e2e.StartManagementServer(nil)
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
 	}
@@ -669,7 +669,7 @@ func (s) TestRDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 
 	// Create an xDS client talking to the above management server.
 	nodeID := uuid.New().String()
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI:    mgmtServer.Address,
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -680,7 +680,7 @@ func (s) TestRDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register a watch for a route configuration resource and have the watch
 	// callback push the received update on to a channel.
@@ -737,15 +737,15 @@ func (s) TestRDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 // propagated to the watcher.
 func (s) TestRDSWatch_NACKError(t *testing.T) {
 	overrideFedEnvVar(t)
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register a watch for a route configuration resource and have the watch
 	// callback push the received update on to a channel.
@@ -786,15 +786,15 @@ func (s) TestRDSWatch_NACKError(t *testing.T) {
 // invalid resource receive an error.
 func (s) TestRDSWatch_PartialValid(t *testing.T) {
 	overrideFedEnvVar(t)
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register two watches for route configuration resources. The first watch
 	// is expected to receive an error because the received resource is NACKed.

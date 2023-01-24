@@ -198,8 +198,6 @@ type ServerInfo struct {
 // StartServer starts a gRPC server serving a benchmark service according to info.
 // It returns a function to stop the server.
 func StartServer(info ServerInfo, opts ...grpc.ServerOption) func() {
-	opts = append(opts, grpc.WriteBufferSize(128*1024))
-	opts = append(opts, grpc.ReadBufferSize(128*1024))
 	s := grpc.NewServer(opts...)
 	switch info.Type {
 	case "protobuf":
@@ -278,11 +276,9 @@ func NewClientConn(addr string, opts ...grpc.DialOption) *grpc.ClientConn {
 
 // NewClientConnWithContext creates a gRPC client connection to addr using ctx.
 func NewClientConnWithContext(ctx context.Context, addr string, opts ...grpc.DialOption) *grpc.ClientConn {
-	opts = append(opts, grpc.WithWriteBufferSize(128*1024))
-	opts = append(opts, grpc.WithReadBufferSize(128*1024))
 	conn, err := grpc.DialContext(ctx, addr, opts...)
 	if err != nil {
-		logger.Fatalf("NewClientConn(%q) failed to create a ClientConn %v", addr, err)
+		logger.Fatalf("NewClientConn(%q) failed to create a ClientConn: %v", addr, err)
 	}
 	return conn
 }

@@ -70,11 +70,12 @@ func startTestService(t *testing.T, server *stubserver.StubServer) (uint32, func
 	if err != nil {
 		t.Fatalf("invalid serving port for stub server: %v", err)
 	}
+	t.Logf("Started test service backend at %q", server.Address)
 	return uint32(port), server.Stop
 }
 
 func (s) TestClientSideXDS(t *testing.T) {
-	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, nil)
+	managementServer, nodeID, _, resolver, cleanup1 := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup1()
 
 	port, cleanup2 := startTestService(t, nil)

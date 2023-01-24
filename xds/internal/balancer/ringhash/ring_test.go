@@ -52,7 +52,7 @@ func (s) TestRingNew(t *testing.T) {
 	for _, min := range []uint64{3, 4, 6, 8} {
 		for _, max := range []uint64{20, 8} {
 			t.Run(fmt.Sprintf("size-min-%v-max-%v", min, max), func(t *testing.T) {
-				r := newRing(testSubConnMap, min, max)
+				r := newRing(testSubConnMap, min, max, nil)
 				totalCount := len(r.items)
 				if totalCount < int(min) || totalCount > int(max) {
 					t.Fatalf("unexpect size %v, want min %v, max %v", totalCount, min, max)
@@ -82,7 +82,7 @@ func equalApproximately(x, y float64) bool {
 }
 
 func (s) TestRingPick(t *testing.T) {
-	r := newRing(testSubConnMap, 10, 20)
+	r := newRing(testSubConnMap, 10, 20, nil)
 	for _, h := range []uint64{xxhash.Sum64String("1"), xxhash.Sum64String("2"), xxhash.Sum64String("3"), xxhash.Sum64String("4")} {
 		t.Run(fmt.Sprintf("picking-hash-%v", h), func(t *testing.T) {
 			e := r.pick(h)
@@ -100,7 +100,7 @@ func (s) TestRingPick(t *testing.T) {
 }
 
 func (s) TestRingNext(t *testing.T) {
-	r := newRing(testSubConnMap, 10, 20)
+	r := newRing(testSubConnMap, 10, 20, nil)
 
 	for _, e := range r.items {
 		ne := r.next(e)

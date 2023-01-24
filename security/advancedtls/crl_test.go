@@ -29,7 +29,6 @@ import (
 	"encoding/hex"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
 	"math/big"
 	"net"
 	"os"
@@ -320,9 +319,9 @@ func makeChain(t *testing.T, name string) []*x509.Certificate {
 
 	certChain := make([]*x509.Certificate, 0)
 
-	rest, err := ioutil.ReadFile(name)
+	rest, err := os.ReadFile(name)
 	if err != nil {
-		t.Fatalf("ioutil.ReadFile(%v) failed %v", name, err)
+		t.Fatalf("os.ReadFile(%v) failed %v", name, err)
 	}
 	for len(rest) > 0 {
 		var block *pem.Block
@@ -338,7 +337,7 @@ func makeChain(t *testing.T, name string) []*x509.Certificate {
 }
 
 func loadCRL(t *testing.T, path string) *certificateListExt {
-	b, err := ioutil.ReadFile(path)
+	b, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("readFile(%v) failed err = %v", path, err)
 	}
@@ -682,9 +681,9 @@ func TestVerifyConnection(t *testing.T) {
 				}
 			}()
 
-			dir, err := ioutil.TempDir("", "crl_dir")
+			dir, err := os.MkdirTemp("", "crl_dir")
 			if err != nil {
-				t.Fatalf("ioutil.TempDir failed err = %v", err)
+				t.Fatalf("os.MkdirTemp failed err = %v", err)
 			}
 			defer os.RemoveAll(dir)
 
@@ -693,9 +692,9 @@ func TestVerifyConnection(t *testing.T) {
 				t.Fatalf("templ.CreateCRL failed err = %v", err)
 			}
 
-			err = ioutil.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", x509NameHash(cert.Subject.ToRDNSequence()))), crl, 0777)
+			err = os.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", x509NameHash(cert.Subject.ToRDNSequence()))), crl, 0777)
 			if err != nil {
-				t.Fatalf("ioutil.WriteFile failed err = %v", err)
+				t.Fatalf("os.WriteFile failed err = %v", err)
 			}
 
 			cp := x509.NewCertPool()
@@ -729,5 +728,45 @@ func TestIssuerNonPrintableString(t *testing.T) {
 	_, err = fetchCRL(rawIssuer, RevocationConfig{RootDir: testdata.Path("crl")})
 	if err != nil {
 		t.Fatalf("fetchCRL failed: %s", err)
+	}
+}
+
+// TestCRLCacheExpirationReloading tests the basic expiration and reloading of a
+// cached CRL. The setup places an empty CRL in the cache, and a corresponding
+// CRL with a revocation in the CRL directory. We then validate the certificate
+// to verify that the certificate is not revoked.  Then, we modify the
+// NextUpdate time to be in the past so that when we next check for revocation,
+// the existing cache entry should be seen as expired, and the CRL in the
+// directory showing `revokedInt.pem` as revoked will be loaded, resulting in
+// the check returning `RevocationRevoked`.
+func TestCRLCacheExpirationReloading(t *testing.T) {
+	cache, err := lru.New(5)
+	if err != nil {
+		t.Fatalf("Creating cache failed")
+	}
+
+	var certs = makeChain(t, testdata.Path("crl/revokedInt.pem"))
+	// Certs[1] has the same issuer as the revoked cert
+	rawIssuer := certs[1].RawIssuer
+
+	// `3.crl`` revokes `revokedInt.pem`
+	crl := loadCRL(t, testdata.Path("crl/3.crl"))
+	// Modify the crl so that the cert is NOT revoked and add it to the cache
+	crl.CertList.TBSCertList.RevokedCertificates = nil
+	crl.CertList.TBSCertList.NextUpdate = time.Now().Add(time.Hour)
+	cache.Add(hex.EncodeToString(rawIssuer), crl)
+	var cfg = RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache}
+	revocationStatus := checkChain(certs, cfg)
+	if revocationStatus != RevocationUnrevoked {
+		t.Fatalf("Certificate check should be RevocationUnrevoked, was %v", revocationStatus)
+	}
+
+	// Modify the entry in the cache so that the cache will be refreshed
+	crl.CertList.TBSCertList.NextUpdate = time.Now()
+	cache.Add(hex.EncodeToString(rawIssuer), crl)
+
+	revocationStatus = checkChain(certs, cfg)
+	if revocationStatus != RevocationRevoked {
+		t.Fatalf("A certificate should have been `RevocationRevoked` but was %v", revocationStatus)
 	}
 }

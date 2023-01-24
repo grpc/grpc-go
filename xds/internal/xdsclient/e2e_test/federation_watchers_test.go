@@ -47,14 +47,14 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 	overrideFedEnvVar(t)
 
 	// Start a management server as the default authority.
-	serverDefaultAuthority, err := e2e.StartManagementServer(nil)
+	serverDefaultAuthority, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
 	}
 	t.Cleanup(serverDefaultAuthority.Stop)
 
 	// Start another management server as the other authority.
-	serverNonDefaultAuthority, err := e2e.StartManagementServer(nil)
+	serverNonDefaultAuthority, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
 	}
@@ -73,10 +73,11 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 		t.Fatalf("Failed to create bootstrap file: %v", err)
 	}
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
+	t.Cleanup(close)
 	return serverNonDefaultAuthority, nodeID, client
 }
 
@@ -88,7 +89,6 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 // that both watchers are notified.
 func (s) TestFederation_ListenerResourceContextParamOrder(t *testing.T) {
 	serverNonDefaultAuthority, nodeID, client := setupForFederationWatchersTest(t)
-	defer client.Close()
 
 	var (
 		// Two resource names only differ in context parameter order.
@@ -145,7 +145,6 @@ func (s) TestFederation_ListenerResourceContextParamOrder(t *testing.T) {
 // parameters. The test verifies that both watchers are notified.
 func (s) TestFederation_RouteConfigResourceContextParamOrder(t *testing.T) {
 	serverNonDefaultAuthority, nodeID, client := setupForFederationWatchersTest(t)
-	defer client.Close()
 
 	var (
 		// Two resource names only differ in context parameter order.
@@ -212,7 +211,6 @@ func (s) TestFederation_RouteConfigResourceContextParamOrder(t *testing.T) {
 // that both watchers are notified.
 func (s) TestFederation_ClusterResourceContextParamOrder(t *testing.T) {
 	serverNonDefaultAuthority, nodeID, client := setupForFederationWatchersTest(t)
-	defer client.Close()
 
 	var (
 		// Two resource names only differ in context parameter order.
@@ -269,7 +267,6 @@ func (s) TestFederation_ClusterResourceContextParamOrder(t *testing.T) {
 // that both watchers are notified.
 func (s) TestFederation_EndpointsResourceContextParamOrder(t *testing.T) {
 	serverNonDefaultAuthority, nodeID, client := setupForFederationWatchersTest(t)
-	defer client.Close()
 
 	var (
 		// Two resource names only differ in context parameter order.

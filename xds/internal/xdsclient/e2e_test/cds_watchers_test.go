@@ -144,15 +144,15 @@ func (s) TestCDSWatch(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			overrideFedEnvVar(t)
-			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
+			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup()
 
 			// Create an xDS client with the above bootstrap contents.
-			client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+			client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
-			defer client.Close()
+			defer close()
 
 			// Register a watch for a cluster resource and have the watch
 			// callback push the received update on to a channel.
@@ -274,15 +274,15 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
 			overrideFedEnvVar(t)
-			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
+			mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 			defer cleanup()
 
 			// Create an xDS client with the above bootstrap contents.
-			client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+			client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 			if err != nil {
 				t.Fatalf("Failed to create xDS client: %v", err)
 			}
-			defer client.Close()
+			defer close()
 
 			// Register two watches for the same cluster resource and have the
 			// callbacks push the received updates on to a channel.
@@ -359,15 +359,15 @@ func (s) TestCDSWatch_TwoWatchesForSameResourceName(t *testing.T) {
 // all watch callbacks.
 func (s) TestCDSWatch_ThreeWatchesForDifferentResourceNames(t *testing.T) {
 	overrideFedEnvVar(t)
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register two watches for the same cluster resource and have the
 	// callbacks push the received updates on to a channel.
@@ -440,7 +440,7 @@ func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
 	firstAckReceived := grpcsync.NewEvent()
 	secondRequestReceived := grpcsync.NewEvent()
 
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, &e2e.ManagementServerOptions{
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{
 		OnStreamRequest: func(id int64, req *v3discoverypb.DiscoveryRequest) error {
 			// The first request has an empty version string.
 			if !firstRequestReceived && req.GetVersionInfo() == "" {
@@ -460,11 +460,11 @@ func (s) TestCDSWatch_ResourceCaching(t *testing.T) {
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
@@ -532,7 +532,7 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// receive a response for the watch being registered by the test.
 
 	// Create an xDS client talking to a non-existent management server.
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI:    "dummy management server address",
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -543,7 +543,7 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register a watch for a resource which is expected to be invoked with an
 	// error after the watch expiry timer fires.
@@ -559,7 +559,7 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 	// Verify that an empty update with the expected error is received.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	wantErr := fmt.Errorf("watch for resource %q of type Cluster timed out", cdsName)
+	wantErr := xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "")
 	if err := verifyClusterUpdate(ctx, updateCh, xdsresource.ClusterUpdateErrTuple{Err: wantErr}); err != nil {
 		t.Fatal(err)
 	}
@@ -571,7 +571,7 @@ func (s) TestCDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 // invocation with error) does not take place.
 func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	overrideFedEnvVar(t)
-	mgmtServer, err := e2e.StartManagementServer(nil)
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
 	}
@@ -579,7 +579,7 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 
 	// Create an xDS client talking to the above management server.
 	nodeID := uuid.New().String()
-	client, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
+	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI:    mgmtServer.Address,
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -590,7 +590,7 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
@@ -644,15 +644,15 @@ func (s) TestCDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 //     invocation of the watch callback associated with the deleted resource.
 func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 	overrideFedEnvVar(t)
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register two watches for two cluster resources and have the
 	// callbacks push the received updates on to a channel.
@@ -753,21 +753,23 @@ func (s) TesCDSWatch_ResourceRemoved(t *testing.T) {
 // propagated to the watcher.
 func (s) TestCDSWatch_NACKError(t *testing.T) {
 	overrideFedEnvVar(t)
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register a watch for a cluster resource and have the watch
 	// callback push the received update on to a channel.
 	updateCh := testutils.NewChannel()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 	cdsCancel := client.WatchCluster(cdsName, func(u xdsresource.ClusterUpdate, err error) {
-		updateCh.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
+		updateCh.SendContext(ctx, xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
 	})
 	defer cdsCancel()
 
@@ -778,8 +780,6 @@ func (s) TestCDSWatch_NACKError(t *testing.T) {
 		Clusters:       []*v3clusterpb.Cluster{badClusterResource(cdsName, edsName, e2e.SecurityLevelNone)},
 		SkipValidation: true,
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
@@ -802,15 +802,15 @@ func (s) TestCDSWatch_NACKError(t *testing.T) {
 // invalid resource receive an error.
 func (s) TestCDSWatch_PartialValid(t *testing.T) {
 	overrideFedEnvVar(t)
-	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, nil)
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
 	defer cleanup()
 
 	// Create an xDS client with the above bootstrap contents.
-	client, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
 	if err != nil {
 		t.Fatalf("Failed to create xDS client: %v", err)
 	}
-	defer client.Close()
+	defer close()
 
 	// Register two watches for cluster resources. The first watch is expected
 	// to receive an error because the received resource is NACK'ed. The second
@@ -863,6 +863,101 @@ func (s) TestCDSWatch_PartialValid(t *testing.T) {
 		},
 	}
 	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestCDSWatch_PartialResponse covers the case where a response from the
+// management server does not contain all requested resources. CDS responses are
+// supposed to contain all requested resources, and the absence of one usually
+// indicates that the management server does not know about it. In cases where
+// the server has never responded with this resource before, the xDS client is
+// expected to wait for the watch timeout to expire before concluding that the
+// resource does not exist on the server
+func (s) TestCDSWatch_PartialResponse(t *testing.T) {
+	overrideFedEnvVar(t)
+	mgmtServer, nodeID, bootstrapContents, _, cleanup := e2e.SetupManagementServer(t, e2e.ManagementServerOptions{})
+	defer cleanup()
+
+	// Create an xDS client with the above bootstrap contents.
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Register two watches for two cluster resources and have the
+	// callbacks push the received updates on to a channel.
+	resourceName1 := cdsName
+	updateCh1 := testutils.NewChannel()
+	cdsCancel1 := client.WatchCluster(resourceName1, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh1.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
+	})
+	defer cdsCancel1()
+	resourceName2 := cdsNameNewStyle
+	updateCh2 := testutils.NewChannel()
+	cdsCancel2 := client.WatchCluster(resourceName2, func(u xdsresource.ClusterUpdate, err error) {
+		updateCh2.Send(xdsresource.ClusterUpdateErrTuple{Update: u, Err: err})
+	})
+	defer cdsCancel2()
+
+	// Configure the management server to return only one of the two cluster
+	// resources, corresponding to the registered watches.
+	resources := e2e.UpdateOptions{
+		NodeID:         nodeID,
+		Clusters:       []*v3clusterpb.Cluster{e2e.DefaultCluster(resourceName1, edsName, e2e.SecurityLevelNone)},
+		SkipValidation: true,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
+	}
+
+	// Verify the contents of the received update for first watcher.
+	wantUpdate1 := xdsresource.ClusterUpdateErrTuple{
+		Update: xdsresource.ClusterUpdate{
+			ClusterName:    resourceName1,
+			EDSServiceName: edsName,
+		},
+	}
+	if err := verifyClusterUpdate(ctx, updateCh1, wantUpdate1); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that the second watcher does not get an update with an error.
+	if err := verifyNoClusterUpdate(ctx, updateCh2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure the management server to return two cluster resources,
+	// corresponding to the registered watches.
+	resources = e2e.UpdateOptions{
+		NodeID: nodeID,
+		Clusters: []*v3clusterpb.Cluster{
+			e2e.DefaultCluster(resourceName1, edsName, e2e.SecurityLevelNone),
+			e2e.DefaultCluster(resourceName2, edsNameNewStyle, e2e.SecurityLevelNone),
+		},
+		SkipValidation: true,
+	}
+	if err := mgmtServer.Update(ctx, resources); err != nil {
+		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
+	}
+
+	// Verify the contents of the received update for the second watcher.
+	wantUpdate2 := xdsresource.ClusterUpdateErrTuple{
+		Update: xdsresource.ClusterUpdate{
+			ClusterName:    resourceName2,
+			EDSServiceName: edsNameNewStyle,
+		},
+	}
+	if err := verifyClusterUpdate(ctx, updateCh2, wantUpdate2); err != nil {
+		t.Fatal(err)
+	}
+
+	// Verify that the first watcher gets no update, as the first resource did
+	// not change.
+	if err := verifyNoClusterUpdate(ctx, updateCh1); err != nil {
 		t.Fatal(err)
 	}
 }
