@@ -760,7 +760,7 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 	if err := c.Unmarshal(buf, m); err != nil {
 		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message: %v", err)
 	}
-	if payInfo != nil {
+	if payInfo != nil && len(buf) != 0 {
 		payInfo.uncompressedBytes = make([]byte, len(buf))
 		copy(payInfo.uncompressedBytes, buf)
 	}
