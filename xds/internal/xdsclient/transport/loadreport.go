@@ -62,6 +62,11 @@ func (t *Transport) lrsStartStream() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.lrsCancelStream = cancel
+
+	// Create a new done channel everytime a new stream is created. This ensures
+	// that we don't close the same channel multiple times (from lrsRunner()
+	// goroutine) when multiple streams are created and closed.
+	t.lrsRunnerDoneCh = make(chan struct{})
 	go t.lrsRunner(ctx)
 }
 
@@ -78,6 +83,9 @@ func (t *Transport) lrsStopStream() {
 
 	t.lrsCancelStream()
 	t.logger.Infof("Stopping LRS stream")
+
+	// Wait for the runner goroutine to exit. The done channel will be
+	// recreated when a new stream is created.
 	<-t.lrsRunnerDoneCh
 }
 

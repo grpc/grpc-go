@@ -54,7 +54,7 @@ func (s) TestReportLoad(t *testing.T) {
 		NodeProto:    nodeProto,
 	}
 
-	// Create a transport to the fake server.
+	// Create a transport to the fake management server.
 	tr, err := transport.New(transport.Options{
 		ServerCfg:          serverCfg,
 		UpdateHandler:      func(transport.ResourceUpdate) error { return nil }, // No ADS validation.
@@ -190,4 +190,16 @@ func (s) TestReportLoad(t *testing.T) {
 	if _, err := mgmtServer.LRSStreamCloseChan.Receive(ctx); err != nil {
 		t.Fatal("Timeout waiting for LRS stream to close")
 	}
+
+	// Calling the load reporting API again should result in the creation of a
+	// new LRS stream. This ensures that creating and closing multiple streams
+	// works smoothly.
+	_, cancelLRS3 := tr.ReportLoad()
+	if err != nil {
+		t.Fatalf("Failed to start LRS load reporting: %v", err)
+	}
+	if _, err := mgmtServer.LRSStreamOpenChan.Receive(ctx); err != nil {
+		t.Fatalf("Timeout when waiting for LRS stream to be created: %v", err)
+	}
+	cancelLRS3()
 }
