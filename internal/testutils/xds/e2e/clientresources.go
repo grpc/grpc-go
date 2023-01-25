@@ -26,6 +26,7 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -307,6 +308,121 @@ func DefaultRouteConfig(routeName, ldsTarget, clusterName string) *v3routepb.Rou
 				}},
 			}},
 		}},
+	}
+}
+
+// RouteConfigClusterSpecifierType determines the cluster specifier type for the
+// route actions configured in the returned RouteConfiguration resource.
+type RouteConfigClusterSpecifierType int
+
+const (
+	// RouteConfigClusterSpecifierTypeCluster results in the cluster specifier
+	// being set to a RouteAction_Cluster.
+	RouteConfigClusterSpecifierTypeCluster RouteConfigClusterSpecifierType = iota
+	// RouteConfigClusterSpecifierTypeWeightedCluster results in the cluster
+	// specifier being set to RouteAction_WeightedClusters.
+	RouteConfigClusterSpecifierTypeWeightedCluster
+	// RouteConfigClusterSpecifierTypeClusterSpecifierPlugin results in the
+	// cluster specifier being set to a RouteAction_ClusterSpecifierPlugin.
+	RouteConfigClusterSpecifierTypeClusterSpecifierPlugin
+)
+
+// RouteConfigOptions contains options to configure a RouteConfiguration
+// resource.
+type RouteConfigOptions struct {
+	// RouteConfigName is the name of the RouteConfiguration resource.
+	RouteConfigName string
+	// ListenerName is the name of the Listener resource which uses this
+	// RouteConfiguration.
+	ListenerName string
+	// ClusterSpecifierType determines the cluster specifier plugin type.
+	ClusterSpecifierType RouteConfigClusterSpecifierType
+
+	// ClusterName is name of the cluster resource used when the cluster
+	// specifier plugin type is set to RouteConfigClusterSpecifierTypeCluster.
+	//
+	// Default value of "A" is used if left unspecified.
+	ClusterName string
+	// WeightedClusters is a map from cluster name to weights, and is used when
+	// the cluster specifier plugin type is set to
+	// RouteConfigClusterSpecifierTypeWeightedCluster.
+	//
+	// Default value of {"A": 75, "B": 25} is used if left unspecified.
+	WeightedClusters map[string]int
+	// The below two fields specify the name of the cluster specifier plugin and
+	// its configuration, and is used when the cluster specifier plugin type is
+	// set to RouteConfigClusterSpecifierTypeClusterSpecifierPlugin. Tests are
+	// expected to provide valid values for these fields when appropriate.
+	ClusterSpecifierPluginName   string
+	ClusterSpecifierPluginConfig *anypb.Any
+}
+
+// RouteConfigResourceWithOptions returns a RouteConfiguration resource
+// configured with the provided options.
+func RouteConfigResourceWithOptions(opts RouteConfigOptions) *v3routepb.RouteConfiguration {
+	switch opts.ClusterSpecifierType {
+	case RouteConfigClusterSpecifierTypeCluster:
+		clusterName := opts.ClusterName
+		if clusterName == "" {
+			clusterName = "A"
+		}
+		return &v3routepb.RouteConfiguration{
+			Name: opts.RouteConfigName,
+			VirtualHosts: []*v3routepb.VirtualHost{{
+				Domains: []string{opts.ListenerName},
+				Routes: []*v3routepb.Route{{
+					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+						ClusterSpecifier: &v3routepb.RouteAction_Cluster{Cluster: clusterName},
+					}},
+				}},
+			}},
+		}
+	case RouteConfigClusterSpecifierTypeWeightedCluster:
+		weightedClusters := opts.WeightedClusters
+		if weightedClusters == nil {
+			weightedClusters = map[string]int{"A": 75, "B": 25}
+		}
+		clusters := []*v3routepb.WeightedCluster_ClusterWeight{}
+		for name, weight := range weightedClusters {
+			clusters = append(clusters, &v3routepb.WeightedCluster_ClusterWeight{
+				Name:   name,
+				Weight: &wrapperspb.UInt32Value{Value: uint32(weight)},
+			})
+		}
+		return &v3routepb.RouteConfiguration{
+			Name: opts.RouteConfigName,
+			VirtualHosts: []*v3routepb.VirtualHost{{
+				Domains: []string{opts.ListenerName},
+				Routes: []*v3routepb.Route{{
+					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{Clusters: clusters}},
+					}},
+				}},
+			}},
+		}
+	case RouteConfigClusterSpecifierTypeClusterSpecifierPlugin:
+		return &v3routepb.RouteConfiguration{
+			Name: opts.RouteConfigName,
+			ClusterSpecifierPlugins: []*v3routepb.ClusterSpecifierPlugin{{
+				Extension: &v3corepb.TypedExtensionConfig{
+					Name:        opts.ClusterSpecifierPluginName,
+					TypedConfig: opts.ClusterSpecifierPluginConfig,
+				}},
+			},
+			VirtualHosts: []*v3routepb.VirtualHost{{
+				Domains: []string{opts.ListenerName},
+				Routes: []*v3routepb.Route{{
+					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
+					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
+						ClusterSpecifier: &v3routepb.RouteAction_ClusterSpecifierPlugin{ClusterSpecifierPlugin: opts.ClusterSpecifierPluginName},
+					}},
+				}},
+			}},
+		}
+	default:
+		panic(fmt.Sprintf("unsupported cluster specifier plugin type: %v", opts.ClusterSpecifierType))
 	}
 }
 
