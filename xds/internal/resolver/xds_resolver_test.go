@@ -38,7 +38,6 @@ import (
 	xdscreds "google.golang.org/grpc/credentials/xds"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/envconfig"
-	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	iresolver "google.golang.org/grpc/internal/resolver"
@@ -2113,18 +2112,6 @@ func (s) TestXDSResolverHTTPFilters(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func replaceRandNumGenerator(start int64) func() {
-	nextInt := start
-	xdsresource.RandInt63n = func(int64) (ret int64) {
-		ret = nextInt
-		nextInt++
-		return
-	}
-	return func() {
-		xdsresource.RandInt63n = grpcrand.Int63n
 	}
 }
 
