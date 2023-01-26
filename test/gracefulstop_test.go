@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/net/http2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -163,4 +164,54 @@ func (s) TestGracefulStop(t *testing.T) {
 	}
 	cancel()
 	wg.Wait()
+}
+
+func (s) TestGracefulStopClosesConnAfterLastStream(t *testing.T) {
+	// This test ensures that a server closes the connections to its clients
+	// when the final stream has completed after a GOAWAY.
+
+	handlerCalled := make(chan struct{})
+	gracefulStopCalled := make(chan struct{})
+
+	ts := &funcServer{streamingInputCall: func(stream testpb.TestService_StreamingInputCallServer) error {
+		close(handlerCalled) // Initiate call to GracefulStop.
+		<-gracefulStopCalled // Wait for GOAWAYs to be received by the client.
+		return nil
+	}}
+
+	te := newTest(t, tcpClearEnv)
+	te.startServer(ts)
+	defer te.tearDown()
+
+	te.withServerTester(func(st *serverTester) {
+		st.writeHeadersGRPC(1, "/grpc.testing.TestService/StreamingInputCall", false)
+
+		<-handlerCalled // Wait for the server to invoke its handler.
+
+		// Gracefully stop the server.
+		gracefulStopDone := make(chan struct{})
+		go func() {
+			te.srv.GracefulStop()
+			close(gracefulStopDone)
+		}()
+		st.wantGoAway(http2.ErrCodeNo) // Server sends a GOAWAY due to GracefulStop.
+		pf := st.wantPing()            // Server sends a ping to verify client receipt.
+		st.writePing(true, pf.Data)    // Send ping ack to confirm.
+		st.wantGoAway(http2.ErrCodeNo) // Wait for subsequent GOAWAY to indicate no new stream processing.
+
+		close(gracefulStopCalled) // Unblock server handler.
+
+		fr := st.wantAnyFrame() // Wait for trailer.
+		hdr, ok := fr.(*http2.MetaHeadersFrame)
+		if !ok {
+			t.Fatalf("Received unexpected frame of type (%T) from server: %v; want HEADERS", fr, fr)
+		}
+		if !hdr.StreamEnded() {
+			t.Fatalf("Received unexpected HEADERS frame from server: %v; want END_STREAM set", fr)
+		}
+
+		st.wantRSTStream(http2.ErrCodeNo) // Server should send RST_STREAM because client did not half-close.
+
+		<-gracefulStopDone // Wait for GracefulStop to return.
+	})
 }
