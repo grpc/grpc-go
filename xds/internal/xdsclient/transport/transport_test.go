@@ -57,6 +57,7 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 		},
 		UpdateHandler:      func(ResourceUpdate) error { return nil },
 		StreamErrorHandler: func(error) {},
+		OnSendHandler:      func(*UpdateChannelInfo) {},
 	}
 	c, err := New(opts)
 	if err != nil {

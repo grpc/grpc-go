@@ -57,17 +57,18 @@ type adsStream = v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesC
 // protocol version.
 type Transport struct {
 	// These fields are initialized at creation time and are read-only afterwards.
-	cc                  *grpc.ClientConn        // ClientConn to the mangement server.
-	serverURI           string                  // URI of the management server.
-	updateHandler       UpdateHandlerFunc       // Resource update handler. xDS data model layer.
-	adsStreamErrHandler func(error)             // To report underlying stream errors.
-	lrsStore            *load.Store             // Store returned to user for pushing loads.
-	backoff             func(int) time.Duration // Backoff after stream failures.
-	nodeProto           *v3corepb.Node          // Identifies the gRPC application.
-	logger              *grpclog.PrefixLogger   // Prefix logger for transport logs.
-	adsRunnerCancel     context.CancelFunc      // CancelFunc for the ADS goroutine.
-	adsRunnerDoneCh     chan struct{}           // To notify exit of ADS goroutine.
-	lrsRunnerDoneCh     chan struct{}           // To notify exit of LRS goroutine.
+	cc                  *grpc.ClientConn         // ClientConn to the mangement server.
+	serverURI           string                   // URI of the management server.
+	updateHandler       UpdateHandlerFunc        // Resource update handler. xDS data model layer.
+	adsStreamErrHandler func(error)              // To report underlying stream errors.
+	reportSendReq       func(*UpdateChannelInfo) // To report underlying stream successful sends.
+	lrsStore            *load.Store              // Store returned to user for pushing loads.
+	backoff             func(int) time.Duration  // Backoff after stream failures.
+	nodeProto           *v3corepb.Node           // Identifies the gRPC application.
+	logger              *grpclog.PrefixLogger    // Prefix logger for transport logs.
+	adsRunnerCancel     context.CancelFunc       // CancelFunc for the ADS goroutine.
+	adsRunnerDoneCh     chan struct{}            // To notify exit of ADS goroutine.
+	lrsRunnerDoneCh     chan struct{}            // To notify exit of LRS goroutine.
 
 	// These channels enable synchronization amongst the different goroutines
 	// spawned by the transport, and between asynchorous events resulting from
@@ -136,6 +137,12 @@ type Options struct {
 	//
 	// Invoked inline and implementations must not block.
 	StreamErrorHandler func(error)
+	// OnSendHandler provides a way for the transport layer to report
+	// underlying resource requests sent on the stream. However, ads stream could break
+	// after send() - thus best effort updates.
+	//
+	// Invoked inline and implementations must not block.
+	OnSendHandler func(*UpdateChannelInfo)
 	// Backoff controls the amount of time to backoff before recreating failed
 	// ADS streams. If unspecified, a default exponential backoff implementation
 	// is used. For more details, see:
@@ -159,7 +166,10 @@ func New(opts Options) (*Transport, error) {
 		return nil, errors.New("missing update handler when creating a new transport")
 	case opts.StreamErrorHandler == nil:
 		return nil, errors.New("missing stream error handler when creating a new transport")
+	case opts.OnSendHandler == nil:
+		return nil, errors.New("missing on send handler when creating a new transport")
 	}
+
 
 	node, ok := opts.ServerCfg.NodeProto.(*v3corepb.Node)
 	if !ok {
@@ -191,6 +201,7 @@ func New(opts Options) (*Transport, error) {
 		serverURI:           opts.ServerCfg.ServerURI,
 		updateHandler:       opts.UpdateHandler,
 		adsStreamErrHandler: opts.StreamErrorHandler,
+		reportSendReq:       opts.OnSendHandler,
 		lrsStore:            load.NewStore(),
 		backoff:             boff,
 		nodeProto:           node,
@@ -243,13 +254,15 @@ func (t *Transport) SendRequest(url string, resources []string) {
 
 func (t *Transport) newAggregatedDiscoveryServiceStream(ctx context.Context, cc *grpc.ClientConn) (adsStream, error) {
 	// The transport retries the stream with an exponential backoff whenever the
-	// stream breaks. But if the channel is broken, we don't want the backoff
-	// logic to continuously retry the stream. Setting WaitForReady() blocks the
-	// stream creation until the channel is READY.
-	//
-	// TODO(easwars): Make changes required to comply with A57:
-	// https://github.com/grpc/proposal/blob/master/A57-xds-client-failure-mode-behavior.md
-	return v3adsgrpc.NewAggregatedDiscoveryServiceClient(cc).StreamAggregatedResources(ctx, grpc.WaitForReady(true))
+	// stream breaks or if the channel is broken.
+	return v3adsgrpc.NewAggregatedDiscoveryServiceClient(cc).StreamAggregatedResources(ctx)
+}
+
+// UpdateChannelInfo is the type for resource request updates pushed to the top-level
+// authority via UpdateCh.
+type UpdateChannelInfo struct {
+	ResourceNames []string
+	URL           string
 }
 
 func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, resourceNames []string, resourceURL, version, nonce string, nackErr error) error {
@@ -268,6 +281,7 @@ func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, reso
 	if err := stream.Send(req); err != nil {
 		return fmt.Errorf("sending ADS request %s failed: %v", pretty.ToJSON(req), err)
 	}
+	t.reportSendReq(&UpdateChannelInfo{URL: resourceURL, ResourceNames: resourceNames})
 	t.logger.Debugf("ADS request sent: %v", pretty.ToJSON(req))
 	return nil
 }
@@ -289,9 +303,6 @@ func (t *Transport) adsRunner(ctx context.Context) {
 	defer close(t.adsRunnerDoneCh)
 
 	go t.send(ctx)
-
-	// TODO: start a goroutine monitoring ClientConn's connectivity state, and
-	// report error (and log) when stats is transient failure.
 
 	backoffAttempt := 0
 	backoffTimer := time.NewTimer(0)
@@ -428,6 +439,7 @@ func (t *Transport) recv(stream adsStream) bool {
 	for {
 		resources, url, rVersion, nonce, err := t.recvAggregatedDiscoveryServiceResponse(stream)
 		if err != nil {
+			// todo(arvindbright): call ErrHandler iff no msgs were ever recv'd on the stream
 			t.adsStreamErrHandler(err)
 			t.logger.Warningf("ADS stream is closed with error: %v", err)
 			return msgReceived

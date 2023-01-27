@@ -67,8 +67,23 @@ func (s) TestNew(t *testing.T) {
 					NodeProto: &v3corepb.Node{},
 				},
 				UpdateHandler: func(transport.ResourceUpdate) error { return nil },
+				OnSendHandler: func(*transport.UpdateChannelInfo) {},
 			},
 			wantErrStr: "missing stream error handler when creating a new transport",
+		},
+
+		{
+			name: "missing on send handler",
+			opts: transport.Options{
+				ServerCfg: bootstrap.ServerConfig{
+					ServerURI: "server-address",
+					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+					NodeProto: &v3corepb.Node{},
+				},
+				UpdateHandler: func(transport.ResourceUpdate) error { return nil },
+				StreamErrorHandler: func(error) {},
+			},
+			wantErrStr: "missing on send handler when creating a new transport",
 		},
 		{
 			name: "node proto version mismatch for v3",
@@ -81,6 +96,7 @@ func (s) TestNew(t *testing.T) {
 				},
 				UpdateHandler:      func(transport.ResourceUpdate) error { return nil },
 				StreamErrorHandler: func(error) {},
+				OnSendHandler:      func(*transport.UpdateChannelInfo) {},
 			},
 			wantErrStr: "unexpected type *core.Node for NodeProto, want *corev3.Node",
 		},
@@ -95,6 +111,7 @@ func (s) TestNew(t *testing.T) {
 				},
 				UpdateHandler:      func(transport.ResourceUpdate) error { return nil },
 				StreamErrorHandler: func(error) {},
+				OnSendHandler:      func(*transport.UpdateChannelInfo) {},
 			},
 		},
 	}

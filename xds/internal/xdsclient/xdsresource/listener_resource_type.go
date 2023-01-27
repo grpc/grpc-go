@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -31,10 +32,12 @@ var (
 	_ Type         = listenerResourceType{}
 	_ ResourceData = &ListenerResourceData{}
 
+	typeURL  = "type.googleapis.com/envoy.config.listener.v3.Listener"
+
 	// Singleton instantiation of the resource type implementation.
 	listenerType = listenerResourceType{
 		resourceTypeState: resourceTypeState{
-			typeURL:                    "type.googleapis.com/envoy.config.listener.v3.Listener",
+			typeURL:                    typeURL,
 			typeEnum:                   ListenerResource,
 			allResourcesRequiredInSotW: true,
 		},
@@ -47,6 +50,14 @@ var (
 // Implements the Type interface.
 type listenerResourceType struct {
 	resourceTypeState
+}
+
+func init(){
+	if internal.ResourceTypeMapForTesting == nil {
+		internal.ResourceTypeMapForTesting = make(map[string]interface{})
+	}
+	internal.ResourceTypeMapForTesting[typeURL] =  listenerType
+
 }
 
 func securityConfigValidator(bc *bootstrap.Config, sc *SecurityConfig) error {

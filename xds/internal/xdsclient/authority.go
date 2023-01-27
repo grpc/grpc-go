@@ -35,6 +35,7 @@ type watchState int
 
 const (
 	watchStateStarted watchState = iota
+	watchStateRespRequested
 	watchStateRespReceived
 	watchStateTimeout
 	watchStateCanceled
@@ -117,13 +118,35 @@ func newAuthority(args authorityArgs) (*authority, error) {
 		ServerCfg:          *args.serverCfg,
 		UpdateHandler:      ret.handleResourceUpdate,
 		StreamErrorHandler: ret.newConnectionError,
+		OnSendHandler:      ret.transportAfterSendHandler,
 		Logger:             args.logger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating new transport to %q: %v", args.serverCfg, err)
 	}
 	ret.transport = tr
+
 	return ret, nil
+}
+
+// transportAfterSendHandler is called by the underlying transport when it sends a
+// resource req successfully. Timers are started for resources waiting for a response.
+func (a *authority) transportAfterSendHandler(u *transport.UpdateChannelInfo) {
+	a.resourcesMu.Lock()
+	rType := a.resourceTypeGetter(u.URL)
+	rTypeMap := a.resources[rType]
+
+	for _, resourceName := range u.ResourceNames {
+		if state, ok := rTypeMap[resourceName]; ok {
+			if state.wState == watchStateStarted {
+				state.wTimer = time.AfterFunc(a.watchExpiryTimeout, func() {
+					a.handleWatchTimerExpiry(rType, resourceName, state)
+				})
+				state.wState = watchStateRespRequested
+			}
+		}
+	}
+	a.resourcesMu.Unlock()
 
 }
 
@@ -306,6 +329,12 @@ func (a *authority) newConnectionError(err error) {
 	// from the transport layer.
 	for _, rType := range a.resources {
 		for _, state := range rType {
+			// if state === watchStateRespRequested, we want to stop the current timer, and
+			// let retries start the timer again.
+			if state.wState == watchStateRespRequested {
+				state.wTimer.Stop()
+				state.wState = watchStateStarted
+			}
 			for watcher := range state.watchers {
 				watcher := watcher
 				a.serializer.Schedule(func(context.Context) {
@@ -355,9 +384,6 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 			md:       xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested},
 			wState:   watchStateStarted,
 		}
-		state.wTimer = time.AfterFunc(a.watchExpiryTimeout, func() {
-			a.handleWatchTimerExpiry(rType, resourceName, state)
-		})
 		resources[resourceName] = state
 		a.sendDiscoveryRequestLocked(rType, resources)
 	}
@@ -399,7 +425,7 @@ func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName 
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 
-	if state.wState == watchStateCanceled {
+	if state.wState != watchStateRespRequested {
 		return
 	}
 

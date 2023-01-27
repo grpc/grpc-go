@@ -149,6 +149,7 @@ func (s) TestSimpleAckAndNack(t *testing.T) {
 		ServerCfg:          serverCfg,
 		UpdateHandler:      dataModelValidator,
 		StreamErrorHandler: func(err error) {},
+		OnSendHandler:      func(*transport.UpdateChannelInfo) {},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -336,6 +337,7 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 		ServerCfg:          serverCfg,
 		UpdateHandler:      dataModelValidator,
 		StreamErrorHandler: func(err error) {},
+		OnSendHandler:      func(*transport.UpdateChannelInfo) {},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -465,6 +467,7 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 		ServerCfg:          serverCfg,
 		UpdateHandler:      dataModelValidator,
 		StreamErrorHandler: func(err error) {},
+		OnSendHandler:      func(*transport.UpdateChannelInfo) {},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)

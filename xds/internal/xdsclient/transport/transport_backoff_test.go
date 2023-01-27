@@ -119,7 +119,8 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 			default:
 			}
 		},
-		Backoff: transportBackoff,
+		OnSendHandler: func(*transport.UpdateChannelInfo) {},
+		Backoff:       transportBackoff,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -287,7 +288,8 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 			default:
 			}
 		},
-		Backoff: func(int) time.Duration { return time.Duration(0) }, // No backoff.
+		OnSendHandler: func(*transport.UpdateChannelInfo) {},
+		Backoff:       func(int) time.Duration { return time.Duration(0) }, // No backoff.
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -421,6 +423,7 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 		ServerCfg:          serverCfg,
 		UpdateHandler:      func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
 		StreamErrorHandler: func(error) {},                                      // No stream error handling.
+		OnSendHandler:      func(*transport.UpdateChannelInfo) {},
 		Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.
 	})
 	if err != nil {

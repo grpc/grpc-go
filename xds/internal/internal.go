@@ -80,3 +80,5 @@ func SetLocalityID(addr resolver.Address, l LocalityID) resolver.Address {
 	addr.BalancerAttributes = addr.BalancerAttributes.WithValue(localityKey, l)
 	return addr
 }
+
+var ResourceTypeMapForTesting map[string]interface{}

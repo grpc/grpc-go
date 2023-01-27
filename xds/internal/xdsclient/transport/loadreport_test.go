@@ -59,6 +59,7 @@ func (s) TestReportLoad(t *testing.T) {
 		ServerCfg:          serverCfg,
 		UpdateHandler:      func(transport.ResourceUpdate) error { return nil }, // No ADS validation.
 		StreamErrorHandler: func(error) {},                                      // No ADS stream error handling.
+		OnSendHandler:      func(*transport.UpdateChannelInfo) {},
 		Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.
 	})
 	if err != nil {
