@@ -29,6 +29,9 @@ import (
 )
 
 var (
+	// DialWithGlobalOptions dials with a knob on whether to disable global dial
+	// options (set via AddGlobalDialOptions).
+	DialWithGlobalOptions interface{} // func (context.Context, string, bool, ...DialOption) (*ClientConn, error)
 	// WithHealthCheckFunc is set by dialoptions.go
 	WithHealthCheckFunc interface{} // func (HealthChecker) DialOption
 	// HealthCheckFunc is used to provide client-side LB channel health checking
