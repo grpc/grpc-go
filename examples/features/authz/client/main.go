@@ -52,7 +52,7 @@ func callUnaryEcho(ctx context.Context, client ecpb.EchoClient, message string, 
 func callBidiStreamingEcho(ctx context.Context, client ecpb.EchoClient, opts ...grpc.CallOption) error {
 	c, err := client.BidirectionalStreamingEcho(ctx, opts...)
 	if err != nil {
-		return status.Errorf(status.Code(err), "BidirectionalStreamingEcho RPC failed: %w", err)
+		return status.Errorf(status.Code(err), "BidirectionalStreamingEcho RPC failed: %v", err)
 	}
 	for i := 0; i < 5; i++ {
 		if err := c.Send(&ecpb.EchoRequest{Message: fmt.Sprintf("Request %d", i+1)}); err != nil {
@@ -102,7 +102,7 @@ func main() {
 	defer cancel()
 	client := ecpb.NewEchoClient(conn)
 
-	// Make RPCs as an authorized user and expect them to suceed.
+	// Make RPCs as an authorized user and expect them to succeed.
 	authorisedUserTokenCallOption := newCredentialsCallOption(token.Token{Username: "super-user", Secret: "super-secret"})
 	if err := callUnaryEcho(ctx, client, "hello world", authorisedUserTokenCallOption); err != nil {
 		log.Fatalf("Unary RPC by authorized user failed: %v", err)
@@ -111,7 +111,7 @@ func main() {
 		log.Fatalf("Bidirectional RPC by authorized user failed: %v", err)
 	}
 
-	// Make RPCs as an unauthorized user and expect them to fail with status code <whatever-code-is-expected>.
+	// Make RPCs as an unauthorized user and expect them to fail with status code PermissionDenied
 	unauthorisedUserTokenCallOption := newCredentialsCallOption(token.Token{Username: "bad-actor", Secret: "super-secret"})
 	if err := callUnaryEcho(ctx, client, "hello world", unauthorisedUserTokenCallOption); err != nil {
 		switch c := status.Code(err); c {
