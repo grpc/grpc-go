@@ -26,7 +26,9 @@ import (
 	"google.golang.org/grpc/internal"
 )
 
-func (s) TestAddExtraDialOptions(t *testing.T) {
+// TestAddGlobalDialOptions tests global dial options, and the dial option that
+// disables global dial options.
+func (s) TestAddGlobalDialOptions(t *testing.T) {
 	// Ensure the Dial fails without credentials
 	if _, err := Dial("fake"); err == nil {
 		t.Fatalf("Dialing without a credential did not fail")
@@ -40,8 +42,8 @@ func (s) TestAddExtraDialOptions(t *testing.T) {
 	opts := []DialOption{WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials()), WithTransportCredentials(insecure.NewCredentials())}
 	internal.AddGlobalDialOptions.(func(opt ...DialOption))(opts...)
 	for i, opt := range opts {
-		if extraDialOptions[i] != opt {
-			t.Fatalf("Unexpected extra dial option at index %d: %v != %v", i, extraDialOptions[i], opt)
+		if globalDialOptions[i] != opt {
+			t.Fatalf("Unexpected global dial option at index %d: %v != %v", i, globalDialOptions[i], opt)
 		}
 	}
 
@@ -52,20 +54,31 @@ func (s) TestAddExtraDialOptions(t *testing.T) {
 		cc.Close()
 	}
 
+	// Test the disableGlobalDialOptions dial option. Setting this while dialing
+	// should cause the Client Conn to not pick up the global dial option with
+	// transport credentials, causing the dial to fail.
+	if _, err := Dial("fake", internal.WithDisableGlobalOptions.(func() DialOption)()); err == nil {
+		t.Fatalf("Dialing without a credential (from blocking the credentials in global options) did not fail")
+	} else {
+		if !strings.Contains(err.Error(), "no transport security set") {
+			t.Fatalf("Dialing failed with unexpected error: %v", err)
+		}
+	}
+
 	internal.ClearGlobalDialOptions()
-	if len(extraDialOptions) != 0 {
-		t.Fatalf("Unexpected len of extraDialOptions: %d != 0", len(extraDialOptions))
+	if len(globalDialOptions) != 0 {
+		t.Fatalf("Unexpected len of globalDialOptions: %d != 0", len(globalDialOptions))
 	}
 }
 
-func (s) TestAddExtraServerOptions(t *testing.T) {
+func (s) TestAddGlobalServerOptions(t *testing.T) {
 	const maxRecvSize = 998765
 	// Set and check the ServerOptions
 	opts := []ServerOption{Creds(insecure.NewCredentials()), MaxRecvMsgSize(maxRecvSize)}
 	internal.AddGlobalServerOptions.(func(opt ...ServerOption))(opts...)
 	for i, opt := range opts {
-		if extraServerOptions[i] != opt {
-			t.Fatalf("Unexpected extra server option at index %d: %v != %v", i, extraServerOptions[i], opt)
+		if globalServerOptions[i] != opt {
+			t.Fatalf("Unexpected global server option at index %d: %v != %v", i, globalServerOptions[i], opt)
 		}
 	}
 
@@ -76,8 +89,8 @@ func (s) TestAddExtraServerOptions(t *testing.T) {
 	}
 
 	internal.ClearGlobalServerOptions()
-	if len(extraServerOptions) != 0 {
-		t.Fatalf("Unexpected len of extraServerOptions: %d != 0", len(extraServerOptions))
+	if len(globalServerOptions) != 0 {
+		t.Fatalf("Unexpected len of globalServerOptions: %d != 0", len(globalServerOptions))
 	}
 }
 

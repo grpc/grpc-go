@@ -38,13 +38,14 @@ import (
 
 func init() {
 	internal.AddGlobalDialOptions = func(opt ...DialOption) {
-		extraDialOptions = append(extraDialOptions, opt...)
+		globalDialOptions = append(globalDialOptions, opt...)
 	}
 	internal.ClearGlobalDialOptions = func() {
-		extraDialOptions = nil
+		globalDialOptions = nil
 	}
 	internal.WithBinaryLogger = withBinaryLogger
 	internal.JoinDialOptions = newJoinDialOption
+	internal.WithDisableGlobalOptions = withDisableGlobalOptions
 }
 
 // dialOptions configure a Dial call. dialOptions are set by the DialOption
@@ -68,6 +69,7 @@ type dialOptions struct {
 	copts                       transport.ConnectOptions
 	callOptions                 []CallOption
 	channelzParentID            *channelz.Identifier
+	disableGlobalOptions        bool
 	disableServiceConfig        bool
 	disableRetry                bool
 	disableHealthCheck          bool
@@ -83,7 +85,7 @@ type DialOption interface {
 	apply(*dialOptions)
 }
 
-var extraDialOptions []DialOption
+var globalDialOptions []DialOption
 
 // EmptyDialOption does not alter the dial configuration. It can be embedded in
 // another structure to build custom dial options.
@@ -184,6 +186,14 @@ func WithMaxMsgSize(s int) DialOption {
 func WithDefaultCallOptions(cos ...CallOption) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.callOptions = append(o.callOptions, cos...)
+	})
+}
+
+// withDisableGlobalOptions returns a DialOption which sets the
+// disableGlobalOptions bool to true.
+func withDisableGlobalOptions() DialOption {
+	return newFuncDialOption(func(o *dialOptions) {
+		o.disableGlobalOptions = true
 	})
 }
 

@@ -146,12 +146,14 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{nil})
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
-	for _, opt := range extraDialOptions {
+	for _, opt := range opts {
 		opt.apply(&cc.dopts)
 	}
 
-	for _, opt := range opts {
-		opt.apply(&cc.dopts)
+	if !cc.dopts.disableGlobalOptions {
+		for _, opt := range globalDialOptions {
+			opt.apply(&cc.dopts)
+		}
 	}
 
 	chainUnaryClientInterceptors(cc)

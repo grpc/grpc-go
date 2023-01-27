@@ -83,7 +83,9 @@ var (
 	// JoinServerOptions combines the server options passed as arguments into a
 	// single server option.
 	JoinServerOptions interface{} // func(...grpc.ServerOption) grpc.ServerOption
-
+	// WithDisableGlobalOptions returns a DialOption which sets the
+	// disableGlobalOptions bool to true.
+	WithDisableGlobalOptions interface{} // func() grpc.DialOption
 	// WithBinaryLogger returns a DialOption that specifies the binary logger
 	// for a ClientConn.
 	WithBinaryLogger interface{} // func(binarylog.Logger) grpc.DialOption
