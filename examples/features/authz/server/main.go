@@ -21,6 +21,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -81,7 +82,6 @@ var (
 	port = flag.Int("port", 50051, "the port to serve on")
 
 	errMissingMetadata = status.Errorf(codes.InvalidArgument, "missing metadata")
-	errInvalidToken    = status.Errorf(codes.Unauthenticated, "invalid token")
 )
 
 func newContextWithRoles(ctx context.Context, username string) context.Context {
@@ -118,23 +118,23 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 }
 
 // valid validates the authorization.
-func valid(authorization []string) (username string, valid bool) {
+func valid(authorization []string) (username string, err error) {
 	if len(authorization) < 1 {
-		return "", false
+		return "", errors.New("received empty authorization token from client")
 	}
 	tokenBase64 := strings.TrimPrefix(authorization[0], "Bearer ")
 	// Perform the token validation here. For the sake of this example, the code
 	// here forgoes any of the usual OAuth2 token validation and instead checks
 	// for a token matching an arbitrary string.
 	var token token.Token
-	err := token.Decode(tokenBase64)
+	err = token.Decode(tokenBase64)
 	if err != nil {
-		return "", false
+		return "", fmt.Errorf("base64 decoding of received token %q: %v", tokenBase64, err)
 	}
 	if token.Secret != "super-secret" {
-		return "", false
+		return "", fmt.Errorf("received token %q does not match expected %q", token.Secret, "super-secret")
 	}
-	return token.Username, true
+	return token.Username, nil
 }
 
 func authUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
@@ -143,9 +143,9 @@ func authUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.Unary
 	if !ok {
 		return nil, errMissingMetadata
 	}
-	username, valid := valid(md["authorization"])
-	if !valid {
-		return nil, errInvalidToken
+	username, err := valid(md["authorization"])
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 	return handler(newContextWithRoles(ctx, username), req)
 }
@@ -170,9 +170,9 @@ func authStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.Str
 	if !ok {
 		return errMissingMetadata
 	}
-	username, valid := valid(md["authorization"])
-	if !valid {
-		return errInvalidToken
+	username, err := valid(md["authorization"])
+	if err != nil {
+		return status.Error(codes.Unauthenticated, err.Error())
 	}
 	return handler(srv, newWrappedStream(newContextWithRoles(ss.Context(), username), ss))
 }

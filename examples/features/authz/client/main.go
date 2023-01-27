@@ -29,11 +29,13 @@ import (
 
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/oauth"
 	"google.golang.org/grpc/examples/data"
 	"google.golang.org/grpc/examples/features/authz/token"
 	ecpb "google.golang.org/grpc/examples/features/proto/echo"
+	"google.golang.org/grpc/status"
 )
 
 var addr = flag.String("addr", "localhost:50051", "the address to connect to")
@@ -41,7 +43,7 @@ var addr = flag.String("addr", "localhost:50051", "the address to connect to")
 func callUnaryEcho(ctx context.Context, client ecpb.EchoClient, message string, opts ...grpc.CallOption) error {
 	resp, err := client.UnaryEcho(ctx, &ecpb.EchoRequest{Message: message}, opts...)
 	if err != nil {
-		return fmt.Errorf("UnaryEcho RPC failed: %w", err)
+		return status.Errorf(status.Code(err), "UnaryEcho RPC failed: %v", err)
 	}
 	fmt.Println("UnaryEcho: ", resp.Message)
 	return nil
@@ -50,11 +52,11 @@ func callUnaryEcho(ctx context.Context, client ecpb.EchoClient, message string, 
 func callBidiStreamingEcho(ctx context.Context, client ecpb.EchoClient, opts ...grpc.CallOption) error {
 	c, err := client.BidirectionalStreamingEcho(ctx, opts...)
 	if err != nil {
-		return fmt.Errorf("BidirectionalStreamingEcho RPC failed: %w", err)
+		return status.Errorf(status.Code(err), "BidirectionalStreamingEcho RPC failed: %w", err)
 	}
 	for i := 0; i < 5; i++ {
 		if err := c.Send(&ecpb.EchoRequest{Message: fmt.Sprintf("Request %d", i+1)}); err != nil {
-			return fmt.Errorf("sending StreamingEcho message: %w", err)
+			return status.Errorf(status.Code(err), "sending StreamingEcho message: %v", err)
 		}
 	}
 	c.CloseSend()
@@ -64,7 +66,7 @@ func callBidiStreamingEcho(ctx context.Context, client ecpb.EchoClient, opts ...
 			break
 		}
 		if err != nil {
-			return fmt.Errorf("receiving StreamingEcho message: %w", err)
+			return status.Errorf(status.Code(err), "receiving StreamingEcho message: %v", err)
 		}
 		fmt.Println("BidiStreaming Echo: ", resp.Message)
 	}
@@ -95,22 +97,36 @@ func main() {
 	}
 	defer conn.Close()
 
-	// Make a echo client and send RPCs.
+	// Make an echo client and send RPCs.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	client := ecpb.NewEchoClient(conn)
+
+	// Make RPCs as an authorized user and expect them to suceed.
 	authorisedUserTokenCallOption := newCredentialsCallOption(token.Token{Username: "super-user", Secret: "super-secret"})
 	if err := callUnaryEcho(ctx, client, "hello world", authorisedUserTokenCallOption); err != nil {
-		log.Fatalf("callUnaryEcho failed with authorised user token: %v", err)
+		log.Fatalf("Unary RPC by authorized user failed: %v", err)
 	}
 	if err := callBidiStreamingEcho(ctx, client, authorisedUserTokenCallOption); err != nil {
-		log.Fatalf("callBidiStreamingEcho failed with authorised user token: %v", err)
+		log.Fatalf("Bidirectional RPC by authorized user failed: %v", err)
 	}
+
+	// Make RPCs as an unauthorized user and expect them to fail with status code <whatever-code-is-expected>.
 	unauthorisedUserTokenCallOption := newCredentialsCallOption(token.Token{Username: "bad-actor", Secret: "super-secret"})
 	if err := callUnaryEcho(ctx, client, "hello world", unauthorisedUserTokenCallOption); err != nil {
-		log.Printf("callUnaryEcho failed as expected with unauthorised user token: %v", err)
+		switch c := status.Code(err); c {
+		case codes.PermissionDenied:
+			log.Printf("Unary RPC by unauthorized user failed as expected: %v", err)
+		default:
+			log.Fatalf("Unary RPC by unauthorized user failed unexpectedly: %v, %v", c, err)
+		}
 	}
 	if err := callBidiStreamingEcho(ctx, client, unauthorisedUserTokenCallOption); err != nil {
-		log.Printf("callBidiStreamingEcho failed as expected with unauthorised user token: %v", err)
+		switch c := status.Code(err); c {
+		case codes.PermissionDenied:
+			log.Printf("Bidirectional RPC by unauthorized user failed as expected: %v", err)
+		default:
+			log.Fatalf("Bidirectional RPC by unauthorized user failed unexpectedly: %v", err)
+		}
 	}
 }
