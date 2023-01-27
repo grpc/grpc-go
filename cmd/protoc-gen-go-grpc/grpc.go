@@ -37,6 +37,7 @@ const (
 
 type serviceGenerateHelperInterface interface {
 	formatFullMethodName(service *protogen.Service, method *protogen.Method) string
+	formatFullMethodSymbol(service *protogen.Service, method *protogen.Method) string
 	generateClientStruct(g *protogen.GeneratedFile, clientName string)
 	generateNewClientDefinitions(g *protogen.GeneratedFile, service *protogen.Service, clientName string)
 	generateUnimplementedServerType(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service)
@@ -48,6 +49,10 @@ type serviceGenerateHelper struct{}
 
 func (serviceGenerateHelper) formatFullMethodName(service *protogen.Service, method *protogen.Method) string {
 	return fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name())
+}
+
+func (serviceGenerateHelper) formatFullMethodSymbol(service *protogen.Service, method *protogen.Method) string {
+	return fmt.Sprintf("%s_%s_FullMethodName", service.GoName, method.GoName)
 }
 
 func (serviceGenerateHelper) generateClientStruct(g *protogen.GeneratedFile, clientName string) {
@@ -290,7 +295,7 @@ func clientSignature(g *protogen.GeneratedFile, method *protogen.Method) string 
 
 func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, method *protogen.Method, index int) {
 	service := method.Parent
-	sname := helper.formatFullMethodName(service, method)
+	fmSymbol := helper.formatFullMethodSymbol(service, method)
 
 	if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 		g.P(deprecationComment)
@@ -298,7 +303,7 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	g.P("func (c *", unexport(service.GoName), "Client) ", clientSignature(g, method), "{")
 	if !method.Desc.IsStreamingServer() && !method.Desc.IsStreamingClient() {
 		g.P("out := new(", method.Output.GoIdent, ")")
-		g.P(`err := c.cc.Invoke(ctx, "`, sname, `", in, out, opts...)`)
+		g.P(`err := c.cc.Invoke(ctx, `, fmSymbol, `, in, out, opts...)`)
 		g.P("if err != nil { return nil, err }")
 		g.P("return out, nil")
 		g.P("}")
@@ -307,7 +312,7 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	}
 	streamType := unexport(service.GoName) + method.GoName + "Client"
 	serviceDescVar := service.GoName + "_ServiceDesc"
-	g.P("stream, err := c.cc.NewStream(ctx, &", serviceDescVar, ".Streams[", index, `], "`, sname, `", opts...)`)
+	g.P("stream, err := c.cc.NewStream(ctx, &", serviceDescVar, ".Streams[", index, `], `, fmSymbol, `, opts...)`)
 	g.P("if err != nil { return nil, err }")
 	g.P("x := &", streamType, "{stream}")
 	if !method.Desc.IsStreamingClient() {
@@ -435,8 +440,8 @@ func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 		g.P("if interceptor == nil { return srv.(", service.GoName, "Server).", method.GoName, "(ctx, in) }")
 		g.P("info := &", grpcPackage.Ident("UnaryServerInfo"), "{")
 		g.P("Server: srv,")
-		fullMethodName := helper.formatFullMethodName(service, method)
-		g.P("FullMethod: \"", fullMethodName, "\",")
+		fmSymbol := helper.formatFullMethodSymbol(service, method)
+		g.P("FullMethod: ", fmSymbol, ",")
 		g.P("}")
 		g.P("handler := func(ctx ", contextPackage.Ident("Context"), ", req interface{}) (interface{}, error) {")
 		g.P("return srv.(", service.GoName, "Server).", method.GoName, "(ctx, req.(*", method.Input.GoIdent, "))")
@@ -519,20 +524,12 @@ func genLeadingComments(g *protogen.GeneratedFile, loc protoreflect.SourceLocati
 
 func genFullMethods(g *protogen.GeneratedFile, service *protogen.Service) {
 	g.P("const (")
-	cNames := make([]string, len(service.Methods))
-	for i, method := range service.Methods {
-		cName := fmt.Sprintf("%s_%s_FullMethod", service.GoName, method.GoName)
-		cNames[i] = cName
+	for _, method := range service.Methods {
+		fmSymbol := helper.formatFullMethodSymbol(service, method)
 		fmName := helper.formatFullMethodName(service, method)
-		g.P(cName, ` = "`, fmName, `"`)
+		g.P(fmSymbol, ` = "`, fmName, `"`)
 	}
 	g.P(")")
-	g.P()
-	g.P("var ", service.GoName, "_FullMethods = []string{")
-	for _, cName := range cNames {
-		g.P(cName, ",")
-	}
-	g.P("}")
 	g.P()
 }
 

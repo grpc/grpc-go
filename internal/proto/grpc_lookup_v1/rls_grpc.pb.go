@@ -50,7 +50,7 @@ func NewRouteLookupServiceClient(cc grpc.ClientConnInterface) RouteLookupService
 
 func (c *routeLookupServiceClient) RouteLookup(ctx context.Context, in *RouteLookupRequest, opts ...grpc.CallOption) (*RouteLookupResponse, error) {
 	out := new(RouteLookupResponse)
-	err := c.cc.Invoke(ctx, "/grpc.lookup.v1.RouteLookupService/RouteLookup", in, out, opts...)
+	err := c.cc.Invoke(ctx, RouteLookupService_RouteLookup_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func _RouteLookupService_RouteLookup_Handler(srv interface{}, ctx context.Contex
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.lookup.v1.RouteLookupService/RouteLookup",
+		FullMethod: RouteLookupService_RouteLookup_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RouteLookupServiceServer).RouteLookup(ctx, req.(*RouteLookupRequest))
@@ -121,9 +121,5 @@ var RouteLookupService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	RouteLookupService_RouteLookup_FullMethod = "/grpc.lookup.v1.RouteLookupService/RouteLookup"
+	RouteLookupService_RouteLookup_FullMethodName = "/grpc.lookup.v1.RouteLookupService/RouteLookup"
 )
-
-var RouteLookupService_FullMethods = []string{
-	RouteLookupService_RouteLookup_FullMethod,
-}

@@ -59,7 +59,7 @@ func NewEchoClient(cc grpc.ClientConnInterface) EchoClient {
 
 func (c *echoClient) UnaryEcho(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (*EchoResponse, error) {
 	out := new(EchoResponse)
-	err := c.cc.Invoke(ctx, "/grpc.examples.echo.Echo/UnaryEcho", in, out, opts...)
+	err := c.cc.Invoke(ctx, Echo_UnaryEcho_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (c *echoClient) UnaryEcho(ctx context.Context, in *EchoRequest, opts ...grp
 }
 
 func (c *echoClient) ServerStreamingEcho(ctx context.Context, in *EchoRequest, opts ...grpc.CallOption) (Echo_ServerStreamingEchoClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[0], "/grpc.examples.echo.Echo/ServerStreamingEcho", opts...)
+	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[0], Echo_ServerStreamingEcho_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func (x *echoServerStreamingEchoClient) Recv() (*EchoResponse, error) {
 }
 
 func (c *echoClient) ClientStreamingEcho(ctx context.Context, opts ...grpc.CallOption) (Echo_ClientStreamingEchoClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[1], "/grpc.examples.echo.Echo/ClientStreamingEcho", opts...)
+	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[1], Echo_ClientStreamingEcho_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (x *echoClientStreamingEchoClient) CloseAndRecv() (*EchoResponse, error) {
 }
 
 func (c *echoClient) BidirectionalStreamingEcho(ctx context.Context, opts ...grpc.CallOption) (Echo_BidirectionalStreamingEchoClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[2], "/grpc.examples.echo.Echo/BidirectionalStreamingEcho", opts...)
+	stream, err := c.cc.NewStream(ctx, &Echo_ServiceDesc.Streams[2], Echo_BidirectionalStreamingEcho_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +217,7 @@ func _Echo_UnaryEcho_Handler(srv interface{}, ctx context.Context, dec func(inte
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.examples.echo.Echo/UnaryEcho",
+		FullMethod: Echo_UnaryEcho_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(EchoServer).UnaryEcho(ctx, req.(*EchoRequest))
@@ -332,15 +332,8 @@ var Echo_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Echo_UnaryEcho_FullMethod                  = "/grpc.examples.echo.Echo/UnaryEcho"
-	Echo_ServerStreamingEcho_FullMethod        = "/grpc.examples.echo.Echo/ServerStreamingEcho"
-	Echo_ClientStreamingEcho_FullMethod        = "/grpc.examples.echo.Echo/ClientStreamingEcho"
-	Echo_BidirectionalStreamingEcho_FullMethod = "/grpc.examples.echo.Echo/BidirectionalStreamingEcho"
+	Echo_UnaryEcho_FullMethodName                  = "/grpc.examples.echo.Echo/UnaryEcho"
+	Echo_ServerStreamingEcho_FullMethodName        = "/grpc.examples.echo.Echo/ServerStreamingEcho"
+	Echo_ClientStreamingEcho_FullMethodName        = "/grpc.examples.echo.Echo/ClientStreamingEcho"
+	Echo_BidirectionalStreamingEcho_FullMethodName = "/grpc.examples.echo.Echo/BidirectionalStreamingEcho"
 )
-
-var Echo_FullMethods = []string{
-	Echo_UnaryEcho_FullMethod,
-	Echo_ServerStreamingEcho_FullMethod,
-	Echo_ClientStreamingEcho_FullMethod,
-	Echo_BidirectionalStreamingEcho_FullMethod,
-}

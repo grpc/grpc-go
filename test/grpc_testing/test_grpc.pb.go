@@ -71,7 +71,7 @@ func NewTestServiceClient(cc grpc.ClientConnInterface) TestServiceClient {
 
 func (c *testServiceClient) EmptyCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/EmptyCall", in, out, opts...)
+	err := c.cc.Invoke(ctx, TestService_EmptyCall_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (c *testServiceClient) EmptyCall(ctx context.Context, in *Empty, opts ...gr
 
 func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
 	out := new(SimpleResponse)
-	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/UnaryCall", in, out, opts...)
+	err := c.cc.Invoke(ctx, TestService_UnaryCall_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, op
 }
 
 func (c *testServiceClient) StreamingOutputCall(ctx context.Context, in *StreamingOutputCallRequest, opts ...grpc.CallOption) (TestService_StreamingOutputCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[0], "/grpc.testing.TestService/StreamingOutputCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[0], TestService_StreamingOutputCall_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -120,7 +120,7 @@ func (x *testServiceStreamingOutputCallClient) Recv() (*StreamingOutputCallRespo
 }
 
 func (c *testServiceClient) StreamingInputCall(ctx context.Context, opts ...grpc.CallOption) (TestService_StreamingInputCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[1], "/grpc.testing.TestService/StreamingInputCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[1], TestService_StreamingInputCall_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func (x *testServiceStreamingInputCallClient) CloseAndRecv() (*StreamingInputCal
 }
 
 func (c *testServiceClient) FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_FullDuplexCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[2], "/grpc.testing.TestService/FullDuplexCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[2], TestService_FullDuplexCall_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +185,7 @@ func (x *testServiceFullDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 }
 
 func (c *testServiceClient) HalfDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_HalfDuplexCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[3], "/grpc.testing.TestService/HalfDuplexCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[3], TestService_HalfDuplexCall_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +287,7 @@ func _TestService_EmptyCall_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.TestService/EmptyCall",
+		FullMethod: TestService_EmptyCall_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TestServiceServer).EmptyCall(ctx, req.(*Empty))
@@ -305,7 +305,7 @@ func _TestService_UnaryCall_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.TestService/UnaryCall",
+		FullMethod: TestService_UnaryCall_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TestServiceServer).UnaryCall(ctx, req.(*SimpleRequest))
@@ -456,19 +456,10 @@ var TestService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	TestService_EmptyCall_FullMethod           = "/grpc.testing.TestService/EmptyCall"
-	TestService_UnaryCall_FullMethod           = "/grpc.testing.TestService/UnaryCall"
-	TestService_StreamingOutputCall_FullMethod = "/grpc.testing.TestService/StreamingOutputCall"
-	TestService_StreamingInputCall_FullMethod  = "/grpc.testing.TestService/StreamingInputCall"
-	TestService_FullDuplexCall_FullMethod      = "/grpc.testing.TestService/FullDuplexCall"
-	TestService_HalfDuplexCall_FullMethod      = "/grpc.testing.TestService/HalfDuplexCall"
+	TestService_EmptyCall_FullMethodName           = "/grpc.testing.TestService/EmptyCall"
+	TestService_UnaryCall_FullMethodName           = "/grpc.testing.TestService/UnaryCall"
+	TestService_StreamingOutputCall_FullMethodName = "/grpc.testing.TestService/StreamingOutputCall"
+	TestService_StreamingInputCall_FullMethodName  = "/grpc.testing.TestService/StreamingInputCall"
+	TestService_FullDuplexCall_FullMethodName      = "/grpc.testing.TestService/FullDuplexCall"
+	TestService_HalfDuplexCall_FullMethodName      = "/grpc.testing.TestService/HalfDuplexCall"
 )
-
-var TestService_FullMethods = []string{
-	TestService_EmptyCall_FullMethod,
-	TestService_UnaryCall_FullMethod,
-	TestService_StreamingOutputCall_FullMethod,
-	TestService_StreamingInputCall_FullMethod,
-	TestService_FullDuplexCall_FullMethod,
-	TestService_HalfDuplexCall_FullMethod,
-}

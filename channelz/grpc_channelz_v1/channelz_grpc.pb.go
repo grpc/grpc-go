@@ -70,7 +70,7 @@ func NewChannelzClient(cc grpc.ClientConnInterface) ChannelzClient {
 
 func (c *channelzClient) GetTopChannels(ctx context.Context, in *GetTopChannelsRequest, opts ...grpc.CallOption) (*GetTopChannelsResponse, error) {
 	out := new(GetTopChannelsResponse)
-	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetTopChannels", in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetTopChannels_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +79,7 @@ func (c *channelzClient) GetTopChannels(ctx context.Context, in *GetTopChannelsR
 
 func (c *channelzClient) GetServers(ctx context.Context, in *GetServersRequest, opts ...grpc.CallOption) (*GetServersResponse, error) {
 	out := new(GetServersResponse)
-	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetServers", in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetServers_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +88,7 @@ func (c *channelzClient) GetServers(ctx context.Context, in *GetServersRequest, 
 
 func (c *channelzClient) GetServer(ctx context.Context, in *GetServerRequest, opts ...grpc.CallOption) (*GetServerResponse, error) {
 	out := new(GetServerResponse)
-	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetServer", in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetServer_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func (c *channelzClient) GetServer(ctx context.Context, in *GetServerRequest, op
 
 func (c *channelzClient) GetServerSockets(ctx context.Context, in *GetServerSocketsRequest, opts ...grpc.CallOption) (*GetServerSocketsResponse, error) {
 	out := new(GetServerSocketsResponse)
-	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetServerSockets", in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetServerSockets_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (c *channelzClient) GetServerSockets(ctx context.Context, in *GetServerSock
 
 func (c *channelzClient) GetChannel(ctx context.Context, in *GetChannelRequest, opts ...grpc.CallOption) (*GetChannelResponse, error) {
 	out := new(GetChannelResponse)
-	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetChannel", in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetChannel_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (c *channelzClient) GetChannel(ctx context.Context, in *GetChannelRequest, 
 
 func (c *channelzClient) GetSubchannel(ctx context.Context, in *GetSubchannelRequest, opts ...grpc.CallOption) (*GetSubchannelResponse, error) {
 	out := new(GetSubchannelResponse)
-	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetSubchannel", in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetSubchannel_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func (c *channelzClient) GetSubchannel(ctx context.Context, in *GetSubchannelReq
 
 func (c *channelzClient) GetSocket(ctx context.Context, in *GetSocketRequest, opts ...grpc.CallOption) (*GetSocketResponse, error) {
 	out := new(GetSocketResponse)
-	err := c.cc.Invoke(ctx, "/grpc.channelz.v1.Channelz/GetSocket", in, out, opts...)
+	err := c.cc.Invoke(ctx, Channelz_GetSocket_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func _Channelz_GetTopChannels_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.channelz.v1.Channelz/GetTopChannels",
+		FullMethod: Channelz_GetTopChannels_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ChannelzServer).GetTopChannels(ctx, req.(*GetTopChannelsRequest))
@@ -217,7 +217,7 @@ func _Channelz_GetServers_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.channelz.v1.Channelz/GetServers",
+		FullMethod: Channelz_GetServers_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ChannelzServer).GetServers(ctx, req.(*GetServersRequest))
@@ -235,7 +235,7 @@ func _Channelz_GetServer_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.channelz.v1.Channelz/GetServer",
+		FullMethod: Channelz_GetServer_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ChannelzServer).GetServer(ctx, req.(*GetServerRequest))
@@ -253,7 +253,7 @@ func _Channelz_GetServerSockets_Handler(srv interface{}, ctx context.Context, de
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.channelz.v1.Channelz/GetServerSockets",
+		FullMethod: Channelz_GetServerSockets_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ChannelzServer).GetServerSockets(ctx, req.(*GetServerSocketsRequest))
@@ -271,7 +271,7 @@ func _Channelz_GetChannel_Handler(srv interface{}, ctx context.Context, dec func
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.channelz.v1.Channelz/GetChannel",
+		FullMethod: Channelz_GetChannel_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ChannelzServer).GetChannel(ctx, req.(*GetChannelRequest))
@@ -289,7 +289,7 @@ func _Channelz_GetSubchannel_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.channelz.v1.Channelz/GetSubchannel",
+		FullMethod: Channelz_GetSubchannel_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ChannelzServer).GetSubchannel(ctx, req.(*GetSubchannelRequest))
@@ -307,7 +307,7 @@ func _Channelz_GetSocket_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.channelz.v1.Channelz/GetSocket",
+		FullMethod: Channelz_GetSocket_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ChannelzServer).GetSocket(ctx, req.(*GetSocketRequest))
@@ -356,21 +356,11 @@ var Channelz_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Channelz_GetTopChannels_FullMethod   = "/grpc.channelz.v1.Channelz/GetTopChannels"
-	Channelz_GetServers_FullMethod       = "/grpc.channelz.v1.Channelz/GetServers"
-	Channelz_GetServer_FullMethod        = "/grpc.channelz.v1.Channelz/GetServer"
-	Channelz_GetServerSockets_FullMethod = "/grpc.channelz.v1.Channelz/GetServerSockets"
-	Channelz_GetChannel_FullMethod       = "/grpc.channelz.v1.Channelz/GetChannel"
-	Channelz_GetSubchannel_FullMethod    = "/grpc.channelz.v1.Channelz/GetSubchannel"
-	Channelz_GetSocket_FullMethod        = "/grpc.channelz.v1.Channelz/GetSocket"
+	Channelz_GetTopChannels_FullMethodName   = "/grpc.channelz.v1.Channelz/GetTopChannels"
+	Channelz_GetServers_FullMethodName       = "/grpc.channelz.v1.Channelz/GetServers"
+	Channelz_GetServer_FullMethodName        = "/grpc.channelz.v1.Channelz/GetServer"
+	Channelz_GetServerSockets_FullMethodName = "/grpc.channelz.v1.Channelz/GetServerSockets"
+	Channelz_GetChannel_FullMethodName       = "/grpc.channelz.v1.Channelz/GetChannel"
+	Channelz_GetSubchannel_FullMethodName    = "/grpc.channelz.v1.Channelz/GetSubchannel"
+	Channelz_GetSocket_FullMethodName        = "/grpc.channelz.v1.Channelz/GetSocket"
 )
-
-var Channelz_FullMethods = []string{
-	Channelz_GetTopChannels_FullMethod,
-	Channelz_GetServers_FullMethod,
-	Channelz_GetServer_FullMethod,
-	Channelz_GetServerSockets_FullMethod,
-	Channelz_GetChannel_FullMethod,
-	Channelz_GetSubchannel_FullMethod,
-	Channelz_GetSocket_FullMethod,
-}

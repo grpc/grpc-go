@@ -54,7 +54,7 @@ func NewServerReflectionClient(cc grpc.ClientConnInterface) ServerReflectionClie
 }
 
 func (c *serverReflectionClient) ServerReflectionInfo(ctx context.Context, opts ...grpc.CallOption) (ServerReflection_ServerReflectionInfoClient, error) {
-	stream, err := c.cc.NewStream(ctx, &ServerReflection_ServiceDesc.Streams[0], "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo", opts...)
+	stream, err := c.cc.NewStream(ctx, &ServerReflection_ServiceDesc.Streams[0], ServerReflection_ServerReflectionInfo_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -157,9 +157,5 @@ var ServerReflection_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ServerReflection_ServerReflectionInfo_FullMethod = "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo"
+	ServerReflection_ServerReflectionInfo_FullMethodName = "/grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo"
 )
-
-var ServerReflection_FullMethods = []string{
-	ServerReflection_ServerReflectionInfo_FullMethod,
-}

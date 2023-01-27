@@ -54,7 +54,7 @@ func NewLoadBalancerClient(cc grpc.ClientConnInterface) LoadBalancerClient {
 }
 
 func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...grpc.CallOption) (LoadBalancer_BalanceLoadClient, error) {
-	stream, err := c.cc.NewStream(ctx, &LoadBalancer_ServiceDesc.Streams[0], "/grpc.lb.v1.LoadBalancer/BalanceLoad", opts...)
+	stream, err := c.cc.NewStream(ctx, &LoadBalancer_ServiceDesc.Streams[0], LoadBalancer_BalanceLoad_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -156,9 +156,5 @@ var LoadBalancer_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	LoadBalancer_BalanceLoad_FullMethod = "/grpc.lb.v1.LoadBalancer/BalanceLoad"
+	LoadBalancer_BalanceLoad_FullMethodName = "/grpc.lb.v1.LoadBalancer/BalanceLoad"
 )
-
-var LoadBalancer_FullMethods = []string{
-	LoadBalancer_BalanceLoad_FullMethod,
-}

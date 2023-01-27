@@ -68,7 +68,7 @@ func NewWorkerServiceClient(cc grpc.ClientConnInterface) WorkerServiceClient {
 }
 
 func (c *workerServiceClient) RunServer(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunServerClient, error) {
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], "/grpc.testing.WorkerService/RunServer", opts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[0], WorkerService_RunServer_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func (x *workerServiceRunServerClient) Recv() (*ServerStatus, error) {
 }
 
 func (c *workerServiceClient) RunClient(ctx context.Context, opts ...grpc.CallOption) (WorkerService_RunClientClient, error) {
-	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[1], "/grpc.testing.WorkerService/RunClient", opts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerService_ServiceDesc.Streams[1], WorkerService_RunClient_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (x *workerServiceRunClientClient) Recv() (*ClientStatus, error) {
 
 func (c *workerServiceClient) CoreCount(ctx context.Context, in *CoreRequest, opts ...grpc.CallOption) (*CoreResponse, error) {
 	out := new(CoreResponse)
-	err := c.cc.Invoke(ctx, "/grpc.testing.WorkerService/CoreCount", in, out, opts...)
+	err := c.cc.Invoke(ctx, WorkerService_CoreCount_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func (c *workerServiceClient) CoreCount(ctx context.Context, in *CoreRequest, op
 
 func (c *workerServiceClient) QuitWorker(ctx context.Context, in *Void, opts ...grpc.CallOption) (*Void, error) {
 	out := new(Void)
-	err := c.cc.Invoke(ctx, "/grpc.testing.WorkerService/QuitWorker", in, out, opts...)
+	err := c.cc.Invoke(ctx, WorkerService_QuitWorker_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +263,7 @@ func _WorkerService_CoreCount_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.WorkerService/CoreCount",
+		FullMethod: WorkerService_CoreCount_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WorkerServiceServer).CoreCount(ctx, req.(*CoreRequest))
@@ -281,7 +281,7 @@ func _WorkerService_QuitWorker_Handler(srv interface{}, ctx context.Context, dec
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.WorkerService/QuitWorker",
+		FullMethod: WorkerService_QuitWorker_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WorkerServiceServer).QuitWorker(ctx, req.(*Void))
@@ -323,15 +323,8 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	WorkerService_RunServer_FullMethod  = "/grpc.testing.WorkerService/RunServer"
-	WorkerService_RunClient_FullMethod  = "/grpc.testing.WorkerService/RunClient"
-	WorkerService_CoreCount_FullMethod  = "/grpc.testing.WorkerService/CoreCount"
-	WorkerService_QuitWorker_FullMethod = "/grpc.testing.WorkerService/QuitWorker"
+	WorkerService_RunServer_FullMethodName  = "/grpc.testing.WorkerService/RunServer"
+	WorkerService_RunClient_FullMethodName  = "/grpc.testing.WorkerService/RunClient"
+	WorkerService_CoreCount_FullMethodName  = "/grpc.testing.WorkerService/CoreCount"
+	WorkerService_QuitWorker_FullMethodName = "/grpc.testing.WorkerService/QuitWorker"
 )
-
-var WorkerService_FullMethods = []string{
-	WorkerService_RunServer_FullMethod,
-	WorkerService_RunClient_FullMethod,
-	WorkerService_CoreCount_FullMethod,
-	WorkerService_QuitWorker_FullMethod,
-}

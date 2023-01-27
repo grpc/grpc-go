@@ -72,7 +72,7 @@ func NewRouteGuideClient(cc grpc.ClientConnInterface) RouteGuideClient {
 
 func (c *routeGuideClient) GetFeature(ctx context.Context, in *Point, opts ...grpc.CallOption) (*Feature, error) {
 	out := new(Feature)
-	err := c.cc.Invoke(ctx, "/routeguide.RouteGuide/GetFeature", in, out, opts...)
+	err := c.cc.Invoke(ctx, RouteGuide_GetFeature_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,7 @@ func (c *routeGuideClient) GetFeature(ctx context.Context, in *Point, opts ...gr
 }
 
 func (c *routeGuideClient) ListFeatures(ctx context.Context, in *Rectangle, opts ...grpc.CallOption) (RouteGuide_ListFeaturesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &RouteGuide_ServiceDesc.Streams[0], "/routeguide.RouteGuide/ListFeatures", opts...)
+	stream, err := c.cc.NewStream(ctx, &RouteGuide_ServiceDesc.Streams[0], RouteGuide_ListFeatures_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func (x *routeGuideListFeaturesClient) Recv() (*Feature, error) {
 }
 
 func (c *routeGuideClient) RecordRoute(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RecordRouteClient, error) {
-	stream, err := c.cc.NewStream(ctx, &RouteGuide_ServiceDesc.Streams[1], "/routeguide.RouteGuide/RecordRoute", opts...)
+	stream, err := c.cc.NewStream(ctx, &RouteGuide_ServiceDesc.Streams[1], RouteGuide_RecordRoute_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func (x *routeGuideRecordRouteClient) CloseAndRecv() (*RouteSummary, error) {
 }
 
 func (c *routeGuideClient) RouteChat(ctx context.Context, opts ...grpc.CallOption) (RouteGuide_RouteChatClient, error) {
-	stream, err := c.cc.NewStream(ctx, &RouteGuide_ServiceDesc.Streams[2], "/routeguide.RouteGuide/RouteChat", opts...)
+	stream, err := c.cc.NewStream(ctx, &RouteGuide_ServiceDesc.Streams[2], RouteGuide_RouteChat_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +246,7 @@ func _RouteGuide_GetFeature_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/routeguide.RouteGuide/GetFeature",
+		FullMethod: RouteGuide_GetFeature_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RouteGuideServer).GetFeature(ctx, req.(*Point))
@@ -361,15 +361,8 @@ var RouteGuide_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	RouteGuide_GetFeature_FullMethod   = "/routeguide.RouteGuide/GetFeature"
-	RouteGuide_ListFeatures_FullMethod = "/routeguide.RouteGuide/ListFeatures"
-	RouteGuide_RecordRoute_FullMethod  = "/routeguide.RouteGuide/RecordRoute"
-	RouteGuide_RouteChat_FullMethod    = "/routeguide.RouteGuide/RouteChat"
+	RouteGuide_GetFeature_FullMethodName   = "/routeguide.RouteGuide/GetFeature"
+	RouteGuide_ListFeatures_FullMethodName = "/routeguide.RouteGuide/ListFeatures"
+	RouteGuide_RecordRoute_FullMethodName  = "/routeguide.RouteGuide/RecordRoute"
+	RouteGuide_RouteChat_FullMethodName    = "/routeguide.RouteGuide/RouteChat"
 )
-
-var RouteGuide_FullMethods = []string{
-	RouteGuide_GetFeature_FullMethod,
-	RouteGuide_ListFeatures_FullMethod,
-	RouteGuide_RecordRoute_FullMethod,
-	RouteGuide_RouteChat_FullMethod,
-}

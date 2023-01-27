@@ -77,7 +77,7 @@ func NewTestServiceClient(cc grpc.ClientConnInterface) TestServiceClient {
 
 func (c *testServiceClient) EmptyCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/EmptyCall", in, out, opts...)
+	err := c.cc.Invoke(ctx, TestService_EmptyCall_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +86,7 @@ func (c *testServiceClient) EmptyCall(ctx context.Context, in *Empty, opts ...gr
 
 func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
 	out := new(SimpleResponse)
-	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/UnaryCall", in, out, opts...)
+	err := c.cc.Invoke(ctx, TestService_UnaryCall_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, op
 
 func (c *testServiceClient) CacheableUnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
 	out := new(SimpleResponse)
-	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/CacheableUnaryCall", in, out, opts...)
+	err := c.cc.Invoke(ctx, TestService_CacheableUnaryCall_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func (c *testServiceClient) CacheableUnaryCall(ctx context.Context, in *SimpleRe
 }
 
 func (c *testServiceClient) StreamingOutputCall(ctx context.Context, in *StreamingOutputCallRequest, opts ...grpc.CallOption) (TestService_StreamingOutputCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[0], "/grpc.testing.TestService/StreamingOutputCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[0], TestService_StreamingOutputCall_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (x *testServiceStreamingOutputCallClient) Recv() (*StreamingOutputCallRespo
 }
 
 func (c *testServiceClient) StreamingInputCall(ctx context.Context, opts ...grpc.CallOption) (TestService_StreamingInputCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[1], "/grpc.testing.TestService/StreamingInputCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[1], TestService_StreamingInputCall_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (x *testServiceStreamingInputCallClient) CloseAndRecv() (*StreamingInputCal
 }
 
 func (c *testServiceClient) FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_FullDuplexCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[2], "/grpc.testing.TestService/FullDuplexCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[2], TestService_FullDuplexCall_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -200,7 +200,7 @@ func (x *testServiceFullDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 }
 
 func (c *testServiceClient) HalfDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_HalfDuplexCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[3], "/grpc.testing.TestService/HalfDuplexCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[3], TestService_HalfDuplexCall_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func (x *testServiceHalfDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 
 func (c *testServiceClient) UnimplementedCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/UnimplementedCall", in, out, opts...)
+	err := c.cc.Invoke(ctx, TestService_UnimplementedCall_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -323,7 +323,7 @@ func _TestService_EmptyCall_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.TestService/EmptyCall",
+		FullMethod: TestService_EmptyCall_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TestServiceServer).EmptyCall(ctx, req.(*Empty))
@@ -341,7 +341,7 @@ func _TestService_UnaryCall_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.TestService/UnaryCall",
+		FullMethod: TestService_UnaryCall_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TestServiceServer).UnaryCall(ctx, req.(*SimpleRequest))
@@ -359,7 +359,7 @@ func _TestService_CacheableUnaryCall_Handler(srv interface{}, ctx context.Contex
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.TestService/CacheableUnaryCall",
+		FullMethod: TestService_CacheableUnaryCall_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TestServiceServer).CacheableUnaryCall(ctx, req.(*SimpleRequest))
@@ -476,7 +476,7 @@ func _TestService_UnimplementedCall_Handler(srv interface{}, ctx context.Context
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.TestService/UnimplementedCall",
+		FullMethod: TestService_UnimplementedCall_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TestServiceServer).UnimplementedCall(ctx, req.(*Empty))
@@ -536,26 +536,15 @@ var TestService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	TestService_EmptyCall_FullMethod           = "/grpc.testing.TestService/EmptyCall"
-	TestService_UnaryCall_FullMethod           = "/grpc.testing.TestService/UnaryCall"
-	TestService_CacheableUnaryCall_FullMethod  = "/grpc.testing.TestService/CacheableUnaryCall"
-	TestService_StreamingOutputCall_FullMethod = "/grpc.testing.TestService/StreamingOutputCall"
-	TestService_StreamingInputCall_FullMethod  = "/grpc.testing.TestService/StreamingInputCall"
-	TestService_FullDuplexCall_FullMethod      = "/grpc.testing.TestService/FullDuplexCall"
-	TestService_HalfDuplexCall_FullMethod      = "/grpc.testing.TestService/HalfDuplexCall"
-	TestService_UnimplementedCall_FullMethod   = "/grpc.testing.TestService/UnimplementedCall"
+	TestService_EmptyCall_FullMethodName           = "/grpc.testing.TestService/EmptyCall"
+	TestService_UnaryCall_FullMethodName           = "/grpc.testing.TestService/UnaryCall"
+	TestService_CacheableUnaryCall_FullMethodName  = "/grpc.testing.TestService/CacheableUnaryCall"
+	TestService_StreamingOutputCall_FullMethodName = "/grpc.testing.TestService/StreamingOutputCall"
+	TestService_StreamingInputCall_FullMethodName  = "/grpc.testing.TestService/StreamingInputCall"
+	TestService_FullDuplexCall_FullMethodName      = "/grpc.testing.TestService/FullDuplexCall"
+	TestService_HalfDuplexCall_FullMethodName      = "/grpc.testing.TestService/HalfDuplexCall"
+	TestService_UnimplementedCall_FullMethodName   = "/grpc.testing.TestService/UnimplementedCall"
 )
-
-var TestService_FullMethods = []string{
-	TestService_EmptyCall_FullMethod,
-	TestService_UnaryCall_FullMethod,
-	TestService_CacheableUnaryCall_FullMethod,
-	TestService_StreamingOutputCall_FullMethod,
-	TestService_StreamingInputCall_FullMethod,
-	TestService_FullDuplexCall_FullMethod,
-	TestService_HalfDuplexCall_FullMethod,
-	TestService_UnimplementedCall_FullMethod,
-}
 
 // UnimplementedServiceClient is the client API for UnimplementedService service.
 //
@@ -575,7 +564,7 @@ func NewUnimplementedServiceClient(cc grpc.ClientConnInterface) UnimplementedSer
 
 func (c *unimplementedServiceClient) UnimplementedCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, "/grpc.testing.UnimplementedService/UnimplementedCall", in, out, opts...)
+	err := c.cc.Invoke(ctx, UnimplementedService_UnimplementedCall_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -621,7 +610,7 @@ func _UnimplementedService_UnimplementedCall_Handler(srv interface{}, ctx contex
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.UnimplementedService/UnimplementedCall",
+		FullMethod: UnimplementedService_UnimplementedCall_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(UnimplementedServiceServer).UnimplementedCall(ctx, req.(*Empty))
@@ -646,12 +635,8 @@ var UnimplementedService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	UnimplementedService_UnimplementedCall_FullMethod = "/grpc.testing.UnimplementedService/UnimplementedCall"
+	UnimplementedService_UnimplementedCall_FullMethodName = "/grpc.testing.UnimplementedService/UnimplementedCall"
 )
-
-var UnimplementedService_FullMethods = []string{
-	UnimplementedService_UnimplementedCall_FullMethod,
-}
 
 // ReconnectServiceClient is the client API for ReconnectService service.
 //
@@ -671,7 +656,7 @@ func NewReconnectServiceClient(cc grpc.ClientConnInterface) ReconnectServiceClie
 
 func (c *reconnectServiceClient) Start(ctx context.Context, in *ReconnectParams, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, "/grpc.testing.ReconnectService/Start", in, out, opts...)
+	err := c.cc.Invoke(ctx, ReconnectService_Start_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -680,7 +665,7 @@ func (c *reconnectServiceClient) Start(ctx context.Context, in *ReconnectParams,
 
 func (c *reconnectServiceClient) Stop(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ReconnectInfo, error) {
 	out := new(ReconnectInfo)
-	err := c.cc.Invoke(ctx, "/grpc.testing.ReconnectService/Stop", in, out, opts...)
+	err := c.cc.Invoke(ctx, ReconnectService_Stop_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -729,7 +714,7 @@ func _ReconnectService_Start_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.ReconnectService/Start",
+		FullMethod: ReconnectService_Start_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ReconnectServiceServer).Start(ctx, req.(*ReconnectParams))
@@ -747,7 +732,7 @@ func _ReconnectService_Stop_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.ReconnectService/Stop",
+		FullMethod: ReconnectService_Stop_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ReconnectServiceServer).Stop(ctx, req.(*Empty))
@@ -776,14 +761,9 @@ var ReconnectService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ReconnectService_Start_FullMethod = "/grpc.testing.ReconnectService/Start"
-	ReconnectService_Stop_FullMethod  = "/grpc.testing.ReconnectService/Stop"
+	ReconnectService_Start_FullMethodName = "/grpc.testing.ReconnectService/Start"
+	ReconnectService_Stop_FullMethodName  = "/grpc.testing.ReconnectService/Stop"
 )
-
-var ReconnectService_FullMethods = []string{
-	ReconnectService_Start_FullMethod,
-	ReconnectService_Stop_FullMethod,
-}
 
 // LoadBalancerStatsServiceClient is the client API for LoadBalancerStatsService service.
 //
@@ -805,7 +785,7 @@ func NewLoadBalancerStatsServiceClient(cc grpc.ClientConnInterface) LoadBalancer
 
 func (c *loadBalancerStatsServiceClient) GetClientStats(ctx context.Context, in *LoadBalancerStatsRequest, opts ...grpc.CallOption) (*LoadBalancerStatsResponse, error) {
 	out := new(LoadBalancerStatsResponse)
-	err := c.cc.Invoke(ctx, "/grpc.testing.LoadBalancerStatsService/GetClientStats", in, out, opts...)
+	err := c.cc.Invoke(ctx, LoadBalancerStatsService_GetClientStats_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -814,7 +794,7 @@ func (c *loadBalancerStatsServiceClient) GetClientStats(ctx context.Context, in 
 
 func (c *loadBalancerStatsServiceClient) GetClientAccumulatedStats(ctx context.Context, in *LoadBalancerAccumulatedStatsRequest, opts ...grpc.CallOption) (*LoadBalancerAccumulatedStatsResponse, error) {
 	out := new(LoadBalancerAccumulatedStatsResponse)
-	err := c.cc.Invoke(ctx, "/grpc.testing.LoadBalancerStatsService/GetClientAccumulatedStats", in, out, opts...)
+	err := c.cc.Invoke(ctx, LoadBalancerStatsService_GetClientAccumulatedStats_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -866,7 +846,7 @@ func _LoadBalancerStatsService_GetClientStats_Handler(srv interface{}, ctx conte
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.LoadBalancerStatsService/GetClientStats",
+		FullMethod: LoadBalancerStatsService_GetClientStats_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LoadBalancerStatsServiceServer).GetClientStats(ctx, req.(*LoadBalancerStatsRequest))
@@ -884,7 +864,7 @@ func _LoadBalancerStatsService_GetClientAccumulatedStats_Handler(srv interface{}
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.LoadBalancerStatsService/GetClientAccumulatedStats",
+		FullMethod: LoadBalancerStatsService_GetClientAccumulatedStats_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LoadBalancerStatsServiceServer).GetClientAccumulatedStats(ctx, req.(*LoadBalancerAccumulatedStatsRequest))
@@ -913,14 +893,9 @@ var LoadBalancerStatsService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	LoadBalancerStatsService_GetClientStats_FullMethod            = "/grpc.testing.LoadBalancerStatsService/GetClientStats"
-	LoadBalancerStatsService_GetClientAccumulatedStats_FullMethod = "/grpc.testing.LoadBalancerStatsService/GetClientAccumulatedStats"
+	LoadBalancerStatsService_GetClientStats_FullMethodName            = "/grpc.testing.LoadBalancerStatsService/GetClientStats"
+	LoadBalancerStatsService_GetClientAccumulatedStats_FullMethodName = "/grpc.testing.LoadBalancerStatsService/GetClientAccumulatedStats"
 )
-
-var LoadBalancerStatsService_FullMethods = []string{
-	LoadBalancerStatsService_GetClientStats_FullMethod,
-	LoadBalancerStatsService_GetClientAccumulatedStats_FullMethod,
-}
 
 // XdsUpdateHealthServiceClient is the client API for XdsUpdateHealthService service.
 //
@@ -940,7 +915,7 @@ func NewXdsUpdateHealthServiceClient(cc grpc.ClientConnInterface) XdsUpdateHealt
 
 func (c *xdsUpdateHealthServiceClient) SetServing(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, "/grpc.testing.XdsUpdateHealthService/SetServing", in, out, opts...)
+	err := c.cc.Invoke(ctx, XdsUpdateHealthService_SetServing_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -949,7 +924,7 @@ func (c *xdsUpdateHealthServiceClient) SetServing(ctx context.Context, in *Empty
 
 func (c *xdsUpdateHealthServiceClient) SetNotServing(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, "/grpc.testing.XdsUpdateHealthService/SetNotServing", in, out, opts...)
+	err := c.cc.Invoke(ctx, XdsUpdateHealthService_SetNotServing_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -999,7 +974,7 @@ func _XdsUpdateHealthService_SetServing_Handler(srv interface{}, ctx context.Con
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.XdsUpdateHealthService/SetServing",
+		FullMethod: XdsUpdateHealthService_SetServing_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(XdsUpdateHealthServiceServer).SetServing(ctx, req.(*Empty))
@@ -1017,7 +992,7 @@ func _XdsUpdateHealthService_SetNotServing_Handler(srv interface{}, ctx context.
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.XdsUpdateHealthService/SetNotServing",
+		FullMethod: XdsUpdateHealthService_SetNotServing_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(XdsUpdateHealthServiceServer).SetNotServing(ctx, req.(*Empty))
@@ -1046,14 +1021,9 @@ var XdsUpdateHealthService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	XdsUpdateHealthService_SetServing_FullMethod    = "/grpc.testing.XdsUpdateHealthService/SetServing"
-	XdsUpdateHealthService_SetNotServing_FullMethod = "/grpc.testing.XdsUpdateHealthService/SetNotServing"
+	XdsUpdateHealthService_SetServing_FullMethodName    = "/grpc.testing.XdsUpdateHealthService/SetServing"
+	XdsUpdateHealthService_SetNotServing_FullMethodName = "/grpc.testing.XdsUpdateHealthService/SetNotServing"
 )
-
-var XdsUpdateHealthService_FullMethods = []string{
-	XdsUpdateHealthService_SetServing_FullMethod,
-	XdsUpdateHealthService_SetNotServing_FullMethod,
-}
 
 // XdsUpdateClientConfigureServiceClient is the client API for XdsUpdateClientConfigureService service.
 //
@@ -1073,7 +1043,7 @@ func NewXdsUpdateClientConfigureServiceClient(cc grpc.ClientConnInterface) XdsUp
 
 func (c *xdsUpdateClientConfigureServiceClient) Configure(ctx context.Context, in *ClientConfigureRequest, opts ...grpc.CallOption) (*ClientConfigureResponse, error) {
 	out := new(ClientConfigureResponse)
-	err := c.cc.Invoke(ctx, "/grpc.testing.XdsUpdateClientConfigureService/Configure", in, out, opts...)
+	err := c.cc.Invoke(ctx, XdsUpdateClientConfigureService_Configure_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1120,7 +1090,7 @@ func _XdsUpdateClientConfigureService_Configure_Handler(srv interface{}, ctx con
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.XdsUpdateClientConfigureService/Configure",
+		FullMethod: XdsUpdateClientConfigureService_Configure_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(XdsUpdateClientConfigureServiceServer).Configure(ctx, req.(*ClientConfigureRequest))
@@ -1145,9 +1115,5 @@ var XdsUpdateClientConfigureService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	XdsUpdateClientConfigureService_Configure_FullMethod = "/grpc.testing.XdsUpdateClientConfigureService/Configure"
+	XdsUpdateClientConfigureService_Configure_FullMethodName = "/grpc.testing.XdsUpdateClientConfigureService/Configure"
 )
-
-var XdsUpdateClientConfigureService_FullMethods = []string{
-	XdsUpdateClientConfigureService_Configure_FullMethod,
-}

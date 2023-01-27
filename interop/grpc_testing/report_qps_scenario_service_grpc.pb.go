@@ -53,7 +53,7 @@ func NewReportQpsScenarioServiceClient(cc grpc.ClientConnInterface) ReportQpsSce
 
 func (c *reportQpsScenarioServiceClient) ReportScenario(ctx context.Context, in *ScenarioResult, opts ...grpc.CallOption) (*Void, error) {
 	out := new(Void)
-	err := c.cc.Invoke(ctx, "/grpc.testing.ReportQpsScenarioService/ReportScenario", in, out, opts...)
+	err := c.cc.Invoke(ctx, ReportQpsScenarioService_ReportScenario_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func _ReportQpsScenarioService_ReportScenario_Handler(srv interface{}, ctx conte
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.ReportQpsScenarioService/ReportScenario",
+		FullMethod: ReportQpsScenarioService_ReportScenario_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ReportQpsScenarioServiceServer).ReportScenario(ctx, req.(*ScenarioResult))
@@ -125,9 +125,5 @@ var ReportQpsScenarioService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ReportQpsScenarioService_ReportScenario_FullMethod = "/grpc.testing.ReportQpsScenarioService/ReportScenario"
+	ReportQpsScenarioService_ReportScenario_FullMethodName = "/grpc.testing.ReportQpsScenarioService/ReportScenario"
 )
-
-var ReportQpsScenarioService_FullMethods = []string{
-	ReportQpsScenarioService_ReportScenario_FullMethod,
-}

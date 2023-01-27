@@ -50,7 +50,7 @@ func NewGreeterClient(cc grpc.ClientConnInterface) GreeterClient {
 
 func (c *greeterClient) SayHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloReply, error) {
 	out := new(HelloReply)
-	err := c.cc.Invoke(ctx, "/helloworld.Greeter/SayHello", in, out, opts...)
+	err := c.cc.Invoke(ctx, Greeter_SayHello_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func _Greeter_SayHello_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/helloworld.Greeter/SayHello",
+		FullMethod: Greeter_SayHello_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(GreeterServer).SayHello(ctx, req.(*HelloRequest))
@@ -121,9 +121,5 @@ var Greeter_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Greeter_SayHello_FullMethod = "/helloworld.Greeter/SayHello"
+	Greeter_SayHello_FullMethodName = "/helloworld.Greeter/SayHello"
 )
-
-var Greeter_FullMethods = []string{
-	Greeter_SayHello_FullMethod,
-}

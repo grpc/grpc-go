@@ -67,7 +67,7 @@ func NewBenchmarkServiceClient(cc grpc.ClientConnInterface) BenchmarkServiceClie
 
 func (c *benchmarkServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
 	out := new(SimpleResponse)
-	err := c.cc.Invoke(ctx, "/grpc.testing.BenchmarkService/UnaryCall", in, out, opts...)
+	err := c.cc.Invoke(ctx, BenchmarkService_UnaryCall_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (c *benchmarkServiceClient) UnaryCall(ctx context.Context, in *SimpleReques
 }
 
 func (c *benchmarkServiceClient) StreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[0], "/grpc.testing.BenchmarkService/StreamingCall", opts...)
+	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[0], BenchmarkService_StreamingCall_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (x *benchmarkServiceStreamingCallClient) Recv() (*SimpleResponse, error) {
 }
 
 func (c *benchmarkServiceClient) StreamingFromClient(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingFromClientClient, error) {
-	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[1], "/grpc.testing.BenchmarkService/StreamingFromClient", opts...)
+	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[1], BenchmarkService_StreamingFromClient_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func (x *benchmarkServiceStreamingFromClientClient) CloseAndRecv() (*SimpleRespo
 }
 
 func (c *benchmarkServiceClient) StreamingFromServer(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (BenchmarkService_StreamingFromServerClient, error) {
-	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[2], "/grpc.testing.BenchmarkService/StreamingFromServer", opts...)
+	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[2], BenchmarkService_StreamingFromServer_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func (x *benchmarkServiceStreamingFromServerClient) Recv() (*SimpleResponse, err
 }
 
 func (c *benchmarkServiceClient) StreamingBothWays(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingBothWaysClient, error) {
-	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[3], "/grpc.testing.BenchmarkService/StreamingBothWays", opts...)
+	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[3], BenchmarkService_StreamingBothWays_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -267,7 +267,7 @@ func _BenchmarkService_UnaryCall_Handler(srv interface{}, ctx context.Context, d
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.BenchmarkService/UnaryCall",
+		FullMethod: BenchmarkService_UnaryCall_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BenchmarkServiceServer).UnaryCall(ctx, req.(*SimpleRequest))
@@ -414,17 +414,9 @@ var BenchmarkService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	BenchmarkService_UnaryCall_FullMethod           = "/grpc.testing.BenchmarkService/UnaryCall"
-	BenchmarkService_StreamingCall_FullMethod       = "/grpc.testing.BenchmarkService/StreamingCall"
-	BenchmarkService_StreamingFromClient_FullMethod = "/grpc.testing.BenchmarkService/StreamingFromClient"
-	BenchmarkService_StreamingFromServer_FullMethod = "/grpc.testing.BenchmarkService/StreamingFromServer"
-	BenchmarkService_StreamingBothWays_FullMethod   = "/grpc.testing.BenchmarkService/StreamingBothWays"
+	BenchmarkService_UnaryCall_FullMethodName           = "/grpc.testing.BenchmarkService/UnaryCall"
+	BenchmarkService_StreamingCall_FullMethodName       = "/grpc.testing.BenchmarkService/StreamingCall"
+	BenchmarkService_StreamingFromClient_FullMethodName = "/grpc.testing.BenchmarkService/StreamingFromClient"
+	BenchmarkService_StreamingFromServer_FullMethodName = "/grpc.testing.BenchmarkService/StreamingFromServer"
+	BenchmarkService_StreamingBothWays_FullMethodName   = "/grpc.testing.BenchmarkService/StreamingBothWays"
 )
-
-var BenchmarkService_FullMethods = []string{
-	BenchmarkService_UnaryCall_FullMethod,
-	BenchmarkService_StreamingCall_FullMethod,
-	BenchmarkService_StreamingFromClient_FullMethod,
-	BenchmarkService_StreamingFromServer_FullMethod,
-	BenchmarkService_StreamingBothWays_FullMethod,
-}

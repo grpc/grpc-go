@@ -70,7 +70,7 @@ func NewHealthClient(cc grpc.ClientConnInterface) HealthClient {
 
 func (c *healthClient) Check(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (*HealthCheckResponse, error) {
 	out := new(HealthCheckResponse)
-	err := c.cc.Invoke(ctx, "/grpc.health.v1.Health/Check", in, out, opts...)
+	err := c.cc.Invoke(ctx, Health_Check_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (c *healthClient) Check(ctx context.Context, in *HealthCheckRequest, opts .
 }
 
 func (c *healthClient) Watch(ctx context.Context, in *HealthCheckRequest, opts ...grpc.CallOption) (Health_WatchClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Health_ServiceDesc.Streams[0], "/grpc.health.v1.Health/Watch", opts...)
+	stream, err := c.cc.NewStream(ctx, &Health_ServiceDesc.Streams[0], Health_Watch_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func _Health_Check_Handler(srv interface{}, ctx context.Context, dec func(interf
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.health.v1.Health/Check",
+		FullMethod: Health_Check_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(HealthServer).Check(ctx, req.(*HealthCheckRequest))
@@ -218,11 +218,6 @@ var Health_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Health_Check_FullMethod = "/grpc.health.v1.Health/Check"
-	Health_Watch_FullMethod = "/grpc.health.v1.Health/Watch"
+	Health_Check_FullMethodName = "/grpc.health.v1.Health/Check"
+	Health_Watch_FullMethodName = "/grpc.health.v1.Health/Watch"
 )
-
-var Health_FullMethods = []string{
-	Health_Check_FullMethod,
-	Health_Watch_FullMethod,
-}

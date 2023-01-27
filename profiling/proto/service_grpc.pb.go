@@ -53,7 +53,7 @@ func NewProfilingClient(cc grpc.ClientConnInterface) ProfilingClient {
 
 func (c *profilingClient) Enable(ctx context.Context, in *EnableRequest, opts ...grpc.CallOption) (*EnableResponse, error) {
 	out := new(EnableResponse)
-	err := c.cc.Invoke(ctx, "/grpc.go.profiling.v1alpha.Profiling/Enable", in, out, opts...)
+	err := c.cc.Invoke(ctx, Profiling_Enable_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (c *profilingClient) Enable(ctx context.Context, in *EnableRequest, opts ..
 
 func (c *profilingClient) GetStreamStats(ctx context.Context, in *GetStreamStatsRequest, opts ...grpc.CallOption) (*GetStreamStatsResponse, error) {
 	out := new(GetStreamStatsResponse)
-	err := c.cc.Invoke(ctx, "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats", in, out, opts...)
+	err := c.cc.Invoke(ctx, Profiling_GetStreamStats_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func _Profiling_Enable_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.go.profiling.v1alpha.Profiling/Enable",
+		FullMethod: Profiling_Enable_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProfilingServer).Enable(ctx, req.(*EnableRequest))
@@ -130,7 +130,7 @@ func _Profiling_GetStreamStats_Handler(srv interface{}, ctx context.Context, dec
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats",
+		FullMethod: Profiling_GetStreamStats_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProfilingServer).GetStreamStats(ctx, req.(*GetStreamStatsRequest))
@@ -159,11 +159,6 @@ var Profiling_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	Profiling_Enable_FullMethod         = "/grpc.go.profiling.v1alpha.Profiling/Enable"
-	Profiling_GetStreamStats_FullMethod = "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats"
+	Profiling_Enable_FullMethodName         = "/grpc.go.profiling.v1alpha.Profiling/Enable"
+	Profiling_GetStreamStats_FullMethodName = "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats"
 )
-
-var Profiling_FullMethods = []string{
-	Profiling_Enable_FullMethod,
-	Profiling_GetStreamStats_FullMethod,
-}
