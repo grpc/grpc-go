@@ -73,6 +73,12 @@ func (pl *PrefixLogger) Debugf(format string, args ...interface{}) {
 		return
 	}
 	InfoDepth(1, fmt.Sprintf(format, args...))
+
+}
+
+// V reports whether verbosity level l is at least the requested verbose level.
+func (pl *PrefixLogger) V(l int) bool {
+	return Logger.V(l)
 }
 
 // NewPrefixLogger creates a prefix logger with the given prefix.
