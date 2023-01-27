@@ -133,6 +133,10 @@ func (dcs *defaultConfigSelector) SelectConfig(rpcInfo iresolver.RPCInfo) (*ires
 // https://github.com/grpc/grpc/blob/master/doc/naming.md.
 // e.g. to use dns resolver, a "dns:///" prefix should be applied to the target.
 func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *ClientConn, err error) {
+	return dialWithGlobalOptions(ctx, target, false, opts...)
+}
+
+func dialWithGlobalOptions(ctx context.Context, target string, disableGlobalOptions bool, opts ...DialOption) (conn *ClientConn, err error) {
 	cc := &ClientConn{
 		target:            target,
 		csMgr:             &connectivityStateManager{},
@@ -146,8 +150,10 @@ func DialContext(ctx context.Context, target string, opts ...DialOption) (conn *
 	cc.safeConfigSelector.UpdateConfigSelector(&defaultConfigSelector{nil})
 	cc.ctx, cc.cancel = context.WithCancel(context.Background())
 
-	for _, opt := range extraDialOptions {
-		opt.apply(&cc.dopts)
+	if !disableGlobalOptions {
+		for _, opt := range globalDialOptions {
+			opt.apply(&cc.dopts)
+		}
 	}
 
 	for _, opt := range opts {

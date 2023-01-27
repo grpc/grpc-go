@@ -74,10 +74,10 @@ func init() {
 		srv.drainServerTransports(addr)
 	}
 	internal.AddGlobalServerOptions = func(opt ...ServerOption) {
-		extraServerOptions = append(extraServerOptions, opt...)
+		globalServerOptions = append(globalServerOptions, opt...)
 	}
 	internal.ClearGlobalServerOptions = func() {
-		extraServerOptions = nil
+		globalServerOptions = nil
 	}
 	internal.BinaryLogger = binaryLogger
 	internal.JoinServerOptions = newJoinServerOption
@@ -183,7 +183,7 @@ var defaultServerOptions = serverOptions{
 	writeBufferSize:       defaultWriteBufSize,
 	readBufferSize:        defaultReadBufSize,
 }
-var extraServerOptions []ServerOption
+var globalServerOptions []ServerOption
 
 // A ServerOption sets options such as credentials, codec and keepalive parameters, etc.
 type ServerOption interface {
@@ -600,7 +600,7 @@ func (s *Server) stopServerWorkers() {
 // started to accept requests yet.
 func NewServer(opt ...ServerOption) *Server {
 	opts := defaultServerOptions
-	for _, o := range extraServerOptions {
+	for _, o := range globalServerOptions {
 		o.apply(&opts)
 	}
 	for _, o := range opt {

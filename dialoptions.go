@@ -38,11 +38,12 @@ import (
 
 func init() {
 	internal.AddGlobalDialOptions = func(opt ...DialOption) {
-		extraDialOptions = append(extraDialOptions, opt...)
+		globalDialOptions = append(globalDialOptions, opt...)
 	}
 	internal.ClearGlobalDialOptions = func() {
-		extraDialOptions = nil
+		globalDialOptions = nil
 	}
+	internal.DialWithGlobalOptions = dialWithGlobalOptions
 	internal.WithBinaryLogger = withBinaryLogger
 	internal.JoinDialOptions = newJoinDialOption
 }
@@ -83,7 +84,7 @@ type DialOption interface {
 	apply(*dialOptions)
 }
 
-var extraDialOptions []DialOption
+var globalDialOptions []DialOption
 
 // EmptyDialOption does not alter the dial configuration. It can be embedded in
 // another structure to build custom dial options.
