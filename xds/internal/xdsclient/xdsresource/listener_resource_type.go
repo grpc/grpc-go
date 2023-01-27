@@ -81,7 +81,7 @@ func listenerValidator(bc *bootstrap.Config, lis ListenerUpdate) error {
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
 func (listenerResourceType) Decode(opts *DecodeOptions, resource *anypb.Any) (*DecodeResult, error) {
-	name, listener, err := unmarshalListenerResource(resource, opts.Logger)
+	name, listener, err := unmarshalListenerResource(resource)
 	switch {
 	case name == "":
 		// Name is unset only when protobuf deserialization fails.
