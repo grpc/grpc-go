@@ -81,4 +81,5 @@ func SetLocalityID(addr resolver.Address, l LocalityID) resolver.Address {
 	return addr
 }
 
+// ResourceTypeMapForTesting maps TypeUrl to corresponding ResourceType.
 var ResourceTypeMapForTesting map[string]interface{}

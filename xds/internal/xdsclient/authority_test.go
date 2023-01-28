@@ -59,11 +59,11 @@ func (s) TestWatchResourceBaseCase(t *testing.T) {
 	// to watch a single listener resource.
 	// This test verifies the resource watch timer behavior and watch states.
 
-	// Start a management server to act as the default authority.
+	// Start a management server.
 	onStreamRequestDoneCh := make(chan struct{})
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 		OnStreamRequest: func(i int64, request *v3discoverypb.DiscoveryRequest) error {
-			// This is to avoid calling close() on a closed ch
+			// This is to avoid calling close() on a closed ch.
 			select {
 			case <-onStreamRequestDoneCh:
 				return nil
@@ -113,29 +113,32 @@ func (s) TestWatchResourceBaseCase(t *testing.T) {
 
 	rType := internal.ResourceTypeMapForTesting[version.V3ListenerURL].(xdsresource.Type)
 
-	// simulating maybeRegister for rType
+	// Simulating maybeRegister for rType.
 	rtRegistry.types[rType.TypeURL()] = rType
 
 	cancelResource := a.watchResource(rType, resourceName, dWatcher)
 	defer cancelResource()
 
-	// check watch == nil
+	a.resourcesMu.Lock()
 	if a.resources[rType][resourceName].wTimer != nil {
 		t.Fatal("watch resource timer has started. Want: wTimer==nil.")
 	}
 	if wState := a.resources[rType][resourceName].wState; wState != watchStateStarted {
 		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateStarted)
 	}
+	a.resourcesMu.Unlock()
 
-	// Wait for mgmt server to recv request
+	// Wait for mgmt server to recv request.
 	<-onStreamRequestDoneCh
 
+	a.resourcesMu.Lock()
 	if a.resources[rType][resourceName].wTimer == nil {
 		t.Fatal("watch resource timer is nil. Want: wTimer to be started.")
 	}
 	if wState := a.resources[rType][resourceName].wState; wState != watchStateRespRequested {
 		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateRespRequested)
 	}
+	a.resourcesMu.Unlock()
 
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
@@ -147,19 +150,20 @@ func (s) TestWatchResourceBaseCase(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	// wait for authority to receive the update
+	// Wait for authority to receive the update.
 	<-watcherUpdateCh
+	a.resourcesMu.Lock()
 	if wState := a.resources[rType][resourceName].wState; wState != watchStateRespReceived {
 		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateRespReceived)
 	}
-
+	a.resourcesMu.Unlock()
 }
 
 func (s) TestWatchResourceTimerStopsOnError(t *testing.T) {
 	// This test verifies that in the case where the ads stream stops the timer for
 	// the resource also stops and the state is ready to be restarted later.
 
-	// Start a management server to act as the default authority.
+	// Start a management server.
 	onStreamRequestDoneCh := make(chan struct{})
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 		OnStreamRequest: func(i int64, request *v3discoverypb.DiscoveryRequest) error {
@@ -212,38 +216,42 @@ func (s) TestWatchResourceTimerStopsOnError(t *testing.T) {
 
 	rType := internal.ResourceTypeMapForTesting[version.V3ListenerURL].(xdsresource.Type)
 
-	// simulating maybeRegister for rType
+	// Simulating maybeRegister for rType.
 	rtRegistry.types[rType.TypeURL()] = rType
 
 	cancelResource := a.watchResource(rType, resourceName, dWatcher)
 	defer cancelResource()
 
-	// check watch == nil
+	a.resourcesMu.Lock()
 	if a.resources[rType][resourceName].wTimer != nil {
 		t.Fatal("watch resource timer has started. Want: wTimer==nil.")
 	}
 	if wState := a.resources[rType][resourceName].wState; wState != watchStateStarted {
 		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateStarted)
 	}
+	a.resourcesMu.Unlock()
 
-	// Wait for mgmt server to recv request
+	// Wait for mgmt server to recv request.
 	<-onStreamRequestDoneCh
 
+	a.resourcesMu.Lock()
 	if a.resources[rType][resourceName].wTimer == nil {
 		t.Fatal("watch resource timer is nil. Want: wTimer to be started.")
 	}
 	if wState := a.resources[rType][resourceName].wState; wState != watchStateRespRequested {
 		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateRespRequested)
 	}
-	// stop mgmt server
+	a.resourcesMu.Unlock()
+
 	mgmtServer.Stop()
 
-	// wait for authority to receive the update
+	// Wait for authority to receive the update.
 	if err := <-watcherErrCh; err == nil {
 		t.Fatalf("got err == nil. Want: %v", watchStateStarted)
 	}
-
+	a.resourcesMu.Lock()
 	if wState := a.resources[rType][resourceName].wState; wState != watchStateStarted {
 		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateStarted)
 	}
+	a.resourcesMu.Unlock()
 }
