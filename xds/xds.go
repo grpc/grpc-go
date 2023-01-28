@@ -63,7 +63,7 @@ func init() {
 		default:
 			// Returning an error would cause the top level admin.Register() to
 			// fail. Log a warning instead.
-			logger.Warningf("server to register service on is neither a *grpc.Server or a *xds.GRPCServer, CSDS will not be registered")
+			logger.Warningf("Server to register service on is neither a *grpc.Server or a *xds.GRPCServer, CSDS will not be registered")
 			return nil, nil
 		}
 
