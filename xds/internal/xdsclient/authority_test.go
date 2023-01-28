@@ -35,8 +35,6 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
-var _ xdsresource.ListenerWatcher
-
 type delegatingDummyWatcher struct {
 	watcher listenerWatcher
 }

@@ -198,7 +198,7 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 					})
 					return nil
 				},
-				OnSendHandler:      func(*transport.UpdateChannelInfo) {},               // No on send handling.
+				OnSendHandler:      func(*transport.UpdateChannelInfo) {},               // No onSend handling.
 				StreamErrorHandler: func(error) {},                                      // No stream error handling.
 				Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.
 			})
