@@ -15,6 +15,13 @@
  * limitations under the License.
  */
 
+// Package xdsresource implements the xDS data model layer.
+//
+// Provides resource-type specific functionality to unmarshal xDS protos into
+// internal data structures that contain only fields gRPC is interested in.
+// These internal data structures are passed to components in the xDS stack
+// (resolver/balancers/server) that have expressed interest in receiving
+// updates to specific resources.
 package xdsresource
 
 import (
