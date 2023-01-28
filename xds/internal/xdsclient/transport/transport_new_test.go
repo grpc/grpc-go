@@ -80,7 +80,7 @@ func (s) TestNew(t *testing.T) {
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 					NodeProto: &v3corepb.Node{},
 				},
-				UpdateHandler: func(transport.ResourceUpdate) error { return nil },
+				UpdateHandler:      func(transport.ResourceUpdate) error { return nil },
 				StreamErrorHandler: func(error) {},
 			},
 			wantErrStr: "missing on send handler when creating a new transport",

@@ -35,8 +35,6 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
-
-
 var _ xdsresource.ListenerWatcher
 
 type delegatingDummyWatcher struct {
@@ -55,7 +53,6 @@ func (d *delegatingDummyWatcher) OnError(err error) {
 func (d *delegatingDummyWatcher) OnResourceDoesNotExist() {
 	d.watcher.OnResourceDoesNotExist()
 }
-
 
 func (s) TestWatchResourceBaseCase(t *testing.T) {
 	// This test simulates a simple scenario where authority is called
@@ -89,13 +86,13 @@ func (s) TestWatchResourceBaseCase(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	a, err := newAuthority(authorityArgs{
-		serverCfg: 					&bootstrap.ServerConfig{
+		serverCfg: &bootstrap.ServerConfig{
 			ServerURI:    mgmtServer.Address,
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 			CredsType:    "insecure",
 			TransportAPI: version.TransportV3,
 			NodeProto:    &v3corepb.Node{Id: nodeID},
-		} ,
+		},
 		bootstrapCfg:       nil,
 		serializer:         cs,
 		resourceTypeGetter: rtRegistry.get,
@@ -125,7 +122,7 @@ func (s) TestWatchResourceBaseCase(t *testing.T) {
 	// check watch == nil
 	if a.resources[rType][resourceName].wTimer != nil {
 		t.Fatal("watch resource timer has started. Want: wTimer==nil.")
-	} 
+	}
 	if wState := a.resources[rType][resourceName].wState; wState != watchStateStarted {
 		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateStarted)
 	}
@@ -151,7 +148,7 @@ func (s) TestWatchResourceBaseCase(t *testing.T) {
 	}
 
 	// wait for authority to receive the update
-	<- watcherUpdateCh
+	<-watcherUpdateCh
 	if wState := a.resources[rType][resourceName].wState; wState != watchStateRespReceived {
 		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateRespReceived)
 	}
@@ -188,13 +185,13 @@ func (s) TestWatchResourceTimerStopsOnError(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	a, err := newAuthority(authorityArgs{
-		serverCfg: 					&bootstrap.ServerConfig{
+		serverCfg: &bootstrap.ServerConfig{
 			ServerURI:    mgmtServer.Address,
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 			CredsType:    "insecure",
 			TransportAPI: version.TransportV3,
 			NodeProto:    &v3corepb.Node{Id: nodeID},
-		} ,
+		},
 		bootstrapCfg:       nil,
 		serializer:         cs,
 		resourceTypeGetter: rtRegistry.get,
@@ -242,7 +239,7 @@ func (s) TestWatchResourceTimerStopsOnError(t *testing.T) {
 	mgmtServer.Stop()
 
 	// wait for authority to receive the update
-	if err := <- watcherErrCh; err == nil {
+	if err := <-watcherErrCh; err == nil {
 		t.Fatalf("got err == nil. Want: %v", watchStateStarted)
 	}
 

@@ -125,7 +125,6 @@ func newAuthority(args authorityArgs) (*authority, error) {
 		return nil, fmt.Errorf("creating new transport to %q: %v", args.serverCfg, err)
 	}
 	ret.transport = tr
-
 	return ret, nil
 }
 
@@ -147,7 +146,6 @@ func (a *authority) transportAfterSendHandler(u *transport.UpdateChannelInfo) {
 		}
 	}
 	a.resourcesMu.Unlock()
-
 }
 
 func (a *authority) handleResourceUpdate(resourceUpdate transport.ResourceUpdate) error {
@@ -329,7 +327,7 @@ func (a *authority) newConnectionError(err error) {
 	// from the transport layer.
 	for _, rType := range a.resources {
 		for _, state := range rType {
-			// if state === watchStateRespRequested, we want to stop the current timer, and
+			// if state === watchStateRespRequested, stop the current timer and
 			// let retries start the timer again.
 			if state.wState == watchStateRespRequested {
 				state.wTimer.Stop()

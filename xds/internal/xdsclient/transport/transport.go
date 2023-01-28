@@ -170,7 +170,6 @@ func New(opts Options) (*Transport, error) {
 		return nil, errors.New("missing on send handler when creating a new transport")
 	}
 
-
 	node, ok := opts.ServerCfg.NodeProto.(*v3corepb.Node)
 	if !ok {
 		return nil, fmt.Errorf("unexpected type %T for NodeProto, want %T", opts.ServerCfg.NodeProto, &v3corepb.Node{})

@@ -20,6 +20,7 @@ package xdsresource
 import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -32,7 +33,7 @@ var (
 	// Singleton instantiation of the resource type implementation.
 	endpointsType = endpointsResourceType{
 		resourceTypeState: resourceTypeState{
-			typeURL:                    "type.googleapis.com/envoy.config.endpoint.v3.ClusterLoadAssignment",
+			typeURL:                    version.V3EndpointsURL,
 			typeEnum:                   EndpointsResource,
 			allResourcesRequiredInSotW: false,
 		},
@@ -47,11 +48,11 @@ type endpointsResourceType struct {
 	resourceTypeState
 }
 
-func init(){
+func init() {
 	if internal.ResourceTypeMapForTesting == nil {
 		internal.ResourceTypeMapForTesting = make(map[string]interface{})
 	}
-	internal.ResourceTypeMapForTesting[typeURL] =  endpointsType
+	internal.ResourceTypeMapForTesting[version.V3EndpointsURL] = endpointsType
 
 }
 
