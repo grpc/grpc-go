@@ -132,6 +132,7 @@ func newAuthority(args authorityArgs) (*authority, error) {
 // resource req successfully. Timers are started for resources waiting for a response.
 func (a *authority) transportAfterSendHandler(u *transport.UpdateChannelInfo) {
 	a.resourcesMu.Lock()
+	defer a.resourcesMu.Unlock()
 	rType := a.resourceTypeGetter(u.URL)
 	rTypeMap := a.resources[rType]
 
@@ -145,7 +146,6 @@ func (a *authority) transportAfterSendHandler(u *transport.UpdateChannelInfo) {
 			}
 		}
 	}
-	a.resourcesMu.Unlock()
 }
 
 func (a *authority) handleResourceUpdate(resourceUpdate transport.ResourceUpdate) error {
@@ -173,8 +173,10 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			// Cancel the expiry timer associated with the resource once a
 			// response is received, irrespective of whether the update is a
 			// good one or not.
-			state.wTimer.Stop()
-			state.wState = watchStateRespReceived
+			if state.wState == watchStateRespRequested {
+				state.wTimer.Stop()
+				state.wState = watchStateRespReceived
+			}
 
 			if uErr.err != nil {
 				// On error, keep previous version of the resource. But update
