@@ -38,6 +38,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	internalbackoff "google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/transport"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/resolver"
@@ -681,6 +682,8 @@ func (s) TestResolverEmptyUpdateNotPanic(t *testing.T) {
 }
 
 func (s) TestClientUpdatesParamsAfterGoAway(t *testing.T) {
+	grpctest.TLogger.ExpectError("Client received GoAway with http2.ErrCodeEnhanceYourCalm and debug data equal to ASCII \"too_many_pings\"")
+
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatalf("Failed to listen. Err: %v", err)

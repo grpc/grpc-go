@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/grpcsync"
+	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/stubserver"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/keepalive"
@@ -120,6 +121,8 @@ func (s) TestDetailedGoAwayErrorOnGracefulClosePropagatesToRPCError(t *testing.T
 }
 
 func (s) TestDetailedGoAwayErrorOnAbruptClosePropagatesToRPCError(t *testing.T) {
+	grpctest.TLogger.ExpectError("Client received GoAway with http2.ErrCodeEnhanceYourCalm and debug data equal to ASCII \"too_many_pings\"")
+
 	// set the min keepalive time very low so that this test can take
 	// a reasonable amount of time
 	prev := internal.KeepaliveMinPingTime
