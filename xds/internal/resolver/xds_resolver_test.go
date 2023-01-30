@@ -108,11 +108,17 @@ type testClientConn struct {
 }
 
 func (t *testClientConn) UpdateState(s resolver.State) error {
-	t.stateCh.Replace(s)
+	// Tests should ideally consume all state updates, and if one happens
+	// unexpectedly, tests should catch it. Hence using `Send()` here.
+	t.stateCh.Send(s)
 	return nil
 }
 
 func (t *testClientConn) ReportError(err error) {
+	// When used with a go-control-plane management server that continuously
+	// resends resources which are NACKed by the xDS client, using a `Replace()`
+	// here simplifies tests which will have access to the most recently
+	// received error.
 	t.errorCh.Replace(err)
 }
 
