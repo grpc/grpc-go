@@ -5118,10 +5118,14 @@ func (s) TestSetSendCompressorSuccess(t *testing.T) {
 			wantCompressInvokes: 1,
 		},
 		{
-			name:                "gzip_request_and_identity_response",
-			desc:                "request is gzip compressed and response is uncompressed with identity",
-			resCompressor:       "identity",
-			dialOpts:            []grpc.DialOption{grpc.WithCompressor(grpc.NewGZIPCompressor())},
+			name:          "gzip_request_and_identity_response",
+			desc:          "request is gzip compressed and response is uncompressed with identity",
+			resCompressor: "identity",
+			dialOpts: []grpc.DialOption{
+				// Use WithCompressor instead of UseCompressor to avoid counting
+				// the client's compressor usage.
+				grpc.WithCompressor(grpc.NewGZIPCompressor()),
+			},
 			wantCompressInvokes: 0,
 		},
 	} {
