@@ -28,6 +28,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
@@ -45,7 +46,7 @@ var (
 	bytesDistributionBounds  = []float64{1024, 2048, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864, 268435456, 1073741824, 4294967296}
 	bytesDistribution        = view.Distribution(bytesDistributionBounds...)
 	millisecondsDistribution = view.Distribution(0.01, 0.05, 0.1, 0.3, 0.6, 0.8, 1, 2, 3, 4, 5, 6, 8, 10, 13, 16, 20, 25, 30, 40, 50, 65, 80, 100, 130, 160, 200, 250, 300, 400, 500, 650, 800, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
-	countDistributionBounds  = []float64{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536} // float64 correct here?
+	countDistributionBounds  = []float64{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536}
 	countDistribution        = view.Distribution(countDistributionBounds...)
 )
 
@@ -67,7 +68,7 @@ type rpcData struct {
 	// || server)
 	recvBytes int64
 
-	startTime time.Time // is this still the correct way to count latency?
+	startTime time.Time
 	method    string
 }
 
@@ -107,37 +108,36 @@ func (ssh *serverStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCT
 }
 
 func recordRPCData(ctx context.Context, s stats.RPCStats) {
-	switch st := s.(type) {
-	case *stats.InHeader, *stats.OutHeader, *stats.InTrailer, *stats.OutTrailer:
-		// Headers and Trailers are not relevant to the measures, as the
-		// measures concern number of messages and bytes for messages. This
-		// aligns with flow control.
-	case *stats.Begin:
-		recordDataBegin(ctx, st)
-	case *stats.OutPayload:
-		recordDataOutPayload(ctx, st)
-	case *stats.InPayload:
-		recordDataInPayload(ctx, st)
-	case *stats.End:
-		recordDataEnd(ctx, st)
-	default:
-		// Shouldn't happen. gRPC calls into stats handler, and will never not
-		// be one of the types above.
-	}
-}
-
-// recordDataBegin takes a measurement related to the RPC beginning,
-// client/server started RPCs dependent on the caller.
-func recordDataBegin(ctx context.Context, b *stats.Begin) {
 	d, ok := ctx.Value(rpcDataKey{}).(*rpcData)
 	if !ok {
 		// Shouldn't happen, as gRPC calls TagRPC which populates the rpcData in
 		// context.
 		return
 	}
+	switch st := s.(type) {
+	case *stats.InHeader, *stats.OutHeader, *stats.InTrailer, *stats.OutTrailer:
+		// Headers and Trailers are not relevant to the measures, as the
+		// measures concern number of messages and bytes for messages. This
+		// aligns with flow control.
+	case *stats.Begin:
+		recordDataBegin(ctx, d, st)
+	case *stats.OutPayload:
+		recordDataOutPayload(d, st)
+	case *stats.InPayload:
+		recordDataInPayload(d, st)
+	case *stats.End:
+		recordDataEnd(ctx, d, st)
+	default:
+		// Shouldn't happen. gRPC calls into stats handler, and will never not
+		// be one of the types above.
+		logger.Errorf("Received unexpected stats type (%T) with data: %v", s, s)
+	}
+}
 
-	if b.IsClient() {
-		print("recording client started rpcs + 1")
+// recordDataBegin takes a measurement related to the RPC beginning,
+// client/server started RPCs dependent on the caller.
+func recordDataBegin(ctx context.Context, d *rpcData, b *stats.Begin) {
+	if b.Client {
 		ocstats.RecordWithOptions(ctx,
 			ocstats.WithTags(tag.Upsert(keyClientMethod, removeLeadingSlash(d.method))),
 			ocstats.WithMeasurements(clientStartedRPCs.M(1)))
@@ -151,13 +151,7 @@ func recordDataBegin(ctx context.Context, b *stats.Begin) {
 // recordDataOutPayload records the length in bytes of outgoing messages and
 // increases total count of sent messages both stored in the RPCs (attempt on
 // client side) context for use in taking measurements at RPC end.
-func recordDataOutPayload(ctx context.Context, op *stats.OutPayload) {
-	d, ok := ctx.Value(rpcDataKey{}).(*rpcData)
-	if !ok {
-		// Shouldn't happen, as gRPC calls tagRPC which populates the rpcData in
-		// context.
-		return
-	}
+func recordDataOutPayload(d *rpcData, op *stats.OutPayload) {
 	atomic.AddInt64(&d.sentMsgs, 1)
 	atomic.AddInt64(&d.sentBytes, int64(op.Length))
 }
@@ -165,33 +159,21 @@ func recordDataOutPayload(ctx context.Context, op *stats.OutPayload) {
 // recordDataInPayload records the length in bytes of incoming messages and
 // increases total count of sent messages both stored in the RPCs (attempt on
 // client side) context for use in taking measurements at RPC end.
-func recordDataInPayload(ctx context.Context, ip *stats.InPayload) {
-	d, ok := ctx.Value(rpcDataKey{}).(*rpcData)
-	if !ok {
-		// Shouldn't happen, as gRPC calls TagRPC which populates the rpcData in
-		// context.
-		return
-	}
+func recordDataInPayload(d *rpcData, ip *stats.InPayload) {
 	atomic.AddInt64(&d.recvMsgs, 1)
 	atomic.AddInt64(&d.recvBytes, int64(ip.Length))
 }
 
 // recordDataEnd takes per RPC measurements derived from information derived
 // from the lifetime of the RPC (RPC attempt client side).
-func recordDataEnd(ctx context.Context, e *stats.End) {
-	d, ok := ctx.Value(rpcDataKey{}).(*rpcData)
-	if !ok {
-		// Shouldn't happen, as gRPC calls TagRPC which populates the rpcData in
-		// context.
-		return
-	}
+func recordDataEnd(ctx context.Context, d *rpcData, e *stats.End) {
 	// latency bounds for distribution data (speced millisecond bounds) have
 	// fractions, thus need a float.
 	latency := float64(time.Since(d.startTime)) / float64(time.Millisecond)
 	var st string
 	if e.Error != nil {
-		s, _ := status.FromError(e.Error) // ignore second argument because codes.Unknown is fine
-		st = codes.CodeToStr[s.Code()]
+		s, _ := status.FromError(e.Error)
+		st = internal.CanonicalString.(func(codes.Code) string)(s.Code())
 	} else {
 		st = "OK"
 	}

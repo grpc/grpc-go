@@ -58,6 +58,9 @@ var (
 	// gRPC server. An xDS-enabled server needs to know what type of credentials
 	// is configured on the underlying gRPC server. This is set by server.go.
 	GetServerCredentials interface{} // func (*grpc.Server) credentials.TransportCredentials
+	// CanonicalString returns the canonical string of the code defined here:
+	// https://github.com/grpc/grpc/blob/master/doc/statuscodes.md.
+	CanonicalString interface{} // func (codes.Code) string
 	// DrainServerTransports initiates a graceful close of existing connections
 	// on a gRPC server accepted on the provided listener address. An
 	// xDS-enabled server invokes this method on a grpc.Server when a particular

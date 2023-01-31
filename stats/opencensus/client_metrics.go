@@ -27,9 +27,9 @@ var (
 	keyClientStatus = tag.MustNewKey("grpc_client_status")
 )
 
-// Measures, which are recorded by client stats handler (and interceptor?): Note
-// that due to the nature of how stats handlers are called on gRPC's client
-// side, the per rpc unit is actually per attempt through this definition file.
+// Measures, which are recorded by client stats handler: Note that due to the
+// nature of how stats handlers are called on gRPC's client side, the per rpc
+// unit is actually per attempt throughout this definition file.
 var (
 	clientSentMessagesPerRPC     = stats.Int64("grpc.io/client/sent_messages_per_rpc", "Number of messages sent in the RPC (always 1 for non-streaming RPCs).", stats.UnitDimensionless)
 	clientSentBytesPerRPC        = stats.Int64("grpc.io/client/sent_bytes_per_rpc", "Total bytes sent across all request messages per RPC.", stats.UnitBytes)
@@ -100,15 +100,6 @@ var (
 		Measure:     clientRoundtripLatency,
 		Name:        "grpc.io/client/roundtrip_latency",
 		Description: "Distribution of round-trip latency, by method.",
-		TagKeys:     []tag.Key{keyClientMethod},
-		Aggregation: millisecondsDistribution,
-	}
-	// ClientServerLatencyView is the distribution of server latency in
-	// milliseconds per RPC, keyed on method.
-	ClientServerLatencyView = &view.View{ // TODO: Same recording point as round trip latency, perhaps I should just delete.
-		Measure:     clientServerLatency,
-		Name:        "grpc.io/client/server_latency",
-		Description: "Distribution of server latency as viewed by client, by method.",
 		TagKeys:     []tag.Key{keyClientMethod},
 		Aggregation: millisecondsDistribution,
 	}

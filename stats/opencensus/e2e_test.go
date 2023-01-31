@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -82,33 +83,6 @@ func (fe *fakeExporter) ExportView(vd *view.Data) {
 	}
 }
 
-func (vi *viewInformation) equal(vi2 *viewInformation) bool {
-	if vi == nil && vi2 == nil {
-		return true
-	}
-	if (vi != nil) != (vi2 != nil) {
-		return false
-	}
-	if vi.aggType != vi2.aggType {
-		return false
-	}
-	if !cmp.Equal(vi.aggBuckets, vi2.aggBuckets) {
-		return false
-	}
-	if vi.desc != vi2.desc {
-		return false
-	}
-	if !cmp.Equal(vi.tagKeys, vi2.tagKeys, cmp.Comparer(func(a tag.Key, b tag.Key) bool {
-		return a.Name() == b.Name()
-	})) {
-		return false
-	}
-	if !compareRows(vi.rows, vi2.rows) {
-		return false
-	}
-	return true
-}
-
 // compareRows compares rows with respect to the information desired to test.
 // Both the tags representing the rows and also the data of the row are tested
 // for equality. Rows are in nondeterministic order when ExportView is called,
@@ -116,12 +90,6 @@ func (vi *viewInformation) equal(vi2 *viewInformation) bool {
 // interval, which will work eventually in a reasonable manner (i.e. doesn't
 // flake).
 func compareRows(rows []*view.Row, rows2 []*view.Row) bool {
-	if rows == nil && rows2 == nil {
-		return true
-	}
-	if (rows != nil) != (rows2 != nil) {
-		return false
-	}
 	if len(rows) != len(rows2) {
 		return false
 	}
@@ -147,15 +115,15 @@ func compareData(ad view.AggregationData, ad2 view.AggregationData) bool {
 	if ad == nil && ad2 == nil {
 		return true
 	}
-	if (ad != nil) != (ad2 != nil) {
+	if ad == nil || ad2 == nil {
+		return false
+	}
+	if reflect.TypeOf(ad) != reflect.TypeOf(ad2) {
 		return false
 	}
 	switch ad1 := ad.(type) {
 	case *view.DistributionData:
-		dd2, ok := ad2.(*view.DistributionData)
-		if !ok {
-			return false
-		}
+		dd2 := ad2.(*view.DistributionData)
 		// Count and Count Per Buckets are reasonable for correctness,
 		// especially since we verify equality of bucket endpoints elsewhere.
 		if ad1.Count != dd2.Count {
@@ -167,58 +135,122 @@ func compareData(ad view.AggregationData, ad2 view.AggregationData) bool {
 			}
 		}
 	case *view.CountData:
-		cd2, ok := ad2.(*view.CountData)
-		if !ok {
-			return false
-		}
+		cd2 := ad2.(*view.CountData)
 		return ad1.Value == cd2.Value
 
-	// gRPC open census plugin does not have these next two types of aggregation
-	// data types present, for now just check for type equality between the two
-	// aggregation data points.
-	case *view.SumData:
-		_, ok := ad2.(*view.SumData)
-		if !ok {
-			return false
-		}
-	case *view.LastValueData:
-		_, ok := ad2.(*view.LastValueData)
-		if !ok {
-			return false
-		}
+		// gRPC open census plugin does not have these next two types of aggregation
+		// data types present, for now just check for type equality between the two
+		// aggregation data points (done above).
+		// case *view.SumData
+		// case *view.LastValueData:
 	}
 	return true
 }
 
 func (vi *viewInformation) Equal(vi2 *viewInformation) bool {
-	return vi.equal(vi2)
+	if vi == nil && vi2 == nil {
+		return true
+	}
+	if vi == nil || vi2 == nil {
+		return false
+	}
+	if vi.aggType != vi2.aggType {
+		return false
+	}
+	if !cmp.Equal(vi.aggBuckets, vi2.aggBuckets) {
+		return false
+	}
+	if vi.desc != vi2.desc {
+		return false
+	}
+	if !cmp.Equal(vi.tagKeys, vi2.tagKeys, cmp.Comparer(func(a tag.Key, b tag.Key) bool {
+		return a.Name() == b.Name()
+	})) {
+		return false
+	}
+	if !compareRows(vi.rows, vi2.rows) {
+		return false
+	}
+	return true
 }
 
-// seenViewPresent checks if the seen views contain the desired information for
-// the view within the scope of a certain time. Returns an nil slice if correct
-// information found, non nil slice of at least length 1 if correct information
-// not found within a timeout.
-func seenViewMatches(fe *fakeExporter, viewName string, wantVI *viewInformation) []error {
+// distributionDataCount checks if the seen views contain the desired
+// distribution latency count that falls in buckets of 5 seconds or less totaled
+// equals the count specified. This check happens within a 5 second timeout, so
+// all the RPC Latency data measuring how much time it took for the RPC to take
+// should fall within buckets 5 seconds or less. This must be called with a
+// viewName that is aggregated with distribution data. Returns a nil error if correct
+// count information found, non nil error if correct information not found within
+// a timeout.
+func distributionDataLatencyCount(fe *fakeExporter, viewName string, countWant int64) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	var errs []error
+	var err error
 	for ctx.Err() == nil {
-		errs = nil
+		err = nil
 		fe.mu.RLock()
 		if vi := fe.seenViews[viewName]; vi != nil {
-			if diff := cmp.Diff(vi, wantVI); diff != "" {
-				errs = append(errs, fmt.Errorf("got unexpected viewInformation, diff (-got, +want): %v", diff))
+			var totalCount int64
+			var largestIndexWithFive int
+			for i, bucket := range vi.aggBuckets {
+				if bucket > 5 {
+					largestIndexWithFive = i
+					break
+				}
+			}
+			// Iterating through rows sums up data points for all methods. In
+			// this case, a unary and streaming RPC.
+			for _, row := range vi.rows {
+				// This could potentially have an extra measurement in buckets
+				// above 5, but that's fine. Count of buckets under 5 is a good
+				// enough assertion.
+				for i, count := range row.Data.(*view.DistributionData).CountPerBucket {
+					if i >= largestIndexWithFive {
+						break
+					}
+					totalCount = totalCount + count
+				}
+			}
+			if totalCount != countWant {
+				err = fmt.Errorf("wrong total count for counts under 5: %v, wantCount: %v", totalCount, countWant)
 			}
 		} else {
-			errs = append(errs, fmt.Errorf("couldn't find %v in the views exported, never collected", viewName))
+			err = fmt.Errorf("couldn't find %v in the views exported, never collected", viewName)
 		}
 		fe.mu.RUnlock()
-		if len(errs) == 0 {
+		if err == nil {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return errs
+	return err
+}
+
+// seenViewPresent checks if the seen views contain the desired information for
+// the view within the scope of a certain time. Returns a nil error if correct
+// span information found, non nil error if correct information not found within
+// a timeout.
+func seenViewMatches(fe *fakeExporter, viewName string, wantVI *viewInformation) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	var err error
+	for ctx.Err() == nil {
+		err = nil
+		fe.mu.RLock()
+		if vi := fe.seenViews[viewName]; vi != nil {
+			if diff := cmp.Diff(vi, wantVI); diff != "" {
+				err = fmt.Errorf("got unexpected viewInformation, diff (-got, +want): %v", diff)
+			}
+		} else {
+			err = fmt.Errorf("couldn't find %v in the views exported, never collected", viewName)
+		}
+		fe.mu.RUnlock()
+		if err == nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return err
 }
 
 // TestAllMetrics tests emitted metrics from gRPC. It configures a system with a
@@ -705,11 +737,14 @@ func (s) TestAllMetrics(t *testing.T) {
 				},
 			},
 		},
-
-		// TODO: 3 missing latency metrics, figure out a way to test even though
-		// non deterministic, perhaps ignore exact distribution and test
-		// everything else?
-
+		{
+			name:   "client-latency",
+			metric: ClientRoundtripLatencyView,
+		},
+		{
+			name:   "server-latency",
+			metric: ServerLatencyView,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -759,15 +794,21 @@ func (s) TestAllMetrics(t *testing.T) {
 			if _, err = stream.Recv(); err != io.EOF {
 				t.Fatalf("unexpected error: %v, expected an EOF error", err)
 			}
-			if errs := seenViewMatches(fe, test.metric.Name, test.wantVI); len(errs) != 0 {
-				t.Fatalf("Invalid OpenCensus export data: %v", errs)
+			if test.metric.Name == "grpc.io/client/roundtrip_latency" || test.metric.Name == "grpc.io/server/server_latency" {
+				// For latency metrics, there is a lot of non determinism about
+				// the exact milliseconds of RPCs that finish. Thus, rather than
+				// declare the exact data you want, make sure the latency
+				// measurement points for the two RPCs above fall within buckets
+				// that fall into less than 5 seconds, which is the timeout in
+				// the helper.
+				if err := distributionDataLatencyCount(fe, test.metric.Name, 2); err != nil {
+					t.Fatalf("Invalid OpenCensus export view data: %v", err)
+				}
+				return
+			}
+			if err := seenViewMatches(fe, test.metric.Name, test.wantVI); err != nil {
+				t.Fatalf("Invalid OpenCensus export view data: %v", err)
 			}
 		})
 	}
 }
-
-// unit test for unmarshal JSON using map
-
-// should I test opencensus progpagted over wire
-
-// trace context plumbed as an attribute is irrelevant because I don't even deal with traces at this moment.
