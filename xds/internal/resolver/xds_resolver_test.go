@@ -82,7 +82,6 @@ const (
 var target = resolver.Target{URL: *testutils.MustParseURL("xds:///" + targetStr)}
 
 var routerFilter = xdsresource.HTTPFilter{Name: "rtr", Filter: httpfilter.Get(router.TypeURL)}
-var routerFilterList = []xdsresource.HTTPFilter{routerFilter}
 
 type s struct {
 	grpctest.Tester
