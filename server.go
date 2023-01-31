@@ -174,6 +174,7 @@ type serverOptions struct {
 	maxHeaderListSize     *uint32
 	headerTableSize       *uint32
 	numServerWorkers      uint32
+	useBytesPoolForParser bool
 }
 
 var defaultServerOptions = serverOptions{
@@ -549,6 +550,19 @@ func NumStreamWorkers(numServerWorkers uint32) ServerOption {
 	// number of CPUs available is most performant; requires thorough testing.
 	return newFuncServerOption(func(o *serverOptions) {
 		o.numServerWorkers = numServerWorkers
+	})
+}
+
+// UseBytesPoolForParser returns a ServerOption that sets whether to use a bytes pool
+// for the parser. Setting this to true will reduce the memory allocation in the parser.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
+func UseBytesPoolForParser(useBytesPoolForParser bool) ServerOption {
+	return newFuncServerOption(func(o *serverOptions) {
+		o.useBytesPoolForParser = useBytesPoolForParser
 	})
 }
 

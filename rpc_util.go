@@ -541,6 +541,9 @@ type parser struct {
 	// The header of a gRPC message. Find more detail at
 	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md
 	header [5]byte
+
+	// useBytesPool indicates whether to use bytes pool to allocate
+	useBytesPool bool
 }
 
 // recvMsg reads a complete gRPC message from the stream.
@@ -574,7 +577,11 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 	if int(length) > maxReceiveMessageSize {
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
-	msg = pool.Get(int(length))
+	if p.useBytesPool {
+		msg = pool.Get(int(length))
+	} else {
+		msg = make([]byte, int(length))
+	}
 	if _, err := p.r.Read(msg); err != nil {
 		if err == io.EOF {
 			err = io.ErrUnexpectedEOF
@@ -764,7 +771,9 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 		payInfo.uncompressedBytes = make([]byte, len(buf))
 		copy(payInfo.uncompressedBytes, buf)
 	}
-	pool.Put(&buf)
+	if p.useBytesPool {
+		pool.Put(&buf)
+	}
 	return nil
 }
 
