@@ -49,7 +49,7 @@ type clusterResourceType struct {
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
 func (clusterResourceType) Decode(opts *DecodeOptions, resource *anypb.Any) (*DecodeResult, error) {
-	name, cluster, err := unmarshalClusterResource(resource, opts.Logger)
+	name, cluster, err := unmarshalClusterResource(resource)
 	switch {
 	case name == "":
 		// Name is unset only when protobuf deserialization fails.

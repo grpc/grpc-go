@@ -208,7 +208,7 @@ func (s) TestEDSParseRespProto(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseEDSRespProto(tt.m, nil)
+			got, err := parseEDSRespProto(tt.m)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseEDSRespProto() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -330,7 +330,7 @@ func (s) TestUnmarshalEndpoints(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalEndpointsResource(test.resource, nil)
+			name, update, err := unmarshalEndpointsResource(test.resource)
 			if (err != nil) != test.wantErr {
 				t.Fatalf("unmarshalEndpointsResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}

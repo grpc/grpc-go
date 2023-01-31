@@ -29,14 +29,12 @@ import (
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	"google.golang.org/grpc/internal/grpclog"
-	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal/httpfilter"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-func unmarshalListenerResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, ListenerUpdate, error) {
+func unmarshalListenerResource(r *anypb.Any) (string, ListenerUpdate, error) {
 	r, err := unwrapResource(r)
 	if err != nil {
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
@@ -51,9 +49,8 @@ func unmarshalListenerResource(r *anypb.Any, logger *grpclog.PrefixLogger) (stri
 	if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
-	logger.Infof("Resource with name: %v, type: %T, contains: %v", lis.GetName(), lis, pretty.ToJSON(lis))
 
-	lu, err := processListener(lis, logger, v2)
+	lu, err := processListener(lis, v2)
 	if err != nil {
 		return lis.GetName(), ListenerUpdate{}, err
 	}
@@ -61,16 +58,16 @@ func unmarshalListenerResource(r *anypb.Any, logger *grpclog.PrefixLogger) (stri
 	return lis.GetName(), *lu, nil
 }
 
-func processListener(lis *v3listenerpb.Listener, logger *grpclog.PrefixLogger, v2 bool) (*ListenerUpdate, error) {
+func processListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUpdate, error) {
 	if lis.GetApiListener() != nil {
-		return processClientSideListener(lis, logger, v2)
+		return processClientSideListener(lis, v2)
 	}
-	return processServerSideListener(lis, logger)
+	return processServerSideListener(lis)
 }
 
 // processClientSideListener checks if the provided Listener proto meets
 // the expected criteria. If so, it returns a non-empty routeConfigName.
-func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.PrefixLogger, v2 bool) (*ListenerUpdate, error) {
+func processClientSideListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUpdate, error) {
 	update := &ListenerUpdate{}
 
 	apiLisAny := lis.GetApiListener().GetApiListener()
@@ -102,7 +99,7 @@ func processClientSideListener(lis *v3listenerpb.Listener, logger *grpclog.Prefi
 		}
 		update.RouteConfigName = name
 	case *v3httppb.HttpConnectionManager_RouteConfig:
-		routeU, err := generateRDSUpdateFromRouteConfiguration(apiLis.GetRouteConfig(), logger, v2)
+		routeU, err := generateRDSUpdateFromRouteConfiguration(apiLis.GetRouteConfig(), v2)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
 		}
@@ -257,7 +254,7 @@ func processHTTPFilters(filters []*v3httppb.HttpFilter, server bool) ([]HTTPFilt
 	return ret, nil
 }
 
-func processServerSideListener(lis *v3listenerpb.Listener, logger *grpclog.PrefixLogger) (*ListenerUpdate, error) {
+func processServerSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
 	if n := len(lis.ListenerFilters); n != 0 {
 		return nil, fmt.Errorf("unsupported field 'listener_filters' contains %d entries", n)
 	}
@@ -279,7 +276,7 @@ func processServerSideListener(lis *v3listenerpb.Listener, logger *grpclog.Prefi
 		},
 	}
 
-	fcMgr, err := NewFilterChainManager(lis, logger)
+	fcMgr, err := NewFilterChainManager(lis)
 	if err != nil {
 		return nil, err
 	}

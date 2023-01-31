@@ -778,7 +778,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			envconfig.XDSRLS = test.rlsEnabled
-			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, nil, false)
+			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, false)
 			if (gotError != nil) != test.wantError ||
 				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),
 					cmp.Transformer("FilterConfig", func(fc httpfilter.FilterConfig) string {
@@ -1020,7 +1020,7 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalRouteConfigResource(test.resource, nil)
+			name, update, err := unmarshalRouteConfigResource(test.resource)
 			if (err != nil) != test.wantErr {
 				t.Errorf("unmarshalRouteConfigResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1608,7 +1608,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 	defer func() { envconfig.XDSRingHash = oldRingHashSupport }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := routesProtoToSlice(tt.routes, nil, nil, false)
+			got, _, err := routesProtoToSlice(tt.routes, nil, false)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -1721,7 +1721,7 @@ func (s) TestHashPoliciesProtoToSlice(t *testing.T) {
 	defer func() { envconfig.XDSRingHash = oldRingHashSupport }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := hashPoliciesProtoToSlice(tt.hashPolicies, nil)
+			got, err := hashPoliciesProtoToSlice(tt.hashPolicies)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("hashPoliciesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 			}

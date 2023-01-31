@@ -49,7 +49,7 @@ type endpointsResourceType struct {
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
 func (endpointsResourceType) Decode(opts *DecodeOptions, resource *anypb.Any) (*DecodeResult, error) {
-	name, rc, err := unmarshalEndpointsResource(resource, opts.Logger)
+	name, rc, err := unmarshalEndpointsResource(resource)
 	switch {
 	case name == "":
 		// Name is unset only when protobuf deserialization fails.
