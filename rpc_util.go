@@ -915,27 +915,90 @@ const (
 
 const grpcUA = "grpc-go/" + Version
 
+const (
+	level0PoolMaxSize = 16
+	level1PoolMaxSize = level0PoolMaxSize * 16
+	level2PoolMaxSize = level1PoolMaxSize * 16 //   4 KB
+	level3PoolMaxSize = level2PoolMaxSize * 16 //  64 KB
+	level4PoolMaxSize = level3PoolMaxSize * 16 //   1 MB
+)
+
+type bytesPools struct {
+	pool0   bytesPool
+	pool1   bytesPool
+	pool2   bytesPool
+	pool3   bytesPool
+	pool4   bytesPool
+	poolMax bytesPool
+}
+
+func (p *bytesPools) Get(size int) []byte {
+	switch {
+	case size <= level0PoolMaxSize:
+		return p.pool0.Get(size)
+	case size <= level1PoolMaxSize:
+		return p.pool1.Get(size)
+	case size <= level2PoolMaxSize:
+		return p.pool2.Get(size)
+	case size <= level3PoolMaxSize:
+		return p.pool3.Get(size)
+	case size <= level4PoolMaxSize:
+		return p.pool4.Get(size)
+	default:
+		return p.poolMax.Get(size)
+	}
+}
+
+func (p *bytesPools) Put(bs *[]byte) {
+	switch size := cap(*bs); {
+	case size <= level0PoolMaxSize:
+		p.pool0.Put(bs)
+	case size <= level1PoolMaxSize:
+		p.pool1.Put(bs)
+	case size <= level2PoolMaxSize:
+		p.pool2.Put(bs)
+	case size <= level3PoolMaxSize:
+		p.pool3.Put(bs)
+	case size <= level4PoolMaxSize:
+		p.pool4.Put(bs)
+	default:
+		p.poolMax.Put(bs)
+	}
+}
+
 type bytesPool struct {
 	sync.Pool
+}
+
+func makeBytesPool() bytesPool {
+	return bytesPool{
+		sync.Pool{
+			New: func() interface{} {
+				return new([]byte)
+			},
+		},
+	}
 }
 
 func (p *bytesPool) Get(size int) []byte {
 	bs := p.Pool.Get().(*[]byte)
 	if cap(*bs) < size {
 		*bs = make([]byte, size)
+		return *bs
+	} else {
+		return (*bs)[:size]
 	}
-
-	return (*bs)[:size]
 }
 
 func (p *bytesPool) Put(bs *[]byte) {
 	p.Pool.Put(bs)
 }
 
-var pool = bytesPool{
-	sync.Pool{
-		New: func() interface{} {
-			return new([]byte)
-		},
-	},
+var pool = bytesPools{
+	pool0:   makeBytesPool(),
+	pool1:   makeBytesPool(),
+	pool2:   makeBytesPool(),
+	pool3:   makeBytesPool(),
+	pool4:   makeBytesPool(),
+	poolMax: makeBytesPool(),
 }
