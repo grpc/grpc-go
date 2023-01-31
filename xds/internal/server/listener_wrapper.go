@@ -292,7 +292,7 @@ func (l *listenerWrapper) Accept() (net.Conn, error) {
 		// tradeoff for simplicity.
 		vhswi, err := fc.ConstructUsableRouteConfiguration(rc)
 		if err != nil {
-			l.logger.Warningf("Constructing usable route configuration: %v", err)
+			l.logger.Warningf("Failed to construct usable route configuration: %v", err)
 			conn.Close()
 			continue
 		}
