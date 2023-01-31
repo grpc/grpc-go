@@ -994,9 +994,9 @@ func (p *bytesPool) Get(size int) []byte {
 	if cap(*bs) < size {
 		*bs = make([]byte, size)
 		return *bs
-	} else {
-		return (*bs)[:size]
 	}
+
+	return (*bs)[:size]
 }
 
 func (p *bytesPool) Put(bs *[]byte) {
