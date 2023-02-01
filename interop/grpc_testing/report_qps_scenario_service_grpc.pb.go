@@ -35,6 +35,10 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	ReportQpsScenarioService_ReportScenario_FullMethodName = "/grpc.testing.ReportQpsScenarioService/ReportScenario"
+)
+
 // ReportQpsScenarioServiceClient is the client API for ReportQpsScenarioService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -53,7 +57,7 @@ func NewReportQpsScenarioServiceClient(cc grpc.ClientConnInterface) ReportQpsSce
 
 func (c *reportQpsScenarioServiceClient) ReportScenario(ctx context.Context, in *ScenarioResult, opts ...grpc.CallOption) (*Void, error) {
 	out := new(Void)
-	err := c.cc.Invoke(ctx, "/grpc.testing.ReportQpsScenarioService/ReportScenario", in, out, opts...)
+	err := c.cc.Invoke(ctx, ReportQpsScenarioService_ReportScenario_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +104,7 @@ func _ReportQpsScenarioService_ReportScenario_Handler(srv interface{}, ctx conte
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.ReportQpsScenarioService/ReportScenario",
+		FullMethod: ReportQpsScenarioService_ReportScenario_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ReportQpsScenarioServiceServer).ReportScenario(ctx, req.(*ScenarioResult))
