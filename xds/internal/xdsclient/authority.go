@@ -118,7 +118,7 @@ func newAuthority(args authorityArgs) (*authority, error) {
 		ServerCfg:      *args.serverCfg,
 		OnRecvHandler:  ret.handleResourceUpdate,
 		OnErrorHandler: ret.newConnectionError,
-		OnSendHandler:  ret.transportAfterSendHandler,
+		OnSendHandler:  ret.transportOnSendHandler,
 		Logger:         args.logger,
 	})
 	if err != nil {
@@ -128,9 +128,9 @@ func newAuthority(args authorityArgs) (*authority, error) {
 	return ret, nil
 }
 
-// transportAfterSendHandler is called by the underlying transport when it sends a
+// transportOnSendHandler is called by the underlying transport when it sends a
 // resource req successfully. Timers are started for resources waiting for a response.
-func (a *authority) transportAfterSendHandler(u *transport.ResourceSendInfo) error {
+func (a *authority) transportOnSendHandler(u *transport.ResourceSendInfo) error {
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 	rType := a.resourceTypeGetter(u.URL)
@@ -147,8 +147,6 @@ func (a *authority) transportAfterSendHandler(u *transport.ResourceSendInfo) err
 				})
 				state.wState = watchStateRequested
 			}
-		} else {
-			a.logger.Warningf("resourceName: %v was not found in resourceStates map", resourceName)
 		}
 	}
 	return nil
@@ -343,6 +341,21 @@ func (a *authority) newConnectionError(err error) {
 				state.wTimer.Stop()
 				state.wState = watchStateStarted
 			}
+		}
+	}
+
+	// Do not propagate errors to watchers if error is of type IgnoredAdsErrorType,
+	// since this error occurred after a successful message was received on the stream.
+	if xdsresource.ErrType(err) == xdsresource.ErrorTypeIgnored {
+		a.logger.Debugf("ErrorTypeIgnored error was ignored and not sent to watchers.")
+		return
+	}
+
+	for _, rType := range a.resources {
+		for _, state := range rType {
+			// For all resource types, for all resources within each resource type, and
+			// for all the watchers for every resource, propagate the connection error
+			// from the transport layer.
 			for watcher := range state.watchers {
 				watcher := watcher
 				a.serializer.Schedule(func(context.Context) {

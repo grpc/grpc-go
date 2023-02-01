@@ -453,8 +453,13 @@ func (t *Transport) recv(stream adsStream) bool {
 	for {
 		resources, url, rVersion, nonce, err := t.recvAggregatedDiscoveryServiceResponse(stream)
 		if err != nil {
-			// todo(arvindbright): call ErrHandler iff no msgs were ever recv'd on the stream
-			t.onErrorHandler(err)
+			// If we have already successfully received a message on the stream, then
+			// the OnError callback is called with an error of type IgnoredADSRecvError.
+			if msgReceived {
+				t.onErrorHandler(xdsresource.NewErrorf(xdsresource.ErrorTypeIgnored, err.Error()))
+			} else {
+				t.onErrorHandler(err)
+			}
 			t.logger.Warningf("ADS stream is closed with error: %v", err)
 			return msgReceived
 		}
