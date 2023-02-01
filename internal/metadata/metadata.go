@@ -84,6 +84,9 @@ func Set(addr resolver.Address, md metadata.MD) resolver.Address {
 // - otherwise, the header value must contain one or more characters from the set [%x20-%x7E].
 func Validate(md metadata.MD) error {
 	for k, vals := range md {
+		if k == "" {
+			return fmt.Errorf("there is an empty key in the header")
+		}
 		// pseudo-header will be ignored
 		if k[0] == ':' {
 			continue
