@@ -32,6 +32,13 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	RouteGuide_GetFeature_FullMethodName   = "/routeguide.RouteGuide/GetFeature"
+	RouteGuide_ListFeatures_FullMethodName = "/routeguide.RouteGuide/ListFeatures"
+	RouteGuide_RecordRoute_FullMethodName  = "/routeguide.RouteGuide/RecordRoute"
+	RouteGuide_RouteChat_FullMethodName    = "/routeguide.RouteGuide/RouteChat"
+)
+
 // RouteGuideClient is the client API for RouteGuide service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -359,10 +366,3 @@ var RouteGuide_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "examples/route_guide/routeguide/route_guide.proto",
 }
-
-const (
-	RouteGuide_GetFeature_FullMethodName   = "/routeguide.RouteGuide/GetFeature"
-	RouteGuide_ListFeatures_FullMethodName = "/routeguide.RouteGuide/ListFeatures"
-	RouteGuide_RecordRoute_FullMethodName  = "/routeguide.RouteGuide/RecordRoute"
-	RouteGuide_RouteChat_FullMethodName    = "/routeguide.RouteGuide/RouteChat"
-)

@@ -32,6 +32,11 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	Profiling_Enable_FullMethodName         = "/grpc.go.profiling.v1alpha.Profiling/Enable"
+	Profiling_GetStreamStats_FullMethodName = "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats"
+)
+
 // ProfilingClient is the client API for Profiling service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -157,8 +162,3 @@ var Profiling_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "profiling/proto/service.proto",
 }
-
-const (
-	Profiling_Enable_FullMethodName         = "/grpc.go.profiling.v1alpha.Profiling/Enable"
-	Profiling_GetStreamStats_FullMethodName = "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats"
-)

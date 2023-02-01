@@ -37,6 +37,10 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	LoadBalancer_BalanceLoad_FullMethodName = "/grpc.lb.v1.LoadBalancer/BalanceLoad"
+)
+
 // LoadBalancerClient is the client API for LoadBalancer service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -154,7 +158,3 @@ var LoadBalancer_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "grpc/lb/v1/load_balancer.proto",
 }
-
-const (
-	LoadBalancer_BalanceLoad_FullMethodName = "/grpc.lb.v1.LoadBalancer/BalanceLoad"
-)

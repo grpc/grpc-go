@@ -32,6 +32,10 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	Greeter_SayHello_FullMethodName = "/helloworld.Greeter/SayHello"
+)
+
 // GreeterClient is the client API for Greeter service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -119,7 +123,3 @@ var Greeter_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "examples/helloworld/helloworld/helloworld.proto",
 }
-
-const (
-	Greeter_SayHello_FullMethodName = "/helloworld.Greeter/SayHello"
-)

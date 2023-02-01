@@ -36,8 +36,8 @@ const (
 )
 
 type serviceGenerateHelperInterface interface {
-	formatFullMethodName(service *protogen.Service, method *protogen.Method) string
 	formatFullMethodSymbol(service *protogen.Service, method *protogen.Method) string
+	genFullMethods(g *protogen.GeneratedFile, service *protogen.Service)
 	generateClientStruct(g *protogen.GeneratedFile, clientName string)
 	generateNewClientDefinitions(g *protogen.GeneratedFile, service *protogen.Service, clientName string)
 	generateUnimplementedServerType(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service)
@@ -47,12 +47,19 @@ type serviceGenerateHelperInterface interface {
 
 type serviceGenerateHelper struct{}
 
-func (serviceGenerateHelper) formatFullMethodName(service *protogen.Service, method *protogen.Method) string {
-	return fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name())
-}
-
 func (serviceGenerateHelper) formatFullMethodSymbol(service *protogen.Service, method *protogen.Method) string {
 	return fmt.Sprintf("%s_%s_FullMethodName", service.GoName, method.GoName)
+}
+
+func (serviceGenerateHelper) genFullMethods(g *protogen.GeneratedFile, service *protogen.Service) {
+	g.P("const (")
+	for _, method := range service.Methods {
+		fmSymbol := helper.formatFullMethodSymbol(service, method)
+		fmName := fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name())
+		g.P(fmSymbol, ` = "`, fmName, `"`)
+	}
+	g.P(")")
+	g.P()
 }
 
 func (serviceGenerateHelper) generateClientStruct(g *protogen.GeneratedFile, clientName string) {
@@ -102,8 +109,6 @@ func (serviceGenerateHelper) generateServerFunctions(gen *protogen.Plugin, file 
 		handlerNames = append(handlerNames, hname)
 	}
 	genServiceDesc(file, g, serviceDescVar, serverType, service, handlerNames)
-
-	genFullMethods(g, service)
 }
 
 func (serviceGenerateHelper) formatHandlerFuncName(service *protogen.Service, hname string) string {
@@ -174,13 +179,16 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 }
 
 func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
+	// Full methods constants.
+	helper.genFullMethods(g, service)
+
+	// Client interface.
 	clientName := service.GoName + "Client"
 
 	g.P("// ", clientName, " is the client API for ", service.GoName, " service.")
 	g.P("//")
 	g.P("// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.")
 
-	// Client interface.
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
 		g.P(deprecationComment)
@@ -520,17 +528,6 @@ func genLeadingComments(g *protogen.GeneratedFile, loc protoreflect.SourceLocati
 		g.P(protogen.Comments(s))
 		g.P()
 	}
-}
-
-func genFullMethods(g *protogen.GeneratedFile, service *protogen.Service) {
-	g.P("const (")
-	for _, method := range service.Methods {
-		fmSymbol := helper.formatFullMethodSymbol(service, method)
-		fmName := helper.formatFullMethodName(service, method)
-		g.P(fmSymbol, ` = "`, fmName, `"`)
-	}
-	g.P(")")
-	g.P()
 }
 
 const deprecationComment = "// Deprecated: Do not use."

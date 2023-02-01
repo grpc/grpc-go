@@ -39,6 +39,11 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	MetricsService_GetAllGauges_FullMethodName = "/grpc.testing.MetricsService/GetAllGauges"
+	MetricsService_GetGauge_FullMethodName     = "/grpc.testing.MetricsService/GetGauge"
+)
+
 // MetricsServiceClient is the client API for MetricsService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -194,8 +199,3 @@ var MetricsService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "stress/grpc_testing/metrics.proto",
 }
-
-const (
-	MetricsService_GetAllGauges_FullMethodName = "/grpc.testing.MetricsService/GetAllGauges"
-	MetricsService_GetGauge_FullMethodName     = "/grpc.testing.MetricsService/GetGauge"
-)

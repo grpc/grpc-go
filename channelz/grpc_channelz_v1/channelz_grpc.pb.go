@@ -39,6 +39,16 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	Channelz_GetTopChannels_FullMethodName   = "/grpc.channelz.v1.Channelz/GetTopChannels"
+	Channelz_GetServers_FullMethodName       = "/grpc.channelz.v1.Channelz/GetServers"
+	Channelz_GetServer_FullMethodName        = "/grpc.channelz.v1.Channelz/GetServer"
+	Channelz_GetServerSockets_FullMethodName = "/grpc.channelz.v1.Channelz/GetServerSockets"
+	Channelz_GetChannel_FullMethodName       = "/grpc.channelz.v1.Channelz/GetChannel"
+	Channelz_GetSubchannel_FullMethodName    = "/grpc.channelz.v1.Channelz/GetSubchannel"
+	Channelz_GetSocket_FullMethodName        = "/grpc.channelz.v1.Channelz/GetSocket"
+)
+
 // ChannelzClient is the client API for Channelz service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -354,13 +364,3 @@ var Channelz_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "grpc/channelz/v1/channelz.proto",
 }
-
-const (
-	Channelz_GetTopChannels_FullMethodName   = "/grpc.channelz.v1.Channelz/GetTopChannels"
-	Channelz_GetServers_FullMethodName       = "/grpc.channelz.v1.Channelz/GetServers"
-	Channelz_GetServer_FullMethodName        = "/grpc.channelz.v1.Channelz/GetServer"
-	Channelz_GetServerSockets_FullMethodName = "/grpc.channelz.v1.Channelz/GetServerSockets"
-	Channelz_GetChannel_FullMethodName       = "/grpc.channelz.v1.Channelz/GetChannel"
-	Channelz_GetSubchannel_FullMethodName    = "/grpc.channelz.v1.Channelz/GetSubchannel"
-	Channelz_GetSocket_FullMethodName        = "/grpc.channelz.v1.Channelz/GetSocket"
-)

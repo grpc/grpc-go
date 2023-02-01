@@ -35,6 +35,11 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	Health_Check_FullMethodName = "/grpc.health.v1.Health/Check"
+	Health_Watch_FullMethodName = "/grpc.health.v1.Health/Watch"
+)
+
 // HealthClient is the client API for Health service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -216,8 +221,3 @@ var Health_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "grpc/health/v1/health.proto",
 }
-
-const (
-	Health_Check_FullMethodName = "/grpc.health.v1.Health/Check"
-	Health_Watch_FullMethodName = "/grpc.health.v1.Health/Watch"
-)

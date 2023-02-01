@@ -35,6 +35,17 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	TestService_EmptyCall_FullMethodName           = "/grpc.testing.TestService/EmptyCall"
+	TestService_UnaryCall_FullMethodName           = "/grpc.testing.TestService/UnaryCall"
+	TestService_CacheableUnaryCall_FullMethodName  = "/grpc.testing.TestService/CacheableUnaryCall"
+	TestService_StreamingOutputCall_FullMethodName = "/grpc.testing.TestService/StreamingOutputCall"
+	TestService_StreamingInputCall_FullMethodName  = "/grpc.testing.TestService/StreamingInputCall"
+	TestService_FullDuplexCall_FullMethodName      = "/grpc.testing.TestService/FullDuplexCall"
+	TestService_HalfDuplexCall_FullMethodName      = "/grpc.testing.TestService/HalfDuplexCall"
+	TestService_UnimplementedCall_FullMethodName   = "/grpc.testing.TestService/UnimplementedCall"
+)
+
 // TestServiceClient is the client API for TestService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -536,14 +547,7 @@ var TestService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	TestService_EmptyCall_FullMethodName           = "/grpc.testing.TestService/EmptyCall"
-	TestService_UnaryCall_FullMethodName           = "/grpc.testing.TestService/UnaryCall"
-	TestService_CacheableUnaryCall_FullMethodName  = "/grpc.testing.TestService/CacheableUnaryCall"
-	TestService_StreamingOutputCall_FullMethodName = "/grpc.testing.TestService/StreamingOutputCall"
-	TestService_StreamingInputCall_FullMethodName  = "/grpc.testing.TestService/StreamingInputCall"
-	TestService_FullDuplexCall_FullMethodName      = "/grpc.testing.TestService/FullDuplexCall"
-	TestService_HalfDuplexCall_FullMethodName      = "/grpc.testing.TestService/HalfDuplexCall"
-	TestService_UnimplementedCall_FullMethodName   = "/grpc.testing.TestService/UnimplementedCall"
+	UnimplementedService_UnimplementedCall_FullMethodName = "/grpc.testing.UnimplementedService/UnimplementedCall"
 )
 
 // UnimplementedServiceClient is the client API for UnimplementedService service.
@@ -635,7 +639,8 @@ var UnimplementedService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	UnimplementedService_UnimplementedCall_FullMethodName = "/grpc.testing.UnimplementedService/UnimplementedCall"
+	ReconnectService_Start_FullMethodName = "/grpc.testing.ReconnectService/Start"
+	ReconnectService_Stop_FullMethodName  = "/grpc.testing.ReconnectService/Stop"
 )
 
 // ReconnectServiceClient is the client API for ReconnectService service.
@@ -761,8 +766,8 @@ var ReconnectService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	ReconnectService_Start_FullMethodName = "/grpc.testing.ReconnectService/Start"
-	ReconnectService_Stop_FullMethodName  = "/grpc.testing.ReconnectService/Stop"
+	LoadBalancerStatsService_GetClientStats_FullMethodName            = "/grpc.testing.LoadBalancerStatsService/GetClientStats"
+	LoadBalancerStatsService_GetClientAccumulatedStats_FullMethodName = "/grpc.testing.LoadBalancerStatsService/GetClientAccumulatedStats"
 )
 
 // LoadBalancerStatsServiceClient is the client API for LoadBalancerStatsService service.
@@ -893,8 +898,8 @@ var LoadBalancerStatsService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	LoadBalancerStatsService_GetClientStats_FullMethodName            = "/grpc.testing.LoadBalancerStatsService/GetClientStats"
-	LoadBalancerStatsService_GetClientAccumulatedStats_FullMethodName = "/grpc.testing.LoadBalancerStatsService/GetClientAccumulatedStats"
+	XdsUpdateHealthService_SetServing_FullMethodName    = "/grpc.testing.XdsUpdateHealthService/SetServing"
+	XdsUpdateHealthService_SetNotServing_FullMethodName = "/grpc.testing.XdsUpdateHealthService/SetNotServing"
 )
 
 // XdsUpdateHealthServiceClient is the client API for XdsUpdateHealthService service.
@@ -1021,8 +1026,7 @@ var XdsUpdateHealthService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	XdsUpdateHealthService_SetServing_FullMethodName    = "/grpc.testing.XdsUpdateHealthService/SetServing"
-	XdsUpdateHealthService_SetNotServing_FullMethodName = "/grpc.testing.XdsUpdateHealthService/SetNotServing"
+	XdsUpdateClientConfigureService_Configure_FullMethodName = "/grpc.testing.XdsUpdateClientConfigureService/Configure"
 )
 
 // XdsUpdateClientConfigureServiceClient is the client API for XdsUpdateClientConfigureService service.
@@ -1113,7 +1117,3 @@ var XdsUpdateClientConfigureService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "grpc/testing/test.proto",
 }
-
-const (
-	XdsUpdateClientConfigureService_Configure_FullMethodName = "/grpc.testing.XdsUpdateClientConfigureService/Configure"
-)

@@ -35,6 +35,15 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	TestService_EmptyCall_FullMethodName           = "/grpc.testing.TestService/EmptyCall"
+	TestService_UnaryCall_FullMethodName           = "/grpc.testing.TestService/UnaryCall"
+	TestService_StreamingOutputCall_FullMethodName = "/grpc.testing.TestService/StreamingOutputCall"
+	TestService_StreamingInputCall_FullMethodName  = "/grpc.testing.TestService/StreamingInputCall"
+	TestService_FullDuplexCall_FullMethodName      = "/grpc.testing.TestService/FullDuplexCall"
+	TestService_HalfDuplexCall_FullMethodName      = "/grpc.testing.TestService/HalfDuplexCall"
+)
+
 // TestServiceClient is the client API for TestService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -454,12 +463,3 @@ var TestService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "test/grpc_testing/test.proto",
 }
-
-const (
-	TestService_EmptyCall_FullMethodName           = "/grpc.testing.TestService/EmptyCall"
-	TestService_UnaryCall_FullMethodName           = "/grpc.testing.TestService/UnaryCall"
-	TestService_StreamingOutputCall_FullMethodName = "/grpc.testing.TestService/StreamingOutputCall"
-	TestService_StreamingInputCall_FullMethodName  = "/grpc.testing.TestService/StreamingInputCall"
-	TestService_FullDuplexCall_FullMethodName      = "/grpc.testing.TestService/FullDuplexCall"
-	TestService_HalfDuplexCall_FullMethodName      = "/grpc.testing.TestService/HalfDuplexCall"
-)

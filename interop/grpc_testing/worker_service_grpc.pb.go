@@ -35,6 +35,13 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	WorkerService_RunServer_FullMethodName  = "/grpc.testing.WorkerService/RunServer"
+	WorkerService_RunClient_FullMethodName  = "/grpc.testing.WorkerService/RunClient"
+	WorkerService_CoreCount_FullMethodName  = "/grpc.testing.WorkerService/CoreCount"
+	WorkerService_QuitWorker_FullMethodName = "/grpc.testing.WorkerService/QuitWorker"
+)
+
 // WorkerServiceClient is the client API for WorkerService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -321,10 +328,3 @@ var WorkerService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "grpc/testing/worker_service.proto",
 }
-
-const (
-	WorkerService_RunServer_FullMethodName  = "/grpc.testing.WorkerService/RunServer"
-	WorkerService_RunClient_FullMethodName  = "/grpc.testing.WorkerService/RunClient"
-	WorkerService_CoreCount_FullMethodName  = "/grpc.testing.WorkerService/CoreCount"
-	WorkerService_QuitWorker_FullMethodName = "/grpc.testing.WorkerService/QuitWorker"
-)

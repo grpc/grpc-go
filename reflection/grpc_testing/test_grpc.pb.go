@@ -32,6 +32,11 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	SearchService_Search_FullMethodName          = "/grpc.testing.SearchService/Search"
+	SearchService_StreamingSearch_FullMethodName = "/grpc.testing.SearchService/StreamingSearch"
+)
+
 // SearchServiceClient is the client API for SearchService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -186,8 +191,3 @@ var SearchService_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "reflection/grpc_testing/test.proto",
 }
-
-const (
-	SearchService_Search_FullMethodName          = "/grpc.testing.SearchService/Search"
-	SearchService_StreamingSearch_FullMethodName = "/grpc.testing.SearchService/StreamingSearch"
-)

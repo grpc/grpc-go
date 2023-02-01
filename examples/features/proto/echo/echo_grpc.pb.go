@@ -35,6 +35,13 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	Echo_UnaryEcho_FullMethodName                  = "/grpc.examples.echo.Echo/UnaryEcho"
+	Echo_ServerStreamingEcho_FullMethodName        = "/grpc.examples.echo.Echo/ServerStreamingEcho"
+	Echo_ClientStreamingEcho_FullMethodName        = "/grpc.examples.echo.Echo/ClientStreamingEcho"
+	Echo_BidirectionalStreamingEcho_FullMethodName = "/grpc.examples.echo.Echo/BidirectionalStreamingEcho"
+)
+
 // EchoClient is the client API for Echo service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -330,10 +337,3 @@ var Echo_ServiceDesc = grpc.ServiceDesc{
 	},
 	Metadata: "examples/features/proto/echo/echo.proto",
 }
-
-const (
-	Echo_UnaryEcho_FullMethodName                  = "/grpc.examples.echo.Echo/UnaryEcho"
-	Echo_ServerStreamingEcho_FullMethodName        = "/grpc.examples.echo.Echo/ServerStreamingEcho"
-	Echo_ClientStreamingEcho_FullMethodName        = "/grpc.examples.echo.Echo/ClientStreamingEcho"
-	Echo_BidirectionalStreamingEcho_FullMethodName = "/grpc.examples.echo.Echo/BidirectionalStreamingEcho"
-)
