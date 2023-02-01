@@ -55,9 +55,9 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 			NodeProto:    &v3corepb.Node{},
 			TransportAPI: version.TransportV3,
 		},
-		UpdateHandler:      func(ResourceUpdate) error { return nil },
-		StreamErrorHandler: func(error) {},
-		OnSendHandler:      func(*UpdateChannelInfo) {},
+		OnRecvHandler:  func(ResourceUpdate) error { return nil },
+		OnErrorHandler: func(error) {},
+		OnSendHandler:  func(*ResourceSendInfo) error { return nil },
 	}
 	c, err := New(opts)
 	if err != nil {

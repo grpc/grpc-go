@@ -112,14 +112,14 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 	// we can pass a no-op data model layer implementation.
 	tr, err := transport.New(transport.Options{
 		ServerCfg:     serverCfg,
-		UpdateHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
-		StreamErrorHandler: func(err error) {
+		OnRecvHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
+		OnErrorHandler: func(err error) {
 			select {
 			case streamErrCh <- err:
 			default:
 			}
 		},
-		OnSendHandler: func(*transport.UpdateChannelInfo) {},
+		OnSendHandler: func(*transport.ResourceSendInfo) error { return nil },
 		Backoff:       transportBackoff,
 	})
 	if err != nil {
@@ -281,14 +281,14 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 	// we can pass a no-op data model layer implementation.
 	tr, err := transport.New(transport.Options{
 		ServerCfg:     serverCfg,
-		UpdateHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
-		StreamErrorHandler: func(err error) {
+		OnRecvHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
+		OnErrorHandler: func(err error) {
 			select {
 			case streamErrCh <- err:
 			default:
 			}
 		},
-		OnSendHandler: func(*transport.UpdateChannelInfo) {},
+		OnSendHandler: func(*transport.ResourceSendInfo) error { return nil },
 		Backoff:       func(int) time.Duration { return time.Duration(0) }, // No backoff.
 	})
 	if err != nil {
@@ -420,11 +420,11 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	// Create a new transport. Since we are only testing backoff behavior here,
 	// we can pass a no-op data model layer implementation.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:          serverCfg,
-		UpdateHandler:      func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
-		StreamErrorHandler: func(error) {},                                      // No stream error handling.
-		OnSendHandler:      func(*transport.UpdateChannelInfo) {},
-		Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.
+		ServerCfg:      serverCfg,
+		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
+		OnErrorHandler: func(error) {},                                      // No stream error handling.
+		OnSendHandler:  func(*transport.ResourceSendInfo) error { return nil },
+		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)

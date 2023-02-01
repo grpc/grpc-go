@@ -34,11 +34,11 @@ import (
 type watchState int
 
 const (
-	watchStateStarted watchState = iota
-	watchStateRespRequested
-	watchStateRespReceived
-	watchStateTimeout
-	watchStateCanceled
+	watchStateStarted   watchState = iota // Watch started, request not yet set.
+	watchStateRequested                   // Request sent for resource being watched.
+	watchStateReceived                    // Response received for resource being watched.
+	watchStateTimeout                     // Watch timer expired, no response.
+	watchStateCanceled                    // Watch cancelled.
 )
 
 type resourceState struct {
@@ -115,11 +115,11 @@ func newAuthority(args authorityArgs) (*authority, error) {
 	}
 
 	tr, err := transport.New(transport.Options{
-		ServerCfg:          *args.serverCfg,
-		UpdateHandler:      ret.handleResourceUpdate,
-		StreamErrorHandler: ret.newConnectionError,
-		OnSendHandler:      ret.transportAfterSendHandler,
-		Logger:             args.logger,
+		ServerCfg:      *args.serverCfg,
+		OnRecvHandler:  ret.handleResourceUpdate,
+		OnErrorHandler: ret.newConnectionError,
+		OnSendHandler:  ret.transportAfterSendHandler,
+		Logger:         args.logger,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating new transport to %q: %v", args.serverCfg, err)
@@ -130,22 +130,28 @@ func newAuthority(args authorityArgs) (*authority, error) {
 
 // transportAfterSendHandler is called by the underlying transport when it sends a
 // resource req successfully. Timers are started for resources waiting for a response.
-func (a *authority) transportAfterSendHandler(u *transport.UpdateChannelInfo) {
+func (a *authority) transportAfterSendHandler(u *transport.ResourceSendInfo) error {
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 	rType := a.resourceTypeGetter(u.URL)
-	rTypeMap := a.resources[rType]
+	if rType == nil {
+		return fmt.Errorf("resourceTypeGetter failed by returning nil for URL:%v", u.URL)
+	}
+	resourceStates := a.resources[rType]
 
 	for _, resourceName := range u.ResourceNames {
-		if state, ok := rTypeMap[resourceName]; ok {
+		if state, ok := resourceStates[resourceName]; ok {
 			if state.wState == watchStateStarted {
 				state.wTimer = time.AfterFunc(a.watchExpiryTimeout, func() {
 					a.handleWatchTimerExpiry(rType, resourceName, state)
 				})
-				state.wState = watchStateRespRequested
+				state.wState = watchStateRequested
 			}
+		} else {
+			a.logger.Warningf("resourceName: %v was not found in resourceStates map", resourceName)
 		}
 	}
+	return nil
 }
 
 func (a *authority) handleResourceUpdate(resourceUpdate transport.ResourceUpdate) error {
@@ -173,9 +179,9 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			// Cancel the expiry timer associated with the resource once a
 			// response is received, irrespective of whether the update is a
 			// good one or not.
-			if state.wState == watchStateRespRequested {
+			if state.wState == watchStateRequested {
 				state.wTimer.Stop()
-				state.wState = watchStateRespReceived
+				state.wState = watchStateReceived
 			}
 
 			if uErr.err != nil {
@@ -329,9 +335,11 @@ func (a *authority) newConnectionError(err error) {
 	// from the transport layer.
 	for _, rType := range a.resources {
 		for _, state := range rType {
-			// if state === watchStateRespRequested, stop the current timer and
-			// let retries start the timer again.
-			if state.wState == watchStateRespRequested {
+			// If the connection/stream breaks after the resource has been requested,
+			// but before the response is received, we stop the timer here. When the stream
+			// is recreated, the transport layer will resend all previously requested resources,
+			// and we will start the timer in the `onResourceSend` callback.
+			if state.wState == watchStateRequested {
 				state.wTimer.Stop()
 				state.wState = watchStateStarted
 			}
@@ -425,7 +433,8 @@ func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName 
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 
-	if state.wState != watchStateRespRequested {
+	if state.wState != watchStateRequested {
+		a.logger.Warningf("Found a resource timer in a wrong state. Got: %v; Want: %v", state.wState, watchStateRequested)
 		return
 	}
 

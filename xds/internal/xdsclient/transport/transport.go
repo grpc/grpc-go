@@ -57,18 +57,18 @@ type adsStream = v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesC
 // protocol version.
 type Transport struct {
 	// These fields are initialized at creation time and are read-only afterwards.
-	cc                  *grpc.ClientConn         // ClientConn to the mangement server.
-	serverURI           string                   // URI of the management server.
-	updateHandler       UpdateHandlerFunc        // Resource update handler. xDS data model layer.
-	adsStreamErrHandler func(error)              // To report underlying stream errors.
-	reportSendReq       func(*UpdateChannelInfo) // To report underlying stream successful sends.
-	lrsStore            *load.Store              // Store returned to user for pushing loads.
-	backoff             func(int) time.Duration  // Backoff after stream failures.
-	nodeProto           *v3corepb.Node           // Identifies the gRPC application.
-	logger              *grpclog.PrefixLogger    // Prefix logger for transport logs.
-	adsRunnerCancel     context.CancelFunc       // CancelFunc for the ADS goroutine.
-	adsRunnerDoneCh     chan struct{}            // To notify exit of ADS goroutine.
-	lrsRunnerDoneCh     chan struct{}            // To notify exit of LRS goroutine.
+	cc              *grpc.ClientConn        // ClientConn to the mangement server.
+	serverURI       string                  // URI of the management server.
+	onRecvHandler   OnRecvHandlerFunc       // Resource update handler. xDS data model layer.
+	onErrorHandler  func(error)             // To report underlying stream errors.
+	onSendHandler   OnSendHandlerFunc       // To report underlying stream successful sends.
+	lrsStore        *load.Store             // Store returned to user for pushing loads.
+	backoff         func(int) time.Duration // Backoff after stream failures.
+	nodeProto       *v3corepb.Node          // Identifies the gRPC application.
+	logger          *grpclog.PrefixLogger   // Prefix logger for transport logs.
+	adsRunnerCancel context.CancelFunc      // CancelFunc for the ADS goroutine.
+	adsRunnerDoneCh chan struct{}           // To notify exit of ADS goroutine.
+	lrsRunnerDoneCh chan struct{}           // To notify exit of LRS goroutine.
 
 	// These channels enable synchronization amongst the different goroutines
 	// spawned by the transport, and between asynchorous events resulting from
@@ -97,7 +97,7 @@ type Transport struct {
 	lrsRefCount     int                // Reference count on the load store.
 }
 
-// UpdateHandlerFunc is the implementation at the xDS data model layer, which
+// OnRecvHandlerFunc is the implementation at the xDS data model layer, which
 // determines if the configuration received from the management server can be
 // applied locally or not.
 //
@@ -106,7 +106,14 @@ type Transport struct {
 // cause the transport layer to send an ACK to the management server. A non-nil
 // error is returned from this function when the data model layer believes
 // otherwise, and this will cause the transport layer to send a NACK.
-type UpdateHandlerFunc func(update ResourceUpdate) error
+type OnRecvHandlerFunc func(update ResourceUpdate) error
+
+// OnSendHandlerFunc is the implementation at the xDS data model layer, which
+// handles state changes for the resource watch and stop watch timers accordingly.
+//
+// A nil error is returned from this function when the data model layer has applied
+// accurate state transitions for all the resources in the update.
+type OnSendHandlerFunc func(update *ResourceSendInfo) error
 
 // ResourceUpdate is a representation of the configuration update received from
 // the management server. It only contains fields which are useful to the data
@@ -126,23 +133,27 @@ type Options struct {
 	// ServerCfg contains all the configuration required to connect to the xDS
 	// management server.
 	ServerCfg bootstrap.ServerConfig
-	// UpdateHandler is the component which makes ACK/NACK decisions based on
+	// OnRecvHandler is the component which makes ACK/NACK decisions based on
 	// the received resources.
 	//
 	// Invoked inline and implementations must not block.
-	UpdateHandler UpdateHandlerFunc
-	// StreamErrorHandler provides a way for the transport layer to report
+	OnRecvHandler OnRecvHandlerFunc
+	// OnErrorHandler provides a way for the transport layer to report
 	// underlying stream errors. These can be bubbled all the way up to the user
 	// of the xdsClient.
 	//
 	// Invoked inline and implementations must not block.
-	StreamErrorHandler func(error)
-	// OnSendHandler provides a way for the transport layer to report
-	// underlying resource requests sent on the stream. However, ads stream could break
-	// after send() - thus best effort updates.
+	OnErrorHandler func(error)
+	// OnSendHandler provides a way for the transport layer to report underlying
+	// resource requests sent on the stream. However, Send() on the ADS stream will
+	// return successfully as long as:
+	//   1. there is enough flow control quota to send the message.
+	//   2. the message is added to the send buffer.
+	// The connection may fail after this happens and before the message is actually
+	// sent on the wire. Hence, best effort.
 	//
 	// Invoked inline and implementations must not block.
-	OnSendHandler func(*UpdateChannelInfo)
+	OnSendHandler func(*ResourceSendInfo) error
 	// Backoff controls the amount of time to backoff before recreating failed
 	// ADS streams. If unspecified, a default exponential backoff implementation
 	// is used. For more details, see:
@@ -162,9 +173,9 @@ func New(opts Options) (*Transport, error) {
 		return nil, errors.New("missing server URI when creating a new transport")
 	case opts.ServerCfg.Creds == nil:
 		return nil, errors.New("missing credentials when creating a new transport")
-	case opts.UpdateHandler == nil:
+	case opts.OnRecvHandler == nil:
 		return nil, errors.New("missing update handler when creating a new transport")
-	case opts.StreamErrorHandler == nil:
+	case opts.OnErrorHandler == nil:
 		return nil, errors.New("missing stream error handler when creating a new transport")
 	case opts.OnSendHandler == nil:
 		return nil, errors.New("missing on send handler when creating a new transport")
@@ -196,15 +207,15 @@ func New(opts Options) (*Transport, error) {
 		boff = backoff.DefaultExponential.Backoff
 	}
 	ret := &Transport{
-		cc:                  cc,
-		serverURI:           opts.ServerCfg.ServerURI,
-		updateHandler:       opts.UpdateHandler,
-		adsStreamErrHandler: opts.StreamErrorHandler,
-		reportSendReq:       opts.OnSendHandler,
-		lrsStore:            load.NewStore(),
-		backoff:             boff,
-		nodeProto:           node,
-		logger:              opts.Logger,
+		cc:             cc,
+		serverURI:      opts.ServerCfg.ServerURI,
+		onRecvHandler:  opts.OnRecvHandler,
+		onErrorHandler: opts.OnErrorHandler,
+		onSendHandler:  opts.OnSendHandler,
+		lrsStore:       load.NewStore(),
+		backoff:        boff,
+		nodeProto:      node,
+		logger:         opts.Logger,
 
 		adsStreamCh:     make(chan adsStream, 1),
 		adsRequestCh:    buffer.NewUnbounded(),
@@ -253,13 +264,14 @@ func (t *Transport) SendRequest(url string, resources []string) {
 
 func (t *Transport) newAggregatedDiscoveryServiceStream(ctx context.Context, cc *grpc.ClientConn) (adsStream, error) {
 	// The transport retries the stream with an exponential backoff whenever the
-	// stream breaks or if the channel is broken.
+	// stream breaks without ever having a response on the stream.
 	return v3adsgrpc.NewAggregatedDiscoveryServiceClient(cc).StreamAggregatedResources(ctx)
 }
 
-// UpdateChannelInfo is the type for resource request updates pushed to the top-level
-// authority via UpdateCh.
-type UpdateChannelInfo struct {
+// ResourceSendInfo wraps the names and url of resources successfully
+// sent to the management server. This is used by the `authority` type
+// to start/stop the watch timer associated with every resource.
+type ResourceSendInfo struct {
 	ResourceNames []string
 	URL           string
 }
@@ -280,7 +292,10 @@ func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, reso
 	if err := stream.Send(req); err != nil {
 		return fmt.Errorf("sending ADS request %s failed: %v", pretty.ToJSON(req), err)
 	}
-	t.reportSendReq(&UpdateChannelInfo{URL: resourceURL, ResourceNames: resourceNames})
+	if err := t.onSendHandler(&ResourceSendInfo{URL: resourceURL, ResourceNames: resourceNames}); err != nil {
+		return err
+	}
+
 	t.logger.Debugf("ADS request sent: %v", pretty.ToJSON(req))
 	return nil
 }
@@ -318,7 +333,7 @@ func (t *Transport) adsRunner(ctx context.Context) {
 		resetBackoff := func() bool {
 			stream, err := t.newAggregatedDiscoveryServiceStream(ctx, t.cc)
 			if err != nil {
-				t.adsStreamErrHandler(err)
+				t.onErrorHandler(err)
 				t.logger.Warningf("ADS stream creation failed: %v", err)
 				return false
 			}
@@ -439,13 +454,13 @@ func (t *Transport) recv(stream adsStream) bool {
 		resources, url, rVersion, nonce, err := t.recvAggregatedDiscoveryServiceResponse(stream)
 		if err != nil {
 			// todo(arvindbright): call ErrHandler iff no msgs were ever recv'd on the stream
-			t.adsStreamErrHandler(err)
+			t.onErrorHandler(err)
 			t.logger.Warningf("ADS stream is closed with error: %v", err)
 			return msgReceived
 		}
 		msgReceived = true
 
-		err = t.updateHandler(ResourceUpdate{
+		err = t.onRecvHandler(ResourceUpdate{
 			Resources: resources,
 			URL:       url,
 			Version:   rVersion,

@@ -133,8 +133,8 @@ func (s) TestWatchResourceBaseCase(t *testing.T) {
 	if a.resources[rType][resourceName].wTimer == nil {
 		t.Fatal("watch resource timer is nil. Want: wTimer to be started.")
 	}
-	if wState := a.resources[rType][resourceName].wState; wState != watchStateRespRequested {
-		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateRespRequested)
+	if wState := a.resources[rType][resourceName].wState; wState != watchStateRequested {
+		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateRequested)
 	}
 	a.resourcesMu.Unlock()
 
@@ -151,8 +151,8 @@ func (s) TestWatchResourceBaseCase(t *testing.T) {
 	// Wait for authority to receive the update.
 	<-watcherUpdateCh
 	a.resourcesMu.Lock()
-	if wState := a.resources[rType][resourceName].wState; wState != watchStateRespReceived {
-		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateRespReceived)
+	if wState := a.resources[rType][resourceName].wState; wState != watchStateReceived {
+		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateReceived)
 	}
 	a.resourcesMu.Unlock()
 }
@@ -236,8 +236,8 @@ func (s) TestWatchResourceTimerStopsOnError(t *testing.T) {
 	if a.resources[rType][resourceName].wTimer == nil {
 		t.Fatal("watch resource timer is nil. Want: wTimer to be started.")
 	}
-	if wState := a.resources[rType][resourceName].wState; wState != watchStateRespRequested {
-		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateRespRequested)
+	if wState := a.resources[rType][resourceName].wState; wState != watchStateRequested {
+		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateRequested)
 	}
 	a.resourcesMu.Unlock()
 

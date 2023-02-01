@@ -190,7 +190,7 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 			tr, err := transport.New(transport.Options{
 				ServerCfg: serverCfg,
 				// No validation. Simply push received resources on a channel.
-				UpdateHandler: func(update transport.ResourceUpdate) error {
+				OnRecvHandler: func(update transport.ResourceUpdate) error {
 					resourcesCh.Send(&resourcesWithTypeURL{
 						resources: update.Resources,
 						url:       update.URL,
@@ -198,9 +198,9 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 					})
 					return nil
 				},
-				OnSendHandler:      func(*transport.UpdateChannelInfo) {},               // No onSend handling.
-				StreamErrorHandler: func(error) {},                                      // No stream error handling.
-				Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.
+				OnSendHandler:  func(*transport.ResourceSendInfo) error { return nil }, // No onSend handling.
+				OnErrorHandler: func(error) {},                                         // No stream error handling.
+				Backoff:        func(int) time.Duration { return time.Duration(0) },    // No backoff.
 			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS transport: %v", err)
