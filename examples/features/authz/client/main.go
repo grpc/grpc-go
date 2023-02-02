@@ -111,7 +111,7 @@ func main() {
 		log.Fatalf("Bidirectional RPC by authorized user failed: %v", err)
 	}
 
-	// Make RPCs as an unauthorized user and expect them to fail with status code PermissionDenied
+	// Make RPCs as an unauthorized user and expect them to fail with status code PermissionDenied.
 	unauthorisedUserTokenCallOption := newCredentialsCallOption(token.Token{Username: "bad-actor", Secret: "super-secret"})
 	if err := callUnaryEcho(ctx, client, "hello world", unauthorisedUserTokenCallOption); err != nil {
 		switch c := status.Code(err); c {

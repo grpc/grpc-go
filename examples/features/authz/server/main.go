@@ -117,8 +117,8 @@ func (s *server) BidirectionalStreamingEcho(stream pb.Echo_BidirectionalStreamin
 	}
 }
 
-// valid validates the authorization.
-func valid(authorization []string) (username string, err error) {
+// isAuthenticated validates the authorization.
+func isAuthenticated(authorization []string) (username string, err error) {
 	if len(authorization) < 1 {
 		return "", errors.New("received empty authorization token from client")
 	}
@@ -137,20 +137,24 @@ func valid(authorization []string) (username string, err error) {
 	return token.Username, nil
 }
 
+// authUnaryInterceptor looks up the authorization header from the incoming RPC context,
+// retrieves the username from it and creates a new context with the username before invoking
+// the provided handler.
 func authUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	// authentication (token verification)
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, errMissingMetadata
 	}
-	username, err := valid(md["authorization"])
+	username, err := isAuthenticated(md["authorization"])
 	if err != nil {
 		return nil, status.Error(codes.Unauthenticated, err.Error())
 	}
 	return handler(newContextWithRoles(ctx, username), req)
 }
 
-// wrappedStream wraps around the embedded grpc.ServerStream, used to set the context
+// wrappedStream wraps a grpc.ServerStream associated with an incoming RPC, and
+// a custom context containing the username derived from the authorization header
+// specified in the incoming RPC metadata
 type wrappedStream struct {
 	grpc.ServerStream
 	ctx context.Context
@@ -164,13 +168,15 @@ func newWrappedStream(ctx context.Context, s grpc.ServerStream) grpc.ServerStrea
 	return &wrappedStream{s, ctx}
 }
 
+// authStreamInterceptor looks up the authorization header from the incoming RPC context,
+// retrieves the username from it and creates a new context with the username before invoking
+// the provided handler.
 func authStreamInterceptor(srv interface{}, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	// authentication (token verification)
 	md, ok := metadata.FromIncomingContext(ss.Context())
 	if !ok {
 		return errMissingMetadata
 	}
-	username, err := valid(md["authorization"])
+	username, err := isAuthenticated(md["authorization"])
 	if err != nil {
 		return status.Error(codes.Unauthenticated, err.Error())
 	}
@@ -190,13 +196,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("Loading credentials: %v", err)
 	}
+
+	// Create an authorization interceptor using a static policy.
 	staticInteceptor, err := authz.NewStatic(authzPolicy)
 	if err != nil {
 		log.Fatalf("Creating a static authz interceptor: %v", err)
 	}
-	unaryInt := grpc.ChainUnaryInterceptor(authUnaryInterceptor, staticInteceptor.UnaryInterceptor)
-	streamInt := grpc.ChainStreamInterceptor(authStreamInterceptor, staticInteceptor.StreamInterceptor)
-	s := grpc.NewServer(grpc.Creds(creds), unaryInt, streamInt)
+	unaryInts := grpc.ChainUnaryInterceptor(authUnaryInterceptor, staticInteceptor.UnaryInterceptor)
+	streamInts := grpc.ChainStreamInterceptor(authStreamInterceptor, staticInteceptor.StreamInterceptor)
+	s := grpc.NewServer(grpc.Creds(creds), unaryInts, streamInts)
 
 	// Register EchoServer on the server.
 	pb.RegisterEchoServer(s, &server{})
