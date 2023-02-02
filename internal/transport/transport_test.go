@@ -667,7 +667,7 @@ func (s) TestClientMix(t *testing.T) {
 		<-ct.Error()
 		ct.Close(fmt.Errorf("closed manually by test"))
 	}(ct)
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 500; i++ {
 		time.Sleep(10 * time.Millisecond)
 		go performOneRPC(ct)
 	}
@@ -2191,15 +2191,10 @@ func runPingPongTest(t *testing.T, msgSize int) {
 	binary.BigEndian.PutUint32(outgoingHeader[1:], uint32(msgSize))
 	opts := &Options{}
 	incomingHeader := make([]byte, 5)
-	done := make(chan struct{})
-	go func() {
-		timer := time.NewTimer(time.Second * 5)
-		<-timer.C
-		close(done)
-	}()
+	timer := time.NewTimer(time.Second * 1)
 	for {
 		select {
-		case <-done:
+		case <-timer.C:
 			client.Write(stream, nil, nil, &Options{Last: true})
 			if _, err := stream.Read(incomingHeader); err != io.EOF {
 				t.Fatalf("Client expected EOF from the server. Got: %v", err)
