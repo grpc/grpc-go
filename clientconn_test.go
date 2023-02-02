@@ -335,7 +335,7 @@ func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("net.Listen() = %v", err)
+		t.Fatalf("Unexpected error from net.Listen(%q, %q): %v", "tcp", "localhost:0", err)
 	}
 	defer lis.Close()
 	done := make(chan struct{})
@@ -379,7 +379,7 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 	}
 	cc, err := Dial(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(cp))
 	if err != nil {
-		t.Fatalf("Dial() = %v", err)
+		t.Fatalf("Unexpected error from Dial(%v) = %v", lis.Addr(), err)
 	}
 	defer cc.Close()
 	go stayConnected(cc)
