@@ -32,11 +32,6 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-const (
-	Profiling_Enable_FullMethodName         = "/grpc.go.profiling.v1alpha.Profiling/Enable"
-	Profiling_GetStreamStats_FullMethodName = "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats"
-)
-
 // ProfilingClient is the client API for Profiling service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -58,7 +53,7 @@ func NewProfilingClient(cc grpc.ClientConnInterface) ProfilingClient {
 
 func (c *profilingClient) Enable(ctx context.Context, in *EnableRequest, opts ...grpc.CallOption) (*EnableResponse, error) {
 	out := new(EnableResponse)
-	err := c.cc.Invoke(ctx, Profiling_Enable_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.go.profiling.v1alpha.Profiling/Enable", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +62,7 @@ func (c *profilingClient) Enable(ctx context.Context, in *EnableRequest, opts ..
 
 func (c *profilingClient) GetStreamStats(ctx context.Context, in *GetStreamStatsRequest, opts ...grpc.CallOption) (*GetStreamStatsResponse, error) {
 	out := new(GetStreamStatsResponse)
-	err := c.cc.Invoke(ctx, Profiling_GetStreamStats_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +112,7 @@ func _Profiling_Enable_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Profiling_Enable_FullMethodName,
+		FullMethod: "/grpc.go.profiling.v1alpha.Profiling/Enable",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProfilingServer).Enable(ctx, req.(*EnableRequest))
@@ -135,7 +130,7 @@ func _Profiling_GetStreamStats_Handler(srv interface{}, ctx context.Context, dec
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: Profiling_GetStreamStats_FullMethodName,
+		FullMethod: "/grpc.go.profiling.v1alpha.Profiling/GetStreamStats",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProfilingServer).GetStreamStats(ctx, req.(*GetStreamStatsRequest))

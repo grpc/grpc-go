@@ -35,14 +35,6 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-const (
-	BenchmarkService_UnaryCall_FullMethodName           = "/grpc.testing.BenchmarkService/UnaryCall"
-	BenchmarkService_StreamingCall_FullMethodName       = "/grpc.testing.BenchmarkService/StreamingCall"
-	BenchmarkService_StreamingFromClient_FullMethodName = "/grpc.testing.BenchmarkService/StreamingFromClient"
-	BenchmarkService_StreamingFromServer_FullMethodName = "/grpc.testing.BenchmarkService/StreamingFromServer"
-	BenchmarkService_StreamingBothWays_FullMethodName   = "/grpc.testing.BenchmarkService/StreamingBothWays"
-)
-
 // BenchmarkServiceClient is the client API for BenchmarkService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -75,7 +67,7 @@ func NewBenchmarkServiceClient(cc grpc.ClientConnInterface) BenchmarkServiceClie
 
 func (c *benchmarkServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
 	out := new(SimpleResponse)
-	err := c.cc.Invoke(ctx, BenchmarkService_UnaryCall_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.BenchmarkService/UnaryCall", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +75,7 @@ func (c *benchmarkServiceClient) UnaryCall(ctx context.Context, in *SimpleReques
 }
 
 func (c *benchmarkServiceClient) StreamingCall(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[0], BenchmarkService_StreamingCall_FullMethodName, opts...)
+	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[0], "/grpc.testing.BenchmarkService/StreamingCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +106,7 @@ func (x *benchmarkServiceStreamingCallClient) Recv() (*SimpleResponse, error) {
 }
 
 func (c *benchmarkServiceClient) StreamingFromClient(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingFromClientClient, error) {
-	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[1], BenchmarkService_StreamingFromClient_FullMethodName, opts...)
+	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[1], "/grpc.testing.BenchmarkService/StreamingFromClient", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +140,7 @@ func (x *benchmarkServiceStreamingFromClientClient) CloseAndRecv() (*SimpleRespo
 }
 
 func (c *benchmarkServiceClient) StreamingFromServer(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (BenchmarkService_StreamingFromServerClient, error) {
-	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[2], BenchmarkService_StreamingFromServer_FullMethodName, opts...)
+	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[2], "/grpc.testing.BenchmarkService/StreamingFromServer", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +172,7 @@ func (x *benchmarkServiceStreamingFromServerClient) Recv() (*SimpleResponse, err
 }
 
 func (c *benchmarkServiceClient) StreamingBothWays(ctx context.Context, opts ...grpc.CallOption) (BenchmarkService_StreamingBothWaysClient, error) {
-	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[3], BenchmarkService_StreamingBothWays_FullMethodName, opts...)
+	stream, err := c.cc.NewStream(ctx, &BenchmarkService_ServiceDesc.Streams[3], "/grpc.testing.BenchmarkService/StreamingBothWays", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +267,7 @@ func _BenchmarkService_UnaryCall_Handler(srv interface{}, ctx context.Context, d
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: BenchmarkService_UnaryCall_FullMethodName,
+		FullMethod: "/grpc.testing.BenchmarkService/UnaryCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(BenchmarkServiceServer).UnaryCall(ctx, req.(*SimpleRequest))

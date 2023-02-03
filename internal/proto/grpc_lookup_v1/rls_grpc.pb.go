@@ -32,10 +32,6 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-const (
-	RouteLookupService_RouteLookup_FullMethodName = "/grpc.lookup.v1.RouteLookupService/RouteLookup"
-)
-
 // RouteLookupServiceClient is the client API for RouteLookupService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -54,7 +50,7 @@ func NewRouteLookupServiceClient(cc grpc.ClientConnInterface) RouteLookupService
 
 func (c *routeLookupServiceClient) RouteLookup(ctx context.Context, in *RouteLookupRequest, opts ...grpc.CallOption) (*RouteLookupResponse, error) {
 	out := new(RouteLookupResponse)
-	err := c.cc.Invoke(ctx, RouteLookupService_RouteLookup_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.lookup.v1.RouteLookupService/RouteLookup", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +96,7 @@ func _RouteLookupService_RouteLookup_Handler(srv interface{}, ctx context.Contex
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: RouteLookupService_RouteLookup_FullMethodName,
+		FullMethod: "/grpc.lookup.v1.RouteLookupService/RouteLookup",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(RouteLookupServiceServer).RouteLookup(ctx, req.(*RouteLookupRequest))

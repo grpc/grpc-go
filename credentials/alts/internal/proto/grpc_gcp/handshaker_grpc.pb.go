@@ -35,10 +35,6 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-const (
-	HandshakerService_DoHandshake_FullMethodName = "/grpc.gcp.HandshakerService/DoHandshake"
-)
-
 // HandshakerServiceClient is the client API for HandshakerService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -61,7 +57,7 @@ func NewHandshakerServiceClient(cc grpc.ClientConnInterface) HandshakerServiceCl
 }
 
 func (c *handshakerServiceClient) DoHandshake(ctx context.Context, opts ...grpc.CallOption) (HandshakerService_DoHandshakeClient, error) {
-	stream, err := c.cc.NewStream(ctx, &HandshakerService_ServiceDesc.Streams[0], HandshakerService_DoHandshake_FullMethodName, opts...)
+	stream, err := c.cc.NewStream(ctx, &HandshakerService_ServiceDesc.Streams[0], "/grpc.gcp.HandshakerService/DoHandshake", opts...)
 	if err != nil {
 		return nil, err
 	}

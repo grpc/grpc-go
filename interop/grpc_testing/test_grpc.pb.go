@@ -35,17 +35,6 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-const (
-	TestService_EmptyCall_FullMethodName           = "/grpc.testing.TestService/EmptyCall"
-	TestService_UnaryCall_FullMethodName           = "/grpc.testing.TestService/UnaryCall"
-	TestService_CacheableUnaryCall_FullMethodName  = "/grpc.testing.TestService/CacheableUnaryCall"
-	TestService_StreamingOutputCall_FullMethodName = "/grpc.testing.TestService/StreamingOutputCall"
-	TestService_StreamingInputCall_FullMethodName  = "/grpc.testing.TestService/StreamingInputCall"
-	TestService_FullDuplexCall_FullMethodName      = "/grpc.testing.TestService/FullDuplexCall"
-	TestService_HalfDuplexCall_FullMethodName      = "/grpc.testing.TestService/HalfDuplexCall"
-	TestService_UnimplementedCall_FullMethodName   = "/grpc.testing.TestService/UnimplementedCall"
-)
-
 // TestServiceClient is the client API for TestService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -88,7 +77,7 @@ func NewTestServiceClient(cc grpc.ClientConnInterface) TestServiceClient {
 
 func (c *testServiceClient) EmptyCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, TestService_EmptyCall_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/EmptyCall", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +86,7 @@ func (c *testServiceClient) EmptyCall(ctx context.Context, in *Empty, opts ...gr
 
 func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
 	out := new(SimpleResponse)
-	err := c.cc.Invoke(ctx, TestService_UnaryCall_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/UnaryCall", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +95,7 @@ func (c *testServiceClient) UnaryCall(ctx context.Context, in *SimpleRequest, op
 
 func (c *testServiceClient) CacheableUnaryCall(ctx context.Context, in *SimpleRequest, opts ...grpc.CallOption) (*SimpleResponse, error) {
 	out := new(SimpleResponse)
-	err := c.cc.Invoke(ctx, TestService_CacheableUnaryCall_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/CacheableUnaryCall", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +103,7 @@ func (c *testServiceClient) CacheableUnaryCall(ctx context.Context, in *SimpleRe
 }
 
 func (c *testServiceClient) StreamingOutputCall(ctx context.Context, in *StreamingOutputCallRequest, opts ...grpc.CallOption) (TestService_StreamingOutputCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[0], TestService_StreamingOutputCall_FullMethodName, opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[0], "/grpc.testing.TestService/StreamingOutputCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +135,7 @@ func (x *testServiceStreamingOutputCallClient) Recv() (*StreamingOutputCallRespo
 }
 
 func (c *testServiceClient) StreamingInputCall(ctx context.Context, opts ...grpc.CallOption) (TestService_StreamingInputCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[1], TestService_StreamingInputCall_FullMethodName, opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[1], "/grpc.testing.TestService/StreamingInputCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +169,7 @@ func (x *testServiceStreamingInputCallClient) CloseAndRecv() (*StreamingInputCal
 }
 
 func (c *testServiceClient) FullDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_FullDuplexCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[2], TestService_FullDuplexCall_FullMethodName, opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[2], "/grpc.testing.TestService/FullDuplexCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +200,7 @@ func (x *testServiceFullDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 }
 
 func (c *testServiceClient) HalfDuplexCall(ctx context.Context, opts ...grpc.CallOption) (TestService_HalfDuplexCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[3], TestService_HalfDuplexCall_FullMethodName, opts...)
+	stream, err := c.cc.NewStream(ctx, &TestService_ServiceDesc.Streams[3], "/grpc.testing.TestService/HalfDuplexCall", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -243,7 +232,7 @@ func (x *testServiceHalfDuplexCallClient) Recv() (*StreamingOutputCallResponse, 
 
 func (c *testServiceClient) UnimplementedCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, TestService_UnimplementedCall_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.TestService/UnimplementedCall", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -334,7 +323,7 @@ func _TestService_EmptyCall_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: TestService_EmptyCall_FullMethodName,
+		FullMethod: "/grpc.testing.TestService/EmptyCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TestServiceServer).EmptyCall(ctx, req.(*Empty))
@@ -352,7 +341,7 @@ func _TestService_UnaryCall_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: TestService_UnaryCall_FullMethodName,
+		FullMethod: "/grpc.testing.TestService/UnaryCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TestServiceServer).UnaryCall(ctx, req.(*SimpleRequest))
@@ -370,7 +359,7 @@ func _TestService_CacheableUnaryCall_Handler(srv interface{}, ctx context.Contex
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: TestService_CacheableUnaryCall_FullMethodName,
+		FullMethod: "/grpc.testing.TestService/CacheableUnaryCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TestServiceServer).CacheableUnaryCall(ctx, req.(*SimpleRequest))
@@ -487,7 +476,7 @@ func _TestService_UnimplementedCall_Handler(srv interface{}, ctx context.Context
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: TestService_UnimplementedCall_FullMethodName,
+		FullMethod: "/grpc.testing.TestService/UnimplementedCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(TestServiceServer).UnimplementedCall(ctx, req.(*Empty))
@@ -546,10 +535,6 @@ var TestService_ServiceDesc = grpc.ServiceDesc{
 	Metadata: "grpc/testing/test.proto",
 }
 
-const (
-	UnimplementedService_UnimplementedCall_FullMethodName = "/grpc.testing.UnimplementedService/UnimplementedCall"
-)
-
 // UnimplementedServiceClient is the client API for UnimplementedService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -568,7 +553,7 @@ func NewUnimplementedServiceClient(cc grpc.ClientConnInterface) UnimplementedSer
 
 func (c *unimplementedServiceClient) UnimplementedCall(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, UnimplementedService_UnimplementedCall_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.UnimplementedService/UnimplementedCall", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -614,7 +599,7 @@ func _UnimplementedService_UnimplementedCall_Handler(srv interface{}, ctx contex
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: UnimplementedService_UnimplementedCall_FullMethodName,
+		FullMethod: "/grpc.testing.UnimplementedService/UnimplementedCall",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(UnimplementedServiceServer).UnimplementedCall(ctx, req.(*Empty))
@@ -638,11 +623,6 @@ var UnimplementedService_ServiceDesc = grpc.ServiceDesc{
 	Metadata: "grpc/testing/test.proto",
 }
 
-const (
-	ReconnectService_Start_FullMethodName = "/grpc.testing.ReconnectService/Start"
-	ReconnectService_Stop_FullMethodName  = "/grpc.testing.ReconnectService/Stop"
-)
-
 // ReconnectServiceClient is the client API for ReconnectService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -661,7 +641,7 @@ func NewReconnectServiceClient(cc grpc.ClientConnInterface) ReconnectServiceClie
 
 func (c *reconnectServiceClient) Start(ctx context.Context, in *ReconnectParams, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, ReconnectService_Start_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.ReconnectService/Start", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -670,7 +650,7 @@ func (c *reconnectServiceClient) Start(ctx context.Context, in *ReconnectParams,
 
 func (c *reconnectServiceClient) Stop(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*ReconnectInfo, error) {
 	out := new(ReconnectInfo)
-	err := c.cc.Invoke(ctx, ReconnectService_Stop_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.ReconnectService/Stop", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -719,7 +699,7 @@ func _ReconnectService_Start_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ReconnectService_Start_FullMethodName,
+		FullMethod: "/grpc.testing.ReconnectService/Start",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ReconnectServiceServer).Start(ctx, req.(*ReconnectParams))
@@ -737,7 +717,7 @@ func _ReconnectService_Stop_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ReconnectService_Stop_FullMethodName,
+		FullMethod: "/grpc.testing.ReconnectService/Stop",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ReconnectServiceServer).Stop(ctx, req.(*Empty))
@@ -765,11 +745,6 @@ var ReconnectService_ServiceDesc = grpc.ServiceDesc{
 	Metadata: "grpc/testing/test.proto",
 }
 
-const (
-	LoadBalancerStatsService_GetClientStats_FullMethodName            = "/grpc.testing.LoadBalancerStatsService/GetClientStats"
-	LoadBalancerStatsService_GetClientAccumulatedStats_FullMethodName = "/grpc.testing.LoadBalancerStatsService/GetClientAccumulatedStats"
-)
-
 // LoadBalancerStatsServiceClient is the client API for LoadBalancerStatsService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -790,7 +765,7 @@ func NewLoadBalancerStatsServiceClient(cc grpc.ClientConnInterface) LoadBalancer
 
 func (c *loadBalancerStatsServiceClient) GetClientStats(ctx context.Context, in *LoadBalancerStatsRequest, opts ...grpc.CallOption) (*LoadBalancerStatsResponse, error) {
 	out := new(LoadBalancerStatsResponse)
-	err := c.cc.Invoke(ctx, LoadBalancerStatsService_GetClientStats_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.LoadBalancerStatsService/GetClientStats", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -799,7 +774,7 @@ func (c *loadBalancerStatsServiceClient) GetClientStats(ctx context.Context, in 
 
 func (c *loadBalancerStatsServiceClient) GetClientAccumulatedStats(ctx context.Context, in *LoadBalancerAccumulatedStatsRequest, opts ...grpc.CallOption) (*LoadBalancerAccumulatedStatsResponse, error) {
 	out := new(LoadBalancerAccumulatedStatsResponse)
-	err := c.cc.Invoke(ctx, LoadBalancerStatsService_GetClientAccumulatedStats_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.LoadBalancerStatsService/GetClientAccumulatedStats", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -851,7 +826,7 @@ func _LoadBalancerStatsService_GetClientStats_Handler(srv interface{}, ctx conte
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: LoadBalancerStatsService_GetClientStats_FullMethodName,
+		FullMethod: "/grpc.testing.LoadBalancerStatsService/GetClientStats",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LoadBalancerStatsServiceServer).GetClientStats(ctx, req.(*LoadBalancerStatsRequest))
@@ -869,7 +844,7 @@ func _LoadBalancerStatsService_GetClientAccumulatedStats_Handler(srv interface{}
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: LoadBalancerStatsService_GetClientAccumulatedStats_FullMethodName,
+		FullMethod: "/grpc.testing.LoadBalancerStatsService/GetClientAccumulatedStats",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(LoadBalancerStatsServiceServer).GetClientAccumulatedStats(ctx, req.(*LoadBalancerAccumulatedStatsRequest))
@@ -897,11 +872,6 @@ var LoadBalancerStatsService_ServiceDesc = grpc.ServiceDesc{
 	Metadata: "grpc/testing/test.proto",
 }
 
-const (
-	XdsUpdateHealthService_SetServing_FullMethodName    = "/grpc.testing.XdsUpdateHealthService/SetServing"
-	XdsUpdateHealthService_SetNotServing_FullMethodName = "/grpc.testing.XdsUpdateHealthService/SetNotServing"
-)
-
 // XdsUpdateHealthServiceClient is the client API for XdsUpdateHealthService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -920,7 +890,7 @@ func NewXdsUpdateHealthServiceClient(cc grpc.ClientConnInterface) XdsUpdateHealt
 
 func (c *xdsUpdateHealthServiceClient) SetServing(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, XdsUpdateHealthService_SetServing_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.XdsUpdateHealthService/SetServing", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -929,7 +899,7 @@ func (c *xdsUpdateHealthServiceClient) SetServing(ctx context.Context, in *Empty
 
 func (c *xdsUpdateHealthServiceClient) SetNotServing(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, XdsUpdateHealthService_SetNotServing_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.XdsUpdateHealthService/SetNotServing", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -979,7 +949,7 @@ func _XdsUpdateHealthService_SetServing_Handler(srv interface{}, ctx context.Con
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: XdsUpdateHealthService_SetServing_FullMethodName,
+		FullMethod: "/grpc.testing.XdsUpdateHealthService/SetServing",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(XdsUpdateHealthServiceServer).SetServing(ctx, req.(*Empty))
@@ -997,7 +967,7 @@ func _XdsUpdateHealthService_SetNotServing_Handler(srv interface{}, ctx context.
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: XdsUpdateHealthService_SetNotServing_FullMethodName,
+		FullMethod: "/grpc.testing.XdsUpdateHealthService/SetNotServing",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(XdsUpdateHealthServiceServer).SetNotServing(ctx, req.(*Empty))
@@ -1025,10 +995,6 @@ var XdsUpdateHealthService_ServiceDesc = grpc.ServiceDesc{
 	Metadata: "grpc/testing/test.proto",
 }
 
-const (
-	XdsUpdateClientConfigureService_Configure_FullMethodName = "/grpc.testing.XdsUpdateClientConfigureService/Configure"
-)
-
 // XdsUpdateClientConfigureServiceClient is the client API for XdsUpdateClientConfigureService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -1047,7 +1013,7 @@ func NewXdsUpdateClientConfigureServiceClient(cc grpc.ClientConnInterface) XdsUp
 
 func (c *xdsUpdateClientConfigureServiceClient) Configure(ctx context.Context, in *ClientConfigureRequest, opts ...grpc.CallOption) (*ClientConfigureResponse, error) {
 	out := new(ClientConfigureResponse)
-	err := c.cc.Invoke(ctx, XdsUpdateClientConfigureService_Configure_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.XdsUpdateClientConfigureService/Configure", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1094,7 +1060,7 @@ func _XdsUpdateClientConfigureService_Configure_Handler(srv interface{}, ctx con
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: XdsUpdateClientConfigureService_Configure_FullMethodName,
+		FullMethod: "/grpc.testing.XdsUpdateClientConfigureService/Configure",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(XdsUpdateClientConfigureServiceServer).Configure(ctx, req.(*ClientConfigureRequest))

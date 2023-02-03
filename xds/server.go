@@ -61,6 +61,10 @@ var (
 	logger                = grpclog.Component("xds")
 )
 
+func prefixLogger(p *GRPCServer) *internalgrpclog.PrefixLogger {
+	return internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(serverPrefix, p))
+}
+
 // grpcServer contains methods from grpc.Server which are used by the
 // GRPCServer type here. This is useful for overriding in unit tests.
 type grpcServer interface {
@@ -103,7 +107,7 @@ func NewGRPCServer(opts ...grpc.ServerOption) *GRPCServer {
 		gs:   newGRPCServer(newOpts...),
 		quit: grpcsync.NewEvent(),
 	}
-	s.logger = internalgrpclog.NewPrefixLogger(logger, fmt.Sprintf(serverPrefix, s))
+	s.logger = prefixLogger(s)
 	s.logger.Infof("Created xds.GRPCServer")
 	s.handleServerOptions(opts)
 
@@ -192,6 +196,7 @@ func (s *GRPCServer) initXDSClient() error {
 	}
 	s.xdsC = client
 	s.xdsClientClose = close
+	s.logger.Infof("Created an xdsClient")
 	return nil
 }
 

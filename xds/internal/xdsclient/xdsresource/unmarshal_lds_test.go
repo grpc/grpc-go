@@ -616,7 +616,7 @@ func (s) TestUnmarshalListener_ClientSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalListenerResource(test.resource)
+			name, update, err := unmarshalListenerResource(test.resource, nil)
 			if (err != nil) != test.wantErr {
 				t.Errorf("unmarshalListenerResource(%s), got err: %v, wantErr: %v", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1744,7 +1744,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, update, err := unmarshalListenerResource(test.resource)
+			name, update, err := unmarshalListenerResource(test.resource, nil)
 			if err != nil && !strings.Contains(err.Error(), test.wantErr) {
 				t.Errorf("unmarshalListenerResource(%s) = %v wantErr: %q", pretty.ToJSON(test.resource), err, test.wantErr)
 			}

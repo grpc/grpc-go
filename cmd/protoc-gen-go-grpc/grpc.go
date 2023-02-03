@@ -36,8 +36,7 @@ const (
 )
 
 type serviceGenerateHelperInterface interface {
-	formatFullMethodSymbol(service *protogen.Service, method *protogen.Method) string
-	genFullMethods(g *protogen.GeneratedFile, service *protogen.Service)
+	formatFullMethodName(service *protogen.Service, method *protogen.Method) string
 	generateClientStruct(g *protogen.GeneratedFile, clientName string)
 	generateNewClientDefinitions(g *protogen.GeneratedFile, service *protogen.Service, clientName string)
 	generateUnimplementedServerType(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service)
@@ -47,19 +46,8 @@ type serviceGenerateHelperInterface interface {
 
 type serviceGenerateHelper struct{}
 
-func (serviceGenerateHelper) formatFullMethodSymbol(service *protogen.Service, method *protogen.Method) string {
-	return fmt.Sprintf("%s_%s_FullMethodName", service.GoName, method.GoName)
-}
-
-func (serviceGenerateHelper) genFullMethods(g *protogen.GeneratedFile, service *protogen.Service) {
-	g.P("const (")
-	for _, method := range service.Methods {
-		fmSymbol := helper.formatFullMethodSymbol(service, method)
-		fmName := fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name())
-		g.P(fmSymbol, ` = "`, fmName, `"`)
-	}
-	g.P(")")
-	g.P()
+func (serviceGenerateHelper) formatFullMethodName(service *protogen.Service, method *protogen.Method) string {
+	return fmt.Sprintf("/%s/%s", service.Desc.FullName(), method.Desc.Name())
 }
 
 func (serviceGenerateHelper) generateClientStruct(g *protogen.GeneratedFile, clientName string) {
@@ -179,16 +167,13 @@ func generateFileContent(gen *protogen.Plugin, file *protogen.File, g *protogen.
 }
 
 func genService(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, service *protogen.Service) {
-	// Full methods constants.
-	helper.genFullMethods(g, service)
-
-	// Client interface.
 	clientName := service.GoName + "Client"
 
 	g.P("// ", clientName, " is the client API for ", service.GoName, " service.")
 	g.P("//")
 	g.P("// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.")
 
+	// Client interface.
 	if service.Desc.Options().(*descriptorpb.ServiceOptions).GetDeprecated() {
 		g.P("//")
 		g.P(deprecationComment)
@@ -303,7 +288,7 @@ func clientSignature(g *protogen.GeneratedFile, method *protogen.Method) string 
 
 func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.GeneratedFile, method *protogen.Method, index int) {
 	service := method.Parent
-	fmSymbol := helper.formatFullMethodSymbol(service, method)
+	sname := helper.formatFullMethodName(service, method)
 
 	if method.Desc.Options().(*descriptorpb.MethodOptions).GetDeprecated() {
 		g.P(deprecationComment)
@@ -311,7 +296,7 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	g.P("func (c *", unexport(service.GoName), "Client) ", clientSignature(g, method), "{")
 	if !method.Desc.IsStreamingServer() && !method.Desc.IsStreamingClient() {
 		g.P("out := new(", method.Output.GoIdent, ")")
-		g.P(`err := c.cc.Invoke(ctx, `, fmSymbol, `, in, out, opts...)`)
+		g.P(`err := c.cc.Invoke(ctx, "`, sname, `", in, out, opts...)`)
 		g.P("if err != nil { return nil, err }")
 		g.P("return out, nil")
 		g.P("}")
@@ -320,7 +305,7 @@ func genClientMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 	}
 	streamType := unexport(service.GoName) + method.GoName + "Client"
 	serviceDescVar := service.GoName + "_ServiceDesc"
-	g.P("stream, err := c.cc.NewStream(ctx, &", serviceDescVar, ".Streams[", index, `], `, fmSymbol, `, opts...)`)
+	g.P("stream, err := c.cc.NewStream(ctx, &", serviceDescVar, ".Streams[", index, `], "`, sname, `", opts...)`)
 	g.P("if err != nil { return nil, err }")
 	g.P("x := &", streamType, "{stream}")
 	if !method.Desc.IsStreamingClient() {
@@ -448,8 +433,8 @@ func genServerMethod(gen *protogen.Plugin, file *protogen.File, g *protogen.Gene
 		g.P("if interceptor == nil { return srv.(", service.GoName, "Server).", method.GoName, "(ctx, in) }")
 		g.P("info := &", grpcPackage.Ident("UnaryServerInfo"), "{")
 		g.P("Server: srv,")
-		fmSymbol := helper.formatFullMethodSymbol(service, method)
-		g.P("FullMethod: ", fmSymbol, ",")
+		fullMethodName := helper.formatFullMethodName(service, method)
+		g.P("FullMethod: \"", fullMethodName, "\",")
 		g.P("}")
 		g.P("handler := func(ctx ", contextPackage.Ident("Context"), ", req interface{}) (interface{}, error) {")
 		g.P("return srv.(", service.GoName, "Server).", method.GoName, "(ctx, req.(*", method.Input.GoIdent, "))")

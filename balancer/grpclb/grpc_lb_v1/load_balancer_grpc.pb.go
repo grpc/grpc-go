@@ -37,10 +37,6 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-const (
-	LoadBalancer_BalanceLoad_FullMethodName = "/grpc.lb.v1.LoadBalancer/BalanceLoad"
-)
-
 // LoadBalancerClient is the client API for LoadBalancer service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -58,7 +54,7 @@ func NewLoadBalancerClient(cc grpc.ClientConnInterface) LoadBalancerClient {
 }
 
 func (c *loadBalancerClient) BalanceLoad(ctx context.Context, opts ...grpc.CallOption) (LoadBalancer_BalanceLoadClient, error) {
-	stream, err := c.cc.NewStream(ctx, &LoadBalancer_ServiceDesc.Streams[0], LoadBalancer_BalanceLoad_FullMethodName, opts...)
+	stream, err := c.cc.NewStream(ctx, &LoadBalancer_ServiceDesc.Streams[0], "/grpc.lb.v1.LoadBalancer/BalanceLoad", opts...)
 	if err != nil {
 		return nil, err
 	}

@@ -32,11 +32,6 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
-const (
-	SearchService_Search_FullMethodName          = "/grpc.testing.SearchService/Search"
-	SearchService_StreamingSearch_FullMethodName = "/grpc.testing.SearchService/StreamingSearch"
-)
-
 // SearchServiceClient is the client API for SearchService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -55,7 +50,7 @@ func NewSearchServiceClient(cc grpc.ClientConnInterface) SearchServiceClient {
 
 func (c *searchServiceClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchResponse, error) {
 	out := new(SearchResponse)
-	err := c.cc.Invoke(ctx, SearchService_Search_FullMethodName, in, out, opts...)
+	err := c.cc.Invoke(ctx, "/grpc.testing.SearchService/Search", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +58,7 @@ func (c *searchServiceClient) Search(ctx context.Context, in *SearchRequest, opt
 }
 
 func (c *searchServiceClient) StreamingSearch(ctx context.Context, opts ...grpc.CallOption) (SearchService_StreamingSearchClient, error) {
-	stream, err := c.cc.NewStream(ctx, &SearchService_ServiceDesc.Streams[0], SearchService_StreamingSearch_FullMethodName, opts...)
+	stream, err := c.cc.NewStream(ctx, &SearchService_ServiceDesc.Streams[0], "/grpc.testing.SearchService/StreamingSearch", opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +130,7 @@ func _SearchService_Search_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: SearchService_Search_FullMethodName,
+		FullMethod: "/grpc.testing.SearchService/Search",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(SearchServiceServer).Search(ctx, req.(*SearchRequest))

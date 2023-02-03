@@ -317,7 +317,7 @@ func bootstrapConfigFromEnvVariable() ([]byte, error) {
 		//
 		// Note that even if the content is invalid, we don't failover to the
 		// file content env variable.
-		logger.Debugf("Using bootstrap file with name %q", fName)
+		logger.Debugf("xds: using bootstrap file with name %q", fName)
 		return bootstrapFileReadFunc(fName)
 	}
 
@@ -349,6 +349,7 @@ func NewConfig() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("xds: Failed to read bootstrap config: %v", err)
 	}
+	logger.Debugf("Bootstrap content: %s", data)
 	return newConfigFromContents(data)
 }
 
@@ -424,7 +425,7 @@ func newConfigFromContents(data []byte) (*Config, error) {
 			}
 		case "client_default_listener_resource_name_template":
 			if !envconfig.XDSFederation {
-				logger.Warningf("Bootstrap field %v is not support when Federation is disabled", k)
+				logger.Warningf("xds: bootstrap field %v is not support when Federation is disabled", k)
 				continue
 			}
 			if err := json.Unmarshal(v, &config.ClientDefaultListenerResourceNameTemplate); err != nil {
@@ -432,7 +433,7 @@ func newConfigFromContents(data []byte) (*Config, error) {
 			}
 		case "authorities":
 			if !envconfig.XDSFederation {
-				logger.Warningf("Bootstrap field %v is not support when Federation is disabled", k)
+				logger.Warningf("xds: bootstrap field %v is not support when Federation is disabled", k)
 				continue
 			}
 			if err := json.Unmarshal(v, &config.Authorities); err != nil {
@@ -476,7 +477,7 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	if err := config.updateNodeProto(node); err != nil {
 		return nil, err
 	}
-	logger.Debugf("Bootstrap config for creating xds-client: %v", pretty.ToJSON(config))
+	logger.Infof("Bootstrap config for creating xds-client: %v", pretty.ToJSON(config))
 	return config, nil
 }
 

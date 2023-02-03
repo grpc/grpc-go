@@ -19,9 +19,7 @@ package xdsclient
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -160,7 +158,10 @@ func (a *authority) handleResourceUpdate(resourceUpdate transport.ResourceUpdate
 		return xdsresource.NewErrorf(xdsresource.ErrorTypeResourceTypeUnsupported, "Resource URL %v unknown in response from server", resourceUpdate.URL)
 	}
 
-	opts := &xdsresource.DecodeOptions{BootstrapConfig: a.bootstrapCfg}
+	opts := &xdsresource.DecodeOptions{
+		BootstrapConfig: a.bootstrapCfg,
+		Logger:          a.logger,
+	}
 	updates, md, err := decodeAllResources(opts, rType, resourceUpdate)
 	a.updateResourceStateAndScheduleCallbacks(rType, updates, md)
 	return err
@@ -204,7 +205,7 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				}
 			}
 			// Sync cache.
-			a.logger.Debugf("Resource type %q with name %q added to cache", rType.TypeEnum().String(), name)
+			a.logger.Debugf("Resource type %q with name %q, value %s added to cache", rType.TypeEnum().String(), name, uErr.resource.ToJSON())
 			state.cache = uErr.resource
 			// Set status to ACK, and clear error state. The metadata might be a
 			// NACK metadata because some other resources in the same response
@@ -312,7 +313,7 @@ func decodeAllResources(opts *xdsresource.DecodeOptions, rType xdsresource.Type,
 
 	typeStr := rType.TypeEnum().String()
 	md.Status = xdsresource.ServiceStatusNACKed
-	errRet := combineErrors(typeStr, topLevelErrors, perResourceErrors)
+	errRet := xdsresource.CombineErrors(typeStr, topLevelErrors, perResourceErrors)
 	md.ErrState = &xdsresource.UpdateErrorMetadata{
 		Version:   update.Version,
 		Err:       errRet,
@@ -500,29 +501,4 @@ func (a *authority) dumpResources() map[string]map[string]xdsresource.UpdateWith
 		dump[rType.TypeURL()] = states
 	}
 	return dump
-}
-
-func combineErrors(rType string, topLevelErrors []error, perResourceErrors map[string]error) error {
-	var errStrB strings.Builder
-	errStrB.WriteString(fmt.Sprintf("error parsing %q response: ", rType))
-	if len(topLevelErrors) > 0 {
-		errStrB.WriteString("top level errors: ")
-		for i, err := range topLevelErrors {
-			if i != 0 {
-				errStrB.WriteString(";\n")
-			}
-			errStrB.WriteString(err.Error())
-		}
-	}
-	if len(perResourceErrors) > 0 {
-		var i int
-		for name, err := range perResourceErrors {
-			if i != 0 {
-				errStrB.WriteString(";\n")
-			}
-			i++
-			errStrB.WriteString(fmt.Sprintf("resource %q: %v", name, err.Error()))
-		}
-	}
-	return errors.New(errStrB.String())
 }

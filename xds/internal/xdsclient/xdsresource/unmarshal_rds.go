@@ -28,12 +28,14 @@ import (
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-func unmarshalRouteConfigResource(r *anypb.Any) (string, RouteConfigUpdate, error) {
+func unmarshalRouteConfigResource(r *anypb.Any, logger *grpclog.PrefixLogger) (string, RouteConfigUpdate, error) {
 	r, err := unwrapResource(r)
 	if err != nil {
 		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unwrap resource: %v", err)
@@ -46,10 +48,11 @@ func unmarshalRouteConfigResource(r *anypb.Any) (string, RouteConfigUpdate, erro
 	if err := proto.Unmarshal(r.GetValue(), rc); err != nil {
 		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
+	logger.Infof("Resource with name: %v, type: %T, contains: %v.", rc.GetName(), rc, pretty.ToJSON(rc))
 
 	// TODO: Pass version.TransportAPI instead of relying upon the type URL
 	v2 := r.GetTypeUrl() == version.V2RouteConfigURL
-	u, err := generateRDSUpdateFromRouteConfiguration(rc, v2)
+	u, err := generateRDSUpdateFromRouteConfiguration(rc, logger, v2)
 	if err != nil {
 		return rc.GetName(), RouteConfigUpdate{}, err
 	}
@@ -73,7 +76,7 @@ func unmarshalRouteConfigResource(r *anypb.Any) (string, RouteConfigUpdate, erro
 // field must be empty and whose route field must be set.  Inside that route
 // message, the cluster field will contain the clusterName or weighted clusters
 // we are looking for.
-func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, v2 bool) (RouteConfigUpdate, error) {
+func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, logger *grpclog.PrefixLogger, v2 bool) (RouteConfigUpdate, error) {
 	vhs := make([]*VirtualHost, 0, len(rc.GetVirtualHosts()))
 	csps := make(map[string]clusterspecifier.BalancerConfig)
 	if envconfig.XDSRLS {
@@ -88,7 +91,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, v
 	// ignored and not emitted by the xdsclient.
 	var cspNames = make(map[string]bool)
 	for _, vh := range rc.GetVirtualHosts() {
-		routes, cspNs, err := routesProtoToSlice(vh.Routes, csps, v2)
+		routes, cspNs, err := routesProtoToSlice(vh.Routes, csps, logger, v2)
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
 		}
@@ -213,7 +216,7 @@ func generateRetryConfig(rp *v3routepb.RetryPolicy) (*RetryConfig, error) {
 	return cfg, nil
 }
 
-func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecifier.BalancerConfig, v2 bool) ([]*Route, map[string]bool, error) {
+func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecifier.BalancerConfig, logger *grpclog.PrefixLogger, v2 bool) ([]*Route, map[string]bool, error) {
 	var routesRet []*Route
 	var cspNames = make(map[string]bool)
 	for _, r := range routes {
@@ -224,7 +227,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 
 		if len(match.GetQueryParameters()) != 0 {
 			// Ignore route with query parameters.
-			logger.Warningf("Ignoring route %+v with query parameter matchers", r)
+			logger.Warningf("route %+v has query parameter matchers, the route will be ignored", r)
 			continue
 		}
 
@@ -306,7 +309,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 
 			// Hash Policies are only applicable for a Ring Hash LB.
 			if envconfig.XDSRingHash {
-				hp, err := hashPoliciesProtoToSlice(action.HashPolicy)
+				hp, err := hashPoliciesProtoToSlice(action.HashPolicy, logger)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -362,7 +365,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 				// it as if it we didn't know about the cluster_specifier_plugin
 				// at all.
 				if !envconfig.XDSRLS {
-					logger.Warningf("Ignoring route %+v with unsupported route_action field: cluster_specifier_plugin", r)
+					logger.Infof("route %+v contains route_action with unsupported field: cluster_specifier_plugin, the route will be ignored", r)
 					continue
 				}
 				if _, ok := csps[a.ClusterSpecifierPlugin]; !ok {
@@ -373,13 +376,13 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 					return nil, nil, fmt.Errorf("route %+v, action %+v, specifies a cluster specifier plugin %+v that is not in Route Configuration", r, a, a.ClusterSpecifierPlugin)
 				}
 				if csps[a.ClusterSpecifierPlugin] == nil {
-					logger.Warningf("Ignoring route %+v with optional and unsupported cluster specifier plugin %+v", r, a.ClusterSpecifierPlugin)
+					logger.Infof("route %+v references optional and unsupported cluster specifier plugin %v, the route will be ignored", r, a.ClusterSpecifierPlugin)
 					continue
 				}
 				cspNames[a.ClusterSpecifierPlugin] = true
 				route.ClusterSpecifierPlugin = a.ClusterSpecifierPlugin
 			default:
-				logger.Warningf("Ignoring route %+v with unknown ClusterSpecifier %+v", r, a)
+				logger.Infof("route %+v references unknown ClusterSpecifier %+v, the route will be ignored", r, a)
 				continue
 			}
 
@@ -421,7 +424,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 	return routesRet, cspNames, nil
 }
 
-func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy) ([]*HashPolicy, error) {
+func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy, logger *grpclog.PrefixLogger) ([]*HashPolicy, error) {
 	var hashPoliciesRet []*HashPolicy
 	for _, p := range policies {
 		policy := HashPolicy{Terminal: p.Terminal}
@@ -440,12 +443,12 @@ func hashPoliciesProtoToSlice(policies []*v3routepb.RouteAction_HashPolicy) ([]*
 			}
 		case *v3routepb.RouteAction_HashPolicy_FilterState_:
 			if p.GetFilterState().GetKey() != "io.grpc.channel_id" {
-				logger.Warningf("Ignoring hash policy %+v with invalid key for filter state policy %q", p, p.GetFilterState().GetKey())
+				logger.Infof("hash policy %+v contains an invalid key for filter state policy %q", p, p.GetFilterState().GetKey())
 				continue
 			}
 			policy.HashPolicyType = HashPolicyTypeChannelID
 		default:
-			logger.Warningf("Ignoring unsupported hash policy %T", p.GetPolicySpecifier())
+			logger.Infof("hash policy %T is an unsupported hash policy", p.GetPolicySpecifier())
 			continue
 		}
 
