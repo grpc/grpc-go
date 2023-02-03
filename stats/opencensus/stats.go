@@ -35,6 +35,8 @@ import (
 
 var logger = grpclog.Component("opencensus-instrumentation")
 
+var canonicalString = internal.CanonicalString.(func(codes.Code) string)
+
 type rpcDataKey struct{}
 
 func setRPCData(ctx context.Context, d *rpcData) context.Context {
@@ -99,10 +101,14 @@ func (ssh *serverStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCT
 		method:    info.FullMethodName,
 	}
 	if tagsBin := stats.Tags(ctx); tagsBin != nil {
-		if tags, err := tag.Decode(tagsBin); err != nil {
+		if tags, err := tag.Decode(tagsBin); err == nil {
 			ctx = tag.NewContext(ctx, tags)
 		}
 	}
+	// We can ignore the error here because in the error case, the context
+	// passed in is returned. If the call errors, the server side application
+	// layer won't get this key server method information in the tag map, but
+	// this instrumentation code will function as normal.
 	ctx, _ = tag.New(ctx, tag.Upsert(keyServerMethod, removeLeadingSlash(info.FullMethodName)))
 	return setRPCData(ctx, d)
 }
@@ -173,7 +179,7 @@ func recordDataEnd(ctx context.Context, d *rpcData, e *stats.End) {
 	var st string
 	if e.Error != nil {
 		s, _ := status.FromError(e.Error)
-		st = internal.CanonicalString.(func(codes.Code) string)(s.Code())
+		st = canonicalString(s.Code())
 	} else {
 		st = "OK"
 	}
