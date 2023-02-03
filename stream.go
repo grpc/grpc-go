@@ -1511,6 +1511,8 @@ type serverStream struct {
 	comp   encoding.Compressor
 	decomp encoding.Compressor
 
+	sendCompressorName string
+
 	maxReceiveMessageSize int
 	maxSendMessageSize    int
 	trInfo                *traceInfo
@@ -1602,6 +1604,13 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			ss.t.IncrMsgSent()
 		}
 	}()
+
+	// Server handler could have set new compressor by calling SetSendCompressor.
+	// In case it is set, we need to use it for compressing outbound message.
+	if sendCompressorsName := ss.s.SendCompress(); sendCompressorsName != ss.sendCompressorName {
+		ss.comp = encoding.GetCompressor(sendCompressorsName)
+		ss.sendCompressorName = sendCompressorsName
+	}
 
 	// load hdr, payload, data
 	hdr, payload, data, err := prepareMsg(m, ss.codec, ss.cp, ss.comp)

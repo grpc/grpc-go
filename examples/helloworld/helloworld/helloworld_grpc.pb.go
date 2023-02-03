@@ -32,6 +32,10 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	Greeter_SayHello_FullMethodName = "/helloworld.Greeter/SayHello"
+)
+
 // GreeterClient is the client API for Greeter service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -50,7 +54,7 @@ func NewGreeterClient(cc grpc.ClientConnInterface) GreeterClient {
 
 func (c *greeterClient) SayHello(ctx context.Context, in *HelloRequest, opts ...grpc.CallOption) (*HelloReply, error) {
 	out := new(HelloReply)
-	err := c.cc.Invoke(ctx, "/helloworld.Greeter/SayHello", in, out, opts...)
+	err := c.cc.Invoke(ctx, Greeter_SayHello_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +100,7 @@ func _Greeter_SayHello_Handler(srv interface{}, ctx context.Context, dec func(in
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/helloworld.Greeter/SayHello",
+		FullMethod: Greeter_SayHello_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(GreeterServer).SayHello(ctx, req.(*HelloRequest))

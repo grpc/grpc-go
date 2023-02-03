@@ -280,29 +280,34 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 			t.Errorf("stream method = %q; want %q", s.method, want)
 		}
 
-		err := s.SetHeader(metadata.Pairs("custom-header", "Custom header value"))
-		if err != nil {
+		if err := s.SetHeader(metadata.Pairs("custom-header", "Custom header value")); err != nil {
 			t.Error(err)
 		}
-		err = s.SetTrailer(metadata.Pairs("custom-trailer", "Custom trailer value"))
-		if err != nil {
+
+		if err := s.SetTrailer(metadata.Pairs("custom-trailer", "Custom trailer value")); err != nil {
+			t.Error(err)
+		}
+
+		if err := s.SetSendCompress("gzip"); err != nil {
 			t.Error(err)
 		}
 
 		md := metadata.Pairs("custom-header", "Another custom header value")
-		err = s.SendHeader(md)
-		delete(md, "custom-header")
-		if err != nil {
+		if err := s.SendHeader(md); err != nil {
 			t.Error(err)
 		}
+		delete(md, "custom-header")
 
-		err = s.SetHeader(metadata.Pairs("too-late", "Header value that should be ignored"))
-		if err == nil {
+		if err := s.SetHeader(metadata.Pairs("too-late", "Header value that should be ignored")); err == nil {
 			t.Error("expected SetHeader call after SendHeader to fail")
 		}
-		err = s.SendHeader(metadata.Pairs("too-late", "This header value should be ignored as well"))
-		if err == nil {
+
+		if err := s.SendHeader(metadata.Pairs("too-late", "This header value should be ignored as well")); err == nil {
 			t.Error("expected second SendHeader call to fail")
+		}
+
+		if err := s.SetSendCompress("snappy"); err == nil {
+			t.Error("expected second SetSendCompress call to fail")
 		}
 
 		st.bodyw.Close() // no body
@@ -317,6 +322,7 @@ func (s) TestHandlerTransport_HandleStreams(t *testing.T) {
 		"Content-Type":  {"application/grpc"},
 		"Trailer":       {"Grpc-Status", "Grpc-Message", "Grpc-Status-Details-Bin"},
 		"Custom-Header": {"Custom header value", "Another custom header value"},
+		"Grpc-Encoding": {"gzip"},
 	}
 	wantTrailer := http.Header{
 		"Grpc-Status":    {"0"},

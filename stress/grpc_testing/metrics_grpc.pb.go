@@ -39,6 +39,11 @@ import (
 // Requires gRPC-Go v1.32.0 or later.
 const _ = grpc.SupportPackageIsVersion7
 
+const (
+	MetricsService_GetAllGauges_FullMethodName = "/grpc.testing.MetricsService/GetAllGauges"
+	MetricsService_GetGauge_FullMethodName     = "/grpc.testing.MetricsService/GetGauge"
+)
+
 // MetricsServiceClient is the client API for MetricsService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
@@ -59,7 +64,7 @@ func NewMetricsServiceClient(cc grpc.ClientConnInterface) MetricsServiceClient {
 }
 
 func (c *metricsServiceClient) GetAllGauges(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (MetricsService_GetAllGaugesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &MetricsService_ServiceDesc.Streams[0], "/grpc.testing.MetricsService/GetAllGauges", opts...)
+	stream, err := c.cc.NewStream(ctx, &MetricsService_ServiceDesc.Streams[0], MetricsService_GetAllGauges_FullMethodName, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +97,7 @@ func (x *metricsServiceGetAllGaugesClient) Recv() (*GaugeResponse, error) {
 
 func (c *metricsServiceClient) GetGauge(ctx context.Context, in *GaugeRequest, opts ...grpc.CallOption) (*GaugeResponse, error) {
 	out := new(GaugeResponse)
-	err := c.cc.Invoke(ctx, "/grpc.testing.MetricsService/GetGauge", in, out, opts...)
+	err := c.cc.Invoke(ctx, MetricsService_GetGauge_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +170,7 @@ func _MetricsService_GetGauge_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/grpc.testing.MetricsService/GetGauge",
+		FullMethod: MetricsService_GetGauge_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MetricsServiceServer).GetGauge(ctx, req.(*GaugeRequest))
