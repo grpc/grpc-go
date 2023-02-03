@@ -198,9 +198,9 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 					})
 					return nil
 				},
-				OnSendHandler:  func(*transport.ResourceSendInfo) error { return nil }, // No onSend handling.
-				OnErrorHandler: func(error) {},                                         // No stream error handling.
-				Backoff:        func(int) time.Duration { return time.Duration(0) },    // No backoff.
+				OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No onSend handling.
+				OnErrorHandler: func(error) {},                                      // No stream error handling.
+				Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
 			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS transport: %v", err)

@@ -57,7 +57,7 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 		},
 		OnRecvHandler:  func(ResourceUpdate) error { return nil },
 		OnErrorHandler: func(error) {},
-		OnSendHandler:  func(*ResourceSendInfo) error { return nil },
+		OnSendHandler:  func(*ResourceSendInfo) {},
 	}
 	c, err := New(opts)
 	if err != nil {

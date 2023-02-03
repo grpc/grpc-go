@@ -119,7 +119,7 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 			default:
 			}
 		},
-		OnSendHandler: func(*transport.ResourceSendInfo) error { return nil },
+		OnSendHandler: func(*transport.ResourceSendInfo) {},
 		Backoff:       transportBackoff,
 	})
 	if err != nil {
@@ -288,7 +288,7 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 			default:
 			}
 		},
-		OnSendHandler: func(*transport.ResourceSendInfo) error { return nil },
+		OnSendHandler: func(*transport.ResourceSendInfo) {},
 		Backoff:       func(int) time.Duration { return time.Duration(0) }, // No backoff.
 	})
 	if err != nil {
@@ -423,7 +423,7 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 		ServerCfg:      serverCfg,
 		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
 		OnErrorHandler: func(error) {},                                      // No stream error handling.
-		OnSendHandler:  func(*transport.ResourceSendInfo) error { return nil },
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No on send handler
 		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
 	})
 	if err != nil {

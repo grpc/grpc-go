@@ -57,10 +57,10 @@ func (s) TestReportLoad(t *testing.T) {
 	// Create a transport to the fake management server.
 	tr, err := transport.New(transport.Options{
 		ServerCfg:      serverCfg,
-		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil },    // No ADS validation.
-		OnErrorHandler: func(error) {},                                         // No ADS stream error handling.
-		OnSendHandler:  func(*transport.ResourceSendInfo) error { return nil }, // No ADS stream update handling.
-		Backoff:        func(int) time.Duration { return time.Duration(0) },    // No backoff.
+		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil }, // No ADS validation.
+		OnErrorHandler: func(error) {},                                      // No ADS stream error handling.
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No ADS stream update handling.
+		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
