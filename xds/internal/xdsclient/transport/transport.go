@@ -113,7 +113,7 @@ type OnRecvHandlerFunc func(update ResourceUpdate) error
 //
 // A nil error is returned from this function when the data model layer has applied
 // accurate state transitions for all the resources in the update.
-type OnSendHandlerFunc func(update *ResourceSendInfo) error
+type OnSendHandlerFunc func(update *ResourceSendInfo)
 
 // ResourceUpdate is a representation of the configuration update received from
 // the management server. It only contains fields which are useful to the data
@@ -153,7 +153,7 @@ type Options struct {
 	// sent on the wire. Hence, best effort.
 	//
 	// Invoked inline and implementations must not block.
-	OnSendHandler func(*ResourceSendInfo) error
+	OnSendHandler func(*ResourceSendInfo)
 	// Backoff controls the amount of time to backoff before recreating failed
 	// ADS streams. If unspecified, a default exponential backoff implementation
 	// is used. For more details, see:
@@ -264,7 +264,7 @@ func (t *Transport) SendRequest(url string, resources []string) {
 
 func (t *Transport) newAggregatedDiscoveryServiceStream(ctx context.Context, cc *grpc.ClientConn) (adsStream, error) {
 	// The transport retries the stream with an exponential backoff whenever the
-	// stream breaks without ever having a response on the stream.
+	// stream breaks without ever having seen a response.
 	return v3adsgrpc.NewAggregatedDiscoveryServiceClient(cc).StreamAggregatedResources(ctx)
 }
 
@@ -292,9 +292,7 @@ func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, reso
 	if err := stream.Send(req); err != nil {
 		return fmt.Errorf("sending ADS request %s failed: %v", pretty.ToJSON(req), err)
 	}
-	if err := t.onSendHandler(&ResourceSendInfo{URL: resourceURL, ResourceNames: resourceNames}); err != nil {
-		return err
-	}
+	t.onSendHandler(&ResourceSendInfo{URL: resourceURL, ResourceNames: resourceNames})
 
 	t.logger.Debugf("ADS request sent: %v", pretty.ToJSON(req))
 	return nil
@@ -453,13 +451,16 @@ func (t *Transport) recv(stream adsStream) bool {
 	for {
 		resources, url, rVersion, nonce, err := t.recvAggregatedDiscoveryServiceResponse(stream)
 		if err != nil {
-			// If we have already successfully received a message on the stream, then
-			// the OnError callback is called with an error of type IgnoredADSRecvError.
+			// Note that we do not consider it an error if the ADS stream was closed after
+			// having received a response on the stream. This is because there are legitimate
+			// reasons why the server may need to close the stream during normal operations,
+			// such as needing to rebalance load or the underlying connection hitting its
+			// max connection age limit .
+			// (see [gRFC A9](https://github.com/grpc/proposal/blob/master/A9-server-side-conn-mgt.md)).
 			if msgReceived {
-				t.onErrorHandler(xdsresource.NewErrorf(xdsresource.ErrorTypeIgnored, err.Error()))
-			} else {
-				t.onErrorHandler(err)
+				err = xdsresource.NewErrorf(xdsresource.ErrTypeStreamFailedAfterRecv, err.Error())
 			}
+			t.onErrorHandler(err)
 			t.logger.Warningf("ADS stream is closed with error: %v", err)
 			return msgReceived
 		}

@@ -66,7 +66,7 @@ func init() {
 	rtRegistry.types[rType.TypeURL()] = rType
 }
 
-func setupAuthorityWithMgmtServer(t *testing.T, ctx context.Context, opts e2e.ManagementServerOptions, nodeID string) (*authority, *e2e.ManagementServer) {
+func setupAuthorityWithMgmtServer(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptions, nodeID string) (*authority, *e2e.ManagementServer) {
 	t.Helper()
 	mgmtServer, err := e2e.StartManagementServer(opts)
 	if err != nil {
@@ -162,7 +162,7 @@ func (s) TestResourceStateTransitionsFromRequestedToReceivedOnUpdate(t *testing.
 		},
 	}
 	nodeID := uuid.New().String()
-	a, mgmtServer := setupAuthorityWithMgmtServer(t, ctx, mgmtServerOpts, nodeID)
+	a, mgmtServer := setupAuthorityWithMgmtServer(ctx, t, mgmtServerOpts, nodeID)
 	defer a.close()
 	defer mgmtServer.Stop()
 
@@ -228,7 +228,7 @@ func (s) TestResourceStateTransitionsFromRequestedToStartedOnError(t *testing.T)
 		},
 	}
 	nodeID := uuid.New().String()
-	a, mgmtServer := setupAuthorityWithMgmtServer(t, ctx, mgmtServerOpts, nodeID)
+	a, mgmtServer := setupAuthorityWithMgmtServer(ctx, t, mgmtServerOpts, nodeID)
 	defer a.close()
 
 	resourceName := "xdsclient-test-lds-resource"
@@ -290,7 +290,7 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 		},
 	}
 	nodeID := uuid.New().String()
-	a, mgmtServer := setupAuthorityWithMgmtServer(t, ctx, mgmtServerOpts, nodeID)
+	a, mgmtServer := setupAuthorityWithMgmtServer(ctx, t, mgmtServerOpts, nodeID)
 	defer a.close()
 
 	resourceNameA := "xdsclient-test-lds-resourceA"
@@ -327,9 +327,9 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	resourceNameB := "xdsclient-test-lds-resourceB"
 	watcherB := listenerWatcher{resourceName: resourceNameB, cb: func(update xdsresource.ListenerUpdate, err error) {
 		switch xdsresource.ErrType(err) {
-		case xdsresource.ErrorTypeIgnored:
+		case xdsresource.ErrTypeStreamFailedAfterRecv:
 			// Verify that an Ignored error was not propagated to the watcher.
-			t.Fatalf("watch got an unexpected error update; want: ErrorTypeIgnored error updates should be ignored.")
+			t.Fatalf("watch got an unexpected error update; want: ErrTypeStreamFailedAfterRecv error updates should be ignored.")
 		case xdsresource.ErrorTypeConnection:
 			// Verify that the error was during ADS stream creation.
 			if !strings.Contains(err.Error(), "Error while dialing:") {

@@ -132,12 +132,13 @@ func newAuthority(args authorityArgs) (*authority, error) {
 
 // transportOnSendHandler is called by the underlying transport when it sends a
 // resource req successfully. Timers are started for resources waiting for a response.
-func (a *authority) transportOnSendHandler(u *transport.ResourceSendInfo) error {
+func (a *authority) transportOnSendHandler(u *transport.ResourceSendInfo) {
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 	rType := a.resourceTypeGetter(u.URL)
 	if rType == nil {
-		return fmt.Errorf("resourceTypeGetter failed by returning nil for URL:%v", u.URL)
+		a.logger.Warningf("unknown resource type url: %s", u.URL)
+		return
 	}
 	resourceStates := a.resources[rType]
 
@@ -151,7 +152,6 @@ func (a *authority) transportOnSendHandler(u *transport.ResourceSendInfo) error 
 			}
 		}
 	}
-	return nil
 }
 
 func (a *authority) handleResourceUpdate(resourceUpdate transport.ResourceUpdate) error {
@@ -343,10 +343,13 @@ func (a *authority) newConnectionError(err error) {
 		}
 	}
 
-	// Do not propagate errors to watchers if error is of type IgnoredAdsErrorType,
-	// since this error occurred after a successful message was received on the stream.
-	if xdsresource.ErrType(err) == xdsresource.ErrorTypeIgnored {
-		a.logger.Debugf("ErrorTypeIgnored error was ignored and not sent to watchers.")
+	// We do not consider it an error if the ADS stream was closed after having received
+	// a response on the stream. This is because there are legitimate reasons why the server
+	// may need to close the stream during normal operations, such as needing to rebalance
+	// load or the underlying connection hitting its max connection age limit.
+	// See gRFC A57 for more details.
+	if xdsresource.ErrType(err) == xdsresource.ErrTypeStreamFailedAfterRecv {
+		a.logger.Warningf("Watchers not notified since ADS stream failed after having received at least one response: %v", err)
 		return
 	}
 

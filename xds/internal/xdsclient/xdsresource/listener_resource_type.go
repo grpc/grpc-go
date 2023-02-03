@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc/internal/pretty"
-	"google.golang.org/grpc/xds/internal"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
@@ -49,14 +48,6 @@ var (
 // Implements the Type interface.
 type listenerResourceType struct {
 	resourceTypeState
-}
-
-func init() {
-	if internal.ResourceTypeMapForTesting == nil {
-		internal.ResourceTypeMapForTesting = make(map[string]interface{})
-	}
-	internal.ResourceTypeMapForTesting[version.V3ListenerURL] = listenerType
-
 }
 
 func securityConfigValidator(bc *bootstrap.Config, sc *SecurityConfig) error {
