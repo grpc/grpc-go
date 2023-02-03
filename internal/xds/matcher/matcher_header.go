@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"google.golang.org/grpc/internal/grpcutil"
 	"google.golang.org/grpc/metadata"
 )
@@ -240,4 +241,35 @@ func (hcm *HeaderContainsMatcher) Match(md metadata.MD) bool {
 
 func (hcm *HeaderContainsMatcher) String() string {
 	return fmt.Sprintf("headerContains:%v%v", hcm.key, hcm.contains)
+}
+
+// HeaderStringMatcher matches on whether the request header value matches
+// the string matcher.
+type HeaderStringMatcher struct {
+	key         string
+	stringMatch *StringMatcher
+	invert      bool
+}
+
+// NewHeaderStringMatcher returns a new NewHeaderStringMatcher.
+func NewHeaderStringMatcher(key string, stringMatch *v3matcherpb.StringMatcher, invert bool) (*HeaderStringMatcher, error) {
+	sm, err := StringMatcherFromProto(stringMatch)
+	if err != nil {
+		return nil, err
+	}
+	return &HeaderStringMatcher{key: key, stringMatch: &sm, invert: invert}, nil
+}
+
+// Match returns whether the passed in HTTP Headers match according to the
+// HeaderStringMatcher.
+func (hsm *HeaderStringMatcher) Match(md metadata.MD) bool {
+	v, ok := mdValuesFromOutgoingCtx(md, hsm.key)
+	if !ok {
+		return false
+	}
+	return hsm.stringMatch.Match(v) != hsm.invert
+}
+
+func (hsm *HeaderStringMatcher) String() string {
+	return fmt.Sprintf("headerStringMatch:%v:%v", hsm.key, hsm.stringMatch.String())
 }

@@ -285,6 +285,12 @@ func newHeaderMatcher(headerMatcherConfig *v3route_componentspb.HeaderMatcher) (
 		m = internalmatcher.NewHeaderSuffixMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetSuffixMatch(), headerMatcherConfig.InvertMatch)
 	case *v3route_componentspb.HeaderMatcher_ContainsMatch:
 		m = internalmatcher.NewHeaderContainsMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetContainsMatch(), headerMatcherConfig.InvertMatch)
+	case *v3route_componentspb.HeaderMatcher_StringMatch:
+		sm, err := internalmatcher.NewHeaderStringMatcher(headerMatcherConfig.Name, headerMatcherConfig.GetStringMatch(), headerMatcherConfig.InvertMatch)
+		if err != nil {
+			return nil, err
+		}
+		m = sm
 	default:
 		return nil, errors.New("unknown header matcher type")
 	}

@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"testing"
 
+	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -461,6 +462,315 @@ func TestHeaderSuffixMatcherMatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			hsm := NewHeaderSuffixMatcher(tt.key, tt.suffix, tt.invert)
+			if got := hsm.Match(tt.md); got != tt.want {
+				t.Errorf("match() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHeaderStringMatcherMatch(t *testing.T) {
+	tests := []struct {
+		name        string
+		key         string
+		stringMatch *v3matcherpb.StringMatcher
+		md          metadata.MD
+		want        bool
+		invert      bool
+	}{
+		// exact match
+		{
+			name:        "[exact] match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "tv"}},
+			md:          metadata.Pairs("th", "tv"),
+			want:        true,
+			invert:      false,
+		},
+		{
+			name:        "[exact] not match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "tv"}},
+			md:          metadata.Pairs("th", "tv123"),
+			want:        false,
+			invert:      false,
+		},
+		{
+			name:        "[exact] two value one match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "tv"}},
+			md:          metadata.Pairs("th", "abc", "th", "tv"),
+			want:        false,
+			invert:      false,
+		},
+		{
+			name:        "[exact] two value match concatenated",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "abc,tv"}},
+			md:          metadata.Pairs("th", "abc", "th", "tv"),
+			want:        true,
+			invert:      false,
+		},
+		{
+			name:        "[exact] invert match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "tv"}},
+			md:          metadata.Pairs("th", "tv"),
+			want:        false,
+			invert:      true,
+		},
+		{
+			name:        "[exact] invert not match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "tv"}},
+			md:          metadata.Pairs("th", "tvv"),
+			want:        true,
+			invert:      true,
+		},
+		{
+			name:        "[exact] invert header not present",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "tv"}},
+			md:          metadata.Pairs(":method", "GET"),
+			want:        false,
+			invert:      true,
+		},
+		// prefix match
+		{
+			name:        "[prefix] prefix match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "tv"}},
+			md:          metadata.Pairs("th", "tv123"),
+			want:        true,
+			invert:      false,
+		},
+		{
+			name:        "[prefix] prefix not match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "tv"}},
+			md:          metadata.Pairs("th", "abc"),
+			want:        false,
+			invert:      false,
+		},
+		{
+			name:        "[prefix] two value one match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "tv"}},
+			md:          metadata.Pairs("th", "abc", "th", "tv"),
+			want:        false,
+			invert:      false,
+		},
+		{
+			name:        "[prefix] two value match concatenated",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "tv"}},
+			md:          metadata.Pairs("th", "tv123", "th", "abc"),
+			want:        true,
+			invert:      false,
+		},
+		{
+			name:        "[prefix] invert match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "tv"}},
+			md:          metadata.Pairs("th", "tv123"),
+			want:        false,
+			invert:      true,
+		},
+		{
+			name:        "[prefix] invert not match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "tv"}},
+			md:          metadata.Pairs("th", "abc"),
+			want:        true,
+			invert:      true,
+		},
+		{
+			name:        "[prefix] invert header not present",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Prefix{Prefix: "tv"}},
+			md:          metadata.Pairs(":method", "GET"),
+			want:        false,
+			invert:      true,
+		},
+		// suffix match
+		{
+			name:        "[suffix] match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "tv"}},
+			md:          metadata.Pairs("th", "123tv"),
+			want:        true,
+			invert:      false,
+		},
+		{
+			name:        "[suffix] not match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "tv"}},
+			md:          metadata.Pairs("th", "tv123"),
+			want:        false,
+			invert:      false,
+		},
+		{
+			name:        "[suffix] two value one match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "tv"}},
+			md:          metadata.Pairs("th", "tv", "th", "abc"),
+			want:        false,
+			invert:      false,
+		},
+		{
+			name:        "[suffix] two value match concatenated",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "tv"}},
+			md:          metadata.Pairs("th", "abc", "th", "tv"),
+			want:        true,
+			invert:      false,
+		},
+		{
+			name:        "[suffix] invert match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "tv"}},
+			md:          metadata.Pairs("th", "tv"),
+			want:        false,
+			invert:      true,
+		},
+		{
+			name:        "[suffix] invert not match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "tv"}},
+			md:          metadata.Pairs("th", "tv123"),
+			want:        true,
+			invert:      true,
+		},
+		{
+			name:        "[suffix] invert header not present",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Suffix{Suffix: "tv"}},
+			md:          metadata.Pairs(":method", "GET"),
+			want:        false,
+			invert:      true,
+		},
+		// regexp match
+		{
+			name:        "[regexp] match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: "^t+v*$"}}},
+			md:          metadata.Pairs("th", "tv"),
+			want:        true,
+			invert:      false,
+		},
+		{
+			name:        "[regexp] not match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: "^t+v*$"}}},
+			md:          metadata.Pairs("th", "abc"),
+			want:        false,
+			invert:      false,
+		},
+		{
+			name:        "[regexp] two value one match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: "^t+v*$"}}},
+			md:          metadata.Pairs("th", "abc", "th", "ttttvvv"),
+			want:        false,
+			invert:      false,
+		},
+		{
+			name:        "[regexp] two value match concatenated",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: "^[abc]*,t+v*$"}}},
+			md:          metadata.Pairs("th", "abc", "th", "tttvv"),
+			want:        true,
+			invert:      false,
+		},
+		{
+			name:        "[regexp] invert match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: "^t+v*$"}}},
+			md:          metadata.Pairs("th", "tv"),
+			want:        false,
+			invert:      true,
+		},
+		{
+			name:        "[regexp] invert not match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: "^t+v*$"}}},
+			md:          metadata.Pairs("th", "abc"),
+			want:        true,
+			invert:      true,
+		},
+		{
+			name:        "[regexp] invert header not present",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: "^t+v*$"}}},
+			md:          metadata.Pairs(":method", "GET"),
+			want:        false,
+			invert:      true,
+		},
+
+		{
+			name:        "[contains] match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "tv"}},
+			md:          metadata.Pairs("th", "abctvvv"),
+			want:        true,
+			invert:      false,
+		},
+		{
+			name:        "[contains] not match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "tv"}},
+			md:          metadata.Pairs("th", "t11v123"),
+			want:        false,
+			invert:      false,
+		},
+		{
+			name:        "[contains] two value one match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "tv"}},
+			md:          metadata.Pairs("th", "abc", "th", "tv"),
+			want:        true,
+			invert:      false,
+		},
+		{
+			name:        "[contains] two value match concatenated",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "tv"}},
+			md:          metadata.Pairs("th", "abc", "th", "tv123"),
+			want:        true,
+			invert:      false,
+		},
+		{
+			name:        "[contains] invert match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "tv"}},
+			md:          metadata.Pairs("th", "tttvv"),
+			want:        false,
+			invert:      true,
+		},
+		{
+			name:        "[contains] invert not match",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "tv"}},
+			md:          metadata.Pairs("th", "abc"),
+			want:        true,
+			invert:      true,
+		},
+		{
+			name:        "[contains] invert header not present",
+			key:         "th",
+			stringMatch: &v3matcherpb.StringMatcher{MatchPattern: &v3matcherpb.StringMatcher_Contains{Contains: "tv"}},
+			md:          metadata.Pairs(":method", "GET"),
+			want:        false,
+			invert:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hsm, err := NewHeaderStringMatcher(tt.key, tt.stringMatch, tt.invert)
+			if err != nil {
+				t.Fatalf("NewHeaderStringMatcher returned err: %v", err)
+			}
 			if got := hsm.Match(tt.md); got != tt.want {
 				t.Errorf("match() = %v, want %v", got, tt.want)
 			}

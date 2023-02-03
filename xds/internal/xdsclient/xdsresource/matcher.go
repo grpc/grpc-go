@@ -59,6 +59,12 @@ func RouteToMatcher(r *Route) (*CompositeMatcher, error) {
 			matcherT = matcher.NewHeaderRangeMatcher(h.Name, h.RangeMatch.Start, h.RangeMatch.End, invert)
 		case h.PresentMatch != nil:
 			matcherT = matcher.NewHeaderPresentMatcher(h.Name, *h.PresentMatch, invert)
+		case h.StringMatch != nil:
+			mch, err := matcher.NewHeaderStringMatcher(h.Name, h.StringMatch, invert)
+			if err != nil {
+				return nil, err
+			}
+			matcherT = mch
 		default:
 			return nil, fmt.Errorf("illegal route: missing header_match_specifier")
 		}

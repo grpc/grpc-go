@@ -46,6 +46,30 @@ type StringMatcher struct {
 	ignoreCase bool
 }
 
+func (sm StringMatcher) String() string {
+	typ := ""
+	value := ""
+	switch {
+	case sm.exactMatch != nil:
+		typ = "exactMatch"
+		value = *sm.exactMatch
+	case sm.prefixMatch != nil:
+		typ = "prefixMatch"
+		value = *sm.prefixMatch
+	case sm.suffixMatch != nil:
+		typ = "suffixMatch"
+		value = *sm.suffixMatch
+	case sm.regexMatch != nil:
+		typ = "regexMatch"
+		value = sm.regexMatch.String()
+	case sm.containsMatch != nil:
+		typ = "containsMatch"
+		value = *sm.containsMatch
+	}
+
+	return fmt.Sprintf("stringMatcher:%s:%s:%v", typ, value, sm.ignoreCase)
+}
+
 // Match returns true if input matches the criteria in the given StringMatcher.
 func (sm StringMatcher) Match(input string) bool {
 	if sm.ignoreCase {

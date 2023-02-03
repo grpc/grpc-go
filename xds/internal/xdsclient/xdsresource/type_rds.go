@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"time"
 
+	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
@@ -171,6 +172,7 @@ type HeaderMatcher struct {
 	SuffixMatch  *string
 	RangeMatch   *Int64Range
 	PresentMatch *bool
+	StringMatch  *v3matcherpb.StringMatcher
 }
 
 // Int64Range is a range for header range match.

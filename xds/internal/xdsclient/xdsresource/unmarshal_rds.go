@@ -277,6 +277,8 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 				header.PrefixMatch = &ht.PrefixMatch
 			case *v3routepb.HeaderMatcher_SuffixMatch:
 				header.SuffixMatch = &ht.SuffixMatch
+			case *v3routepb.HeaderMatcher_StringMatch:
+				header.StringMatch = ht.StringMatch
 			default:
 				return nil, nil, fmt.Errorf("route %+v has an unrecognized header matcher: %+v", r, ht)
 			}
