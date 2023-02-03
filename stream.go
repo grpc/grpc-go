@@ -168,25 +168,20 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 }
 
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
-	// validate original input
 	if md, added, ok := metadata.FromOutgoingContextRaw(ctx); ok {
-		// copy the original MD to avoid changing it
-		mdSize := len(md)
-		for i := range added {
-			mdSize += len(added[i]) / 2
-		}
-		merged := make(metadata.MD, mdSize)
-		for k, v := range md {
-			merged[k] = v
-		}
-		for _, pairs := range added {
-			for i := 0; i < len(pairs); i += 2 {
-				k := pairs[i]
-				merged[k] = append(merged[k], pairs[i+1])
-			}
-		}
-		if err := imetadata.Validate(merged); err != nil {
+		// validate md
+		err := imetadata.Validate(md)
+		if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
+		}
+		// validate added
+		for _, kvs := range added {
+			for i := 0; i < len(kvs); i += 2 {
+				err = imetadata.ValidatePair(kvs[i], kvs[i+1])
+				if err != nil {
+					return nil, status.Error(codes.Internal, err.Error())
+				}
+			}
 		}
 	}
 	if channelz.IsOn() {
