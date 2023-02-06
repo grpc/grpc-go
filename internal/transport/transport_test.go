@@ -664,7 +664,7 @@ func (s) TestClientMix(t *testing.T) {
 		<-ct.Error()
 		ct.Close(fmt.Errorf("closed manually by test"))
 	}(ct)
-	for i := 0; i < 500; i++ {
+	for i := 0; i < 750; i++ {
 		time.Sleep(2 * time.Millisecond)
 		go performOneRPC(ct)
 	}
