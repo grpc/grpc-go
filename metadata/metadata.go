@@ -91,7 +91,11 @@ func (md MD) Len() int {
 
 // Copy returns a copy of md.
 func (md MD) Copy() MD {
-	return Join(md)
+	out := make(MD, len(md))
+	for k, v := range md {
+		out[k] = copyOf(v)
+	}
+	return out
 }
 
 // Get obtains the values for a given key.
