@@ -161,11 +161,6 @@ func New(opts Options) (*Transport, error) {
 		return nil, errors.New("missing stream error handler when creating a new transport")
 	}
 
-	node, ok := opts.ServerCfg.NodeProto.(*v3corepb.Node)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type %T for NodeProto, want %T", opts.ServerCfg.NodeProto, &v3corepb.Node{})
-	}
-
 	// Dial the xDS management with the passed in credentials.
 	dopts := []grpc.DialOption{
 		opts.ServerCfg.Creds,
@@ -193,7 +188,7 @@ func New(opts Options) (*Transport, error) {
 		adsStreamErrHandler: opts.StreamErrorHandler,
 		lrsStore:            load.NewStore(),
 		backoff:             boff,
-		nodeProto:           node,
+		nodeProto:           opts.ServerCfg.NodeProto,
 		logger:              opts.Logger,
 
 		adsStreamCh:     make(chan adsStream, 1),

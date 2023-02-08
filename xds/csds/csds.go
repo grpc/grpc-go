@@ -121,10 +121,14 @@ func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statusp
 	}
 
 	dump := s.xdsClient.DumpResources()
+	node, ok := s.xdsClient.BootstrapConfig().XDSServer.NodeProto.(*v3corepb.Node)
+	if !ok {
+		logger.Warningf("node from bootstrap is %#v, only v3.Node is supported", s.xdsClient.BootstrapConfig().XDSServer.NodeProto)
+	}
 	ret := &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
-				Node:              s.xdsClient.BootstrapConfig().XDSServer.NodeProto.(*v3corepb.Node),
+				Node:              node,
 				GenericXdsConfigs: dumpToGenericXdsConfig(dump),
 			},
 		},

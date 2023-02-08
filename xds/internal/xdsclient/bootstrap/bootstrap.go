@@ -28,8 +28,8 @@ import (
 	"os"
 	"strings"
 
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/golang/protobuf/jsonpb"
-	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
@@ -40,8 +40,6 @@ import (
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
-
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
 const (
@@ -59,8 +57,6 @@ func init() {
 	bootstrap.RegisterCredentials(&insecureCredsBuilder{})
 	bootstrap.RegisterCredentials(&googleDefaultCredsBuilder{})
 }
-
-var gRPCVersion = fmt.Sprintf("%s %s", gRPCUserAgentName, grpc.Version)
 
 // For overriding in unit tests.
 var bootstrapFileReadFunc = os.ReadFile
@@ -106,13 +102,9 @@ type ServerConfig struct {
 	// This describes the xDS gRPC endpoint and version of
 	// DiscoveryRequest/Response used on the wire.
 	TransportAPI version.TransportAPI
-	// NodeProto contains the Node proto to be used in xDS requests. The actual
-	// type depends on the transport protocol version used.
-	//
-	// Note that it's specified in the bootstrap globally for all the servers,
-	// but we keep it in each server config so that its type (e.g. *v2pb.Node or
-	// *v3pb.Node) is consistent with the transport API version.
-	NodeProto proto.Message
+	// NodeProto contains the Node proto to be used in xDS requests. This will be
+	// of type *v3corepb.Node.
+	NodeProto *v3corepb.Node
 }
 
 // String returns the string representation of the ServerConfig.
