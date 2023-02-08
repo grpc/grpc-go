@@ -335,7 +335,7 @@ func (s) TestCloseConnectionWhenServerPrefaceNotReceived(t *testing.T) {
 func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 	lis, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
-		t.Fatalf("Error while listening. Err: %v", err)
+		t.Fatalf("Unexpected error from net.Listen(%q, %q): %v", "tcp", "localhost:0", err)
 	}
 	defer lis.Close()
 	done := make(chan struct{})
@@ -367,9 +367,19 @@ func (s) TestBackoffWhenNoServerPrefaceReceived(t *testing.T) {
 			prevAt = meow
 		}
 	}()
-	cc, err := Dial(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()))
+	bc := backoff.Config{
+		BaseDelay:  200 * time.Millisecond,
+		Multiplier: 1.1,
+		Jitter:     0,
+		MaxDelay:   120 * time.Second,
+	}
+	cp := ConnectParams{
+		Backoff:           bc,
+		MinConnectTimeout: 1 * time.Second,
+	}
+	cc, err := Dial(lis.Addr().String(), WithTransportCredentials(insecure.NewCredentials()), WithConnectParams(cp))
 	if err != nil {
-		t.Fatalf("Error while dialing. Err: %v", err)
+		t.Fatalf("Unexpected error from Dial(%v) = %v", lis.Addr(), err)
 	}
 	defer cc.Close()
 	go stayConnected(cc)
@@ -1192,7 +1202,7 @@ func keepReading(conn net.Conn) {
 // stayConnected makes cc stay connected by repeatedly calling cc.Connect()
 // until the state becomes Shutdown or until 10 seconds elapses.
 func stayConnected(cc *ClientConn) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
 	for {
