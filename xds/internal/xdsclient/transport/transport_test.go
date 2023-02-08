@@ -25,7 +25,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 type s struct {
@@ -50,10 +49,9 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 	// Create a new transport and ensure that the custom dialer was called.
 	opts := Options{
 		ServerCfg: bootstrap.ServerConfig{
-			ServerURI:    "server-address",
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto:    &v3corepb.Node{},
-			TransportAPI: version.TransportV3,
+			ServerURI: "server-address",
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			NodeProto: &v3corepb.Node{},
 		},
 		UpdateHandler:      func(ResourceUpdate) error { return nil },
 		StreamErrorHandler: func(error) {},

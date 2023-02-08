@@ -178,11 +178,10 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 
 			// Construct the server config to represent the management server.
 			serverCfg := bootstrap.ServerConfig{
-				ServerURI:    mgmtServer.Address,
-				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-				CredsType:    "insecure",
-				TransportAPI: version.TransportV3,
-				NodeProto:    &v3corepb.Node{Id: uuid.New().String()},
+				ServerURI: mgmtServer.Address,
+				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+				CredsType: "insecure",
+				NodeProto: &v3corepb.Node{Id: uuid.New().String()},
 			}
 
 			// Create a new transport.

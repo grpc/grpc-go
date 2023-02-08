@@ -39,7 +39,6 @@ import (
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/xds/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 const (
@@ -98,10 +97,6 @@ type ServerConfig struct {
 	Creds grpc.DialOption
 	// CredsType is the type of the creds. It will be used to dedup servers.
 	CredsType string
-	// TransportAPI indicates the API version of xDS transport protocol to use.
-	// This describes the xDS gRPC endpoint and version of
-	// DiscoveryRequest/Response used on the wire.
-	TransportAPI version.TransportAPI
 	// NodeProto contains the Node proto to be used in xDS requests. This will be
 	// of type *v3corepb.Node.
 	NodeProto *v3corepb.Node
@@ -127,9 +122,7 @@ func (sc ServerConfig) MarshalJSON() ([]byte, error) {
 		ServerURI:    sc.ServerURI,
 		ChannelCreds: []channelCreds{{Type: sc.CredsType, Config: nil}},
 	}
-	if sc.TransportAPI == version.TransportV3 {
-		server.ServerFeatures = []string{serverFeaturesV3}
-	}
+	server.ServerFeatures = []string{serverFeaturesV3}
 	return json.Marshal(server)
 }
 
@@ -153,11 +146,6 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		}
 		sc.Creds = grpc.WithCredentialsBundle(bundle)
 		break
-	}
-	for _, f := range server.ServerFeatures {
-		if f == serverFeaturesV3 {
-			sc.TransportAPI = version.TransportV3
-		}
 	}
 	return nil
 }

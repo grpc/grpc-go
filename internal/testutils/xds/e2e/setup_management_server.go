@@ -79,7 +79,6 @@ func SetupManagementServer(t *testing.T, opts ManagementServerOptions) (*Managem
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		Version:                            bootstrap.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          server.Address,
 		CertificateProviders:               cpc,

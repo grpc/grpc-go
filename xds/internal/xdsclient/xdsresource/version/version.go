@@ -20,16 +20,6 @@
 // versions.
 package version
 
-// TransportAPI refers to the API version for xDS transport protocol. This
-// describes the xDS gRPC endpoint and version of DiscoveryRequest/Response used
-// on the wire.
-type TransportAPI int
-
-const (
-	// TransportV3 refers to the v3 xDS transport protocol.
-	TransportV3 TransportAPI = iota
-)
-
 // Resource URLs. We need to be able to accept either version of the resource
 // regardless of the version of the transport protocol in use.
 const (

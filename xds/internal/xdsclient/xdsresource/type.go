@@ -165,19 +165,3 @@ func (r ResourceType) String() string {
 		return "UnknownResource"
 	}
 }
-
-var v3ResourceTypeToURL = map[ResourceType]string{
-	ListenerResource:        version.V3ListenerURL,
-	HTTPConnManagerResource: version.V3HTTPConnManagerURL,
-	RouteConfigResource:     version.V3RouteConfigURL,
-	ClusterResource:         version.V3ClusterURL,
-	EndpointsResource:       version.V3EndpointsURL,
-}
-
-// URL returns the transport protocol specific resource type URL.
-func (r ResourceType) URL(v version.TransportAPI) string {
-	if url, ok := v3ResourceTypeToURL[r]; ok {
-		return url
-	}
-	return "UnknownResource"
-}

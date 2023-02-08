@@ -101,11 +101,10 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 	// Construct the server config to represent the management server.
 	nodeID := uuid.New().String()
 	serverCfg := bootstrap.ServerConfig{
-		ServerURI:    mgmtServer.Address,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType:    "insecure",
-		TransportAPI: version.TransportV3,
-		NodeProto:    &v3corepb.Node{Id: nodeID},
+		ServerURI: mgmtServer.Address,
+		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+		CredsType: "insecure",
+		NodeProto: &v3corepb.Node{Id: nodeID},
 	}
 
 	// Create a new transport. Since we are only testing backoff behavior here,
@@ -269,11 +268,10 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 
 	// Construct the server config to represent the management server.
 	serverCfg := bootstrap.ServerConfig{
-		ServerURI:    lis.Addr().String(),
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType:    "insecure",
-		TransportAPI: version.TransportV3,
-		NodeProto:    &v3corepb.Node{Id: nodeID},
+		ServerURI: lis.Addr().String(),
+		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+		CredsType: "insecure",
+		NodeProto: &v3corepb.Node{Id: nodeID},
 	}
 
 	// Create a new transport. Since we are only testing backoff behavior here,
@@ -408,11 +406,10 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	// Construct the server config to represent the management server.
 	nodeID := uuid.New().String()
 	serverCfg := bootstrap.ServerConfig{
-		ServerURI:    lis.Addr().String(),
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType:    "insecure",
-		TransportAPI: version.TransportV3,
-		NodeProto:    &v3corepb.Node{Id: nodeID},
+		ServerURI: lis.Addr().String(),
+		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+		CredsType: "insecure",
+		NodeProto: &v3corepb.Node{Id: nodeID},
 	}
 
 	// Create a new transport. Since we are only testing backoff behavior here,

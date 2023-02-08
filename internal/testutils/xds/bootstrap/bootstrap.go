@@ -30,18 +30,8 @@ import (
 
 var logger = grpclog.Component("internal/xds")
 
-// TransportAPI refers to the API version for xDS transport protocol.
-type TransportAPI int
-
-const (
-	// TransportV3 refers to the v3 xDS transport protocol.
-	TransportV3 TransportAPI = iota
-)
-
 // Options wraps the parameters used to generate bootstrap configuration.
 type Options struct {
-	// Version is the xDS transport protocol version.
-	Version TransportAPI
 	// NodeID is the node identifier of the gRPC client/server node in the
 	// proxyless service mesh.
 	NodeID string

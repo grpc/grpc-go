@@ -137,11 +137,10 @@ func (s) TestSimpleAckAndNack(t *testing.T) {
 
 	// Construct the server config to represent the management server.
 	serverCfg := bootstrap.ServerConfig{
-		ServerURI:    mgmtServer.Address,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType:    "insecure",
-		TransportAPI: version.TransportV3,
-		NodeProto:    &v3corepb.Node{Id: nodeID},
+		ServerURI: mgmtServer.Address,
+		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+		CredsType: "insecure",
+		NodeProto: &v3corepb.Node{Id: nodeID},
 	}
 
 	// Create a new transport.
@@ -324,11 +323,10 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 
 	// Construct the server config to represent the management server.
 	serverCfg := bootstrap.ServerConfig{
-		ServerURI:    mgmtServer.Address,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType:    "insecure",
-		TransportAPI: version.TransportV3,
-		NodeProto:    &v3corepb.Node{Id: nodeID},
+		ServerURI: mgmtServer.Address,
+		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+		CredsType: "insecure",
+		NodeProto: &v3corepb.Node{Id: nodeID},
 	}
 
 	// Create a new transport.
@@ -453,11 +451,10 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 
 	// Construct the server config to represent the management server.
 	serverCfg := bootstrap.ServerConfig{
-		ServerURI:    mgmtServer.Address,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType:    "insecure",
-		TransportAPI: version.TransportV3,
-		NodeProto:    &v3corepb.Node{Id: nodeID},
+		ServerURI: mgmtServer.Address,
+		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+		CredsType: "insecure",
+		NodeProto: &v3corepb.Node{Id: nodeID},
 	}
 
 	// Create a new transport.

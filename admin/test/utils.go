@@ -55,7 +55,6 @@ type ExpectedStatusCodes struct {
 func RunRegisterTests(t *testing.T, ec ExpectedStatusCodes) {
 	nodeID := uuid.New().String()
 	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
-		Version:   bootstrap.TransportV3,
 		NodeID:    nodeID,
 		ServerURI: "no.need.for.a.server",
 	})

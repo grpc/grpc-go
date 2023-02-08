@@ -29,7 +29,6 @@ import (
 	"io"
 	"sync"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/grpclog"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
@@ -121,14 +120,10 @@ func (s *ClientStatusDiscoveryServer) buildClientStatusRespForReq(req *v3statusp
 	}
 
 	dump := s.xdsClient.DumpResources()
-	node, ok := s.xdsClient.BootstrapConfig().XDSServer.NodeProto.(*v3corepb.Node)
-	if !ok {
-		logger.Warningf("node from bootstrap is %#v, only v3.Node is supported", s.xdsClient.BootstrapConfig().XDSServer.NodeProto)
-	}
 	ret := &v3statuspb.ClientStatusResponse{
 		Config: []*v3statuspb.ClientConfig{
 			{
-				Node:              node,
+				Node:              s.xdsClient.BootstrapConfig().XDSServer.NodeProto,
 				GenericXdsConfigs: dumpToGenericXdsConfig(dump),
 			},
 		},

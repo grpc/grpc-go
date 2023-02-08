@@ -209,9 +209,8 @@ func (s) TestResolverBuilder_DifferentBootstrapConfigs(t *testing.T) {
 			// Add top-level xDS server config corresponding to the above
 			// management server.
 			test.bootstrapCfg.XDSServer = &bootstrap.ServerConfig{
-				ServerURI:    mgmtServer.Address,
-				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-				TransportAPI: version.TransportV3,
+				ServerURI: mgmtServer.Address,
+				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 			}
 
 			// Override xDS client creation to use bootstrap configuration
@@ -418,7 +417,6 @@ func (s) TestResolverResourceName(t *testing.T) {
 			// Create a bootstrap configuration with test options.
 			opts := xdsbootstrap.Options{
 				ServerURI: mgmtServer.Address,
-				Version:   xdsbootstrap.TransportV3,
 				ClientDefaultListenerResourceNameTemplate: tt.listenerResourceNameTemplate,
 			}
 			if tt.extraAuthority != "" {
@@ -481,7 +479,6 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -534,9 +531,8 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 	bootstrapCfg := &bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
-			ServerURI:    "dummy-management-server-address",
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			TransportAPI: version.TransportV3,
+			ServerURI: "dummy-management-server-address",
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 		},
 	}
 
@@ -583,7 +579,6 @@ func (s) TestResolverBadServiceUpdate(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -694,7 +689,6 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -941,7 +935,6 @@ func (s) TestResolverRequestHash(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1040,7 +1033,6 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1174,7 +1166,6 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1314,7 +1305,6 @@ func (s) TestResolverWRR(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1411,7 +1401,6 @@ func (s) TestResolverMaxStreamDuration(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1580,7 +1569,6 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1777,7 +1765,6 @@ func (s) TestResolverMultipleLDSUpdates(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
