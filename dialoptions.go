@@ -43,7 +43,6 @@ func init() {
 	internal.ClearGlobalDialOptions = func() {
 		globalDialOptions = nil
 	}
-	internal.DialWithGlobalOptions = dialWithGlobalOptions
 	internal.WithBinaryLogger = withBinaryLogger
 	internal.JoinDialOptions = newJoinDialOption
 }
