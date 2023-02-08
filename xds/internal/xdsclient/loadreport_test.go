@@ -99,7 +99,7 @@ func (s) TestLRSClient(t *testing.T) {
 			ServerURI:    fs2.Address,
 			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
 			CredsType:    "insecure",
-			TransportAPI: version.TransportV2,
+			TransportAPI: version.TransportV3,
 			NodeProto:    &v3corepb.Node{},
 		},
 	)

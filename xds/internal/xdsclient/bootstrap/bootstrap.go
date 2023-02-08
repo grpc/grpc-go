@@ -41,7 +41,6 @@ import (
 	"google.golang.org/grpc/xds/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
@@ -126,13 +125,7 @@ type ServerConfig struct {
 // content. It doesn't cover NodeProto because NodeProto isn't used by
 // federation.
 func (sc *ServerConfig) String() string {
-	var ver string
-	switch sc.TransportAPI {
-	case version.TransportV3:
-		ver = "xDSv3"
-	case version.TransportV2:
-		ver = "xDSv2"
-	}
+	var ver = "xDSv3"
 	return strings.Join([]string{sc.ServerURI, sc.CredsType, ver}, "-")
 }
 
@@ -501,37 +494,14 @@ func (c *Config) updateNodeProto(node *v3corepb.Node) error {
 	v3.UserAgentVersionType = &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
 	v3.ClientFeatures = append(v3.ClientFeatures, clientFeatureNoOverprovisioning, clientFeatureResourceWrapper)
 
-	v3bytes, err := proto.Marshal(v3)
-	if err != nil {
-		return fmt.Errorf("xds: proto.Marshal(%v): %v", v3, err)
-	}
-	v2 := &v2corepb.Node{}
-	if err := proto.Unmarshal(v3bytes, v2); err != nil {
-		return fmt.Errorf("xds: proto.Unmarshal(%v): %v", v3bytes, err)
-	}
-	// BuildVersion is deprecated, and is replaced by user_agent_name and
-	// user_agent_version. But the management servers are still using the old
-	// field, so we will keep both set.
-	v2.BuildVersion = gRPCVersion
-	v2.UserAgentVersionType = &v2corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
-
-	switch c.XDSServer.TransportAPI {
-	case version.TransportV2:
-		c.XDSServer.NodeProto = v2
-	case version.TransportV3:
-		c.XDSServer.NodeProto = v3
-	}
+	c.XDSServer.NodeProto = v3
 
 	for _, a := range c.Authorities {
 		if a.XDSServer == nil {
 			continue
 		}
-		switch a.XDSServer.TransportAPI {
-		case version.TransportV2:
-			a.XDSServer.NodeProto = v2
-		case version.TransportV3:
-			a.XDSServer.NodeProto = v3
-		}
+		a.XDSServer.NodeProto = v3
+
 	}
 
 	return nil
