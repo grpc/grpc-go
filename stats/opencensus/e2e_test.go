@@ -869,7 +869,7 @@ func (s) TestOpenCensusTags(t *testing.T) {
 				readerErrCh.Send(fmt.Errorf("received wrong type from channel: %T", tm))
 			}
 			// key1: "value1" populated in the tag map client side should make
-			// it's way to server.
+			// its way to server.
 			val, ok := tagMap.Value(key1)
 			if !ok {
 				readerErrCh.Send(fmt.Errorf("no key: %v present in OpenCensus tag map", key1.Name()))
@@ -973,12 +973,6 @@ func compareMessageEvents(me []trace.MessageEvent, me2 []trace.MessageEvent) boo
 
 // compareLinks compares the type of link received compared to the wanted link.
 func compareLinks(ls []trace.Link, ls2 []trace.Link) bool {
-	if ls == nil && ls2 == nil {
-		return true
-	}
-	if ls == nil || ls2 == nil {
-		return false
-	}
 	if len(ls) != len(ls2) {
 		return false
 	}
@@ -1010,17 +1004,19 @@ type spanInformation struct {
 	childSpanCount  int
 }
 
-// presenceAndRelationshipAssertionsClientServerSpan checks for consistent trace
-// ID across the full trace. It also asserts each span has a corresponding
-// generated SpanID, and makes sure in the case of a server span and a client
-// span, the server span points to the client span as it's parent. This is
-// assumed to be called with spans from the same RPC (thus the same trace).
-// These assertions are orthogonal to pure equality assertions, as this data is
-// generated at runtime, so can only test relations between IDs (i.e. this part
-// of the data has the same ID as this part of the data).
+// validateTraceAndSpanIDs checks for consistent trace ID across the full trace.
+// It also asserts each span has a corresponding generated SpanID, and makes
+// sure in the case of a server span and a client span, the server span points
+// to the client span as its parent. This is assumed to be called with spans
+// from the same RPC (thus the same trace). If called with spanInformation slice
+// of length 2, it assumes first span is a server span which points to second
+// span as parent and second span is a client span. These assertions are
+// orthogonal to pure equality assertions, as this data is generated at runtime,
+// so can only test relations between IDs (i.e. this part of the data has the
+// same ID as this part of the data).
 //
 // Returns an error in the case of a failing assertion, non nil error otherwise.
-func presenceAndRelationshipAssertionsClientServerSpan(sis []spanInformation) error {
+func validateTraceAndSpanIDs(sis []spanInformation) error {
 	var traceID trace.TraceID
 	for i, si := range sis {
 		// Trace IDs should all be consistent across every span, since this
@@ -1046,11 +1042,11 @@ func presenceAndRelationshipAssertionsClientServerSpan(sis []spanInformation) er
 	}
 	// If the length of spans of an RPC is 2, it means there is a server span
 	// which exports first and a client span which exports second. Thus, the
-	// server span should point to the client span as it's parent, represented
-	// by it's ID.
+	// server span should point to the client span as its parent, represented
+	// by its ID.
 	if len(sis) == 2 {
 		if !cmp.Equal(sis[0].parentSpanID, sis[1].sc.SpanID) {
-			return fmt.Errorf("server span should point to the client span as it's parent. parentSpanID: %v, clientSpanID: %v", sis[0].parentSpanID, sis[1].sc.SpanID)
+			return fmt.Errorf("server span should point to the client span as its parent. parentSpanID: %v, clientSpanID: %v", sis[0].parentSpanID, sis[1].sc.SpanID)
 		}
 	}
 	return nil
@@ -1229,7 +1225,7 @@ func (s) TestSpan(t *testing.T) {
 		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
 	}
 	fe.mu.Lock()
-	if err := presenceAndRelationshipAssertionsClientServerSpan(fe.seenSpans); err != nil {
+	if err := validateTraceAndSpanIDs(fe.seenSpans); err != nil {
 		fe.mu.Unlock()
 		t.Fatalf("Error in runtime data assertions: %v", err)
 	}
@@ -1306,7 +1302,7 @@ func (s) TestSpan(t *testing.T) {
 	}
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
-	if err := presenceAndRelationshipAssertionsClientServerSpan(fe.seenSpans); err != nil {
+	if err := validateTraceAndSpanIDs(fe.seenSpans); err != nil {
 		t.Fatalf("Error in runtime data assertions: %v", err)
 	}
 }

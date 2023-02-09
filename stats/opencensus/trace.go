@@ -77,7 +77,6 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 // spanContext deserialized from context passed in (wire data in gRPC metadata)
 // if present.
 func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) context.Context {
-	// TODO: get consensus on whether this method name of "s.m" is correct.
 	mn := strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
 	var sc trace.SpanContext
 	// gotSpanContext represents if after all the logic to get span context out
@@ -105,9 +104,13 @@ func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 
 	var span *trace.Span
 	if gotSpanContext {
+		// Returned context is ignored because will populate context with data
+		// that wraps the span instead.
 		_, span = trace.StartSpanWithRemoteParent(ctx, mn, sc, trace.WithSpanKind(trace.SpanKindServer), trace.WithSampler(ssh.to.TS))
 		span.AddLink(trace.Link{TraceID: sc.TraceID, SpanID: sc.SpanID, Type: trace.LinkTypeChild})
 	} else {
+		// Returned context is ignored because will populate context with data
+		// that wraps the span instead.
 		_, span = trace.StartSpan(ctx, mn, trace.WithSpanKind(trace.SpanKindServer), trace.WithSampler(ssh.to.TS))
 	}
 
@@ -135,8 +138,8 @@ func populateSpan(ctx context.Context, rs stats.RPCStats) {
 
 	switch rs := rs.(type) {
 	case *stats.Begin:
-		// Note: not present in Java, but left in because already there, so why
-		// not. Thus untested due to no formal definition and not important for
+		// Note: Go always added these attributes even though they are not
+		// defined by the OpenCensus gRPC spec. Thus, they are unimportant for
 		// correctness.
 		span.AddAttributes(
 			trace.BoolAttribute("Client", rs.Client),
@@ -155,7 +158,7 @@ func populateSpan(ctx context.Context, rs stats.RPCStats) {
 			// "The mapping between gRPC canonical codes and OpenCensus codes
 			// can be found here", which implies 1:1 mapping to gRPC statuses
 			// (OpenCensus statuses are based off gRPC statuses and a subset).
-			s, _ := status.FromError(rs.Error) // ignore second argument because codes.Unknown is fine and is correct the correct status to populate span with.
+			s := status.Convert(rs.Error)
 			span.SetStatus(trace.Status{Code: int32(s.Code()), Message: s.Message()})
 		} else {
 			span.SetStatus(trace.Status{Code: trace.StatusCodeOK}) // could get rid of this else conditional and just leave as 0 value, but this makes it explicit
