@@ -71,6 +71,7 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unexpected Dial(%q) error: %v", target, err)
 	}
+	cc.Connect()
 	if got, want := <-addrCh, "localhost:1234"; got != want {
 		cc.Close()
 		t.Fatalf("Dialer got address %q; wanted %q", got, want)
@@ -88,10 +89,15 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 	// globally-registered resolver.  Since it is "dns" instead of passthrough,
 	// we can validate by checking for an address that has been resolved
 	// (i.e. is not "localhost:port").
-	cc, err = Dial(target, WithContextDialer(customDialer), WithResolvers(res), WithTransportCredentials(insecure.NewCredentials()))
+
+	// WithDisableServiceConfig disables TXT lookups, which can hang for
+	// "localhost".
+	cc, err = Dial(target, WithContextDialer(customDialer), WithResolvers(res),
+		WithTransportCredentials(insecure.NewCredentials()), WithDisableServiceConfig())
 	if err != nil {
 		t.Fatalf("Unexpected Dial(%q) error: %v", target, err)
 	}
+	cc.Connect()
 	defer cc.Close()
 	if got, wantNot := <-addrCh, "localhost:1234"; got == wantNot {
 		t.Fatalf("Dialer got address %q; wanted something other than %q", got, wantNot)
