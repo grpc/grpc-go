@@ -1527,9 +1527,12 @@ func (c *channelzChannel) ChannelzMetric() *channelz.ChannelInternalMetric {
 // referenced by users.
 var ErrClientConnTimeout = errors.New("grpc: timed out when dialing")
 
+// getResolver finds the scheme in the cc's resolvers or the global registry.
+// scheme should always be lowercase (typically by virtue of url.Parse()
+// performing proper RFC3986 behavior).
 func (cc *ClientConn) getResolver(scheme string) resolver.Builder {
 	for _, rb := range cc.dopts.resolvers {
-		if scheme == rb.Scheme() {
+		if scheme == strings.ToLower(rb.Scheme()) {
 			return rb
 		}
 	}
