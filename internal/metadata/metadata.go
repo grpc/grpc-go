@@ -82,14 +82,13 @@ func Set(addr resolver.Address, md metadata.MD) resolver.Address {
 // - header names must contain one or more characters from this set [0-9 a-z _ - .].
 // - if the header-name ends with a "-bin" suffix, no validation of the header value is performed.
 // - otherwise, the header value must contain one or more characters from the set [%x20-%x7E].
-func Validate(md metadata.MD) (err error) {
+func Validate(md metadata.MD) error {
 	for k, vals := range md {
-		err = ValidatePair(k, vals...)
-		if err != nil {
-			break
+		if err := ValidatePair(k, vals...); err != nil {
+			return err
 		}
 	}
-	return
+	return nil
 }
 
 // hasNotPrintable return true if msg contains any characters which are not in %x20-%x7E

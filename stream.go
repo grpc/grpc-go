@@ -170,15 +170,13 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
 	if md, added, ok := metadata.FromOutgoingContextRaw(ctx); ok {
 		// validate md
-		err := imetadata.Validate(md)
-		if err != nil {
+		if err := imetadata.Validate(md); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 		// validate added
 		for _, kvs := range added {
 			for i := 0; i < len(kvs); i += 2 {
-				err = imetadata.ValidatePair(kvs[i], kvs[i+1])
-				if err != nil {
+				if err = imetadata.ValidatePair(kvs[i], kvs[i+1]); err != nil {
 					return nil, status.Error(codes.Internal, err.Error())
 				}
 			}
