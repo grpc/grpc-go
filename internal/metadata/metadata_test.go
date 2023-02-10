@@ -101,7 +101,7 @@ func TestValidate(t *testing.T) {
 			want: errors.New("header key \"test\" contains value with non-printable ASCII characters"),
 		},
 		{
-			md:   map[string][]string{"": {string(rune(0x19))}},
+			md:   map[string][]string{"": {"valid"}},
 			want: errors.New("there is an empty key in the header"),
 		},
 		{
