@@ -452,17 +452,3 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	logger.Debugf("Bootstrap config for creating xds-client: %v", pretty.ToJSON(config))
 	return config, nil
 }
-
-// updateNodeProto updates the node proto read from the bootstrap file.
-//
-// The input node is a v3.Node protobuf message corresponding to the JSON
-// contents found in the bootstrap file. This method performs some post
-// processing on it:
-// 1. If the node is nil, we create an empty one here. That way, callers of this
-// function can always expect that the NodeProto field is non-nil.
-// 2. Some additional fields which are not expected to be set in the bootstrap
-// file are populated here.
-func (c *Config) updateNodeProto(node *v3corepb.Node) error {
-
-	return nil
-}
