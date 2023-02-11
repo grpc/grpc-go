@@ -29,24 +29,9 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-type spanWithMsgCountKey struct{}
-
-// getSpanWithMsgCount returns the msgEventsCount stored in the context, or nil
-// if there isn't one.
-func getSpanWithMsgCount(ctx context.Context) *spanWithMsgCount {
-	swmc, _ := ctx.Value(spanWithMsgCountKey{}).(*spanWithMsgCount)
-	return swmc
-}
-
-// setSpanWithMsgCount stores a spanWithMsgCount in the context.
-func setSpanWithMsgCount(ctx context.Context, swmc *spanWithMsgCount) context.Context {
-	// needs to be on the heap to persist changes over time so pointer.
-	return context.WithValue(ctx, spanWithMsgCountKey{}, swmc)
-}
-
-// spanWithMsgCount wraps a trace.Span to count msg events.
-type spanWithMsgCount struct {
-	*trace.Span
+// traceInfo is data used for recording traces.
+type traceInfo struct {
+	span         *trace.Span
 	countSentMsg uint32
 	countRecvMsg uint32
 }
@@ -58,32 +43,29 @@ const traceContextMDKey = "grpc-trace-bin"
 
 // traceTagRPC populates context with a new span, and serializes information
 // about this span into gRPC Metadata.
-func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) context.Context {
+func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
 	// TODO: get consensus on whether this method name of "s.m" is correct.
 	mn := strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
 	_, span := trace.StartSpan(ctx, mn, trace.WithSampler(csh.to.TS), trace.WithSpanKind(trace.SpanKindClient))
 
-	swmc := &spanWithMsgCount{
-		Span:         span,
+	tcBin := propagation.Binary(span.SpanContext())
+	return metadata.AppendToOutgoingContext(ctx, traceContextMDKey, string(tcBin)), &traceInfo{
+		span:         span,
 		countSentMsg: 0, // msg events scoped to scope of context, per attempt client side
 		countRecvMsg: 0,
 	}
-	ctx = setSpanWithMsgCount(ctx, swmc)
-	tcBin := propagation.Binary(span.SpanContext())
-	return metadata.AppendToOutgoingContext(ctx, traceContextMDKey, string(tcBin))
 }
 
 // traceTagRPC populates context with new span data, with a parent based on the
 // spanContext deserialized from context passed in (wire data in gRPC metadata)
 // if present.
-func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) context.Context {
+func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
 	mn := strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
 	var sc trace.SpanContext
 	// gotSpanContext represents if after all the logic to get span context out
 	// of context passed in, whether there was a span context which represents
 	// the future created server span's parent or not.
 	var gotSpanContext bool
-
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		// Shouldn't happen, but if does just notify caller through error log,
@@ -114,27 +96,24 @@ func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 		_, span = trace.StartSpan(ctx, mn, trace.WithSpanKind(trace.SpanKindServer), trace.WithSampler(ssh.to.TS))
 	}
 
-	swmc := &spanWithMsgCount{
-		Span:         span,
+	return ctx, &traceInfo{
+		span:         span,
 		countSentMsg: 0,
 		countRecvMsg: 0,
 	}
-	ctx = setSpanWithMsgCount(ctx, swmc)
-	return ctx
 }
 
 // populateSpan populates span information based on stats passed in (invariants
 // of the RPC lifecycle), and also ends span which triggers the span to be
 // exported.
-func populateSpan(ctx context.Context, rs stats.RPCStats) {
-	swmc := getSpanWithMsgCount(ctx)
-	if swmc == nil || swmc.Span == nil {
+func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
+	if ti == nil || ti.span == nil {
 		// Shouldn't happen, tagRPC call comes before this function gets called
 		// which populates this information.
 		logger.Error("ctx passed into stats handler tracing event handling has no span present")
 		return
 	}
-	span := swmc.Span
+	span := ti.span
 
 	switch rs := rs.(type) {
 	case *stats.Begin:
@@ -148,10 +127,10 @@ func populateSpan(ctx context.Context, rs stats.RPCStats) {
 	case *stats.InPayload:
 		// message id - "must be calculated as two different counters starting
 		// from 1 one for sent messages and one for received messages."
-		mi := atomic.AddUint32(&swmc.countRecvMsg, 1)
+		mi := atomic.AddUint32(&ti.countRecvMsg, 1)
 		span.AddMessageReceiveEvent(int64(mi), int64(rs.Length), int64(rs.WireLength))
 	case *stats.OutPayload:
-		mi := atomic.AddUint32(&swmc.countSentMsg, 1)
+		mi := atomic.AddUint32(&ti.countSentMsg, 1)
 		span.AddMessageSendEvent(int64(mi), int64(rs.Length), int64(rs.WireLength))
 	case *stats.End:
 		if rs.Error != nil {
