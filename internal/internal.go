@@ -77,6 +77,10 @@ var (
 	// globally for newly created client channels. The priority will be: 1.
 	// user-provided; 2. this method; 3. default values.
 	AddGlobalDialOptions interface{} // func(opt ...DialOption)
+	// DisableGlobalDialOptions returns a DialOption that prevents the
+	// ClientConn from applying the global DialOptions (set via
+	// AddGlobalDialOptions).
+	DisableGlobalDialOptions interface{} // func() grpc.DialOption
 	// ClearGlobalDialOptions clears the array of extra DialOption. This
 	// method is useful in testing and benchmarking.
 	ClearGlobalDialOptions func()

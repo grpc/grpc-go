@@ -58,6 +58,24 @@ func (s) TestAddGlobalDialOptions(t *testing.T) {
 	}
 }
 
+// TestDisableGlobalOptions tests dialing with the disableGlobalDialOptions dial
+// option. Dialing with this set should not pick up global options.
+func (s) TestDisableGlobalOptions(t *testing.T) {
+	// Set transport credentials as a global option.
+	internal.AddGlobalDialOptions.(func(opt ...DialOption))(WithTransportCredentials(insecure.NewCredentials()))
+	// Dial with the disable global options dial option. This dial should fail
+	// due to the global dial options with credentials not being picked up due
+	// to global options being disabled.
+	if _, err := Dial("fake", internal.DisableGlobalDialOptions.(func() DialOption)()); err == nil {
+		t.Fatalf("Dialing without a credential did not fail")
+	} else {
+		if !strings.Contains(err.Error(), "no transport security set") {
+			t.Fatalf("Dialing failed with unexpected error: %v", err)
+		}
+	}
+	internal.ClearGlobalDialOptions()
+}
+
 func (s) TestAddGlobalServerOptions(t *testing.T) {
 	const maxRecvSize = 998765
 	// Set and check the ServerOptions
