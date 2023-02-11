@@ -97,8 +97,8 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: defaultAuthorityServer.Address,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto: &v3corepb.Node{Id: nodeID},
 		},
+		NodeProto: &v3corepb.Node{Id: nodeID},
 		Authorities: map[string]*bootstrap.Authority{
 			testAuthority1: {},
 			testAuthority2: {},
@@ -106,7 +106,6 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 				XDSServer: &bootstrap.ServerConfig{
 					ServerURI: nonDefaultAuthorityServer.Address,
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-					NodeProto: &v3corepb.Node{Id: nodeID},
 				},
 			},
 		},

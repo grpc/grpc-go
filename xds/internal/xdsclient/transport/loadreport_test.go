@@ -49,12 +49,12 @@ func (s) TestReportLoad(t *testing.T) {
 		ServerURI: mgmtServer.Address,
 		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 		CredsType: "insecure",
-		NodeProto: nodeProto,
 	}
 
 	// Create a transport to the fake management server.
 	tr, err := transport.New(transport.Options{
 		ServerCfg:          serverCfg,
+		NodeProto:          nodeProto,
 		UpdateHandler:      func(transport.ResourceUpdate) error { return nil }, // No ADS validation.
 		StreamErrorHandler: func(error) {},                                      // No ADS stream error handling.
 		Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.

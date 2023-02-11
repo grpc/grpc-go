@@ -247,8 +247,8 @@ func (s) TestHandleListenerResponseFromManagementServer(t *testing.T) {
 					ServerURI: mgmtServer.Address,
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 					CredsType: "insecure",
-					NodeProto: &v3corepb.Node{Id: nodeID},
 				},
+				NodeProto: &v3corepb.Node{Id: nodeID},
 			}, defaultTestWatchExpiryTimeout, time.Duration(0))
 			if err != nil {
 				t.Fatalf("failed to create xds client: %v", err)
@@ -513,8 +513,8 @@ func (s) TestHandleRouteConfigResponseFromManagementServer(t *testing.T) {
 					ServerURI: mgmtServer.Address,
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 					CredsType: "insecure",
-					NodeProto: &v3corepb.Node{Id: nodeID},
 				},
+				NodeProto: &v3corepb.Node{Id: nodeID},
 			}, defaultTestWatchExpiryTimeout, time.Duration(0))
 			if err != nil {
 				t.Fatalf("failed to create xds client: %v", err)
@@ -755,8 +755,8 @@ func (s) TestHandleClusterResponseFromManagementServer(t *testing.T) {
 					ServerURI: mgmtServer.Address,
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 					CredsType: "insecure",
-					NodeProto: &v3corepb.Node{Id: nodeID},
 				},
+				NodeProto: &v3corepb.Node{Id: nodeID},
 			}, defaultTestWatchExpiryTimeout, time.Duration(0))
 			if err != nil {
 				t.Fatalf("failed to create xds client: %v", err)
@@ -1080,8 +1080,8 @@ func (s) TestHandleEndpointsResponseFromManagementServer(t *testing.T) {
 					ServerURI: mgmtServer.Address,
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 					CredsType: "insecure",
-					NodeProto: &v3corepb.Node{Id: nodeID},
 				},
+				NodeProto: &v3corepb.Node{Id: nodeID},
 			}, defaultTestWatchExpiryTimeout, time.Duration(0))
 			if err != nil {
 				t.Fatalf("failed to create xds client: %v", err)

@@ -52,8 +52,9 @@ func (s) TestNew(t *testing.T) {
 			opts: transport.Options{ServerCfg: bootstrap.ServerConfig{
 				ServerURI: "server-address",
 				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			},
 				NodeProto: &v3corepb.Node{},
-			}},
+			},
 			wantErrStr: "missing update handler when creating a new transport",
 		},
 		{
@@ -62,8 +63,8 @@ func (s) TestNew(t *testing.T) {
 				ServerCfg: bootstrap.ServerConfig{
 					ServerURI: "server-address",
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-					NodeProto: &v3corepb.Node{},
 				},
+				NodeProto:     &v3corepb.Node{},
 				UpdateHandler: func(transport.ResourceUpdate) error { return nil },
 			},
 			wantErrStr: "missing stream error handler when creating a new transport",
@@ -74,8 +75,8 @@ func (s) TestNew(t *testing.T) {
 				ServerCfg: bootstrap.ServerConfig{
 					ServerURI: "server-address",
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-					NodeProto: &v3corepb.Node{},
 				},
+				NodeProto:          &v3corepb.Node{},
 				UpdateHandler:      func(transport.ResourceUpdate) error { return nil },
 				StreamErrorHandler: func(error) {},
 			},

@@ -143,6 +143,9 @@ type Options struct {
 	Backoff func(retries int) time.Duration
 	// Logger does logging with a prefix.
 	Logger *grpclog.PrefixLogger
+	// NodeProto contains the Node proto to be used in xDS requests. This will be
+	// of type *v3corepb.Node.
+	NodeProto *v3corepb.Node
 }
 
 // For overriding in unit tests.
@@ -188,7 +191,7 @@ func New(opts Options) (*Transport, error) {
 		adsStreamErrHandler: opts.StreamErrorHandler,
 		lrsStore:            load.NewStore(),
 		backoff:             boff,
-		nodeProto:           opts.ServerCfg.NodeProto,
+		nodeProto:           opts.NodeProto,
 		logger:              opts.Logger,
 
 		adsStreamCh:     make(chan adsStream, 1),

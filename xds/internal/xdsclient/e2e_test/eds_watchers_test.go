@@ -592,8 +592,8 @@ func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: "dummy management server address",
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto: &v3corepb.Node{},
 		},
+		NodeProto: &v3corepb.Node{},
 	}, defaultTestWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
@@ -638,8 +638,8 @@ func (s) TestEDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: mgmtServer.Address,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto: &v3corepb.Node{Id: nodeID},
 		},
+		NodeProto: &v3corepb.Node{Id: nodeID},
 	}, defaultTestWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)

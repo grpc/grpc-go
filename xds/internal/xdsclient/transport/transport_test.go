@@ -51,8 +51,8 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 		ServerCfg: bootstrap.ServerConfig{
 			ServerURI: "server-address",
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto: &v3corepb.Node{},
 		},
+		NodeProto:          &v3corepb.Node{},
 		UpdateHandler:      func(ResourceUpdate) error { return nil },
 		StreamErrorHandler: func(error) {},
 	}

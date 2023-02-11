@@ -214,7 +214,6 @@ func TestBuildXDS(t *testing.T) {
 			}
 			serverConfig := &bootstrap.ServerConfig{
 				ServerURI: tdURL,
-				NodeProto: wantNode,
 			}
 			wantConfig := &bootstrap.Config{
 				XDSServer: serverConfig,
@@ -224,6 +223,7 @@ func TestBuildXDS(t *testing.T) {
 						XDSServer: serverConfig,
 					},
 				},
+				NodeProto: wantNode,
 			}
 			if tt.tdURI != "" {
 				wantConfig.XDSServer.ServerURI = tt.tdURI

@@ -28,6 +28,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"google.golang.org/grpc/credentials/insecure"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
@@ -74,6 +75,113 @@ var (
 				"server_features" : ["foo", "bar", "xds_v3"]
 			}]
 		}`,
+		"emptyNodeProto": `
+		{
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
+			}]
+		}`,
+		"unknownTopLevelFieldInFile": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
+			}],
+			"unknownField": "foobar"
+		}`,
+		"unknownFieldInNodeProto": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"unknownField": "foobar",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				]
+			}]
+		}`,
+		"unknownFieldInXdsServer": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "insecure" }
+				],
+				"unknownField": "foobar"
+			}]
+		}`,
+		"multipleChannelCreds": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "not-google-default" },
+					{ "type": "google_default" }
+				]
+			}]
+		}`,
+		"goodBootstrap": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "google_default" }
+				]
+			}]
+		}`,
+		"multipleXDSServers": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [
+				{
+					"server_uri": "trafficdirector.googleapis.com:443",
+					"channel_creds": [{ "type": "google_default" }]
+				},
+				{
+					"server_uri": "backup.never.use.com:1234",
+					"channel_creds": [{ "type": "not-google-default" }]
+				}
+			]
+		}`,
 	}
 	metadata = &structpb.Struct{
 		Fields: map[string]*structpb.Value{
@@ -89,13 +197,22 @@ var (
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
 		ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
 	}
+	nilCredsConfigV3 = &Config{
+		XDSServer: &ServerConfig{
+			ServerURI: "trafficdirector.googleapis.com:443",
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			CredsType: "insecure",
+		},
+		NodeProto: v3NodeProto,
+		ClientDefaultListenerResourceNameTemplate: "%s",
+	}
 	nonNilCredsConfigV3 = &Config{
 		XDSServer: &ServerConfig{
 			ServerURI: "trafficdirector.googleapis.com:443",
 			Creds:     grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
 			CredsType: "google_default",
-			NodeProto: v3NodeProto,
 		},
+		NodeProto: v3NodeProto,
 		ClientDefaultListenerResourceNameTemplate: "%s",
 	}
 )
@@ -172,6 +289,114 @@ func testNewConfigWithFileContentEnv(t *testing.T, fileName string, wantError bo
 	}
 	if err := c.compare(wantConfig); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestNewConfigV3ProtoFailure exercises the functionality in NewConfig with
+// different bootstrap file contents which are expected to fail.
+func TestNewConfigV3ProtoFailure(t *testing.T) {
+	bootstrapFileMap := map[string]string{
+		"empty":          "",
+		"badJSON":        `["test": 123]`,
+		"noBalancerName": `{"node": {"id": "ENVOY_NODE_ID"}}`,
+		"emptyXdsServer": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			}
+		}`,
+		"emptyChannelCreds": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443"
+			}]
+		}`,
+		"nonGoogleDefaultCreds": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "not-google-default" }
+				]
+			}]
+		}`,
+	}
+	cancel := setupBootstrapOverride(bootstrapFileMap)
+	defer cancel()
+
+	tests := []struct {
+		name      string
+		wantError bool
+	}{
+		{"nonExistentBootstrapFile", true},
+		{"empty", true},
+		{"badJSON", true},
+		{"noBalancerName", true},
+		{"emptyXdsServer", true},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testNewConfigWithFileNameEnv(t, test.name, true, nil)
+			testNewConfigWithFileContentEnv(t, test.name, true, nil)
+		})
+	}
+}
+
+// TestNewConfigV3ProtoSuccess exercises the functionality in NewConfig with
+// different bootstrap file contents. It overrides the fileReadFunc by returning
+// bootstrap file contents defined in this test, instead of reading from a file.
+func TestNewConfigV3ProtoSuccess(t *testing.T) {
+	cancel := setupBootstrapOverride(v3BootstrapFileMap)
+	defer cancel()
+
+	tests := []struct {
+		name       string
+		wantConfig *Config
+	}{
+		{
+			"emptyNodeProto", &Config{
+				XDSServer: &ServerConfig{
+					ServerURI: "trafficdirector.googleapis.com:443",
+					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+					CredsType: "insecure",
+				},
+				NodeProto: &v3corepb.Node{
+					UserAgentName:        gRPCUserAgentName,
+					UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version},
+					ClientFeatures:       []string{clientFeatureNoOverprovisioning, clientFeatureResourceWrapper},
+				},
+				ClientDefaultListenerResourceNameTemplate: "%s",
+			},
+		},
+		{"unknownTopLevelFieldInFile", nilCredsConfigV3},
+		{"unknownFieldInNodeProto", nilCredsConfigV3},
+		{"unknownFieldInXdsServer", nilCredsConfigV3},
+		{"multipleChannelCreds", nonNilCredsConfigV3},
+		{"goodBootstrap", nonNilCredsConfigV3},
+		{"multipleXDSServers", nonNilCredsConfigV3},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			testNewConfigWithFileNameEnv(t, test.name, false, test.wantConfig)
+			testNewConfigWithFileContentEnv(t, test.name, false, test.wantConfig)
+		})
 	}
 }
 
@@ -419,8 +644,8 @@ func TestNewConfigWithCertificateProviders(t *testing.T) {
 			ServerURI: "trafficdirector.googleapis.com:443",
 			Creds:     grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
 			CredsType: "google_default",
-			NodeProto: v3NodeProto,
 		},
+		NodeProto: v3NodeProto,
 		CertProviderConfigs: map[string]*certprovider.BuildableConfig{
 			"fakeProviderInstance": wantCfg,
 		},
@@ -512,8 +737,8 @@ func TestNewConfigWithServerListenerResourceNameTemplate(t *testing.T) {
 					ServerURI: "trafficdirector.googleapis.com:443",
 					Creds:     grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
 					CredsType: "google_default",
-					NodeProto: v3NodeProto,
 				},
+				NodeProto:                                 v3NodeProto,
 				ServerListenerResourceNameTemplate:        "grpc/server?xds.resource.listening_address=%s",
 				ClientDefaultListenerResourceNameTemplate: "%s",
 			},
@@ -661,8 +886,8 @@ func TestNewConfigWithFederation(t *testing.T) {
 					ServerURI: "trafficdirector.googleapis.com:443",
 					Creds:     grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
 					CredsType: "google_default",
-					NodeProto: v3NodeProto,
 				},
+				NodeProto:                                 v3NodeProto,
 				ServerListenerResourceNameTemplate:        "xdstp://xds.example.com/envoy.config.listener.v3.Listener/grpc/server?listening_address=%s",
 				ClientDefaultListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
 				Authorities: map[string]*Authority{
@@ -672,7 +897,6 @@ func TestNewConfigWithFederation(t *testing.T) {
 							ServerURI: "td.com",
 							Creds:     grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
 							CredsType: "google_default",
-							NodeProto: v3NodeProto,
 						},
 					},
 				},
@@ -685,8 +909,8 @@ func TestNewConfigWithFederation(t *testing.T) {
 					ServerURI: "trafficdirector.googleapis.com:443",
 					Creds:     grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
 					CredsType: "google_default",
-					NodeProto: v3NodeProto,
 				},
+				NodeProto: v3NodeProto,
 				ClientDefaultListenerResourceNameTemplate: "%s",
 			},
 		},
@@ -697,8 +921,8 @@ func TestNewConfigWithFederation(t *testing.T) {
 					ServerURI: "trafficdirector.googleapis.com:443",
 					Creds:     grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
 					CredsType: "google_default",
-					NodeProto: v3NodeProto,
 				},
+				NodeProto: v3NodeProto,
 				ClientDefaultListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
 				Authorities: map[string]*Authority{
 					"xds.td.com": {
@@ -717,8 +941,8 @@ func TestNewConfigWithFederation(t *testing.T) {
 					ServerURI: "trafficdirector.googleapis.com:443",
 					Creds:     grpc.WithCredentialsBundle(google.NewComputeEngineCredentials()),
 					CredsType: "google_default",
-					NodeProto: v3NodeProto,
 				},
+				NodeProto: v3NodeProto,
 				ClientDefaultListenerResourceNameTemplate: "xdstp://xds.example.com/envoy.config.listener.v3.Listener/%s",
 				Authorities: map[string]*Authority{
 					"xds.td.com": {

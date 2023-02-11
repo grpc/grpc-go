@@ -140,7 +140,6 @@ func (s) TestSimpleAckAndNack(t *testing.T) {
 		ServerURI: mgmtServer.Address,
 		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 		CredsType: "insecure",
-		NodeProto: &v3corepb.Node{Id: nodeID},
 	}
 
 	// Create a new transport.
@@ -148,6 +147,7 @@ func (s) TestSimpleAckAndNack(t *testing.T) {
 		ServerCfg:          serverCfg,
 		UpdateHandler:      dataModelValidator,
 		StreamErrorHandler: func(err error) {},
+		NodeProto:          &v3corepb.Node{Id: nodeID},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -326,7 +326,6 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 		ServerURI: mgmtServer.Address,
 		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 		CredsType: "insecure",
-		NodeProto: &v3corepb.Node{Id: nodeID},
 	}
 
 	// Create a new transport.
@@ -334,6 +333,7 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 		ServerCfg:          serverCfg,
 		UpdateHandler:      dataModelValidator,
 		StreamErrorHandler: func(err error) {},
+		NodeProto:          &v3corepb.Node{Id: nodeID},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -454,7 +454,6 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 		ServerURI: mgmtServer.Address,
 		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 		CredsType: "insecure",
-		NodeProto: &v3corepb.Node{Id: nodeID},
 	}
 
 	// Create a new transport.
@@ -462,6 +461,7 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 		ServerCfg:          serverCfg,
 		UpdateHandler:      dataModelValidator,
 		StreamErrorHandler: func(err error) {},
+		NodeProto:          &v3corepb.Node{Id: nodeID},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)

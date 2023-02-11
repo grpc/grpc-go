@@ -120,6 +120,7 @@ func newAuthority(args authorityArgs) (*authority, error) {
 		UpdateHandler:      ret.handleResourceUpdate,
 		StreamErrorHandler: ret.newConnectionError,
 		Logger:             args.logger,
+		NodeProto:          args.bootstrapCfg.NodeProto,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("creating new transport to %q: %v", args.serverCfg, err)

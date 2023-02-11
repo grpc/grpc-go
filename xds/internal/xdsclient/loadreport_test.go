@@ -53,8 +53,8 @@ func (s) TestLRSClient(t *testing.T) {
 		XDSServer: &bootstrap.ServerConfig{
 			ServerURI: fs.Address,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			NodeProto: &v3corepb.Node{},
 		},
+		NodeProto: &v3corepb.Node{},
 	}, defaultClientWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
@@ -67,7 +67,6 @@ func (s) TestLRSClient(t *testing.T) {
 			ServerURI: fs.Address,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 			CredsType: "insecure",
-			NodeProto: &v3corepb.Node{},
 		},
 	)
 	defer lrsCancel1()
@@ -96,7 +95,6 @@ func (s) TestLRSClient(t *testing.T) {
 			ServerURI: fs2.Address,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 			CredsType: "insecure",
-			NodeProto: &v3corepb.Node{},
 		},
 	)
 	defer lrsCancel2()

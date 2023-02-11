@@ -97,9 +97,6 @@ type ServerConfig struct {
 	Creds grpc.DialOption
 	// CredsType is the type of the creds. It will be used to dedup servers.
 	CredsType string
-	// NodeProto contains the Node proto to be used in xDS requests. This will be
-	// of type *v3corepb.Node.
-	NodeProto *v3corepb.Node
 }
 
 // String returns the string representation of the ServerConfig.
@@ -250,7 +247,6 @@ type Config struct {
 	//
 	// Defaults to "%s".
 	ClientDefaultListenerResourceNameTemplate string
-
 	// Authorities is a map of authority name to corresponding configuration.
 	//
 	// This is used in the following cases:
@@ -265,6 +261,9 @@ type Config struct {
 	// In any of those cases, it is an error if the specified authority is
 	// not present in this map.
 	Authorities map[string]*Authority
+	// NodeProto contains the Node proto to be used in xDS requests. This will be
+	// of type *v3corepb.Node.
+	NodeProto *v3corepb.Node
 }
 
 type channelCreds struct {
@@ -346,12 +345,6 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	for k, v := range jsonData {
 		switch k {
 		case "node":
-			// We unconditionally convert the JSON into a v3.Node proto. The v3
-			// proto does not contain the deprecated field "build_version" from
-			// the v2 proto. We do not expect the bootstrap file to contain the
-			// "build_version" field. In any case, the unmarshal will succeed
-			// because we have set the `AllowUnknownFields` option on the
-			// unmarshaler.
 			node = &v3corepb.Node{}
 			if err := m.Unmarshal(bytes.NewReader(v), node); err != nil {
 				return nil, fmt.Errorf("xds: jsonpb.Unmarshal(%v) for field %q failed during bootstrap: %v", string(v), k, err)
@@ -446,9 +439,13 @@ func newConfigFromContents(data []byte) (*Config, error) {
 		}
 	}
 
-	if err := config.updateNodeProto(node); err != nil {
-		return nil, err
-	}
+	// Performing post-production on the node information. Some additional fields
+	// which are not expected to be set in the bootstrap file are populated here.
+	node.UserAgentName = gRPCUserAgentName
+	node.UserAgentVersionType = &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
+	node.ClientFeatures = append(node.ClientFeatures, clientFeatureNoOverprovisioning, clientFeatureResourceWrapper)
+	config.NodeProto = node
+
 	logger.Debugf("Bootstrap config for creating xds-client: %v", pretty.ToJSON(config))
 	return config, nil
 }
@@ -462,27 +459,7 @@ func newConfigFromContents(data []byte) (*Config, error) {
 // function can always expect that the NodeProto field is non-nil.
 // 2. Some additional fields which are not expected to be set in the bootstrap
 // file are populated here.
-// 3. For each server config (both top level and in each authority), we set its
-// node field to the v3.Node, or a v2.Node with the same content, depending on
-// the server's transport API version.
 func (c *Config) updateNodeProto(node *v3corepb.Node) error {
-	v3 := node
-	if v3 == nil {
-		v3 = &v3corepb.Node{}
-	}
-	v3.UserAgentName = gRPCUserAgentName
-	v3.UserAgentVersionType = &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
-	v3.ClientFeatures = append(v3.ClientFeatures, clientFeatureNoOverprovisioning, clientFeatureResourceWrapper)
-
-	c.XDSServer.NodeProto = v3
-
-	for _, a := range c.Authorities {
-		if a.XDSServer == nil {
-			continue
-		}
-		a.XDSServer.NodeProto = v3
-
-	}
 
 	return nil
 }
