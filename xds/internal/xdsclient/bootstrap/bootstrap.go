@@ -441,6 +441,9 @@ func newConfigFromContents(data []byte) (*Config, error) {
 
 	// Performing post-production on the node information. Some additional fields
 	// which are not expected to be set in the bootstrap file are populated here.
+	if node == nil {
+		node = &v3corepb.Node{}
+	}
 	node.UserAgentName = gRPCUserAgentName
 	node.UserAgentVersionType = &v3corepb.Node_UserAgentVersion{UserAgentVersion: grpc.Version}
 	node.ClientFeatures = append(node.ClientFeatures, clientFeatureNoOverprovisioning, clientFeatureResourceWrapper)
