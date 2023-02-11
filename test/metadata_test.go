@@ -105,9 +105,6 @@ func (s) TestInvalidMetadata(t *testing.T) {
 			testNum++
 			// merge original md and added md.
 			md := metadata.Join(test.md, metadata.Pairs(test.appendMD...))
-			for i := 0; i < len(test.appendMD); i += 2 {
-				md.Append(test.appendMD[i], test.appendMD[i+1])
-			}
 
 			if err := stream.SetHeader(md); !reflect.DeepEqual(test.want, err) {
 				return fmt.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", md, err, test.want)

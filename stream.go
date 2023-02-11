@@ -176,7 +176,7 @@ func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 		// validate added
 		for _, kvs := range added {
 			for i := 0; i < len(kvs); i += 2 {
-				if err = imetadata.ValidatePair(kvs[i], kvs[i+1]); err != nil {
+				if err := imetadata.ValidatePair(kvs[i], kvs[i+1]); err != nil {
 					return nil, status.Error(codes.Internal, err.Error())
 				}
 			}
