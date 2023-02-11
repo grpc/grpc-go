@@ -58,7 +58,7 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 	// see the target's address directly, but "dns" would be converted into a
 	// loopback IP (v4 or v6) address.
 	target = "caseTest2:///localhost:1234"
-	addrCh := make(chan string)
+	addrCh := make(chan string, 1)
 	customDialer := func(ctx context.Context, addr string) (net.Conn, error) {
 		select {
 		case addrCh <- addr:
