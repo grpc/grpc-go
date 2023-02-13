@@ -466,6 +466,7 @@ func (b *cdsBalancer) run() {
 			if b.cachedIdentity != nil {
 				b.cachedIdentity.Close()
 			}
+			b.updateCh.Close()
 			b.logger.Infof("Shutdown")
 			b.done.Fire()
 			return

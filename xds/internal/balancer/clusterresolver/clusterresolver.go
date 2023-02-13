@@ -312,6 +312,7 @@ func (b *clusterResolverBalancer) run() {
 				b.child.Close()
 				b.child = nil
 			}
+			b.updateCh.Close()
 			// This is the *ONLY* point of return from this function.
 			b.logger.Infof("Shutdown")
 			b.done.Fire()

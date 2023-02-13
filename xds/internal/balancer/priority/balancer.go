@@ -205,6 +205,7 @@ func (b *priorityBalancer) UpdateSubConnState(sc balancer.SubConn, state balance
 
 func (b *priorityBalancer) Close() {
 	b.bg.Close()
+	b.childBalancerStateUpdate.Close()
 
 	b.mu.Lock()
 	defer b.mu.Unlock()

@@ -56,6 +56,7 @@ func (t *callbackSerializer) run(ctx context.Context) {
 	for ctx.Err() == nil {
 		select {
 		case <-ctx.Done():
+			t.callbacks.Close()
 			return
 		case callback := <-t.callbacks.Get():
 			t.callbacks.Load()

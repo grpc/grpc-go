@@ -296,6 +296,8 @@ func (ccb *ccBalancerWrapper) close() {
 
 func (ccb *ccBalancerWrapper) handleClose() {
 	ccb.balancer.Close()
+	ccb.updateCh.Close()
+	ccb.resultCh.Close()
 	ccb.done.Fire()
 }
 

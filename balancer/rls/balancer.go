@@ -450,6 +450,8 @@ func (b *rlsBalancer) Close() {
 	b.dataCache.stop()
 	b.cacheMu.Unlock()
 
+	b.updateCh.Close()
+
 	<-b.done.Done()
 }
 

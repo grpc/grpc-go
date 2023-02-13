@@ -333,6 +333,7 @@ func (b *clusterImplBalancer) Close() {
 		b.childLB = nil
 		b.childState = balancer.State{}
 	}
+	b.pickerUpdateCh.Close()
 	<-b.done.Done()
 	b.logger.Infof("Shutdown")
 }

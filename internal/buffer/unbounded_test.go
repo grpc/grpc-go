@@ -119,3 +119,13 @@ func (s) TestMultipleWriters(t *testing.T) {
 		t.Errorf("reads: %#v, wantReads: %#v", reads, wantReads)
 	}
 }
+
+func (s) TestClose(t *testing.T) {
+	ub := NewUnbounded()
+	ub.Close()
+	ub.Put(1)
+	ub.Load()
+	if v, ok := <-ub.Get(); ok {
+		t.Errorf("Unbounded.Get() = %v, want closed channel", v)
+	}
+}

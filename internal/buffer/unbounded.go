@@ -35,6 +35,7 @@ import "sync"
 // internal/transport/transport.go for an example of this.
 type Unbounded struct {
 	c       chan interface{}
+	closed  bool
 	mu      sync.Mutex
 	backlog []interface{}
 }
@@ -47,6 +48,10 @@ func NewUnbounded() *Unbounded {
 // Put adds t to the unbounded buffer.
 func (b *Unbounded) Put(t interface{}) {
 	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		return
+	}
 	if len(b.backlog) == 0 {
 		select {
 		case b.c <- t:
@@ -64,6 +69,10 @@ func (b *Unbounded) Put(t interface{}) {
 // value from the read channel.
 func (b *Unbounded) Load() {
 	b.mu.Lock()
+	if b.closed {
+		b.mu.Unlock()
+		return
+	}
 	if len(b.backlog) > 0 {
 		select {
 		case b.c <- b.backlog[0]:
@@ -82,4 +91,14 @@ func (b *Unbounded) Load() {
 // send the next buffered value onto the channel if there is any.
 func (b *Unbounded) Get() <-chan interface{} {
 	return b.c
+}
+
+// Close closes the unbounded buffer.
+func (b *Unbounded) Close() {
+	b.mu.Lock()
+	if !b.closed {
+		b.closed = true
+		close(b.c)
+	}
+	b.mu.Unlock()
 }

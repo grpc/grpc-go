@@ -272,6 +272,7 @@ func (s *GRPCServer) Serve(lis net.Listener) error {
 		// need to explicitly close the listener. Cancellation of the xDS watch
 		// is handled by the listenerWrapper.
 		lw.Close()
+		modeUpdateCh.Close()
 		return nil
 	case <-goodUpdateCh:
 	}

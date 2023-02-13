@@ -560,6 +560,7 @@ func (t *Transport) processAckRequest(ack *ackRequest, stream grpc.ClientStream)
 func (t *Transport) Close() {
 	t.adsRunnerCancel()
 	<-t.adsRunnerDoneCh
+	t.adsRequestCh.Close()
 	t.cc.Close()
 }
 

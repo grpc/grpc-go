@@ -362,11 +362,14 @@ func (b *outlierDetectionBalancer) Close() {
 	b.child.Close()
 	b.childMu.Unlock()
 
+	b.scUpdateCh.Close()
+	b.pickerUpdateCh.Close()
+
 	b.mu.Lock()
-	defer b.mu.Unlock()
 	if b.intervalTimer != nil {
 		b.intervalTimer.Stop()
 	}
+	b.mu.Unlock()
 }
 
 func (b *outlierDetectionBalancer) ExitIdle() {
