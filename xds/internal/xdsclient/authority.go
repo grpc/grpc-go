@@ -131,13 +131,16 @@ func newAuthority(args authorityArgs) (*authority, error) {
 }
 
 // transportOnSendHandler is called by the underlying transport when it sends a
-// resource req successfully. Timers are started for resources waiting for a response.
+// resource req successfully. Timers are started for resources waiting for a
+// response.
 func (a *authority) transportOnSendHandler(u *transport.ResourceSendInfo) {
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 	rType := a.resourceTypeGetter(u.URL)
+	// Resource type not found is not expected under normal circumstances, since
+	// the resource type url passed to the transport is determined by the authority.
 	if rType == nil {
-		a.logger.Warningf("unknown resource type url: %s", u.URL)
+		a.logger.Warningf("Unknown resource type url: %s", u.URL)
 		return
 	}
 	resourceStates := a.resources[rType]
@@ -331,13 +334,16 @@ func (a *authority) newConnectionError(err error) {
 	// for all the watchers for every resource, propagate the connection error
 	// from the transport layer.
 	for _, rType := range a.resources {
-		for _, state := range rType {
+		for resourceName, state := range rType {
 			// If the connection/stream breaks after the resource has been requested,
-			// but before the response is received, we stop the timer here. When the stream
-			// is recreated, the transport layer will resend all previously requested resources,
-			// and we will start the timer in the `onResourceSend` callback.
+			// but before the response is received, we stop the timer here. When the
+			// stream is recreated, the transport layer will resend all previously
+			// requested resources, and we will start the timer in the `onResourceSend`
+			// callback.
 			if state.wState == watchStateRequested {
-				state.wTimer.Stop()
+				if ok := state.wTimer.Stop(); !ok {
+					a.logger.Warningf("wTimer.Stop() for resource %v returned false", resourceName)
+				}
 				state.wState = watchStateStarted
 			}
 		}
@@ -355,9 +361,7 @@ func (a *authority) newConnectionError(err error) {
 
 	for _, rType := range a.resources {
 		for _, state := range rType {
-			// For all resource types, for all resources within each resource type, and
-			// for all the watchers for every resource, propagate the connection error
-			// from the transport layer.
+			// Propagate the connection error from the transport layer to all watchers.
 			for watcher := range state.watchers {
 				watcher := watcher
 				a.serializer.Schedule(func(context.Context) {
@@ -449,7 +453,7 @@ func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName 
 	defer a.resourcesMu.Unlock()
 
 	if state.wState != watchStateRequested {
-		a.logger.Warningf("Found a resource timer in a wrong state. Got: %v; Want: %v", state.wState, watchStateRequested)
+		a.logger.Warningf("Unexpected watch state %q for resource %q", state.wState, watchStateRequested)
 		return
 	}
 
