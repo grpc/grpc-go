@@ -41,7 +41,6 @@ import (
 	_ "google.golang.org/grpc/xds" // To register xds resolvers and balancers.
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -118,10 +117,8 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		balancerName = tdURL
 	}
 	serverConfig := &bootstrap.ServerConfig{
-		ServerURI:    balancerName,
-		Creds:        grpc.WithCredentialsBundle(google.NewDefaultCredentials()),
-		TransportAPI: version.TransportV3,
-		NodeProto:    newNode(<-zoneCh, <-ipv6CapableCh),
+		ServerURI: balancerName,
+		Creds:     grpc.WithCredentialsBundle(google.NewDefaultCredentials()),
 	}
 	config := &bootstrap.Config{
 		XDSServer: serverConfig,
@@ -131,6 +128,7 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 				XDSServer: serverConfig,
 			},
 		},
+		NodeProto: newNode(<-zoneCh, <-ipv6CapableCh),
 	}
 
 	// Create singleton xds client with this config. The xds client will be

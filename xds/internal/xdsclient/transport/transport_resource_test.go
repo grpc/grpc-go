@@ -178,11 +178,9 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 
 			// Construct the server config to represent the management server.
 			serverCfg := bootstrap.ServerConfig{
-				ServerURI:    mgmtServer.Address,
-				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-				CredsType:    "insecure",
-				TransportAPI: version.TransportV3,
-				NodeProto:    &v3corepb.Node{Id: uuid.New().String()},
+				ServerURI: mgmtServer.Address,
+				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+				CredsType: "insecure",
 			}
 
 			// Create a new transport.
@@ -200,6 +198,7 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 				},
 				StreamErrorHandler: func(error) {},                                      // No stream error handling.
 				Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.
+				NodeProto:          &v3corepb.Node{Id: uuid.New().String()},
 			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS transport: %v", err)

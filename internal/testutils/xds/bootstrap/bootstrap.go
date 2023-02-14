@@ -30,20 +30,8 @@ import (
 
 var logger = grpclog.Component("internal/xds")
 
-// TransportAPI refers to the API version for xDS transport protocol.
-type TransportAPI int
-
-const (
-	// TransportV2 refers to the v2 xDS transport protocol.
-	TransportV2 TransportAPI = iota
-	// TransportV3 refers to the v3 xDS transport protocol.
-	TransportV3
-)
-
 // Options wraps the parameters used to generate bootstrap configuration.
 type Options struct {
-	// Version is the xDS transport protocol version.
-	Version TransportAPI
 	// NodeID is the node identifier of the gRPC client/server node in the
 	// proxyless service mesh.
 	NodeID string
@@ -119,14 +107,7 @@ func Contents(opts Options) ([]byte, error) {
 		ClientDefaultListenerResourceNameTemplate: opts.ClientDefaultListenerResourceNameTemplate,
 		ServerListenerResourceNameTemplate:        opts.ServerListenerResourceNameTemplate,
 	}
-	switch opts.Version {
-	case TransportV2:
-		// TODO: Add any v2 specific fields.
-	case TransportV3:
-		cfg.XdsServers[0].ServerFeatures = append(cfg.XdsServers[0].ServerFeatures, "xds_v3")
-	default:
-		return nil, fmt.Errorf("unsupported xDS transport protocol version: %v", opts.Version)
-	}
+	cfg.XdsServers[0].ServerFeatures = append(cfg.XdsServers[0].ServerFeatures, "xds_v3")
 
 	auths := make(map[string]authority)
 	if envconfig.XDSFederation {

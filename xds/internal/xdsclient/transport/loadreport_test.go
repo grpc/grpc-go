@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
 
@@ -47,16 +46,15 @@ func (s) TestReportLoad(t *testing.T) {
 	// Construct the server config to represent the management server.
 	nodeProto := &v3corepb.Node{Id: uuid.New().String()}
 	serverCfg := bootstrap.ServerConfig{
-		ServerURI:    mgmtServer.Address,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType:    "insecure",
-		TransportAPI: version.TransportV3,
-		NodeProto:    nodeProto,
+		ServerURI: mgmtServer.Address,
+		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+		CredsType: "insecure",
 	}
 
 	// Create a transport to the fake management server.
 	tr, err := transport.New(transport.Options{
 		ServerCfg:          serverCfg,
+		NodeProto:          nodeProto,
 		UpdateHandler:      func(transport.ResourceUpdate) error { return nil }, // No ADS validation.
 		StreamErrorHandler: func(error) {},                                      // No ADS stream error handling.
 		Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.
