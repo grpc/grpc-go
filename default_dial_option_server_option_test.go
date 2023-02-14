@@ -19,6 +19,7 @@
 package grpc
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -66,12 +67,9 @@ func (s) TestDisableGlobalOptions(t *testing.T) {
 	// Dial with the disable global options dial option. This dial should fail
 	// due to the global dial options with credentials not being picked up due
 	// to global options being disabled.
-	if _, err := Dial("fake", internal.DisableGlobalDialOptions.(func() DialOption)()); err == nil {
-		t.Fatalf("Dialing without a credential did not fail")
-	} else {
-		if !strings.Contains(err.Error(), "no transport security set") {
-			t.Fatalf("Dialing failed with unexpected error: %v", err)
-		}
+	noTSecStr := "no transport security set"
+	if _, err := Dial("fake", internal.DisableGlobalDialOptions.(func() DialOption)()); !strings.Contains(fmt.Sprint(err), noTSecStr) {
+		t.Fatalf("Dialing received unexpected error: %v, want error containing \"%v\"", err, noTSecStr)
 	}
 	internal.ClearGlobalDialOptions()
 }
