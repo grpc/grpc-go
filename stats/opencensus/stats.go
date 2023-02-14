@@ -37,12 +37,6 @@ var logger = grpclog.Component("opencensus-instrumentation")
 
 var canonicalString = internal.CanonicalString.(func(codes.Code) string)
 
-type rpcDataKey struct{}
-
-func setRPCData(ctx context.Context, d *rpcData) context.Context {
-	return context.WithValue(ctx, rpcDataKey{}, d)
-}
-
 var (
 	// bounds separate variable for testing purposes.
 	bytesDistributionBounds  = []float64{1024, 2048, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864, 268435456, 1073741824, 4294967296}
@@ -56,9 +50,9 @@ func removeLeadingSlash(mn string) string {
 	return strings.TrimLeft(mn, "/")
 }
 
-// rpcData is data about the rpc attempt client side, and the overall rpc server
-// side.
-type rpcData struct {
+// metricsInfo is data used for recording metrics about the rpc attempt client
+// side, and the overall rpc server side.
+type metricsInfo struct {
 	// access these counts atomically for hedging in the future
 	// number of messages sent from side (client || server)
 	sentMsgs int64
@@ -79,27 +73,29 @@ type rpcData struct {
 // context). It also populates the gRPC Metadata within the context with any
 // opencensus specific tags set by the application in the context, binary
 // encoded to send across the wire.
-func (csh *clientStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	d := &rpcData{
+func (csh *clientStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCTagInfo) (context.Context, *metricsInfo) {
+	mi := &metricsInfo{
 		startTime: time.Now(),
 		method:    info.FullMethodName,
 	}
+
 	// Populate gRPC Metadata with OpenCensus tag map if set by application.
 	if tm := tag.FromContext(ctx); tm != nil {
 		ctx = stats.SetTags(ctx, tag.Encode(tm))
 	}
-	return setRPCData(ctx, d)
+	return ctx, mi
 }
 
 // statsTagRPC creates a recording object to derive measurements from in the
 // context, scoping the recordings to per RPC server side (scope of the
 // context). It also deserializes the opencensus tags set in the context's gRPC
 // Metadata, and adds a server method tag to the opencensus tags.
-func (ssh *serverStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCTagInfo) context.Context {
-	d := &rpcData{
+func (ssh *serverStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCTagInfo) (context.Context, *metricsInfo) {
+	mi := &metricsInfo{
 		startTime: time.Now(),
 		method:    info.FullMethodName,
 	}
+
 	if tagsBin := stats.Tags(ctx); tagsBin != nil {
 		if tags, err := tag.Decode(tagsBin); err == nil {
 			ctx = tag.NewContext(ctx, tags)
@@ -110,14 +106,14 @@ func (ssh *serverStatsHandler) statsTagRPC(ctx context.Context, info *stats.RPCT
 	// layer won't get this key server method information in the tag map, but
 	// this instrumentation code will function as normal.
 	ctx, _ = tag.New(ctx, tag.Upsert(keyServerMethod, removeLeadingSlash(info.FullMethodName)))
-	return setRPCData(ctx, d)
+	return ctx, mi
 }
 
-func recordRPCData(ctx context.Context, s stats.RPCStats) {
-	d, ok := ctx.Value(rpcDataKey{}).(*rpcData)
-	if !ok {
-		// Shouldn't happen, as gRPC calls TagRPC which populates the rpcData in
+func recordRPCData(ctx context.Context, s stats.RPCStats, mi *metricsInfo) {
+	if mi == nil {
+		// Shouldn't happen, as gRPC calls TagRPC which populates the metricsInfo in
 		// context.
+		logger.Error("ctx passed into stats handler metrics event handling has no metrics data present")
 		return
 	}
 	switch st := s.(type) {
@@ -126,13 +122,13 @@ func recordRPCData(ctx context.Context, s stats.RPCStats) {
 		// measures concern number of messages and bytes for messages. This
 		// aligns with flow control.
 	case *stats.Begin:
-		recordDataBegin(ctx, d, st)
+		recordDataBegin(ctx, mi, st)
 	case *stats.OutPayload:
-		recordDataOutPayload(d, st)
+		recordDataOutPayload(mi, st)
 	case *stats.InPayload:
-		recordDataInPayload(d, st)
+		recordDataInPayload(mi, st)
 	case *stats.End:
-		recordDataEnd(ctx, d, st)
+		recordDataEnd(ctx, mi, st)
 	default:
 		// Shouldn't happen. gRPC calls into stats handler, and will never not
 		// be one of the types above.
@@ -142,40 +138,40 @@ func recordRPCData(ctx context.Context, s stats.RPCStats) {
 
 // recordDataBegin takes a measurement related to the RPC beginning,
 // client/server started RPCs dependent on the caller.
-func recordDataBegin(ctx context.Context, d *rpcData, b *stats.Begin) {
+func recordDataBegin(ctx context.Context, mi *metricsInfo, b *stats.Begin) {
 	if b.Client {
 		ocstats.RecordWithOptions(ctx,
-			ocstats.WithTags(tag.Upsert(keyClientMethod, removeLeadingSlash(d.method))),
+			ocstats.WithTags(tag.Upsert(keyClientMethod, removeLeadingSlash(mi.method))),
 			ocstats.WithMeasurements(clientStartedRPCs.M(1)))
 		return
 	}
 	ocstats.RecordWithOptions(ctx,
-		ocstats.WithTags(tag.Upsert(keyServerMethod, removeLeadingSlash(d.method))),
+		ocstats.WithTags(tag.Upsert(keyServerMethod, removeLeadingSlash(mi.method))),
 		ocstats.WithMeasurements(serverStartedRPCs.M(1)))
 }
 
 // recordDataOutPayload records the length in bytes of outgoing messages and
 // increases total count of sent messages both stored in the RPCs (attempt on
 // client side) context for use in taking measurements at RPC end.
-func recordDataOutPayload(d *rpcData, op *stats.OutPayload) {
-	atomic.AddInt64(&d.sentMsgs, 1)
-	atomic.AddInt64(&d.sentBytes, int64(op.Length))
+func recordDataOutPayload(mi *metricsInfo, op *stats.OutPayload) {
+	atomic.AddInt64(&mi.sentMsgs, 1)
+	atomic.AddInt64(&mi.sentBytes, int64(op.Length))
 }
 
 // recordDataInPayload records the length in bytes of incoming messages and
 // increases total count of sent messages both stored in the RPCs (attempt on
 // client side) context for use in taking measurements at RPC end.
-func recordDataInPayload(d *rpcData, ip *stats.InPayload) {
-	atomic.AddInt64(&d.recvMsgs, 1)
-	atomic.AddInt64(&d.recvBytes, int64(ip.Length))
+func recordDataInPayload(mi *metricsInfo, ip *stats.InPayload) {
+	atomic.AddInt64(&mi.recvMsgs, 1)
+	atomic.AddInt64(&mi.recvBytes, int64(ip.Length))
 }
 
 // recordDataEnd takes per RPC measurements derived from information derived
 // from the lifetime of the RPC (RPC attempt client side).
-func recordDataEnd(ctx context.Context, d *rpcData, e *stats.End) {
+func recordDataEnd(ctx context.Context, mi *metricsInfo, e *stats.End) {
 	// latency bounds for distribution data (speced millisecond bounds) have
 	// fractions, thus need a float.
-	latency := float64(time.Since(d.startTime)) / float64(time.Millisecond)
+	latency := float64(time.Since(mi.startTime)) / float64(time.Millisecond)
 	var st string
 	if e.Error != nil {
 		s, _ := status.FromError(e.Error)
@@ -189,13 +185,13 @@ func recordDataEnd(ctx context.Context, d *rpcData, e *stats.End) {
 	if e.Client {
 		ocstats.RecordWithOptions(ctx,
 			ocstats.WithTags(
-				tag.Upsert(keyClientMethod, removeLeadingSlash(d.method)),
+				tag.Upsert(keyClientMethod, removeLeadingSlash(mi.method)),
 				tag.Upsert(keyClientStatus, st)),
 			ocstats.WithMeasurements(
-				clientSentBytesPerRPC.M(atomic.LoadInt64(&d.sentBytes)),
-				clientSentMessagesPerRPC.M(atomic.LoadInt64(&d.sentMsgs)),
-				clientReceivedMessagesPerRPC.M(atomic.LoadInt64(&d.recvMsgs)),
-				clientReceivedBytesPerRPC.M(atomic.LoadInt64(&d.recvBytes)),
+				clientSentBytesPerRPC.M(atomic.LoadInt64(&mi.sentBytes)),
+				clientSentMessagesPerRPC.M(atomic.LoadInt64(&mi.sentMsgs)),
+				clientReceivedMessagesPerRPC.M(atomic.LoadInt64(&mi.recvMsgs)),
+				clientReceivedBytesPerRPC.M(atomic.LoadInt64(&mi.recvBytes)),
 				clientRoundtripLatency.M(latency),
 				clientServerLatency.M(latency),
 			))
@@ -203,13 +199,13 @@ func recordDataEnd(ctx context.Context, d *rpcData, e *stats.End) {
 	}
 	ocstats.RecordWithOptions(ctx,
 		ocstats.WithTags(
-			tag.Upsert(keyServerMethod, removeLeadingSlash(d.method)),
+			tag.Upsert(keyServerMethod, removeLeadingSlash(mi.method)),
 			tag.Upsert(keyServerStatus, st),
 		),
 		ocstats.WithMeasurements(
-			serverSentBytesPerRPC.M(atomic.LoadInt64(&d.sentBytes)),
-			serverSentMessagesPerRPC.M(atomic.LoadInt64(&d.sentMsgs)),
-			serverReceivedMessagesPerRPC.M(atomic.LoadInt64(&d.recvMsgs)),
-			serverReceivedBytesPerRPC.M(atomic.LoadInt64(&d.recvBytes)),
+			serverSentBytesPerRPC.M(atomic.LoadInt64(&mi.sentBytes)),
+			serverSentMessagesPerRPC.M(atomic.LoadInt64(&mi.sentMsgs)),
+			serverReceivedMessagesPerRPC.M(atomic.LoadInt64(&mi.recvMsgs)),
+			serverReceivedBytesPerRPC.M(atomic.LoadInt64(&mi.recvBytes)),
 			serverLatency.M(latency)))
 }
