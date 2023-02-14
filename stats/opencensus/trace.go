@@ -24,7 +24,6 @@ import (
 	"go.opencensus.io/trace"
 	"go.opencensus.io/trace/propagation"
 
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/stats"
 	"google.golang.org/grpc/status"
 )
@@ -49,7 +48,7 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 	_, span := trace.StartSpan(ctx, mn, trace.WithSampler(csh.to.TS), trace.WithSpanKind(trace.SpanKindClient))
 
 	tcBin := propagation.Binary(span.SpanContext())
-	return metadata.AppendToOutgoingContext(ctx, traceContextMDKey, string(tcBin)), &traceInfo{
+	return stats.SetTrace(ctx, tcBin), &traceInfo{
 		span:         span,
 		countSentMsg: 0, // msg events scoped to scope of context, per attempt client side
 		countRecvMsg: 0,
@@ -61,28 +60,9 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 // if present.
 func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
 	mn := strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
-	var sc trace.SpanContext
-	// gotSpanContext represents if after all the logic to get span context out
-	// of context passed in, whether there was a span context which represents
-	// the future created server span's parent or not.
-	var gotSpanContext bool
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		// Shouldn't happen, but if does just notify caller through error log,
-		// and create a span without remote parent.
-		logger.Error("server side context passed into stats handler has no metadata")
-	} else {
-		tcMDVal := md[traceContextMDKey]
-		if len(tcMDVal) != 0 {
-			tcBin := []byte(tcMDVal[0])
-			// Only if this function gets through all of these operations and the
-			// binary metadata value successfully unmarshals means the server
-			// received a span context, meaning this created server span should have
-			// a remote parent corresponding to whatever was received off the wire
-			// and unmarshaled into this span context.
-			sc, gotSpanContext = propagation.FromBinary(tcBin)
-		}
-	}
+
+	tcBin := stats.Trace(ctx)
+	sc, gotSpanContext := propagation.FromBinary(tcBin)
 
 	var span *trace.Span
 	if gotSpanContext {
