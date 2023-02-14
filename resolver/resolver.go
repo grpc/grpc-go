@@ -49,7 +49,7 @@ var (
 // an init() function), and is not thread-safe. If multiple Resolvers are
 // registered with the same name, the one registered last will take effect.
 func Register(b Builder) {
-	m[strings.ToLower(b.Scheme())] = b
+	m[b.Scheme()] = b
 }
 
 // Get returns the resolver builder registered with the given scheme.
@@ -290,10 +290,10 @@ type Builder interface {
 	// gRPC dial calls Build synchronously, and fails if the returned error is
 	// not nil.
 	Build(target Target, cc ClientConn, opts BuildOptions) (Resolver, error)
-	// Scheme returns the scheme supported by this resolver.
-	// Scheme is defined at https://github.com/grpc/grpc/blob/master/doc/naming.md.
-	// The returned string should not contain upper-case characters, but will be
-	// converted by gRPC at runtime if needed.
+	// Scheme returns the scheme supported by this resolver.  Scheme is defined
+	// at https://github.com/grpc/grpc/blob/master/doc/naming.md.  The returned
+	// string should not contain uppercase characters, as they will not match
+	// the parsed target's scheme as defined in RFC 3986.
 	Scheme() string
 }
 

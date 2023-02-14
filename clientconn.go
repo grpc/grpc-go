@@ -1532,7 +1532,7 @@ var ErrClientConnTimeout = errors.New("grpc: timed out when dialing")
 // performing proper RFC3986 behavior).
 func (cc *ClientConn) getResolver(scheme string) resolver.Builder {
 	for _, rb := range cc.dopts.resolvers {
-		if scheme == strings.ToLower(rb.Scheme()) {
+		if scheme == rb.Scheme() {
 			return rb
 		}
 	}

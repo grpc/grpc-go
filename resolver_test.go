@@ -38,26 +38,17 @@ func (w *wrapResolverBuilder) Scheme() string {
 }
 
 func init() {
-	resolver.Register(&wrapResolverBuilder{Builder: resolver.Get("dns"), scheme: "caseTEST"})
-	resolver.Register(&wrapResolverBuilder{Builder: resolver.Get("dns"), scheme: "caseTest2"})
-	resolver.Register(&wrapResolverBuilder{Builder: resolver.Get("passthrough"), scheme: "caSetest2"})
+	resolver.Register(&wrapResolverBuilder{Builder: resolver.Get("passthrough"), scheme: "casetest"})
+	resolver.Register(&wrapResolverBuilder{Builder: resolver.Get("dns"), scheme: "caseTest"})
 }
 
 func (s) TestResolverCaseSensitivity(t *testing.T) {
-	// This should find the "caseTEST" resolver, which is "dns"
-	target := "casetest:///localhost:1234"
-	cc, err := Dial(target, WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		t.Fatalf("Unexpected Dial(%q) error: %v", target, err)
-	}
-	cc.Close()
-
-	// This should find the "caSetest2" resolver instead of the "caseTest2"
-	// resolver, because it was registered later.  "caSetest2" is "passthrough"
-	// and the overwritten one is "dns".  With "passthrough" the dialer should
-	// see the target's address directly, but "dns" would be converted into a
-	// loopback IP (v4 or v6) address.
-	target = "caseTest2:///localhost:1234"
+	// This should find the "casetest" resolver instead of the "caseTest"
+	// resolver, even though the latter was registered later.  "casetest" is
+	// "passthrough" and "caseTest" is "dns".  With "passthrough" the dialer
+	// should see the target's address directly, but "dns" would be converted
+	// into a loopback IP (v4 or v6) address.
+	target := "caseTest:///localhost:1234"
 	addrCh := make(chan string, 1)
 	customDialer := func(ctx context.Context, addr string) (net.Conn, error) {
 		select {
@@ -67,7 +58,7 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 		return nil, fmt.Errorf("not dialing with custom dialer")
 	}
 
-	cc, err = Dial(target, WithContextDialer(customDialer), WithTransportCredentials(insecure.NewCredentials()))
+	cc, err := Dial(target, WithContextDialer(customDialer), WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Unexpected Dial(%q) error: %v", target, err)
 	}
@@ -84,22 +75,19 @@ func (s) TestResolverCaseSensitivity(t *testing.T) {
 	default:
 	}
 
-	res := &wrapResolverBuilder{Builder: resolver.Get("dns"), scheme: "CaSetest2"}
-	// This should find the injected resolver instead of the "caSetest2"
-	// globally-registered resolver.  Since it is "dns" instead of passthrough,
-	// we can validate by checking for an address that has been resolved
-	// (i.e. is not "localhost:port").
-
-	// WithDisableServiceConfig disables TXT lookups, which can hang for
-	// "localhost".
-	cc, err = Dial(target, WithContextDialer(customDialer), WithResolvers(res),
-		WithTransportCredentials(insecure.NewCredentials()), WithDisableServiceConfig())
+	res := &wrapResolverBuilder{Builder: resolver.Get("dns"), scheme: "caseTest2"}
+	// This should not find the injected resolver due to the case not matching.
+	// This results in "passthrough" being used with the address as the whole
+	// target.
+	target = "caseTest2:///localhost:1234"
+	cc, err = Dial(target, WithContextDialer(customDialer), WithResolvers(res), WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Unexpected Dial(%q) error: %v", target, err)
 	}
 	cc.Connect()
-	defer cc.Close()
-	if got, wantNot := <-addrCh, "localhost:1234"; got == wantNot {
-		t.Fatalf("Dialer got address %q; wanted something other than %q", got, wantNot)
+	if got, want := <-addrCh, target; got != want {
+		cc.Close()
+		t.Fatalf("Dialer got address %q; wanted %q", got, want)
 	}
+	cc.Close()
 }
