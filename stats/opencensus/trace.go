@@ -35,11 +35,6 @@ type traceInfo struct {
 	countRecvMsg uint32
 }
 
-// used to attach data client side and deserialize server side
-// traceContextMDKey is the speced key for gRPC Metadata that carries binary
-// serialized traceContext.
-const traceContextMDKey = "grpc-trace-bin"
-
 // traceTagRPC populates context with a new span, and serializes information
 // about this span into gRPC Metadata.
 func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
@@ -61,11 +56,8 @@ func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTa
 func (ssh *serverStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
 	mn := strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
 
-	tcBin := stats.Trace(ctx)
-	sc, gotSpanContext := propagation.FromBinary(tcBin)
-
 	var span *trace.Span
-	if gotSpanContext {
+	if sc, ok := propagation.FromBinary(stats.Trace(ctx)); ok {
 		// Returned context is ignored because will populate context with data
 		// that wraps the span instead.
 		_, span = trace.StartSpanWithRemoteParent(ctx, mn, sc, trace.WithSpanKind(trace.SpanKindServer), trace.WithSampler(ssh.to.TS))
