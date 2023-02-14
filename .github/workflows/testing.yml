@@ -64,10 +64,10 @@ jobs:
             goarch: arm64
 
           - type: tests
-            goversion: 1.19
+            goversion: '1.19'
 
           - type: tests
-            goversion: 1.18
+            goversion: '1.18'
 
           - type: extras
             goversion: '1.20'
