@@ -12,7 +12,7 @@ Server requires the following roles on an authenticated user to authorise usage 
 - `UnaryEcho` requires the role `UNARY_ECHO:W`
 - `BidirectionalStreamingEcho` requires the role `STREAM_ECHO:RW`
 
-Upon recieving a request, the server first checks that a token was supplied, decodes it and checks that a secret is correctly set (hardcoded to `super-secret` for simplicity, this should use a proper ID provider in production).
+Upon receiving a request, the server first checks that a token was supplied, decodes it and checks that a secret is correctly set (hardcoded to `super-secret` for simplicity, this should use a proper ID provider in production).
 
 If the above is successful, it uses the username in the token to set appropriate roles (hardcoded to the 2 required roles above if the username matches `super-user` for simplicity, these roles should be supplied externally as well).
 
