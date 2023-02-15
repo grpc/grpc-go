@@ -194,6 +194,23 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 			wantUpdate: emptyUpdate,
 			wantErr:    true,
 		},
+		{
+			name: "aggregate-v3-empty-clusters",
+			cluster: &v3clusterpb.Cluster{
+				Name: clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
+					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
+						Name: "envoy.clusters.aggregate",
+						TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{
+							Clusters: []string{},
+						}),
+					},
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			},
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
+		},
 	}
 
 	oldAggregateAndDNSSupportEnv := envconfig.XDSAggregateAndDNS
