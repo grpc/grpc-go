@@ -75,13 +75,13 @@ func setupAuthorityWithMgmtServer(ctx context.Context, t *testing.T, opts e2e.Ma
 
 	a, err := newAuthority(authorityArgs{
 		serverCfg: &bootstrap.ServerConfig{
-			ServerURI:    mgmtServer.Address,
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			CredsType:    "insecure",
-			TransportAPI: version.TransportV3,
-			NodeProto:    &v3corepb.Node{Id: nodeID},
+			ServerURI: mgmtServer.Address,
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			CredsType: "insecure",
 		},
-		bootstrapCfg:       nil,
+		bootstrapCfg: &bootstrap.Config{
+			NodeProto: &v3corepb.Node{Id: nodeID},
+		},
 		serializer:         newCallbackSerializer(ctx),
 		resourceTypeGetter: rtRegistry.get,
 		watchExpiryTimeout: defaultTestWatchExpiryTimeout,
@@ -104,13 +104,13 @@ func (s) TestResourceStateTransitionWhenWatchResourceIsInvoked(t *testing.T) {
 	nodeID := uuid.New().String()
 	a, err := newAuthority(authorityArgs{
 		serverCfg: &bootstrap.ServerConfig{
-			ServerURI:    "mgmtServer'sAddress",
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			CredsType:    "insecure",
-			TransportAPI: version.TransportV3,
-			NodeProto:    &v3corepb.Node{Id: nodeID},
+			ServerURI: "mgmtServer'sAddress",
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			CredsType: "insecure",
 		},
-		bootstrapCfg:       nil,
+		bootstrapCfg: &bootstrap.Config{
+			NodeProto: &v3corepb.Node{Id: nodeID},
+		},
 		serializer:         cs,
 		resourceTypeGetter: rtRegistry.get,
 		watchExpiryTimeout: defaultTestWatchExpiryTimeout,
