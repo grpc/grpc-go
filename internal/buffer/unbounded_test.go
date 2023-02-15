@@ -125,6 +125,7 @@ func (s) TestClose(t *testing.T) {
 	ub.Close()
 	ub.Put(1)
 	ub.Load()
+	ub.Close()
 	if v, ok := <-ub.Get(); ok {
 		t.Errorf("Unbounded.Get() = %v, want closed channel", v)
 	}
