@@ -195,7 +195,22 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 			wantErr:    true,
 		},
 		{
-			name: "aggregate-v3-empty-clusters",
+			name: "aggregate-nil-clusters",
+			cluster: &v3clusterpb.Cluster{
+				Name: clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
+					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
+						Name:        "envoy.clusters.aggregate",
+						TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{}),
+					},
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			},
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
+		},
+		{
+			name: "aggregate-empty-clusters",
 			cluster: &v3clusterpb.Cluster{
 				Name: clusterName,
 				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{

@@ -178,7 +178,7 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 			return ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 		}
 		if len(clusters.Clusters) == 0 {
-			return ClusterUpdate{}, fmt.Errorf("aggregate cluster has clusterConfig with empty Clusters field in response: %+v", cluster)
+			return ClusterUpdate{}, fmt.Errorf("xds: aggregate cluster has empty clusters field in response: %+v", cluster)
 		}
 		ret.ClusterType = ClusterTypeAggregate
 		ret.PrioritizedClusterNames = clusters.Clusters
