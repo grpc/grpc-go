@@ -40,7 +40,6 @@ func newControlPlane() (*controlPlane, error) {
 
 	nodeID := uuid.New().String()
 	bootstrapContentBytes, err := bootstrap.Contents(bootstrap.Options{
-		Version:                            bootstrap.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          server.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,

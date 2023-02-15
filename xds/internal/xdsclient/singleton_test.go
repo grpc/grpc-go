@@ -36,7 +36,6 @@ func (s) TestClientNewSingleton(t *testing.T) {
 	cleanup, err := bootstrap.CreateFile(bootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: "non-existent-server-address",
-		Version:   bootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)

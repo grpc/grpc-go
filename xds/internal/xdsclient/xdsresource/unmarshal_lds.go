@@ -30,7 +30,6 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
 	"google.golang.org/grpc/xds/internal/httpfilter"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -43,14 +42,12 @@ func unmarshalListenerResource(r *anypb.Any) (string, ListenerUpdate, error) {
 	if !IsListenerResource(r.GetTypeUrl()) {
 		return "", ListenerUpdate{}, fmt.Errorf("unexpected resource type: %q ", r.GetTypeUrl())
 	}
-	// TODO: Pass version.TransportAPI instead of relying upon the type URL
-	v2 := r.GetTypeUrl() == version.V2ListenerURL
 	lis := &v3listenerpb.Listener{}
 	if err := proto.Unmarshal(r.GetValue(), lis); err != nil {
 		return "", ListenerUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 
-	lu, err := processListener(lis, v2)
+	lu, err := processListener(lis)
 	if err != nil {
 		return lis.GetName(), ListenerUpdate{}, err
 	}
@@ -58,16 +55,16 @@ func unmarshalListenerResource(r *anypb.Any) (string, ListenerUpdate, error) {
 	return lis.GetName(), *lu, nil
 }
 
-func processListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUpdate, error) {
+func processListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
 	if lis.GetApiListener() != nil {
-		return processClientSideListener(lis, v2)
+		return processClientSideListener(lis)
 	}
 	return processServerSideListener(lis)
 }
 
 // processClientSideListener checks if the provided Listener proto meets
 // the expected criteria. If so, it returns a non-empty routeConfigName.
-func processClientSideListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUpdate, error) {
+func processClientSideListener(lis *v3listenerpb.Listener) (*ListenerUpdate, error) {
 	update := &ListenerUpdate{}
 
 	apiLisAny := lis.GetApiListener().GetApiListener()
@@ -99,7 +96,7 @@ func processClientSideListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUp
 		}
 		update.RouteConfigName = name
 	case *v3httppb.HttpConnectionManager_RouteConfig:
-		routeU, err := generateRDSUpdateFromRouteConfiguration(apiLis.GetRouteConfig(), v2)
+		routeU, err := generateRDSUpdateFromRouteConfiguration(apiLis.GetRouteConfig())
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse inline RDS resp: %v", err)
 		}
@@ -108,10 +105,6 @@ func processClientSideListener(lis *v3listenerpb.Listener, v2 bool) (*ListenerUp
 		return nil, fmt.Errorf("no RouteSpecifier: %+v", apiLis)
 	default:
 		return nil, fmt.Errorf("unsupported type %T for RouteSpecifier", apiLis.RouteSpecifier)
-	}
-
-	if v2 {
-		return update, nil
 	}
 
 	// The following checks and fields only apply to xDS protocol versions v3+.

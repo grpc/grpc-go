@@ -161,6 +161,9 @@ type Options struct {
 	Backoff func(retries int) time.Duration
 	// Logger does logging with a prefix.
 	Logger *grpclog.PrefixLogger
+	// NodeProto contains the Node proto to be used in xDS requests. This will be
+	// of type *v3corepb.Node.
+	NodeProto *v3corepb.Node
 }
 
 // For overriding in unit tests.
@@ -179,11 +182,6 @@ func New(opts Options) (*Transport, error) {
 		return nil, errors.New("missing stream error handler when creating a new transport")
 	case opts.OnSendHandler == nil:
 		return nil, errors.New("missing on send handler when creating a new transport")
-	}
-
-	node, ok := opts.ServerCfg.NodeProto.(*v3corepb.Node)
-	if !ok {
-		return nil, fmt.Errorf("unexpected type %T for NodeProto, want %T", opts.ServerCfg.NodeProto, &v3corepb.Node{})
 	}
 
 	// Dial the xDS management with the passed in credentials.
@@ -214,7 +212,7 @@ func New(opts Options) (*Transport, error) {
 		onSendHandler:  opts.OnSendHandler,
 		lrsStore:       load.NewStore(),
 		backoff:        boff,
-		nodeProto:      node,
+		nodeProto:      opts.NodeProto,
 		logger:         opts.Logger,
 
 		adsStreamCh:     make(chan adsStream, 1),

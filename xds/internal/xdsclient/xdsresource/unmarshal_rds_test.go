@@ -37,8 +37,6 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/durationpb"
 
-	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	v2routepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/route"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	rpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -778,7 +776,7 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			envconfig.XDSRLS = test.rlsEnabled
-			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc, false)
+			gotUpdate, gotError := generateRDSUpdateFromRouteConfiguration(test.rc)
 			if (gotError != nil) != test.wantError ||
 				!cmp.Equal(gotUpdate, test.wantUpdate, cmpopts.EquateEmpty(),
 					cmp.Transformer("FilterConfig", func(fc httpfilter.FilterConfig) string {
@@ -836,45 +834,11 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 		ldsTarget                = "lds.target.good:1111"
 		uninterestingDomain      = "uninteresting.domain"
 		uninterestingClusterName = "uninterestingClusterName"
-		v2RouteConfigName        = "v2RouteConfig"
 		v3RouteConfigName        = "v3RouteConfig"
-		v2ClusterName            = "v2Cluster"
 		v3ClusterName            = "v3Cluster"
 	)
 
 	var (
-		v2VirtualHost = []*v2routepb.VirtualHost{
-			{
-				Domains: []string{uninterestingDomain},
-				Routes: []*v2routepb.Route{
-					{
-						Match: &v2routepb.RouteMatch{PathSpecifier: &v2routepb.RouteMatch_Prefix{Prefix: ""}},
-						Action: &v2routepb.Route_Route{
-							Route: &v2routepb.RouteAction{
-								ClusterSpecifier: &v2routepb.RouteAction_Cluster{Cluster: uninterestingClusterName},
-							},
-						},
-					},
-				},
-			},
-			{
-				Domains: []string{ldsTarget},
-				Routes: []*v2routepb.Route{
-					{
-						Match: &v2routepb.RouteMatch{PathSpecifier: &v2routepb.RouteMatch_Prefix{Prefix: ""}},
-						Action: &v2routepb.Route_Route{
-							Route: &v2routepb.RouteAction{
-								ClusterSpecifier: &v2routepb.RouteAction_Cluster{Cluster: v2ClusterName},
-							},
-						},
-					},
-				},
-			},
-		}
-		v2RouteConfig = testutils.MarshalAny(&v2xdspb.RouteConfiguration{
-			Name:         v2RouteConfigName,
-			VirtualHosts: v2VirtualHost,
-		})
 		v3VirtualHost = []*v3routepb.VirtualHost{
 			{
 				Domains: []string{uninterestingDomain},
@@ -928,50 +892,6 @@ func (s) TestUnmarshalRouteConfig(t *testing.T) {
 				Value:   []byte{1, 2, 3, 4},
 			},
 			wantErr: true,
-		},
-		{
-			name:     "v2 routeConfig resource",
-			resource: v2RouteConfig,
-			wantName: v2RouteConfigName,
-			wantUpdate: RouteConfigUpdate{
-				VirtualHosts: []*VirtualHost{
-					{
-						Domains: []string{uninterestingDomain},
-						Routes: []*Route{{Prefix: newStringP(""),
-							WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
-							ActionType:       RouteActionRoute}},
-					},
-					{
-						Domains: []string{ldsTarget},
-						Routes: []*Route{{Prefix: newStringP(""),
-							WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}},
-							ActionType:       RouteActionRoute}},
-					},
-				},
-				Raw: v2RouteConfig,
-			},
-		},
-		{
-			name:     "v2 routeConfig resource wrapped",
-			resource: testutils.MarshalAny(&v2xdspb.Resource{Resource: v2RouteConfig}),
-			wantName: v2RouteConfigName,
-			wantUpdate: RouteConfigUpdate{
-				VirtualHosts: []*VirtualHost{
-					{
-						Domains: []string{uninterestingDomain},
-						Routes: []*Route{{Prefix: newStringP(""),
-							WeightedClusters: map[string]WeightedCluster{uninterestingClusterName: {Weight: 1}},
-							ActionType:       RouteActionRoute}},
-					},
-					{
-						Domains: []string{ldsTarget},
-						Routes: []*Route{{Prefix: newStringP(""),
-							WeightedClusters: map[string]WeightedCluster{v2ClusterName: {Weight: 1}},
-							ActionType:       RouteActionRoute}},
-					},
-				},
-				Raw: v2RouteConfig,
-			},
 		},
 		{
 			name:     "v3 routeConfig resource",
@@ -1608,7 +1528,7 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 	defer func() { envconfig.XDSRingHash = oldRingHashSupport }()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, _, err := routesProtoToSlice(tt.routes, nil, false)
+			got, _, err := routesProtoToSlice(tt.routes, nil)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("routesProtoToSlice() error = %v, wantErr %v", err, tt.wantErr)
 			}

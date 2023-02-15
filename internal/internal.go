@@ -29,9 +29,6 @@ import (
 )
 
 var (
-	// DialWithGlobalOptions dials with a knob on whether to disable global dial
-	// options (set via AddGlobalDialOptions).
-	DialWithGlobalOptions interface{} // func (context.Context, string, bool, ...DialOption) (*ClientConn, error)
 	// WithHealthCheckFunc is set by dialoptions.go
 	WithHealthCheckFunc interface{} // func (HealthChecker) DialOption
 	// HealthCheckFunc is used to provide client-side LB channel health checking
@@ -61,6 +58,9 @@ var (
 	// gRPC server. An xDS-enabled server needs to know what type of credentials
 	// is configured on the underlying gRPC server. This is set by server.go.
 	GetServerCredentials interface{} // func (*grpc.Server) credentials.TransportCredentials
+	// CanonicalString returns the canonical string of the code defined here:
+	// https://github.com/grpc/grpc/blob/master/doc/statuscodes.md.
+	CanonicalString interface{} // func (codes.Code) string
 	// DrainServerTransports initiates a graceful close of existing connections
 	// on a gRPC server accepted on the provided listener address. An
 	// xDS-enabled server invokes this method on a grpc.Server when a particular
@@ -77,6 +77,10 @@ var (
 	// globally for newly created client channels. The priority will be: 1.
 	// user-provided; 2. this method; 3. default values.
 	AddGlobalDialOptions interface{} // func(opt ...DialOption)
+	// DisableGlobalDialOptions returns a DialOption that prevents the
+	// ClientConn from applying the global DialOptions (set via
+	// AddGlobalDialOptions).
+	DisableGlobalDialOptions interface{} // func() grpc.DialOption
 	// ClearGlobalDialOptions clears the array of extra DialOption. This
 	// method is useful in testing and benchmarking.
 	ClearGlobalDialOptions func()

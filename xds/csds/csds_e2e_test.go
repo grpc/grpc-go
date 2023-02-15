@@ -125,7 +125,6 @@ func (s) TestCSDS(t *testing.T) {
 
 	// Create a bootstrap file in a temporary directory.
 	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
-		Version:   bootstrap.TransportV3,
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
 	})

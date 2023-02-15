@@ -39,7 +39,6 @@ import (
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
@@ -586,11 +585,10 @@ func (s) TestLDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
 
 	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
-			ServerURI:    mgmtServer.Address,
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			TransportAPI: version.TransportV3,
-			NodeProto:    &v3corepb.Node{},
+			ServerURI: mgmtServer.Address,
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 		},
+		NodeProto: &v3corepb.Node{},
 	}, defaultTestWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
@@ -633,11 +631,10 @@ func (s) TestLDSWatch_ValidResponseCancelsExpiryTimerBehavior(t *testing.T) {
 	nodeID := uuid.New().String()
 	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
-			ServerURI:    mgmtServer.Address,
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			TransportAPI: version.TransportV3,
-			NodeProto:    &v3corepb.Node{Id: nodeID},
+			ServerURI: mgmtServer.Address,
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 		},
+		NodeProto: &v3corepb.Node{Id: nodeID},
 	}, defaultTestWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
