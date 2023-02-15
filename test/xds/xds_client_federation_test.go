@@ -74,7 +74,6 @@ func (s) TestClientSideFederation(t *testing.T) {
 	// Create a bootstrap file in a temporary directory.
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		Version:                            bootstrap.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          serverDefaultAuth.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
@@ -220,7 +219,6 @@ func (s) TestFederation_UnknownAuthorityInReceivedResponse(t *testing.T) {
 
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		Version:                            bootstrap.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          mgmtServer.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,

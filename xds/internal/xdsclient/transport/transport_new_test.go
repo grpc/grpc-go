@@ -25,9 +25,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
 
@@ -54,8 +52,9 @@ func (s) TestNew(t *testing.T) {
 			opts: transport.Options{ServerCfg: bootstrap.ServerConfig{
 				ServerURI: "server-address",
 				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			},
 				NodeProto: &v3corepb.Node{},
-			}},
+			},
 			wantErrStr: "missing update handler when creating a new transport",
 		},
 		{
@@ -64,35 +63,20 @@ func (s) TestNew(t *testing.T) {
 				ServerCfg: bootstrap.ServerConfig{
 					ServerURI: "server-address",
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-					NodeProto: &v3corepb.Node{},
 				},
+				NodeProto:     &v3corepb.Node{},
 				UpdateHandler: func(transport.ResourceUpdate) error { return nil },
 			},
 			wantErrStr: "missing stream error handler when creating a new transport",
 		},
 		{
-			name: "node proto version mismatch for v3",
-			opts: transport.Options{
-				ServerCfg: bootstrap.ServerConfig{
-					ServerURI:    "server-address",
-					Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-					NodeProto:    &v2corepb.Node{},
-					TransportAPI: version.TransportV3,
-				},
-				UpdateHandler:      func(transport.ResourceUpdate) error { return nil },
-				StreamErrorHandler: func(error) {},
-			},
-			wantErrStr: "unexpected type *core.Node for NodeProto, want *corev3.Node",
-		},
-		{
 			name: "happy case",
 			opts: transport.Options{
 				ServerCfg: bootstrap.ServerConfig{
-					ServerURI:    "server-address",
-					Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-					NodeProto:    &v3corepb.Node{},
-					TransportAPI: version.TransportV3,
+					ServerURI: "server-address",
+					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 				},
+				NodeProto:          &v3corepb.Node{},
 				UpdateHandler:      func(transport.ResourceUpdate) error { return nil },
 				StreamErrorHandler: func(error) {},
 			},

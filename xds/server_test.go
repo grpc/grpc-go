@@ -326,8 +326,8 @@ func setupOverrides() (*fakeGRPCServer, *testutils.Channel, func()) {
 			XDSServer: &bootstrap.ServerConfig{
 				ServerURI: "dummyBalancer",
 				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				NodeProto: xdstestutils.EmptyNodeProtoV3,
 			},
+			NodeProto:                          xdstestutils.EmptyNodeProtoV3,
 			ServerListenerResourceNameTemplate: testServerListenerResourceNameTemplate,
 			CertProviderConfigs:                certProviderConfigs,
 		})
@@ -358,8 +358,8 @@ func setupOverridesForXDSCreds(includeCertProviderCfg bool) (*testutils.Channel,
 			XDSServer: &bootstrap.ServerConfig{
 				ServerURI: "dummyBalancer",
 				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				NodeProto: xdstestutils.EmptyNodeProtoV3,
 			},
+			NodeProto:                          xdstestutils.EmptyNodeProtoV3,
 			ServerListenerResourceNameTemplate: testServerListenerResourceNameTemplate,
 		}
 		if includeCertProviderCfg {
@@ -607,8 +607,8 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 				XDSServer: &bootstrap.ServerConfig{
 					ServerURI: "dummyBalancer",
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-					NodeProto: xdstestutils.EmptyNodeProtoV3,
 				},
+				NodeProto:                          xdstestutils.EmptyNodeProtoV3,
 				ServerListenerResourceNameTemplate: testServerListenerResourceNameTemplate,
 			},
 		},
@@ -618,8 +618,8 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 				XDSServer: &bootstrap.ServerConfig{
 					ServerURI: "dummyBalancer",
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-					NodeProto: xdstestutils.EmptyNodeProtoV3,
 				},
+				NodeProto:           xdstestutils.EmptyNodeProtoV3,
 				CertProviderConfigs: certProviderConfigs,
 			},
 		},

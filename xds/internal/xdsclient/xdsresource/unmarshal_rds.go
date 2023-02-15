@@ -29,7 +29,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/xds/internal/clusterspecifier"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
@@ -47,9 +46,7 @@ func unmarshalRouteConfigResource(r *anypb.Any) (string, RouteConfigUpdate, erro
 		return "", RouteConfigUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 	}
 
-	// TODO: Pass version.TransportAPI instead of relying upon the type URL
-	v2 := r.GetTypeUrl() == version.V2RouteConfigURL
-	u, err := generateRDSUpdateFromRouteConfiguration(rc, v2)
+	u, err := generateRDSUpdateFromRouteConfiguration(rc)
 	if err != nil {
 		return rc.GetName(), RouteConfigUpdate{}, err
 	}
@@ -73,7 +70,7 @@ func unmarshalRouteConfigResource(r *anypb.Any) (string, RouteConfigUpdate, erro
 // field must be empty and whose route field must be set.  Inside that route
 // message, the cluster field will contain the clusterName or weighted clusters
 // we are looking for.
-func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, v2 bool) (RouteConfigUpdate, error) {
+func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration) (RouteConfigUpdate, error) {
 	vhs := make([]*VirtualHost, 0, len(rc.GetVirtualHosts()))
 	csps := make(map[string]clusterspecifier.BalancerConfig)
 	if envconfig.XDSRLS {
@@ -88,7 +85,7 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, v
 	// ignored and not emitted by the xdsclient.
 	var cspNames = make(map[string]bool)
 	for _, vh := range rc.GetVirtualHosts() {
-		routes, cspNs, err := routesProtoToSlice(vh.Routes, csps, v2)
+		routes, cspNs, err := routesProtoToSlice(vh.Routes, csps)
 		if err != nil {
 			return RouteConfigUpdate{}, fmt.Errorf("received route is invalid: %v", err)
 		}
@@ -104,13 +101,11 @@ func generateRDSUpdateFromRouteConfiguration(rc *v3routepb.RouteConfiguration, v
 			Routes:      routes,
 			RetryConfig: rc,
 		}
-		if !v2 {
-			cfgs, err := processHTTPFilterOverrides(vh.GetTypedPerFilterConfig())
-			if err != nil {
-				return RouteConfigUpdate{}, fmt.Errorf("virtual host %+v: %v", vh, err)
-			}
-			vhOut.HTTPFilterConfigOverride = cfgs
+		cfgs, err := processHTTPFilterOverrides(vh.GetTypedPerFilterConfig())
+		if err != nil {
+			return RouteConfigUpdate{}, fmt.Errorf("virtual host %+v: %v", vh, err)
 		}
+		vhOut.HTTPFilterConfigOverride = cfgs
 		vhs = append(vhs, vhOut)
 	}
 
@@ -213,7 +208,7 @@ func generateRetryConfig(rp *v3routepb.RetryPolicy) (*RetryConfig, error) {
 	return cfg, nil
 }
 
-func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecifier.BalancerConfig, v2 bool) ([]*Route, map[string]bool, error) {
+func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecifier.BalancerConfig) ([]*Route, map[string]bool, error) {
 	var routesRet []*Route
 	var cspNames = make(map[string]bool)
 	for _, r := range routes {
@@ -325,13 +320,11 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 						continue
 					}
 					wc := WeightedCluster{Weight: w}
-					if !v2 {
-						cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
-						if err != nil {
-							return nil, nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
-						}
-						wc.HTTPFilterConfigOverride = cfgs
+					cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
+					if err != nil {
+						return nil, nil, fmt.Errorf("route %+v, action %+v: %v", r, a, err)
 					}
+					wc.HTTPFilterConfigOverride = cfgs
 					route.WeightedClusters[c.GetName()] = wc
 					totalWeight += w
 				}
@@ -409,13 +402,11 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 			route.ActionType = RouteActionUnsupported
 		}
 
-		if !v2 {
-			cfgs, err := processHTTPFilterOverrides(r.GetTypedPerFilterConfig())
-			if err != nil {
-				return nil, nil, fmt.Errorf("route %+v: %v", r, err)
-			}
-			route.HTTPFilterConfigOverride = cfgs
+		cfgs, err := processHTTPFilterOverrides(r.GetTypedPerFilterConfig())
+		if err != nil {
+			return nil, nil, fmt.Errorf("route %+v: %v", r, err)
 		}
+		route.HTTPFilterConfigOverride = cfgs
 		routesRet = append(routesRet, &route)
 	}
 	return routesRet, cspNames, nil

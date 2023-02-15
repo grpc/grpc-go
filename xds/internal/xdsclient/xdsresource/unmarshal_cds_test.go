@@ -34,8 +34,6 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 
-	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	v2corepb "github.com/envoyproxy/go-control-plane/envoy/api/v2/core"
 	v3clusterpb "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3endpointpb "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
@@ -192,6 +190,38 @@ func (s) TestValidateCluster_Failure(t *testing.T) {
 						MaximumRingSize: wrapperspb.UInt64(ringHashSizeUpperBound + 1),
 					},
 				},
+			},
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
+		},
+		{
+			name: "aggregate-nil-clusters",
+			cluster: &v3clusterpb.Cluster{
+				Name: clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
+					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
+						Name:        "envoy.clusters.aggregate",
+						TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{}),
+					},
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
+			},
+			wantUpdate: emptyUpdate,
+			wantErr:    true,
+		},
+		{
+			name: "aggregate-empty-clusters",
+			cluster: &v3clusterpb.Cluster{
+				Name: clusterName,
+				ClusterDiscoveryType: &v3clusterpb.Cluster_ClusterType{
+					ClusterType: &v3clusterpb.Cluster_CustomClusterType{
+						Name: "envoy.clusters.aggregate",
+						TypedConfig: testutils.MarshalAny(&v3aggregateclusterpb.ClusterConfig{
+							Clusters: []string{},
+						}),
+					},
+				},
+				LbPolicy: v3clusterpb.Cluster_ROUND_ROBIN,
 			},
 			wantUpdate: emptyUpdate,
 			wantErr:    true,
@@ -1382,31 +1412,10 @@ func (s) TestValidateClusterWithSecurityConfig(t *testing.T) {
 
 func (s) TestUnmarshalCluster(t *testing.T) {
 	const (
-		v2ClusterName = "v2clusterName"
 		v3ClusterName = "v3clusterName"
-		v2Service     = "v2Service"
-		v3Service     = "v2Service"
+		v3Service     = "v3Service"
 	)
 	var (
-		v2ClusterAny = testutils.MarshalAny(&v2xdspb.Cluster{
-			Name:                 v2ClusterName,
-			ClusterDiscoveryType: &v2xdspb.Cluster_Type{Type: v2xdspb.Cluster_EDS},
-			EdsClusterConfig: &v2xdspb.Cluster_EdsClusterConfig{
-				EdsConfig: &v2corepb.ConfigSource{
-					ConfigSourceSpecifier: &v2corepb.ConfigSource_Ads{
-						Ads: &v2corepb.AggregatedConfigSource{},
-					},
-				},
-				ServiceName: v2Service,
-			},
-			LbPolicy: v2xdspb.Cluster_ROUND_ROBIN,
-			LrsServer: &v2corepb.ConfigSource{
-				ConfigSourceSpecifier: &v2corepb.ConfigSource_Self{
-					Self: &v2corepb.SelfConfigSource{},
-				},
-			},
-		})
-
 		v3ClusterAny = testutils.MarshalAny(&v3clusterpb.Cluster{
 			Name:                 v3ClusterName,
 			ClusterDiscoveryType: &v3clusterpb.Cluster_Type{Type: v3clusterpb.Cluster_EDS},
@@ -1495,26 +1504,6 @@ func (s) TestUnmarshalCluster(t *testing.T) {
 			}),
 			wantName: "test",
 			wantErr:  true,
-		},
-		{
-			name:     "v2 cluster",
-			resource: v2ClusterAny,
-			wantName: v2ClusterName,
-			wantUpdate: ClusterUpdate{
-				ClusterName:    v2ClusterName,
-				EDSServiceName: v2Service, LRSServerConfig: ClusterLRSServerSelf,
-				Raw: v2ClusterAny,
-			},
-		},
-		{
-			name:     "v2 cluster wrapped",
-			resource: testutils.MarshalAny(&v2xdspb.Resource{Resource: v2ClusterAny}),
-			wantName: v2ClusterName,
-			wantUpdate: ClusterUpdate{
-				ClusterName:    v2ClusterName,
-				EDSServiceName: v2Service, LRSServerConfig: ClusterLRSServerSelf,
-				Raw: v2ClusterAny,
-			},
 		},
 		{
 			name:     "v3 cluster",
