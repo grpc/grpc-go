@@ -118,7 +118,8 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 			}
 		},
 		OnSendHandler: func(*transport.ResourceSendInfo) {},
-		Backoff:       transportBackoff, NodeProto: &v3corepb.Node{Id: nodeID},
+		Backoff:       transportBackoff,
+		NodeProto:     &v3corepb.Node{Id: nodeID},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -285,7 +286,8 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 			}
 		},
 		OnSendHandler: func(*transport.ResourceSendInfo) {},
-		Backoff:       func(int) time.Duration { return time.Duration(0) }, // No backoff.NodeProto: &v3corepb.Node{Id: nodeID},
+		Backoff:       func(int) time.Duration { return time.Duration(0) }, // No backoff.
+		NodeProto:     &v3corepb.Node{Id: nodeID},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
