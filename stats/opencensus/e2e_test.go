@@ -244,6 +244,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		ServerReceivedMessagesPerRPCView,
 		ClientRoundtripLatencyView,
 		ServerLatencyView,
+		ClientAPILatencyView,
 	}
 	view.Register(allViews...)
 	// Unregister unconditionally in this defer to correctly cleanup globals in
@@ -760,6 +761,10 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		{
 			metric: ServerLatencyView,
 		},
+		// Per call metrics:
+		{
+			metric: ClientAPILatencyView,
+		},
 	}
 	// Unregister all the views. Unregistering a view causes a synchronous
 	// upload of any collected data for the view to any registered exporters.
@@ -780,7 +785,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		// declare the exact data you want, make sure the latency
 		// measurement points for the two RPCs above fall within buckets
 		// that fall into less than 5 seconds, which is the rpc timeout.
-		if metricName == "grpc.io/client/roundtrip_latency" || metricName == "grpc.io/server/server_latency" {
+		if metricName == "grpc.io/client/roundtrip_latency" || metricName == "grpc.io/server/server_latency" || metricName == "grpc.io/client/api_latency" {
 			// RPCs have a context timeout of 5s, so all the recorded
 			// measurements (one per RPC - two total) should fall within 5
 			// second buckets.

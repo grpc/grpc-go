@@ -20,12 +20,16 @@ package opencensus
 
 import (
 	"context"
+	"time"
 
+	ocstats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 	"go.opencensus.io/trace"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -78,15 +82,50 @@ func ServerOption(to TraceOptions) grpc.ServerOption {
 }
 
 // unaryInterceptor handles per RPC context management. It also handles per RPC
-// tracing and stats.
+// tracing and stats, and records the latency for the full RPC call.
 func unaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	return invoker(ctx, method, req, reply, cc, opts...)
+	startTime := time.Now()
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	callLatency := float64(time.Since(startTime)) / float64(time.Millisecond)
+
+	ocstats.RecordWithOptions(ctx,
+		ocstats.WithTags(
+			tag.Upsert(keyClientMethod, removeLeadingSlash(method)),
+			tag.Upsert(keyClientStatus, canonicalString(status.Code(err))),
+		),
+		ocstats.WithMeasurements(
+			clientAPILatency.M(callLatency),
+		),
+	)
+
+	return err
 }
 
 // streamInterceptor handles per RPC context management. It also handles per RPC
-// tracing and stats.
+// tracing and stats, and records the latency for the full RPC call.
 func streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	return streamer(ctx, desc, cc, method, opts...)
+	startTime := time.Now()
+
+	callback := func(err error) {
+		callLatency := float64(time.Since(startTime)) / float64(time.Millisecond)
+		ocstats.RecordWithOptions(context.Background(),
+			ocstats.WithTags(
+				tag.Upsert(keyClientMethod, method),
+				tag.Upsert(keyClientStatus, canonicalString(status.Code(err))),
+			),
+			ocstats.WithMeasurements(
+				clientAPILatency.M(callLatency),
+			),
+		)
+	}
+
+	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
+
+	s, err := streamer(ctx, desc, cc, method, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
 type rpcInfo struct {
