@@ -298,9 +298,10 @@ func (o FailFastCallOption) after(c *callInfo, attempt *csAttempt) {}
 
 // OnFinish returns a CallOption that configures a callback to be called when
 // the call completes. The error passed to the callback is the status of the
-// RPC, and may be nil. Must only be called once. This is mainly used in the
-// context of streaming interceptors, to be notified when the RPC completes
-// along with information about the status of the RPC.
+// RPC, and may be nil. The onFinish callback provided will only be called once
+// by gRPC. This is mainly used to be used by streaming interceptors, to be
+// notified when the RPC completes along with information about the status of
+// the RPC.
 //
 // # Experimental
 //
