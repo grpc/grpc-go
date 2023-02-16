@@ -20,7 +20,6 @@ package opencensus
 
 import (
 	"context"
-	"io"
 	"time"
 
 	ocstats "go.opencensus.io/stats"
@@ -89,66 +88,16 @@ func unaryInterceptor(ctx context.Context, method string, req, reply interface{}
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	callLatency := float64(time.Since(startTime)) / float64(time.Millisecond)
 
-	var st string
-	if err != nil {
-		s := status.Convert(err)
-		st = canonicalString(s.Code())
-	} else {
-		st = "OK"
-	}
-
 	ocstats.RecordWithOptions(ctx,
 		ocstats.WithTags(
 			tag.Upsert(keyClientMethod, removeLeadingSlash(method)),
-			tag.Upsert(keyClientStatus, st),
+			tag.Upsert(keyClientStatus, canonicalString(status.Code(err))),
 		),
 		ocstats.WithMeasurements(
 			clientAPILatency.M(callLatency),
 		),
 	)
 
-	return err
-}
-
-// wrappedStream wraps a grpc.ClientStream to intercept the RecvMsg call to take
-// latency measurements on RPC Completion.
-type wrappedStream struct {
-	grpc.ClientStream
-	// The timestamp of when this stream started.
-	startTime time.Time
-	// the method for this stream.
-	method string
-}
-
-func newWrappedStream(s grpc.ClientStream) grpc.ClientStream {
-	return &wrappedStream{ClientStream: s}
-}
-
-func (ws *wrappedStream) RecvMsg(m interface{}) error {
-	err := ws.ClientStream.RecvMsg(m)
-	if err == nil {
-		// RPC isn't over yet, no need to take measurement.
-		return err
-	}
-	// RPC completed, record measurement for full call latency.
-	callLatency := float64(time.Since(ws.startTime)) / float64(time.Millisecond)
-	var st string
-	if err == io.EOF {
-		st = "OK"
-	} else {
-		s := status.Convert(err)
-		st = canonicalString(s.Code())
-	}
-
-	ocstats.RecordWithOptions(context.Background(),
-		ocstats.WithTags(
-			tag.Upsert(keyClientMethod, ws.method),
-			tag.Upsert(keyClientStatus, st),
-		),
-		ocstats.WithMeasurements(
-			clientAPILatency.M(callLatency),
-		),
-	)
 	return err
 }
 
@@ -156,16 +105,28 @@ func (ws *wrappedStream) RecvMsg(m interface{}) error {
 // tracing and stats, and records the latency for the full RPC call.
 func streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	startTime := time.Now()
+
+	callback := func(err error) {
+		callLatency := float64(time.Since(startTime)) / float64(time.Millisecond)
+		ocstats.RecordWithOptions(context.Background(),
+			ocstats.WithTags(
+				tag.Upsert(keyClientMethod, method),
+				tag.Upsert(keyClientStatus, canonicalString(status.Code(err))),
+			),
+			ocstats.WithMeasurements(
+				clientAPILatency.M(callLatency),
+			),
+		)
+	}
+
+	callOption := grpc.OnFinish(callback)
+	opts = append(opts, callOption)
+
 	s, err := streamer(ctx, desc, cc, method, opts...)
 	if err != nil {
 		return nil, err
 	}
-
-	return &wrappedStream{
-		ClientStream: s,
-		startTime:    startTime,
-		method:       method,
-	}, nil
+	return s, nil
 }
 
 type clientStatsHandler struct {

@@ -971,6 +971,9 @@ func (cs *clientStream) finish(err error) {
 		return
 	}
 	cs.finished = true
+	if cs.callInfo.onFinish != nil {
+		cs.callInfo.onFinish(err)
+	}
 	cs.commitAttemptLocked()
 	if cs.attempt != nil {
 		cs.attempt.finish(err)

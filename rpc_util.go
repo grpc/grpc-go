@@ -159,6 +159,7 @@ type callInfo struct {
 	contentSubtype        string
 	codec                 baseCodec
 	maxRetryRPCBufferSize int
+	onFinish              func(err error)
 }
 
 func defaultCallInfo() *callInfo {
@@ -294,6 +295,27 @@ func (o FailFastCallOption) before(c *callInfo) error {
 	return nil
 }
 func (o FailFastCallOption) after(c *callInfo, attempt *csAttempt) {}
+
+// OnFinish returns a CallOption that configures a callback to be called when
+// the call completes.
+func OnFinish(onFinish func(err error)) CallOption {
+	return OnFinishCallOption{
+		onFinish: onFinish,
+	}
+}
+
+// OnFinishCallOption is CallOption that indicates a callback to be called when
+// the call completes.
+type OnFinishCallOption struct {
+	onFinish func(error)
+}
+
+func (o OnFinishCallOption) before(c *callInfo) error {
+	c.onFinish = o.onFinish
+	return nil
+}
+
+func (o OnFinishCallOption) after(c *callInfo, attempt *csAttempt) {}
 
 // MaxCallRecvMsgSize returns a CallOption which sets the maximum message size
 // in bytes the client can receive. If this is not set, gRPC uses the default
