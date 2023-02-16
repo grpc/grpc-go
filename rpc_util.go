@@ -159,7 +159,7 @@ type callInfo struct {
 	contentSubtype        string
 	codec                 baseCodec
 	maxRetryRPCBufferSize int
-	onFinish              func(err error)
+	onFinish              []func(err error)
 }
 
 func defaultCallInfo() *callInfo {
@@ -324,7 +324,7 @@ type OnFinishCallOption struct {
 }
 
 func (o OnFinishCallOption) before(c *callInfo) error {
-	c.onFinish = o.OnFinish
+	c.onFinish = append(c.onFinish, o.OnFinish)
 	return nil
 }
 
