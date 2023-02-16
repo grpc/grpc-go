@@ -297,21 +297,34 @@ func (o FailFastCallOption) before(c *callInfo) error {
 func (o FailFastCallOption) after(c *callInfo, attempt *csAttempt) {}
 
 // OnFinish returns a CallOption that configures a callback to be called when
-// the call completes.
+// the call completes. The error passed to the callback is the status of the
+// RPC, and may be nil. Must only be called once. This is mainly used in the
+// context of streaming interceptors, to be notified when the RPC completes
+// along with information about the status of the RPC.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func OnFinish(onFinish func(err error)) CallOption {
 	return OnFinishCallOption{
-		onFinish: onFinish,
+		OnFinish: onFinish,
 	}
 }
 
 // OnFinishCallOption is CallOption that indicates a callback to be called when
 // the call completes.
+//
+// # Experimental
+//
+// Notice: This type is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type OnFinishCallOption struct {
-	onFinish func(error)
+	OnFinish func(error)
 }
 
 func (o OnFinishCallOption) before(c *callInfo) error {
-	c.onFinish = o.onFinish
+	c.onFinish = o.OnFinish
 	return nil
 }
 

@@ -119,8 +119,7 @@ func streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.Clie
 		)
 	}
 
-	callOption := grpc.OnFinish(callback)
-	opts = append(opts, callOption)
+	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
 
 	s, err := streamer(ctx, desc, cc, method, opts...)
 	if err != nil {
