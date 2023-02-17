@@ -1327,11 +1327,11 @@ func (s) TestSpan(t *testing.T) {
 			hasRemoteParent: false,
 		},
 	}
+	fe.mu.Lock()
+	defer fe.mu.Unlock()
 	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
 		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
 	}
-	fe.mu.Lock()
-	defer fe.mu.Unlock()
 	if err := validateTraceAndSpanIDs(fe.seenSpans); err != nil {
 		t.Fatalf("Error in runtime data assertions: %v", err)
 	}

@@ -28,12 +28,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc/internal/envconfig"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/stubserver"
+	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/grpc_testing"
 )
@@ -80,6 +83,8 @@ type fakeOpenCensusExporter struct {
 	// Number of spans
 	SeenSpans int
 
+	idCh *testutils.Channel
+
 	t  *testing.T
 	mu sync.RWMutex
 }
@@ -102,7 +107,37 @@ func (fe *fakeOpenCensusExporter) ExportView(vd *view.Data) {
 	}
 }
 
+type traceAndSpanID struct {
+	traceID trace.TraceID
+	spanID  trace.SpanID
+}
+
+type traceAndSpanIDString struct {
+	traceID string
+	spanID  string
+}
+
+// idsToString is a helper that converts from generated trace and span IDs to
+// the string version stored in trace message events. (hex 16 lowercase encoded,
+// and extra data attached to trace id).
+func idsToString(tasi traceAndSpanID, projectID string) traceAndSpanIDString {
+	return traceAndSpanIDString{
+		traceID: "projects/" + projectID + "/traces/" + fmt.Sprintf("%x", tasi.traceID),
+		spanID:  fmt.Sprintf("%x", tasi.spanID),
+	}
+}
+
 func (fe *fakeOpenCensusExporter) ExportSpan(vd *trace.SpanData) {
+	if fe.idCh != nil {
+		// This is what export span sees representing the trace/span ID which
+		// will populate different contexts throughout the system, convert in
+		// caller to string version as the logging code does.
+		fe.idCh.Send(traceAndSpanID{
+			traceID: vd.TraceID,
+			spanID:  vd.SpanID,
+		})
+	}
+
 	fe.mu.Lock()
 	defer fe.mu.Unlock()
 	fe.SeenSpans++
@@ -483,4 +518,251 @@ func (s) TestStartErrorsThenEnd(t *testing.T) {
 		t.Fatalf("Invalid patterns not triggering error")
 	}
 	End()
+}
+
+// TestLoggingLinkedWithTrace tests that logging gets the trace and span id
+// corresponding to the RPC.
+func (s) TestLoggingLinkedWithTrace(t *testing.T) {
+	fle := &fakeLoggingExporter{
+		t: t,
+	}
+	defer func(ne func(ctx context.Context, config *config) (loggingExporter, error)) {
+		newLoggingExporter = ne
+	}(newLoggingExporter)
+
+	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
+		return fle, nil
+	}
+
+	idCh := testutils.NewChannel()
+
+	fe := &fakeOpenCensusExporter{
+		t:    t,
+		idCh: idCh,
+	}
+	defer func(ne func(config *config) (tracingMetricsExporter, error)) {
+		newExporter = ne
+	}(newExporter)
+
+	newExporter = func(config *config) (tracingMetricsExporter, error) {
+		return fe, nil
+	}
+
+	const projectID = "project-id"
+	tracesAndLogsConfig := &config{
+		ProjectID: projectID,
+		CloudLogging: &cloudLogging{
+			ClientRPCEvents: []clientRPCEvents{
+				{
+					Methods:          []string{"*"},
+					MaxMetadataBytes: 30,
+					MaxMessageBytes:  30,
+				},
+			},
+			ServerRPCEvents: []serverRPCEvents{
+				{
+					Methods:          []string{"*"},
+					MaxMetadataBytes: 30,
+					MaxMessageBytes:  30,
+				},
+			},
+		},
+		CloudTrace: &cloudTrace{
+			SamplingRate: 1.0,
+		},
+	}
+	cleanup, err := setupObservabilitySystemWithConfig(tracesAndLogsConfig)
+	if err != nil {
+		t.Fatalf("error setting up observability %v", err)
+	}
+	defer cleanup()
+	ss := &stubserver.StubServer{
+		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
+			return &grpc_testing.SimpleResponse{}, nil
+		},
+		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
+			_, err := stream.Recv()
+			if err != io.EOF {
+				return err
+			}
+			return nil
+		},
+	}
+	if err := ss.Start(nil); err != nil {
+		t.Fatalf("Error starting endpoint server: %v", err)
+	}
+	defer ss.Stop()
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	// Spawn a goroutine to receive the trace and span ids received by the
+	// exporter corresponding to a Unary RPC.
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	readerErrCh := testutils.NewChannel()
+	unaryDone := grpcsync.NewEvent()
+	go func() {
+		defer wg.Done()
+		val, err := idCh.Receive(ctx)
+		if err != nil {
+			readerErrCh.Send(fmt.Errorf("error while waiting for IDs: %v", err))
+		}
+
+		traceAndSpanIDs, ok := val.(traceAndSpanID)
+		if !ok {
+			readerErrCh.Send(fmt.Errorf("received wrong type from channel: %T", val))
+		}
+		tasiServer := idsToString(traceAndSpanIDs, projectID)
+
+		// The ordering of the spans received is deterministic due to happens
+		// before relationships in gRPC's codebase.
+		val, err = idCh.Receive(ctx)
+		if err != nil {
+			readerErrCh.Send(fmt.Errorf("error while waiting for IDs: %v", err))
+		}
+
+		traceAndSpanIDs, ok = val.(traceAndSpanID)
+		if !ok {
+			readerErrCh.Send(fmt.Errorf("received wrong type from channel: %T", val))
+		}
+		// The attempt doesn't get used in client (attempts happen at layer
+		// below binary logging client side) or server logs, only the call span
+		// and server span.
+		// tasiAttempt := idsToString(traceAndSpanIDs, projectID)
+
+		val, err = idCh.Receive(ctx)
+		if err != nil {
+			readerErrCh.Send(fmt.Errorf("error while waiting for IDs: %v", err))
+		}
+		traceAndSpanIDs, ok = val.(traceAndSpanID)
+		if !ok {
+			readerErrCh.Send(fmt.Errorf("received wrong type from channel: %T", val))
+		}
+		tasiSent := idsToString(traceAndSpanIDs, projectID)
+		<-unaryDone.Done()
+		// The ordering of logging calls out of client streams and server
+		// streams due to happens before relationships in gRPC's codebase.
+		idsWant := []*traceAndSpanIDString{
+			&tasiSent,
+			&tasiSent,
+			&tasiServer,
+			&tasiServer,
+			&tasiServer,
+			&tasiServer,
+			&tasiServer,
+			&tasiSent,
+			&tasiSent,
+			&tasiSent,
+		}
+		fle.mu.Lock()
+		if diff := cmp.Diff(fle.idsSeen, idsWant, cmp.AllowUnexported(traceAndSpanIDString{})); diff != "" {
+			readerErrCh.Send(fmt.Errorf("got unexpected id list, diff (-got, +want): %v", diff))
+		}
+
+		fle.entries = nil
+		fle.mu.Unlock()
+		readerErrCh.Send(nil)
+	}()
+	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{Body: testOkPayload}}); err != nil {
+		t.Fatalf("Unexpected error from UnaryCall: %v", err)
+	}
+	unaryDone.Fire()
+	if chErr, err := readerErrCh.Receive(ctx); chErr != nil || err != nil {
+		if err != nil {
+			t.Fatalf("Should have received something from error channel: %v", err)
+		}
+		if chErr != nil {
+			t.Fatalf("Should have received a nil error from channel, instead received: %v", chErr)
+		}
+	}
+	wg.Wait()
+
+	fle.mu.Lock()
+	fle.idsSeen = nil
+	fle.mu.Unlock()
+
+	// Test streaming. Spawn a goroutine to receive the trace and span ids
+	// received by the exporter corresponding to a streaming RPC.
+	wg.Add(1)
+	readerErrCh = testutils.NewChannel()
+	streamDone := grpcsync.NewEvent()
+	go func() {
+		defer wg.Done()
+		// The ordering of the spans received is deterministic due to happens
+		// before relationships in gRPC's codebase.
+		val, err := idCh.Receive(ctx)
+		if err != nil {
+			readerErrCh.Send(fmt.Errorf("error while waiting for IDs: %v", err))
+		}
+
+		traceAndSpanIDs, ok := val.(traceAndSpanID)
+		if !ok {
+			readerErrCh.Send(fmt.Errorf("received wrong type from channel: %T", val))
+		}
+		tasiServer := idsToString(traceAndSpanIDs, projectID)
+		val, err = idCh.Receive(ctx)
+		if err != nil {
+			readerErrCh.Send(fmt.Errorf("error while waiting for IDs: %v", err))
+		}
+
+		traceAndSpanIDs, ok = val.(traceAndSpanID)
+		if !ok {
+			readerErrCh.Send(fmt.Errorf("received wrong type from channel: %T", val))
+		}
+		tasiSent := idsToString(traceAndSpanIDs, projectID)
+		val, err = idCh.Receive(ctx)
+		if err != nil {
+			readerErrCh.Send(fmt.Errorf("error while waiting for IDs: %v", err))
+		}
+		traceAndSpanIDs, ok = val.(traceAndSpanID)
+		if !ok {
+			readerErrCh.Send(fmt.Errorf("received wrong type from channel: %T", val))
+		}
+		// The attempt doesn't get used in client (attempts happen at layer
+		// below binary logging client side) or server logs, only the call span
+		// and server span.
+		// tasiAttempt := idsToString(traceAndSpanIDs, projectID)
+
+		// The ordering of logging calls out of client streams and server
+		// streams due to happens before relationships in gRPC's codebase.
+		idsWant := []*traceAndSpanIDString{
+			&tasiSent,
+			&tasiSent,
+			&tasiServer,
+			&tasiServer,
+			&tasiServer,
+			&tasiSent,
+		}
+		<-streamDone.Done()
+		fle.mu.Lock()
+		if diff := cmp.Diff(fle.idsSeen, idsWant, cmp.AllowUnexported(traceAndSpanIDString{})); diff != "" {
+			readerErrCh.Send(fmt.Errorf("got unexpected id list, diff (-got, +want): %v", diff))
+		}
+
+		fle.entries = nil
+		fle.mu.Unlock()
+		readerErrCh.Send(nil)
+	}()
+
+	stream, err := ss.Client.FullDuplexCall(ctx)
+	if err != nil {
+		t.Fatalf("ss.Client.FullDuplexCall failed: %f", err)
+	}
+
+	stream.CloseSend()
+	if _, err = stream.Recv(); err != io.EOF {
+		t.Fatalf("unexpected error: %v, expected an EOF error", err)
+	}
+	streamDone.Fire()
+
+	if chErr, err := readerErrCh.Receive(ctx); chErr != nil || err != nil {
+		if err != nil {
+			t.Fatalf("Should have received something from error channel: %v", err)
+		}
+		if chErr != nil {
+			t.Fatalf("Should have received a nil error from channel, instead received: %v", chErr)
+		}
+	}
+	wg.Wait()
 }

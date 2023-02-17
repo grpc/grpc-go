@@ -68,6 +68,8 @@ type fakeLoggingExporter struct {
 
 	mu      sync.Mutex
 	entries []*grpcLogEntry
+
+	idsSeen []*traceAndSpanIDString
 }
 
 func (fle *fakeLoggingExporter) EmitGcpLoggingEntry(entry gcplogging.Entry) {
@@ -76,6 +78,13 @@ func (fle *fakeLoggingExporter) EmitGcpLoggingEntry(entry gcplogging.Entry) {
 	if entry.Severity != 100 {
 		fle.t.Errorf("entry.Severity is not 100, this should be hardcoded")
 	}
+
+	ids := &traceAndSpanIDString{
+		traceID: entry.Trace,
+		spanID:  entry.SpanID,
+	}
+	fle.idsSeen = append(fle.idsSeen, ids)
+
 	grpcLogEntry, ok := entry.Payload.(*grpcLogEntry)
 	if !ok {
 		fle.t.Errorf("payload passed in isn't grpcLogEntry")

@@ -10,7 +10,7 @@ require (
 	go.opencensus.io v0.24.0
 	golang.org/x/oauth2 v0.4.0
 	google.golang.org/grpc v1.52.0
-	google.golang.org/grpc/stats/opencensus v0.0.0-20230214213552-081499f2e8a4
+	google.golang.org/grpc/stats/opencensus v0.0.0-20230222033013-5353eaa44095
 )
 
 require (
@@ -39,3 +39,5 @@ require (
 )
 
 replace google.golang.org/grpc => ../../
+
+replace google.golang.org/grpc/stats/opencensus => ../../stats/opencensus
