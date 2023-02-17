@@ -32,6 +32,7 @@ import (
 	cpb "google.golang.org/genproto/googleapis/rpc/code"
 	epb "google.golang.org/genproto/googleapis/rpc/errdetails"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/status"
@@ -189,6 +190,70 @@ func (s) TestFromErrorUnknownError(t *testing.T) {
 	s, ok := FromError(err)
 	if ok || s.Code() != code || s.Message() != message {
 		t.Fatalf("FromError(%v) = %v, %v; want <Code()=%s, Message()=%q>, false", err, s, ok, code, message)
+	}
+}
+
+func (s) TestFromErrorWrapped(t *testing.T) {
+	const code, message = codes.Internal, "test description"
+	err := fmt.Errorf("wrapped error: %w", Error(code, message))
+	s, ok := FromError(err)
+	if !ok || s.Code() != code || s.Message() != message || s.Err() == nil {
+		t.Fatalf("FromError(%v) = %v, %v; want <Code()=%s, Message()=%q, Err()!=nil>, true", err, s, ok, code, message)
+	}
+}
+
+func (s) TestFromErrorImplementsInterfaceWrapped(t *testing.T) {
+	const code, message = codes.Internal, "test description"
+	err := fmt.Errorf("wrapped error: %w", customError{Code: code, Message: message})
+	s, ok := FromError(err)
+	if !ok || s.Code() != code || s.Message() != message || s.Err() == nil {
+		t.Fatalf("FromError(%v) = %v, %v; want <Code()=%s, Message()=%q, Err()!=nil>, true", err, s, ok, code, message)
+	}
+}
+
+func (s) TestCode(t *testing.T) {
+	const code = codes.Internal
+	err := Error(code, "test description")
+	if s := Code(err); s != code {
+		t.Fatalf("Code(%v) = %v; want <Code()=%s>", err, s, code)
+	}
+}
+
+func (s) TestCodeOK(t *testing.T) {
+	if s, code := Code(nil), codes.OK; s != code {
+		t.Fatalf("Code(%v) = %v; want <Code()=%s>", nil, s, code)
+	}
+}
+
+func (s) TestCodeImplementsInterface(t *testing.T) {
+	const code = codes.Internal
+	err := customError{Code: code, Message: "test description"}
+	if s := Code(err); s != code {
+		t.Fatalf("Code(%v) = %v; want <Code()=%s>", err, s, code)
+	}
+}
+
+func (s) TestCodeUnknownError(t *testing.T) {
+	const code = codes.Unknown
+	err := errors.New("unknown error")
+	if s := Code(err); s != code {
+		t.Fatalf("Code(%v) = %v; want <Code()=%s>", err, s, code)
+	}
+}
+
+func (s) TestCodeWrapped(t *testing.T) {
+	const code = codes.Internal
+	err := fmt.Errorf("wrapped: %w", Error(code, "test description"))
+	if s := Code(err); s != code {
+		t.Fatalf("Code(%v) = %v; want <Code()=%s>", err, s, code)
+	}
+}
+
+func (s) TestCodeImplementsInterfaceWrapped(t *testing.T) {
+	const code = codes.Internal
+	err := fmt.Errorf("wrapped: %w", customError{Code: code, Message: "test description"})
+	if s := Code(err); s != code {
+		t.Fatalf("Code(%v) = %v; want <Code()=%s>", err, s, code)
 	}
 }
 
