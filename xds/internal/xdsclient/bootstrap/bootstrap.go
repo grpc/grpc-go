@@ -48,7 +48,7 @@ const (
 	//   the xDS transport protocol.
 	// + A value of "ignore_resource_deletion" indicates that the client should
 	//   ignore resource deletion in updates from the server.
-	serverFeaturesV3 = "xds_v3"
+	serverFeaturesV3                     = "xds_v3"
 	serverFeaturesIgnoreResourceDeletion = "ignore_resource_deletion"
 
 	gRPCUserAgentName               = "gRPC Go"
