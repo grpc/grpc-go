@@ -43,9 +43,13 @@ import (
 
 const (
 	// The "server_features" field in the bootstrap file contains a list of
-	// features supported by the server. A value of "xds_v3" indicates that the
-	// server supports the v3 version of the xDS transport protocol.
+	// features supported by the server.
+	// + A value of "xds_v3" indicates that the server supports the v3 version of
+	//   the xDS transport protocol.
+	// + A value of "ignore_resource_deletion" indicates that the client should
+	//   ignore resource deletion in updates from the server.
 	serverFeaturesV3 = "xds_v3"
+	serverFeaturesIgnoreResourceDeletion = "ignore_resource_deletion"
 
 	gRPCUserAgentName               = "gRPC Go"
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
@@ -97,6 +101,10 @@ type ServerConfig struct {
 	Creds grpc.DialOption
 	// CredsType is the type of the creds. It will be used to dedup servers.
 	CredsType string
+	// IgnoreResourceDeletion if set the XdsClient will not invoke the watchers'
+	// OnResourceDoesNotExist() method when a resource is deleted, nor will it
+	// remove the existing resource value from its cache.
+	IgnoreResourceDeletion bool
 }
 
 // String returns the string representation of the ServerConfig.
@@ -120,6 +128,9 @@ func (sc ServerConfig) MarshalJSON() ([]byte, error) {
 		ChannelCreds: []channelCreds{{Type: sc.CredsType, Config: nil}},
 	}
 	server.ServerFeatures = []string{serverFeaturesV3}
+	if sc.IgnoreResourceDeletion {
+		server.ServerFeatures = append(server.ServerFeatures, serverFeaturesIgnoreResourceDeletion)
+	}
 	return json.Marshal(server)
 }
 
@@ -143,6 +154,11 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		}
 		sc.Creds = grpc.WithCredentialsBundle(bundle)
 		break
+	}
+	for _, f := range server.ServerFeatures {
+		if f == serverFeaturesIgnoreResourceDeletion {
+			sc.IgnoreResourceDeletion = true
+		}
 	}
 	return nil
 }

@@ -182,6 +182,22 @@ var (
 				}
 			]
 		}`,
+		"serverSupportsIgnoreResourceDeletion": `
+		{
+			"node": {
+				"id": "ENVOY_NODE_ID",
+				"metadata": {
+				    "TRAFFICDIRECTOR_GRPC_HOSTNAME": "trafficdirector"
+			    }
+			},
+			"xds_servers" : [{
+				"server_uri": "trafficdirector.googleapis.com:443",
+				"channel_creds": [
+					{ "type": "google_default" }
+				],
+				"server_features" : ["foo", "ignores_resource_deletion", "xds_v3"]
+			}]
+		}`,
 	}
 	metadata = &structpb.Struct{
 		Fields: map[string]*structpb.Value{

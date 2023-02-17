@@ -117,8 +117,9 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 		balancerName = tdURL
 	}
 	serverConfig := &bootstrap.ServerConfig{
-		ServerURI: balancerName,
-		Creds:     grpc.WithCredentialsBundle(google.NewDefaultCredentials()),
+		ServerURI:              balancerName,
+		Creds:                  grpc.WithCredentialsBundle(google.NewDefaultCredentials()),
+		IgnoreResourceDeletion: false,
 	}
 	config := &bootstrap.Config{
 		XDSServer: serverConfig,

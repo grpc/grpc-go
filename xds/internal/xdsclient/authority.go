@@ -48,6 +48,8 @@ type resourceState struct {
 	cache    xdsresource.ResourceData             // Most recent ACKed update for this resource
 	md       xdsresource.UpdateMetadata           // Metadata for the most recent update
 
+	resourceDeletionIgnored bool // Set if resource deletion was ignored for a prior update
+
 	// Common watch state for all watchers of this resource.
 	wTimer *time.Timer // Expiry timer
 	wState watchState  // State of the watch
@@ -186,8 +188,13 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				}
 				continue
 			}
-			// If we get here, it means that the update is a valid one. Notify
-			// watchers only if this is a first time update or it is different
+			// If we get here, it means that the update is a valid one.
+			// Check if resourceDeletionIgnored flag was set for a prior response from server.
+			if state.resourceDeletionIgnored {
+				state.resourceDeletionIgnored = false
+				a.logger.Infof("A valid update was received for resource type %q with resource name %q after previously ignoring a deletion", rType.TypeEnum(), name)
+			}
+			// Notify watchers only if this is a first time update or it is different
 			// from the one currently cached.
 			if state.cache == nil || !state.cache.Equal(uErr.resource) {
 				for watcher := range state.watchers {
@@ -214,7 +221,8 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 	// If this resource type requires that all resources be present in every
 	// SotW response from the server, a response that does not include a
 	// previously seen resource will be interpreted as a deletion of that
-	// resource.
+	// resource unless ignore_resource_deletion option was set in the server
+	// config.
 	if !rType.AllResourcesRequiredInSotW() {
 		return
 	}
@@ -246,6 +254,16 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				continue
 			}
 
+			// Per A53, we want to delete the resource from cache based on the environment
+			// variable ignore_resource_deletion in server config.
+			if a.serverCfg.IgnoreResourceDeletion {
+				if !state.resourceDeletionIgnored {
+					state.resourceDeletionIgnored = true
+					a.logger.Warningf("Ignoring resource deletion for resource type %q with resource name %q ", rType.TypeEnum(), name)
+				}
+				// Skip sending updates to watchers.
+				continue
+			}
 			// If resource exists in cache, but not in the new update, delete
 			// the resource from cache, and also send a resource not found error
 			// to indicate resource removed. Metadata for the resource is still
@@ -424,9 +442,10 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 	if state == nil {
 		a.logger.Debugf("First watch for type %q, resource name %q", rType.TypeEnum(), resourceName)
 		state = &resourceState{
-			watchers: make(map[xdsresource.ResourceWatcher]bool),
-			md:       xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested},
-			wState:   watchStateStarted,
+			watchers:                make(map[xdsresource.ResourceWatcher]bool),
+			md:                      xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested},
+			wState:                  watchStateStarted,
+			resourceDeletionIgnored: false,
 		}
 		resources[resourceName] = state
 		a.sendDiscoveryRequestLocked(rType, resources)
