@@ -20,7 +20,9 @@ package clusterresolver
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/url"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -340,6 +342,45 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 	}
 	if edsNameCanceled != gotEDSName2 {
 		t.Fatalf("xdsClient.CancelEDS called for %v, want: %v", edsNameCanceled, gotEDSName2)
+	}
+}
+
+// Test that an invalid target returns an URL parsing error on the update channel and
+// that no panic is thrown during while building the DNS resolver.
+func (s) TestResourceResolverInvalidTarget(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		target string
+	}{
+		{
+			name:   "invalid target URL",
+			target: "%" + testDNSTarget,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			dnsTargetCh, _, _, _, cleanup := setupDNS()
+			defer cleanup()
+			fakeClient := fakeclient.NewClient()
+			rr := newResourceResolver(&clusterResolverBalancer{xdsClient: fakeClient})
+			rr.updateMechanisms([]DiscoveryMechanism{{
+				Type:        DiscoveryMechanismTypeLogicalDNS,
+				DNSHostname: test.target,
+			}})
+			ctx, ctxCancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer ctxCancel()
+			select {
+			case target := <-dnsTargetCh:
+				t.Fatalf("got unexpected DNS target to watch: %v", target)
+			case ru := <-rr.updateChannel:
+				var uErr *url.Error
+				if !errors.As(ru.err, &uErr) {
+					t.Fatalf("got unexpected error on update channel: %T (expected %T)", ru.err, uErr)
+				}
+				// all good
+			case <-ctx.Done():
+				t.Fatal("Timed out waiting for building DNS resolver")
+			}
+		})
 	}
 }
 
