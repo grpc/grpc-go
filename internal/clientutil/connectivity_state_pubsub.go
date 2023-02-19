@@ -1,6 +1,6 @@
 /*
  *
- * Copyright 2022 gRPC authors.
+ * Copyright 2023 gRPC authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,23 +31,27 @@ type ClientStateChangeSubscriberInterface interface {
 	ClientStateChangeListenOnChannel(m connectivity.State)
 }
 
+// ClientStateChangePublisher manages listeners. Users should use a function Register
+// to register a subscriber to listeners and Publish to publish the connectivity.State
+// changes on ClientConn to subsribers registered by using Register.
 type ClientStateChangePublisher struct {
 	stateListeners []chan connectivity.State
 }
 
-// Register is going to be called by Management Server Sides
+// Register registers a state channel to ClientStateChangePublisher's listeners
+// and waits until the connectivity.State of ClientConn change is reported.
 func (p *ClientStateChangePublisher) Register(s ClientStateChangeSubscriberInterface) {
 	p.stateListeners = append(p.stateListeners, s.GetStateChannel())
 	go func() {
 		for {
 			state := <-s.GetStateChannel()
 			s.ClientStateChangeListenOnChannel(state)
-			// TODO(miyoshi): goroutineメモリリークを避けるために終了処理が必要か？
 		}
 	}()
 }
 
-// ClientConn 側から呼ばれる想定
+// Publish is called to publish the connectivity.State changes on ClientConn
+// to listeners.
 func (p *ClientStateChangePublisher) Publish(m connectivity.State) {
 	for _, c := range p.stateListeners {
 		c <- m
