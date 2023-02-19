@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
+	"google.golang.org/grpc/internal/clientutil"
 	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
@@ -410,6 +411,7 @@ type connectivityStateManager struct {
 	state      connectivity.State
 	notifyChan chan struct{}
 	channelzID *channelz.Identifier
+	publisher  clientutil.ClientStateChangePublisher
 }
 
 // updateState updates the connectivity.State of ClientConn.
@@ -425,6 +427,7 @@ func (csm *connectivityStateManager) updateState(state connectivity.State) {
 		return
 	}
 	csm.state = state
+	csm.publisher.Publish(state)
 	channelz.Infof(logger, csm.channelzID, "Channel Connectivity change to %v", state)
 	if csm.notifyChan != nil {
 		// There are other goroutines waiting on this channel.
