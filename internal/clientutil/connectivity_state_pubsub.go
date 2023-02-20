@@ -16,6 +16,7 @@
  *
  */
 
+// Package clientutil defines internal-only client utilities.
 package clientutil
 
 import (
