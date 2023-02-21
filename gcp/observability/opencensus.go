@@ -25,7 +25,6 @@ import (
 	"contrib.go.opencensus.io/exporter/stackdriver"
 	"contrib.go.opencensus.io/exporter/stackdriver/monitoredresource"
 
-	"go.opencensus.io/plugin/ocgrpc"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
@@ -105,10 +104,10 @@ func startOpenCensus(config *config) error {
 	}
 
 	if config.CloudMonitoring != nil {
-		if err := view.Register(ocgrpc.ServerStartedRPCsView, ocgrpc.ClientCompletedRPCsView); err != nil {
+		if err := view.Register(opencensus.ClientStartedRPCsView, opencensus.ClientCompletedRPCsView, opencensus.ClientRoundtripLatencyView); err != nil {
 			return fmt.Errorf("failed to register default client views: %v", err)
 		}
-		if err := view.Register(ocgrpc.ClientStartedRPCsView, ocgrpc.ServerCompletedRPCsView); err != nil {
+		if err := view.Register(opencensus.ServerStartedRPCsView, opencensus.ServerCompletedRPCsView, opencensus.ServerLatencyView); err != nil {
 			return fmt.Errorf("failed to register default server views: %v", err)
 		}
 		view.SetReportingPeriod(defaultMetricsReportingInterval)
