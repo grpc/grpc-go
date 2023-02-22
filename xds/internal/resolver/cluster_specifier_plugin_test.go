@@ -135,7 +135,6 @@ func (s) TestResolverClusterSpecifierPlugin(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -289,7 +288,6 @@ func (s) TestXDSResolverDelayedOnCommittedCSP(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
