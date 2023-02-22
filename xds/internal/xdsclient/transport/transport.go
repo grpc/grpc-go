@@ -45,7 +45,10 @@ import (
 	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 )
 
-// Extremely verbose per-RPC level logs should check for this verbosity level.
+// Any per-RPC level logs which print complete request or response messages
+// should be gated at this verbosity level. Other per-RPC level logs which print
+// terse output should be at `INFO` and verbosity 2, which corresponds to using
+// the `Debugf` method on the logger.
 const perRPCVerbosityLevel = 9
 
 type adsStream = v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
@@ -269,7 +272,7 @@ func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, reso
 		}
 	}
 	if err := stream.Send(req); err != nil {
-		return fmt.Errorf("sending ADS request %s failed: %v", pretty.ToJSON(req), err)
+		return err
 	}
 	if t.logger.V(perRPCVerbosityLevel) {
 		t.logger.Infof("ADS request sent: %v", pretty.ToJSON(req))
