@@ -335,24 +335,24 @@ type RouteConfigOptions struct {
 	// ListenerName is the name of the Listener resource which uses this
 	// RouteConfiguration.
 	ListenerName string
-	// ClusterSpecifierType determines the cluster specifier plugin type.
+	// ClusterSpecifierType determines the cluster specifier type.
 	ClusterSpecifierType RouteConfigClusterSpecifierType
 
 	// ClusterName is name of the cluster resource used when the cluster
-	// specifier plugin type is set to RouteConfigClusterSpecifierTypeCluster.
+	// specifier type is set to RouteConfigClusterSpecifierTypeCluster.
 	//
 	// Default value of "A" is used if left unspecified.
 	ClusterName string
 	// WeightedClusters is a map from cluster name to weights, and is used when
-	// the cluster specifier plugin type is set to
+	// the cluster specifier type is set to
 	// RouteConfigClusterSpecifierTypeWeightedCluster.
 	//
 	// Default value of {"A": 75, "B": 25} is used if left unspecified.
 	WeightedClusters map[string]int
 	// The below two fields specify the name of the cluster specifier plugin and
-	// its configuration, and is used when the cluster specifier plugin type is
-	// set to RouteConfigClusterSpecifierTypeClusterSpecifierPlugin. Tests are
-	// expected to provide valid values for these fields when appropriate.
+	// its configuration, and are used when the cluster specifier type is set to
+	// RouteConfigClusterSpecifierTypeClusterSpecifierPlugin. Tests are expected
+	// to provide valid values for these fields when appropriate.
 	ClusterSpecifierPluginName   string
 	ClusterSpecifierPluginConfig *anypb.Any
 }

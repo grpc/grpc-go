@@ -98,7 +98,7 @@ func (testClusterSpecifierPlugin) ParseClusterSpecifierConfig(cfg proto.Message)
 	}
 	any, ok := cfg.(*anypb.Any)
 	if !ok {
-		return nil, fmt.Errorf("testClusterSpecifierPlugin: error parsing config %v: unknown type %T", cfg, cfg)
+		return nil, fmt.Errorf("testClusterSpecifierPlugin: error parsing config %v: got type %T, want *anypb.Any", cfg, cfg)
 	}
 	lbCfg := new(wrapperspb.StringValue)
 	if err := ptypes.UnmarshalAny(any, lbCfg); err != nil {
