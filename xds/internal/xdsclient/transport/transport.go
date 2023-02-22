@@ -272,7 +272,7 @@ func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, reso
 		return fmt.Errorf("sending ADS request %s failed: %v", pretty.ToJSON(req), err)
 	}
 	if t.logger.V(perRPCVerbosityLevel) {
-		t.logger.Debugf("ADS request sent: %v", pretty.ToJSON(req))
+		t.logger.Infof("ADS request sent: %v", pretty.ToJSON(req))
 	} else {
 		t.logger.Debugf("ADS request sent for type %q, resources: %v, version %q, nonce %q", resourceURL, resourceNames, version, nonce)
 	}
@@ -285,7 +285,7 @@ func (t *Transport) recvAggregatedDiscoveryServiceResponse(stream adsStream) (re
 		return nil, "", "", "", fmt.Errorf("failed to read ADS response: %v", err)
 	}
 	if t.logger.V(perRPCVerbosityLevel) {
-		t.logger.Debugf("ADS response received: %v", pretty.ToJSON(resp))
+		t.logger.Infof("ADS response received: %v", pretty.ToJSON(resp))
 	} else {
 		t.logger.Debugf("ADS response received for type %q, version %q, nonce %q", resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce())
 	}
@@ -319,7 +319,7 @@ func (t *Transport) adsRunner(ctx context.Context) {
 			stream, err := t.newAggregatedDiscoveryServiceStream(ctx, t.cc)
 			if err != nil {
 				t.adsStreamErrHandler(err)
-				t.logger.Warningf("Creating new ADS stream: %v", err)
+				t.logger.Warningf("Creating new ADS stream failed: %v", err)
 				return false
 			}
 			t.logger.Infof("ADS stream created")
@@ -389,7 +389,7 @@ func (t *Transport) send(ctx context.Context) {
 				continue
 			}
 			if err := t.sendAggregatedDiscoveryServiceRequest(stream, resources, url, version, nonce, nackErr); err != nil {
-				t.logger.Warningf("Sending ADS request: %v", err)
+				t.logger.Warningf("Sending ADS request for resources: %q, url: %q, version: %q, nonce: %q failed: %v", resources, url, version, nonce, err)
 				// Send failed, clear the current stream.
 				stream = nil
 			}
@@ -422,7 +422,7 @@ func (t *Transport) sendExisting(stream adsStream) bool {
 
 	for url, resources := range t.resources {
 		if err := t.sendAggregatedDiscoveryServiceRequest(stream, mapToSlice(resources), url, t.versions[url], "", nil); err != nil {
-			t.logger.Warningf("Sending ADS request: %v", err)
+			t.logger.Warningf("Sending ADS request for resources: %q, url: %q, version: %q, nonce: %q failed: %v", resources, url, t.versions[url], "", err)
 			return false
 		}
 	}
