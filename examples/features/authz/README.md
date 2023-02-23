@@ -20,7 +20,7 @@ for simplicity, this should use a proper ID provider in production).
 
 If the above is successful, it uses the username in the token to set appropriate
 roles (hardcoded to the 2 required roles above if the username matches `super-user`
-or simplicity, these roles should be supplied externally as well).
+for simplicity, these roles should be supplied externally as well).
 
 Start the server with:
 
