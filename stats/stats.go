@@ -67,10 +67,19 @@ type InPayload struct {
 	Payload interface{}
 	// Data is the serialized message payload.
 	Data []byte
-	// Length is the length of uncompressed data.
+
+	// None of these lengths contain the transport framing bytes (HTTP/2
+	// specific).
+	// Length is the length of uncompressed data. Does not include gRPC framing
+	// bytes (1 byte compressed flag and 4 byte message length).
 	Length int
-	// WireLength is the length of data on wire (compressed, signed, encrypted).
+	// WireLength is the length of tbe compressed data, alongside gRPC framing
+	// bytes (1 byte compressed flag and 4 byte message length).
 	WireLength int
+	// CompressedLength is the length of the compressed data. Does not include
+	// gRPC framing bytes (1 byte compressed flag and 4 byte message length).
+	CompressedLength int
+
 	// RecvTime is the time when the payload is received.
 	RecvTime time.Time
 }
@@ -129,10 +138,17 @@ type OutPayload struct {
 	Payload interface{}
 	// Data is the serialized message payload.
 	Data []byte
-	// Length is the length of uncompressed data.
+	// None of these lengths contain the transport framing bytes (HTTP/2
+	// specific).
+	// Length is the length of uncompressed data. Does not include gRPC framing
+	// bytes (1 byte compressed flag and 4 byte message length).
 	Length int
-	// WireLength is the length of data on wire (compressed, signed, encrypted).
+	// WireLength is the length of tbe compressed data, alongside gRPC
+	// framing bytes (1 byte compressed flag and 4 byte message length).
 	WireLength int
+	// CompressedLength is the length of the uncompressed data. Doesn't include
+	// gRPC framing bytes (1 byte compressed flag and 4 byte message length).
+	CompressedLength int
 	// SentTime is the time when the payload is sent.
 	SentTime time.Time
 }

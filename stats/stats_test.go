@@ -568,9 +568,9 @@ func checkInPayload(t *testing.T, d *gotData, e *expectedData) {
 	}
 	// Below are sanity checks that WireLength and RecvTime are populated.
 	// TODO: check values of WireLength and RecvTime.
-	if len(st.Data) > 0 && st.WireLength == 0 {
+	if len(st.Data) > 0 && st.CompressedLength == 0 {
 		t.Fatalf("st.WireLength = %v with non-empty data, want <non-zero>",
-			st.WireLength)
+			st.CompressedLength)
 	}
 	if st.RecvTime.IsZero() {
 		t.Fatalf("st.ReceivedTime = %v, want <non-zero>", st.RecvTime)
