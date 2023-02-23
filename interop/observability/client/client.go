@@ -36,10 +36,9 @@ import (
 )
 
 var (
-	serverHost           = flag.String("server_host", "localhost", "The server host name")
-	serverPort           = flag.Int("server_port", 10000, "The server port number")
-	exporterSleepSeconds = flag.Int("exporter_sleep_seconds", 0, "Number of seconds to wait to export observability data")
-	testCase             = flag.String("test_case", "large_unary", "The action to perform")
+	serverHost = flag.String("server_host", "localhost", "The server host name")
+	serverPort = flag.Int("server_port", 10000, "The server port number")
+	testCase   = flag.String("test_case", "large_unary", "The action to perform")
 )
 
 func main() {
@@ -73,6 +72,9 @@ func main() {
 			log.Fatalf("Invalid test case: %s", singleCase)
 		}
 	}
-	log.Printf("Sleeping %d seconds before closing client", *exporterSleepSeconds)
-	time.Sleep(time.Duration(*exporterSleepSeconds) * time.Second)
+	// TODO(stanleycheung): remove this once the observability exporter plugin is able to
+	//                      gracefully flush observability data to cloud at shutdown
+	const exporterSleepSeconds = 65
+	log.Printf("Sleeping %d seconds before closing client", exporterSleepSeconds)
+	time.Sleep(time.Duration(exporterSleepSeconds) * time.Second)
 }

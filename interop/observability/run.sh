@@ -24,8 +24,7 @@ cd "$(dirname "$0")"/../..
 #
 # For client: $2: server_host
 #             $3: server_port
-#             $4: observability_exporter_sleep_seconds
-#             $5: test_case
+#             $4: test_case    # comma delimited interop test case names
 
 if [ "$1" = "server" ] ; then
   /grpc-go/interop/observability/server/server --port $2
@@ -33,7 +32,7 @@ if [ "$1" = "server" ] ; then
 elif [ "$1" = "client" ] ; then
   /grpc-go/interop/observability/client/client \
     --server_host=$2 --server_port=$3 \
-    --exporter_sleep_seconds=$4 --test_case=$5
+    --test_case=$4
 
 else
   echo "Invalid action: $1"

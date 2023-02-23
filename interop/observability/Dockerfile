@@ -12,6 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
+#
+# Stage 1: Build the interop test client and server
+#
+
 FROM golang:1.17.13-bullseye as build
 
 WORKDIR /grpc-go
@@ -22,6 +27,14 @@ RUN go build -o server/ server/server.go && \
     go build -o client/ client/client.go
 
 
+
+#
+# Stage 2:
+#
+# - Copy only the necessary files to reduce Docker image size.
+# - Have an ENTRYPOINT script which will launch the interop test client or server
+#   with the given parameters.
+#
 
 FROM golang:1.17.13-bullseye
 
