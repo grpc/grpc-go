@@ -20,7 +20,7 @@ package xdsclient
 
 import (
 	"context"
-	"strings"
+	"fmt"
 	"testing"
 	"time"
 
@@ -32,42 +32,66 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal"
-	"google.golang.org/grpc/xds/internal/httpfilter/router"
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
-type delegatingDummyWatcher struct {
-	watcher listenerWatcher
+type testResourceWatcher struct {
+	updateCh               chan *xdsresource.ResourceData
+	errorCh                chan error
+	resourceDoesNotExistCh chan struct{}
 }
 
-func (d *delegatingDummyWatcher) OnUpdate(data xdsresource.ResourceData) {
-	l := data.(*xdsresource.ListenerResourceData)
-	d.watcher.OnUpdate(l)
+func (w *testResourceWatcher) OnUpdate(data xdsresource.ResourceData) {
+	w.updateCh <- &data
 }
 
-func (d *delegatingDummyWatcher) OnError(err error) {
-	d.watcher.OnError(err)
+func (w *testResourceWatcher) OnError(err error) {
+	w.errorCh <- err
 }
 
-func (d *delegatingDummyWatcher) OnResourceDoesNotExist() {
-	d.watcher.OnResourceDoesNotExist()
+func (w *testResourceWatcher) OnResourceDoesNotExist() {
+	w.resourceDoesNotExistCh <- struct{}{}
+}
+
+func newTestResourceWatcher() *testResourceWatcher {
+	return &testResourceWatcher{
+		updateCh:               make(chan *xdsresource.ResourceData),
+		errorCh:                make(chan error, 1),
+		resourceDoesNotExistCh: make(chan struct{}),
+	}
 }
 
 var (
-	rType      = internal.ResourceTypeMapForTesting[version.V3ListenerURL].(xdsresource.Type)
-	rtRegistry = newResourceTypeRegistry()
-	_          = router.TypeURL
+	// listenerResourceType gets the resource type from the lookup map in the internal
+	// package, which is initialized when the individual resource types are created.
+	listenerResourceType = internal.ResourceTypeMapForTesting[version.V3ListenerURL].(xdsresource.Type)
+	rtRegistry           = newResourceTypeRegistry()
 )
 
 func init() {
-	// Simulating maybeRegister for rType.
-	rtRegistry.types[rType.TypeURL()] = rType
+	// Simulating maybeRegister for listenerResourceType. The getter to this registry
+	// is passed to the authority for accessing the resource type.
+	rtRegistry.types[listenerResourceType.TypeURL()] = listenerResourceType
 }
 
-func setupAuthorityWithMgmtServer(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptions, nodeID string) (*authority, *e2e.ManagementServer) {
+func mgmtServerOptWithOnRequestDoneCh(done chan struct{}) e2e.ManagementServerOptions {
+	return e2e.ManagementServerOptions{
+		OnStreamRequest: func(i int64, request *v3discoverypb.DiscoveryRequest) error {
+			select {
+			case done <- struct{}{}:
+			default:
+			}
+			return nil
+		},
+	}
+}
+
+func setupAuthorityWithMgmtServer(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptions, watchExpiryTimeout time.Duration) (*authority, *e2e.ManagementServer, string) {
 	t.Helper()
+	nodeID := uuid.New().String()
 	mgmtServer, err := e2e.StartManagementServer(opts)
 	if err != nil {
 		t.Fatalf("Failed to spin up the xDS management server: %v", err)
@@ -84,232 +108,160 @@ func setupAuthorityWithMgmtServer(ctx context.Context, t *testing.T, opts e2e.Ma
 		},
 		serializer:         newCallbackSerializer(ctx),
 		resourceTypeGetter: rtRegistry.get,
-		watchExpiryTimeout: defaultTestWatchExpiryTimeout,
+		watchExpiryTimeout: watchExpiryTimeout,
 		logger:             nil,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return a, mgmtServer
+	return a, mgmtServer, nodeID
 }
 
+// This tests a resource's watch state when a watch is registered for a resource.
+// The test calls the `watchResource` api to register a watch for a resource and
+// verifies that the resource's watch state is set to `watchStateStarted`.
 func (s) TestResourceStateTransitionWhenWatchResourceIsInvoked(t *testing.T) {
-	// This tests the scenario when WatchResource is called, the wState transitions to
-	// watchStateStarted and also the timer is not initiated.
-
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	cs := newCallbackSerializer(ctx)
-	defer cancel()
-
-	nodeID := uuid.New().String()
-	a, err := newAuthority(authorityArgs{
-		serverCfg: &bootstrap.ServerConfig{
-			ServerURI: "mgmtServer'sAddress",
-			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			CredsType: "insecure",
-		},
-		bootstrapCfg: &bootstrap.Config{
-			NodeProto: &v3corepb.Node{Id: nodeID},
-		},
-		serializer:         cs,
-		resourceTypeGetter: rtRegistry.get,
-		watchExpiryTimeout: defaultTestWatchExpiryTimeout,
-		logger:             nil,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer a.close()
-
-	resourceName := "xdsclient-test-lds-resource"
-	watcher := listenerWatcher{resourceName: resourceName, cb: func(xdsresource.ListenerUpdate, error) {}}
-	dWatcher := &delegatingDummyWatcher{watcher: watcher}
-
-	cancelResource := a.watchResource(rType, resourceName, dWatcher)
-	defer cancelResource()
-
-	a.resourcesMu.Lock()
-	if a.resources[rType][resourceName].wTimer != nil {
-		t.Fatal("watch resource timer has started. Want: wTimer==nil.")
-	}
-	if wState := a.resources[rType][resourceName].wState; wState != watchStateStarted {
-		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateStarted)
-	}
-	a.resourcesMu.Unlock()
-
-}
-
-func (s) TestResourceStateTransitionsFromRequestedToReceivedOnUpdate(t *testing.T) {
-	// This tests the scenario where there is a watch on a resource and the mgmt
-	// server responds with an update. In this case, the wState should transition
-	// from watchStateRequested to watchStateReceived
-
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	onStreamRequestDoneCh := make(chan struct{})
-
-	mgmtServerOpts := e2e.ManagementServerOptions{
-		OnStreamRequest: func(i int64, request *v3discoverypb.DiscoveryRequest) error {
-			// This is to avoid calling close() on a closed ch.
-			select {
-			case <-onStreamRequestDoneCh:
-				return nil
-			default:
-			}
-			close(onStreamRequestDoneCh)
-			return nil
-		},
-	}
-	nodeID := uuid.New().String()
-	a, mgmtServer := setupAuthorityWithMgmtServer(ctx, t, mgmtServerOpts, nodeID)
+	a, mgmtServer, _ := setupAuthorityWithMgmtServer(ctx, t, e2e.ManagementServerOptions{}, defaultTestTimeout)
 	defer a.close()
 	defer mgmtServer.Stop()
 
 	resourceName := "xdsclient-test-lds-resource"
-	watcherUpdateCh := make(chan struct{})
-	watcher := listenerWatcher{resourceName: resourceName, cb: func(update xdsresource.ListenerUpdate, err error) {
-		close(watcherUpdateCh)
-	}}
-	dWatcher := &delegatingDummyWatcher{watcher: watcher}
-
-	cancelResource := a.watchResource(rType, resourceName, dWatcher)
+	watcher := newTestResourceWatcher()
+	cancelResource := a.watchResource(listenerResourceType, resourceName, watcher)
 	defer cancelResource()
 
-	// Wait for mgmt server to recv request.
-	<-onStreamRequestDoneCh
+	if err := compareWStateAndWTimer(a, listenerResourceType, resourceName, watchStateStarted); err != nil {
+		t.Fatal(err)
+	}
+}
 
-	a.resourcesMu.Lock()
-	if a.resources[rType][resourceName].wTimer == nil {
-		t.Fatal("watch resource timer is nil. Want: wTimer to be started.")
+// This tests the resource's watch state transition when there is a response for
+// the resource from the management server. The test calls the `watchResource`
+// api to register a watch for a resource, sends an update from the mgmt server,
+// and verifies that the resource's watch state transitions from
+// `watchStateRequested` to `watchStateReceived`.
+func (s) TestResourceStateTransitionsFromRequestedToReceivedOnUpdate(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+
+	onStreamRequestDoneCh := make(chan struct{})
+	mgmtServerOpts := mgmtServerOptWithOnRequestDoneCh(onStreamRequestDoneCh)
+	a, mgmtServer, nodeID := setupAuthorityWithMgmtServer(ctx, t, mgmtServerOpts, defaultTestTimeout)
+	defer a.close()
+	defer mgmtServer.Stop()
+
+	resourceName := "xdsclient-test-lds-resource"
+	watcher := newTestResourceWatcher()
+	cancelResource := a.watchResource(listenerResourceType, resourceName, watcher)
+	defer cancelResource()
+
+	// Waiting for mgmt server to recv request before verifying state.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Test timed out before mgmt server got the request.")
+	case <-onStreamRequestDoneCh:
 	}
-	if wState := a.resources[rType][resourceName].wState; wState != watchStateRequested {
-		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateRequested)
+	if err := compareWStateAndWTimer(a, listenerResourceType, resourceName, watchStateRequested); err != nil {
+		t.Fatal(err)
 	}
-	a.resourcesMu.Unlock()
 
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
 		Listeners:      []*v3listenerpb.Listener{e2e.DefaultClientListener(resourceName, "new-rds-resource")},
 		SkipValidation: true,
 	}
-
 	if err := mgmtServer.Update(ctx, resources); err != nil {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	// Wait for authority to receive the update.
-	<-watcherUpdateCh
-	a.resourcesMu.Lock()
-	if wState := a.resources[rType][resourceName].wState; wState != watchStateReceived {
-		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateReceived)
+	// Waiting for authority to receive the update before verifying state.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Test timed out before watcher received the update.")
+	case <-watcher.updateCh:
 	}
-	a.resourcesMu.Unlock()
+
+	if err := compareWStateAndWTimer(a, listenerResourceType, resourceName, watchStateReceived); err != nil {
+		t.Fatal(err)
+	}
 }
 
+// This tests the resource's watch state transition when the ADS stream is closed
+// by the management server. The test calls the `watchResource` api to register
+// a watch for a resource, stops the management server, and verifies the resource's
+// watch state transitions from `watchStateRequested` to `watchStateStarted` so
+// that the watch can be restarted later.
 func (s) TestResourceStateTransitionsFromRequestedToStartedOnError(t *testing.T) {
-	// This tests the scenario where the ADS stream breaks after watchResource call.
-	// In this case the timer for the resource also stops and the state is ready
-	// to be restarted later.
-
-	onStreamRequestDoneCh := make(chan struct{})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	mgmtServerOpts := e2e.ManagementServerOptions{
-		OnStreamRequest: func(i int64, request *v3discoverypb.DiscoveryRequest) error {
-			// This is to avoid calling close() on a closed ch.
-			select {
-			case <-onStreamRequestDoneCh:
-				return nil
-			default:
-			}
-			close(onStreamRequestDoneCh)
-			return nil
-		},
-	}
-	nodeID := uuid.New().String()
-	a, mgmtServer := setupAuthorityWithMgmtServer(ctx, t, mgmtServerOpts, nodeID)
+
+	onStreamRequestDoneCh := make(chan struct{})
+	mgmtServerOpts := mgmtServerOptWithOnRequestDoneCh(onStreamRequestDoneCh)
+	a, mgmtServer, _ := setupAuthorityWithMgmtServer(ctx, t, mgmtServerOpts, defaultTestTimeout)
 	defer a.close()
 
 	resourceName := "xdsclient-test-lds-resource"
-	watcherErrCh := make(chan error)
-	watcher := listenerWatcher{resourceName: resourceName, cb: func(update xdsresource.ListenerUpdate, err error) {
-		watcherErrCh <- err
-	}}
-	dWatcher := &delegatingDummyWatcher{watcher: watcher}
-
-	cancelResource := a.watchResource(rType, resourceName, dWatcher)
+	watcher := newTestResourceWatcher()
+	cancelResource := a.watchResource(listenerResourceType, resourceName, watcher)
 	defer cancelResource()
 
-	// Wait for mgmt server to recv request.
-	<-onStreamRequestDoneCh
-
-	a.resourcesMu.Lock()
-	if a.resources[rType][resourceName].wTimer == nil {
-		t.Fatal("watch resource timer is nil. Want: wTimer to be started.")
+	// Waiting for mgmt server to recv request.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Test timed out before mgmt server got the request.")
+	case <-onStreamRequestDoneCh:
 	}
-	if wState := a.resources[rType][resourceName].wState; wState != watchStateRequested {
-		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateRequested)
+	if err := compareWStateAndWTimer(a, listenerResourceType, resourceName, watchStateRequested); err != nil {
+		t.Fatal(err)
 	}
-	a.resourcesMu.Unlock()
 
 	mgmtServer.Stop()
 
-	// Wait for watcher to receive the update.
-	if err := <-watcherErrCh; err == nil {
-		t.Fatalf("got err == nil. Want: %v", watchStateStarted)
+	// Waiting for watcher to receive the update.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Test timed out before verifying error propagation.")
+	case err := <-watcher.errorCh:
+		if err == nil {
+			t.Fatal("got err == nil. Want: err from stream connection reset by peer")
+		}
 	}
-	a.resourcesMu.Lock()
-	if wState := a.resources[rType][resourceName].wState; wState != watchStateStarted {
-		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateStarted)
+	if err := compareWStateAndWTimer(a, listenerResourceType, resourceName, watchStateStarted); err != nil {
+		t.Fatal(err)
 	}
-	a.resourcesMu.Unlock()
 }
 
+// This tests the case where ADS stream breaks after a successfully receiving a
+// message on the stream. In this case, we do not want the error to be propagated
+// to the watchers. verifies that in the case where the ADS stream breaks after successfully
+// receiving a message on the stream. In this case we want to ignore propagating
+// connection error to the watcher. But since the mgmt server stops in this test,
+// the watcher would be updated with a connection error for the subsequent attempt
+// to create an ADS stream.
 func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
-	// This test verifies that in the case where the ADS stream breaks after successfully
-	// receiving a message on the stream. In this case we want to ignore propagating
-	// connection error to the watcher. But since the mgmt server stops in this test,
-	// the watcher would be updated with a connection error for the subsequent attempt
-	// to create an ADS stream.
-
-	onStreamRequestDoneCh := make(chan struct{})
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 
-	mgmtServerOpts := e2e.ManagementServerOptions{
-		OnStreamRequest: func(i int64, request *v3discoverypb.DiscoveryRequest) error {
-			// This is to avoid calling close() on a closed ch.
-			select {
-			case <-onStreamRequestDoneCh:
-				return nil
-			default:
-			}
-			close(onStreamRequestDoneCh)
-			return nil
-		},
-	}
-	nodeID := uuid.New().String()
-	a, mgmtServer := setupAuthorityWithMgmtServer(ctx, t, mgmtServerOpts, nodeID)
+	onStreamRequestDoneCh := make(chan struct{})
+	mgmtServerOpts := mgmtServerOptWithOnRequestDoneCh(onStreamRequestDoneCh)
+	a, mgmtServer, nodeID := setupAuthorityWithMgmtServer(ctx, t, mgmtServerOpts, defaultTestWatchExpiryTimeout)
 	defer a.close()
 
 	resourceNameA := "xdsclient-test-lds-resourceA"
-	watcherAUpdateCh := make(chan struct{})
-	watcherA := listenerWatcher{resourceName: resourceNameA, cb: func(update xdsresource.ListenerUpdate, err error) {
-		select {
-		case <-watcherAUpdateCh:
-			return
-		default:
-		}
-		close(watcherAUpdateCh)
-	}}
-	dWatcherA := &delegatingDummyWatcher{watcher: watcherA}
+	watcherA := newTestResourceWatcher()
 
-	cancelWatchResourceA := a.watchResource(rType, resourceNameA, dWatcherA)
+	cancelWatchResourceA := a.watchResource(listenerResourceType, resourceNameA, watcherA)
 	defer cancelWatchResourceA()
 
 	// Wait for mgmt server to recv request.
-	<-onStreamRequestDoneCh
+	select {
+	case <-ctx.Done():
+		t.Fatal("Test timed out before mgmt server got the request.")
+	case <-onStreamRequestDoneCh:
+	}
 
 	resources := e2e.UpdateOptions{
 		NodeID:         nodeID,
@@ -321,35 +273,72 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 		t.Fatalf("Failed to update management server with resources: %v, err: %v", resources, err)
 	}
 
-	// Verify update for resource A is received and stop the mgmt server.
-	<-watcherAUpdateCh
+	// Verifying update for resource A is received.
+	select {
+	case <-ctx.Done():
+		t.Fatal("Test timed out before watcher received the update.")
+	case <-watcherA.updateCh:
+	}
 
 	resourceNameB := "xdsclient-test-lds-resourceB"
-	watcherB := listenerWatcher{resourceName: resourceNameB, cb: func(update xdsresource.ListenerUpdate, err error) {
-		switch xdsresource.ErrType(err) {
-		case xdsresource.ErrTypeStreamFailedAfterRecv:
-			// Verify that an Ignored error was not propagated to the watcher.
-			t.Fatalf("watch got an unexpected error update; want: ErrTypeStreamFailedAfterRecv error updates should be ignored.")
-		case xdsresource.ErrorTypeConnection:
-			// Verify that the error was during ADS stream creation.
-			if !strings.Contains(err.Error(), "Error while dialing:") {
-				t.Fatalf("watch got an unexpected error update; want: error updates only for failed stream creation.")
-			}
-		}
-	}}
-	dWatcherB := &delegatingDummyWatcher{watcher: watcherB}
-
-	cancelWatchResourceB := a.watchResource(rType, resourceNameB, dWatcherB)
+	watcherB := newTestResourceWatcher()
+	cancelWatchResourceB := a.watchResource(listenerResourceType, resourceNameB, watcherB)
 	defer cancelWatchResourceB()
 
+	// Stopping the management server after watch was created for resource B.
 	mgmtServer.Stop()
 
-	// Since there was already a response on the stream, the timer for resource B should not fire.
-	<-time.After(defaultTestWatchExpiryTimeout)
-
-	a.resourcesMu.Lock()
-	if wState := a.resources[rType][resourceNameB].wState; wState != watchStateStarted {
-		t.Fatalf("watch resource state in: %v. Want: %v", wState, watchStateStarted)
+	// Waiting for watcherB to get an error on err ch.
+	var err error
+	select {
+	case <-ctx.Done():
+		t.Fatal("Test timed out before mgmt server got the request.")
+	case err = <-watcherB.errorCh:
 	}
-	a.resourcesMu.Unlock()
+	// This error should be due to connectivity issue when reconnecting because
+	// the mgmt server was already been stopped. Any other error should fail the
+	// test.
+	switch xdsresource.ErrType(err) {
+	case xdsresource.ErrorTypeConnection:
+	default:
+		// Verify that no error was not propagated to the watcher.
+		t.Fatalf("watch got an unexpected error update; want: error propagation should be ignored.")
+	}
+
+	// Since there was already a response on the stream, the timer for resource B
+	// should not fire.
+	<-time.After(defaultTestWatchExpiryTimeout)
+	if err := compareWStateAndWTimer(a, listenerResourceType, resourceNameB, watchStateStarted); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+func compareWStateAndWTimer(a *authority, rt xdsresource.Type, rn string, wantState watchState) error {
+	a.resourcesMu.Lock()
+	defer a.resourcesMu.Unlock()
+	wState := a.resources[rt][rn].wState
+
+	if wState != wantState {
+		return fmt.Errorf("resource watch state in: %v. Want: %v", wState, wantState)
+	}
+
+	wTimer := a.resources[rt][rn].wTimer
+	switch wState {
+	case watchStateRequested:
+		if wTimer == nil {
+			return fmt.Errorf("got timer that is nil. want: timer that is active")
+		}
+	case watchStateStarted:
+		if wTimer != nil {
+			return fmt.Errorf("got timer that is not nil. want: nil")
+		}
+	default:
+		if wTimer.Stop() {
+			// This means that the timer was running but could be successfully stopped.
+			return fmt.Errorf("got timer that was actively running. want: timer that has already stopped")
+		}
+	}
+
+	return nil
 }

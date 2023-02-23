@@ -108,11 +108,8 @@ type Transport struct {
 // otherwise, and this will cause the transport layer to send a NACK.
 type OnRecvHandlerFunc func(update ResourceUpdate) error
 
-// OnSendHandlerFunc is the implementation at the xDS data model layer, which
-// handles state changes for the resource watch and stop watch timers accordingly.
-//
-// A nil error is returned from this function when the data model layer has applied
-// accurate state transitions for all the resources in the update.
+// OnSendHandlerFunc is the implementation at the authority, which handles state
+// changes for the resource watch and stop watch timers accordingly.
 type OnSendHandlerFunc func(update *ResourceSendInfo)
 
 // ResourceUpdate is a representation of the configuration update received from

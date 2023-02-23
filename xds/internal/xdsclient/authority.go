@@ -132,11 +132,9 @@ func newAuthority(args authorityArgs) (*authority, error) {
 }
 
 // transportOnSendHandler is called by the underlying transport when it sends a
-// resource req successfully. Timers are started for resources waiting for a
-// response.
+// resource request successfully. Timers are activated for resources waiting for
+// a response.
 func (a *authority) transportOnSendHandler(u *transport.ResourceSendInfo) {
-	a.resourcesMu.Lock()
-	defer a.resourcesMu.Unlock()
 	rType := a.resourceTypeGetter(u.URL)
 	// Resource type not found is not expected under normal circumstances, since
 	// the resource type url passed to the transport is determined by the authority.
@@ -144,18 +142,9 @@ func (a *authority) transportOnSendHandler(u *transport.ResourceSendInfo) {
 		a.logger.Warningf("Unknown resource type url: %s", u.URL)
 		return
 	}
-	resourceStates := a.resources[rType]
-
-	for _, resourceName := range u.ResourceNames {
-		if state, ok := resourceStates[resourceName]; ok {
-			if state.wState == watchStateStarted {
-				state.wTimer = time.AfterFunc(a.watchExpiryTimeout, func() {
-					a.handleWatchTimerExpiry(rType, resourceName, state)
-				})
-				state.wState = watchStateRequested
-			}
-		}
-	}
+	a.resourcesMu.Lock()
+	defer a.resourcesMu.Unlock()
+	a.startAllWatchTimersLocked(rType, u.ResourceNames)
 }
 
 func (a *authority) handleResourceUpdate(resourceUpdate transport.ResourceUpdate) error {
@@ -325,30 +314,57 @@ func decodeAllResources(opts *xdsresource.DecodeOptions, rType xdsresource.Type,
 	return ret, md, errRet
 }
 
+// startAllWatchTimersLocked is invoked when transport OnSend callback is called
+// to start watch timers for resources that have been requested on the stream.
+//
+// Caller must host a.resourcesMu.
+func (a *authority) startAllWatchTimersLocked(rType xdsresource.Type, resourceNames []string) {
+	resourceStates := a.resources[rType]
+
+	for _, resourceName := range resourceNames {
+		if state, ok := resourceStates[resourceName]; ok {
+			if state.wState != watchStateStarted {
+				continue
+			}
+			state.wTimer = time.AfterFunc(a.watchExpiryTimeout, func() {
+				a.handleWatchTimerExpiry(rType, resourceName, state)
+			})
+			state.wState = watchStateRequested
+		}
+	}
+}
+
+// stopAllWatchTimersLocked is invoked upon connection errors to stops watch timers
+// for resources that have been requested, but not yet responded to by the management
+// server.
+//
+// Caller must host a.resourcesMu.
+func (a *authority) stopAllWatchTimersLocked() {
+	for _, rType := range a.resources {
+		for resourceName, state := range rType {
+			if state.wState != watchStateRequested {
+				continue
+			}
+			if !state.wTimer.Stop() {
+				// If the timer has already fired, it means that the timer watch expiry
+				// callback is blocked on the same lock that we currently hold. Don't change
+				// the watch state and instead let the watch expiry callback handle it.
+				a.logger.Warningf("Watch timer for resource %v already fired. Ignoring here.", resourceName)
+				continue
+			}
+			state.wTimer = nil
+			state.wState = watchStateStarted
+		}
+	}
+}
+
 // newConnectionError is called by the underlying transport when it receives a
 // connection error. The error will be forwarded to all the resource watchers.
 func (a *authority) newConnectionError(err error) {
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 
-	// For all resource types, for all resources within each resource type, and
-	// for all the watchers for every resource, propagate the connection error
-	// from the transport layer.
-	for _, rType := range a.resources {
-		for resourceName, state := range rType {
-			// If the connection/stream breaks after the resource has been requested,
-			// but before the response is received, we stop the timer here. When the
-			// stream is recreated, the transport layer will resend all previously
-			// requested resources, and we will start the timer in the `onResourceSend`
-			// callback.
-			if state.wState == watchStateRequested {
-				if ok := state.wTimer.Stop(); !ok {
-					a.logger.Warningf("wTimer.Stop() for resource %v returned false", resourceName)
-				}
-				state.wState = watchStateStarted
-			}
-		}
-	}
+	a.stopAllWatchTimersLocked()
 
 	// We do not consider it an error if the ADS stream was closed after having received
 	// a response on the stream. This is because there are legitimate reasons why the server
@@ -453,8 +469,12 @@ func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName 
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 
-	if state.wState != watchStateRequested {
-		a.logger.Warningf("Unexpected watch state %q for resource %q", state.wState, watchStateRequested)
+	switch state.wState {
+	case watchStateRequested:
+	case watchStateCanceled:
+		return
+	default:
+		a.logger.Warningf("Unexpected watch state %q for resource %q", state.wState, resourceName)
 		return
 	}
 
