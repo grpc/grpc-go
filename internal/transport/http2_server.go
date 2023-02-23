@@ -141,6 +141,16 @@ type http2Server struct {
 func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport, err error) {
 	var authInfo credentials.AuthInfo
 	rawConn := conn
+
+	ctx := context.Background()
+	if cc := config.ConnContext; cc != nil {
+		ctx = cc(ctx, rawConn)
+		if ctx == nil {
+			panic("ConnContext returned nil")
+		}
+	}
+	ctx = setConnection(ctx, rawConn)
+
 	if config.Credentials != nil {
 		var err error
 		conn, authInfo, err = config.Credentials.ServerHandshake(rawConn)
@@ -245,7 +255,7 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 
 	done := make(chan struct{})
 	t := &http2Server{
-		ctx:               setConnection(context.Background(), rawConn),
+		ctx:               ctx,
 		done:              done,
 		conn:              conn,
 		remoteAddr:        conn.RemoteAddr(),

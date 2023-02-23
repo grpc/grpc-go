@@ -124,7 +124,8 @@ type serverWorkerData struct {
 
 // Server is a gRPC server to serve RPC requests.
 type Server struct {
-	opts serverOptions
+	opts        serverOptions
+	ConnContext func(ctx context.Context, c net.Conn) context.Context
 
 	mu  sync.Mutex // guards following
 	lis map[net.Listener]bool
@@ -921,6 +922,7 @@ func (s *Server) newHTTP2Transport(c net.Conn) transport.ServerTransport {
 		ChannelzParentID:      s.channelzID,
 		MaxHeaderListSize:     s.opts.maxHeaderListSize,
 		HeaderTableSize:       s.opts.headerTableSize,
+		ConnContext:           s.ConnContext,
 	}
 	st, err := transport.NewServerTransport(c, config)
 	if err != nil {

@@ -82,6 +82,8 @@ type testStreamHandler struct {
 
 type hType int
 
+type connKey struct{}
+
 const (
 	normal hType = iota
 	suspended
@@ -443,7 +445,13 @@ func setUpServerOnly(t *testing.T, port int, sc *ServerConfig, ht hType) *server
 }
 
 func setUp(t *testing.T, port int, maxStreams uint32, ht hType) (*server, *http2Client, func()) {
-	return setUpWithOptions(t, port, &ServerConfig{MaxStreams: maxStreams}, ht, ConnectOptions{})
+	sc := &ServerConfig{
+		MaxStreams: maxStreams,
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			return context.WithValue(ctx, connKey{}, "conn")
+		},
+	}
+	return setUpWithOptions(t, port, sc, ht, ConnectOptions{})
 }
 
 func setUpWithOptions(t *testing.T, port int, sc *ServerConfig, ht hType, copts ConnectOptions) (*server, *http2Client, func()) {
@@ -2647,6 +2655,26 @@ func (s) TestPeerSetInServerContext(t *testing.T) {
 		}
 		if _, ok = peer.FromContext(sc.ctx); !ok {
 			t.Fatalf("Peer expected in server transport's context, but actually not found.")
+		}
+	}
+	server.mu.Unlock()
+}
+
+func (s) TestConnContextSetInServerContext(t *testing.T) {
+	// create server transports.
+	server, client, cancel := setUp(t, 0, math.MaxUint32, normal)
+	defer cancel()
+	defer server.stop()
+	defer client.Close(fmt.Errorf("closed manually by test"))
+
+	server.mu.Lock()
+	for k := range server.conns {
+		sc, ok := k.(*http2Server)
+		if !ok {
+			t.Fatalf("ServerTransport is of type %T, want %T", k, &http2Server{})
+		}
+		if got, want := sc.ctx.Value(connKey{}), "conn"; got != want {
+			t.Fatalf("conn context key = %#v; want %q", got, want)
 		}
 	}
 	server.mu.Unlock()
