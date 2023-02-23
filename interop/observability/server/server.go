@@ -51,6 +51,6 @@ func main() {
 	var opts []grpc.ServerOption
 	server := grpc.NewServer(opts...)
 	testgrpc.RegisterTestServiceServer(server, interop.NewTestServer())
-	log.Printf("observability interop server listening on %v", lis.Addr())
+	log.Printf("Observability interop server listening on %v", lis.Addr())
 	server.Serve(lis)
 }

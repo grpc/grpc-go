@@ -12,20 +12,29 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+FROM golang:1.17.13-bullseye as build
+
+WORKDIR /grpc-go
+COPY . .
+
+WORKDIR /grpc-go/interop/observability
+RUN go build -o server/ server/server.go && \
+    go build -o client/ client/client.go
+
+
+
 FROM golang:1.17.13-bullseye
 
 ENV GRPC_GO_LOG_SEVERITY_LEVEL info
 ENV GRPC_GO_LOG_VERBOSITY_LEVEL 2
 
 WORKDIR /grpc-go/interop/observability/server
-
-COPY ./interop/observability/server/server .
+COPY --from=build /grpc-go/interop/observability/server/server .
 
 WORKDIR /grpc-go/interop/observability/client
+COPY --from=build /grpc-go/interop/observability/client/client .
 
-COPY ./interop/observability/client/client .
+WORKDIR /grpc-go/interop/observability
+COPY --from=build /grpc-go/interop/observability/run.sh .
 
-WORKDIR /grpc-go
-
-CMD ["/bin/sleep", "inf"]
-
+ENTRYPOINT ["/grpc-go/interop/observability/run.sh"]
