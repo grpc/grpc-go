@@ -76,12 +76,7 @@ func Set(addr resolver.Address, md metadata.MD) resolver.Address {
 	return addr
 }
 
-// Validate returns an error if the input md contains invalid keys or values.
-//
-// If the header is not a pseudo-header, the following items are checked:
-// - header names must contain one or more characters from this set [0-9 a-z _ - .].
-// - if the header-name ends with a "-bin" suffix, no validation of the header value is performed.
-// - otherwise, the header value must contain one or more characters from the set [%x20-%x7E].
+// Validate validates every pair in md with ValidatePair.
 func Validate(md metadata.MD) error {
 	for k, vals := range md {
 		if err := ValidatePair(k, vals...); err != nil {
@@ -102,8 +97,14 @@ func hasNotPrintable(msg string) bool {
 	return false
 }
 
-// ValidatePair validate single pair in metadata
+// ValidatePair validate a key-value pair with the following rules (the pseudo-header will be skipped) :
+//
+// - key must contain one or more characters.
+// - the characters in the key must be contained in [0-9 a-z _ - .].
+// - if the key ends with a "-bin" suffix, no validation of the corresponding value is performed.
+// - the characters in the every value must be printable (in [%x20-%x7E]).
 func ValidatePair(key string, vals ...string) error {
+	// key should not be empty
 	if key == "" {
 		return fmt.Errorf("there is an empty key in the header")
 	}
