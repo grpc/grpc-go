@@ -35,32 +35,47 @@ func convertToPtypesDuration(sec int64, usec int64) *durpb.Duration {
 func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOption {
 	var opts []*channelzpb.SocketOption
 	if skopts.Linger != nil {
-		opts = append(opts, &channelzpb.SocketOption{
-			Name: "SO_LINGER",
-			Additional: testutils.MarshalAny(&channelzpb.SocketOptionLinger{
-				Active:   skopts.Linger.Onoff != 0,
-				Duration: convertToPtypesDuration(int64(skopts.Linger.Linger), 0),
-			}),
+		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionLinger{
+			Active:   skopts.Linger.Onoff != 0,
+			Duration: convertToPtypesDuration(int64(skopts.Linger.Linger), 0),
 		})
+		if err == nil {
+			opts = append(opts, &channelzpb.SocketOption{
+				Name:       "SO_LINGER",
+				Additional: additional,
+			})
+		} else {
+			logger.Warningf("Failed to marshal socket options linger %+v: %v", skopts.Linger, err)
+		}
 	}
 	if skopts.RecvTimeout != nil {
-		opts = append(opts, &channelzpb.SocketOption{
-			Name: "SO_RCVTIMEO",
-			Additional: testutils.MarshalAny(&channelzpb.SocketOptionTimeout{
-				Duration: convertToPtypesDuration(int64(skopts.RecvTimeout.Sec), int64(skopts.RecvTimeout.Usec)),
-			}),
+		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionTimeout{
+			Duration: convertToPtypesDuration(int64(skopts.RecvTimeout.Sec), int64(skopts.RecvTimeout.Usec)),
 		})
+		if err == nil {
+			opts = append(opts, &channelzpb.SocketOption{
+				Name:       "SO_RCVTIMEO",
+				Additional: additional,
+			})
+		} else {
+			logger.Warningf("Failed to marshal socket options receive timeout %+v: %v", skopts.RecvTimeout, err)
+		}
 	}
 	if skopts.SendTimeout != nil {
-		opts = append(opts, &channelzpb.SocketOption{
-			Name: "SO_SNDTIMEO",
-			Additional: testutils.MarshalAny(&channelzpb.SocketOptionTimeout{
-				Duration: convertToPtypesDuration(int64(skopts.SendTimeout.Sec), int64(skopts.SendTimeout.Usec)),
-			}),
+		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionTimeout{
+			Duration: convertToPtypesDuration(int64(skopts.SendTimeout.Sec), int64(skopts.SendTimeout.Usec)),
 		})
+		if err == nil {
+			opts = append(opts, &channelzpb.SocketOption{
+				Name:       "SO_SNDTIMEO",
+				Additional: additional,
+			})
+		} else {
+			logger.Warningf("Failed to marshal socket options send timeout %+v: %v", skopts.SendTimeout, err)
+		}
 	}
 	if skopts.TCPInfo != nil {
-		additional := testutils.MarshalAny(&channelzpb.SocketOptionTcpInfo{
+		additional, err := ptypes.MarshalAny(&channelzpb.SocketOptionTcpInfo{
 			TcpiState:       uint32(skopts.TCPInfo.State),
 			TcpiCaState:     uint32(skopts.TCPInfo.Ca_state),
 			TcpiRetransmits: uint32(skopts.TCPInfo.Retransmits),
@@ -91,10 +106,14 @@ func sockoptToProto(skopts *channelz.SocketOptionData) []*channelzpb.SocketOptio
 			TcpiAdvmss:       skopts.TCPInfo.Advmss,
 			TcpiReordering:   skopts.TCPInfo.Reordering,
 		})
-		opts = append(opts, &channelzpb.SocketOption{
-			Name:       "TCP_INFO",
-			Additional: additional,
-		})
+		if err == nil {
+			opts = append(opts, &channelzpb.SocketOption{
+				Name:       "TCP_INFO",
+				Additional: additional,
+			})
+		} else {
+			logger.Warningf("Failed to marshal socket options TCP info %+v: %v", skopts.TCPInfo, err)
+		}
 	}
 	return opts
 }
