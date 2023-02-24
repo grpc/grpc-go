@@ -285,7 +285,7 @@ func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, reso
 func (t *Transport) recvAggregatedDiscoveryServiceResponse(stream adsStream) (resources []*anypb.Any, resourceURL, version, nonce string, err error) {
 	resp, err := stream.Recv()
 	if err != nil {
-		return nil, "", "", "", fmt.Errorf("failed to read ADS response: %v", err)
+		return nil, "", "", "", err
 	}
 	if t.logger.V(perRPCVerbosityLevel) {
 		t.logger.Infof("ADS response received: %v", pretty.ToJSON(resp))
