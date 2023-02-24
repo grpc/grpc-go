@@ -21,6 +21,7 @@ package clusterresolver
 import (
 	"fmt"
 	"net/url"
+	"sync"
 
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/serviceconfig"
@@ -42,6 +43,7 @@ type dnsDiscoveryMechanism struct {
 	topLevelResolver topLevelResolver
 	dnsR             resolver.Resolver
 
+	mu             sync.Mutex
 	addrs          []string
 	updateReceived bool
 }
@@ -83,6 +85,9 @@ func newDNSResolver(target string, topLevelResolver topLevelResolver) *dnsDiscov
 }
 
 func (dr *dnsDiscoveryMechanism) lastUpdate() (interface{}, bool) {
+	dr.mu.Lock()
+	defer dr.mu.Unlock()
+
 	if !dr.updateReceived {
 		return nil, false
 	}
@@ -105,12 +110,15 @@ func (dr *dnsDiscoveryMechanism) stop() {
 // updates from the real DNS resolver.
 
 func (dr *dnsDiscoveryMechanism) UpdateState(state resolver.State) error {
+	dr.mu.Lock()
 	addrs := make([]string, len(state.Addresses))
 	for i, a := range state.Addresses {
 		addrs[i] = a.Addr
 	}
 	dr.addrs = addrs
 	dr.updateReceived = true
+	dr.mu.Unlock()
+
 	dr.topLevelResolver.onUpdate()
 	return nil
 }
