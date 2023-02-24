@@ -152,7 +152,7 @@ func parseEDSRespProto(m *v3endpointpb.ClusterLoadAssignment) (EndpointsUpdate, 
 		ret.Localities = append(ret.Localities, Locality{
 			ID:        lid,
 			Endpoints: endpoints,
-			Weight:    locality.GetLoadBalancingWeight().GetValue(),
+			Weight:    weight,
 			Priority:  priority,
 		})
 	}
