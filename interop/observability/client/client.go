@@ -24,7 +24,6 @@ import (
 	"log"
 	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	"google.golang.org/grpc"
@@ -39,6 +38,7 @@ var (
 	serverHost = flag.String("server_host", "localhost", "The server host name")
 	serverPort = flag.Int("server_port", 10000, "The server port number")
 	testCase   = flag.String("test_case", "large_unary", "The action to perform")
+	numTimes   = flag.Int("num_times", 1, "Number of times to run the test case")
 )
 
 func main() {
@@ -60,16 +60,15 @@ func main() {
 	}
 	defer conn.Close()
 	tc := testgrpc.NewTestServiceClient(conn)
-	testCases := strings.Split(*testCase, ",")
-	for _, singleCase := range testCases {
-		if singleCase == "ping_pong" {
+	for i := 0; i < *numTimes; i++ {
+		if *testCase == "ping_pong" {
 			interop.DoPingPong(tc)
-		} else if singleCase == "large_unary" {
+		} else if *testCase == "large_unary" {
 			interop.DoLargeUnaryCall(tc)
-		} else if singleCase == "custom_metadata" {
+		} else if *testCase == "custom_metadata" {
 			interop.DoCustomMetadata(tc)
 		} else {
-			log.Fatalf("Invalid test case: %s", singleCase)
+			log.Fatalf("Invalid test case: %s", *testCase)
 		}
 	}
 	// TODO(stanleycheung): remove this once the observability exporter plugin is able to
