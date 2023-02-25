@@ -48,17 +48,17 @@ func (s) TestNew(t *testing.T) {
 			wantErrStr: "missing credentials when creating a new transport",
 		},
 		{
-			name: "missing update handler",
+			name: "missing onRecv handler",
 			opts: transport.Options{ServerCfg: bootstrap.ServerConfig{
 				ServerURI: "server-address",
 				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 			},
 				NodeProto: &v3corepb.Node{},
 			},
-			wantErrStr: "missing update handler when creating a new transport",
+			wantErrStr: "missing OnRecv callback when creating a new transport",
 		},
 		{
-			name: "missing stream error handler",
+			name: "missing onError handler",
 			opts: transport.Options{
 				ServerCfg: bootstrap.ServerConfig{
 					ServerURI: "server-address",
@@ -68,11 +68,11 @@ func (s) TestNew(t *testing.T) {
 				OnRecvHandler: func(transport.ResourceUpdate) error { return nil },
 				OnSendHandler: func(*transport.ResourceSendInfo) {},
 			},
-			wantErrStr: "missing stream error handler when creating a new transport",
+			wantErrStr: "missing OnError callback handler when creating a new transport",
 		},
 
 		{
-			name: "missing on send handler",
+			name: "missing onSend handler",
 			opts: transport.Options{
 				ServerCfg: bootstrap.ServerConfig{
 					ServerURI: "server-address",
@@ -82,7 +82,7 @@ func (s) TestNew(t *testing.T) {
 				OnRecvHandler:  func(transport.ResourceUpdate) error { return nil },
 				OnErrorHandler: func(error) {},
 			},
-			wantErrStr: "missing on send handler when creating a new transport",
+			wantErrStr: "missing onSend callback handler when creating a new transport",
 		},
 		{
 			name: "happy case",
