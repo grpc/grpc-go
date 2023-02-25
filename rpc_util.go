@@ -542,8 +542,8 @@ type parser struct {
 	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md
 	header [5]byte
 
-	// useSharedRecvBuffers indicates whether to use shared receive buffers.
-	useSharedRecvBuffers bool
+	// sharedRecvBufferPool is the pool of shared receive buffers.
+	sharedRecvBufferPool sharedRecvBufferPool
 }
 
 // recvMsg reads a complete gRPC message from the stream.
@@ -577,8 +577,8 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 	if int(length) > maxReceiveMessageSize {
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
-	if p.useSharedRecvBuffers {
-		msg = pool.Get(int(length))
+	if p.sharedRecvBufferPool != nil {
+		msg = p.sharedRecvBufferPool.Get(int(length))
 	} else {
 		msg = make([]byte, int(length))
 	}
@@ -768,7 +768,7 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message: %v", err)
 	}
 	if payInfo != nil {
-		if p.useSharedRecvBuffers {
+		if p.sharedRecvBufferPool != nil {
 			if len(buf) != 0 {
 				payInfo.uncompressedBytes = make([]byte, len(buf))
 				copy(payInfo.uncompressedBytes, buf)
@@ -777,8 +777,8 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 			payInfo.uncompressedBytes = buf
 		}
 	}
-	if p.useSharedRecvBuffers {
-		pool.Put(&buf)
+	if p.sharedRecvBufferPool != nil {
+		p.sharedRecvBufferPool.Put(&buf)
 	}
 	return nil
 }
@@ -930,90 +930,7 @@ const (
 
 const grpcUA = "grpc-go/" + Version
 
-const (
-	level0PoolMaxSize = 16
-	level1PoolMaxSize = level0PoolMaxSize * 16
-	level2PoolMaxSize = level1PoolMaxSize * 16 //   4 KB
-	level3PoolMaxSize = level2PoolMaxSize * 16 //  64 KB
-	level4PoolMaxSize = level3PoolMaxSize * 16 //   1 MB
-)
-
-type bytesPools struct {
-	pool0   bytesPool
-	pool1   bytesPool
-	pool2   bytesPool
-	pool3   bytesPool
-	pool4   bytesPool
-	poolMax bytesPool
-}
-
-func (p *bytesPools) Get(size int) []byte {
-	switch {
-	case size <= level0PoolMaxSize:
-		return p.pool0.Get(size)
-	case size <= level1PoolMaxSize:
-		return p.pool1.Get(size)
-	case size <= level2PoolMaxSize:
-		return p.pool2.Get(size)
-	case size <= level3PoolMaxSize:
-		return p.pool3.Get(size)
-	case size <= level4PoolMaxSize:
-		return p.pool4.Get(size)
-	default:
-		return p.poolMax.Get(size)
-	}
-}
-
-func (p *bytesPools) Put(bs *[]byte) {
-	switch size := cap(*bs); {
-	case size <= level0PoolMaxSize:
-		p.pool0.Put(bs)
-	case size <= level1PoolMaxSize:
-		p.pool1.Put(bs)
-	case size <= level2PoolMaxSize:
-		p.pool2.Put(bs)
-	case size <= level3PoolMaxSize:
-		p.pool3.Put(bs)
-	case size <= level4PoolMaxSize:
-		p.pool4.Put(bs)
-	default:
-		p.poolMax.Put(bs)
-	}
-}
-
-type bytesPool struct {
-	sync.Pool
-}
-
-func makeBytesPool() bytesPool {
-	return bytesPool{
-		sync.Pool{
-			New: func() interface{} {
-				return new([]byte)
-			},
-		},
-	}
-}
-
-func (p *bytesPool) Get(size int) []byte {
-	bs := p.Pool.Get().(*[]byte)
-	if cap(*bs) < size {
-		*bs = make([]byte, size)
-		return *bs
-	}
-
-	return (*bs)[:size]
-}
-
-func (p *bytesPool) Put(bs *[]byte) {
-	p.Pool.Put(bs)
-}
-
-var pool = bytesPools{
-	pool0:   makeBytesPool(),
-	pool1:   makeBytesPool(),
-	pool2:   makeBytesPool(),
-	pool3:   makeBytesPool(),
-	pool4:   makeBytesPool(),
-	poolMax: makeBytesPool(),
+type sharedRecvBufferPool interface {
+	Get(length int) []byte
+	Put(*[]byte)
 }

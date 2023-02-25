@@ -490,7 +490,7 @@ func (a *csAttempt) newStream() error {
 		return toRPCErr(nse.Err)
 	}
 	a.s = s
-	a.p = &parser{r: s, useSharedRecvBuffers: a.cs.cc.dopts.useSharedRecvBuffers}
+	a.p = &parser{r: s, sharedRecvBufferPool: a.cs.cc.dopts.sharedRecvBufferPool}
 	return nil
 }
 
@@ -1249,7 +1249,7 @@ func newNonRetryClientStream(ctx context.Context, desc *StreamDesc, method strin
 		return nil, err
 	}
 	as.s = s
-	as.p = &parser{r: s, useSharedRecvBuffers: ac.dopts.useSharedRecvBuffers}
+	as.p = &parser{r: s, sharedRecvBufferPool: ac.dopts.sharedRecvBufferPool}
 	ac.incrCallsStarted()
 	if desc != unaryStreamDesc {
 		// Listen on cc and stream contexts to cleanup when the user closes the

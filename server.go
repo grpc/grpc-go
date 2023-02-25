@@ -174,7 +174,7 @@ type serverOptions struct {
 	maxHeaderListSize     *uint32
 	headerTableSize       *uint32
 	numServerWorkers      uint32
-	useSharedRecvBuffers  bool
+	sharedRecvBufferPool  sharedRecvBufferPool
 }
 
 var defaultServerOptions = serverOptions{
@@ -553,16 +553,16 @@ func NumStreamWorkers(numServerWorkers uint32) ServerOption {
 	})
 }
 
-// SharedRecvBuffers returns a ServerOption that sets whether to use a bytes pool
-// for the parser. Setting this to true will reduce the memory allocation in the parser.
+// SharedRecvBufferPool returns a DialOption that specifies shared buffer pool
+// for parsing. Setting this will reduce the memory allocation in the parser.
 //
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func SharedRecvBuffers(ok bool) ServerOption {
+func SharedRecvBufferPool(bufferPool sharedRecvBufferPool) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
-		o.useSharedRecvBuffers = ok
+		o.sharedRecvBufferPool = bufferPool
 	})
 }
 
@@ -1310,7 +1310,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	if len(shs) != 0 || len(binlogs) != 0 {
 		payInfo = &payloadInfo{}
 	}
-	d, err := recvAndDecompress(&parser{r: stream}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp)
+	d, err := recvAndDecompress(&parser{r: stream, sharedRecvBufferPool: s.opts.sharedRecvBufferPool}, stream, dc, s.opts.maxReceiveMessageSize, payInfo, decomp)
 	if err != nil {
 		if e := t.WriteStatus(stream, status.Convert(err)); e != nil {
 			channelz.Warningf(logger, s.channelzID, "grpc: Server.processUnaryRPC failed to write status: %v", e)
@@ -1515,7 +1515,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		ctx:                   ctx,
 		t:                     t,
 		s:                     stream,
-		p:                     &parser{r: stream},
+		p:                     &parser{r: stream, sharedRecvBufferPool: s.opts.sharedRecvBufferPool},
 		codec:                 s.getCodec(stream.ContentSubtype()),
 		maxReceiveMessageSize: s.opts.maxReceiveMessageSize,
 		maxSendMessageSize:    s.opts.maxSendMessageSize,
