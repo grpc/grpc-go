@@ -109,6 +109,7 @@ var (
 	clientWriteBufferSize = flags.IntSlice("clientWriteBufferSize", []int{-1}, "Configures the client write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
 	serverReadBufferSize  = flags.IntSlice("serverReadBufferSize", []int{-1}, "Configures the server read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
 	serverWriteBufferSize = flags.IntSlice("serverWriteBufferSize", []int{-1}, "Configures the server write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
+	sharedRecvBufferPool  = flags.StringWithAllowedValues("sharedRecvBufferPool", sharedRecvBufferPoolAll, "Configures the shared receive buffer pool. One of: nil, simple", allSharedRecvBufferPools)
 
 	logger = grpclog.Component("benchmark")
 )
@@ -133,6 +134,10 @@ const (
 	networkModeLAN   = "LAN"
 	networkModeWAN   = "WAN"
 	networkLongHaul  = "Longhaul"
+	// Shared recv buffer pool
+	sharedRecvBufferPoolNil    = "nil"
+	sharedRecvBufferPoolSimple = "simple"
+	sharedRecvBufferPoolAll    = "all"
 
 	numStatsBuckets = 10
 	warmupCallCount = 10
@@ -144,6 +149,7 @@ var (
 	allCompModes              = []string{compModeOff, compModeGzip, compModeNop, compModeAll}
 	allToggleModes            = []string{toggleModeOff, toggleModeOn, toggleModeBoth}
 	allNetworkModes           = []string{networkModeNone, networkModeLocal, networkModeLAN, networkModeWAN, networkLongHaul}
+	allSharedRecvBufferPools  = []string{sharedRecvBufferPoolNil, sharedRecvBufferPoolSimple, sharedRecvBufferPoolAll}
 	defaultReadLatency        = []time.Duration{0, 40 * time.Millisecond} // if non-positive, no delay.
 	defaultReadKbps           = []int{0, 10240}                           // if non-positive, infinite
 	defaultReadMTU            = []int{0}                                  // if non-positive, infinite
@@ -320,6 +326,15 @@ func makeClient(bf stats.Features) (testgrpc.BenchmarkServiceClient, func()) {
 	}
 	if bf.ServerWriteBufferSize >= 0 {
 		sopts = append(sopts, grpc.WriteBufferSize(bf.ServerWriteBufferSize))
+	}
+	switch bf.SharedRecvBufferPool {
+	case sharedRecvBufferPoolNil:
+		// Do nothing.
+	case sharedRecvBufferPoolSimple:
+		opts = append(opts, grpc.WithSharedRecvBufferPool(newSimpleSharedRecvBufferPool()))
+		sopts = append(sopts, grpc.SharedRecvBufferPool(newSimpleSharedRecvBufferPool()))
+	default:
+		logger.Fatalf("Unknown shared recv buffer pool type: %v", bf.SharedRecvBufferPool)
 	}
 
 	sopts = append(sopts, grpc.MaxConcurrentStreams(uint32(bf.MaxConcurrentCalls+1)))
@@ -528,6 +543,7 @@ type featureOpts struct {
 	clientWriteBufferSize []int
 	serverReadBufferSize  []int
 	serverWriteBufferSize []int
+	sharedRecvBufferPools []string
 }
 
 // makeFeaturesNum returns a slice of ints of size 'maxFeatureIndex' where each
@@ -572,6 +588,8 @@ func makeFeaturesNum(b *benchOpts) []int {
 			featuresNum[i] = len(b.features.serverReadBufferSize)
 		case stats.ServerWriteBufferSize:
 			featuresNum[i] = len(b.features.serverWriteBufferSize)
+		case stats.SharedRecvBufferPool:
+			featuresNum[i] = len(b.features.sharedRecvBufferPools)
 		default:
 			log.Fatalf("Unknown feature index %v in generateFeatures. maxFeatureIndex is %v", i, stats.MaxFeatureIndex)
 		}
@@ -638,6 +656,7 @@ func (b *benchOpts) generateFeatures(featuresNum []int) []stats.Features {
 			ClientWriteBufferSize: b.features.clientWriteBufferSize[curPos[stats.ClientWriteBufferSize]],
 			ServerReadBufferSize:  b.features.serverReadBufferSize[curPos[stats.ServerReadBufferSize]],
 			ServerWriteBufferSize: b.features.serverWriteBufferSize[curPos[stats.ServerWriteBufferSize]],
+			SharedRecvBufferPool:  b.features.sharedRecvBufferPools[curPos[stats.SharedRecvBufferPool]],
 		}
 		if len(b.features.reqPayloadCurves) == 0 {
 			f.ReqSizeBytes = b.features.reqSizeBytes[curPos[stats.ReqSizeBytesIndex]]
@@ -708,6 +727,7 @@ func processFlags() *benchOpts {
 			clientWriteBufferSize: append([]int(nil), *clientWriteBufferSize...),
 			serverReadBufferSize:  append([]int(nil), *serverReadBufferSize...),
 			serverWriteBufferSize: append([]int(nil), *serverWriteBufferSize...),
+			sharedRecvBufferPools: setSharedRecvBufferPool(*sharedRecvBufferPool),
 		},
 	}
 
@@ -776,6 +796,19 @@ func setCompressorMode(val string) []string {
 		return []string{val}
 	case compModeAll:
 		return []string{compModeNop, compModeGzip, compModeOff}
+	default:
+		// This should never happen because a wrong value passed to this flag would
+		// be caught during flag.Parse().
+		return []string{}
+	}
+}
+
+func setSharedRecvBufferPool(val string) []string {
+	switch val {
+	case sharedRecvBufferPoolNil, sharedRecvBufferPoolSimple:
+		return []string{val}
+	case sharedRecvBufferPoolAll:
+		return []string{sharedRecvBufferPoolNil, sharedRecvBufferPoolSimple}
 	default:
 		// This should never happen because a wrong value passed to this flag would
 		// be caught during flag.Parse().
@@ -882,3 +915,33 @@ type nopDecompressor struct{}
 
 func (nopDecompressor) Do(r io.Reader) ([]byte, error) { return io.ReadAll(r) }
 func (nopDecompressor) Type() string                   { return compModeNop }
+
+// simpleSharedRecvBufferPool is a simple implementation of sharedRecvBufferPool.
+type simpleSharedRecvBufferPool struct {
+	sync.Pool
+}
+
+func newSimpleSharedRecvBufferPool() *simpleSharedRecvBufferPool {
+	return &simpleSharedRecvBufferPool{
+		Pool: sync.Pool{
+			New: func() interface{} {
+				bs := make([]byte, 0)
+				return &bs
+			},
+		},
+	}
+}
+
+func (p *simpleSharedRecvBufferPool) Get(size int) []byte {
+	bs := p.Pool.Get().(*[]byte)
+	if cap(*bs) < size {
+		*bs = make([]byte, size)
+		return *bs
+	}
+
+	return (*bs)[:size]
+}
+
+func (p *simpleSharedRecvBufferPool) Put(bs *[]byte) {
+	p.Pool.Put(bs)
+}
