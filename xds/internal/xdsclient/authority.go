@@ -139,12 +139,12 @@ func (a *authority) transportOnSendHandler(u *transport.ResourceSendInfo) {
 	// Resource type not found is not expected under normal circumstances, since
 	// the resource type url passed to the transport is determined by the authority.
 	if rType == nil {
-		a.logger.Warningf("Unknown resource type url: %s", u.URL)
+		a.logger.Warningf("Unknown resource type url: %s.", u.URL)
 		return
 	}
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
-	a.startAllWatchTimersLocked(rType, u.ResourceNames)
+	a.startWatchTimersLocked(rType, u.ResourceNames)
 }
 
 func (a *authority) handleResourceUpdate(resourceUpdate transport.ResourceUpdate) error {
@@ -314,13 +314,13 @@ func decodeAllResources(opts *xdsresource.DecodeOptions, rType xdsresource.Type,
 	return ret, md, errRet
 }
 
-// startAllWatchTimersLocked is invoked when transport OnSend callback is called
-// to start watch timers for resources that have been requested on the stream.
+// startWatchTimersLocked is invoked upon transport.OnSend() callback with resources
+// requested on the underlying ADS stream. This satisfies the conditions to start
+// watch timers per A57 [https://github.com/grpc/proposal/blob/master/A57-xds-client-failure-mode-behavior.md#handling-resources-that-do-not-exist]
 //
-// Caller must host a.resourcesMu.
-func (a *authority) startAllWatchTimersLocked(rType xdsresource.Type, resourceNames []string) {
+// Caller must hold a.resourcesMu.
+func (a *authority) startWatchTimersLocked(rType xdsresource.Type, resourceNames []string) {
 	resourceStates := a.resources[rType]
-
 	for _, resourceName := range resourceNames {
 		if state, ok := resourceStates[resourceName]; ok {
 			if state.wState != watchStateStarted {
@@ -334,12 +334,12 @@ func (a *authority) startAllWatchTimersLocked(rType xdsresource.Type, resourceNa
 	}
 }
 
-// stopAllWatchTimersLocked is invoked upon connection errors to stops watch timers
+// stopWatchTimersLocked is invoked upon connection errors to stops watch timers
 // for resources that have been requested, but not yet responded to by the management
 // server.
 //
-// Caller must host a.resourcesMu.
-func (a *authority) stopAllWatchTimersLocked() {
+// Caller must hold a.resourcesMu.
+func (a *authority) stopWatchTimersLocked() {
 	for _, rType := range a.resources {
 		for resourceName, state := range rType {
 			if state.wState != watchStateRequested {
@@ -364,7 +364,7 @@ func (a *authority) newConnectionError(err error) {
 	a.resourcesMu.Lock()
 	defer a.resourcesMu.Unlock()
 
-	a.stopAllWatchTimersLocked()
+	a.stopWatchTimersLocked()
 
 	// We do not consider it an error if the ADS stream was closed after having received
 	// a response on the stream. This is because there are legitimate reasons why the server
@@ -471,10 +471,12 @@ func (a *authority) handleWatchTimerExpiry(rType xdsresource.Type, resourceName 
 
 	switch state.wState {
 	case watchStateRequested:
+		// This is the only state where we need to handle the timer expiry by
+		// invoking appropriate watch callbacks. This is handled outside the switch.
 	case watchStateCanceled:
 		return
 	default:
-		a.logger.Warningf("Unexpected watch state %q for resource %q", state.wState, resourceName)
+		a.logger.Warningf("Unexpected watch state %q for resource %q.", state.wState, resourceName)
 		return
 	}
 

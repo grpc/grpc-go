@@ -67,7 +67,7 @@ type Transport struct {
 	serverURI       string                  // URI of the management server.
 	onRecvHandler   OnRecvHandlerFunc       // Resource update handler. xDS data model layer.
 	onErrorHandler  func(error)             // To report underlying stream errors.
-	onSendHandler   OnSendHandlerFunc       // To report underlying stream successful sends.
+	onSendHandler   OnSendHandlerFunc       // To report resources requested on ADS stream.
 	lrsStore        *load.Store             // Store returned to user for pushing loads.
 	backoff         func(int) time.Duration // Backoff after stream failures.
 	nodeProto       *v3corepb.Node          // Identifies the gRPC application.
@@ -152,8 +152,8 @@ type Options struct {
 	// return successfully as long as:
 	//   1. there is enough flow control quota to send the message.
 	//   2. the message is added to the send buffer.
-	// The connection may fail after this happens and before the message is actually
-	// sent on the wire. Hence, best effort.
+	// However, the connection may fail after the callback is invoked and before
+	// the message is actually sent on the wire. This is accepted.
 	//
 	// Invoked inline and implementations must not block.
 	OnSendHandler func(*ResourceSendInfo)
@@ -180,11 +180,11 @@ func New(opts Options) (*Transport, error) {
 	case opts.ServerCfg.Creds == nil:
 		return nil, errors.New("missing credentials when creating a new transport")
 	case opts.OnRecvHandler == nil:
-		return nil, errors.New("missing update handler when creating a new transport")
+		return nil, errors.New("missing OnRecv callback handler when creating a new transport")
 	case opts.OnErrorHandler == nil:
-		return nil, errors.New("missing stream error handler when creating a new transport")
+		return nil, errors.New("missing OnError callback handler when creating a new transport")
 	case opts.OnSendHandler == nil:
-		return nil, errors.New("missing on send handler when creating a new transport")
+		return nil, errors.New("missing OnSend callback handler when creating a new transport")
 	}
 
 	// Dial the xDS management with the passed in credentials.
@@ -269,9 +269,9 @@ func (t *Transport) newAggregatedDiscoveryServiceStream(ctx context.Context, cc 
 	return v3adsgrpc.NewAggregatedDiscoveryServiceClient(cc).StreamAggregatedResources(ctx)
 }
 
-// ResourceSendInfo wraps the names and url of resources successfully
-// sent to the management server. This is used by the `authority` type
-// to start/stop the watch timer associated with every resource.
+// ResourceSendInfo wraps the names and url of resources sent to the management
+// server. This is used by the `authority` type to start/stop the watch timer
+// associated with every resource in the update.
 type ResourceSendInfo struct {
 	ResourceNames []string
 	URL           string
@@ -458,11 +458,11 @@ func (t *Transport) recv(stream adsStream) bool {
 	for {
 		resources, url, rVersion, nonce, err := t.recvAggregatedDiscoveryServiceResponse(stream)
 		if err != nil {
-			// Note that we do not consider it an error if the ADS stream was closed after
-			// having received a response on the stream. This is because there are legitimate
-			// reasons why the server may need to close the stream during normal operations,
-			// such as needing to rebalance load or the underlying connection hitting its
-			// max connection age limit .
+			// Note that we do not consider it an error if the ADS stream was closed
+			// after having received a response on the stream. This is because there
+			// are legitimate reasons why the server may need to close the stream during
+			// normal operations, such as needing to rebalance load or the underlying
+			// connection hitting its max connection age limit.
 			// (see [gRFC A9](https://github.com/grpc/proposal/blob/master/A9-server-side-conn-mgt.md)).
 			if msgReceived {
 				err = xdsresource.NewErrorf(xdsresource.ErrTypeStreamFailedAfterRecv, err.Error())
