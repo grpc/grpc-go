@@ -55,7 +55,7 @@ func (s) TestNew(t *testing.T) {
 			},
 				NodeProto: &v3corepb.Node{},
 			},
-			wantErrStr: "missing OnRecv callback when creating a new transport",
+			wantErrStr: "missing OnRecv callback handler when creating a new transport",
 		},
 		{
 			name: "missing onError handler",
@@ -82,7 +82,7 @@ func (s) TestNew(t *testing.T) {
 				OnRecvHandler:  func(transport.ResourceUpdate) error { return nil },
 				OnErrorHandler: func(error) {},
 			},
-			wantErrStr: "missing onSend callback handler when creating a new transport",
+			wantErrStr: "missing OnSend callback handler when creating a new transport",
 		},
 		{
 			name: "happy case",
