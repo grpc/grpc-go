@@ -542,8 +542,8 @@ type parser struct {
 	// https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md
 	header [5]byte
 
-	// useBytesPool indicates whether to use bytes pool to allocate
-	useBytesPool bool
+	// useSharedRecvBuffers indicates whether to use shared receive buffers.
+	useSharedRecvBuffers bool
 }
 
 // recvMsg reads a complete gRPC message from the stream.
@@ -577,7 +577,7 @@ func (p *parser) recvMsg(maxReceiveMessageSize int) (pf payloadFormat, msg []byt
 	if int(length) > maxReceiveMessageSize {
 		return 0, nil, status.Errorf(codes.ResourceExhausted, "grpc: received message larger than max (%d vs. %d)", length, maxReceiveMessageSize)
 	}
-	if p.useBytesPool {
+	if p.useSharedRecvBuffers {
 		msg = pool.Get(int(length))
 	} else {
 		msg = make([]byte, int(length))
@@ -768,7 +768,7 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 		return status.Errorf(codes.Internal, "grpc: failed to unmarshal the received message: %v", err)
 	}
 	if payInfo != nil {
-		if p.useBytesPool {
+		if p.useSharedRecvBuffers {
 			if len(buf) != 0 {
 				payInfo.uncompressedBytes = make([]byte, len(buf))
 				copy(payInfo.uncompressedBytes, buf)
@@ -777,7 +777,7 @@ func recv(p *parser, c baseCodec, s *transport.Stream, dc Decompressor, m interf
 			payInfo.uncompressedBytes = buf
 		}
 	}
-	if p.useBytesPool {
+	if p.useSharedRecvBuffers {
 		pool.Put(&buf)
 	}
 	return nil

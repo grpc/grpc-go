@@ -76,7 +76,7 @@ type dialOptions struct {
 	defaultServiceConfig        *ServiceConfig // defaultServiceConfig is parsed from defaultServiceConfigRawJSON.
 	defaultServiceConfigRawJSON *string
 	resolvers                   []resolver.Builder
-	useBytesPoolForParser       bool
+	useSharedRecvBuffers        bool
 }
 
 // DialOption configures how we set up the connection.
@@ -637,7 +637,7 @@ func WithResolvers(rs ...resolver.Builder) DialOption {
 	})
 }
 
-// WithUseBytesPoolForParser returns a DialOption that specifies whether to use
+// WithSharedRecvBuffers returns a DialOption that specifies whether to use
 // a bytes pool for parsing. Setting this to true will reduce the memory allocation
 // in the parser.
 //
@@ -645,8 +645,8 @@ func WithResolvers(rs ...resolver.Builder) DialOption {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func WithUseBytesPoolForParser(useBytesPoolForParser bool) DialOption {
+func WithSharedRecvBuffers(ok bool) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
-		o.useBytesPoolForParser = useBytesPoolForParser
+		o.useSharedRecvBuffers = ok
 	})
 }
