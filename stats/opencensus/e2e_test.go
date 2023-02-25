@@ -244,6 +244,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		ServerReceivedMessagesPerRPCView,
 		ClientRoundtripLatencyView,
 		ServerLatencyView,
+		ClientAPILatencyView,
 	}
 	view.Register(allViews...)
 	// Unregister unconditionally in this defer to correctly cleanup globals in
@@ -760,6 +761,10 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		{
 			metric: ServerLatencyView,
 		},
+		// Per call metrics:
+		{
+			metric: ClientAPILatencyView,
+		},
 	}
 	// Unregister all the views. Unregistering a view causes a synchronous
 	// upload of any collected data for the view to any registered exporters.
@@ -780,7 +785,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		// declare the exact data you want, make sure the latency
 		// measurement points for the two RPCs above fall within buckets
 		// that fall into less than 5 seconds, which is the rpc timeout.
-		if metricName == "grpc.io/client/roundtrip_latency" || metricName == "grpc.io/server/server_latency" {
+		if metricName == "grpc.io/client/roundtrip_latency" || metricName == "grpc.io/server/server_latency" || metricName == "grpc.io/client/api_latency" {
 			// RPCs have a context timeout of 5s, so all the recorded
 			// measurements (one per RPC - two total) should fall within 5
 			// second buckets.
@@ -1204,7 +1209,7 @@ func (s) TestSpan(t *testing.T) {
 				TraceOptions: 1,
 			},
 			spanKind: trace.SpanKindClient,
-			name:     "grpc.testing.TestService.UnaryCall",
+			name:     "Attempt.grpc.testing.TestService.UnaryCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType:            trace.MessageEventTypeSent,
@@ -1220,6 +1225,15 @@ func (s) TestSpan(t *testing.T) {
 			},
 			hasRemoteParent: false,
 		},
+		{
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
+			spanKind:        trace.SpanKindClient,
+			name:            "Sent.grpc.testing.TestService.UnaryCall",
+			hasRemoteParent: false,
+			childSpanCount:  1,
+		},
 	}
 	if diff := cmp.Diff(fe.seenSpans, wantSI); diff != "" {
 		t.Fatalf("got unexpected spans, diff (-got, +want): %v", diff)
@@ -1229,6 +1243,13 @@ func (s) TestSpan(t *testing.T) {
 		fe.mu.Unlock()
 		t.Fatalf("Error in runtime data assertions: %v", err)
 	}
+	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[1].sc.SpanID) {
+		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[1].sc.SpanID)
+	}
+	if !cmp.Equal(fe.seenSpans[1].parentSpanID, fe.seenSpans[2].sc.SpanID) {
+		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[1].parentSpanID, fe.seenSpans[2].sc.SpanID)
+	}
+
 	fe.seenSpans = nil
 	fe.mu.Unlock()
 
@@ -1280,8 +1301,17 @@ func (s) TestSpan(t *testing.T) {
 			sc: trace.SpanContext{
 				TraceOptions: 1,
 			},
+			spanKind:        trace.SpanKindClient,
+			name:            "Sent.grpc.testing.TestService.FullDuplexCall",
+			hasRemoteParent: false,
+			childSpanCount:  1,
+		},
+		{
+			sc: trace.SpanContext{
+				TraceOptions: 1,
+			},
 			spanKind: trace.SpanKindClient,
-			name:     "grpc.testing.TestService.FullDuplexCall",
+			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
 			messageEvents: []trace.MessageEvent{
 				{
 					EventType:          trace.MessageEventTypeSent,
@@ -1304,5 +1334,11 @@ func (s) TestSpan(t *testing.T) {
 	defer fe.mu.Unlock()
 	if err := validateTraceAndSpanIDs(fe.seenSpans); err != nil {
 		t.Fatalf("Error in runtime data assertions: %v", err)
+	}
+	if !cmp.Equal(fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID) {
+		t.Fatalf("server span should point to the client attempt span as its parent. parentSpanID: %v, clientAttemptSpanID: %v", fe.seenSpans[0].parentSpanID, fe.seenSpans[2].sc.SpanID)
+	}
+	if !cmp.Equal(fe.seenSpans[2].parentSpanID, fe.seenSpans[1].sc.SpanID) {
+		t.Fatalf("client attempt span should point to the client call span as its parent. parentSpanID: %v, clientCallSpanID: %v", fe.seenSpans[2].parentSpanID, fe.seenSpans[1].sc.SpanID)
 	}
 }

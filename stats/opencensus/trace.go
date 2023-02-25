@@ -39,7 +39,7 @@ type traceInfo struct {
 // about this span into gRPC Metadata.
 func (csh *clientStatsHandler) traceTagRPC(ctx context.Context, rti *stats.RPCTagInfo) (context.Context, *traceInfo) {
 	// TODO: get consensus on whether this method name of "s.m" is correct.
-	mn := strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
+	mn := "Attempt." + strings.Replace(removeLeadingSlash(rti.FullMethodName), "/", ".", -1)
 	_, span := trace.StartSpan(ctx, mn, trace.WithSampler(csh.to.TS), trace.WithSpanKind(trace.SpanKindClient))
 
 	tcBin := propagation.Binary(span.SpanContext())

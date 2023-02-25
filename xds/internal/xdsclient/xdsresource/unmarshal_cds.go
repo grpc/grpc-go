@@ -177,6 +177,9 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		if err := proto.Unmarshal(cluster.GetClusterType().GetTypedConfig().GetValue(), clusters); err != nil {
 			return ClusterUpdate{}, fmt.Errorf("failed to unmarshal resource: %v", err)
 		}
+		if len(clusters.Clusters) == 0 {
+			return ClusterUpdate{}, fmt.Errorf("xds: aggregate cluster has empty clusters field in response: %+v", cluster)
+		}
 		ret.ClusterType = ClusterTypeAggregate
 		ret.PrioritizedClusterNames = clusters.Clusters
 		return ret, nil

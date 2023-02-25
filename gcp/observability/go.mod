@@ -9,7 +9,8 @@ require (
 	github.com/google/uuid v1.3.0
 	go.opencensus.io v0.24.0
 	golang.org/x/oauth2 v0.4.0
-	google.golang.org/grpc v1.51.0
+	google.golang.org/grpc v1.52.0
+	google.golang.org/grpc/stats/opencensus v0.0.0-20230214213552-081499f2e8a4
 )
 
 require (

@@ -41,8 +41,9 @@ var (
 
 // TODO(bar) install dns resolver in init(){}.
 
-// Register registers the resolver builder to the resolver map. b.Scheme will be
-// used as the scheme registered with this builder.
+// Register registers the resolver builder to the resolver map. b.Scheme will
+// be used as the scheme registered with this builder. The registry is case
+// sensitive, and schemes should not contain any uppercase characters.
 //
 // NOTE: this function must only be called during initialization time (i.e. in
 // an init() function), and is not thread-safe. If multiple Resolvers are
@@ -289,8 +290,10 @@ type Builder interface {
 	// gRPC dial calls Build synchronously, and fails if the returned error is
 	// not nil.
 	Build(target Target, cc ClientConn, opts BuildOptions) (Resolver, error)
-	// Scheme returns the scheme supported by this resolver.
-	// Scheme is defined at https://github.com/grpc/grpc/blob/master/doc/naming.md.
+	// Scheme returns the scheme supported by this resolver.  Scheme is defined
+	// at https://github.com/grpc/grpc/blob/master/doc/naming.md.  The returned
+	// string should not contain uppercase characters, as they will not match
+	// the parsed target's scheme as defined in RFC 3986.
 	Scheme() string
 }
 

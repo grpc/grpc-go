@@ -45,6 +45,12 @@ import (
 	statuspb "google.golang.org/genproto/googleapis/rpc/status"
 )
 
+// Any per-RPC level logs which print complete request or response messages
+// should be gated at this verbosity level. Other per-RPC level logs which print
+// terse output should be at `INFO` and verbosity 2, which corresponds to using
+// the `Debugf` method on the logger.
+const perRPCVerbosityLevel = 9
+
 type adsStream = v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesClient
 
 // Transport provides a resource-type agnostic implementation of the xDS
@@ -285,21 +291,27 @@ func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, reso
 		}
 	}
 	if err := stream.Send(req); err != nil {
-		return fmt.Errorf("sending ADS request %s failed: %v", pretty.ToJSON(req), err)
+		return err
+	}
+	if t.logger.V(perRPCVerbosityLevel) {
+		t.logger.Infof("ADS request sent: %v", pretty.ToJSON(req))
+	} else {
+		t.logger.Debugf("ADS request sent for type %q, resources: %v, version %q, nonce %q", resourceURL, resourceNames, version, nonce)
 	}
 	t.onSendHandler(&ResourceSendInfo{URL: resourceURL, ResourceNames: resourceNames})
-
-	t.logger.Debugf("ADS request sent: %v", pretty.ToJSON(req))
 	return nil
 }
 
 func (t *Transport) recvAggregatedDiscoveryServiceResponse(stream adsStream) (resources []*anypb.Any, resourceURL, version, nonce string, err error) {
 	resp, err := stream.Recv()
 	if err != nil {
-		return nil, "", "", "", fmt.Errorf("failed to read ADS response: %v", err)
+		return nil, "", "", "", err
 	}
-	t.logger.Infof("ADS response received, type: %v", resp.GetTypeUrl())
-	t.logger.Debugf("ADS response received: %v", pretty.ToJSON(resp))
+	if t.logger.V(perRPCVerbosityLevel) {
+		t.logger.Infof("ADS response received: %v", pretty.ToJSON(resp))
+	} else {
+		t.logger.Debugf("ADS response received for type %q, version %q, nonce %q", resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce())
+	}
 	return resp.GetResources(), resp.GetTypeUrl(), resp.GetVersionInfo(), resp.GetNonce(), nil
 }
 
@@ -327,7 +339,7 @@ func (t *Transport) adsRunner(ctx context.Context) {
 			stream, err := t.newAggregatedDiscoveryServiceStream(ctx, t.cc)
 			if err != nil {
 				t.onErrorHandler(err)
-				t.logger.Warningf("ADS stream creation failed: %v", err)
+				t.logger.Warningf("Creating new ADS stream failed: %v", err)
 				return false
 			}
 			t.logger.Infof("ADS stream created")
@@ -397,7 +409,7 @@ func (t *Transport) send(ctx context.Context) {
 				continue
 			}
 			if err := t.sendAggregatedDiscoveryServiceRequest(stream, resources, url, version, nonce, nackErr); err != nil {
-				t.logger.Warningf("ADS request for {resources: %q, url: %v, version: %q, nonce: %q} failed: %v", resources, url, version, nonce, err)
+				t.logger.Warningf("Sending ADS request for resources: %q, url: %q, version: %q, nonce: %q failed: %v", resources, url, version, nonce, err)
 				// Send failed, clear the current stream.
 				stream = nil
 			}
@@ -430,7 +442,7 @@ func (t *Transport) sendExisting(stream adsStream) bool {
 
 	for url, resources := range t.resources {
 		if err := t.sendAggregatedDiscoveryServiceRequest(stream, mapToSlice(resources), url, t.versions[url], "", nil); err != nil {
-			t.logger.Warningf("ADS request failed: %v", err)
+			t.logger.Warningf("Sending ADS request for resources: %q, url: %q, version: %q, nonce: %q failed: %v", resources, url, t.versions[url], "", err)
 			return false
 		}
 	}
@@ -456,7 +468,7 @@ func (t *Transport) recv(stream adsStream) bool {
 				err = xdsresource.NewErrorf(xdsresource.ErrTypeStreamFailedAfterRecv, err.Error())
 			}
 			t.onErrorHandler(err)
-			t.logger.Warningf("ADS stream is closed with error: %v", err)
+			t.logger.Warningf("ADS stream closed: %v", err)
 			return msgReceived
 		}
 		msgReceived = true
@@ -483,7 +495,7 @@ func (t *Transport) recv(stream adsStream) bool {
 				nackErr: err,
 			})
 			t.mu.Unlock()
-			t.logger.Warningf("Sending NACK for resource type: %v, version: %v, nonce: %v, reason: %v", url, rVersion, nonce, err)
+			t.logger.Warningf("Sending NACK for resource type: %q, version: %q, nonce: %q, reason: %v", url, rVersion, nonce, err)
 			continue
 		}
 		t.adsRequestCh.Put(&ackRequest{
@@ -492,7 +504,7 @@ func (t *Transport) recv(stream adsStream) bool {
 			stream:  stream,
 			version: rVersion,
 		})
-		t.logger.Infof("Sending ACK for resource type: %v, version: %v, nonce: %v", url, rVersion, nonce)
+		t.logger.Debugf("Sending ACK for resource type: %q, version: %q, nonce: %q", url, rVersion, nonce)
 	}
 }
 

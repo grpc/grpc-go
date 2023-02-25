@@ -38,6 +38,8 @@ var (
 	clientRoundtripLatency       = stats.Float64("grpc.io/client/roundtrip_latency", "Time between first byte of request sent to last byte of response received, or terminal error.", stats.UnitMilliseconds)
 	clientStartedRPCs            = stats.Int64("grpc.io/client/started_rpcs", "The total number of client RPCs ever opened, including those that have not completed.", stats.UnitDimensionless)
 	clientServerLatency          = stats.Float64("grpc.io/client/server_latency", `Propagated from the server and should have the same value as "grpc.io/server/latency".`, stats.UnitMilliseconds)
+	// Per call measure:
+	clientAPILatency = stats.Float64("grpc.io/client/api_latency", "The end-to-end time the gRPC library takes to complete an RPC from the application’s perspective", stats.UnitMilliseconds)
 )
 
 var (
@@ -101,6 +103,18 @@ var (
 		Name:        "grpc.io/client/roundtrip_latency",
 		Description: "Distribution of round-trip latency, by method.",
 		TagKeys:     []tag.Key{keyClientMethod},
+		Aggregation: millisecondsDistribution,
+	}
+
+	// The following metric is per call:
+
+	// ClientAPILatencyView is the distribution of client api latency for the
+	// full RPC call, keyed on method and status.
+	ClientAPILatencyView = &view.View{
+		Measure:     clientAPILatency,
+		Name:        "grpc.io/client/api_latency",
+		Description: "Distribution of client api latency, by method and status",
+		TagKeys:     []tag.Key{keyClientMethod, keyClientStatus},
 		Aggregation: millisecondsDistribution,
 	}
 )
