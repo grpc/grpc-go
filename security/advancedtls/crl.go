@@ -222,7 +222,7 @@ func cachedCrl(rawIssuer []byte, cache Cache) (*certificateListExt, bool) {
 		return nil, false
 	}
 	// If the CRL is expired, force a reload.
-	if hasExpired(*crl.CertList, time.Now()) {
+	if hasExpired(crl.CertList, time.Now()) {
 		return nil, false
 	}
 	return crl, true
@@ -521,7 +521,7 @@ func extractCRLIssuer(crlBytes []byte) ([]byte, error) {
 	return issuer, nil
 }
 
-func hasExpired(crl x509.RevocationList, now time.Time) bool {
+func hasExpired(crl *x509.RevocationList, now time.Time) bool {
 	return !now.Before(crl.NextUpdate)
 }
 
