@@ -494,17 +494,21 @@ func verifyCRL(crl *certificateListExt, rawIssuer []byte, chain []*x509.Certific
 
 var crlPemPrefix = []byte("-----BEGIN X509 CRL")
 
+func crlPemToDer(crlBytes []byte) []byte {
+	block, _ := pem.Decode(crlBytes)
+	if block != nil && block.Type == "X509 CRL" {
+		crlBytes = block.Bytes
+	}
+	return crlBytes
+}
+
 // extractCRLIssuer extracts the raw ASN.1 encoding of the CRL issuer. Due to the design of
 // pkix.CertificateList and pkix.RDNSequence, it is not possible to reliably marshal the
 // parsed Issuer to it's original raw encoding.
 func extractCRLIssuer(crlBytes []byte) ([]byte, error) {
 	if bytes.HasPrefix(crlBytes, crlPemPrefix) {
-		block, _ := pem.Decode(crlBytes)
-		if block != nil && block.Type == "X509 CRL" {
-			crlBytes = block.Bytes
-		}
+		crlBytes = crlPemToDer(crlBytes)
 	}
-
 	der := cryptobyte.String(crlBytes)
 	var issuer cryptobyte.String
 	if !der.ReadASN1(&der, cbasn1.SEQUENCE) ||
@@ -527,19 +531,12 @@ func hasExpired(crl x509.RevocationList, now time.Time) bool {
 // We must first convert PEM to DER to be able to use the new
 // x509.ParseRevocationList instead of the deprecated x509.ParseCRL
 
-// pemCRLPrefix is the magic string that indicates that we have a PEM encoded
-// CRL.
-var pemCRLPrefix = []byte("-----BEGIN X509 CRL")
-
 // pemType is the type of a PEM encoded CRL.
 var pemType = "X509 CRL"
 
 func parseRevocationList(crlBytes []byte) (*x509.RevocationList, error) {
-	if bytes.HasPrefix(crlBytes, pemCRLPrefix) {
-		block, _ := pem.Decode(crlBytes)
-		if block != nil && block.Type == pemType {
-			crlBytes = block.Bytes
-		}
+	if bytes.HasPrefix(crlBytes, crlPemPrefix) {
+		crlBytes = crlPemToDer(crlBytes)
 	}
 	crl, err := x509.ParseRevocationList(crlBytes)
 	if err != nil {
