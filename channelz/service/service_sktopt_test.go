@@ -32,13 +32,13 @@ import (
 	"testing"
 
 	"github.com/golang/protobuf/ptypes"
-	durpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"golang.org/x/sys/unix"
-	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	"google.golang.org/grpc/internal/channelz"
 	"google.golang.org/protobuf/testing/protocmp"
+
+	durpb "github.com/golang/protobuf/ptypes/duration"
+	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 )
 
 func init() {
@@ -153,7 +153,7 @@ func (s) TestGetSocketOptions(t *testing.T) {
 	for i, s := range ss {
 		resp, _ := svr.GetSocket(ctx, &channelzpb.GetSocketRequest{SocketId: ids[i].Int()})
 		got, want := resp.GetSocket().GetRef(), &channelzpb.SocketRef{SocketId: ids[i].Int(), Name: strconv.Itoa(i)}
-		if !cmp.Equal(got, want, cmpopts.IgnoreUnexported(channelzpb.SocketRef{})) {
+		if !cmp.Equal(got, want, protocmp.Transform()) {
 			t.Fatalf("resp.GetSocket() returned metrics.GetRef() = %#v, want %#v", got, want)
 		}
 		socket, err := socketProtoToStruct(resp.GetSocket())
