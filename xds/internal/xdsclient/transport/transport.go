@@ -63,17 +63,18 @@ type adsStream = v3adsgrpc.AggregatedDiscoveryService_StreamAggregatedResourcesC
 // protocol version.
 type Transport struct {
 	// These fields are initialized at creation time and are read-only afterwards.
-	cc                  *grpc.ClientConn        // ClientConn to the mangement server.
-	serverURI           string                  // URI of the management server.
-	updateHandler       UpdateHandlerFunc       // Resource update handler. xDS data model layer.
-	adsStreamErrHandler func(error)             // To report underlying stream errors.
-	lrsStore            *load.Store             // Store returned to user for pushing loads.
-	backoff             func(int) time.Duration // Backoff after stream failures.
-	nodeProto           *v3corepb.Node          // Identifies the gRPC application.
-	logger              *grpclog.PrefixLogger   // Prefix logger for transport logs.
-	adsRunnerCancel     context.CancelFunc      // CancelFunc for the ADS goroutine.
-	adsRunnerDoneCh     chan struct{}           // To notify exit of ADS goroutine.
-	lrsRunnerDoneCh     chan struct{}           // To notify exit of LRS goroutine.
+	cc              *grpc.ClientConn        // ClientConn to the mangement server.
+	serverURI       string                  // URI of the management server.
+	onRecvHandler   OnRecvHandlerFunc       // Resource update handler. xDS data model layer.
+	onErrorHandler  func(error)             // To report underlying stream errors.
+	onSendHandler   OnSendHandlerFunc       // To report resources requested on ADS stream.
+	lrsStore        *load.Store             // Store returned to user for pushing loads.
+	backoff         func(int) time.Duration // Backoff after stream failures.
+	nodeProto       *v3corepb.Node          // Identifies the gRPC application.
+	logger          *grpclog.PrefixLogger   // Prefix logger for transport logs.
+	adsRunnerCancel context.CancelFunc      // CancelFunc for the ADS goroutine.
+	adsRunnerDoneCh chan struct{}           // To notify exit of ADS goroutine.
+	lrsRunnerDoneCh chan struct{}           // To notify exit of LRS goroutine.
 
 	// These channels enable synchronization amongst the different goroutines
 	// spawned by the transport, and between asynchorous events resulting from
@@ -102,7 +103,7 @@ type Transport struct {
 	lrsRefCount     int                // Reference count on the load store.
 }
 
-// UpdateHandlerFunc is the implementation at the xDS data model layer, which
+// OnRecvHandlerFunc is the implementation at the xDS data model layer, which
 // determines if the configuration received from the management server can be
 // applied locally or not.
 //
@@ -111,7 +112,11 @@ type Transport struct {
 // cause the transport layer to send an ACK to the management server. A non-nil
 // error is returned from this function when the data model layer believes
 // otherwise, and this will cause the transport layer to send a NACK.
-type UpdateHandlerFunc func(update ResourceUpdate) error
+type OnRecvHandlerFunc func(update ResourceUpdate) error
+
+// OnSendHandlerFunc is the implementation at the authority, which handles state
+// changes for the resource watch and stop watch timers accordingly.
+type OnSendHandlerFunc func(update *ResourceSendInfo)
 
 // ResourceUpdate is a representation of the configuration update received from
 // the management server. It only contains fields which are useful to the data
@@ -131,17 +136,27 @@ type Options struct {
 	// ServerCfg contains all the configuration required to connect to the xDS
 	// management server.
 	ServerCfg bootstrap.ServerConfig
-	// UpdateHandler is the component which makes ACK/NACK decisions based on
+	// OnRecvHandler is the component which makes ACK/NACK decisions based on
 	// the received resources.
 	//
 	// Invoked inline and implementations must not block.
-	UpdateHandler UpdateHandlerFunc
-	// StreamErrorHandler provides a way for the transport layer to report
+	OnRecvHandler OnRecvHandlerFunc
+	// OnErrorHandler provides a way for the transport layer to report
 	// underlying stream errors. These can be bubbled all the way up to the user
 	// of the xdsClient.
 	//
 	// Invoked inline and implementations must not block.
-	StreamErrorHandler func(error)
+	OnErrorHandler func(error)
+	// OnSendHandler provides a way for the transport layer to report underlying
+	// resource requests sent on the stream. However, Send() on the ADS stream will
+	// return successfully as long as:
+	//   1. there is enough flow control quota to send the message.
+	//   2. the message is added to the send buffer.
+	// However, the connection may fail after the callback is invoked and before
+	// the message is actually sent on the wire. This is accepted.
+	//
+	// Invoked inline and implementations must not block.
+	OnSendHandler func(*ResourceSendInfo)
 	// Backoff controls the amount of time to backoff before recreating failed
 	// ADS streams. If unspecified, a default exponential backoff implementation
 	// is used. For more details, see:
@@ -164,10 +179,12 @@ func New(opts Options) (*Transport, error) {
 		return nil, errors.New("missing server URI when creating a new transport")
 	case opts.ServerCfg.Creds == nil:
 		return nil, errors.New("missing credentials when creating a new transport")
-	case opts.UpdateHandler == nil:
-		return nil, errors.New("missing update handler when creating a new transport")
-	case opts.StreamErrorHandler == nil:
-		return nil, errors.New("missing stream error handler when creating a new transport")
+	case opts.OnRecvHandler == nil:
+		return nil, errors.New("missing OnRecv callback handler when creating a new transport")
+	case opts.OnErrorHandler == nil:
+		return nil, errors.New("missing OnError callback handler when creating a new transport")
+	case opts.OnSendHandler == nil:
+		return nil, errors.New("missing OnSend callback handler when creating a new transport")
 	}
 
 	// Dial the xDS management with the passed in credentials.
@@ -191,14 +208,15 @@ func New(opts Options) (*Transport, error) {
 		boff = backoff.DefaultExponential.Backoff
 	}
 	ret := &Transport{
-		cc:                  cc,
-		serverURI:           opts.ServerCfg.ServerURI,
-		updateHandler:       opts.UpdateHandler,
-		adsStreamErrHandler: opts.StreamErrorHandler,
-		lrsStore:            load.NewStore(),
-		backoff:             boff,
-		nodeProto:           opts.NodeProto,
-		logger:              opts.Logger,
+		cc:             cc,
+		serverURI:      opts.ServerCfg.ServerURI,
+		onRecvHandler:  opts.OnRecvHandler,
+		onErrorHandler: opts.OnErrorHandler,
+		onSendHandler:  opts.OnSendHandler,
+		lrsStore:       load.NewStore(),
+		backoff:        boff,
+		nodeProto:      opts.NodeProto,
+		logger:         opts.Logger,
 
 		adsStreamCh:     make(chan adsStream, 1),
 		adsRequestCh:    buffer.NewUnbounded(),
@@ -247,13 +265,16 @@ func (t *Transport) SendRequest(url string, resources []string) {
 
 func (t *Transport) newAggregatedDiscoveryServiceStream(ctx context.Context, cc *grpc.ClientConn) (adsStream, error) {
 	// The transport retries the stream with an exponential backoff whenever the
-	// stream breaks. But if the channel is broken, we don't want the backoff
-	// logic to continuously retry the stream. Setting WaitForReady() blocks the
-	// stream creation until the channel is READY.
-	//
-	// TODO(easwars): Make changes required to comply with A57:
-	// https://github.com/grpc/proposal/blob/master/A57-xds-client-failure-mode-behavior.md
-	return v3adsgrpc.NewAggregatedDiscoveryServiceClient(cc).StreamAggregatedResources(ctx, grpc.WaitForReady(true))
+	// stream breaks without ever having seen a response.
+	return v3adsgrpc.NewAggregatedDiscoveryServiceClient(cc).StreamAggregatedResources(ctx)
+}
+
+// ResourceSendInfo wraps the names and url of resources sent to the management
+// server. This is used by the `authority` type to start/stop the watch timer
+// associated with every resource in the update.
+type ResourceSendInfo struct {
+	ResourceNames []string
+	URL           string
 }
 
 func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, resourceNames []string, resourceURL, version, nonce string, nackErr error) error {
@@ -277,6 +298,7 @@ func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, reso
 	} else {
 		t.logger.Debugf("ADS request sent for type %q, resources: %v, version %q, nonce %q", resourceURL, resourceNames, version, nonce)
 	}
+	t.onSendHandler(&ResourceSendInfo{URL: resourceURL, ResourceNames: resourceNames})
 	return nil
 }
 
@@ -301,9 +323,6 @@ func (t *Transport) adsRunner(ctx context.Context) {
 
 	go t.send(ctx)
 
-	// TODO: start a goroutine monitoring ClientConn's connectivity state, and
-	// report error (and log) when stats is transient failure.
-
 	backoffAttempt := 0
 	backoffTimer := time.NewTimer(0)
 	for ctx.Err() == nil {
@@ -319,7 +338,7 @@ func (t *Transport) adsRunner(ctx context.Context) {
 		resetBackoff := func() bool {
 			stream, err := t.newAggregatedDiscoveryServiceStream(ctx, t.cc)
 			if err != nil {
-				t.adsStreamErrHandler(err)
+				t.onErrorHandler(err)
 				t.logger.Warningf("Creating new ADS stream failed: %v", err)
 				return false
 			}
@@ -439,13 +458,22 @@ func (t *Transport) recv(stream adsStream) bool {
 	for {
 		resources, url, rVersion, nonce, err := t.recvAggregatedDiscoveryServiceResponse(stream)
 		if err != nil {
-			t.adsStreamErrHandler(err)
+			// Note that we do not consider it an error if the ADS stream was closed
+			// after having received a response on the stream. This is because there
+			// are legitimate reasons why the server may need to close the stream during
+			// normal operations, such as needing to rebalance load or the underlying
+			// connection hitting its max connection age limit.
+			// (see [gRFC A9](https://github.com/grpc/proposal/blob/master/A9-server-side-conn-mgt.md)).
+			if msgReceived {
+				err = xdsresource.NewErrorf(xdsresource.ErrTypeStreamFailedAfterRecv, err.Error())
+			}
+			t.onErrorHandler(err)
 			t.logger.Warningf("ADS stream closed: %v", err)
 			return msgReceived
 		}
 		msgReceived = true
 
-		err = t.updateHandler(ResourceUpdate{
+		err = t.onRecvHandler(ResourceUpdate{
 			Resources: resources,
 			URL:       url,
 			Version:   rVersion,

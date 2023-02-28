@@ -144,10 +144,11 @@ func (s) TestSimpleAckAndNack(t *testing.T) {
 
 	// Create a new transport.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:          serverCfg,
-		UpdateHandler:      dataModelValidator,
-		StreamErrorHandler: func(err error) {},
-		NodeProto:          &v3corepb.Node{Id: nodeID},
+		ServerCfg:      serverCfg,
+		OnRecvHandler:  dataModelValidator,
+		OnErrorHandler: func(err error) {},
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},
+		NodeProto:      &v3corepb.Node{Id: nodeID},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -330,10 +331,11 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 
 	// Create a new transport.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:          serverCfg,
-		UpdateHandler:      dataModelValidator,
-		StreamErrorHandler: func(err error) {},
-		NodeProto:          &v3corepb.Node{Id: nodeID},
+		ServerCfg:      serverCfg,
+		NodeProto:      &v3corepb.Node{Id: nodeID},
+		OnRecvHandler:  dataModelValidator,
+		OnErrorHandler: func(err error) {},
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -458,10 +460,11 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 
 	// Create a new transport.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:          serverCfg,
-		UpdateHandler:      dataModelValidator,
-		StreamErrorHandler: func(err error) {},
-		NodeProto:          &v3corepb.Node{Id: nodeID},
+		ServerCfg:      serverCfg,
+		NodeProto:      &v3corepb.Node{Id: nodeID},
+		OnRecvHandler:  dataModelValidator,
+		OnErrorHandler: func(err error) {},
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
