@@ -363,7 +363,7 @@ func (s) TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 	server, client, cancel := setUpWithOptions(t, 0,
 		&ServerConfig{
 			KeepalivePolicy: keepalive.EnforcementPolicy{
-				MinTime: 50 * time.Millisecond,
+				MinTime:             50 * time.Millisecond,
 				PermitWithoutStream: true,
 			},
 		},
