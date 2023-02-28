@@ -154,9 +154,9 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	}
 	select {
 	case <-ctx.Done():
-		t.Fatal("Test timed out before w received the update.")
+		t.Fatal("Test timed out before watcher received an update from server.")
 	case err := <-w.errorCh:
-		t.Fatalf("Watch got an expected error update: %q.", err)
+		t.Fatalf("Watch got an unexpected error update: %q. Want valid updates.", err)
 	case <-w.updateCh:
 		// This means the OnUpdate callback was invoked and the watcher was notified.
 	}
