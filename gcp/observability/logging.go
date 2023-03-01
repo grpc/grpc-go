@@ -240,8 +240,9 @@ type methodLoggerBuilder interface {
 type binaryMethodLogger struct {
 	callID, serviceName, methodName, authority, projectID string
 
-	mlb      methodLoggerBuilder
-	exporter loggingExporter
+	mlb        methodLoggerBuilder
+	exporter   loggingExporter
+	clientSide bool
 }
 
 // buildGCPLoggingEntry converts the binary log log entry into a gcp logging
@@ -326,17 +327,19 @@ func (bml *binaryMethodLogger) buildGCPLoggingEntry(c iblog.LogEntryConfig) gcpl
 // span and trace information from the context and attaches that to log entry.
 func (bml *binaryMethodLogger) LogWithContext(ctx context.Context, c iblog.LogEntryConfig) {
 	gcploggingEntry := bml.buildGCPLoggingEntry(c)
-	// client side span, populated through opencensus trace package.
-	if span := trace.FromContext(ctx); span != nil {
-		sc := span.SpanContext()
-		gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + fmt.Sprintf("%x", sc.TraceID)
-		gcploggingEntry.SpanID = fmt.Sprintf("%x", sc.SpanID)
-	}
-	// server side span, populated through our internal stats/opencensus
-	// package.
-	if tID, sID, ok := internal.GetTraceIDAndSpanID.(func(context.Context) (trace.TraceID, trace.SpanID, bool))(ctx); ok {
-		gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + fmt.Sprintf("%x", tID)
-		gcploggingEntry.SpanID = fmt.Sprintf("%x", sID)
+	if bml.clientSide {
+		// client side span, populated through opencensus trace package.
+		if span := trace.FromContext(ctx); span != nil {
+			sc := span.SpanContext()
+			gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + fmt.Sprintf("%x", sc.TraceID)
+			gcploggingEntry.SpanID = fmt.Sprintf("%x", sc.SpanID)
+		}
+	} else {
+		// server side span, populated through stats/opencensus package.
+		if tID, sID, ok := internal.GetTraceIDAndSpanID.(func(context.Context) (trace.TraceID, trace.SpanID, bool))(ctx); ok {
+			gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + fmt.Sprintf("%x", tID)
+			gcploggingEntry.SpanID = fmt.Sprintf("%x", sID)
+		}
 	}
 	bml.exporter.EmitGcpLoggingEntry(gcploggingEntry)
 }
@@ -362,6 +365,7 @@ type binaryLogger struct {
 	EventConfigs []eventConfig
 	projectID    string
 	exporter     loggingExporter
+	clientSide   bool
 }
 
 func (bl *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
@@ -382,10 +386,11 @@ func (bl *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
 			}
 
 			return &binaryMethodLogger{
-				exporter:  bl.exporter,
-				mlb:       iblog.NewTruncatingMethodLogger(eventConfig.HeaderBytes, eventConfig.MessageBytes),
-				callID:    uuid.NewString(),
-				projectID: bl.projectID,
+				exporter:   bl.exporter,
+				mlb:        iblog.NewTruncatingMethodLogger(eventConfig.HeaderBytes, eventConfig.MessageBytes),
+				callID:     uuid.NewString(),
+				projectID:  bl.projectID,
+				clientSide: bl.clientSide,
 			}
 		}
 	}
@@ -438,6 +443,7 @@ func registerClientRPCEvents(config *config, exporter loggingExporter) {
 		EventConfigs: eventConfigs,
 		exporter:     exporter,
 		projectID:    config.ProjectID,
+		clientSide:   true,
 	}
 	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.Logger) grpc.DialOption)(clientSideLogger))
 }
@@ -477,6 +483,7 @@ func registerServerRPCEvents(config *config, exporter loggingExporter) {
 		EventConfigs: eventConfigs,
 		exporter:     exporter,
 		projectID:    config.ProjectID,
+		clientSide:   false,
 	}
 	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.Logger) grpc.ServerOption)(serverSideLogger))
 }
