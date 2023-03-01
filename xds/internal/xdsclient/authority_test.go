@@ -63,9 +63,9 @@ func (w *testResourceWatcher) OnResourceDoesNotExist() {}
 func (w *testResourceWatcher) BlockOnUpdateCh(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
-		return fmt.Errorf("Test timed out before watcher received the update.")
+		return fmt.Errorf("test timed out before watcher received the update")
 	case err := <-w.errorCh:
-		return fmt.Errorf("Watch got an unexpected error update: %q; want: valid update.", err)
+		return fmt.Errorf("watch got an unexpected error update: %q; want: valid update", err)
 	case <-w.updateCh:
 	}
 	return nil
