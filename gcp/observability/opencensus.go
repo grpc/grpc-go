@@ -74,6 +74,8 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 		MonitoredResource:       mr,
 		DefaultMonitoringLabels: labelsToMonitoringLabels(config.Labels),
 		DefaultTraceAttributes:  labelsToTraceAttributes(config.Labels),
+		MonitoringClientOptions: cOptsDisableLogTrace,
+		TraceClientOptions:      cOptsDisableLogTrace,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Stackdriver exporter: %v", err)
