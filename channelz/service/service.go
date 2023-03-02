@@ -21,6 +21,7 @@ package service
 
 import (
 	"context"
+	"google.golang.org/protobuf/types/known/anypb"
 	"net"
 
 	"github.com/golang/protobuf/ptypes"
@@ -187,7 +188,7 @@ func securityToProto(se credentials.ChannelzSecurityValue) *channelzpb.Security 
 		otherSecurity := &channelzpb.Security_OtherSecurity{
 			Name: v.Name,
 		}
-		if anyval, err := ptypes.MarshalAny(v.Value); err == nil {
+		if anyval, err := anypb.New(v.Value); err == nil {
 			otherSecurity.Value = anyval
 		}
 		return &channelzpb.Security{Model: &channelzpb.Security_Other{Other: otherSecurity}}

@@ -30,6 +30,7 @@ package status
 import (
 	"errors"
 	"fmt"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
@@ -109,7 +110,7 @@ func (s *Status) WithDetails(details ...proto.Message) (*Status, error) {
 	// s.Code() != OK implies that s.Proto() != nil.
 	p := s.Proto()
 	for _, detail := range details {
-		any, err := ptypes.MarshalAny(detail)
+		any, err := anypb.New(detail)
 		if err != nil {
 			return nil, err
 		}
