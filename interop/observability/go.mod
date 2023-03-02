@@ -1,6 +1,6 @@
 module google.golang.org/grpc/interop/observability
 
-go 1.20
+go 1.17
 
 require (
 	google.golang.org/grpc v1.53.0
@@ -42,3 +42,5 @@ require (
 replace google.golang.org/grpc => ../..
 
 replace google.golang.org/grpc/gcp/observability => ../../gcp/observability
+
+replace google.golang.org/grpc/stats/opencensus => ../../stats/opencensus

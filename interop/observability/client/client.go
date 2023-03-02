@@ -52,9 +52,7 @@ func main() {
 	if *serverPort != 0 {
 		serverAddr = net.JoinHostPort(*serverHost, strconv.Itoa(*serverPort))
 	}
-	var opts []grpc.DialOption
-	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	conn, err := grpc.Dial(serverAddr, opts...)
+	conn, err := grpc.Dial(serverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("Fail to dial: %v", err)
 	}
@@ -73,7 +71,7 @@ func main() {
 	}
 	// TODO(stanleycheung): remove this once the observability exporter plugin is able to
 	//                      gracefully flush observability data to cloud at shutdown
-	const exporterSleepSeconds = 65
-	log.Printf("Sleeping %d seconds before closing client", exporterSleepSeconds)
-	time.Sleep(time.Duration(exporterSleepSeconds) * time.Second)
+	const exporterSleepDuration = 65 * time.Second
+	log.Printf("Sleeping %v before closing...", exporterSleepDuration)
+	time.Sleep(exporterSleepDuration)
 }

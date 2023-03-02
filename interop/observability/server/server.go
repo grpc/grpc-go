@@ -21,9 +21,9 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net"
-	"strconv"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/gcp/observability"
@@ -43,13 +43,13 @@ func main() {
 	}
 	defer observability.End()
 	flag.Parse()
-	p := strconv.Itoa(*port)
-	lis, err := net.Listen("tcp", ":"+p)
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 	var opts []grpc.ServerOption
 	server := grpc.NewServer(opts...)
+	defer server.Stop()
 	testgrpc.RegisterTestServiceServer(server, interop.NewTestServer())
 	log.Printf("Observability interop server listening on %v", lis.Addr())
 	server.Serve(lis)
