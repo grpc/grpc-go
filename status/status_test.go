@@ -22,6 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/anypb"
 	"testing"
 
@@ -348,11 +349,16 @@ func str(s *Status) string {
 
 // mustMarshalAny converts a protobuf message to an any.
 func mustMarshalAny(msg proto.Message) *apb.Any {
-	any, err := anypb.New(msg)
+	protoMessage, ok := msg.(protoreflect.ProtoMessage)
+	if !ok {
+		panic(fmt.Sprintf("proto.Message(%+v) is not a protoreflect.Message", msg))
+	}
+	any, err := anypb.New(protoMessage)
 	if err != nil {
 		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", msg, err))
 	}
 	return any
+
 }
 
 func (s) TestFromContextError(t *testing.T) {

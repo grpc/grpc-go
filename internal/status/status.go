@@ -30,6 +30,7 @@ package status
 import (
 	"errors"
 	"fmt"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/golang/protobuf/proto"
@@ -110,7 +111,12 @@ func (s *Status) WithDetails(details ...proto.Message) (*Status, error) {
 	// s.Code() != OK implies that s.Proto() != nil.
 	p := s.Proto()
 	for _, detail := range details {
-		any, err := anypb.New(detail)
+
+		detailMsg, ok := detail.(protoreflect.ProtoMessage)
+		if !ok {
+			panic(fmt.Sprintf("proto.Message(%+v) is not a protoreflect.Message", detail))
+		}
+		any, err := anypb.New(detailMsg)
 		if err != nil {
 			return nil, err
 		}
