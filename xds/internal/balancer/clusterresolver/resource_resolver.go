@@ -57,7 +57,7 @@ type endpointsResolver interface {
 	// resolverNow triggers re-resolution of the resource.
 	resolveNow()
 
-	// stop stops resolution of the resource
+	// stop stops resolution of the resource.
 	stop()
 }
 
