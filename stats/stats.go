@@ -68,17 +68,16 @@ type InPayload struct {
 	// Data is the serialized message payload.
 	Data []byte
 
-	// None of these lengths contain the transport framing bytes (HTTP/2
-	// specific).
-	// Length is the length of uncompressed data. Does not include gRPC framing
-	// bytes (1 byte compressed flag and 4 byte message length).
+	// Length is the size of the uncompressed payload data. Does not include any
+	// framing (gRPC or HTTP/2).
 	Length int
-	// WireLength is the length of tbe compressed data, alongside gRPC framing
-	// bytes (1 byte compressed flag and 4 byte message length).
-	WireLength int
-	// CompressedLength is the length of the compressed data. Does not include
-	// gRPC framing bytes (1 byte compressed flag and 4 byte message length).
+	// CompressedLength is the size of the compressed payload data. Does not
+	// include any framing (gRPC or HTTP/2). Same as Length if compression not
+	// enabled.
 	CompressedLength int
+	// WireLength is the size of the compressed payload data plus gRPC framing.
+	// Does not include HTTP/2 framing.
+	WireLength int
 
 	// RecvTime is the time when the payload is received.
 	RecvTime time.Time
@@ -138,17 +137,16 @@ type OutPayload struct {
 	Payload interface{}
 	// Data is the serialized message payload.
 	Data []byte
-	// None of these lengths contain the transport framing bytes (HTTP/2
-	// specific).
-	// Length is the length of uncompressed data. Does not include gRPC framing
-	// bytes (1 byte compressed flag and 4 byte message length).
+	// Length is the size of the uncompressed payload data. Does not include any
+	// framing (gRPC or HTTP/2).
 	Length int
-	// WireLength is the length of tbe compressed data, alongside gRPC
-	// framing bytes (1 byte compressed flag and 4 byte message length).
-	WireLength int
-	// CompressedLength is the length of the uncompressed data. Doesn't include
-	// gRPC framing bytes (1 byte compressed flag and 4 byte message length).
+	// CompressedLength is the size of the compressed payload data. Does not
+	// include any framing (gRPC or HTTP/2). Same as Length if compression not
+	// enabled.
 	CompressedLength int
+	// WireLength is the size of the compressed payload data plus gRPC framing.
+	// Does not include HTTP/2 framing.
+	WireLength int
 	// SentTime is the time when the payload is sent.
 	SentTime time.Time
 }

@@ -33,6 +33,7 @@ import (
 	"go.opencensus.io/trace"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/stubserver"
@@ -263,7 +264,9 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+			return &grpc_testing.SimpleResponse{Payload: &grpc_testing.Payload{
+				Body: make([]byte, 10000),
+			}}, nil
 		},
 		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
 			for {
@@ -282,7 +285,9 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	defer cancel()
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
 	// certain metrics to be emitted.
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{
+		Body: make([]byte, 10000),
+	}}, grpc.UseCompressor(gzip.Name)); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	stream, err := ss.Client.FullDuplexCall(ctx)
@@ -481,7 +486,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 						},
 						Data: &view.DistributionData{
 							Count:          1,
-							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+							CountPerBucket: []int64{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 						},
 					},
 					{
@@ -555,7 +560,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 						},
 						Data: &view.DistributionData{
 							Count:          1,
-							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+							CountPerBucket: []int64{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 						},
 					},
 					{
@@ -629,7 +634,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 						},
 						Data: &view.DistributionData{
 							Count:          1,
-							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+							CountPerBucket: []int64{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 						},
 					},
 					{
@@ -703,7 +708,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 						},
 						Data: &view.DistributionData{
 							Count:          1,
-							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+							CountPerBucket: []int64{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 						},
 					},
 					{
