@@ -43,7 +43,7 @@ const (
 )
 
 func (s) TestLRSClient(t *testing.T) {
-	fs, sCleanup, err := fakeserver.StartServer()
+	fs, sCleanup, err := fakeserver.StartServer(nil)
 	if err != nil {
 		t.Fatalf("failed to start fake xDS server: %v", err)
 	}
@@ -83,7 +83,7 @@ func (s) TestLRSClient(t *testing.T) {
 		t.Errorf("unexpected NewConn: %v, %v, want channel recv timeout", u, err)
 	}
 
-	fs2, sCleanup2, err := fakeserver.StartServer()
+	fs2, sCleanup2, err := fakeserver.StartServer(nil)
 	if err != nil {
 		t.Fatalf("failed to start fake xDS server: %v", err)
 	}
