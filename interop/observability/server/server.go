@@ -47,8 +47,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	var opts []grpc.ServerOption
-	server := grpc.NewServer(opts...)
+	server := grpc.NewServer()
 	defer server.Stop()
 	testgrpc.RegisterTestServiceServer(server, interop.NewTestServer())
 	log.Printf("Observability interop server listening on %v", lis.Addr())

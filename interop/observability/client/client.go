@@ -71,6 +71,7 @@ func main() {
 	}
 	// TODO(stanleycheung): remove this once the observability exporter plugin is able to
 	//                      gracefully flush observability data to cloud at shutdown
+	// TODO(stanleycheung): see if we can reduce the number 65
 	const exporterSleepDuration = 65 * time.Second
 	log.Printf("Sleeping %v before closing...", exporterSleepDuration)
 	time.Sleep(exporterSleepDuration)
