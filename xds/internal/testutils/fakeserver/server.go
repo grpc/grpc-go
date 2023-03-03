@@ -114,13 +114,17 @@ func (wl *wrappedListener) Accept() (net.Conn, error) {
 	return c, err
 }
 
-// StartServer makes a new Server and gets it to start listening on a local
-// port for gRPC requests. The returned cancel function should be invoked by
-// the caller upon completion of the test.
-func StartServer() (*Server, func(), error) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		return nil, func() {}, fmt.Errorf("net.Listen() failed: %v", err)
+// StartServer makes a new Server and gets it to start listening on the given
+// net.Listener. If the given net.Listener is nil, a new one is created on a
+// local port for gRPC requests. The returned cancel function should be invoked
+// by the caller upon completion of the test.
+func StartServer(lis net.Listener) (*Server, func(), error) {
+	if lis == nil {
+		var err error
+		lis, err = net.Listen("tcp", "localhost:0")
+		if err != nil {
+			return nil, func() {}, fmt.Errorf("net.Listen() failed: %v", err)
+		}
 	}
 
 	s := &Server{

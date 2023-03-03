@@ -15,6 +15,7 @@
  * limitations under the License.
  *
  */
+
 package xdsclient
 
 import (
@@ -32,40 +33,13 @@ import (
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
+	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 )
 
 var emptyServerOpts = e2e.ManagementServerOptions{}
-
-type testResourceWatcher struct {
-	updateCh chan *xdsresource.ResourceData
-	errorCh  chan error
-}
-
-func (w *testResourceWatcher) OnUpdate(data xdsresource.ResourceData) {
-	select {
-	case w.updateCh <- &data:
-	default:
-	}
-}
-
-func (w *testResourceWatcher) OnError(err error) {
-	select {
-	case w.errorCh <- err:
-	default:
-	}
-}
-
-func (w *testResourceWatcher) OnResourceDoesNotExist() {}
-
-func newTestResourceWatcher() *testResourceWatcher {
-	return &testResourceWatcher{
-		updateCh: make(chan *xdsresource.ResourceData),
-		errorCh:  make(chan error),
-	}
-}
 
 var (
 	// Listener resource type implementation retrieved from the resource type map
@@ -131,7 +105,7 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	defer a.close()
 
 	rn := "xdsclient-test-lds-resource"
-	w := newTestResourceWatcher()
+	w := testutils.NewTestResourceWatcher()
 	cancelResource := a.watchResource(listenerResourceType, rn, w)
 	defer cancelResource()
 
@@ -155,9 +129,9 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Test timed out before watcher received an update from server.")
-	case err := <-w.errorCh:
+	case err := <-w.ErrorCh:
 		t.Fatalf("Watch got an unexpected error update: %q. Want valid updates.", err)
-	case <-w.updateCh:
+	case <-w.UpdateCh:
 		// This means the OnUpdate callback was invoked and the watcher was notified.
 	}
 	if err := compareWatchState(a, rn, watchStateReceived); err != nil {
@@ -176,7 +150,7 @@ func (s) TestTimerAndWatchStateOnErrorCallback(t *testing.T) {
 	defer a.close()
 
 	rn := "xdsclient-test-lds-resource"
-	w := newTestResourceWatcher()
+	w := testutils.NewTestResourceWatcher()
 	cancelResource := a.watchResource(listenerResourceType, rn, w)
 	defer cancelResource()
 
@@ -188,7 +162,7 @@ func (s) TestTimerAndWatchStateOnErrorCallback(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Test timed out before verifying error propagation.")
-	case err := <-w.errorCh:
+	case err := <-w.ErrorCh:
 		if xdsresource.ErrType(err) != xdsresource.ErrorTypeConnection {
 			t.Fatal("Connection error not propagated to watchers.")
 		}
@@ -219,7 +193,7 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	defer a.close()
 
 	nameA := "xdsclient-test-lds-resourceA"
-	watcherA := newTestResourceWatcher()
+	watcherA := testutils.NewTestResourceWatcher()
 	cancelA := a.watchResource(listenerResourceType, nameA, watcherA)
 
 	if err := updateResourceInServer(ctx, ms, nameA, nodeID); err != nil {
@@ -231,13 +205,13 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Test timed out before watcher received the update.")
-	case err := <-watcherA.errorCh:
+	case err := <-watcherA.ErrorCh:
 		t.Fatalf("Watch got an unexpected error update: %q; want: valid update.", err)
-	case <-watcherA.updateCh:
+	case <-watcherA.UpdateCh:
 	}
 
 	nameB := "xdsclient-test-lds-resourceB"
-	watcherB := newTestResourceWatcher()
+	watcherB := testutils.NewTestResourceWatcher()
 	cancelB := a.watchResource(listenerResourceType, nameB, watcherB)
 	defer cancelB()
 
@@ -249,9 +223,9 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Test timed out before mgmt server got the request.")
-	case u := <-watcherB.updateCh:
+	case u := <-watcherB.UpdateCh:
 		t.Fatalf("Watch got an unexpected resource update: %v.", u)
-	case gotErr := <-watcherB.errorCh:
+	case gotErr := <-watcherB.ErrorCh:
 		wantErr := xdsresource.ErrorTypeConnection
 		if xdsresource.ErrType(gotErr) != wantErr {
 			t.Fatalf("Watch got an unexpected error:%q. Want: %q.", gotErr, wantErr)

@@ -20,14 +20,31 @@ package xdsclient_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/grpc/internal/testutils/xds/bootstrap"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
+	"google.golang.org/grpc/xds/internal"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
+	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+)
+
+var (
+	// Resource type implementations retrieved from the resource type map in the
+	// internal package, which is initialized when the individual resource types
+	// are created.
+	listenerResourceType    = internal.ResourceTypeMapForTesting[version.V3ListenerURL].(xdsresource.Type)
+	routeConfigResourceType = internal.ResourceTypeMapForTesting[version.V3RouteConfigURL].(xdsresource.Type)
 )
 
 // TestWatchCallAnotherWatch tests the scenario where a watch is registered for
@@ -128,4 +145,167 @@ func (s) TestWatchCallAnotherWatch(t *testing.T) {
 	if err := verifyRouteConfigUpdate(ctx, updateCh3, wantUpdate3); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestNodeProtoSentOnlyInFirstRequest verifies that a non-empty node proto gets
+// sent only on the first discovery request message on the ADS stream.
+//
+// It also verifies the same behavior holds after a stream restart.
+func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
+	overrideFedEnvVar(t)
+
+	// Create a restartable listener which can close existing connections.
+	l, err := testutils.LocalTCPListener()
+	if err != nil {
+		t.Fatalf("testutils.LocalTCPListener() failed: %v", err)
+	}
+	lis := testutils.NewRestartableListener(l)
+
+	// Start a fake xDS management server with the above restartable listener.
+	//
+	// We are unable to use the go-control-plane server here, because it caches
+	// the node proto received in the first request message and adds it to
+	// subsequent requests before invoking the OnStreamRequest() callback.
+	// Therefore we cannot verify what is sent by the xDS client.
+	mgmtServer, cleanup, err := fakeserver.StartServer(lis)
+	if err != nil {
+		t.Fatalf("Failed to start fake xDS server: %v", err)
+	}
+	defer cleanup()
+
+	// Create a bootstrap file in a temporary directory.
+	nodeID := uuid.New().String()
+	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
+		NodeID:    nodeID,
+		ServerURI: mgmtServer.Address,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create bootstrap file: %v", err)
+	}
+
+	// Create an xDS client with the above bootstrap contents.
+	client, close, err := xdsclient.NewWithBootstrapContentsForTesting(bootstrapContents)
+	if err != nil {
+		t.Fatalf("Failed to create xDS client: %v", err)
+	}
+	defer close()
+
+	// Configure a listener resource on the fake xDS server.
+	const (
+		serviceName     = "my-service-client-side-xds"
+		routeConfigName = "route-" + serviceName
+		clusterName     = "cluster-" + serviceName
+	)
+	lisAny, err := anypb.New(e2e.DefaultClientListener(serviceName, routeConfigName))
+	if err != nil {
+		t.Fatalf("Failed to marshal listener resource into an Any proto: %v", err)
+	}
+	mgmtServer.XDSResponseChan <- &fakeserver.Response{
+		Resp: &v3discoverypb.DiscoveryResponse{
+			TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
+			VersionInfo: "1",
+			Resources:   []*anypb.Any{lisAny},
+		},
+	}
+
+	// Register a watch for the Listener resource.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	watcher := xdstestutils.NewTestResourceWatcher()
+	client.WatchResource(listenerResourceType, serviceName, watcher)
+
+	// The first request on the stream must contain a non-empty node proto.
+	if err := readDiscoveryResponseAndCheckForNonEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
+		t.Fatal(err)
+	}
+
+	// The xDS client is expected to ACK the Listener resource. The discovery
+	// request corresponding to the ACK must contain a nil node proto.
+	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
+		t.Fatal(err)
+	}
+
+	// Configure the route configuration resource on the fake xDS server.
+	rcAny, err := anypb.New(e2e.DefaultRouteConfig(routeConfigName, serviceName, clusterName))
+	if err != nil {
+		t.Fatalf("Failed to marshal route configuration resource into an Any proto: %v", err)
+	}
+	mgmtServer.XDSResponseChan <- &fakeserver.Response{
+		Resp: &v3discoverypb.DiscoveryResponse{
+			TypeUrl:     "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+			VersionInfo: "1",
+			Resources:   []*anypb.Any{rcAny},
+		},
+	}
+
+	// Register a watch for a RouteConfiguration resource. Ensure that the
+	// discovery requests for the route configuration resource and the
+	// subsequent ACK contains an empty node proto.
+	client.WatchResource(routeConfigResourceType, routeConfigName, watcher)
+	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
+		t.Fatal(err)
+	}
+	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stop the management server and expect the error callback to be invoked.
+	lis.Stop()
+	select {
+	case <-ctx.Done():
+		t.Fatal("Timeout when waiting for the connection error to be propagated to the watcher")
+	case <-watcher.ErrorCh:
+	}
+
+	// Restart the management server.
+	lis.Restart()
+
+	// The xDS client is expected to re-request previously requested resources.
+	// Hence, we expect two DiscoveryRequest messages (one for the Listener and
+	// one for the RouteConfiguration resource). The first message should
+	// contain a non-nil node proto and second one should contain a nil-proto.
+	//
+	// And since we don't push any responses on the response channel of the fake
+	// server, we do not expect any ACKs here.
+	if err := readDiscoveryResponseAndCheckForNonEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
+		t.Fatal(err)
+	}
+
+	// The xDS client is expected to ACK the Listener resource. The discovery
+	// request corresponding to the ACK must contain a nil node proto.
+	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// readDiscoveryResponseAndCheckForEmptyNodeProto reads a discovery request
+// message out of the provided reqCh. It returns an error if it fails to read a
+// message before the context deadline expires, or if the read message contains
+// a non-empty node proto.
+func readDiscoveryResponseAndCheckForEmptyNodeProto(ctx context.Context, reqCh *testutils.Channel) error {
+	v, err := reqCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("Timeout when waiting for a DiscoveryRequest message")
+	}
+	req := v.(*fakeserver.Request).Req.(*v3discoverypb.DiscoveryRequest)
+	if node := req.GetNode(); node != nil {
+		return fmt.Errorf("Node proto received in DiscoveryRequest message is %v, want empty node proto", node)
+	}
+	return nil
+}
+
+// readDiscoveryResponseAndCheckForNonEmptyNodeProto reads a discovery request
+// message out of the provided reqCh. It returns an error if it fails to read a
+// message before the context deadline expires, or if the read message contains
+// an empty node proto.
+func readDiscoveryResponseAndCheckForNonEmptyNodeProto(ctx context.Context, reqCh *testutils.Channel) error {
+	v, err := reqCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("Timeout when waiting for a DiscoveryRequest message")
+	}
+	req := v.(*fakeserver.Request).Req.(*v3discoverypb.DiscoveryRequest)
+	if node := req.GetNode(); node == nil {
+		return fmt.Errorf("Empty node proto received in DiscoveryRequest message, want non-empty node proto")
+	}
+	return nil
 }
