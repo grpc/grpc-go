@@ -5905,6 +5905,8 @@ func (s) TestClientMaxHeaderListSizeServerUserViolation(t *testing.T) {
 }
 
 func testClientMaxHeaderListSizeServerUserViolation(t *testing.T, e env) {
+	grpctest.TLogger.ExpectError("header list size to send violates the maximum size")
+
 	te := newTest(t, e)
 	te.maxClientHeaderListSize = new(uint32)
 	*te.maxClientHeaderListSize = 1 // any header server sends will violate
