@@ -21,6 +21,7 @@ package service
 
 import (
 	"context"
+	"github.com/golang/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"net"
 
@@ -188,12 +189,13 @@ func securityToProto(se credentials.ChannelzSecurityValue) *channelzpb.Security 
 		otherSecurity := &channelzpb.Security_OtherSecurity{
 			Name: v.Name,
 		}
-		if anyval, err := anypb.New(v.Value); err == nil {
+		if anyval, err := anypb.New(proto.MessageV2(v.Value)); err == nil {
 			otherSecurity.Value = anyval
 		}
 		return &channelzpb.Security{Model: &channelzpb.Security_Other{Other: otherSecurity}}
 	}
 	return nil
+
 }
 
 func addrToProto(a net.Addr) *channelzpb.Address {

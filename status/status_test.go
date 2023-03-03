@@ -22,11 +22,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/anypb"
 	"testing"
 
-	"github.com/golang/protobuf/proto"
 	apb "github.com/golang/protobuf/ptypes/any"
 	dpb "github.com/golang/protobuf/ptypes/duration"
 	"github.com/google/go-cmp/cmp"
@@ -36,6 +34,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/status"
+	"google.golang.org/protobuf/proto"
 )
 
 type s struct {
@@ -349,11 +348,7 @@ func str(s *Status) string {
 
 // mustMarshalAny converts a protobuf message to an any.
 func mustMarshalAny(msg proto.Message) *apb.Any {
-	protoMessage, ok := msg.(protoreflect.ProtoMessage)
-	if !ok {
-		panic(fmt.Sprintf("proto.Message(%+v) is not a protoreflect.Message", msg))
-	}
-	any, err := anypb.New(protoMessage)
+	any, err := anypb.New(msg)
 	if err != nil {
 		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", msg, err))
 	}
