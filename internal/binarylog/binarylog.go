@@ -21,6 +21,7 @@
 package binarylog
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -67,6 +68,28 @@ func GetMethodLogger(methodName string) MethodLogger {
 		return nil
 	}
 	return binLogger.GetMethodLogger(methodName)
+}
+
+// MethodLoggerToMethodLoggerWithContext converts the MethodLogger passed in to
+// a MethodLoggerWithContext. If the MethodLogger passed in implements
+// MethodLoggerWithContext, it returns itself typecasted. If the MethodLogger
+// passed in does not implement MethodLoggerWithContext, it returns a
+// wrappedMethodLogger which calls into MethodLogger ignoring context.
+func MethodLoggerToMethodLoggerWithContext(ml MethodLogger) MethodLoggerWithContext {
+	if mlwc, ok := ml.(MethodLoggerWithContext); ok {
+		return mlwc
+	}
+	return &wrappedMethodLogger{methodLogger: ml}
+}
+
+// wrappedMethodLogger implements LogWithContext by defering to underlying
+// MethodLogger while ignoring the context.
+type wrappedMethodLogger struct {
+	methodLogger MethodLogger
+}
+
+func (wml *wrappedMethodLogger) LogWithContext(_ context.Context, lec LogEntryConfig) {
+	wml.methodLogger.Log(lec)
 }
 
 func init() {

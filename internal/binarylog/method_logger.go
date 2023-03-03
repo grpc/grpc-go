@@ -59,17 +59,6 @@ type MethodLoggerWithContext interface {
 	LogWithContext(context.Context, LogEntryConfig)
 }
 
-// BinLogWithContext is a helper to pass a context to the binary logger's Log
-// function if binary logger has support. If not, it calls the log method that
-// doesn't take a context.
-func BinLogWithContext(ctx context.Context, binLogger MethodLogger, lec LogEntryConfig) {
-	if mlwc, ok := binLogger.(MethodLoggerWithContext); ok {
-		mlwc.LogWithContext(ctx, lec)
-	} else {
-		binLogger.Log(lec)
-	}
-}
-
 // TruncatingMethodLogger is a method logger that truncates headers and messages
 // based on configured fields.
 type TruncatingMethodLogger struct {

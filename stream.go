@@ -310,11 +310,13 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
 	}
 	if ml := binarylog.GetMethodLogger(method); ml != nil {
-		cs.binlogs = append(cs.binlogs, ml)
+		mlwc := binarylog.MethodLoggerToMethodLoggerWithContext(ml)
+		cs.binlogs = append(cs.binlogs, mlwc)
 	}
 	if cc.dopts.binaryLogger != nil {
 		if ml := cc.dopts.binaryLogger.GetMethodLogger(method); ml != nil {
-			cs.binlogs = append(cs.binlogs, ml)
+			mlwc := binarylog.MethodLoggerToMethodLoggerWithContext(ml)
+			cs.binlogs = append(cs.binlogs, mlwc)
 		}
 	}
 
@@ -352,7 +354,7 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 			}
 		}
 		for _, binlog := range cs.binlogs {
-			binarylog.BinLogWithContext(cs.ctx, binlog, logEntry)
+			binlog.LogWithContext(cs.ctx, logEntry)
 		}
 	}
 
@@ -516,7 +518,7 @@ type clientStream struct {
 
 	retryThrottler *retryThrottler // The throttler active when the RPC began.
 
-	binlogs []binarylog.MethodLogger
+	binlogs []binarylog.MethodLoggerWithContext
 	// serverHeaderBinlogged is a boolean for whether server header has been
 	// logged. Server header will be logged when the first time one of those
 	// happens: stream.Header(), stream.Recv().
@@ -800,7 +802,7 @@ func (cs *clientStream) Header() (metadata.MD, error) {
 		}
 		cs.serverHeaderBinlogged = true
 		for _, binlog := range cs.binlogs {
-			binarylog.BinLogWithContext(cs.ctx, binlog, logEntry)
+			binlog.LogWithContext(cs.ctx, logEntry)
 		}
 	}
 	return m, nil
@@ -881,7 +883,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 			Message:      data,
 		}
 		for _, binlog := range cs.binlogs {
-			binarylog.BinLogWithContext(cs.ctx, binlog, cm)
+			binlog.LogWithContext(cs.ctx, cm)
 		}
 	}
 	return err
@@ -905,7 +907,7 @@ func (cs *clientStream) RecvMsg(m interface{}) error {
 			Message:      recvInfo.uncompressedBytes,
 		}
 		for _, binlog := range cs.binlogs {
-			binarylog.BinLogWithContext(cs.ctx, binlog, sm)
+			binlog.LogWithContext(cs.ctx, sm)
 		}
 	}
 	if err != nil || !cs.desc.ServerStreams {
@@ -926,7 +928,7 @@ func (cs *clientStream) RecvMsg(m interface{}) error {
 				logEntry.PeerAddr = peer.Addr
 			}
 			for _, binlog := range cs.binlogs {
-				binarylog.BinLogWithContext(cs.ctx, binlog, logEntry)
+				binlog.LogWithContext(cs.ctx, logEntry)
 			}
 		}
 	}
@@ -953,7 +955,7 @@ func (cs *clientStream) CloseSend() error {
 			OnClientSide: true,
 		}
 		for _, binlog := range cs.binlogs {
-			binarylog.BinLogWithContext(cs.ctx, binlog, chc)
+			binlog.LogWithContext(cs.ctx, chc)
 		}
 	}
 	// We never returned an error here for reasons.
@@ -995,7 +997,7 @@ func (cs *clientStream) finish(err error) {
 			OnClientSide: true,
 		}
 		for _, binlog := range cs.binlogs {
-			binarylog.BinLogWithContext(cs.ctx, binlog, c)
+			binlog.LogWithContext(cs.ctx, c)
 		}
 	}
 	if err == nil {
@@ -1522,7 +1524,7 @@ type serverStream struct {
 
 	statsHandler []stats.Handler
 
-	binlogs []binarylog.MethodLogger
+	binlogs []binarylog.MethodLoggerWithContext
 	// serverHeaderBinlogged indicates whether server header has been logged. It
 	// will happen when one of the following two happens: stream.SendHeader(),
 	// stream.Send().
@@ -1563,7 +1565,7 @@ func (ss *serverStream) SendHeader(md metadata.MD) error {
 		}
 		ss.serverHeaderBinlogged = true
 		for _, binlog := range ss.binlogs {
-			binarylog.BinLogWithContext(ss.ctx, binlog, sh)
+			binlog.LogWithContext(ss.ctx, sh)
 		}
 	}
 	return err
@@ -1636,14 +1638,14 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			}
 			ss.serverHeaderBinlogged = true
 			for _, binlog := range ss.binlogs {
-				binarylog.BinLogWithContext(ss.ctx, binlog, sh)
+				binlog.LogWithContext(ss.ctx, sh)
 			}
 		}
 		sm := &binarylog.ServerMessage{
 			Message: data,
 		}
 		for _, binlog := range ss.binlogs {
-			binarylog.BinLogWithContext(ss.ctx, binlog, sm)
+			binlog.LogWithContext(ss.ctx, sm)
 		}
 	}
 	if len(ss.statsHandler) != 0 {
@@ -1691,7 +1693,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			if len(ss.binlogs) != 0 {
 				chc := &binarylog.ClientHalfClose{}
 				for _, binlog := range ss.binlogs {
-					binarylog.BinLogWithContext(ss.ctx, binlog, chc)
+					binlog.LogWithContext(ss.ctx, chc)
 				}
 			}
 			return err
@@ -1718,7 +1720,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			Message: payInfo.uncompressedBytes,
 		}
 		for _, binlog := range ss.binlogs {
-			binarylog.BinLogWithContext(ss.ctx, binlog, cm)
+			binlog.LogWithContext(ss.ctx, cm)
 		}
 	}
 	return nil
