@@ -1320,11 +1320,12 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		for _, sh := range shs {
 			sh.HandleRPC(stream.Context(), &stats.InPayload{
-				RecvTime:   time.Now(),
-				Payload:    v,
-				WireLength: payInfo.wireLength + headerLen,
-				Data:       d,
-				Length:     len(d),
+				RecvTime:         time.Now(),
+				Payload:          v,
+				Length:           len(d),
+				WireLength:       payInfo.compressedLength + headerLen,
+				CompressedLength: payInfo.compressedLength,
+				Data:             d,
 			})
 		}
 		if len(binlogs) != 0 {
