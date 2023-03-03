@@ -341,4 +341,3 @@ func (s) TestNewServerHandshaker(t *testing.T) {
 		t.Errorf("altsHandshaker.side: %v, want: %v", got, want)
 	}
 }
-
