@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package e2e_test
+package xdsclient_test
 
 import (
 	"context"
