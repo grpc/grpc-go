@@ -39,6 +39,8 @@ jobs:
     # Proto checks are run in the above job.
     env:
       VET_SKIP_PROTO: 1
+      GRPC_GO_LOG_SEVERITY_LEVEL: "info"
+      GRPC_GO_LOG_VERBOSITY_LEVEL: 2
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
