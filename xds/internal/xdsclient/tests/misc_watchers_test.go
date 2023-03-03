@@ -215,13 +215,13 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 	client.WatchResource(listenerResourceType, serviceName, watcher)
 
 	// The first request on the stream must contain a non-empty node proto.
-	if err := readDiscoveryResponseAndCheckForNodeProto(ctx, mgmtServer.XDSRequestChan, false); err != nil {
+	if err := readDiscoveryResponseAndCheckForNonEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
 		t.Fatal(err)
 	}
 
 	// The xDS client is expected to ACK the Listener resource. The discovery
 	// request corresponding to the ACK must contain a nil node proto.
-	if err := readDiscoveryResponseAndCheckForNodeProto(ctx, mgmtServer.XDSRequestChan, true); err != nil {
+	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
 		t.Fatal(err)
 	}
 
@@ -242,10 +242,10 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 	// discovery requests for the route configuration resource and the
 	// subsequent ACK contains an empty node proto.
 	client.WatchResource(routeConfigResourceType, routeConfigName, watcher)
-	if err := readDiscoveryResponseAndCheckForNodeProto(ctx, mgmtServer.XDSRequestChan, true); err != nil {
+	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
 		t.Fatal(err)
 	}
-	if err := readDiscoveryResponseAndCheckForNodeProto(ctx, mgmtServer.XDSRequestChan, true); err != nil {
+	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
 		t.Fatal(err)
 	}
 
@@ -267,32 +267,45 @@ func (s) TestNodeProtoSentOnlyInFirstRequest(t *testing.T) {
 	//
 	// And since we don't push any responses on the response channel of the fake
 	// server, we do not expect any ACKs here.
-	if err := readDiscoveryResponseAndCheckForNodeProto(ctx, mgmtServer.XDSRequestChan, false); err != nil {
+	if err := readDiscoveryResponseAndCheckForNonEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
 		t.Fatal(err)
 	}
 
 	// The xDS client is expected to ACK the Listener resource. The discovery
 	// request corresponding to the ACK must contain a nil node proto.
-	if err := readDiscoveryResponseAndCheckForNodeProto(ctx, mgmtServer.XDSRequestChan, true); err != nil {
+	if err := readDiscoveryResponseAndCheckForEmptyNodeProto(ctx, mgmtServer.XDSRequestChan); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// readDiscoveryResponseAndCheckForNodeProto reads a discovery request message
-// out of the provided reqCh. It returns an error if it fails to read a message
-// before the context deadline expires.
-//
-// wantEmptyNodeProto indicates whether the request message is expected to
-// contain an empty node proto. This function returns an error if that is not
-// the case.
-func readDiscoveryResponseAndCheckForNodeProto(ctx context.Context, reqCh *testutils.Channel, wantEmptyNodeProto bool) error {
+// readDiscoveryResponseAndCheckForEmptyNodeProto reads a discovery request
+// message out of the provided reqCh. It returns an error if it fails to read a
+// message before the context deadline expires, or if the read message contains
+// a non-empty node proto.
+func readDiscoveryResponseAndCheckForEmptyNodeProto(ctx context.Context, reqCh *testutils.Channel) error {
 	v, err := reqCh.Receive(ctx)
 	if err != nil {
 		return fmt.Errorf("Timeout when waiting for a DiscoveryRequest message")
 	}
 	req := v.(*fakeserver.Request).Req.(*v3discoverypb.DiscoveryRequest)
-	if gotEmptyNodeProto := req.GetNode() == nil; gotEmptyNodeProto != wantEmptyNodeProto {
-		return fmt.Errorf("Node proto received in DiscoveryRequest message is %v, want empty node proto is %v", req.GetNode(), wantEmptyNodeProto)
+	if node := req.GetNode(); node != nil {
+		return fmt.Errorf("Node proto received in DiscoveryRequest message is %v, want empty node proto", node)
+	}
+	return nil
+}
+
+// readDiscoveryResponseAndCheckForNonEmptyNodeProto reads a discovery request
+// message out of the provided reqCh. It returns an error if it fails to read a
+// message before the context deadline expires, or if the read message contains
+// an empty node proto.
+func readDiscoveryResponseAndCheckForNonEmptyNodeProto(ctx context.Context, reqCh *testutils.Channel) error {
+	v, err := reqCh.Receive(ctx)
+	if err != nil {
+		return fmt.Errorf("Timeout when waiting for a DiscoveryRequest message")
+	}
+	req := v.(*fakeserver.Request).Req.(*v3discoverypb.DiscoveryRequest)
+	if node := req.GetNode(); node == nil {
+		return fmt.Errorf("Empty node proto received in DiscoveryRequest message, want non-empty node proto")
 	}
 	return nil
 }
