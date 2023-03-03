@@ -20,13 +20,14 @@ package status_test
 
 import (
 	"errors"
-	protov2 "google.golang.org/protobuf/proto"
+
 	"testing"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/grpc_testing"
+	protov2 "google.golang.org/protobuf/proto"
 )
 
 type s struct {

@@ -283,7 +283,7 @@ func HTTPFilter(name string, config proto.Message) *v3httppb.HttpFilter {
 	return &v3httppb.HttpFilter{
 		Name: name,
 		ConfigType: &v3httppb.HttpFilter_TypedConfig{
-			TypedConfig: testutils.MarshalAny(proto.MessageV2(config)),
+			TypedConfig: testutils.MarshalAny(config),
 		},
 	}
 }
