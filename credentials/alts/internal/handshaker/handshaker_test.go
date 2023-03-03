@@ -283,3 +283,62 @@ func (s) TestPeerNotResponding(t *testing.T) {
 		t.Errorf("ClientHandshake() = %v, want %v", got, want)
 	}
 }
+
+func (s) TestNewClientHandshaker(t *testing.T) {
+	conn := testutil.NewTestConn(nil, nil)
+	clientConn := &grpc.ClientConn{}
+	opts := &ClientHandshakerOptions{}
+	hs, err := NewClientHandshaker(context.Background(), clientConn, conn, opts)
+	if err != nil {
+		t.Errorf("NextClientHandshaker returned unexpected error: %v", err)
+	}
+	altsHs := hs.(*altsHandshaker)
+	if altsHs.stream != nil {
+		t.Errorf("altsHandshaker.stream is non-nil")
+	}
+	if got, want := altsHs.conn, conn; got != want {
+		t.Errorf("altsHandshaker.conn: %v, want: %v", got, want)
+	}
+	if got, want := altsHs.clientConn, clientConn; got != want {
+		t.Errorf("altsHandshaker.clientConn: %v, want: %v", got, want)
+	}
+	if got, want := altsHs.clientOpts, opts; got != want {
+		t.Errorf("altsHandshaker.clientOpts: %v, want: %v", got, want)
+	}
+	if altsHs.serverOpts != nil {
+		t.Errorf("altsHandshaker.serverOpts is non-nil")
+	}
+	if got, want := altsHs.side, core.ClientSide; got != want {
+		t.Errorf("altsHandshaker.side: %v, want: %v", got, want)
+	}
+}
+
+func (s) TestNewServerHandshaker(t *testing.T) {
+	conn := testutil.NewTestConn(nil, nil)
+	clientConn := &grpc.ClientConn{}
+	opts := &ServerHandshakerOptions{}
+	hs, err := NewServerHandshaker(context.Background(), clientConn, conn, opts)
+	if err != nil {
+		t.Errorf("NextServerHandshaker returned unexpected error: %v", err)
+	}
+	altsHs := hs.(*altsHandshaker)
+	if altsHs.stream != nil {
+		t.Errorf("altsHandshaker.stream is non-nil")
+	}
+	if got, want := altsHs.conn, conn; got != want {
+		t.Errorf("altsHandshaker.conn: %v, want: %v", got, want)
+	}
+	if got, want := altsHs.clientConn, clientConn; got != want {
+		t.Errorf("altsHandshaker.clientConn: %v, want: %v", got, want)
+	}
+	if altsHs.clientOpts != nil {
+		t.Errorf("altsHandshaker.clientOpts is non-nil")
+	}
+	if got, want := altsHs.serverOpts, opts; got != want {
+		t.Errorf("altsHandshaker.serverOpts: %v, want: %v", got, want)
+	}
+	if got, want := altsHs.side, core.ServerSide; got != want {
+		t.Errorf("altsHandshaker.side: %v, want: %v", got, want)
+	}
+}
+

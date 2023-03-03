@@ -138,7 +138,7 @@ func DefaultServerHandshakerOptions() *ServerHandshakerOptions {
 //       and server options (server options struct does not exist now. When
 //       caller can provide endpoints, it should be created.
 
-// altsHandshaker is used to complete a ALTS handshaking between client and
+// altsHandshaker is used to complete an ALTS handshake between client and
 // server. This handshaker talks to the ALTS handshaker service in the metadata
 // server.
 type altsHandshaker struct {
@@ -156,12 +156,12 @@ type altsHandshaker struct {
 	side core.Side
 }
 
-// NewClientHandshaker creates a ALTS handshaker for GCP which contains an RPC
+// NewClientHandshaker creates an ALTS handshaker for GCP which contains an RPC
 // stub created using the passed conn and used to talk to the ALTS Handshaker
 // service in the metadata server.
 func NewClientHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn, opts *ClientHandshakerOptions) (core.Handshaker, error) {
 	return &altsHandshaker{
-		stream:     stream,
+		stream:     nil,
 		conn:       c,
 		clientConn: conn,
 		clientOpts: opts,
@@ -169,12 +169,12 @@ func NewClientHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn,
 	}, nil
 }
 
-// NewServerHandshaker creates a ALTS handshaker for GCP which contains an RPC
+// NewServerHandshaker creates an ALTS handshaker for GCP which contains an RPC
 // stub created using the passed conn and used to talk to the ALTS Handshaker
 // service in the metadata server.
 func NewServerHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn, opts *ServerHandshakerOptions) (core.Handshaker, error) {
 	return &altsHandshaker{
-		stream:     stream,
+		stream:     nil,
 		conn:       c,
 		clientConn: conn,
 		serverOpts: opts,
@@ -194,11 +194,13 @@ func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credent
 		return nil, nil, errors.New("only handshakers created using NewClientHandshaker can perform a client handshaker")
 	}
 
-	stream, err := altsgrpc.NewHandshakerServiceClient(h.clientConn).DoHandshake(ctx)
-	if err != nil {
-		return nil, nil, err
+	if h.stream == nil {
+		stream, err := altsgrpc.NewHandshakerServiceClient(h.clientConn).DoHandshake(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		h.stream = stream
 	}
-	h.stream = stream
 
 	// Create target identities from service account list.
 	targetIdentities := make([]*altspb.Identity, 0, len(h.clientOpts.TargetServiceAccounts))
@@ -243,11 +245,13 @@ func (h *altsHandshaker) ServerHandshake(ctx context.Context) (net.Conn, credent
 		return nil, nil, errors.New("only handshakers created using NewServerHandshaker can perform a server handshaker")
 	}
 
-	stream, err := altsgrpc.NewHandshakerServiceClient(h.clientConn).DoHandshake(ctx)
-        if err != nil {
-                return nil, nil, err
-        }
-        h.stream = stream
+	if h.stream == nil {
+		stream, err := altsgrpc.NewHandshakerServiceClient(h.clientConn).DoHandshake(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		h.stream = stream
+	}
 
 	p := make([]byte, frameLimit)
 	n, err := h.conn.Read(p)
