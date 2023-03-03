@@ -37,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/binarylog"
 	iblog "google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/grpcutil"
+	"google.golang.org/grpc/stats/opencensus"
 )
 
 var lExporter loggingExporter
@@ -336,7 +337,7 @@ func (bml *binaryMethodLogger) LogWithContext(ctx context.Context, c iblog.LogEn
 		}
 	} else {
 		// server side span, populated through stats/opencensus package.
-		if tID, sID, ok := internal.GetTraceIDAndSpanID.(func(context.Context) (trace.TraceID, trace.SpanID, bool))(ctx); ok {
+		if tID, sID, ok := opencensus.GetTraceAndSpanID(ctx); ok {
 			gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + fmt.Sprintf("%x", tID)
 			gcploggingEntry.SpanID = fmt.Sprintf("%x", sID)
 		}

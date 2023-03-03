@@ -33,10 +33,6 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func init() {
-	internal.GetTraceIDAndSpanID = getTraceAndSpanID
-}
-
 var (
 	joinDialOptions = internal.JoinDialOptions.(func(...grpc.DialOption) grpc.DialOption)
 )
@@ -163,9 +159,9 @@ func getRPCInfo(ctx context.Context) *rpcInfo {
 	return ri
 }
 
-// getTraceAndSpanID returns the trace and span ID of the span in the context.
+// GetTraceAndSpanID returns the trace and span ID of the span in the context.
 // Returns true if IDs present and false if IDs not present.
-func getTraceAndSpanID(ctx context.Context) (trace.TraceID, trace.SpanID, bool) {
+func GetTraceAndSpanID(ctx context.Context) (trace.TraceID, trace.SpanID, bool) {
 	ri, ok := ctx.Value(rpcInfoKey{}).(*rpcInfo)
 	if !ok {
 		return [16]byte{}, [8]byte{}, false
