@@ -22,7 +22,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"google.golang.org/grpc/internal/testutils"
+	"google.golang.org/protobuf/types/known/anypb"
 	"testing"
 
 	apb "github.com/golang/protobuf/ptypes/any"
@@ -307,7 +307,7 @@ func (s) TestStatus_ErrorDetails_Fail(t *testing.T) {
 						TypeUrl: "",
 						Value:   []byte{},
 					},
-					testutils.MarshalAny(&epb.ResourceInfo{
+					mustMarshalAny(&epb.ResourceInfo{
 						ResourceType: "book",
 						ResourceName: "projects/1234/books/5678",
 						Owner:        "User",
@@ -344,6 +344,16 @@ func str(s *Status) string {
 		return "<Code=OK>"
 	}
 	return fmt.Sprintf("<Code=%v, Message=%q, Details=%+v>", s.Code(), s.Message(), s.Details())
+}
+
+// mustMarshalAny converts a protobuf message to an any.
+func mustMarshalAny(msg proto.Message) *apb.Any {
+	any, err := anypb.New(msg)
+	if err != nil {
+		panic(fmt.Sprintf("anypb.New(%+v) failed: %v", msg, err))
+	}
+	return any
+
 }
 
 func (s) TestFromContextError(t *testing.T) {
