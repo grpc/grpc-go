@@ -20,6 +20,7 @@ package xdsresource
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"testing"
 	"time"
@@ -412,38 +413,6 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 			},
 		},
 		{
-			// weights not add up to total-weight.
-			name: "route-config-with-weighted_clusters_weights_not_add_up",
-			rc: &v3routepb.RouteConfiguration{
-				Name: routeName,
-				VirtualHosts: []*v3routepb.VirtualHost{
-					{
-						Domains: []string{ldsTarget},
-						Routes: []*v3routepb.Route{
-							{
-								Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
-								Action: &v3routepb.Route_Route{
-									Route: &v3routepb.RouteAction{
-										ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
-											WeightedClusters: &v3routepb.WeightedCluster{
-												Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-													{Name: "a", Weight: &wrapperspb.UInt32Value{Value: 2}},
-													{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 3}},
-													{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 5}},
-												},
-												TotalWeight: &wrapperspb.UInt32Value{Value: 30},
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			wantError: true,
-		},
-		{
 			name: "good-route-config-with-weighted_clusters",
 			rc: &v3routepb.RouteConfiguration{
 				Name: routeName,
@@ -462,7 +431,6 @@ func (s) TestRDSGenerateRDSUpdateFromRouteConfiguration(t *testing.T) {
 													{Name: "b", Weight: &wrapperspb.UInt32Value{Value: 3}},
 													{Name: "c", Weight: &wrapperspb.UInt32Value{Value: 5}},
 												},
-												TotalWeight: &wrapperspb.UInt32Value{Value: 10},
 											},
 										},
 									},
@@ -971,7 +939,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 									{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}, TypedPerFilterConfig: cfgs},
 									{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
 								},
-								TotalWeight: &wrapperspb.UInt32Value{Value: 100},
 							}}}},
 				TypedPerFilterConfig: cfgs,
 			}}
@@ -1016,7 +983,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 									{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
 									{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
 								},
-								TotalWeight: &wrapperspb.UInt32Value{Value: 100},
 							}}}},
 			}},
 			wantRoutes: []*Route{{
@@ -1056,7 +1022,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
 										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
 									},
-									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
 								}}}},
 				},
 			},
@@ -1102,7 +1067,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
 										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
 									},
-									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
 								}}}},
 				},
 			},
@@ -1136,7 +1100,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
 										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
 									},
-									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
 								}}}},
 				},
 				{
@@ -1252,14 +1215,13 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 0}},
 										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 0}},
 									},
-									TotalWeight: &wrapperspb.UInt32Value{Value: 0},
 								}}}},
 				},
 			},
 			wantErr: true,
 		},
 		{
-			name: "totalWeight is nil in weighted clusters action",
+			name: "The sum of all weighted clusters is more than uint32",
 			routes: []*v3routepb.Route{
 				{
 					Match: &v3routepb.RouteMatch{
@@ -1270,30 +1232,9 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
 								WeightedClusters: &v3routepb.WeightedCluster{
 									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 20}},
-										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 30}},
+										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: math.MaxUint32}},
+										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: math.MaxUint32}},
 									},
-								}}}},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "The sum of all weighted clusters is not equal totalWeight",
-			routes: []*v3routepb.Route{
-				{
-					Match: &v3routepb.RouteMatch{
-						PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/a/"},
-					},
-					Action: &v3routepb.Route_Route{
-						Route: &v3routepb.RouteAction{
-							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{
-								WeightedClusters: &v3routepb.WeightedCluster{
-									Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 50}},
-										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 20}},
-									},
-									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
 								}}}},
 				},
 			},
@@ -1353,7 +1294,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 30}},
 										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 20}},
 									},
-									TotalWeight: &wrapperspb.UInt32Value{Value: 50},
 								}}}},
 				},
 			},
@@ -1394,7 +1334,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
 										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
 									},
-									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
 								}},
 							HashPolicy: []*v3routepb.RouteAction_HashPolicy{
 								{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_FilterState_{FilterState: &v3routepb.RouteAction_HashPolicy_FilterState{Key: "io.grpc.channel_id"}}},
@@ -1452,7 +1391,6 @@ func (s) TestRoutesProtoToSlice(t *testing.T) {
 										{Name: "B", Weight: &wrapperspb.UInt32Value{Value: 60}},
 										{Name: "A", Weight: &wrapperspb.UInt32Value{Value: 40}},
 									},
-									TotalWeight: &wrapperspb.UInt32Value{Value: 100},
 								}},
 							HashPolicy: []*v3routepb.RouteAction_HashPolicy{
 								{PolicySpecifier: &v3routepb.RouteAction_HashPolicy_Header_{Header: &v3routepb.RouteAction_HashPolicy_Header{HeaderName: ":path"}}},

@@ -326,16 +326,12 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 					}
 					wc.HTTPFilterConfigOverride = cfgs
 					route.WeightedClusters[c.GetName()] = wc
+
+					// Sum of all weights cannot exceed MaxUint32. Checking for overflow.
+					if totalWeight > (totalWeight + w) {
+						return nil, nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
+					}
 					totalWeight += w
-				}
-				// envoy xds doc
-				// default TotalWeight https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto.html#envoy-v3-api-field-config-route-v3-weightedcluster-total-weight
-				wantTotalWeight := uint32(100)
-				if tw := wcs.GetTotalWeight(); tw != nil {
-					wantTotalWeight = tw.GetValue()
-				}
-				if totalWeight != wantTotalWeight {
-					return nil, nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, expected total weight from response: %v", r, a, totalWeight, wantTotalWeight)
 				}
 				if totalWeight == 0 {
 					return nil, nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
