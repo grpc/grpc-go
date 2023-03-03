@@ -182,7 +182,7 @@ func NewServerHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn,
 	}, nil
 }
 
-// ClientHandshake starts and completes a client ALTS handshaking for GCP. Once
+// ClientHandshake starts and completes a client ALTS handshake for GCP. Once
 // done, ClientHandshake returns a secure connection.
 func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credentials.AuthInfo, error) {
 	if !acquire() {
@@ -233,7 +233,7 @@ func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credent
 	return conn, authInfo, nil
 }
 
-// ServerHandshake starts and completes a server ALTS handshaking for GCP. Once
+// ServerHandshake starts and completes a server ALTS handshake for GCP. Once
 // done, ServerHandshake returns a secure connection.
 func (h *altsHandshaker) ServerHandshake(ctx context.Context) (net.Conn, credentials.AuthInfo, error) {
 	if !acquire() {
