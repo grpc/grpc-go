@@ -430,7 +430,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		// "Transports must consider requests containing the Connection header
 		// as malformed." - A41
 		case "connection":
-			logger.Errorf("transport: http2Server.operateHeaders parsed a :connection header which makes a request malformed as per the HTTP/2 spec")
+			logger.Errorf("Received a HEADERS frame with a :connection header which makes it malformed as per the HTTP/2 spec")
 			protocolError = true
 		default:
 			if isReservedHeader(hf.Name) && !isWhitelistedHeader(hf.Name) {
@@ -452,14 +452,12 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	// with HTTP/2 error code PROTOCOL_ERROR." - A41. Since this is a HTTP/2
 	// error, this takes precedence over a client not speaking gRPC.
 	if len(mdata[":authority"]) > 1 || len(mdata["host"]) > 1 {
-		errMsg := fmt.Sprintf("num values of :authority: %v, num values of host: %v, both must only have 1 value as per HTTP/2 spec", len(mdata[":authority"]), len(mdata["host"]))
-		logger.Errorf("transport: %v", errMsg)
-
+		logger.Errorf("Received a HEADERS frame with multiple host or :authority headers. Both must only have 1 value as per HTTP/2 spec")
 		t.controlBuf.put(&earlyAbortStream{
 			httpStatus:     http.StatusBadRequest,
 			streamID:       streamID,
 			contentSubtype: s.contentSubtype,
-			status:         status.New(codes.Internal, errMsg),
+			status:         status.New(codes.Internal, fmt.Sprintf("num values of :authority: %v, num values of host: %v, both must only have 1 value as per HTTP/2 spec", len(mdata[":authority"]), len(mdata["host"]))),
 			rst:            !frame.StreamEnded(),
 		})
 		return nil
@@ -684,7 +682,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 		case *http2.GoAwayFrame:
 			// TODO: Handle GoAway from the client appropriately.
 		default:
-			logger.Errorf("transport: http2Server.HandleStreams found unhandled frame type %v.", frame)
+			logger.Infof("Received unsupported http/2 frame type %T: %v", frame, frame)
 		}
 	}
 }
@@ -942,7 +940,7 @@ func (t *http2Server) checkForHeaderListSize(it interface{}) bool {
 	var sz int64
 	for _, f := range hdrFrame.hf {
 		if sz += int64(f.Size()); sz > int64(*t.maxSendHeaderListSize) {
-			logger.Errorf("header list size to send violates the maximum size (%d bytes) set by client", *t.maxSendHeaderListSize)
+			logger.Warningf("Header list size to send violates the maximum size (%d bytes) set by client", *t.maxSendHeaderListSize)
 			return false
 		}
 	}

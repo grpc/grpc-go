@@ -1799,7 +1799,7 @@ func (s) TestReadGivesSameErrorAfterAnyErrorOccurs(t *testing.T) {
 // error, which would end up with a RST_STREAM being sent to the client and also
 // the server closing the stream.
 func (s) TestHeadersCausingStreamError(t *testing.T) {
-	grpctest.TLogger.ExpectError("transport: http2Server.operateHeaders parsed a :connection header which makes a request malformed as per the HTTP/2 spec")
+	grpctest.TLogger.ExpectError("Received a HEADERS frame with a :connection header which makes it malformed as per the HTTP/2 spec")
 
 	tests := []struct {
 		name    string
@@ -1927,7 +1927,7 @@ func (s) TestHeadersCausingStreamError(t *testing.T) {
 // TestHeadersHTTPStatusGRPCStatus tests requests with certain headers get a
 // certain HTTP and gRPC status back.
 func (s) TestHeadersHTTPStatusGRPCStatus(t *testing.T) {
-	grpctest.TLogger.ExpectErrorN("num values of :authority: 1, num values of host: 2, both must only have 1 value as per HTTP/2 spec", 2)
+	grpctest.TLogger.ExpectErrorN("Received a HEADERS frame with multiple host or :authority headers. Both must only have 1 value as per HTTP/2 spec", 2)
 
 	tests := []struct {
 		name    string
