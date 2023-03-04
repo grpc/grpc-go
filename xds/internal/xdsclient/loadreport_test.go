@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -44,7 +43,7 @@ const (
 )
 
 func (s) TestLRSClient(t *testing.T) {
-	fs, sCleanup, err := fakeserver.StartServer()
+	fs, sCleanup, err := fakeserver.StartServer(nil)
 	if err != nil {
 		t.Fatalf("failed to start fake xDS server: %v", err)
 	}
@@ -52,11 +51,10 @@ func (s) TestLRSClient(t *testing.T) {
 
 	xdsC, close, err := NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
-			ServerURI:    fs.Address,
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			TransportAPI: version.TransportV3,
-			NodeProto:    &v3corepb.Node{},
+			ServerURI: fs.Address,
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 		},
+		NodeProto: &v3corepb.Node{},
 	}, defaultClientWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
 		t.Fatalf("failed to create xds client: %v", err)
@@ -66,11 +64,9 @@ func (s) TestLRSClient(t *testing.T) {
 	// Report to the same address should not create new ClientConn.
 	store1, lrsCancel1 := xdsC.ReportLoad(
 		&bootstrap.ServerConfig{
-			ServerURI:    fs.Address,
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			CredsType:    "insecure",
-			TransportAPI: version.TransportV3,
-			NodeProto:    &v3corepb.Node{},
+			ServerURI: fs.Address,
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			CredsType: "insecure",
 		},
 	)
 	defer lrsCancel1()
@@ -87,7 +83,7 @@ func (s) TestLRSClient(t *testing.T) {
 		t.Errorf("unexpected NewConn: %v, %v, want channel recv timeout", u, err)
 	}
 
-	fs2, sCleanup2, err := fakeserver.StartServer()
+	fs2, sCleanup2, err := fakeserver.StartServer(nil)
 	if err != nil {
 		t.Fatalf("failed to start fake xDS server: %v", err)
 	}
@@ -96,11 +92,9 @@ func (s) TestLRSClient(t *testing.T) {
 	// Report to a different address should create new ClientConn.
 	store2, lrsCancel2 := xdsC.ReportLoad(
 		&bootstrap.ServerConfig{
-			ServerURI:    fs2.Address,
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			CredsType:    "insecure",
-			TransportAPI: version.TransportV2,
-			NodeProto:    &v3corepb.Node{},
+			ServerURI: fs2.Address,
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+			CredsType: "insecure",
 		},
 	)
 	defer lrsCancel2()

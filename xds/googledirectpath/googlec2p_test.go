@@ -32,7 +32,6 @@ import (
 	"google.golang.org/grpc/resolver"
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
-	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -214,9 +213,7 @@ func TestBuildXDS(t *testing.T) {
 				}
 			}
 			serverConfig := &bootstrap.ServerConfig{
-				ServerURI:    tdURL,
-				TransportAPI: version.TransportV3,
-				NodeProto:    wantNode,
+				ServerURI: tdURL,
 			}
 			wantConfig := &bootstrap.Config{
 				XDSServer: serverConfig,
@@ -226,6 +223,7 @@ func TestBuildXDS(t *testing.T) {
 						XDSServer: serverConfig,
 					},
 				},
+				NodeProto: wantNode,
 			}
 			if tt.tdURI != "" {
 				wantConfig.XDSServer.ServerURI = tt.tdURI

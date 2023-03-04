@@ -106,7 +106,6 @@ func clientSetup(t *testing.T) (*e2e.ManagementServer, string, uint32, func()) {
 
 	// Create a bootstrap file in a temporary directory.
 	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
-		Version:                            bootstrap.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          fs.Address,
 		ServerListenerResourceNameTemplate: "grpc/server",

@@ -383,7 +383,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 		// if false, content-type was missing or invalid
 		isGRPC      = false
 		contentType = ""
-		mdata       = make(map[string][]string)
+		mdata       = make(metadata.MD, len(frame.Fields))
 		httpMethod  string
 		// these are set if an error is encountered while parsing the headers
 		protocolError bool
@@ -404,6 +404,17 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
 			s.contentSubtype = contentSubtype
 			isGRPC = true
+
+		case "grpc-accept-encoding":
+			mdata[hf.Name] = append(mdata[hf.Name], hf.Value)
+			if hf.Value == "" {
+				continue
+			}
+			compressors := hf.Value
+			if s.clientAdvertisedCompressors != "" {
+				compressors = s.clientAdvertisedCompressors + "," + compressors
+			}
+			s.clientAdvertisedCompressors = compressors
 		case "grpc-encoding":
 			s.recvCompress = hf.Value
 		case ":method":
@@ -595,7 +606,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 			LocalAddr:   t.localAddr,
 			Compression: s.recvCompress,
 			WireLength:  int(frame.Header().Length),
-			Header:      metadata.MD(mdata).Copy(),
+			Header:      mdata.Copy(),
 		}
 		sh.HandleRPC(s.ctx, inHeader)
 	}

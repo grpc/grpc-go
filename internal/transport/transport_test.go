@@ -659,16 +659,13 @@ func performOneRPC(ct ClientTransport) {
 func (s) TestClientMix(t *testing.T) {
 	s, ct, cancel := setUp(t, 0, math.MaxUint32, normal)
 	defer cancel()
-	go func(s *server) {
-		time.Sleep(5 * time.Second)
-		s.stop()
-	}(s)
+	time.AfterFunc(time.Second, s.stop)
 	go func(ct ClientTransport) {
 		<-ct.Error()
 		ct.Close(fmt.Errorf("closed manually by test"))
 	}(ct)
-	for i := 0; i < 1000; i++ {
-		time.Sleep(10 * time.Millisecond)
+	for i := 0; i < 750; i++ {
+		time.Sleep(2 * time.Millisecond)
 		go performOneRPC(ct)
 	}
 }
@@ -2191,33 +2188,26 @@ func runPingPongTest(t *testing.T, msgSize int) {
 	binary.BigEndian.PutUint32(outgoingHeader[1:], uint32(msgSize))
 	opts := &Options{}
 	incomingHeader := make([]byte, 5)
-	done := make(chan struct{})
-	go func() {
-		timer := time.NewTimer(time.Second * 5)
-		<-timer.C
-		close(done)
-	}()
-	for {
-		select {
-		case <-done:
-			client.Write(stream, nil, nil, &Options{Last: true})
-			if _, err := stream.Read(incomingHeader); err != io.EOF {
-				t.Fatalf("Client expected EOF from the server. Got: %v", err)
-			}
-			return
-		default:
-			if err := client.Write(stream, outgoingHeader, msg, opts); err != nil {
-				t.Fatalf("Error on client while writing message. Err: %v", err)
-			}
-			if _, err := stream.Read(incomingHeader); err != nil {
-				t.Fatalf("Error on client while reading data header. Err: %v", err)
-			}
-			sz := binary.BigEndian.Uint32(incomingHeader[1:])
-			recvMsg := make([]byte, int(sz))
-			if _, err := stream.Read(recvMsg); err != nil {
-				t.Fatalf("Error on client while reading data. Err: %v", err)
-			}
+
+	ctx, cancel = context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	for ctx.Err() == nil {
+		if err := client.Write(stream, outgoingHeader, msg, opts); err != nil {
+			t.Fatalf("Error on client while writing message. Err: %v", err)
 		}
+		if _, err := stream.Read(incomingHeader); err != nil {
+			t.Fatalf("Error on client while reading data header. Err: %v", err)
+		}
+		sz := binary.BigEndian.Uint32(incomingHeader[1:])
+		recvMsg := make([]byte, int(sz))
+		if _, err := stream.Read(recvMsg); err != nil {
+			t.Fatalf("Error on client while reading data. Err: %v", err)
+		}
+	}
+
+	client.Write(stream, nil, nil, &Options{Last: true})
+	if _, err := stream.Read(incomingHeader); err != io.EOF {
+		t.Fatalf("Client expected EOF from the server. Got: %v", err)
 	}
 }
 

@@ -137,18 +137,18 @@ func (s) TestSimpleAckAndNack(t *testing.T) {
 
 	// Construct the server config to represent the management server.
 	serverCfg := bootstrap.ServerConfig{
-		ServerURI:    mgmtServer.Address,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType:    "insecure",
-		TransportAPI: version.TransportV3,
-		NodeProto:    &v3corepb.Node{Id: nodeID},
+		ServerURI: mgmtServer.Address,
+		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+		CredsType: "insecure",
 	}
 
 	// Create a new transport.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:          serverCfg,
-		UpdateHandler:      dataModelValidator,
-		StreamErrorHandler: func(err error) {},
+		ServerCfg:      serverCfg,
+		OnRecvHandler:  dataModelValidator,
+		OnErrorHandler: func(err error) {},
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},
+		NodeProto:      &v3corepb.Node{Id: nodeID},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -324,18 +324,18 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 
 	// Construct the server config to represent the management server.
 	serverCfg := bootstrap.ServerConfig{
-		ServerURI:    mgmtServer.Address,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType:    "insecure",
-		TransportAPI: version.TransportV3,
-		NodeProto:    &v3corepb.Node{Id: nodeID},
+		ServerURI: mgmtServer.Address,
+		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+		CredsType: "insecure",
 	}
 
 	// Create a new transport.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:          serverCfg,
-		UpdateHandler:      dataModelValidator,
-		StreamErrorHandler: func(err error) {},
+		ServerCfg:      serverCfg,
+		NodeProto:      &v3corepb.Node{Id: nodeID},
+		OnRecvHandler:  dataModelValidator,
+		OnErrorHandler: func(err error) {},
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -453,18 +453,18 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 
 	// Construct the server config to represent the management server.
 	serverCfg := bootstrap.ServerConfig{
-		ServerURI:    mgmtServer.Address,
-		Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType:    "insecure",
-		TransportAPI: version.TransportV3,
-		NodeProto:    &v3corepb.Node{Id: nodeID},
+		ServerURI: mgmtServer.Address,
+		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+		CredsType: "insecure",
 	}
 
 	// Create a new transport.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:          serverCfg,
-		UpdateHandler:      dataModelValidator,
-		StreamErrorHandler: func(err error) {},
+		ServerCfg:      serverCfg,
+		NodeProto:      &v3corepb.Node{Id: nodeID},
+		OnRecvHandler:  dataModelValidator,
+		OnErrorHandler: func(err error) {},
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)

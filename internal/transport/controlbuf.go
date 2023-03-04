@@ -527,6 +527,9 @@ const minBatchSize = 1000
 // As an optimization, to increase the batch size for each flush, loopy yields the processor, once
 // if the batch size is too low to give stream goroutines a chance to fill it up.
 func (l *loopyWriter) run() (err error) {
+	// Always flush the writer before exiting in case there are pending frames
+	// to be sent.
+	defer l.framer.writer.Flush()
 	for {
 		it, err := l.cbuf.get(true)
 		if err != nil {
@@ -759,7 +762,7 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 			return err
 		}
 	}
-	if l.side == clientSide && l.draining && len(l.estdStreams) == 0 {
+	if l.draining && len(l.estdStreams) == 0 {
 		return errors.New("finished processing active streams while in draining mode")
 	}
 	return nil
@@ -814,7 +817,6 @@ func (l *loopyWriter) goAwayHandler(g *goAway) error {
 }
 
 func (l *loopyWriter) closeConnectionHandler() error {
-	l.framer.writer.Flush()
 	// Exit loopyWriter entirely by returning an error here.  This will lead to
 	// the transport closing the connection, and, ultimately, transport
 	// closure.

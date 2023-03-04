@@ -326,8 +326,8 @@ func setupOverrides() (*fakeGRPCServer, *testutils.Channel, func()) {
 			XDSServer: &bootstrap.ServerConfig{
 				ServerURI: "dummyBalancer",
 				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				NodeProto: xdstestutils.EmptyNodeProtoV3,
 			},
+			NodeProto:                          xdstestutils.EmptyNodeProtoV3,
 			ServerListenerResourceNameTemplate: testServerListenerResourceNameTemplate,
 			CertProviderConfigs:                certProviderConfigs,
 		})
@@ -358,8 +358,8 @@ func setupOverridesForXDSCreds(includeCertProviderCfg bool) (*testutils.Channel,
 			XDSServer: &bootstrap.ServerConfig{
 				ServerURI: "dummyBalancer",
 				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				NodeProto: xdstestutils.EmptyNodeProtoV3,
 			},
+			NodeProto:                          xdstestutils.EmptyNodeProtoV3,
 			ServerListenerResourceNameTemplate: testServerListenerResourceNameTemplate,
 		}
 		if includeCertProviderCfg {
@@ -448,7 +448,7 @@ func (s) TestServeSuccess(t *testing.T) {
 
 	// Push a good LDS response, and wait for Serve() to be invoked on the
 	// underlying grpc.Server.
-	fcm, err := xdsresource.NewFilterChainManager(listenerWithFilterChains, nil)
+	fcm, err := xdsresource.NewFilterChainManager(listenerWithFilterChains)
 	if err != nil {
 		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
 	}
@@ -607,8 +607,8 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 				XDSServer: &bootstrap.ServerConfig{
 					ServerURI: "dummyBalancer",
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-					NodeProto: xdstestutils.EmptyNodeProtoV3,
 				},
+				NodeProto:                          xdstestutils.EmptyNodeProtoV3,
 				ServerListenerResourceNameTemplate: testServerListenerResourceNameTemplate,
 			},
 		},
@@ -618,8 +618,8 @@ func (s) TestServeBootstrapConfigInvalid(t *testing.T) {
 				XDSServer: &bootstrap.ServerConfig{
 					ServerURI: "dummyBalancer",
 					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-					NodeProto: xdstestutils.EmptyNodeProtoV3,
 				},
+				NodeProto:           xdstestutils.EmptyNodeProtoV3,
 				CertProviderConfigs: certProviderConfigs,
 			},
 		},
@@ -801,7 +801,7 @@ func (s) TestHandleListenerUpdate_NoXDSCreds(t *testing.T) {
 				},
 			},
 		},
-	}, nil)
+	})
 	if err != nil {
 		t.Fatalf("xdsclient.NewFilterChainManager() failed with error: %v", err)
 	}

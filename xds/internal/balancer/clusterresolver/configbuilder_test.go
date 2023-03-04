@@ -588,12 +588,12 @@ func TestPriorityLocalitiesToClusterImpl(t *testing.T) {
 		mechanism: DiscoveryMechanism{
 			Cluster:        testClusterName,
 			Type:           DiscoveryMechanismTypeEDS,
-			EDSServiceName: testEDSServcie,
+			EDSServiceName: testEDSService,
 		},
 		// lrsServer is nil, so LRS policy will not be used.
 		wantConfig: &clusterimpl.LBConfig{
 			Cluster:        testClusterName,
-			EDSServiceName: testEDSServcie,
+			EDSServiceName: testEDSService,
 			ChildPolicy: &internalserviceconfig.BalancerConfig{
 				Name: weightedtarget.Name,
 				Config: &weightedtarget.LBConfig{

@@ -36,6 +36,7 @@ import (
 
 	v3statusgrpc "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	channelzgrpc "google.golang.org/grpc/channelz/grpc_channelz_v1"
 	channelzpb "google.golang.org/grpc/channelz/grpc_channelz_v1"
 )
 
@@ -55,7 +56,6 @@ type ExpectedStatusCodes struct {
 func RunRegisterTests(t *testing.T, ec ExpectedStatusCodes) {
 	nodeID := uuid.New().String()
 	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
-		Version:   bootstrap.TransportV3,
 		NodeID:    nodeID,
 		ServerURI: "no.need.for.a.server",
 	})
@@ -99,7 +99,7 @@ func RunRegisterTests(t *testing.T, ec ExpectedStatusCodes) {
 
 // RunChannelz makes a channelz RPC.
 func RunChannelz(conn *grpc.ClientConn) error {
-	c := channelzpb.NewChannelzClient(conn)
+	c := channelzgrpc.NewChannelzClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	_, err := c.GetTopChannels(ctx, &channelzpb.GetTopChannelsRequest{}, grpc.WaitForReady(true))

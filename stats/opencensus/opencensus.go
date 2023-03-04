@@ -20,12 +20,17 @@ package opencensus
 
 import (
 	"context"
+	"strings"
+	"time"
 
+	ocstats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 	"go.opencensus.io/trace"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/stats"
+	"google.golang.org/grpc/status"
 )
 
 var (
@@ -57,7 +62,8 @@ type TraceOptions struct {
 // conjunction, and do not work standalone. It is not supported to use this
 // alongside another stats handler dial option.
 func DialOption(to TraceOptions) grpc.DialOption {
-	return joinDialOptions(grpc.WithChainUnaryInterceptor(unaryInterceptor), grpc.WithChainStreamInterceptor(streamInterceptor), grpc.WithStatsHandler(&clientStatsHandler{to: to}))
+	csh := &clientStatsHandler{to: to}
+	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
 }
 
 // ServerOption returns a server option which enables OpenCensus instrumentation
@@ -77,16 +83,80 @@ func ServerOption(to TraceOptions) grpc.ServerOption {
 	return grpc.StatsHandler(&serverStatsHandler{to: to})
 }
 
+// createCallSpan creates a call span if tracing is enabled, which will be put
+// in the context provided if created.
+func (csh *clientStatsHandler) createCallSpan(ctx context.Context, method string) (context.Context, *trace.Span) {
+	var span *trace.Span
+	if !csh.to.DisableTrace {
+		mn := "Sent." + strings.Replace(removeLeadingSlash(method), "/", ".", -1)
+		ctx, span = trace.StartSpan(ctx, mn, trace.WithSampler(csh.to.TS), trace.WithSpanKind(trace.SpanKindClient))
+	}
+	return ctx, span
+}
+
+// perCallTracesAndMetrics records per call spans and metrics.
+func perCallTracesAndMetrics(err error, span *trace.Span, startTime time.Time, method string) {
+	s := status.Convert(err)
+	if span != nil {
+		span.SetStatus(trace.Status{Code: int32(s.Code()), Message: s.Message()})
+		span.End()
+	}
+	callLatency := float64(time.Since(startTime)) / float64(time.Millisecond)
+	ocstats.RecordWithOptions(context.Background(),
+		ocstats.WithTags(
+			tag.Upsert(keyClientMethod, method),
+			tag.Upsert(keyClientStatus, canonicalString(s.Code())),
+		),
+		ocstats.WithMeasurements(
+			clientAPILatency.M(callLatency),
+		),
+	)
+}
+
 // unaryInterceptor handles per RPC context management. It also handles per RPC
-// tracing and stats.
-func unaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	return invoker(ctx, method, req, reply, cc, opts...)
+// tracing and stats by creating a top level call span and recording the latency
+// for the full RPC call.
+func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	startTime := time.Now()
+	ctx, span := csh.createCallSpan(ctx, method)
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	perCallTracesAndMetrics(err, span, startTime, method)
+	return err
 }
 
 // streamInterceptor handles per RPC context management. It also handles per RPC
-// tracing and stats.
-func streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	return streamer(ctx, desc, cc, method, opts...)
+// tracing and stats by creating a top level call span and recording the latency
+// for the full RPC call.
+func (csh *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+	startTime := time.Now()
+	ctx, span := csh.createCallSpan(ctx, method)
+	callback := func(err error) {
+		perCallTracesAndMetrics(err, span, startTime, method)
+	}
+	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
+	s, err := streamer(ctx, desc, cc, method, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+type rpcInfo struct {
+	mi *metricsInfo
+	ti *traceInfo
+}
+
+type rpcInfoKey struct{}
+
+func setRPCInfo(ctx context.Context, ri *rpcInfo) context.Context {
+	return context.WithValue(ctx, rpcInfoKey{}, ri)
+}
+
+// getSpanWithMsgCount returns the rpcInfo stored in the context, or nil
+// if there isn't one.
+func getRPCInfo(ctx context.Context) *rpcInfo {
+	ri, _ := ctx.Value(rpcInfoKey{}).(*rpcInfo)
+	return ri
 }
 
 type clientStatsHandler struct {
@@ -103,10 +173,29 @@ func (csh *clientStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC attempt context management.
 func (csh *clientStatsHandler) TagRPC(ctx context.Context, rti *stats.RPCTagInfo) context.Context {
-	return ctx
+	ctx, mi := csh.statsTagRPC(ctx, rti)
+	var ti *traceInfo
+	if !csh.to.DisableTrace {
+		ctx, ti = csh.traceTagRPC(ctx, rti)
+	}
+	ri := &rpcInfo{
+		mi: mi,
+		ti: ti,
+	}
+	return setRPCInfo(ctx, ri)
 }
 
-func (csh *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {}
+func (csh *clientStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
+	ri := getRPCInfo(ctx)
+	if ri == nil {
+		// Shouldn't happen because TagRPC populates this information.
+		return
+	}
+	recordRPCData(ctx, rs, ri.mi)
+	if !csh.to.DisableTrace {
+		populateSpan(ctx, rs, ri.ti)
+	}
+}
 
 type serverStatsHandler struct {
 	to TraceOptions
@@ -122,8 +211,27 @@ func (ssh *serverStatsHandler) HandleConn(context.Context, stats.ConnStats) {}
 
 // TagRPC implements per RPC context management.
 func (ssh *serverStatsHandler) TagRPC(ctx context.Context, rti *stats.RPCTagInfo) context.Context {
-	return ctx
+	ctx, mi := ssh.statsTagRPC(ctx, rti)
+	var ti *traceInfo
+	if !ssh.to.DisableTrace {
+		ctx, ti = ssh.traceTagRPC(ctx, rti)
+	}
+	ri := &rpcInfo{
+		mi: mi,
+		ti: ti,
+	}
+	return setRPCInfo(ctx, ri)
 }
 
 // HandleRPC implements per RPC tracing and stats implementation.
-func (ssh *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {}
+func (ssh *serverStatsHandler) HandleRPC(ctx context.Context, rs stats.RPCStats) {
+	ri := getRPCInfo(ctx)
+	if ri == nil {
+		// Shouldn't happen because TagRPC populates this information.
+		return
+	}
+	recordRPCData(ctx, rs, ri.mi)
+	if !ssh.to.DisableTrace {
+		populateSpan(ctx, rs, ri.ti)
+	}
+}

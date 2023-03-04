@@ -60,7 +60,7 @@ const (
 // cleanup function to close the fake server.
 func startFakeManagementServer(t *testing.T) (*fakeserver.Server, func()) {
 	t.Helper()
-	fs, sCleanup, err := fakeserver.StartServer()
+	fs, sCleanup, err := fakeserver.StartServer(nil)
 	if err != nil {
 		t.Fatalf("Failed to start fake xDS server: %v", err)
 	}
@@ -178,11 +178,9 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 
 			// Construct the server config to represent the management server.
 			serverCfg := bootstrap.ServerConfig{
-				ServerURI:    mgmtServer.Address,
-				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-				CredsType:    "insecure",
-				TransportAPI: version.TransportV3,
-				NodeProto:    &v3corepb.Node{Id: uuid.New().String()},
+				ServerURI: mgmtServer.Address,
+				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
+				CredsType: "insecure",
 			}
 
 			// Create a new transport.
@@ -190,7 +188,7 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 			tr, err := transport.New(transport.Options{
 				ServerCfg: serverCfg,
 				// No validation. Simply push received resources on a channel.
-				UpdateHandler: func(update transport.ResourceUpdate) error {
+				OnRecvHandler: func(update transport.ResourceUpdate) error {
 					resourcesCh.Send(&resourcesWithTypeURL{
 						resources: update.Resources,
 						url:       update.URL,
@@ -198,8 +196,10 @@ func (s) TestHandleResponseFromManagementServer(t *testing.T) {
 					})
 					return nil
 				},
-				StreamErrorHandler: func(error) {},                                      // No stream error handling.
-				Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.
+				OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No onSend handling.
+				OnErrorHandler: func(error) {},                                      // No stream error handling.
+				Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
+				NodeProto:      &v3corepb.Node{Id: uuid.New().String()},
 			})
 			if err != nil {
 				t.Fatalf("Failed to create xDS transport: %v", err)

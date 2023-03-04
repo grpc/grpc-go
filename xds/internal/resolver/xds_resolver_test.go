@@ -82,7 +82,6 @@ const (
 var target = resolver.Target{URL: *testutils.MustParseURL("xds:///" + targetStr)}
 
 var routerFilter = xdsresource.HTTPFilter{Name: "rtr", Filter: httpfilter.Get(router.TypeURL)}
-var routerFilterList = []xdsresource.HTTPFilter{routerFilter}
 
 type s struct {
 	grpctest.Tester
@@ -108,11 +107,17 @@ type testClientConn struct {
 }
 
 func (t *testClientConn) UpdateState(s resolver.State) error {
-	t.stateCh.Replace(s)
+	// Tests should ideally consume all state updates, and if one happens
+	// unexpectedly, tests should catch it. Hence using `Send()` here.
+	t.stateCh.Send(s)
 	return nil
 }
 
 func (t *testClientConn) ReportError(err error) {
+	// When used with a go-control-plane management server that continuously
+	// resends resources which are NACKed by the xDS client, using a `Replace()`
+	// here simplifies tests which will have access to the most recently
+	// received error.
 	t.errorCh.Replace(err)
 }
 
@@ -209,9 +214,8 @@ func (s) TestResolverBuilder_DifferentBootstrapConfigs(t *testing.T) {
 			// Add top-level xDS server config corresponding to the above
 			// management server.
 			test.bootstrapCfg.XDSServer = &bootstrap.ServerConfig{
-				ServerURI:    mgmtServer.Address,
-				Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-				TransportAPI: version.TransportV3,
+				ServerURI: mgmtServer.Address,
+				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 			}
 
 			// Override xDS client creation to use bootstrap configuration
@@ -418,7 +422,6 @@ func (s) TestResolverResourceName(t *testing.T) {
 			// Create a bootstrap configuration with test options.
 			opts := xdsbootstrap.Options{
 				ServerURI: mgmtServer.Address,
-				Version:   xdsbootstrap.TransportV3,
 				ClientDefaultListenerResourceNameTemplate: tt.listenerResourceNameTemplate,
 			}
 			if tt.extraAuthority != "" {
@@ -481,7 +484,6 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -534,9 +536,8 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 func (s) TestResolverCloseClosesXDSClient(t *testing.T) {
 	bootstrapCfg := &bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
-			ServerURI:    "dummy-management-server-address",
-			Creds:        grpc.WithTransportCredentials(insecure.NewCredentials()),
-			TransportAPI: version.TransportV3,
+			ServerURI: "dummy-management-server-address",
+			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 		},
 	}
 
@@ -583,7 +584,6 @@ func (s) TestResolverBadServiceUpdate(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -694,7 +694,6 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -714,25 +713,12 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 	}{
 		{
 			// A route configuration with a single cluster.
-			routeConfig: &v3routepb.RouteConfiguration{
-				Name: rdsName,
-				VirtualHosts: []*v3routepb.VirtualHost{{
-					Domains: []string{ldsName},
-					Routes: []*v3routepb.Route{{
-						Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
-						Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
-								Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-									{
-										Name:   "test-cluster-1",
-										Weight: &wrapperspb.UInt32Value{Value: 100},
-									},
-								},
-							}},
-						}},
-					}},
-				}},
-			},
+			routeConfig: e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
+				RouteConfigName:      rdsName,
+				ListenerName:         ldsName,
+				ClusterSpecifierType: e2e.RouteConfigClusterSpecifierTypeCluster,
+				ClusterName:          "test-cluster-1",
+			}),
 			wantServiceConfig: `
 {
   "loadBalancingConfig": [{
@@ -753,29 +739,12 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 		},
 		{
 			// A route configuration with a two new clusters.
-			routeConfig: &v3routepb.RouteConfiguration{
-				Name: rdsName,
-				VirtualHosts: []*v3routepb.VirtualHost{{
-					Domains: []string{ldsName},
-					Routes: []*v3routepb.Route{{
-						Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
-						Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
-								Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-									{
-										Name:   "cluster_1",
-										Weight: &wrapperspb.UInt32Value{Value: 75},
-									},
-									{
-										Name:   "cluster_2",
-										Weight: &wrapperspb.UInt32Value{Value: 25},
-									},
-								},
-							}},
-						}},
-					}},
-				}},
-			},
+			routeConfig: e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
+				RouteConfigName:      rdsName,
+				ListenerName:         ldsName,
+				ClusterSpecifierType: e2e.RouteConfigClusterSpecifierTypeWeightedCluster,
+				WeightedClusters:     map[string]int{"cluster_1": 75, "cluster_2": 25},
+			}),
 			// This update contains the cluster from the previous update as well
 			// as this update, as the previous config selector still references
 			// the old cluster when the new one is pushed.
@@ -811,62 +780,7 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 }`,
 			wantClusters: map[string]bool{"cluster:cluster_1": true, "cluster:cluster_2": true},
 		},
-		{
-			// A redundant route configuration update.
-			// TODO(easwars): Do we need this, or can we do something else? Because the xds client might swallow this update.
-			routeConfig: &v3routepb.RouteConfiguration{
-				Name: rdsName,
-				VirtualHosts: []*v3routepb.VirtualHost{{
-					Domains: []string{ldsName},
-					Routes: []*v3routepb.Route{{
-						Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
-						Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-							ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
-								Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-									{
-										Name:   "cluster_1",
-										Weight: &wrapperspb.UInt32Value{Value: 75},
-									},
-									{
-										Name:   "cluster_2",
-										Weight: &wrapperspb.UInt32Value{Value: 25},
-									},
-								},
-							}},
-						}},
-					}},
-				}},
-			},
-			// With this redundant update, the old config selector has been
-			// stopped, so there are no more references to the first cluster.
-			// Only the second update's clusters should remain.
-			wantServiceConfig: `
-{
-  "loadBalancingConfig": [{
-    "xds_cluster_manager_experimental": {
-      "children": {
-        "cluster:cluster_1": {
-          "childPolicy": [{
-			"cds_experimental": {
-			  "cluster": "cluster_1"
-			}
-		  }]
-        },
-        "cluster:cluster_2": {
-          "childPolicy": [{
-			"cds_experimental": {
-			  "cluster": "cluster_2"
-			}
-		  }]
-        }
-      }
-    }
-  }]
-}`,
-			wantClusters: map[string]bool{"cluster:cluster_1": true, "cluster:cluster_2": true},
-		},
 	} {
-
 		// Configure the management server with a good listener resource and a
 		// route configuration resource, as specified by the test case.
 		resources := e2e.UpdateOptions{
@@ -893,9 +807,7 @@ func (s) TestResolverGoodServiceUpdate(t *testing.T) {
 
 		wantSCParsed := internal.ParseServiceConfig.(func(string) *serviceconfig.ParseResult)(tt.wantServiceConfig)
 		if !internal.EqualServiceConfigForTesting(rState.ServiceConfig.Config, wantSCParsed.Config) {
-			t.Errorf("Received unexpected service config")
-			t.Error("got: ", cmp.Diff(nil, rState.ServiceConfig.Config))
-			t.Fatal("want: ", cmp.Diff(nil, wantSCParsed.Config))
+			t.Fatalf("Got service config:\n%s \nWant service config:\n%s", cmp.Diff(nil, rState.ServiceConfig.Config), cmp.Diff(nil, wantSCParsed.Config))
 		}
 
 		cs := iresolver.GetConfigSelector(rState)
@@ -941,7 +853,6 @@ func (s) TestResolverRequestHash(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1040,7 +951,6 @@ func (s) TestResolverRemovedWithRPCs(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1174,7 +1084,6 @@ func (s) TestResolverRemovedResource(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1314,7 +1223,6 @@ func (s) TestResolverWRR(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1332,29 +1240,12 @@ func (s) TestResolverWRR(t *testing.T) {
 	resources := e2e.UpdateOptions{
 		NodeID:    nodeID,
 		Listeners: []*v3listenerpb.Listener{e2e.DefaultClientListener(ldsName, rdsName)},
-		Routes: []*v3routepb.RouteConfiguration{{
-			Name: rdsName,
-			VirtualHosts: []*v3routepb.VirtualHost{{
-				Domains: []string{ldsName},
-				Routes: []*v3routepb.Route{{
-					Match: &v3routepb.RouteMatch{PathSpecifier: &v3routepb.RouteMatch_Prefix{Prefix: "/"}},
-					Action: &v3routepb.Route_Route{Route: &v3routepb.RouteAction{
-						ClusterSpecifier: &v3routepb.RouteAction_WeightedClusters{WeightedClusters: &v3routepb.WeightedCluster{
-							Clusters: []*v3routepb.WeightedCluster_ClusterWeight{
-								{
-									Name:   "A",
-									Weight: &wrapperspb.UInt32Value{Value: 75},
-								},
-								{
-									Name:   "B",
-									Weight: &wrapperspb.UInt32Value{Value: 25},
-								},
-							},
-						}},
-					}},
-				}},
-			}},
-		}},
+		Routes: []*v3routepb.RouteConfiguration{e2e.RouteConfigResourceWithOptions(e2e.RouteConfigOptions{
+			RouteConfigName:      rdsName,
+			ListenerName:         ldsName,
+			ClusterSpecifierType: e2e.RouteConfigClusterSpecifierTypeWeightedCluster,
+			WeightedClusters:     map[string]int{"A": 75, "B": 25},
+		})},
 		SkipValidation: true,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
@@ -1411,7 +1302,6 @@ func (s) TestResolverMaxStreamDuration(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1580,7 +1470,6 @@ func (s) TestResolverDelayedOnCommitted(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1777,7 +1666,6 @@ func (s) TestResolverMultipleLDSUpdates(t *testing.T) {
 	cleanup, err := xdsbootstrap.CreateFile(xdsbootstrap.Options{
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
-		Version:   xdsbootstrap.TransportV3,
 	})
 	if err != nil {
 		t.Fatal(err)

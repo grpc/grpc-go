@@ -25,11 +25,11 @@ import (
 	"contrib.go.opencensus.io/exporter/stackdriver"
 	"contrib.go.opencensus.io/exporter/stackdriver/monitoredresource"
 
-	"go.opencensus.io/plugin/ocgrpc"
 	"go.opencensus.io/stats/view"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/stats/opencensus"
 )
 
 var (
@@ -74,6 +74,8 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 		MonitoredResource:       mr,
 		DefaultMonitoringLabels: labelsToMonitoringLabels(config.Labels),
 		DefaultTraceAttributes:  labelsToTraceAttributes(config.Labels),
+		MonitoringClientOptions: cOptsDisableLogTrace,
+		TraceClientOptions:      cOptsDisableLogTrace,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Stackdriver exporter: %v", err)
@@ -96,18 +98,18 @@ func startOpenCensus(config *config) error {
 		return err
 	}
 
-	var so trace.StartOptions
+	var to opencensus.TraceOptions
 	if config.CloudTrace != nil {
-		so.Sampler = trace.ProbabilitySampler(config.CloudTrace.SamplingRate)
+		to.TS = trace.ProbabilitySampler(config.CloudTrace.SamplingRate)
 		trace.RegisterExporter(exporter.(trace.Exporter))
 		logger.Infof("Start collecting and exporting trace spans with global_trace_sampling_rate=%.2f", config.CloudTrace.SamplingRate)
 	}
 
 	if config.CloudMonitoring != nil {
-		if err := view.Register(ocgrpc.ServerStartedRPCsView, ocgrpc.ClientCompletedRPCsView); err != nil {
+		if err := view.Register(opencensus.ClientAPILatencyView, opencensus.ClientStartedRPCsView, opencensus.ClientCompletedRPCsView, opencensus.ClientRoundtripLatencyView); err != nil {
 			return fmt.Errorf("failed to register default client views: %v", err)
 		}
-		if err := view.Register(ocgrpc.ClientStartedRPCsView, ocgrpc.ServerCompletedRPCsView); err != nil {
+		if err := view.Register(opencensus.ServerStartedRPCsView, opencensus.ServerCompletedRPCsView, opencensus.ServerLatencyView); err != nil {
 			return fmt.Errorf("failed to register default server views: %v", err)
 		}
 		view.SetReportingPeriod(defaultMetricsReportingInterval)
@@ -115,9 +117,8 @@ func startOpenCensus(config *config) error {
 		logger.Infof("Start collecting and exporting metrics")
 	}
 
-	// Only register default StatsHandlers if other things are setup correctly.
-	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(grpc.StatsHandler(&ocgrpc.ServerHandler{StartOptions: so}))
-	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(grpc.WithStatsHandler(&ocgrpc.ClientHandler{StartOptions: so}))
+	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(opencensus.ServerOption(to))
+	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(opencensus.DialOption(to))
 	logger.Infof("Enabled OpenCensus StatsHandlers for clients and servers")
 
 	return nil

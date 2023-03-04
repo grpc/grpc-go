@@ -86,6 +86,34 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
+// The following watcher implementations are no-ops since we don't really care
+// about the callback received by these watchers in the test. We only care
+// whether CSDS reports the expected state.
+
+type unimplementedListenerWatcher struct{}
+
+func (unimplementedListenerWatcher) OnUpdate(*xdsresource.ListenerResourceData) {}
+func (unimplementedListenerWatcher) OnError(error)                              {}
+func (unimplementedListenerWatcher) OnResourceDoesNotExist()                    {}
+
+type unimplementedRouteConfigWatcher struct{}
+
+func (unimplementedRouteConfigWatcher) OnUpdate(*xdsresource.RouteConfigResourceData) {}
+func (unimplementedRouteConfigWatcher) OnError(error)                                 {}
+func (unimplementedRouteConfigWatcher) OnResourceDoesNotExist()                       {}
+
+type unimplementedClusterWatcher struct{}
+
+func (unimplementedClusterWatcher) OnUpdate(*xdsresource.ClusterResourceData) {}
+func (unimplementedClusterWatcher) OnError(error)                             {}
+func (unimplementedClusterWatcher) OnResourceDoesNotExist()                   {}
+
+type unimplementedEndpointsWatcher struct{}
+
+func (unimplementedEndpointsWatcher) OnUpdate(*xdsresource.EndpointsResourceData) {}
+func (unimplementedEndpointsWatcher) OnError(error)                               {}
+func (unimplementedEndpointsWatcher) OnResourceDoesNotExist()                     {}
+
 func (s) TestCSDS(t *testing.T) {
 	// Spin up a xDS management server on a local port.
 	nodeID := uuid.New().String()
@@ -97,7 +125,6 @@ func (s) TestCSDS(t *testing.T) {
 
 	// Create a bootstrap file in a temporary directory.
 	bootstrapCleanup, err := bootstrap.CreateFile(bootstrap.Options{
-		Version:   bootstrap.TransportV3,
 		NodeID:    nodeID,
 		ServerURI: mgmtServer.Address,
 	})
@@ -190,16 +217,16 @@ func (s) TestCSDS(t *testing.T) {
 
 	// Register watches on the xDS client for two resources of each type.
 	for _, target := range ldsTargets {
-		xdsC.WatchListener(target, func(xdsresource.ListenerUpdate, error) {})
+		xdsresource.WatchListener(xdsC, target, unimplementedListenerWatcher{})
 	}
 	for _, target := range rdsTargets {
-		xdsC.WatchRouteConfig(target, func(xdsresource.RouteConfigUpdate, error) {})
+		xdsresource.WatchRouteConfig(xdsC, target, unimplementedRouteConfigWatcher{})
 	}
 	for _, target := range cdsTargets {
-		xdsC.WatchCluster(target, func(xdsresource.ClusterUpdate, error) {})
+		xdsresource.WatchCluster(xdsC, target, unimplementedClusterWatcher{})
 	}
 	for _, target := range edsTargets {
-		xdsC.WatchEndpoints(target, func(xdsresource.EndpointsUpdate, error) {})
+		xdsresource.WatchEndpoints(xdsC, target, unimplementedEndpointsWatcher{})
 	}
 
 	// Verify that the xDS client reports the resources as being in "Requested"

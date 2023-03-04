@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package e2e_test
+package xdsclient_test
 
 import (
 	"context"
@@ -62,7 +62,6 @@ func setupForFederationWatchersTest(t *testing.T) (*e2e.ManagementServer, string
 
 	nodeID := uuid.New().String()
 	bootstrapContents, err := bootstrap.Contents(bootstrap.Options{
-		Version:                            bootstrap.TransportV3,
 		NodeID:                             nodeID,
 		ServerURI:                          serverDefaultAuthority.Address,
 		ServerListenerResourceNameTemplate: e2e.ServerListenerResourceNameTemplate,
