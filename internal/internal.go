@@ -98,6 +98,9 @@ var (
 	// server.
 	BinaryLogger interface{} // func(binarylog.Logger) grpc.ServerOption
 
+	// AddConnectivityStateWatcher adds a connectivitystate.Watcher to a provided grpc.ClientConn
+	AddConnectivityStateWatcher interface{} // func(*grpc.ClientConn, connectivitystate.Watcher)
+
 	// NewXDSResolverWithConfigForTesting creates a new xds resolver builder using
 	// the provided xds bootstrap config instead of the global configuration from
 	// the supported environment variables.  The resolver.Builder is meant to be
@@ -108,9 +111,6 @@ var (
 	// This function should ONLY be used for testing and may not work with some
 	// other features, including the CSDS service.
 	NewXDSResolverWithConfigForTesting interface{} // func([]byte) (resolver.Builder, error)
-
-	// TODO(miyoshi): must add comment
-	AddConnectivityStateWatcher interface{}
 
 	// RegisterRLSClusterSpecifierPluginForTesting registers the RLS Cluster
 	// Specifier Plugin for testing purposes, regardless of the XDSRLS environment
