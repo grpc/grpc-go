@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal/cache"
+	"google.golang.org/grpc/internal/callbackserializer"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 )
@@ -69,7 +70,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration, i
 		done:               grpcsync.NewEvent(),
 		config:             config,
 		watchExpiryTimeout: watchExpiryTimeout,
-		serializer:         newCallbackSerializer(ctx),
+		serializer:         callbackserializer.NewCallbackSerializer(ctx),
 		serializerClose:    cancel,
 		resourceTypes:      newResourceTypeRegistry(),
 		authorities:        make(map[string]*authority),

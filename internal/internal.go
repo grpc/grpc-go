@@ -109,6 +109,9 @@ var (
 	// other features, including the CSDS service.
 	NewXDSResolverWithConfigForTesting interface{} // func([]byte) (resolver.Builder, error)
 
+	// TODO(miyoshi): must add comment
+	AddConnectivityStateWatcher interface{}
+
 	// RegisterRLSClusterSpecifierPluginForTesting registers the RLS Cluster
 	// Specifier Plugin for testing purposes, regardless of the XDSRLS environment
 	// variable.

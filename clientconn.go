@@ -35,9 +35,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/backoff"
 	"google.golang.org/grpc/internal/channelz"
-	"google.golang.org/grpc/internal/clientutil"
+	"google.golang.org/grpc/internal/connectivitystate"
 	"google.golang.org/grpc/internal/grpcsync"
 	iresolver "google.golang.org/grpc/internal/resolver"
 	"google.golang.org/grpc/internal/transport"
@@ -407,11 +408,11 @@ func getChainStreamer(interceptors []StreamClientInterceptor, curr int, finalStr
 // connectivityStateManager keeps the connectivity.State of ClientConn.
 // This struct will eventually be exported so the balancers can access it.
 type connectivityStateManager struct {
-	mu         sync.Mutex
-	state      connectivity.State
-	notifyChan chan struct{}
-	channelzID *channelz.Identifier
-	publisher  clientutil.ClientStateChangePublisher
+	mu                       sync.Mutex
+	state                    connectivity.State
+	notifyChan               chan struct{}
+	channelzID               *channelz.Identifier
+	connectivityStateTracker *connectivitystate.Tracker
 }
 
 // updateState updates the connectivity.State of ClientConn.
@@ -427,7 +428,9 @@ func (csm *connectivityStateManager) updateState(state connectivity.State) {
 		return
 	}
 	csm.state = state
-	csm.publisher.Publish(state)
+	if csm.connectivityStateTracker != nil {
+		csm.connectivityStateTracker.SetState(state)
+	}
 	channelz.Infof(logger, csm.channelzID, "Channel Connectivity change to %v", state)
 	if csm.notifyChan != nil {
 		// There are other goroutines waiting on this channel.
@@ -601,6 +604,14 @@ func init() {
 		panic(fmt.Sprintf("impossible error parsing empty service config: %v", cfg.Err))
 	}
 	emptyServiceConfig = cfg.Config.(*ServiceConfig)
+
+	internal.AddConnectivityStateWatcher = func(cc *ClientConn, w connectivitystate.Watcher) func() {
+		if cc.csMgr.connectivityStateTracker == nil {
+			cc.csMgr.connectivityStateTracker = connectivitystate.NewTracker()
+		}
+		cancelFunc := cc.csMgr.connectivityStateTracker.AddWatcher(w)
+		return cancelFunc
+	}
 }
 
 func (cc *ClientConn) maybeApplyDefaultServiceConfig(addrs []resolver.Address) {

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc/internal/cache"
+	"google.golang.org/grpc/internal/callbackserializer"
 	"google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
@@ -37,7 +38,7 @@ type clientImpl struct {
 	config             *bootstrap.Config
 	logger             *grpclog.PrefixLogger
 	watchExpiryTimeout time.Duration
-	serializer         *callbackSerializer
+	serializer         *callbackserializer.CallbackSerializer
 	serializerClose    func()
 	resourceTypes      *resourceTypeRegistry
 
