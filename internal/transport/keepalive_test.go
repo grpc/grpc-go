@@ -67,7 +67,7 @@ func (s) TestMaxConnectionIdle(t *testing.T) {
 	// kicks in.
 	select {
 	case <-ctx.Done():
-		t.Fatalf("context expired before receving GoAway from the server.")
+		t.Fatalf("context expired before receiving GoAway from the server.")
 	case <-client.GoAway():
 		if reason, _ := client.GetGoAwayReason(); reason != GoAwayNoReason {
 			t.Fatalf("GoAwayReason is %v, want %v", reason, GoAwayNoReason)
