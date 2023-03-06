@@ -43,7 +43,7 @@ const (
 	rekeyRecordProtocolName = "ALTSRP_GCM_AES128_REKEY"
 	// maxPendingHandshakes represents the maximum number of concurrent
 	// handshakes.
-	maxPendingHandshakes = 40
+	maxPendingHandshakes = 100
 )
 
 var (
