@@ -1,3 +1,5 @@
+//go:build go1.19
+
 /*
  *
  * Copyright 2021 gRPC authors.
