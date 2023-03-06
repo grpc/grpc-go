@@ -45,7 +45,7 @@ const defaultTestTimeout = 5 * time.Second
 func (s) TestMaxConnectionIdle(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
-			MaxConnectionIdle: 100 * time.Millisecond,
+			MaxConnectionIdle: 30 * time.Millisecond,
 		},
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, suspended, ConnectOptions{})
@@ -90,7 +90,7 @@ func (s) TestMaxConnectionIdleBusyClient(t *testing.T) {
 		cancel()
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	_, err := client.NewStream(ctx, &CallHdr{})
 	if err != nil {
@@ -101,7 +101,7 @@ func (s) TestMaxConnectionIdleBusyClient(t *testing.T) {
 	// timeout kicks in.
 	select {
 	case <-client.GoAway():
-		t.Fatalf("A non-idle client received a GoAway.")
+		t.Fatalf("A busy client received a GoAway.")
 	case <-ctx.Done():
 	}
 }
@@ -109,9 +109,10 @@ func (s) TestMaxConnectionIdleBusyClient(t *testing.T) {
 // TestMaxConnectionAge tests that a server will send GoAway after a duration
 // of MaxConnectionAge.
 func (s) TestMaxConnectionAge(t *testing.T) {
+	maxConnAge := 100 * time.Millisecond
 	serverConfig := &ServerConfig{
 		KeepaliveParams: keepalive.ServerParameters{
-			MaxConnectionAge:      100 * time.Millisecond,
+			MaxConnectionAge:      maxConnAge,
 			MaxConnectionAgeGrace: 10 * time.Millisecond,
 		},
 	}
@@ -122,10 +123,9 @@ func (s) TestMaxConnectionAge(t *testing.T) {
 		cancel()
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), maxConnAge*2)
 	defer cancel()
-	_, err := client.NewStream(ctx, &CallHdr{})
-	if err != nil {
+	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
 		t.Fatalf("client.NewStream() failed: %v", err)
 	}
 
@@ -225,18 +225,11 @@ func (s) TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 		cancel()
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
+	// Give keepalive logic some time by sleeping.
+	time.Sleep(1 * time.Second)
 
-	// Make sure the client transport is healthy.
-	for ctx.Err() == nil {
-		if _, err := client.NewStream(ctx, &CallHdr{}); err == nil {
-			break
-		}
-		time.Sleep(40 * time.Millisecond)
-	}
-	if ctx.Err() != nil {
-		t.Fatalf("client.NewStream() failed: %v", ctx.Err())
+	if err := pollForHealthyStream(client); err != nil {
+		t.Fatalf("Stream creation failed: %v", err)
 	}
 }
 
@@ -250,8 +243,8 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 	copts := ConnectOptions{
 		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:                50 * time.Millisecond,
-			Timeout:             5 * time.Millisecond,
+			Time:                10 * time.Millisecond,
+			Timeout:             10 * time.Millisecond,
 			PermitWithoutStream: true,
 		},
 	}
@@ -265,20 +258,8 @@ func (s) TestKeepaliveClientClosesUnresponsiveServer(t *testing.T) {
 	}
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	for ctx.Err() == nil {
-		// Make sure the client transport is not healthy.
-		if _, err := client.NewStream(ctx, &CallHdr{}); err == nil {
-			break
-		}
-		// Sleep for keepalive to close the connection.
-		time.Sleep(200 * time.Millisecond)
-	}
-
-	if ctx.Err() != nil {
-		t.Fatal("client.NewStream() should have failed, but succeeded")
+	if err := pollForStreamCreationError(client); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -306,20 +287,8 @@ func (s) TestKeepaliveClientOpenWithUnresponsiveServer(t *testing.T) {
 	}
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	// Make sure the client transport is still healthy.
-	var err error
-	for ctx.Err() == nil {
-		if _, err = client.NewStream(ctx, &CallHdr{}); err != nil {
-			break
-		}
-		// Sleep for client to send a few keepalive pings.
-		time.Sleep(100 * time.Millisecond)
-	}
-	if ctx.Err() != nil {
-		t.Fatalf("client.NewStream() failed: %v", err)
+	if err := pollForHealthyStream(client); err != nil {
+		t.Fatalf("Stream creation failed: %v", err)
 	}
 }
 
@@ -331,8 +300,8 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	copts := ConnectOptions{
 		ChannelzParentID: channelz.NewIdentifierForTesting(channelz.RefSubChannel, time.Now().Unix(), nil),
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:    10 * time.Millisecond,
-			Timeout: 10 * time.Millisecond,
+			Time:    500 * time.Millisecond,
+			Timeout: 500 * time.Millisecond,
 		},
 	}
 	client, cancel := setUpWithNoPingServer(t, copts, connCh)
@@ -345,20 +314,12 @@ func (s) TestKeepaliveClientClosesWithActiveStreams(t *testing.T) {
 	}
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-
-	for ctx.Err() == nil {
-		// Create a stream, but send no data on it. Make sure the client transport is not healthy after
-		// keepalive logic kicks in.
-		if _, err := client.NewStream(ctx, &CallHdr{}); err == nil {
-			break
-		}
-		// Give keepalive some time.
-		time.Sleep(10 * time.Millisecond)
+	if err := pollForHealthyStream(client); err != nil {
+		t.Fatalf("Stream creation failed: %v", err)
 	}
-	if ctx.Err() != nil {
-		t.Fatal("client.NewStream() should have failed, but succeeded")
+
+	if err := pollForStreamCreationError(client); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -376,8 +337,8 @@ func (s) TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 		normal,
 		ConnectOptions{
 			KeepaliveParams: keepalive.ClientParameters{
-				Time:                100 * time.Millisecond,
-				Timeout:             100 * time.Millisecond,
+				Time:                55 * time.Millisecond,
+				Timeout:             10 * time.Millisecond,
 				PermitWithoutStream: true,
 			}})
 	defer func() {
@@ -387,19 +348,16 @@ func (s) TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 	}()
 
 	// Give keepalive some time.
-	time.Sleep(400 * time.Millisecond)
+	time.Sleep(500 * time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
-	defer cancel()
-	// Make sure the client transport is healthy.
-	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
-		t.Fatalf("client.NewStream() failed: %v", err)
+	if err := pollForHealthyStream(client); err != nil {
+		t.Fatalf("Stream creation failed: %v", err)
 	}
 }
 
 // TestKeepaliveClientFrequency creates a server which expects at most 1 client
-// ping for every 12 ms, while the client is configured to send a ping
-// every 10 second. So, this configuration should end up with the client
+// ping for every 45 ms, while the client is configured to send a ping
+// every 20 second. So, this configuration should end up with the client
 // transport being closed. But we had a bug wherein the client was sending one
 // ping every [Time+Timeout] instead of every [Time] period, and this test
 // explicitly makes sure the fix works and the client sends a ping every [Time]
@@ -409,13 +367,13 @@ func (s) TestKeepaliveClientFrequency(t *testing.T) {
 
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
-			MinTime:             45 * time.Millisecond,
+			MinTime:             100 * time.Millisecond,
 			PermitWithoutStream: true,
 		},
 	}
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:                20 * time.Millisecond,
+			Time:                50 * time.Millisecond,
 			Timeout:             100 * time.Millisecond,
 			PermitWithoutStream: true,
 		},
@@ -427,28 +385,8 @@ func (s) TestKeepaliveClientFrequency(t *testing.T) {
 		cancel()
 	}()
 
-	// Verify that client received a GoAway from the server for to too many pings.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	for ctx.Err() == nil {
-		time.Sleep(45 * time.Millisecond)
-		if reason, _ := client.GetGoAwayReason(); reason == GoAwayTooManyPings {
-			break
-		}
-	}
-	if ctx.Err() != nil {
-		t.Fatal("Test timed out before getting GoAway with reason:GoAwayTooManyPings from server.")
-	}
-
-	// Make sure the client transport is not healthy.
-	for ctx.Err() == nil {
-		time.Sleep(10 * time.Millisecond)
-		if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
-			break
-		}
-	}
-	if ctx.Err() != nil {
-		t.Fatal("client.NewStream() did not fail before test time out.")
+	if err := waitForGoAwayTooManyPings(client); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -461,7 +399,7 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
-			MinTime: 45 * time.Millisecond,
+			MinTime: 50 * time.Millisecond,
 		},
 	}
 	clientOptions := ConnectOptions{
@@ -478,28 +416,8 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientNoRPC(t *testing.T) {
 		cancel()
 	}()
 
-	// Verify that client received a GoAway from the server for to too many pings.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	for ctx.Err() == nil {
-		time.Sleep(45 * time.Millisecond)
-		if reason, _ := client.GetGoAwayReason(); reason == GoAwayTooManyPings {
-			break
-		}
-	}
-	if ctx.Err() != nil {
-		t.Fatal("Test timed out before getting GoAway with reason:GoAwayTooManyPings from server.")
-	}
-
-	// Make sure the client transport is not healthy.
-	for ctx.Err() == nil {
-		time.Sleep(10 * time.Millisecond)
-		if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
-			break
-		}
-	}
-	if ctx.Err() != nil {
-		t.Fatal("client.NewStream() did not fail before test time out.")
+	if err := waitForGoAwayTooManyPings(client); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -512,12 +430,12 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
-			MinTime: 50 * time.Millisecond,
+			MinTime: 500 * time.Millisecond,
 		},
 	}
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:    20 * time.Millisecond,
+			Time:    100 * time.Millisecond,
 			Timeout: 100 * time.Millisecond,
 		},
 	}
@@ -528,32 +446,12 @@ func (s) TestKeepaliveServerEnforcementWithAbusiveClientWithRPC(t *testing.T) {
 		cancel()
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
-		t.Fatalf("client.NewStream() failed: %v", err)
+	if err := pollForHealthyStream(client); err != nil {
+		t.Fatalf("Stream creation failed: %v", err)
 	}
 
-	// Verify that client received a GoAway from the server for to too many pings.
-	for ctx.Err() == nil {
-		time.Sleep(45 * time.Millisecond)
-		if reason, _ := client.GetGoAwayReason(); reason == GoAwayTooManyPings {
-			break
-		}
-	}
-	if ctx.Err() != nil {
-		t.Fatal("Test timed out before getting GoAway with reason:GoAwayTooManyPings from server.")
-	}
-
-	// Make sure the client transport is not healthy.
-	for ctx.Err() == nil {
-		time.Sleep(10 * time.Millisecond)
-		if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
-			break
-		}
-	}
-	if ctx.Err() != nil {
-		t.Fatal("client.NewStream() did not fail before test time out.")
+	if err := waitForGoAwayTooManyPings(client); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -582,13 +480,10 @@ func (s) TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 	}()
 
 	// Sleep until client sends a few Keepalive pings.
-	time.Sleep(1 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 
-	// Make sure the client transport is healthy.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
-		t.Fatalf("client.NewStream() failed: %v", err)
+	if err := pollForHealthyStream(client); err != nil {
+		t.Fatalf("Stream creation failed: %v", err)
 	}
 }
 
@@ -614,18 +509,15 @@ func (s) TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 		cancel()
 	}()
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
-		t.Fatalf("client.NewStream() failed: %v", err)
+	if err := pollForHealthyStream(client); err != nil {
+		t.Fatalf("Stream creation failed: %v", err)
 	}
 
 	// Sleep until client sends a few Keepalive pings.
-	time.Sleep(1 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 
-	// Make sure the client transport is healthy.
-	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
-		t.Fatalf("client.NewStream() failed: %v", err)
+	if err := pollForHealthyStream(client); err != nil {
+		t.Fatalf("Stream creation failed: %v", err)
 	}
 }
 
@@ -655,13 +547,10 @@ func (s) TestKeepaliveServerEnforcementWithDormantKeepaliveOnClient(t *testing.T
 	}()
 
 	// No active streams on the client. Give keepalive enough time.
-	time.Sleep(1 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	// Make sure the client transport is healthy.
-	if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
-		t.Fatalf("client.NewStream() failed: %v", err)
+	if err := pollForHealthyStream(client); err != nil {
+		t.Fatalf("Stream creation failed: %v", err)
 	}
 }
 
@@ -764,4 +653,46 @@ func (s) TestTCPUserTimeout(t *testing.T) {
 			t.Fatalf("syscall.GetTCPUserTimeout() = %d, want %d", gotTimeout, tt.serverWantTimeout)
 		}
 	}
+}
+
+func pollForHealthyStream(client *http2Client) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	var err error
+	for ctx.Err() == nil {
+		if _, err = client.NewStream(ctx, &CallHdr{}); err == nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return err
+}
+
+func pollForStreamCreationError(client *http2Client) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	for ctx.Err() == nil {
+		if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if ctx.Err() != nil {
+		return fmt.Errorf("client creation did not fail before test time out")
+	}
+	return nil
+}
+
+func waitForGoAwayTooManyPings(client *http2Client) error {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	select {
+	case <-client.Error():
+		if reason, _ := client.GetGoAwayReason(); reason != GoAwayTooManyPings {
+			return fmt.Errorf("goAwayReason is %v, want %v", reason, GoAwayTooManyPings)
+		}
+	case <-ctx.Done():
+		return fmt.Errorf("test timed out before getting GoAway with reason:GoAwayTooManyPings from server")
+	}
+	return pollForStreamCreationError(client)
 }
