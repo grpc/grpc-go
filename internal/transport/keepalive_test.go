@@ -226,7 +226,7 @@ func (s) TestKeepaliveServerWithResponsiveClient(t *testing.T) {
 	}()
 
 	// Give keepalive logic some time by sleeping.
-	time.Sleep(1 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 
 	if err := pollForHealthyStream(client); err != nil {
 		t.Fatalf("Stream creation failed: %v", err)
@@ -356,8 +356,8 @@ func (s) TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 }
 
 // TestKeepaliveClientFrequency creates a server which expects at most 1 client
-// ping for every 45 ms, while the client is configured to send a ping
-// every 20 second. So, this configuration should end up with the client
+// ping for every 100 ms, while the client is configured to send a ping
+// every 50 second. So, this configuration should end up with the client
 // transport being closed. But we had a bug wherein the client was sending one
 // ping every [Time+Timeout] instead of every [Time] period, and this test
 // explicitly makes sure the fix works and the client sends a ping every [Time]
@@ -479,7 +479,7 @@ func (s) TestKeepaliveServerEnforcementWithObeyingClientNoRPC(t *testing.T) {
 		cancel()
 	}()
 
-	// Sleep until client sends a few Keepalive pings.
+	// Give keepalive enough time.
 	time.Sleep(500 * time.Millisecond)
 
 	if err := pollForHealthyStream(client); err != nil {
@@ -513,7 +513,7 @@ func (s) TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 		t.Fatalf("Stream creation failed: %v", err)
 	}
 
-	// Sleep until client sends a few Keepalive pings.
+	// Give keepalive enough time.
 	time.Sleep(500 * time.Millisecond)
 
 	if err := pollForHealthyStream(client); err != nil {
