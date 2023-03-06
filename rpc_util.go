@@ -694,12 +694,13 @@ func msgHeader(data, compData []byte) (hdr []byte, payload []byte) {
 
 func outPayload(client bool, msg interface{}, data, payload []byte, t time.Time) *stats.OutPayload {
 	return &stats.OutPayload{
-		Client:     client,
-		Payload:    msg,
-		Data:       data,
-		Length:     len(data),
-		WireLength: len(payload) + headerLen,
-		SentTime:   t,
+		Client:           client,
+		Payload:          msg,
+		Data:             data,
+		Length:           len(data),
+		WireLength:       len(payload) + headerLen,
+		CompressedLength: len(payload),
+		SentTime:         t,
 	}
 }
 
@@ -720,7 +721,7 @@ func checkRecvPayload(pf payloadFormat, recvCompress string, haveCompressor bool
 }
 
 type payloadInfo struct {
-	wireLength        int // The compressed length got from wire.
+	compressedLength  int // The compressed length got from wire.
 	uncompressedBytes []byte
 }
 
@@ -730,7 +731,7 @@ func recvAndDecompress(p *parser, s *transport.Stream, dc Decompressor, maxRecei
 		return nil, err
 	}
 	if payInfo != nil {
-		payInfo.wireLength = len(d)
+		payInfo.compressedLength = len(d)
 	}
 
 	if st := checkRecvPayload(pf, s.RecvCompress(), compressor != nil || dc != nil); st != nil {

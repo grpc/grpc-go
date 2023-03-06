@@ -22,8 +22,27 @@ import (
 	"context"
 	"fmt"
 
+	"google.golang.org/api/option"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/internal"
+	"google.golang.org/grpc/stats/opencensus"
+
 	gcplogging "cloud.google.com/go/logging"
 )
+
+// cOptsDisableLogTrace are client options for the go client libraries which are
+// used to configure connections to GCP exporting backends. These disable global
+// dial and server options set by this module, which configure logging, metrics,
+// and tracing on all created grpc.ClientConn's and grpc.Server's. These options
+// turn on only metrics, and also disable the client libraries behavior of
+// plumbing in the older opencensus instrumentation code.
+var cOptsDisableLogTrace = []option.ClientOption{
+	option.WithTelemetryDisabled(),
+	option.WithGRPCDialOption(internal.DisableGlobalDialOptions.(func() grpc.DialOption)()),
+	option.WithGRPCDialOption(opencensus.DialOption(opencensus.TraceOptions{
+		DisableTrace: true,
+	})),
+}
 
 // loggingExporter is the interface of logging exporter for gRPC Observability.
 // In future, we might expose this to allow users provide custom exporters. But
@@ -42,7 +61,7 @@ type cloudLoggingExporter struct {
 }
 
 func newCloudLoggingExporter(ctx context.Context, config *config) (loggingExporter, error) {
-	c, err := gcplogging.NewClient(ctx, fmt.Sprintf("projects/%v", config.ProjectID))
+	c, err := gcplogging.NewClient(ctx, fmt.Sprintf("projects/%v", config.ProjectID), cOptsDisableLogTrace...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cloudLoggingExporter: %v", err)
 	}

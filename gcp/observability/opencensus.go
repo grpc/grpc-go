@@ -74,6 +74,8 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 		MonitoredResource:       mr,
 		DefaultMonitoringLabels: labelsToMonitoringLabels(config.Labels),
 		DefaultTraceAttributes:  labelsToTraceAttributes(config.Labels),
+		MonitoringClientOptions: cOptsDisableLogTrace,
+		TraceClientOptions:      cOptsDisableLogTrace,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Stackdriver exporter: %v", err)
@@ -104,7 +106,7 @@ func startOpenCensus(config *config) error {
 	}
 
 	if config.CloudMonitoring != nil {
-		if err := view.Register(opencensus.ClientStartedRPCsView, opencensus.ClientCompletedRPCsView, opencensus.ClientRoundtripLatencyView); err != nil {
+		if err := view.Register(opencensus.ClientAPILatencyView, opencensus.ClientStartedRPCsView, opencensus.ClientCompletedRPCsView, opencensus.ClientRoundtripLatencyView); err != nil {
 			return fmt.Errorf("failed to register default client views: %v", err)
 		}
 		if err := view.Register(opencensus.ServerStartedRPCsView, opencensus.ServerCompletedRPCsView, opencensus.ServerLatencyView); err != nil {

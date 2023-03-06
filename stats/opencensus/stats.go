@@ -58,11 +58,16 @@ type metricsInfo struct {
 	sentMsgs int64
 	// number of bytes sent (within each message) from side (client || server)
 	sentBytes int64
+	// number of bytes after compression (within each message) from side (client || server)
+	sentCompressedBytes int64
 	// number of messages received on side (client || server)
 	recvMsgs int64
 	// number of bytes received (within each message) received on side (client
 	// || server)
 	recvBytes int64
+	// number of compressed bytes received (within each message) received on
+	// side (client || server)
+	recvCompressedBytes int64
 
 	startTime time.Time
 	method    string
@@ -156,6 +161,7 @@ func recordDataBegin(ctx context.Context, mi *metricsInfo, b *stats.Begin) {
 func recordDataOutPayload(mi *metricsInfo, op *stats.OutPayload) {
 	atomic.AddInt64(&mi.sentMsgs, 1)
 	atomic.AddInt64(&mi.sentBytes, int64(op.Length))
+	atomic.AddInt64(&mi.sentCompressedBytes, int64(op.CompressedLength))
 }
 
 // recordDataInPayload records the length in bytes of incoming messages and
@@ -164,6 +170,7 @@ func recordDataOutPayload(mi *metricsInfo, op *stats.OutPayload) {
 func recordDataInPayload(mi *metricsInfo, ip *stats.InPayload) {
 	atomic.AddInt64(&mi.recvMsgs, 1)
 	atomic.AddInt64(&mi.recvBytes, int64(ip.Length))
+	atomic.AddInt64(&mi.recvCompressedBytes, int64(ip.CompressedLength))
 }
 
 // recordDataEnd takes per RPC measurements derived from information derived
@@ -189,9 +196,11 @@ func recordDataEnd(ctx context.Context, mi *metricsInfo, e *stats.End) {
 				tag.Upsert(keyClientStatus, st)),
 			ocstats.WithMeasurements(
 				clientSentBytesPerRPC.M(atomic.LoadInt64(&mi.sentBytes)),
+				clientSentCompressedBytesPerRPC.M(atomic.LoadInt64(&mi.sentCompressedBytes)),
 				clientSentMessagesPerRPC.M(atomic.LoadInt64(&mi.sentMsgs)),
 				clientReceivedMessagesPerRPC.M(atomic.LoadInt64(&mi.recvMsgs)),
 				clientReceivedBytesPerRPC.M(atomic.LoadInt64(&mi.recvBytes)),
+				clientReceivedCompressedBytesPerRPC.M(atomic.LoadInt64(&mi.recvCompressedBytes)),
 				clientRoundtripLatency.M(latency),
 				clientServerLatency.M(latency),
 			))
@@ -204,8 +213,10 @@ func recordDataEnd(ctx context.Context, mi *metricsInfo, e *stats.End) {
 		),
 		ocstats.WithMeasurements(
 			serverSentBytesPerRPC.M(atomic.LoadInt64(&mi.sentBytes)),
+			serverSentCompressedBytesPerRPC.M(atomic.LoadInt64(&mi.sentCompressedBytes)),
 			serverSentMessagesPerRPC.M(atomic.LoadInt64(&mi.sentMsgs)),
 			serverReceivedMessagesPerRPC.M(atomic.LoadInt64(&mi.recvMsgs)),
 			serverReceivedBytesPerRPC.M(atomic.LoadInt64(&mi.recvBytes)),
+			serverReceivedCompressedBytesPerRPC.M(atomic.LoadInt64(&mi.recvCompressedBytes)),
 			serverLatency.M(latency)))
 }

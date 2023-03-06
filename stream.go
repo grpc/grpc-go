@@ -168,9 +168,18 @@ func NewClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, meth
 }
 
 func newClientStream(ctx context.Context, desc *StreamDesc, cc *ClientConn, method string, opts ...CallOption) (_ ClientStream, err error) {
-	if md, _, ok := metadata.FromOutgoingContextRaw(ctx); ok {
+	if md, added, ok := metadata.FromOutgoingContextRaw(ctx); ok {
+		// validate md
 		if err := imetadata.Validate(md); err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
+		}
+		// validate added
+		for _, kvs := range added {
+			for i := 0; i < len(kvs); i += 2 {
+				if err := imetadata.ValidatePair(kvs[i], kvs[i+1]); err != nil {
+					return nil, status.Error(codes.Internal, err.Error())
+				}
+			}
 		}
 	}
 	if channelz.IsOn() {
@@ -1084,9 +1093,10 @@ func (a *csAttempt) recvMsg(m interface{}, payInfo *payloadInfo) (err error) {
 			RecvTime: time.Now(),
 			Payload:  m,
 			// TODO truncate large payload.
-			Data:       payInfo.uncompressedBytes,
-			WireLength: payInfo.wireLength + headerLen,
-			Length:     len(payInfo.uncompressedBytes),
+			Data:             payInfo.uncompressedBytes,
+			WireLength:       payInfo.compressedLength + headerLen,
+			CompressedLength: payInfo.compressedLength,
+			Length:           len(payInfo.uncompressedBytes),
 		})
 	}
 	if channelz.IsOn() {
@@ -1707,9 +1717,10 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 				RecvTime: time.Now(),
 				Payload:  m,
 				// TODO truncate large payload.
-				Data:       payInfo.uncompressedBytes,
-				WireLength: payInfo.wireLength + headerLen,
-				Length:     len(payInfo.uncompressedBytes),
+				Data:             payInfo.uncompressedBytes,
+				Length:           len(payInfo.uncompressedBytes),
+				WireLength:       payInfo.compressedLength + headerLen,
+				CompressedLength: payInfo.compressedLength,
 			})
 		}
 	}
