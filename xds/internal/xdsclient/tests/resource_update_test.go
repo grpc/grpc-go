@@ -57,7 +57,7 @@ import (
 // cleanup function to close the fake server.
 func startFakeManagementServer(t *testing.T) (*fakeserver.Server, func()) {
 	t.Helper()
-	fs, sCleanup, err := fakeserver.StartServer()
+	fs, sCleanup, err := fakeserver.StartServer(nil)
 	if err != nil {
 		t.Fatalf("Failed to start fake xDS server: %v", err)
 	}

@@ -100,10 +100,10 @@ func populateSpan(ctx context.Context, rs stats.RPCStats, ti *traceInfo) {
 		// message id - "must be calculated as two different counters starting
 		// from 1 one for sent messages and one for received messages."
 		mi := atomic.AddUint32(&ti.countRecvMsg, 1)
-		span.AddMessageReceiveEvent(int64(mi), int64(rs.Length), int64(rs.WireLength))
+		span.AddMessageReceiveEvent(int64(mi), int64(rs.Length), int64(rs.CompressedLength))
 	case *stats.OutPayload:
 		mi := atomic.AddUint32(&ti.countSentMsg, 1)
-		span.AddMessageSendEvent(int64(mi), int64(rs.Length), int64(rs.WireLength))
+		span.AddMessageSendEvent(int64(mi), int64(rs.Length), int64(rs.CompressedLength))
 	case *stats.End:
 		if rs.Error != nil {
 			// "The mapping between gRPC canonical codes and OpenCensus codes

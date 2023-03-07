@@ -169,8 +169,32 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			// Cancel the expiry timer associated with the resource once a
 			// response is received, irrespective of whether the update is a
 			// good one or not.
-			if state.wState == watchStateRequested {
-				state.wTimer.Stop()
+			//
+			// We check for watch states `started` and `requested` here to
+			// accommodate for a race which can happen in the following
+			// scenario:
+			// - When a watch is registered, it is possible that the ADS stream
+			//   is not yet created. In this case, the request for the resource
+			//   is not sent out immediately. An entry in the `resourceStates`
+			//   map is created with a watch state of `started`.
+			// - Once the stream is created, it is possible that the management
+			//   server might respond with the requested resource before we send
+			//   out request for the same. If we don't check for `started` here,
+			//   and move the state to `received`, we will end up starting the
+			//   timer when the request gets sent out. And since the mangement
+			//   server already sent us the resource, there is a good chance
+			//   that it will not send it again. This would eventually lead to
+			//   the timer firing, even though we have the resource in the
+			//   cache.
+			if state.wState == watchStateStarted || state.wState == watchStateRequested {
+				// It is OK to ignore the return value from Stop() here because
+				// if the timer has already fired, it means that the timer watch
+				// expiry callback is blocked on the same lock that we currently
+				// hold. Since we move the state to `received` here, the timer
+				// callback will be a no-op.
+				if state.wTimer != nil {
+					state.wTimer.Stop()
+				}
 				state.wState = watchStateReceived
 			}
 

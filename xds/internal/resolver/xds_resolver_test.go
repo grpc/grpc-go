@@ -463,12 +463,15 @@ func (s) TestResolverWatchCallbackAfterClose(t *testing.T) {
 	// it receives a discovery request for a route configuration resource. And
 	// the test goroutine signals the management server when the resolver is
 	// closed.
-	waitForRouteConfigDiscoveryReqCh := make(chan struct{})
+	waitForRouteConfigDiscoveryReqCh := make(chan struct{}, 1)
 	waitForResolverCloseCh := make(chan struct{})
 	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{
 		OnStreamRequest: func(_ int64, req *v3discoverypb.DiscoveryRequest) error {
 			if req.GetTypeUrl() == version.V3RouteConfigURL {
-				close(waitForRouteConfigDiscoveryReqCh)
+				select {
+				case waitForRouteConfigDiscoveryReqCh <- struct{}{}:
+				default:
+				}
 				<-waitForResolverCloseCh
 			}
 			return nil
