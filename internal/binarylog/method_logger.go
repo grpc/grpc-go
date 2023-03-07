@@ -53,9 +53,9 @@ type MethodLogger interface {
 	Log(LogEntryConfig)
 }
 
-// MethodLoggerWithContext is an optional interface that a method logger can
+// MethodLoggerContext is an optional interface that a method logger can
 // implement that takes a context on Log calls.
-type MethodLoggerWithContext interface {
+type MethodLoggerContext interface {
 	LogWithContext(context.Context, LogEntryConfig)
 }
 

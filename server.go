@@ -158,7 +158,7 @@ type serverOptions struct {
 	streamInt             StreamServerInterceptor
 	chainUnaryInts        []UnaryServerInterceptor
 	chainStreamInts       []StreamServerInterceptor
-	binaryLogger          binarylog.Logger
+	binaryLogger          binarylog.LoggerContext
 	inTapHandle           tap.ServerInHandle
 	statsHandlers         []stats.Handler
 	maxConcurrentStreams  uint32
@@ -474,7 +474,7 @@ func StatsHandler(h stats.Handler) ServerOption {
 
 // binaryLogger returns a ServerOption that can set the binary logger for the
 // server.
-func binaryLogger(bl binarylog.Logger) ServerOption {
+func binaryLogger(bl binarylog.LoggerContext) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.binaryLogger = bl
 	})
@@ -1223,15 +1223,13 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			}
 		}()
 	}
-	var binlogs []binarylog.MethodLoggerWithContext
+	var binlogs []binarylog.MethodLoggerContext
 	if ml := binarylog.GetMethodLogger(stream.Method()); ml != nil {
-		mlwc := binarylog.MethodLoggerToMethodLoggerWithContext(ml)
-		binlogs = append(binlogs, mlwc)
+		binlogs = append(binlogs, ml)
 	}
 	if s.opts.binaryLogger != nil {
-		if ml := s.opts.binaryLogger.GetMethodLogger(stream.Method()); ml != nil {
-			mlwc := binarylog.MethodLoggerToMethodLoggerWithContext(ml)
-			binlogs = append(binlogs, mlwc)
+		if ml := s.opts.binaryLogger.GetMethodLoggerContext(stream.Method()); ml != nil {
+			binlogs = append(binlogs, ml)
 		}
 	}
 	if len(binlogs) != 0 {
@@ -1562,13 +1560,11 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 	}
 
 	if ml := binarylog.GetMethodLogger(stream.Method()); ml != nil {
-		mlwc := binarylog.MethodLoggerToMethodLoggerWithContext(ml)
-		ss.binlogs = append(ss.binlogs, mlwc)
+		ss.binlogs = append(ss.binlogs, ml)
 	}
 	if s.opts.binaryLogger != nil {
-		if ml := s.opts.binaryLogger.GetMethodLogger(stream.Method()); ml != nil {
-			mlwc := binarylog.MethodLoggerToMethodLoggerWithContext(ml)
-			ss.binlogs = append(ss.binlogs, mlwc)
+		if ml := s.opts.binaryLogger.GetMethodLoggerContext(stream.Method()); ml != nil {
+			ss.binlogs = append(ss.binlogs, ml)
 		}
 	}
 	if len(ss.binlogs) != 0 {

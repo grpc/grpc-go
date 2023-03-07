@@ -310,13 +310,11 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 		cs.retryThrottler = cc.retryThrottler.Load().(*retryThrottler)
 	}
 	if ml := binarylog.GetMethodLogger(method); ml != nil {
-		mlwc := binarylog.MethodLoggerToMethodLoggerWithContext(ml)
-		cs.binlogs = append(cs.binlogs, mlwc)
+		cs.binlogs = append(cs.binlogs, ml)
 	}
 	if cc.dopts.binaryLogger != nil {
-		if ml := cc.dopts.binaryLogger.GetMethodLogger(method); ml != nil {
-			mlwc := binarylog.MethodLoggerToMethodLoggerWithContext(ml)
-			cs.binlogs = append(cs.binlogs, mlwc)
+		if ml := cc.dopts.binaryLogger.GetMethodLoggerContext(method); ml != nil {
+			cs.binlogs = append(cs.binlogs, ml)
 		}
 	}
 
@@ -518,7 +516,7 @@ type clientStream struct {
 
 	retryThrottler *retryThrottler // The throttler active when the RPC began.
 
-	binlogs []binarylog.MethodLoggerWithContext
+	binlogs []binarylog.MethodLoggerContext
 	// serverHeaderBinlogged is a boolean for whether server header has been
 	// logged. Server header will be logged when the first time one of those
 	// happens: stream.Header(), stream.Recv().
@@ -1524,7 +1522,7 @@ type serverStream struct {
 
 	statsHandler []stats.Handler
 
-	binlogs []binarylog.MethodLoggerWithContext
+	binlogs []binarylog.MethodLoggerContext
 	// serverHeaderBinlogged indicates whether server header has been logged. It
 	// will happen when one of the following two happens: stream.SendHeader(),
 	// stream.Send().

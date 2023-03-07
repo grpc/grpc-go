@@ -65,7 +65,7 @@ type dialOptions struct {
 	timeout                     time.Duration
 	scChan                      <-chan ServiceConfig
 	authority                   string
-	binaryLogger                binarylog.Logger
+	binaryLogger                binarylog.LoggerContext
 	copts                       transport.ConnectOptions
 	callOptions                 []CallOption
 	channelzParentID            *channelz.Identifier
@@ -434,7 +434,7 @@ func WithStatsHandler(h stats.Handler) DialOption {
 
 // withBinaryLogger returns a DialOption that specifies the binary logger for
 // this ClientConn.
-func withBinaryLogger(bl binarylog.Logger) DialOption {
+func withBinaryLogger(bl binarylog.LoggerContext) DialOption {
 	return newFuncDialOption(func(o *dialOptions) {
 		o.binaryLogger = bl
 	})

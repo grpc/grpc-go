@@ -248,7 +248,7 @@ type binaryMethodLogger struct {
 
 // buildGCPLoggingEntry converts the binary log log entry into a gcp logging
 // entry.
-func (bml *binaryMethodLogger) buildGCPLoggingEntry(c iblog.LogEntryConfig) gcplogging.Entry {
+func (bml *binaryMethodLogger) buildGCPLoggingEntry(ctx context.Context, c iblog.LogEntryConfig) gcplogging.Entry {
 	binLogEntry := bml.mlb.Build(c)
 
 	grpcLogEntry := &grpcLogEntry{
@@ -320,14 +320,6 @@ func (bml *binaryMethodLogger) buildGCPLoggingEntry(c iblog.LogEntryConfig) gcpl
 		Severity:  100,
 		Payload:   grpcLogEntry,
 	}
-
-	return gcploggingEntry
-}
-
-// LogWithContext logs the same as the normal Log call, but also takes pulls
-// span and trace information from the context and attaches that to log entry.
-func (bml *binaryMethodLogger) LogWithContext(ctx context.Context, c iblog.LogEntryConfig) {
-	gcploggingEntry := bml.buildGCPLoggingEntry(c)
 	if bml.clientSide {
 		// client side span, populated through opencensus trace package.
 		if span := trace.FromContext(ctx); span != nil {
@@ -342,12 +334,11 @@ func (bml *binaryMethodLogger) LogWithContext(ctx context.Context, c iblog.LogEn
 			gcploggingEntry.SpanID = fmt.Sprintf("%x", sID)
 		}
 	}
-	bml.exporter.EmitGcpLoggingEntry(gcploggingEntry)
+	return gcploggingEntry
 }
 
-func (bml *binaryMethodLogger) Log(c iblog.LogEntryConfig) {
-	gcploggingEntry := bml.buildGCPLoggingEntry(c)
-	bml.exporter.EmitGcpLoggingEntry(gcploggingEntry)
+func (bml *binaryMethodLogger) LogWithContext(ctx context.Context, c iblog.LogEntryConfig) {
+	bml.exporter.EmitGcpLoggingEntry(bml.buildGCPLoggingEntry(ctx, c))
 }
 
 type eventConfig struct {
@@ -369,7 +360,7 @@ type binaryLogger struct {
 	clientSide   bool
 }
 
-func (bl *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
+func (bl *binaryLogger) GetMethodLoggerContext(methodName string) iblog.MethodLoggerContext {
 	// Prevent logging from logging, traces, and metrics API calls.
 	if strings.HasPrefix(methodName, "/google.logging.v2.LoggingServiceV2/") || strings.HasPrefix(methodName, "/google.monitoring.v3.MetricService/") ||
 		strings.HasPrefix(methodName, "/google.devtools.cloudtrace.v2.TraceService/") {
@@ -446,7 +437,7 @@ func registerClientRPCEvents(config *config, exporter loggingExporter) {
 		projectID:    config.ProjectID,
 		clientSide:   true,
 	}
-	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.Logger) grpc.DialOption)(clientSideLogger))
+	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.LoggerContext) grpc.DialOption)(clientSideLogger))
 }
 
 func registerServerRPCEvents(config *config, exporter loggingExporter) {
@@ -486,7 +477,7 @@ func registerServerRPCEvents(config *config, exporter loggingExporter) {
 		projectID:    config.ProjectID,
 		clientSide:   false,
 	}
-	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.Logger) grpc.ServerOption)(serverSideLogger))
+	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.LoggerContext) grpc.ServerOption)(serverSideLogger))
 }
 
 func startLogging(ctx context.Context, config *config) error {
