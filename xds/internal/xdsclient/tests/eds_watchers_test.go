@@ -16,7 +16,7 @@
  *
  */
 
-package e2e_test
+package xdsclient_test
 
 import (
 	"context"
@@ -584,13 +584,16 @@ func (s) TestEDSWatch_ResourceCaching(t *testing.T) {
 // verifies that the watch callback is invoked with an error once the
 // watchExpiryTimer fires.
 func (s) TestEDSWatch_ExpiryTimerFiresBeforeResponse(t *testing.T) {
-	// No need to spin up a management server since we don't want the client to
-	// receive a response for the watch being registered by the test.
+	overrideFedEnvVar(t)
+	mgmtServer, err := e2e.StartManagementServer(e2e.ManagementServerOptions{})
+	if err != nil {
+		t.Fatalf("Failed to spin up the xDS management server: %v", err)
+	}
+	defer mgmtServer.Stop()
 
-	// Create an xDS client talking to a non-existent management server.
 	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
 		XDSServer: &bootstrap.ServerConfig{
-			ServerURI: "dummy management server address",
+			ServerURI: mgmtServer.Address,
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 		},
 		NodeProto: &v3corepb.Node{},

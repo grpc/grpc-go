@@ -363,6 +363,7 @@ func (s) TestKeepaliveClientStaysHealthyWithResponsiveServer(t *testing.T) {
 	server, client, cancel := setUpWithOptions(t, 0,
 		&ServerConfig{
 			KeepalivePolicy: keepalive.EnforcementPolicy{
+				MinTime:             50 * time.Millisecond,
 				PermitWithoutStream: true,
 			},
 		},
@@ -621,13 +622,13 @@ func (s) TestKeepaliveServerEnforcementWithObeyingClientWithRPC(t *testing.T) {
 func (s) TestKeepaliveServerEnforcementWithDormantKeepaliveOnClient(t *testing.T) {
 	serverConfig := &ServerConfig{
 		KeepalivePolicy: keepalive.EnforcementPolicy{
-			MinTime: 2 * time.Second,
+			MinTime: 100 * time.Millisecond,
 		},
 	}
 	clientOptions := ConnectOptions{
 		KeepaliveParams: keepalive.ClientParameters{
-			Time:    50 * time.Millisecond,
-			Timeout: 1 * time.Second,
+			Time:    10 * time.Millisecond,
+			Timeout: 10 * time.Millisecond,
 		},
 	}
 	server, client, cancel := setUpWithOptions(t, 0, serverConfig, normal, clientOptions)
@@ -638,7 +639,7 @@ func (s) TestKeepaliveServerEnforcementWithDormantKeepaliveOnClient(t *testing.T
 	}()
 
 	// No active streams on the client. Give keepalive enough time.
-	time.Sleep(5 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()

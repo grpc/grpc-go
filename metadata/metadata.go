@@ -175,8 +175,11 @@ func AppendToOutgoingContext(ctx context.Context, kv ...string) context.Context 
 	md, _ := ctx.Value(mdOutgoingKey{}).(rawMD)
 	added := make([][]string, len(md.added)+1)
 	copy(added, md.added)
-	added[len(added)-1] = make([]string, len(kv))
-	copy(added[len(added)-1], kv)
+	kvCopy := make([]string, 0, len(kv))
+	for i := 0; i < len(kv); i += 2 {
+		kvCopy = append(kvCopy, strings.ToLower(kv[i]), kv[i+1])
+	}
+	added[len(added)-1] = kvCopy
 	return context.WithValue(ctx, mdOutgoingKey{}, rawMD{md: md.md, added: added})
 }
 

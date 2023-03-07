@@ -33,6 +33,7 @@ import (
 	"go.opencensus.io/trace"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/leakcheck"
 	"google.golang.org/grpc/internal/stubserver"
@@ -235,9 +236,13 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		ClientCompletedRPCsView,
 		ServerCompletedRPCsView,
 		ClientSentBytesPerRPCView,
+		ClientSentCompressedBytesPerRPCView,
 		ServerSentBytesPerRPCView,
+		ServerSentCompressedBytesPerRPCView,
 		ClientReceivedBytesPerRPCView,
+		ClientReceivedCompressedBytesPerRPCView,
 		ServerReceivedBytesPerRPCView,
+		ServerReceivedCompressedBytesPerRPCView,
 		ClientSentMessagesPerRPCView,
 		ServerSentMessagesPerRPCView,
 		ClientReceivedMessagesPerRPCView,
@@ -259,7 +264,9 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 
 	ss := &stubserver.StubServer{
 		UnaryCallF: func(ctx context.Context, in *grpc_testing.SimpleRequest) (*grpc_testing.SimpleResponse, error) {
-			return &grpc_testing.SimpleResponse{}, nil
+			return &grpc_testing.SimpleResponse{Payload: &grpc_testing.Payload{
+				Body: make([]byte, 10000),
+			}}, nil
 		},
 		FullDuplexCallF: func(stream grpc_testing.TestService_FullDuplexCallServer) error {
 			for {
@@ -278,7 +285,9 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 	defer cancel()
 	// Make two RPC's, a unary RPC and a streaming RPC. These should cause
 	// certain metrics to be emitted.
-	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{}}); err != nil {
+	if _, err := ss.Client.UnaryCall(ctx, &grpc_testing.SimpleRequest{Payload: &grpc_testing.Payload{
+		Body: make([]byte, 10000),
+	}}, grpc.UseCompressor(gzip.Name)); err != nil {
 		t.Fatalf("Unexpected error from UnaryCall: %v", err)
 	}
 	stream, err := ss.Client.FullDuplexCall(ctx)
@@ -477,6 +486,43 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 						},
 						Data: &view.DistributionData{
 							Count:          1,
+							CountPerBucket: []int64{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   cmtk,
+								Value: "grpc.testing.TestService/FullDuplexCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
+							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+				},
+			},
+		},
+		{
+			metric: ClientSentCompressedBytesPerRPCView,
+			wantVI: &viewInformation{
+				aggType:    view.AggTypeDistribution,
+				aggBuckets: bytesDistributionBounds,
+				desc:       "Distribution of sent compressed bytes per RPC, by method.",
+				tagKeys: []tag.Key{
+					cmtk,
+				},
+				rows: []*view.Row{
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   cmtk,
+								Value: "grpc.testing.TestService/UnaryCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
 							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 						},
 					},
@@ -514,6 +560,43 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 						},
 						Data: &view.DistributionData{
 							Count:          1,
+							CountPerBucket: []int64{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   smtk,
+								Value: "grpc.testing.TestService/FullDuplexCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
+							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+				},
+			},
+		},
+		{
+			metric: ServerSentCompressedBytesPerRPCView,
+			wantVI: &viewInformation{
+				aggType:    view.AggTypeDistribution,
+				aggBuckets: bytesDistributionBounds,
+				desc:       "Distribution of sent compressed bytes per RPC, by method.",
+				tagKeys: []tag.Key{
+					smtk,
+				},
+				rows: []*view.Row{
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   smtk,
+								Value: "grpc.testing.TestService/UnaryCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
 							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 						},
 					},
@@ -532,13 +615,49 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 				},
 			},
 		},
-
 		{
 			metric: ClientReceivedBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
 				desc:       "Distribution of received bytes per RPC, by method.",
+				tagKeys: []tag.Key{
+					cmtk,
+				},
+				rows: []*view.Row{
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   cmtk,
+								Value: "grpc.testing.TestService/UnaryCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
+							CountPerBucket: []int64{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   cmtk,
+								Value: "grpc.testing.TestService/FullDuplexCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
+							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+				},
+			},
+		},
+		{
+			metric: ClientReceivedCompressedBytesPerRPCView,
+			wantVI: &viewInformation{
+				aggType:    view.AggTypeDistribution,
+				aggBuckets: bytesDistributionBounds,
+				desc:       "Distribution of received compressed bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					cmtk,
 				},
@@ -576,6 +695,43 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
 				desc:       "Distribution of received bytes per RPC, by method.",
+				tagKeys: []tag.Key{
+					smtk,
+				},
+				rows: []*view.Row{
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   smtk,
+								Value: "grpc.testing.TestService/UnaryCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
+							CountPerBucket: []int64{0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+					{
+						Tags: []tag.Tag{
+							{
+								Key:   smtk,
+								Value: "grpc.testing.TestService/FullDuplexCall",
+							},
+						},
+						Data: &view.DistributionData{
+							Count:          1,
+							CountPerBucket: []int64{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+						},
+					},
+				},
+			},
+		},
+		{
+			metric: ServerReceivedCompressedBytesPerRPCView,
+			wantVI: &viewInformation{
+				aggType:    view.AggTypeDistribution,
+				aggBuckets: bytesDistributionBounds,
+				desc:       "Distribution of received compressed bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					smtk,
 				},
@@ -1186,12 +1342,11 @@ func (s) TestSpan(t *testing.T) {
 					EventType:            trace.MessageEventTypeRecv,
 					MessageID:            1, // First msg recv so 1 (see comment above)
 					UncompressedByteSize: 2,
-					CompressedByteSize:   7,
+					CompressedByteSize:   2,
 				},
 				{
-					EventType:          trace.MessageEventTypeSent,
-					MessageID:          1, // First msg send so 1 (see comment above)
-					CompressedByteSize: 5,
+					EventType: trace.MessageEventTypeSent,
+					MessageID: 1, // First msg send so 1 (see comment above)
 				},
 			},
 			links: []trace.Link{
@@ -1215,12 +1370,11 @@ func (s) TestSpan(t *testing.T) {
 					EventType:            trace.MessageEventTypeSent,
 					MessageID:            1, // First msg send so 1 (see comment above)
 					UncompressedByteSize: 2,
-					CompressedByteSize:   7,
+					CompressedByteSize:   2,
 				},
 				{
-					EventType:          trace.MessageEventTypeRecv,
-					MessageID:          1, // First msg recv so 1 (see comment above)
-					CompressedByteSize: 5,
+					EventType: trace.MessageEventTypeRecv,
+					MessageID: 1, // First msg recv so 1 (see comment above)
 				},
 			},
 			hasRemoteParent: false,
@@ -1285,14 +1439,12 @@ func (s) TestSpan(t *testing.T) {
 			},
 			messageEvents: []trace.MessageEvent{
 				{
-					EventType:          trace.MessageEventTypeRecv,
-					MessageID:          1, // First msg recv so 1
-					CompressedByteSize: 5,
+					EventType: trace.MessageEventTypeRecv,
+					MessageID: 1, // First msg recv so 1
 				},
 				{
-					EventType:          trace.MessageEventTypeRecv,
-					MessageID:          2, // Second msg recv so 2
-					CompressedByteSize: 5,
+					EventType: trace.MessageEventTypeRecv,
+					MessageID: 2, // Second msg recv so 2
 				},
 			},
 			hasRemoteParent: true,
@@ -1314,14 +1466,12 @@ func (s) TestSpan(t *testing.T) {
 			name:     "Attempt.grpc.testing.TestService.FullDuplexCall",
 			messageEvents: []trace.MessageEvent{
 				{
-					EventType:          trace.MessageEventTypeSent,
-					MessageID:          1, // First msg send so 1
-					CompressedByteSize: 5,
+					EventType: trace.MessageEventTypeSent,
+					MessageID: 1, // First msg send so 1
 				},
 				{
-					EventType:          trace.MessageEventTypeSent,
-					MessageID:          2, // Second msg send so 2
-					CompressedByteSize: 5,
+					EventType: trace.MessageEventTypeSent,
+					MessageID: 2, // Second msg send so 2
 				},
 			},
 			hasRemoteParent: false,

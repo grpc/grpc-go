@@ -36,29 +36,55 @@ import (
 )
 
 func (s) TestInvalidMetadata(t *testing.T) {
-	grpctest.TLogger.ExpectErrorN("stream: failed to validate md when setting trailer", 2)
+	grpctest.TLogger.ExpectErrorN("stream: failed to validate md when setting trailer", 5)
 
 	tests := []struct {
-		md   metadata.MD
-		want error
-		recv error
+		name     string
+		md       metadata.MD
+		appendMD []string
+		want     error
+		recv     error
 	}{
 		{
+			name: "invalid key",
 			md:   map[string][]string{string(rune(0x19)): {"testVal"}},
 			want: status.Error(codes.Internal, "header key \"\\x19\" contains illegal characters not in [0-9a-z-_.]"),
 			recv: status.Error(codes.Internal, "invalid header field"),
 		},
 		{
+			name: "invalid value",
 			md:   map[string][]string{"test": {string(rune(0x19))}},
 			want: status.Error(codes.Internal, "header key \"test\" contains value with non-printable ASCII characters"),
 			recv: status.Error(codes.Internal, "invalid header field"),
 		},
 		{
+			name:     "invalid appended value",
+			md:       map[string][]string{"test": {"test"}},
+			appendMD: []string{"/", "value"},
+			want:     status.Error(codes.Internal, "header key \"/\" contains illegal characters not in [0-9a-z-_.]"),
+			recv:     status.Error(codes.Internal, "invalid header field"),
+		},
+		{
+			name:     "empty appended key",
+			md:       map[string][]string{"test": {"test"}},
+			appendMD: []string{"", "value"},
+			want:     status.Error(codes.Internal, "there is an empty key in the header"),
+			recv:     status.Error(codes.Internal, "invalid header field"),
+		},
+		{
+			name: "empty key",
+			md:   map[string][]string{"": {"test"}},
+			want: status.Error(codes.Internal, "there is an empty key in the header"),
+			recv: status.Error(codes.Internal, "invalid header field"),
+		},
+		{
+			name: "-bin key with arbitrary value",
 			md:   map[string][]string{"test-bin": {string(rune(0x19))}},
 			want: nil,
 			recv: io.EOF,
 		},
 		{
+			name: "valid key and value",
 			md:   map[string][]string{"test": {"value"}},
 			want: nil,
 			recv: io.EOF,
@@ -77,13 +103,16 @@ func (s) TestInvalidMetadata(t *testing.T) {
 			}
 			test := tests[testNum]
 			testNum++
-			if err := stream.SetHeader(test.md); !reflect.DeepEqual(test.want, err) {
-				return fmt.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
+			// merge original md and added md.
+			md := metadata.Join(test.md, metadata.Pairs(test.appendMD...))
+
+			if err := stream.SetHeader(md); !reflect.DeepEqual(test.want, err) {
+				return fmt.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", md, err, test.want)
 			}
-			if err := stream.SendHeader(test.md); !reflect.DeepEqual(test.want, err) {
-				return fmt.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
+			if err := stream.SendHeader(md); !reflect.DeepEqual(test.want, err) {
+				return fmt.Errorf("call stream.SendHeader(md) validate metadata which is %v got err :%v, want err :%v", md, err, test.want)
 			}
-			stream.SetTrailer(test.md)
+			stream.SetTrailer(md)
 			return nil
 		},
 	}
@@ -93,29 +122,33 @@ func (s) TestInvalidMetadata(t *testing.T) {
 	defer ss.Stop()
 
 	for _, test := range tests {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-
-		ctx = metadata.NewOutgoingContext(ctx, test.md)
-		if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); !reflect.DeepEqual(test.want, err) {
-			t.Errorf("call ss.Client.EmptyCall() validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
-		}
+		t.Run("unary "+test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			ctx = metadata.NewOutgoingContext(ctx, test.md)
+			ctx = metadata.AppendToOutgoingContext(ctx, test.appendMD...)
+			if _, err := ss.Client.EmptyCall(ctx, &testpb.Empty{}); !reflect.DeepEqual(test.want, err) {
+				t.Errorf("call ss.Client.EmptyCall() validate metadata which is %v got err :%v, want err :%v", test.md, err, test.want)
+			}
+		})
 	}
 
 	// call the stream server's api to drive the server-side unit testing
 	for _, test := range tests {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		stream, err := ss.Client.FullDuplexCall(ctx)
-		defer cancel()
-		if err != nil {
-			t.Errorf("call ss.Client.FullDuplexCall(context.Background()) will success but got err :%v", err)
-			continue
-		}
-		if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
-			t.Errorf("call ss.Client stream Send(nil) will success but got err :%v", err)
-		}
-		if _, err := stream.Recv(); status.Code(err) != status.Code(test.recv) || !strings.Contains(err.Error(), test.recv.Error()) {
-			t.Errorf("stream.Recv() = _, get err :%v, want err :%v", err, test.recv)
-		}
+		t.Run("streaming "+test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			stream, err := ss.Client.FullDuplexCall(ctx)
+			if err != nil {
+				t.Errorf("call ss.Client.FullDuplexCall(context.Background()) will success but got err :%v", err)
+				return
+			}
+			if err := stream.Send(&testpb.StreamingOutputCallRequest{}); err != nil {
+				t.Errorf("call ss.Client stream Send(nil) will success but got err :%v", err)
+			}
+			if _, err := stream.Recv(); status.Code(err) != status.Code(test.recv) || !strings.Contains(err.Error(), test.recv.Error()) {
+				t.Errorf("stream.Recv() = _, get err :%v, want err :%v", err, test.recv)
+			}
+		})
 	}
 }

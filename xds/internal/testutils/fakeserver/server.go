@@ -35,12 +35,8 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/status"
 
-	v2discoverypb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
-	v2discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v2"
 	v3discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	v2lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
-	v2lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v2"
 	v3lrsgrpc "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 	v3lrspb "github.com/envoyproxy/go-control-plane/envoy/service/load_stats/v3"
 )
@@ -100,9 +96,7 @@ type Server struct {
 	Address string
 
 	// The underlying fake implementation of xDS and LRS.
-	xdsV2 *xdsServerV2
 	xdsV3 *xdsServerV3
-	lrsV2 *lrsServerV2
 	lrsV3 *lrsServerV3
 }
 
@@ -120,13 +114,17 @@ func (wl *wrappedListener) Accept() (net.Conn, error) {
 	return c, err
 }
 
-// StartServer makes a new Server and gets it to start listening on a local
-// port for gRPC requests. The returned cancel function should be invoked by
-// the caller upon completion of the test.
-func StartServer() (*Server, func(), error) {
-	lis, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		return nil, func() {}, fmt.Errorf("net.Listen() failed: %v", err)
+// StartServer makes a new Server and gets it to start listening on the given
+// net.Listener. If the given net.Listener is nil, a new one is created on a
+// local port for gRPC requests. The returned cancel function should be invoked
+// by the caller upon completion of the test.
+func StartServer(lis net.Listener) (*Server, func(), error) {
+	if lis == nil {
+		var err error
+		lis, err = net.Listen("tcp", "localhost:0")
+		if err != nil {
+			return nil, func() {}, fmt.Errorf("net.Listen() failed: %v", err)
+		}
 	}
 
 	s := &Server{
@@ -139,9 +137,7 @@ func StartServer() (*Server, func(), error) {
 		LRSStreamCloseChan: testutils.NewChannel(),
 		Address:            lis.Addr().String(),
 	}
-	s.xdsV2 = &xdsServerV2{reqChan: s.XDSRequestChan, respChan: s.XDSResponseChan}
 	s.xdsV3 = &xdsServerV3{reqChan: s.XDSRequestChan, respChan: s.XDSResponseChan}
-	s.lrsV2 = &lrsServerV2{reqChan: s.LRSRequestChan, respChan: s.LRSResponseChan, streamOpenChan: s.LRSStreamOpenChan, streamCloseChan: s.LRSStreamCloseChan}
 	s.lrsV3 = &lrsServerV3{reqChan: s.LRSRequestChan, respChan: s.LRSResponseChan, streamOpenChan: s.LRSStreamOpenChan, streamCloseChan: s.LRSStreamCloseChan}
 	wp := &wrappedListener{
 		Listener: lis,
@@ -149,64 +145,11 @@ func StartServer() (*Server, func(), error) {
 	}
 
 	server := grpc.NewServer()
-	v2lrsgrpc.RegisterLoadReportingServiceServer(server, s.lrsV2)
-	v2discoverygrpc.RegisterAggregatedDiscoveryServiceServer(server, s.xdsV2)
 	v3lrsgrpc.RegisterLoadReportingServiceServer(server, s.lrsV3)
 	v3discoverygrpc.RegisterAggregatedDiscoveryServiceServer(server, s.xdsV3)
 	go server.Serve(wp)
 
 	return s, func() { server.Stop() }, nil
-}
-
-type xdsServerV2 struct {
-	reqChan  *testutils.Channel
-	respChan chan *Response
-}
-
-func (xdsS *xdsServerV2) StreamAggregatedResources(s v2discoverygrpc.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
-	errCh := make(chan error, 2)
-	go func() {
-		for {
-			req, err := s.Recv()
-			if err != nil {
-				errCh <- err
-				return
-			}
-			xdsS.reqChan.Send(&Request{req, err})
-		}
-	}()
-	go func() {
-		var retErr error
-		defer func() {
-			errCh <- retErr
-		}()
-
-		for {
-			select {
-			case r := <-xdsS.respChan:
-				if r.Err != nil {
-					retErr = r.Err
-					return
-				}
-				if err := s.Send(r.Resp.(*v2discoverypb.DiscoveryResponse)); err != nil {
-					retErr = err
-					return
-				}
-			case <-s.Context().Done():
-				retErr = s.Context().Err()
-				return
-			}
-		}
-	}()
-
-	if err := <-errCh; err != nil {
-		return err
-	}
-	return nil
-}
-
-func (xdsS *xdsServerV2) DeltaAggregatedResources(v2discoverygrpc.AggregatedDiscoveryService_DeltaAggregatedResourcesServer) error {
-	return status.Error(codes.Unimplemented, "")
 }
 
 type xdsServerV3 struct {
@@ -258,47 +201,6 @@ func (xdsS *xdsServerV3) StreamAggregatedResources(s v3discoverygrpc.AggregatedD
 
 func (xdsS *xdsServerV3) DeltaAggregatedResources(v3discoverygrpc.AggregatedDiscoveryService_DeltaAggregatedResourcesServer) error {
 	return status.Error(codes.Unimplemented, "")
-}
-
-type lrsServerV2 struct {
-	reqChan         *testutils.Channel
-	respChan        chan *Response
-	streamOpenChan  *testutils.Channel
-	streamCloseChan *testutils.Channel
-}
-
-func (lrsS *lrsServerV2) StreamLoadStats(s v2lrsgrpc.LoadReportingService_StreamLoadStatsServer) error {
-	lrsS.streamOpenChan.Send(nil)
-	defer lrsS.streamCloseChan.Send(nil)
-
-	req, err := s.Recv()
-	lrsS.reqChan.Send(&Request{req, err})
-	if err != nil {
-		return err
-	}
-
-	select {
-	case r := <-lrsS.respChan:
-		if r.Err != nil {
-			return r.Err
-		}
-		if err := s.Send(r.Resp.(*v2lrspb.LoadStatsResponse)); err != nil {
-			return err
-		}
-	case <-s.Context().Done():
-		return s.Context().Err()
-	}
-
-	for {
-		req, err := s.Recv()
-		lrsS.reqChan.Send(&Request{req, err})
-		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
-			return err
-		}
-	}
 }
 
 type lrsServerV3 struct {

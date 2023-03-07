@@ -19,6 +19,7 @@ package xdsresource
 
 import (
 	"google.golang.org/grpc/internal/pretty"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -31,7 +32,7 @@ var (
 	// Singleton instantiation of the resource type implementation.
 	routeConfigType = routeConfigResourceType{
 		resourceTypeState: resourceTypeState{
-			typeURL:                    "type.googleapis.com/envoy.config.route.v3.RouteConfiguration",
+			typeURL:                    version.V3RouteConfigURL,
 			typeEnum:                   RouteConfigResource,
 			allResourcesRequiredInSotW: false,
 		},

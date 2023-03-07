@@ -52,9 +52,10 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 			ServerURI: "server-address",
 			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
 		},
-		NodeProto:          &v3corepb.Node{},
-		UpdateHandler:      func(ResourceUpdate) error { return nil },
-		StreamErrorHandler: func(error) {},
+		NodeProto:      &v3corepb.Node{},
+		OnRecvHandler:  func(ResourceUpdate) error { return nil },
+		OnErrorHandler: func(error) {},
+		OnSendHandler:  func(*ResourceSendInfo) {},
 	}
 	c, err := New(opts)
 	if err != nil {
