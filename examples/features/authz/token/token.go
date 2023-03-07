@@ -16,6 +16,8 @@
  *
  */
 
+// Package token implements an example of authorization token encoding/decoding
+// that can be used in RPC headers.
 package token
 
 import (
