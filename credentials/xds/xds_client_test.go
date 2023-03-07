@@ -476,7 +476,7 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			handshakeFunc: testServerTLSHandshake,
 			rootProvider:  makeRootProvider(t, "x509/server_ca_cert.pem"),
 			san:           "bad-san",
-			wantErr:       "does not match any of the accepted SANs",
+			wantErr:       "do not match any of the accepted SANs",
 		},
 	}
 
