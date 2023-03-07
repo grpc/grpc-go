@@ -6791,7 +6791,7 @@ func newMockBinaryLogger() *mockBinaryLogger {
 	}
 }
 
-func (mbl *mockBinaryLogger) GetMethodLogger(string) binarylog.MethodLogger {
+func (mbl *mockBinaryLogger) GetMethodLoggerContext(string) binarylog.MethodLoggerContext {
 	return mbl.mml
 }
 
@@ -6799,7 +6799,7 @@ type mockMethodLogger struct {
 	events uint64
 }
 
-func (mml *mockMethodLogger) Log(binarylog.LogEntryConfig) {
+func (mml *mockMethodLogger) LogWithContext(context.Context, binarylog.LogEntryConfig) {
 	atomic.AddUint64(&mml.events, 1)
 }
 
@@ -6812,8 +6812,8 @@ func (s) TestGlobalBinaryLoggingOptions(t *testing.T) {
 	csbl := newMockBinaryLogger()
 	ssbl := newMockBinaryLogger()
 
-	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.Logger) grpc.DialOption)(csbl))
-	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.Logger) grpc.ServerOption)(ssbl))
+	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.LoggerContext) grpc.DialOption)(csbl))
+	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.LoggerContext) grpc.ServerOption)(ssbl))
 	defer func() {
 		internal.ClearGlobalDialOptions()
 		internal.ClearGlobalServerOptions()
