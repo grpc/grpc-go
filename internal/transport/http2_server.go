@@ -331,14 +331,9 @@ func NewServerTransport(conn net.Conn, config *ServerConfig) (_ ServerTransport,
 	t.handleSettings(sf)
 
 	go func() {
-		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst)
+		t.loopy = newLoopyWriter(serverSide, t.framer, t.controlBuf, t.bdpEst, t.conn)
 		t.loopy.ssGoAwayHandler = t.outgoingGoAwayHandler
-		err := t.loopy.run()
-		if logger.V(logLevel) {
-			logger.Infof("transport: loopyWriter exited. Closing connection. Err: %v", err)
-		}
-		t.conn.Close()
-		t.controlBuf.finish()
+		t.loopy.run()
 		close(t.writerDone)
 	}()
 	go t.keepalive()
@@ -1355,9 +1350,10 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 			return false, err
 		}
 		if retErr != nil {
-			// Abruptly close the connection following the GoAway (via
-			// loopywriter).  But flush out what's inside the buffer first.
+			// Abruptly close the connection following the GoAway, but flush
+			// out what's inside the buffer first.
 			t.framer.writer.Flush()
+			t.conn.Close()
 			return false, retErr
 		}
 		return true, nil
