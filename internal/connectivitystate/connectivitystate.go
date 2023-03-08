@@ -16,7 +16,8 @@
  *
  */
 
-// Package connectivitystate defines internal-only api to report connectivity state changes
+// Package connectivitystate provides functionality to report and track
+// connectivity state changes of ClientConns and SubConns.
 package connectivitystate
 
 import (
@@ -27,12 +28,15 @@ import (
 	"google.golang.org/grpc/internal/callbackserializer"
 )
 
+// Watcher defines the functions which is executed as soon as a connectivity state changes
+// of Tracker is reported.
 type Watcher interface {
 	// OnStateChange is invoked when connectivity state changes on ClientConn is reported.
 	OnStateChange(state connectivity.State)
 }
 
-// Tracker manages watchers and their status. .
+// Tracker manages watchers and their status. It holds a previous connecitivity state of
+// ClientConns and SubConns.
 type Tracker struct {
 	mu       sync.Mutex
 	state    connectivity.State
@@ -40,11 +44,13 @@ type Tracker struct {
 	cs       *callbackserializer.CallbackSerializer
 }
 
-func NewTracker() *Tracker {
+// NewTracker retuns a new Tracker instance.
+func NewTracker(state connectivity.State) *Tracker {
 	ctx := context.Background()
 	return &Tracker{
+		state:    state,
 		watchers: map[Watcher]bool{},
-		cs:       callbackserializer.NewCallbackSerializer(ctx),
+		cs:       callbackserializer.New(ctx),
 	}
 }
 

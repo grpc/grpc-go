@@ -607,7 +607,7 @@ func init() {
 
 	internal.AddConnectivityStateWatcher = func(cc *ClientConn, w connectivitystate.Watcher) func() {
 		if cc.csMgr.connectivityStateTracker == nil {
-			cc.csMgr.connectivityStateTracker = connectivitystate.NewTracker()
+			cc.csMgr.connectivityStateTracker = connectivitystate.NewTracker(connectivity.Idle)
 		}
 		cancelFunc := cc.csMgr.connectivityStateTracker.AddWatcher(w)
 		return cancelFunc

@@ -70,7 +70,7 @@ func newWithConfig(config *bootstrap.Config, watchExpiryTimeout time.Duration, i
 		done:               grpcsync.NewEvent(),
 		config:             config,
 		watchExpiryTimeout: watchExpiryTimeout,
-		serializer:         callbackserializer.NewCallbackSerializer(ctx),
+		serializer:         callbackserializer.New(ctx),
 		serializerClose:    cancel,
 		resourceTypes:      newResourceTypeRegistry(),
 		authorities:        make(map[string]*authority),

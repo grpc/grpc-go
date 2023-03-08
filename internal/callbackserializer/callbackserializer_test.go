@@ -47,7 +47,7 @@ func Test(t *testing.T) {
 // the same order in which they were scheduled.
 func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	cs := NewCallbackSerializer(ctx)
+	cs := New(ctx)
 	defer cancel()
 
 	// We have two channels, one to record the order of scheduling, and the
@@ -115,7 +115,7 @@ func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 // scheduled callbacks get executed.
 func (s) TestCallbackSerializer_Schedule_Concurrent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	cs := NewCallbackSerializer(ctx)
+	cs := New(ctx)
 	defer cancel()
 
 	// Schedule callbacks concurrently by calling Schedule() from goroutines.
@@ -151,7 +151,7 @@ func (s) TestCallbackSerializer_Schedule_Concurrent(t *testing.T) {
 // are not executed once Close() returns.
 func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	cs := NewCallbackSerializer(ctx)
+	cs := New(ctx)
 
 	// Schedule a callback which blocks until the context passed to it is
 	// canceled. It also closes a couple of channels to signal that it started
