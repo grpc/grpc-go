@@ -32,7 +32,7 @@ package binarylog
 var (
 	// AllLogger is a logger that logs all headers/messages for all RPCs. It's
 	// for testing only.
-	AllLogger = NewLoggerFromConfigString("*")
+	AllLogger = NewLoggerFromConfigString("*").(*wrappedLogger).logger
 	// MdToMetadataProto converts metadata to a binary logging proto message.
 	// It's for testing only.
 	MdToMetadataProto = mdToMetadataProto

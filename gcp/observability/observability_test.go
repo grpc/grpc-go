@@ -533,9 +533,10 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 	fle := &fakeLoggingExporter{
 		t: t,
 	}
-	defer func(ne func(ctx context.Context, config *config) (loggingExporter, error)) {
-		newLoggingExporter = ne
-	}(newLoggingExporter)
+	oldNewLoggingExporter := newLoggingExporter
+	defer func() {
+		newLoggingExporter = oldNewLoggingExporter
+	}()
 
 	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
 		return fle, nil
@@ -547,9 +548,10 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 		t:    t,
 		idCh: idCh,
 	}
-	defer func(ne func(config *config) (tracingMetricsExporter, error)) {
-		newExporter = ne
-	}(newExporter)
+	oldNewExporter := newExporter
+	defer func() {
+		newExporter = oldNewExporter
+	}()
 
 	newExporter = func(config *config) (tracingMetricsExporter, error) {
 		return fe, nil
@@ -598,12 +600,9 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 
 	// Spawn a goroutine to receive the trace and span ids received by the
 	// exporter corresponding to a Unary RPC.
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	readerErrCh := testutils.NewChannel()
 	unaryDone := grpcsync.NewEvent()
 	go func() {
-		defer wg.Done()
 		var traceAndSpanIDs []traceAndSpanID
 		val, err := idCh.Receive(ctx)
 		if err != nil {
@@ -668,7 +667,6 @@ func (s) TestLoggingLinkedWithTraceClientSide(t *testing.T) {
 			t.Fatalf("Should have received a nil error from channel, instead received: %v", chErr)
 		}
 	}
-	wg.Wait()
 }
 
 // TestLoggingLinkedWithTraceServerSide tests that server side logs get the
@@ -677,9 +675,10 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 	fle := &fakeLoggingExporter{
 		t: t,
 	}
-	defer func(ne func(ctx context.Context, config *config) (loggingExporter, error)) {
-		newLoggingExporter = ne
-	}(newLoggingExporter)
+	oldNewLoggingExporter := newLoggingExporter
+	defer func() {
+		newLoggingExporter = oldNewLoggingExporter
+	}()
 
 	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
 		return fle, nil
@@ -691,9 +690,10 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 		t:    t,
 		idCh: idCh,
 	}
-	defer func(ne func(config *config) (tracingMetricsExporter, error)) {
-		newExporter = ne
-	}(newExporter)
+	oldNewExporter := newExporter
+	defer func() {
+		newExporter = oldNewExporter
+	}()
 
 	newExporter = func(config *config) (tracingMetricsExporter, error) {
 		return fe, nil
@@ -742,12 +742,9 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 
 	// Spawn a goroutine to receive the trace and span ids received by the
 	// exporter corresponding to a Unary RPC.
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	readerErrCh := testutils.NewChannel()
 	unaryDone := grpcsync.NewEvent()
 	go func() {
-		defer wg.Done()
 		var traceAndSpanIDs []traceAndSpanID
 		val, err := idCh.Receive(ctx)
 		if err != nil {
@@ -812,7 +809,6 @@ func (s) TestLoggingLinkedWithTraceServerSide(t *testing.T) {
 			t.Fatalf("Should have received a nil error from channel, instead received: %v", chErr)
 		}
 	}
-	wg.Wait()
 }
 
 // TestLoggingLinkedWithTrace tests that client and server side logs get the
@@ -823,9 +819,10 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 	fle := &fakeLoggingExporter{
 		t: t,
 	}
-	defer func(ne func(ctx context.Context, config *config) (loggingExporter, error)) {
-		newLoggingExporter = ne
-	}(newLoggingExporter)
+	oldNewLoggingExporter := newLoggingExporter
+	defer func() {
+		newLoggingExporter = oldNewLoggingExporter
+	}()
 
 	newLoggingExporter = func(ctx context.Context, config *config) (loggingExporter, error) {
 		return fle, nil
@@ -837,9 +834,10 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 		t:    t,
 		idCh: idCh,
 	}
-	defer func(ne func(config *config) (tracingMetricsExporter, error)) {
-		newExporter = ne
-	}(newExporter)
+	oldNewExporter := newExporter
+	defer func() {
+		newExporter = oldNewExporter
+	}()
 
 	newExporter = func(config *config) (tracingMetricsExporter, error) {
 		return fe, nil
@@ -895,12 +893,9 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 
 	// Spawn a goroutine to receive the trace and span ids received by the
 	// exporter corresponding to a Unary RPC.
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	readerErrCh := testutils.NewChannel()
 	unaryDone := grpcsync.NewEvent()
 	go func() {
-		defer wg.Done()
 		var traceAndSpanIDs []traceAndSpanID
 		val, err := idCh.Receive(ctx)
 		if err != nil {
@@ -971,7 +966,6 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 			t.Fatalf("Should have received a nil error from channel, instead received: %v", chErr)
 		}
 	}
-	wg.Wait()
 
 	fle.mu.Lock()
 	fle.idsSeen = nil
@@ -979,11 +973,9 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 
 	// Test streaming. Spawn a goroutine to receive the trace and span ids
 	// received by the exporter corresponding to a streaming RPC.
-	wg.Add(1)
 	readerErrCh = testutils.NewChannel()
 	streamDone := grpcsync.NewEvent()
 	go func() {
-		defer wg.Done()
 		var traceAndSpanIDs []traceAndSpanID
 
 		val, err := idCh.Receive(ctx)
@@ -1062,5 +1054,4 @@ func (s) TestLoggingLinkedWithTrace(t *testing.T) {
 			t.Fatalf("Should have received a nil error from channel, instead received: %v", chErr)
 		}
 	}
-	wg.Wait()
 }

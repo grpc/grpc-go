@@ -34,7 +34,7 @@ func (s) TestNewLoggerFromConfigString(t *testing.T) {
 		fullM2 = s1 + "/" + m2
 	)
 	c := fmt.Sprintf("*{h:1;m:2},%s{h},%s{m},%s{h;m}", s1+"/*", fullM1, fullM2)
-	l := NewLoggerFromConfigString(c).(*logger)
+	l := NewLoggerFromConfigString(c).(*wrappedLogger).logger.(*logger)
 
 	if l.config.All.Header != 1 || l.config.All.Message != 2 {
 		t.Errorf("l.config.All = %#v, want headerLen: 1, messageLen: 2", l.config.All)

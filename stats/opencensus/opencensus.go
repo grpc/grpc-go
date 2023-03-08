@@ -164,7 +164,7 @@ func getRPCInfo(ctx context.Context) *rpcInfo {
 func GetTraceAndSpanID(ctx context.Context) (trace.TraceID, trace.SpanID, bool) {
 	ri, ok := ctx.Value(rpcInfoKey{}).(*rpcInfo)
 	if !ok {
-		return [16]byte{}, [8]byte{}, false
+		return trace.TraceID{}, trace.SpanID{}, false
 	}
 	sc := ri.ti.span.SpanContext()
 	return sc.TraceID, sc.SpanID, true

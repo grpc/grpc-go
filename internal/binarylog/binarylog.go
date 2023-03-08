@@ -48,9 +48,6 @@ type wrappedLogger struct {
 }
 
 func (wl *wrappedLogger) GetMethodLoggerContext(methodName string) MethodLoggerContext {
-	if wl.logger == nil {
-		return nil
-	}
 	return &wrappedMethodLogger{
 		methodLogger: wl.logger.GetMethodLogger(methodName),
 	}
@@ -108,11 +105,7 @@ func (wml *wrappedMethodLogger) LogWithContext(_ context.Context, lec LogEntryCo
 func init() {
 	const envStr = "GRPC_BINARY_LOG_FILTER"
 	configStr := os.Getenv(envStr)
-	if bl := NewLoggerFromConfigString(configStr); bl != nil {
-		binLogger = &wrappedLogger{
-			logger: bl,
-		}
-	}
+	binLogger = NewLoggerFromConfigString(configStr)
 }
 
 // MethodLoggerConfig contains the setting for logging behavior of a method

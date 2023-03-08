@@ -42,7 +42,7 @@ import (
 //
 // If two configs exist for one certain method or service, the one specified
 // later overrides the previous config.
-func NewLoggerFromConfigString(s string) Logger {
+func NewLoggerFromConfigString(s string) LoggerContext {
 	if s == "" {
 		return nil
 	}
@@ -54,7 +54,9 @@ func NewLoggerFromConfigString(s string) Logger {
 			return nil
 		}
 	}
-	return l
+	return &wrappedLogger{
+		logger: l,
+	}
 }
 
 // fillMethodLoggerWithConfigString parses config, creates TruncatingMethodLogger and adds
