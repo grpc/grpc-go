@@ -649,17 +649,16 @@ func (l *loopyWriter) headerHandler(h *headerFrame) error {
 		itl:   &itemList{},
 		wq:    h.wq,
 	}
-	l.originateStream(str, h)
-	return nil
+	return l.originateStream(str, h)
 }
 
-func (l *loopyWriter) originateStream(str *outStream, hdr *headerFrame) {
+func (l *loopyWriter) originateStream(str *outStream, hdr *headerFrame) error {
 	// l.draining is set when handling GoAway. In which case, we want to avoid
 	// creating new streams.
 	if l.draining {
 		// TODO: provide a better error with the reason we are in draining.
 		hdr.onOrphaned(errStreamDrain)
-		return
+		return nil
 	}
 	if err := hdr.initStream(str.id); err != nil {
 		return err
@@ -668,6 +667,7 @@ func (l *loopyWriter) originateStream(str *outStream, hdr *headerFrame) {
 		return err
 	}
 	l.estdStreams[str.id] = str
+	return nil
 }
 
 func (l *loopyWriter) writeHeader(streamID uint32, endStream bool, hf []hpack.HeaderField, onWrite func()) error {
