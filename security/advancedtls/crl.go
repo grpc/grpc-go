@@ -1,3 +1,4 @@
+// TODO(@gregorycooke) - Remove when only golang 1.19+ is supported
 //go:build go1.19
 
 /*
