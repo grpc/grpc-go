@@ -495,11 +495,14 @@ func verifyCRL(crl *certificateListExt, rawIssuer []byte, chain []*x509.Certific
 	return fmt.Errorf("verifyCRL: No certificates mached CRL issuer (%v)", crl.CertList.Issuer)
 }
 
+// pemType is the type of a PEM encoded CRL.
+const pemType string = "X509 CRL"
+
 var crlPemPrefix = []byte("-----BEGIN X509 CRL")
 
 func crlPemToDer(crlBytes []byte) []byte {
 	block, _ := pem.Decode(crlBytes)
-	if block != nil && block.Type == "X509 CRL" {
+	if block != nil && block.Type == pemType {
 		crlBytes = block.Bytes
 	}
 	return crlBytes
@@ -528,15 +531,11 @@ func hasExpired(crl *x509.RevocationList, now time.Time) bool {
 	return !now.Before(crl.NextUpdate)
 }
 
-// pemCRLPrefix, pemType, and parseRevocationList  come largely from here
+// parseRevocationList comes largely from here
 // x509.go:
 // https://github.com/golang/go/blob/e2f413402527505144beea443078649380e0c545/src/crypto/x509/x509.go#L1669-L1690
 // We must first convert PEM to DER to be able to use the new
 // x509.ParseRevocationList instead of the deprecated x509.ParseCRL
-
-// pemType is the type of a PEM encoded CRL.
-var pemType = "X509 CRL"
-
 func parseRevocationList(crlBytes []byte) (*x509.RevocationList, error) {
 	if bytes.HasPrefix(crlBytes, crlPemPrefix) {
 		crlBytes = crlPemToDer(crlBytes)
