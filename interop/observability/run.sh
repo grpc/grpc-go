@@ -16,26 +16,14 @@
 set -ex
 cd "$(dirname "$0")"/../..
 
-# TODO(stanleycheung): replace positional parameters with explicit parameters
-#
-#             $1: server | client
-#
-# For server: $2: server_port
-#
-# For client: $2: server_host
-#             $3: server_port
-#             $4: test_case
-#             $5: num_times
-
 if [ "$1" = "server" ] ; then
-  /grpc-go/interop/observability/server/server --port $2
+  /grpc-go/interop/observability/server/server "${@:2}"
 
 elif [ "$1" = "client" ] ; then
-  /grpc-go/interop/observability/client/client \
-    --server_host=$2 --server_port=$3 \
-    --test_case=$4 --num_times=$5
+  /grpc-go/interop/observability/client/client "${@:2}"
 
 else
-  echo "Invalid action: $1"
+  echo "Invalid action: $1. Usage:"
+  echo "  $ .../run.sh [server|client] --server_host=<hostname> --server_port=<port> ..."
   exit 1
 fi
