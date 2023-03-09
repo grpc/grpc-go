@@ -823,6 +823,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 }
 
 func (t *http2Server) handleRSTStream(f *http2.RSTStreamFrame) {
+	logger.Infof("http2Server.handleRSTStream. StreamID=%v Flags=%v ErrCode=%v", f.StreamID, f.Flags, f.ErrCode)
 	// If the stream is not deleted from the transport's active streams map, then do a regular close stream.
 	if s, ok := t.getStream(f); ok {
 		t.closeStream(s, false, 0, false)
@@ -1300,6 +1301,7 @@ func (t *http2Server) finishStream(s *Stream, rst bool, rstCode http2.ErrCode, h
 
 // closeStream clears the footprint of a stream when the stream is not needed any more.
 func (t *http2Server) closeStream(s *Stream, rst bool, rstCode http2.ErrCode, eosReceived bool) {
+	logger.Infof("http2Server.closeStream. rst=%v rstCode=%v eosReceived=%v", rst, rstCode, eosReceived)
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
 	// called to interrupt the potential blocking on other goroutines.
