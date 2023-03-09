@@ -36,6 +36,7 @@ import (
 	v3routerpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	v3typepb "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 )
 
@@ -428,7 +429,7 @@ func RouteConfigResourceWithOptions(opts RouteConfigOptions) *v3routepb.RouteCon
 
 // DefaultCluster returns a basic xds Cluster resource.
 func DefaultCluster(clusterName, edsServiceName string, secLevel SecurityLevel) *v3clusterpb.Cluster {
-	return ClusterResourceWithOptions(&ClusterOptions{
+	return ClusterResourceWithOptions(ClusterOptions{
 		ClusterName:   clusterName,
 		ServiceName:   edsServiceName,
 		Policy:        LoadBalancingPolicyRoundRobin,
@@ -463,7 +464,7 @@ type ClusterOptions struct {
 
 // ClusterResourceWithOptions returns an xDS Cluster resource configured with
 // the provided options.
-func ClusterResourceWithOptions(opts *ClusterOptions) *v3clusterpb.Cluster {
+func ClusterResourceWithOptions(opts ClusterOptions) *v3clusterpb.Cluster {
 	var tlsContext *v3tlspb.UpstreamTlsContext
 	switch opts.SecurityLevel {
 	case SecurityLevelNone:
@@ -523,23 +524,50 @@ func ClusterResourceWithOptions(opts *ClusterOptions) *v3clusterpb.Cluster {
 	return cluster
 }
 
+// EndpointOptions contains options to configure an Endpoint (or
+// ClusterLoadAssignment) resource.
+type EndpointOptions struct {
+	// ClusterName is the name of the Cluster resource (or EDS service name)
+	// containing the endpoints specified below.
+	ClusterName string
+	// Host is the hostname of the endpoints. In our e2e tests, hostname must
+	// always be "localhost".
+	Host string
+	// Ports is a set of ports on "localhost" where the endpoints corresponding
+	// to this resource reside.
+	Ports []uint32
+	// DropPercents is a map from drop category to a drop percentage. If unset,
+	// no drops are configured.
+	DropPercents map[string]int
+}
+
 // DefaultEndpoint returns a basic xds Endpoint resource.
 func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpointpb.ClusterLoadAssignment {
+	return EndpointResourceWithOptions(EndpointOptions{
+		ClusterName: clusterName,
+		Host:        host,
+		Ports:       ports,
+	})
+}
+
+// EndpointResourceWithOptions returns an xds Endpoint resource configured with
+// the provided options.
+func EndpointResourceWithOptions(opts EndpointOptions) *v3endpointpb.ClusterLoadAssignment {
 	var lbEndpoints []*v3endpointpb.LbEndpoint
-	for _, port := range ports {
+	for _, port := range opts.Ports {
 		lbEndpoints = append(lbEndpoints, &v3endpointpb.LbEndpoint{
 			HostIdentifier: &v3endpointpb.LbEndpoint_Endpoint{Endpoint: &v3endpointpb.Endpoint{
 				Address: &v3corepb.Address{Address: &v3corepb.Address_SocketAddress{
 					SocketAddress: &v3corepb.SocketAddress{
 						Protocol:      v3corepb.SocketAddress_TCP,
-						Address:       host,
+						Address:       opts.Host,
 						PortSpecifier: &v3corepb.SocketAddress_PortValue{PortValue: port}},
 				}},
 			}},
 		})
 	}
-	return &v3endpointpb.ClusterLoadAssignment{
-		ClusterName: clusterName,
+	cla := &v3endpointpb.ClusterLoadAssignment{
+		ClusterName: opts.ClusterName,
 		Endpoints: []*v3endpointpb.LocalityLbEndpoints{{
 			Locality:            &v3corepb.Locality{SubZone: "subzone"},
 			LbEndpoints:         lbEndpoints,
@@ -547,4 +575,21 @@ func DefaultEndpoint(clusterName string, host string, ports []uint32) *v3endpoin
 			Priority:            0,
 		}},
 	}
+
+	var drops []*v3endpointpb.ClusterLoadAssignment_Policy_DropOverload
+	for category, val := range opts.DropPercents {
+		drops = append(drops, &v3endpointpb.ClusterLoadAssignment_Policy_DropOverload{
+			Category: category,
+			DropPercentage: &v3typepb.FractionalPercent{
+				Numerator:   uint32(val),
+				Denominator: v3typepb.FractionalPercent_HUNDRED,
+			},
+		})
+	}
+	if len(drops) != 0 {
+		cla.Policy = &v3endpointpb.ClusterLoadAssignment_Policy{
+			DropOverloads: drops,
+		}
+	}
+	return cla
 }
