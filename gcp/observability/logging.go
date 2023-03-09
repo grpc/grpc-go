@@ -337,7 +337,7 @@ func (bml *binaryMethodLogger) buildGCPLoggingEntry(ctx context.Context, c iblog
 	return gcploggingEntry
 }
 
-func (bml *binaryMethodLogger) LogWithContext(ctx context.Context, c iblog.LogEntryConfig) {
+func (bml *binaryMethodLogger) Log(ctx context.Context, c iblog.LogEntryConfig) {
 	bml.exporter.EmitGcpLoggingEntry(bml.buildGCPLoggingEntry(ctx, c))
 }
 
@@ -360,7 +360,7 @@ type binaryLogger struct {
 	clientSide   bool
 }
 
-func (bl *binaryLogger) GetMethodLoggerContext(methodName string) iblog.MethodLoggerContext {
+func (bl *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
 	s, _, err := grpcutil.ParseMethod(methodName)
 	if err != nil {
 		logger.Infof("binarylogging: failed to parse %q: %v", methodName, err)
@@ -432,7 +432,7 @@ func registerClientRPCEvents(config *config, exporter loggingExporter) {
 		projectID:    config.ProjectID,
 		clientSide:   true,
 	}
-	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.LoggerContext) grpc.DialOption)(clientSideLogger))
+	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.Logger) grpc.DialOption)(clientSideLogger))
 }
 
 func registerServerRPCEvents(config *config, exporter loggingExporter) {
@@ -472,7 +472,7 @@ func registerServerRPCEvents(config *config, exporter loggingExporter) {
 		projectID:    config.ProjectID,
 		clientSide:   false,
 	}
-	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.LoggerContext) grpc.ServerOption)(serverSideLogger))
+	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.Logger) grpc.ServerOption)(serverSideLogger))
 }
 
 func startLogging(ctx context.Context, config *config) error {

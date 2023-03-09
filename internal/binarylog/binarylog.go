@@ -21,7 +21,6 @@
 package binarylog
 
 import (
-	"context"
 	"fmt"
 	"os"
 
@@ -31,51 +30,29 @@ import (
 
 var grpclogLogger = grpclog.Component("binarylog")
 
-// Logger specifies MethodLoggers for method names with a Log call that don't
-// take a context.
+// Logger specifies MethodLoggers for method names with a Log call that
+// takes a context.
 type Logger interface {
 	GetMethodLogger(methodName string) MethodLogger
-}
-
-// LoggerContext specifies MethodLoggers for method names with a Log call that
-// takes a context.
-type LoggerContext interface {
-	GetMethodLoggerContext(methodName string) MethodLoggerContext
-}
-
-type wrappedLogger struct {
-	logger Logger
-}
-
-func (wl *wrappedLogger) GetMethodLoggerContext(methodName string) MethodLoggerContext {
-	return &wrappedMethodLogger{
-		methodLogger: wl.logger.GetMethodLogger(methodName),
-	}
 }
 
 // binLogger is the global binary logger for the binary. One of this should be
 // built at init time from the configuration (environment variable or flags).
 //
-// It is used to get a MethodLoggerContext for each individual method.
-var binLogger LoggerContext
+// It is used to get a MethodLogger for each individual method.
+var binLogger Logger
 
 // SetLogger sets the binary logger.
 //
 // Only call this at init time.
 func SetLogger(l Logger) {
-	if lc, ok := l.(LoggerContext); ok {
-		binLogger = lc
-		return
-	}
-	binLogger = &wrappedLogger{
-		logger: l,
-	}
+	binLogger = l
 }
 
 // GetLogger gets the binary logger.
 //
 // Only call this at init time.
-func GetLogger() LoggerContext {
+func GetLogger() Logger {
 	return binLogger
 }
 
@@ -85,21 +62,11 @@ func GetLogger() LoggerContext {
 //
 // Each MethodLogger returned by this method is a new instance. This is to
 // generate sequence id within the call.
-func GetMethodLogger(methodName string) MethodLoggerContext {
+func GetMethodLogger(methodName string) MethodLogger {
 	if binLogger == nil {
 		return nil
 	}
-	return binLogger.GetMethodLoggerContext(methodName)
-}
-
-// wrappedMethodLogger implements LogWithContext by defering to underlying
-// MethodLogger while ignoring the context.
-type wrappedMethodLogger struct {
-	methodLogger MethodLogger
-}
-
-func (wml *wrappedMethodLogger) LogWithContext(_ context.Context, lec LogEntryConfig) {
-	wml.methodLogger.Log(lec)
+	return binLogger.GetMethodLogger(methodName)
 }
 
 func init() {

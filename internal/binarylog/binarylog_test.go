@@ -93,15 +93,13 @@ func (s) TestGetMethodLogger(t *testing.T) {
 			t.Errorf("in: %q, failed to create logger from config string", tc.in)
 			continue
 		}
-		wml := l.GetMethodLoggerContext(tc.method).(*wrappedMethodLogger)
-		ml := wml.methodLogger
+		ml := l.GetMethodLogger(tc.method).(*TruncatingMethodLogger)
 		if ml == nil {
 			t.Errorf("in: %q, method logger is nil, want non-nil", tc.in)
 			continue
 		}
-		tml := ml.(*TruncatingMethodLogger)
-		if tml.headerMaxLen != tc.hdr || tml.messageMaxLen != tc.msg {
-			t.Errorf("in: %q, want header: %v, message: %v, got header: %v, message: %v", tc.in, tc.hdr, tc.msg, tml.headerMaxLen, tml.messageMaxLen)
+		if ml.headerMaxLen != tc.hdr || ml.messageMaxLen != tc.msg {
+			t.Errorf("in: %q, want header: %v, message: %v, got header: %v, message: %v", tc.in, tc.hdr, tc.msg, ml.headerMaxLen, ml.messageMaxLen)
 		}
 	}
 }
@@ -150,8 +148,8 @@ func (s) TestGetMethodLoggerOff(t *testing.T) {
 			t.Errorf("in: %q, failed to create logger from config string", tc.in)
 			continue
 		}
-		wml := l.GetMethodLoggerContext(tc.method)
-		if wml == nil || wml.(*wrappedMethodLogger).methodLogger != nil {
+		ml := l.GetMethodLogger(tc.method)
+		if ml != nil {
 			t.Errorf("in: %q, method logger is non-nil, want nil", tc.in)
 		}
 	}

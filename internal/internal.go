@@ -93,10 +93,10 @@ var (
 
 	// WithBinaryLogger returns a DialOption that specifies the binary logger
 	// for a ClientConn.
-	WithBinaryLogger interface{} // func(binarylog.LoggerWithContext) grpc.DialOption
+	WithBinaryLogger interface{} // func(binarylog.Logger) grpc.DialOption
 	// BinaryLogger returns a ServerOption that can set the binary logger for a
 	// server.
-	BinaryLogger interface{} // func(binarylog.LoggerWithContext) grpc.ServerOption
+	BinaryLogger interface{} // func(binarylog.Logger) grpc.ServerOption
 
 	// NewXDSResolverWithConfigForTesting creates a new xds resolver builder using
 	// the provided xds bootstrap config instead of the global configuration from

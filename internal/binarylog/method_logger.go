@@ -50,13 +50,7 @@ var idGen callIDGenerator
 
 // MethodLogger is the sub-logger for each method.
 type MethodLogger interface {
-	Log(LogEntryConfig)
-}
-
-// MethodLoggerContext is an optional interface that a method logger can
-// implement that takes a context on Log calls.
-type MethodLoggerContext interface {
-	LogWithContext(context.Context, LogEntryConfig)
+	Log(context.Context, LogEntryConfig)
 }
 
 // TruncatingMethodLogger is a method logger that truncates headers and messages
@@ -105,7 +99,7 @@ func (ml *TruncatingMethodLogger) Build(c LogEntryConfig) *binlogpb.GrpcLogEntry
 }
 
 // Log creates a proto binary log entry, and logs it to the sink.
-func (ml *TruncatingMethodLogger) Log(c LogEntryConfig) {
+func (ml *TruncatingMethodLogger) Log(ctx context.Context, c LogEntryConfig) {
 	ml.sink.Write(ml.Build(c))
 }
 
