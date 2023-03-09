@@ -61,7 +61,7 @@ func defaultClientResourcesWithRLSCSP(lb e2e.LoadBalancingPolicy, params e2e.Res
 				RouteLookupConfig: rlsProto,
 			}),
 		})},
-		Clusters: []*v3clusterpb.Cluster{e2e.ClusterResourceWithOptions(&e2e.ClusterOptions{
+		Clusters: []*v3clusterpb.Cluster{e2e.ClusterResourceWithOptions(e2e.ClusterOptions{
 			ClusterName:   clusterName,
 			ServiceName:   endpointsName,
 			Policy:        lb,
