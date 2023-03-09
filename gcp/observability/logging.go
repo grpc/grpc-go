@@ -29,6 +29,7 @@ import (
 
 	gcplogging "cloud.google.com/go/logging"
 	"github.com/google/uuid"
+	"go.opencensus.io/trace"
 
 	"google.golang.org/grpc"
 	binlogpb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
@@ -36,6 +37,7 @@ import (
 	"google.golang.org/grpc/internal/binarylog"
 	iblog "google.golang.org/grpc/internal/binarylog"
 	"google.golang.org/grpc/internal/grpcutil"
+	"google.golang.org/grpc/stats/opencensus"
 )
 
 var lExporter loggingExporter
@@ -237,13 +239,16 @@ type methodLoggerBuilder interface {
 }
 
 type binaryMethodLogger struct {
-	callID, serviceName, methodName, authority string
+	callID, serviceName, methodName, authority, projectID string
 
-	mlb      methodLoggerBuilder
-	exporter loggingExporter
+	mlb        methodLoggerBuilder
+	exporter   loggingExporter
+	clientSide bool
 }
 
-func (bml *binaryMethodLogger) Log(c iblog.LogEntryConfig) {
+// buildGCPLoggingEntry converts the binary log log entry into a gcp logging
+// entry.
+func (bml *binaryMethodLogger) buildGCPLoggingEntry(ctx context.Context, c iblog.LogEntryConfig) gcplogging.Entry {
 	binLogEntry := bml.mlb.Build(c)
 
 	grpcLogEntry := &grpcLogEntry{
@@ -305,9 +310,6 @@ func (bml *binaryMethodLogger) Log(c iblog.LogEntryConfig) {
 		setPeerIfPresent(binLogEntry, grpcLogEntry)
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_CANCEL:
 		grpcLogEntry.Type = eventTypeCancel
-	default:
-		logger.Infof("Unknown event type: %v", binLogEntry.Type)
-		return
 	}
 	grpcLogEntry.ServiceName = bml.serviceName
 	grpcLogEntry.MethodName = bml.methodName
@@ -318,8 +320,25 @@ func (bml *binaryMethodLogger) Log(c iblog.LogEntryConfig) {
 		Severity:  100,
 		Payload:   grpcLogEntry,
 	}
+	if bml.clientSide {
+		// client side span, populated through opencensus trace package.
+		if span := trace.FromContext(ctx); span != nil {
+			sc := span.SpanContext()
+			gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + fmt.Sprintf("%x", sc.TraceID)
+			gcploggingEntry.SpanID = fmt.Sprintf("%x", sc.SpanID)
+		}
+	} else {
+		// server side span, populated through stats/opencensus package.
+		if tID, sID, ok := opencensus.GetTraceAndSpanID(ctx); ok {
+			gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + fmt.Sprintf("%x", tID)
+			gcploggingEntry.SpanID = fmt.Sprintf("%x", sID)
+		}
+	}
+	return gcploggingEntry
+}
 
-	bml.exporter.EmitGcpLoggingEntry(gcploggingEntry)
+func (bml *binaryMethodLogger) Log(ctx context.Context, c iblog.LogEntryConfig) {
+	bml.exporter.EmitGcpLoggingEntry(bml.buildGCPLoggingEntry(ctx, c))
 }
 
 type eventConfig struct {
@@ -336,7 +355,9 @@ type eventConfig struct {
 
 type binaryLogger struct {
 	EventConfigs []eventConfig
+	projectID    string
 	exporter     loggingExporter
+	clientSide   bool
 }
 
 func (bl *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
@@ -352,9 +373,11 @@ func (bl *binaryLogger) GetMethodLogger(methodName string) iblog.MethodLogger {
 			}
 
 			return &binaryMethodLogger{
-				exporter: bl.exporter,
-				mlb:      iblog.NewTruncatingMethodLogger(eventConfig.HeaderBytes, eventConfig.MessageBytes),
-				callID:   uuid.NewString(),
+				exporter:   bl.exporter,
+				mlb:        iblog.NewTruncatingMethodLogger(eventConfig.HeaderBytes, eventConfig.MessageBytes),
+				callID:     uuid.NewString(),
+				projectID:  bl.projectID,
+				clientSide: bl.clientSide,
 			}
 		}
 	}
@@ -372,7 +395,8 @@ func parseMethod(method string) (string, string, error) {
 	return method[:pos], method[pos+1:], nil
 }
 
-func registerClientRPCEvents(clientRPCEvents []clientRPCEvents, exporter loggingExporter) {
+func registerClientRPCEvents(config *config, exporter loggingExporter) {
+	clientRPCEvents := config.CloudLogging.ClientRPCEvents
 	if len(clientRPCEvents) == 0 {
 		return
 	}
@@ -405,11 +429,14 @@ func registerClientRPCEvents(clientRPCEvents []clientRPCEvents, exporter logging
 	clientSideLogger := &binaryLogger{
 		EventConfigs: eventConfigs,
 		exporter:     exporter,
+		projectID:    config.ProjectID,
+		clientSide:   true,
 	}
 	internal.AddGlobalDialOptions.(func(opt ...grpc.DialOption))(internal.WithBinaryLogger.(func(bl binarylog.Logger) grpc.DialOption)(clientSideLogger))
 }
 
-func registerServerRPCEvents(serverRPCEvents []serverRPCEvents, exporter loggingExporter) {
+func registerServerRPCEvents(config *config, exporter loggingExporter) {
+	serverRPCEvents := config.CloudLogging.ServerRPCEvents
 	if len(serverRPCEvents) == 0 {
 		return
 	}
@@ -442,6 +469,8 @@ func registerServerRPCEvents(serverRPCEvents []serverRPCEvents, exporter logging
 	serverSideLogger := &binaryLogger{
 		EventConfigs: eventConfigs,
 		exporter:     exporter,
+		projectID:    config.ProjectID,
+		clientSide:   false,
 	}
 	internal.AddGlobalServerOptions.(func(opt ...grpc.ServerOption))(internal.BinaryLogger.(func(bl binarylog.Logger) grpc.ServerOption)(serverSideLogger))
 }
@@ -456,9 +485,8 @@ func startLogging(ctx context.Context, config *config) error {
 		return fmt.Errorf("unable to create CloudLogging exporter: %v", err)
 	}
 
-	cl := config.CloudLogging
-	registerClientRPCEvents(cl.ClientRPCEvents, lExporter)
-	registerServerRPCEvents(cl.ServerRPCEvents, lExporter)
+	registerClientRPCEvents(config, lExporter)
+	registerServerRPCEvents(config, lExporter)
 	return nil
 }
 

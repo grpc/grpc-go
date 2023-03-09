@@ -20,6 +20,7 @@ package binarylog
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -335,7 +336,7 @@ func (s) TestLog(t *testing.T) {
 	for i, tc := range testCases {
 		buf.Reset()
 		tc.want.SequenceIdWithinCall = uint64(i + 1)
-		ml.Log(tc.config)
+		ml.Log(context.Background(), tc.config)
 		inSink := new(binlogpb.GrpcLogEntry)
 		if err := proto.Unmarshal(buf.Bytes()[4:], inSink); err != nil {
 			t.Errorf("failed to unmarshal bytes in sink to proto: %v", err)
