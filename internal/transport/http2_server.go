@@ -758,6 +758,7 @@ func (t *http2Server) updateFlowControl(n uint32) {
 }
 
 func (t *http2Server) handleData(f *http2.DataFrame) {
+	logger.Infof("[stream %v] handleData: entering", f.Header().StreamID)
 	size := f.Header().Length
 	var sendBDPPing bool
 	if t.bdpEst != nil {
@@ -791,6 +792,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	// Select the right stream to dispatch.
 	s, ok := t.getStream(f)
 	if !ok {
+		logger.Infof("handleData: stream not found")
 		return
 	}
 	if s.getState() == streamReadDone {
@@ -819,11 +821,11 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	}
 	if f.StreamEnded() {
 		// Received the end of stream from the client.
-		logger.Infof("handledata: StreamEnded=true")
+		logger.Infof("handleData: StreamEnded=true")
 		s.compareAndSwapState(streamActive, streamReadDone)
 		s.write(recvMsg{err: io.EOF})
 	} else {
-		logger.Infof("handledata: StreamEnded=false")
+		logger.Infof("handleData: StreamEnded=false")
 	}
 }
 
