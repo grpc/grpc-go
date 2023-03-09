@@ -1035,7 +1035,8 @@ func (t *http2Server) writeHeaderLocked(s *Stream) error {
 // TODO(zhaoq): Now it indicates the end of entire stream. Revisit if early
 // OK is adopted.
 func (t *http2Server) WriteStatus(s *Stream, st *status.Status) error {
-	logger.Infof("[stream %v] http2Server.WriteStatus code=%v message=%v", s.id, st.Code(), st.Message())
+	logger.Infof("[stream %v] http2Server.WriteStatus code=%v message=%v state=%v",
+		s.id, st.Code(), st.Message(), s.getState())
 	s.hdrMu.Lock()
 	defer s.hdrMu.Unlock()
 
