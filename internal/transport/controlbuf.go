@@ -752,6 +752,7 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 		str.deleteSelf()
 	}
 	if c.rst { // If RST_STREAM needs to be sent.
+		logger.Info("loopyWriter.cleanupStreamHandler: calling WriteRSTStream")
 		if err := l.framer.fr.WriteRSTStream(c.streamID, c.rstCode); err != nil {
 			return err
 		}

@@ -1274,6 +1274,8 @@ func (t *http2Server) deleteStream(s *Stream, eosReceived bool) {
 
 // finishStream closes the stream and puts the trailing headerFrame into controlbuf.
 func (t *http2Server) finishStream(s *Stream, rst bool, rstCode http2.ErrCode, hdr *headerFrame, eosReceived bool) {
+	logger.Infof("http2Server.finishStream. rst=%v rstCode=%v eosReceived=%v", rst, rstCode, eosReceived)
+
 	// In case stream sending and receiving are invoked in separate
 	// goroutines (e.g., bi-directional streaming), cancel needs to be
 	// called to interrupt the potential blocking on other goroutines.
