@@ -19,6 +19,7 @@ package xdsresource
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -313,11 +314,14 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 				route.WeightedClusters[a.Cluster] = WeightedCluster{Weight: 1}
 			case *v3routepb.RouteAction_WeightedClusters:
 				wcs := a.WeightedClusters
-				var totalWeight uint32
+				var totalWeight uint64
 				for _, c := range wcs.Clusters {
 					w := c.GetWeight().GetValue()
 					if w == 0 {
 						continue
+					}
+					if (totalWeight + uint64(w)) > math.MaxUint32 {
+						return nil, nil, fmt.Errorf("total weight of clusters exceed MaxUint32")
 					}
 					wc := WeightedCluster{Weight: w}
 					cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
@@ -326,12 +330,7 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 					}
 					wc.HTTPFilterConfigOverride = cfgs
 					route.WeightedClusters[c.GetName()] = wc
-
-					// Sum of all weights cannot exceed MaxUint32. Checking for overflow.
-					if totalWeight > (totalWeight + w) {
-						return nil, nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
-					}
-					totalWeight += w
+					totalWeight += uint64(w)
 				}
 				if totalWeight == 0 {
 					return nil, nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
@@ -343,7 +342,6 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 				// cluster_specifier:
 				// - Can be Cluster
 				// - Can be Weighted_clusters
-				//   - The sum of weights must add up to the total_weight.
 				// - Can be unset or an unsupported field. The route containing
 				//   this action will be ignored.
 				//
