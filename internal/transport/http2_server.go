@@ -819,6 +819,7 @@ func (t *http2Server) handleData(f *http2.DataFrame) {
 	}
 	if f.StreamEnded() {
 		// Received the end of stream from the client.
+		logger.Infof("handledata: StreamEnded=true")
 		s.compareAndSwapState(streamActive, streamReadDone)
 		s.write(recvMsg{err: io.EOF})
 	}

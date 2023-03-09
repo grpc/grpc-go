@@ -311,7 +311,7 @@ func (s *Stream) updateHeaderSent() bool {
 }
 
 func (s *Stream) swapState(st streamState) streamState {
-	logger.Infof("[stream %v] swapState -> %v", s.id, st)
+	logger.Infof("[stream %v] swapState -> %v (was %v)", s.id, st, s.state)
 	return streamState(atomic.SwapUint32((*uint32)(&s.state), uint32(st)))
 }
 

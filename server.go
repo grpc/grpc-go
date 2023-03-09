@@ -1453,7 +1453,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			binlog.Log(st)
 		}
 	}
-	logger.Infof("processUnaryRPC calling WriteStatus")
+	logger.Infof("processUnaryRPC calling WriteStatus in the end")
 	return t.WriteStatus(stream, statusOK)
 }
 
