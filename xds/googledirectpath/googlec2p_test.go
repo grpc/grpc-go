@@ -19,6 +19,7 @@
 package googledirectpath
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -212,15 +213,20 @@ func TestBuildXDS(t *testing.T) {
 					},
 				}
 			}
-			serverConfig := &bootstrap.ServerConfig{
-				ServerURI: tdURL,
+			wantServerConfig, err := bootstrap.ServerConfigFromJSON([]byte(fmt.Sprintf(`{
+				"server_uri": "%s",
+				"channel_creds": [{"type": "google_default"}],
+				"server_features": ["xds_v3"]
+			}`, tdURL)))
+			if err != nil {
+				t.Fatalf("Failed to build server bootstrap config: %v", err)
 			}
 			wantConfig := &bootstrap.Config{
-				XDSServer: serverConfig,
+				XDSServer: wantServerConfig,
 				ClientDefaultListenerResourceNameTemplate: "%s",
 				Authorities: map[string]*bootstrap.Authority{
 					"traffic-director-c2p.xds.googleapis.com": {
-						XDSServer: serverConfig,
+						XDSServer: wantServerConfig,
 					},
 				},
 				NodeProto: wantNode,
@@ -234,9 +240,9 @@ func TestBuildXDS(t *testing.T) {
 				protocmp.Transform(),
 			}
 			select {
-			case c := <-configCh:
-				if diff := cmp.Diff(c, wantConfig, cmpOpts); diff != "" {
-					t.Fatalf("%v", diff)
+			case gotConfig := <-configCh:
+				if diff := cmp.Diff(wantConfig, gotConfig, cmpOpts); diff != "" {
+					t.Fatalf("Unexpected diff in bootstrap config (-want +got):\n%s", diff)
 				}
 			case <-time.After(time.Second):
 				t.Fatalf("timeout waiting for client config")

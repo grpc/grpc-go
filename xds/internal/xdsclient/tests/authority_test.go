@@ -24,8 +24,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
@@ -94,20 +92,12 @@ func setupForAuthorityTests(ctx context.Context, t *testing.T, idleTimeout time.
 	// config, which points to the above management server.
 	nodeID := uuid.New().String()
 	client, close, err := xdsclient.NewWithConfigForTesting(&bootstrap.Config{
-		XDSServer: &bootstrap.ServerConfig{
-			ServerURI: defaultAuthorityServer.Address,
-			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		},
+		XDSServer: xdstestutils.ServerConfigForAddress(t, defaultAuthorityServer.Address),
 		NodeProto: &v3corepb.Node{Id: nodeID},
 		Authorities: map[string]*bootstrap.Authority{
 			testAuthority1: {},
 			testAuthority2: {},
-			testAuthority3: {
-				XDSServer: &bootstrap.ServerConfig{
-					ServerURI: nonDefaultAuthorityServer.Address,
-					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				},
-			},
+			testAuthority3: {XDSServer: xdstestutils.ServerConfigForAddress(t, nonDefaultAuthorityServer.Address)},
 		},
 	}, defaultTestWatchExpiryTimeout, idleTimeout)
 	if err != nil {
