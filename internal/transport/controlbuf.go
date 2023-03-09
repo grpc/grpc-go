@@ -752,10 +752,12 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 		str.deleteSelf()
 	}
 	if c.rst { // If RST_STREAM needs to be sent.
-		logger.Info("loopyWriter.cleanupStreamHandler: calling WriteRSTStream")
+		logger.Infof("[stream %v] loopyWriter.cleanupStreamHandler: calling WriteRSTStream code %v", c.streamID, c.rstCode)
 		if err := l.framer.fr.WriteRSTStream(c.streamID, c.rstCode); err != nil {
 			return err
 		}
+	} else {
+		logger.Infof("[stream %v] loopyWriter.cleanupStreamHandler: rst=false", c.streamID)
 	}
 	if l.draining && len(l.estdStreams) == 0 {
 		return errors.New("finished processing active streams while in draining mode")
