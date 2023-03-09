@@ -96,8 +96,8 @@ type Server struct {
 	Address string
 
 	// The underlying fake implementation of xDS and LRS.
-	xdsV3 *xdsServerV3
-	lrsV3 *lrsServerV3
+	*xdsServerV3
+	*lrsServerV3
 }
 
 type wrappedListener struct {
@@ -127,29 +127,38 @@ func StartServer(lis net.Listener) (*Server, func(), error) {
 		}
 	}
 
-	s := &Server{
-		XDSRequestChan:     testutils.NewChannelWithSize(defaultChannelBufferSize),
-		LRSRequestChan:     testutils.NewChannelWithSize(defaultChannelBufferSize),
-		NewConnChan:        testutils.NewChannelWithSize(defaultChannelBufferSize),
-		XDSResponseChan:    make(chan *Response, defaultChannelBufferSize),
-		LRSResponseChan:    make(chan *Response, 1), // The server only ever sends one response.
-		LRSStreamOpenChan:  testutils.NewChannel(),
-		LRSStreamCloseChan: testutils.NewChannel(),
-		Address:            lis.Addr().String(),
-	}
-	s.xdsV3 = &xdsServerV3{reqChan: s.XDSRequestChan, respChan: s.XDSResponseChan}
-	s.lrsV3 = &lrsServerV3{reqChan: s.LRSRequestChan, respChan: s.LRSResponseChan, streamOpenChan: s.LRSStreamOpenChan, streamCloseChan: s.LRSStreamCloseChan}
+	s := NewServer(lis.Addr().String())
 	wp := &wrappedListener{
 		Listener: lis,
 		server:   s,
 	}
 
 	server := grpc.NewServer()
-	v3lrsgrpc.RegisterLoadReportingServiceServer(server, s.lrsV3)
-	v3discoverygrpc.RegisterAggregatedDiscoveryServiceServer(server, s.xdsV3)
+	v3lrsgrpc.RegisterLoadReportingServiceServer(server, s)
+	v3discoverygrpc.RegisterAggregatedDiscoveryServiceServer(server, s)
 	go server.Serve(wp)
 
 	return s, func() { server.Stop() }, nil
+}
+
+// NewServer returns a new instance of Server, set to accept requests on addr.
+// It is the responsibility of the caller to register the exported ADS and LRS
+// services on an appropriate gRPC server. Most usages should prefer
+// StartServer() instead of this.
+func NewServer(addr string) *Server {
+	s := &Server{
+		XDSRequestChan:     testutils.NewChannelWithSize(defaultChannelBufferSize),
+		LRSRequestChan:     testutils.NewChannelWithSize(defaultChannelBufferSize),
+		NewConnChan:        testutils.NewChannelWithSize(defaultChannelBufferSize),
+		XDSResponseChan:    make(chan *Response, defaultChannelBufferSize),
+		LRSResponseChan:    make(chan *Response, 1), // The server only ever sends one response.
+		LRSStreamOpenChan:  testutils.NewChannelWithSize(defaultChannelBufferSize),
+		LRSStreamCloseChan: testutils.NewChannelWithSize(defaultChannelBufferSize),
+		Address:            addr,
+	}
+	s.xdsServerV3 = &xdsServerV3{reqChan: s.XDSRequestChan, respChan: s.XDSResponseChan}
+	s.lrsServerV3 = &lrsServerV3{reqChan: s.LRSRequestChan, respChan: s.LRSResponseChan, streamOpenChan: s.LRSStreamOpenChan, streamCloseChan: s.LRSStreamCloseChan}
+	return s
 }
 
 type xdsServerV3 struct {
