@@ -320,8 +320,9 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 					if w == 0 {
 						continue
 					}
-					if (totalWeight + uint64(w)) > math.MaxUint32 {
-						return nil, nil, fmt.Errorf("total weight of clusters exceed MaxUint32")
+					totalWeight += uint64(w)
+					if totalWeight > math.MaxUint32 {
+						return nil, nil, fmt.Errorf("xds: total weight of clusters exceeds MaxUint32")
 					}
 					wc := WeightedCluster{Weight: w}
 					cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
@@ -330,7 +331,6 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 					}
 					wc.HTTPFilterConfigOverride = cfgs
 					route.WeightedClusters[c.GetName()] = wc
-					totalWeight += uint64(w)
 				}
 				if totalWeight == 0 {
 					return nil, nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
