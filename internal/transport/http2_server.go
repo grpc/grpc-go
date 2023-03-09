@@ -469,6 +469,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 
 	if protocolError {
+		logger.Infof("[stream %d] OperateHeaders: protocol error condition", streamID)
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
 			rst:      true,
@@ -513,6 +514,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 
 	if frame.StreamEnded() {
 		// s is just created by the caller. No lock needed.
+		logger.Infof("[stream %d] OperateHeaders setting state to streamReadDone (%v)", s.id, streamReadDone)
 		s.state = streamReadDone
 	}
 	if timeoutSet {
