@@ -536,7 +536,8 @@ type EndpointOptions struct {
 	// Ports is a set of ports on "localhost" where the endpoints corresponding
 	// to this resource reside.
 	Ports []uint32
-	// DropPercents is a map from drop category to a drop percentage.
+	// DropPercents is a map from drop category to a drop percentage. If unset,
+	// no drops are configured.
 	DropPercents map[string]int
 }
 
