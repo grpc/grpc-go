@@ -35,6 +35,19 @@ import (
 var (
 	// It's a variable instead of const to speed up testing
 	defaultMetricsReportingInterval = time.Second * 30
+	o11yMetrics                     = []*view.View{
+		opencensus.ClientStartedRPCsView,
+		opencensus.ClientCompletedRPCsView,
+		opencensus.ClientRoundtripLatencyView,
+		opencensus.ClientSentCompressedBytesPerRPCView, // need to add verifications for this in test
+		opencensus.ClientReceivedCompressedBytesPerRPCView,
+		opencensus.ClientAPILatencyView,
+		opencensus.ServerStartedRPCsView,
+		opencensus.ServerCompletedRPCsView,
+		opencensus.ServerSentCompressedBytesPerRPCView,
+		opencensus.ServerReceivedCompressedBytesPerRPCView,
+		opencensus.ServerLatencyView,
+	}
 )
 
 func labelsToMonitoringLabels(labels map[string]string) *stackdriver.Labels {
@@ -106,11 +119,8 @@ func startOpenCensus(config *config) error {
 	}
 
 	if config.CloudMonitoring != nil {
-		if err := view.Register(opencensus.ClientAPILatencyView, opencensus.ClientStartedRPCsView, opencensus.ClientCompletedRPCsView, opencensus.ClientRoundtripLatencyView); err != nil {
-			return fmt.Errorf("failed to register default client views: %v", err)
-		}
-		if err := view.Register(opencensus.ServerStartedRPCsView, opencensus.ServerCompletedRPCsView, opencensus.ServerLatencyView); err != nil {
-			return fmt.Errorf("failed to register default server views: %v", err)
+		if err := view.Register(o11yMetrics...); err != nil {
+			return fmt.Errorf("failed to register observability views: %v", err)
 		}
 		view.SetReportingPeriod(defaultMetricsReportingInterval)
 		view.RegisterExporter(exporter.(view.Exporter))
@@ -130,11 +140,15 @@ func stopOpenCensus() {
 	if exporter != nil {
 		internal.ClearGlobalDialOptions()
 		internal.ClearGlobalServerOptions()
+		// This Unregister call guarantees the data recorded gets sent to exporter,
+		// synchronising the view package and exporter.
+		view.Unregister(o11yMetrics...)
 		// Call these unconditionally, doesn't matter if not registered, will be
 		// a noop if not registered.
 		trace.UnregisterExporter(exporter)
 		view.UnregisterExporter(exporter)
 
+		// This Flush call makes sure recorded telemetry get sent to backend.
 		exporter.Flush()
 		exporter.Close()
 	}
