@@ -912,6 +912,7 @@ func (t *http2Client) closeStream(s *Stream, err error, rst bool, rstCode http2.
 		s.noHeaders = true
 		close(s.headerChan)
 	}
+	logger.Infof("[stream %v] closeStream: cleanupStream", s.id)
 	cleanup := &cleanupStream{
 		streamID: s.id,
 		onWrite: func() {

@@ -357,6 +357,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	// frame.Truncated is set to true when framer detects that the current header
 	// list size hits MaxHeaderListSize limit.
 	if frame.Truncated {
+		logger.Infof("[stream %v] operateHeaders: cleanupStream because Truncated", streamID)
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
 			rst:      true,
@@ -541,6 +542,7 @@ func (t *http2Server) operateHeaders(frame *http2.MetaHeadersFrame, handle func(
 	}
 	if uint32(len(t.activeStreams)) >= t.maxStreams {
 		t.mu.Unlock()
+		logger.Infof("[stream %v] operateHeaders: cleanupStream because maxStreams", streamID)
 		t.controlBuf.put(&cleanupStream{
 			streamID: streamID,
 			rst:      true,
@@ -657,6 +659,7 @@ func (t *http2Server) HandleStreams(handle func(*Stream), traceCtx func(context.
 				if s != nil {
 					t.closeStream(s, true, se.Code, false)
 				} else {
+					logger.Infof("[stream %v] HandleStreams: cleanupStream because err %v", se.StreamID, se.Cause)
 					t.controlBuf.put(&cleanupStream{
 						streamID: se.StreamID,
 						rst:      true,
