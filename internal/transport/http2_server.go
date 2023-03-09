@@ -758,7 +758,8 @@ func (t *http2Server) updateFlowControl(n uint32) {
 }
 
 func (t *http2Server) handleData(f *http2.DataFrame) {
-	logger.Infof("[stream %v] handleData: entering", f.Header().StreamID)
+	logger.Infof("[stream %v] handleData: entering length=%v flags=%v",
+		f.Header().StreamID, f.Header().Length, f.Header().Flags)
 	size := f.Header().Length
 	var sendBDPPing bool
 	if t.bdpEst != nil {
