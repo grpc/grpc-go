@@ -6799,7 +6799,7 @@ type mockMethodLogger struct {
 	events uint64
 }
 
-func (mml *mockMethodLogger) Log(binarylog.LogEntryConfig) {
+func (mml *mockMethodLogger) Log(context.Context, binarylog.LogEntryConfig) {
 	atomic.AddUint64(&mml.events, 1)
 }
 

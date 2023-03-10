@@ -361,7 +361,7 @@ func newClientStreamWithParams(ctx context.Context, desc *StreamDesc, cc *Client
 			}
 		}
 		for _, binlog := range cs.binlogs {
-			binlog.Log(logEntry)
+			binlog.Log(cs.ctx, logEntry)
 		}
 	}
 
@@ -809,7 +809,7 @@ func (cs *clientStream) Header() (metadata.MD, error) {
 		}
 		cs.serverHeaderBinlogged = true
 		for _, binlog := range cs.binlogs {
-			binlog.Log(logEntry)
+			binlog.Log(cs.ctx, logEntry)
 		}
 	}
 	return m, nil
@@ -890,7 +890,7 @@ func (cs *clientStream) SendMsg(m interface{}) (err error) {
 			Message:      data,
 		}
 		for _, binlog := range cs.binlogs {
-			binlog.Log(cm)
+			binlog.Log(cs.ctx, cm)
 		}
 	}
 	return err
@@ -914,7 +914,7 @@ func (cs *clientStream) RecvMsg(m interface{}) error {
 			Message:      recvInfo.uncompressedBytes,
 		}
 		for _, binlog := range cs.binlogs {
-			binlog.Log(sm)
+			binlog.Log(cs.ctx, sm)
 		}
 	}
 	if err != nil || !cs.desc.ServerStreams {
@@ -935,7 +935,7 @@ func (cs *clientStream) RecvMsg(m interface{}) error {
 				logEntry.PeerAddr = peer.Addr
 			}
 			for _, binlog := range cs.binlogs {
-				binlog.Log(logEntry)
+				binlog.Log(cs.ctx, logEntry)
 			}
 		}
 	}
@@ -962,7 +962,7 @@ func (cs *clientStream) CloseSend() error {
 			OnClientSide: true,
 		}
 		for _, binlog := range cs.binlogs {
-			binlog.Log(chc)
+			binlog.Log(cs.ctx, chc)
 		}
 	}
 	// We never returned an error here for reasons.
@@ -1004,7 +1004,7 @@ func (cs *clientStream) finish(err error) {
 			OnClientSide: true,
 		}
 		for _, binlog := range cs.binlogs {
-			binlog.Log(c)
+			binlog.Log(cs.ctx, c)
 		}
 	}
 	if err == nil {
@@ -1573,7 +1573,7 @@ func (ss *serverStream) SendHeader(md metadata.MD) error {
 		}
 		ss.serverHeaderBinlogged = true
 		for _, binlog := range ss.binlogs {
-			binlog.Log(sh)
+			binlog.Log(ss.ctx, sh)
 		}
 	}
 	return err
@@ -1646,14 +1646,14 @@ func (ss *serverStream) SendMsg(m interface{}) (err error) {
 			}
 			ss.serverHeaderBinlogged = true
 			for _, binlog := range ss.binlogs {
-				binlog.Log(sh)
+				binlog.Log(ss.ctx, sh)
 			}
 		}
 		sm := &binarylog.ServerMessage{
 			Message: data,
 		}
 		for _, binlog := range ss.binlogs {
-			binlog.Log(sm)
+			binlog.Log(ss.ctx, sm)
 		}
 	}
 	if len(ss.statsHandler) != 0 {
@@ -1701,7 +1701,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			if len(ss.binlogs) != 0 {
 				chc := &binarylog.ClientHalfClose{}
 				for _, binlog := range ss.binlogs {
-					binlog.Log(chc)
+					binlog.Log(ss.ctx, chc)
 				}
 			}
 			return err
@@ -1729,7 +1729,7 @@ func (ss *serverStream) RecvMsg(m interface{}) (err error) {
 			Message: payInfo.uncompressedBytes,
 		}
 		for _, binlog := range ss.binlogs {
-			binlog.Log(cm)
+			binlog.Log(ss.ctx, cm)
 		}
 	}
 	return nil
