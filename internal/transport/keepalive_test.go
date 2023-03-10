@@ -683,14 +683,15 @@ func pollForStreamCreationError(client *http2Client) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
 	for {
-		if ctx.Err() != nil {
-			return fmt.Errorf("test timed out before stream creation returned an error")
-		}
 		if _, err := client.NewStream(ctx, &CallHdr{}); err != nil {
-			return nil
+			break
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+	if ctx.Err() != nil {
+		return fmt.Errorf("test timed out before stream creation returned an error")
+	}
+	return nil
 }
 
 // waitForGoAwayTooManyPings waits for client to receive a GoAwayTooManyPings
