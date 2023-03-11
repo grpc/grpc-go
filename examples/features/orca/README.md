@@ -17,19 +17,32 @@ go run client/main.go
 
 ## Explanation
 
-The server is set up to report query cost metrics in its RPC handler.  It also
-registers an ORCA service that is used for out-of-band metrics.  Both of these
-pieces are optional and work independently.  For per-RPC metrics to be
-reported, two things are important: 1. using `orca.CallMetricsServerOption()`
-when creating the server and 2. setting metrics in the method handlers by using
-`orca.CallMetricRecorderFromContext()`.  For out-of-band metrics, one simply
-needs to create and register the reporter by using `orca.Register()` and set
-metrics on the returned `orca.Service` using its methods.
-
-The client performs one RPC per second.  All metrics are received via the LB
-policy.  Per-RPC metrics are available via the `Done()` callback returned from
-the LB policy's picker.  Out-of-band metrics are available via a listener
-callback that is registered on `SubConn`s using `orca.RegisterOOBListener`.
+gRPC ORCA support provides two different ways to report load data to clients
+from servers: out-of-band and per-RPC.  Out-of-band metrics are reported
+regularly at some interval on a stream, while per-RPC metrics are reported
+along with the trailers at the end of a call.  Both of these mechanisms are
+optional and work independently.
 
 The full ORCA API documentation is available here:
 https://pkg.go.dev/google.golang.org/grpc/orca
+
+### Out-of-band Metrics
+
+The server registers an ORCA service that is used for out-of-band metrics.  It
+does this by using `orca.Register()` and then setting metrics on the returned
+`orca.Service` using its methods.
+
+The client receives out-of-band metrics via the LB policy.  It receives
+callbacks to a listener by registering the listener on a `SubConn` via
+`orca.RegisterOOBListener`.
+
+### Per-RPC Metrics
+
+The server is set up to report query cost metrics in its RPC handler.  For
+per-RPC metrics to be reported, the gRPC server must be created with the
+`orca.CallMetricsServerOption()` option, and metrics are set by calling methods
+on the returned `orca.CallMetricRecorder` from
+`orca.CallMetricRecorderFromContext()`.
+
+The client performs one RPC per second.  Per-RPC metrics are available for each
+call via the `Done()` callback returned from the LB policy's picker.

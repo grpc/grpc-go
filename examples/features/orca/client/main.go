@@ -113,8 +113,9 @@ func (o *orcaLB) UpdateClientConnState(ccs balancer.ClientConnState) error {
 	sc.Connect()
 
 	// Register a simple ORCA OOB listener on the SubConn.  We request a 1
-	// second report interval, but in this example the minimum interval is 3
-	// seconds so reports will be sent that often.
+	// second report interval, but in this example the server indicated the
+	// minimum interval it will allow is 3 seconds, so reports will only be
+	// sent that often.
 	orca.RegisterOOBListener(sc, orcaLis{}, orca.OOBListenerOptions{ReportInterval: time.Second})
 
 	return nil
@@ -143,6 +144,8 @@ func (p *picker) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 	}, nil
 }
 
+// orcaLis is the out-of-band load report listener that we pass to
+// orca.RegisterOOBListener to receive periodic load report information.
 type orcaLis struct{}
 
 func (orcaLis) OnLoadReport(lr *v3orcapb.OrcaLoadReport) {

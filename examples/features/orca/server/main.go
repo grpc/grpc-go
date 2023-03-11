@@ -68,8 +68,8 @@ func main() {
 	pb.RegisterEchoServer(s, &server{})
 
 	// Register the orca service for out-of-band metric reporting, and set the
-	// maximum reporting frequency to once every 3 seconds.  Note that, by
-	// default, the shortest interval is 30 seconds, but 3 seconds is set via
+	// minimum reporting interval to 3 seconds.  Note that, by default, the
+	// minimum interval must be at least 30 seconds, but 3 seconds is set via
 	// an internal-only option for illustration purposes only.
 	opts := orca.ServiceOptions{MinReportingInterval: 3 * time.Second}
 	internal.ORCAAllowAnyMinReportingInterval.(func(so *orca.ServiceOptions))(&opts)
