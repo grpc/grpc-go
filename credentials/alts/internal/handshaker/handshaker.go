@@ -194,6 +194,8 @@ func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credent
 		return nil, nil, errors.New("only handshakers created using NewClientHandshaker can perform a client handshaker")
 	}
 
+	// TODO(matthewstevenson88): Change unit tests to use public APIs so
+	// that h.stream can unconditionally be set based on h.clientConn.
 	if h.stream == nil {
 		stream, err := altsgrpc.NewHandshakerServiceClient(h.clientConn).DoHandshake(ctx)
 		if err != nil {
@@ -245,6 +247,8 @@ func (h *altsHandshaker) ServerHandshake(ctx context.Context) (net.Conn, credent
 		return nil, nil, errors.New("only handshakers created using NewServerHandshaker can perform a server handshaker")
 	}
 
+        // TODO(matthewstevenson88): Change unit tests to use public APIs so
+        // that h.stream can unconditionally be set based on h.clientConn.
 	if h.stream == nil {
 		stream, err := altsgrpc.NewHandshakerServiceClient(h.clientConn).DoHandshake(ctx)
 		if err != nil {
