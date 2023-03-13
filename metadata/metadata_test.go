@@ -335,3 +335,23 @@ func BenchmarkFromOutgoingContext(b *testing.B) {
 		FromOutgoingContext(ctx)
 	}
 }
+
+func BenchmarkFromIncomingContext(b *testing.B) {
+	md := Pairs(
+		"X-My-Header-1", "42",
+	)
+	ctx := NewIncomingContext(context.Background(), md)
+	for n := 0; n < b.N; n++ {
+		FromIncomingContext(ctx)
+	}
+}
+
+func BenchmarkValueFromIncomingContext(b *testing.B) {
+	md := Pairs(
+		"X-My-Header-1", "42",
+	)
+	ctx := NewIncomingContext(context.Background(), md)
+	for n := 0; n < b.N; n++ {
+		ValueFromIncomingContext(ctx, "x-my-header-1")
+	}
+}
