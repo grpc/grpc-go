@@ -857,7 +857,7 @@ func (l *loopyWriter) handle(i interface{}) error {
 		l.outFlowControlSizeRequestHandler(i)
 	case closeConnection:
 		// Just return a non-I/O error and run() will flush and close the
-		// conneciton.
+		// connection.
 		return ErrConnClosing
 	default:
 		return fmt.Errorf("transport: unknown control message type %T", i)
