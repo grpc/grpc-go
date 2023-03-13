@@ -593,7 +593,7 @@ func (l *loopyWriter) run() (err error) {
 }
 
 func (l *loopyWriter) outgoingWindowUpdateHandler(w *outgoingWindowUpdate) error {
-	return toIOError(l.framer.fr.WriteWindowUpdate(w.streamID, w.increment))
+	return l.framer.fr.WriteWindowUpdate(w.streamID, w.increment)
 }
 
 func (l *loopyWriter) incomingWindowUpdateHandler(w *incomingWindowUpdate) {
@@ -614,12 +614,12 @@ func (l *loopyWriter) incomingWindowUpdateHandler(w *incomingWindowUpdate) {
 }
 
 func (l *loopyWriter) outgoingSettingsHandler(s *outgoingSettings) error {
-	return toIOError(l.framer.fr.WriteSettings(s.ss...))
+	return l.framer.fr.WriteSettings(s.ss...)
 }
 
 func (l *loopyWriter) incomingSettingsHandler(s *incomingSettings) error {
 	l.applySettings(s.ss)
-	return toIOError(l.framer.fr.WriteSettingsAck())
+	return l.framer.fr.WriteSettingsAck()
 }
 
 func (l *loopyWriter) registerStreamHandler(h *registerStream) {
@@ -711,18 +711,18 @@ func (l *loopyWriter) writeHeader(streamID uint32, endStream bool, hf []hpack.He
 		}
 		if first {
 			first = false
-			err = toIOError(l.framer.fr.WriteHeaders(http2.HeadersFrameParam{
+			err = l.framer.fr.WriteHeaders(http2.HeadersFrameParam{
 				StreamID:      streamID,
 				BlockFragment: l.hBuf.Next(size),
 				EndStream:     endStream,
 				EndHeaders:    endHeaders,
-			}))
+			})
 		} else {
-			err = toIOError(l.framer.fr.WriteContinuation(
+			err = l.framer.fr.WriteContinuation(
 				streamID,
 				endHeaders,
 				l.hBuf.Next(size),
-			))
+			)
 		}
 		if err != nil {
 			return err
@@ -749,7 +749,7 @@ func (l *loopyWriter) pingHandler(p *ping) error {
 	if !p.ack {
 		l.bdpEst.timesnap(p.data)
 	}
-	return toIOError(l.framer.fr.WritePing(p.ack, p.data))
+	return l.framer.fr.WritePing(p.ack, p.data)
 
 }
 
@@ -768,7 +768,7 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 	}
 	if c.rst { // If RST_STREAM needs to be sent.
 		if err := l.framer.fr.WriteRSTStream(c.streamID, c.rstCode); err != nil {
-			return toIOError(err)
+			return err
 		}
 	}
 	if l.draining && len(l.estdStreams) == 0 {
@@ -798,7 +798,7 @@ func (l *loopyWriter) earlyAbortStreamHandler(eas *earlyAbortStream) error {
 	}
 	if eas.rst {
 		if err := l.framer.fr.WriteRSTStream(eas.streamID, http2.ErrCodeNo); err != nil {
-			return toIOError(err)
+			return err
 		}
 	}
 	return nil
@@ -907,7 +907,7 @@ func (l *loopyWriter) processData() (bool, error) {
 	if len(dataItem.h) == 0 && len(dataItem.d) == 0 { // Empty data frame
 		// Client sends out empty data frame with endStream = true
 		if err := l.framer.fr.WriteData(dataItem.streamID, dataItem.endStream, nil); err != nil {
-			return false, toIOError(err)
+			return false, err
 		}
 		str.itl.dequeue() // remove the empty data item from stream
 		if str.itl.isEmpty() {
@@ -969,7 +969,7 @@ func (l *loopyWriter) processData() (bool, error) {
 		dataItem.onEachWrite()
 	}
 	if err := l.framer.fr.WriteData(dataItem.streamID, endStream, buf[:size]); err != nil {
-		return false, toIOError(err)
+		return false, err
 	}
 	str.bytesOutStanding += size
 	l.sendQuota -= uint32(size)
@@ -1001,20 +1001,4 @@ func min(a, b int) int {
 		return a
 	}
 	return b
-}
-
-type ioError struct {
-	error
-}
-
-func isIOError(err error) bool {
-	_, ok := err.(ioError)
-	return ok
-}
-
-func toIOError(err error) error {
-	if err == nil {
-		return nil
-	}
-	return ioError{error: err}
 }
