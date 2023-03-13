@@ -1347,13 +1347,9 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 		t.mu.Unlock()
 		t.maxStreamMu.Unlock()
 		if err := t.framer.fr.WriteGoAway(sid, g.code, g.debugData); err != nil {
-			return false, err
+			return false, toIOError(err)
 		}
 		if retErr != nil {
-			// Abruptly close the connection following the GoAway, but flush
-			// out what's inside the buffer first.
-			t.framer.writer.Flush()
-			t.conn.Close()
 			return false, retErr
 		}
 		return true, nil
@@ -1367,10 +1363,10 @@ func (t *http2Server) outgoingGoAwayHandler(g *goAway) (bool, error) {
 	// After getting the ack or timer expiration send out another GoAway this
 	// time with an ID of the max stream server intends to process.
 	if err := t.framer.fr.WriteGoAway(math.MaxUint32, http2.ErrCodeNo, []byte{}); err != nil {
-		return false, err
+		return false, toIOError(err)
 	}
 	if err := t.framer.fr.WritePing(false, goAwayPing.data); err != nil {
-		return false, err
+		return false, toIOError(err)
 	}
 	go func() {
 		timer := time.NewTimer(time.Minute)

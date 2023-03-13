@@ -524,22 +524,30 @@ const minBatchSize = 1000
 // 2. Stream level flow control quota available.
 //
 // In each iteration of run loop, other than processing the incoming control
-// frame, loopy calls processData, which processes one node from the activeStreams linked-list.
-// This results in writing of HTTP2 frames into an underlying write buffer.
-// When there's no more control frames to read from controlBuf, loopy flushes the write buffer.
-// As an optimization, to increase the batch size for each flush, loopy yields the processor, once
-// if the batch size is too low to give stream goroutines a chance to fill it up.
+// frame, loopy calls processData, which processes one node from the
+// activeStreams linked-list.  This results in writing of HTTP2 frames into an
+// underlying write buffer.  When there's no more control frames to read from
+// controlBuf, loopy flushes the write buffer.  As an optimization, to increase
+// the batch size for each flush, loopy yields the processor, once if the batch
+// size is too low to give stream goroutines a chance to fill it up.
+//
+// Upon exiting, if the error causing the exit is not an I/O error, run()
+// flushes and closes the underlying connection.  Otherwise, the connection is
+// left open to allow the I/O error to be encountered by the reader instead.
 func (l *loopyWriter) run() (err error) {
 	defer func() {
 		if logger.V(logLevel) {
 			logger.Infof("transport: loopyWriter exiting with error: %v", err)
+		}
+		if !isIOError(err) {
+			l.framer.writer.Flush()
+			l.conn.Close()
 		}
 		l.cbuf.finish()
 	}()
 	for {
 		it, err := l.cbuf.get(true)
 		if err != nil {
-			l.closeConnection()
 			return err
 		}
 		if err = l.handle(it); err != nil {
@@ -553,7 +561,6 @@ func (l *loopyWriter) run() (err error) {
 		for {
 			it, err := l.cbuf.get(false)
 			if err != nil {
-				l.closeConnection()
 				return err
 			}
 			if it != nil {
@@ -586,7 +593,7 @@ func (l *loopyWriter) run() (err error) {
 }
 
 func (l *loopyWriter) outgoingWindowUpdateHandler(w *outgoingWindowUpdate) error {
-	return l.framer.fr.WriteWindowUpdate(w.streamID, w.increment)
+	return toIOError(l.framer.fr.WriteWindowUpdate(w.streamID, w.increment))
 }
 
 func (l *loopyWriter) incomingWindowUpdateHandler(w *incomingWindowUpdate) {
@@ -607,12 +614,12 @@ func (l *loopyWriter) incomingWindowUpdateHandler(w *incomingWindowUpdate) {
 }
 
 func (l *loopyWriter) outgoingSettingsHandler(s *outgoingSettings) error {
-	return l.framer.fr.WriteSettings(s.ss...)
+	return toIOError(l.framer.fr.WriteSettings(s.ss...))
 }
 
 func (l *loopyWriter) incomingSettingsHandler(s *incomingSettings) error {
 	l.applySettings(s.ss)
-	return l.framer.fr.WriteSettingsAck()
+	return toIOError(l.framer.fr.WriteSettingsAck())
 }
 
 func (l *loopyWriter) registerStreamHandler(h *registerStream) {
@@ -704,18 +711,18 @@ func (l *loopyWriter) writeHeader(streamID uint32, endStream bool, hf []hpack.He
 		}
 		if first {
 			first = false
-			err = l.framer.fr.WriteHeaders(http2.HeadersFrameParam{
+			err = toIOError(l.framer.fr.WriteHeaders(http2.HeadersFrameParam{
 				StreamID:      streamID,
 				BlockFragment: l.hBuf.Next(size),
 				EndStream:     endStream,
 				EndHeaders:    endHeaders,
-			})
+			}))
 		} else {
-			err = l.framer.fr.WriteContinuation(
+			err = toIOError(l.framer.fr.WriteContinuation(
 				streamID,
 				endHeaders,
 				l.hBuf.Next(size),
-			)
+			))
 		}
 		if err != nil {
 			return err
@@ -742,7 +749,7 @@ func (l *loopyWriter) pingHandler(p *ping) error {
 	if !p.ack {
 		l.bdpEst.timesnap(p.data)
 	}
-	return l.framer.fr.WritePing(p.ack, p.data)
+	return toIOError(l.framer.fr.WritePing(p.ack, p.data))
 
 }
 
@@ -761,12 +768,11 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 	}
 	if c.rst { // If RST_STREAM needs to be sent.
 		if err := l.framer.fr.WriteRSTStream(c.streamID, c.rstCode); err != nil {
-			return err
+			return toIOError(err)
 		}
 	}
 	if l.draining && len(l.estdStreams) == 0 {
 		// Flush and close the connection; we are done with it.
-		l.closeConnection()
 		return errors.New("finished processing active streams while in draining mode")
 	}
 	return nil
@@ -792,7 +798,7 @@ func (l *loopyWriter) earlyAbortStreamHandler(eas *earlyAbortStream) error {
 	}
 	if eas.rst {
 		if err := l.framer.fr.WriteRSTStream(eas.streamID, http2.ErrCodeNo); err != nil {
-			return err
+			return toIOError(err)
 		}
 	}
 	return nil
@@ -803,7 +809,6 @@ func (l *loopyWriter) incomingGoAwayHandler(*incomingGoAway) error {
 		l.draining = true
 		if len(l.estdStreams) == 0 {
 			// Flush and close the connection; we are done with it.
-			l.closeConnection()
 			return errors.New("received GOAWAY with no active streams")
 		}
 	}
@@ -820,11 +825,6 @@ func (l *loopyWriter) goAwayHandler(g *goAway) error {
 		l.draining = draining
 	}
 	return nil
-}
-
-func (l *loopyWriter) closeConnection() {
-	l.framer.writer.Flush()
-	l.conn.Close()
 }
 
 func (l *loopyWriter) handle(i interface{}) error {
@@ -856,7 +856,8 @@ func (l *loopyWriter) handle(i interface{}) error {
 	case *outFlowControlSizeRequest:
 		l.outFlowControlSizeRequestHandler(i)
 	case closeConnection:
-		l.closeConnection()
+		// Just return a non-I/O error and run() will flush and close the
+		// conneciton.
 		return ErrConnClosing
 	default:
 		return fmt.Errorf("transport: unknown control message type %T", i)
@@ -906,7 +907,7 @@ func (l *loopyWriter) processData() (bool, error) {
 	if len(dataItem.h) == 0 && len(dataItem.d) == 0 { // Empty data frame
 		// Client sends out empty data frame with endStream = true
 		if err := l.framer.fr.WriteData(dataItem.streamID, dataItem.endStream, nil); err != nil {
-			return false, err
+			return false, toIOError(err)
 		}
 		str.itl.dequeue() // remove the empty data item from stream
 		if str.itl.isEmpty() {
@@ -916,7 +917,7 @@ func (l *loopyWriter) processData() (bool, error) {
 				return false, err
 			}
 			if err := l.cleanupStreamHandler(trailer.cleanup); err != nil {
-				return false, nil
+				return false, err
 			}
 		} else {
 			l.activeStreams.enqueue(str)
@@ -968,7 +969,7 @@ func (l *loopyWriter) processData() (bool, error) {
 		dataItem.onEachWrite()
 	}
 	if err := l.framer.fr.WriteData(dataItem.streamID, endStream, buf[:size]); err != nil {
-		return false, err
+		return false, toIOError(err)
 	}
 	str.bytesOutStanding += size
 	l.sendQuota -= uint32(size)
@@ -1000,4 +1001,20 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+type ioError struct {
+	error
+}
+
+func isIOError(err error) bool {
+	_, ok := err.(ioError)
+	return ok
+}
+
+func toIOError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return ioError{error: err}
 }
