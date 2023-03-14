@@ -146,7 +146,7 @@ type altsHandshaker struct {
 	stream altsgrpc.HandshakerService_DoHandshakeClient
 	// the connection to the peer.
 	conn net.Conn
-	// the connection to the ALTS handshaker service.
+	// a virtual connection to the ALTS handshaker service.
 	clientConn *grpc.ClientConn
 	// client handshake options.
 	clientOpts *ClientHandshakerOptions
@@ -156,8 +156,8 @@ type altsHandshaker struct {
 	side core.Side
 }
 
-// NewClientHandshaker creates an ALTS handshaker for GCP which contains an RPC
-// stub created using the passed conn and used to talk to the ALTS Handshaker
+// NewClientHandshaker creates a core.Handshaker that performs a client-side
+// ALTS handshake by acting as a proxy between the peer and the ALTS handshaker
 // service in the metadata server.
 func NewClientHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn, opts *ClientHandshakerOptions) (core.Handshaker, error) {
 	return &altsHandshaker{
@@ -169,8 +169,8 @@ func NewClientHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn,
 	}, nil
 }
 
-// NewServerHandshaker creates an ALTS handshaker for GCP which contains an RPC
-// stub created using the passed conn and used to talk to the ALTS Handshaker
+// NewServerHandshaker creates a core.Handshaker that performs a server-side
+// ALTS handshake by acting as a proxy between the peer and the ALTS handshaker
 // service in the metadata server.
 func NewServerHandshaker(ctx context.Context, conn *grpc.ClientConn, c net.Conn, opts *ServerHandshakerOptions) (core.Handshaker, error) {
 	return &altsHandshaker{
@@ -199,7 +199,7 @@ func (h *altsHandshaker) ClientHandshake(ctx context.Context) (net.Conn, credent
 	if h.stream == nil {
 		stream, err := altsgrpc.NewHandshakerServiceClient(h.clientConn).DoHandshake(ctx)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("failed to establish stream to ALTS handshaker service: %v", err)
 		}
 		h.stream = stream
 	}
@@ -252,7 +252,7 @@ func (h *altsHandshaker) ServerHandshake(ctx context.Context) (net.Conn, credent
 	if h.stream == nil {
 		stream, err := altsgrpc.NewHandshakerServiceClient(h.clientConn).DoHandshake(ctx)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("failed to establish stream to ALTS handshaker service: %v", err)
 		}
 		h.stream = stream
 	}
