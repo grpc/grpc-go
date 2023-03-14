@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"net"
 	"runtime"
 	"strconv"
 	"sync"
@@ -486,12 +487,13 @@ type loopyWriter struct {
 	hEnc          *hpack.Encoder // HPACK encoder.
 	bdpEst        *bdpEstimator
 	draining      bool
+	conn          net.Conn
 
 	// Side-specific handlers
 	ssGoAwayHandler func(*goAway) (bool, error)
 }
 
-func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimator) *loopyWriter {
+func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimator, conn net.Conn) *loopyWriter {
 	var buf bytes.Buffer
 	l := &loopyWriter{
 		side:          s,
@@ -504,6 +506,7 @@ func newLoopyWriter(s side, fr *framer, cbuf *controlBuffer, bdpEst *bdpEstimato
 		hBuf:          &buf,
 		hEnc:          hpack.NewEncoder(&buf),
 		bdpEst:        bdpEst,
+		conn:          conn,
 	}
 	return l
 }
@@ -521,15 +524,27 @@ const minBatchSize = 1000
 // 2. Stream level flow control quota available.
 //
 // In each iteration of run loop, other than processing the incoming control
-// frame, loopy calls processData, which processes one node from the activeStreams linked-list.
-// This results in writing of HTTP2 frames into an underlying write buffer.
-// When there's no more control frames to read from controlBuf, loopy flushes the write buffer.
-// As an optimization, to increase the batch size for each flush, loopy yields the processor, once
-// if the batch size is too low to give stream goroutines a chance to fill it up.
+// frame, loopy calls processData, which processes one node from the
+// activeStreams linked-list.  This results in writing of HTTP2 frames into an
+// underlying write buffer.  When there's no more control frames to read from
+// controlBuf, loopy flushes the write buffer.  As an optimization, to increase
+// the batch size for each flush, loopy yields the processor, once if the batch
+// size is too low to give stream goroutines a chance to fill it up.
+//
+// Upon exiting, if the error causing the exit is not an I/O error, run()
+// flushes and closes the underlying connection.  Otherwise, the connection is
+// left open to allow the I/O error to be encountered by the reader instead.
 func (l *loopyWriter) run() (err error) {
-	// Always flush the writer before exiting in case there are pending frames
-	// to be sent.
-	defer l.framer.writer.Flush()
+	defer func() {
+		if logger.V(logLevel) {
+			logger.Infof("transport: loopyWriter exiting with error: %v", err)
+		}
+		if !isIOError(err) {
+			l.framer.writer.Flush()
+			l.conn.Close()
+		}
+		l.cbuf.finish()
+	}()
 	for {
 		it, err := l.cbuf.get(true)
 		if err != nil {
@@ -757,6 +772,7 @@ func (l *loopyWriter) cleanupStreamHandler(c *cleanupStream) error {
 		}
 	}
 	if l.draining && len(l.estdStreams) == 0 {
+		// Flush and close the connection; we are done with it.
 		return errors.New("finished processing active streams while in draining mode")
 	}
 	return nil
@@ -792,6 +808,7 @@ func (l *loopyWriter) incomingGoAwayHandler(*incomingGoAway) error {
 	if l.side == clientSide {
 		l.draining = true
 		if len(l.estdStreams) == 0 {
+			// Flush and close the connection; we are done with it.
 			return errors.New("received GOAWAY with no active streams")
 		}
 	}
@@ -808,13 +825,6 @@ func (l *loopyWriter) goAwayHandler(g *goAway) error {
 		l.draining = draining
 	}
 	return nil
-}
-
-func (l *loopyWriter) closeConnectionHandler() error {
-	// Exit loopyWriter entirely by returning an error here.  This will lead to
-	// the transport closing the connection, and, ultimately, transport
-	// closure.
-	return ErrConnClosing
 }
 
 func (l *loopyWriter) handle(i interface{}) error {
@@ -846,7 +856,9 @@ func (l *loopyWriter) handle(i interface{}) error {
 	case *outFlowControlSizeRequest:
 		l.outFlowControlSizeRequestHandler(i)
 	case closeConnection:
-		return l.closeConnectionHandler()
+		// Just return a non-I/O error and run() will flush and close the
+		// connection.
+		return ErrConnClosing
 	default:
 		return fmt.Errorf("transport: unknown control message type %T", i)
 	}
@@ -905,7 +917,7 @@ func (l *loopyWriter) processData() (bool, error) {
 				return false, err
 			}
 			if err := l.cleanupStreamHandler(trailer.cleanup); err != nil {
-				return false, nil
+				return false, err
 			}
 		} else {
 			l.activeStreams.enqueue(str)
