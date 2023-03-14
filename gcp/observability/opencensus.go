@@ -39,7 +39,7 @@ var (
 		opencensus.ClientStartedRPCsView,
 		opencensus.ClientCompletedRPCsView,
 		opencensus.ClientRoundtripLatencyView,
-		opencensus.ClientSentCompressedBytesPerRPCView, // need to add verifications for this in test
+		opencensus.ClientSentCompressedBytesPerRPCView,
 		opencensus.ClientReceivedCompressedBytesPerRPCView,
 		opencensus.ClientAPILatencyView,
 		opencensus.ServerStartedRPCsView,

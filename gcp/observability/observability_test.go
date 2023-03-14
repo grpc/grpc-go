@@ -436,8 +436,6 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 		if value := fe.SeenViews["grpc.io/server/server_latency"]; value != TypeOpenCensusViewDistribution {
 			errs = append(errs, fmt.Errorf("grpc.io/server/server_latency: %s != %s", value, TypeOpenCensusViewDistribution))
 		}
-
-		// *** 4 new metrics
 		if value := fe.SeenViews["grpc.io/client/sent_compressed_bytes_per_rpc"]; value != TypeOpenCensusViewDistribution {
 			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/client/sent_compressed_bytes_per_rpc: %s != %s", value, TypeOpenCensusViewDistribution))
 		}
@@ -450,8 +448,6 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 		if value := fe.SeenViews["grpc.io/server/received_compressed_bytes_per_rpc"]; value != TypeOpenCensusViewDistribution {
 			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/server/received_compressed_bytes_per_rpc: %s != %s", value, TypeOpenCensusViewDistribution))
 		}
-		// ***
-
 		if fe.SeenSpans <= 0 {
 			errs = append(errs, fmt.Errorf("unexpected number of seen spans: %v <= 0", fe.SeenSpans))
 		}
