@@ -44,7 +44,7 @@ type Tracker struct {
 	cs       *callbackserializer.CallbackSerializer
 }
 
-// NewTracker retuns a new Tracker instance.
+// NewTracker returns a new Tracker instance.
 func NewTracker(state connectivity.State) *Tracker {
 	ctx := context.Background()
 	return &Tracker{
