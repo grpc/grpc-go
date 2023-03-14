@@ -20,6 +20,7 @@ package status_test
 
 import (
 	"errors"
+	"github.com/golang/protobuf/proto"
 
 	"testing"
 
@@ -27,7 +28,6 @@ import (
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/grpc_testing"
-	protov2 "google.golang.org/protobuf/proto"
 )
 
 type s struct {
@@ -38,7 +38,7 @@ func Test(t *testing.T) {
 	grpctest.RunSubTests(t, s{})
 }
 
-func errWithDetails(t *testing.T, s *status.Status, details ...protov2.Message) error {
+func errWithDetails(t *testing.T, s *status.Status, details ...proto.Message) error {
 	t.Helper()
 	res, err := s.WithDetails(details...)
 	if err != nil {
