@@ -554,8 +554,9 @@ func NumStreamWorkers(numServerWorkers uint32) ServerOption {
 	})
 }
 
-// SharedRecvBufferPool returns a DialOption that specifies shared buffer pool
-// for parsing. Setting this will reduce the memory allocation in the parser.
+// SharedRecvBufferPool returns a ServerOption that configures the server
+// to use the provided shared buffer pool for parsing incoming messages. Depending
+// on the application's workload, this could result in reduced memory allocation.
 //
 // # Experimental
 //

@@ -648,8 +648,9 @@ func WithResolvers(rs ...resolver.Builder) DialOption {
 	})
 }
 
-// WithSharedRecvBufferPool returns a DialOption that specifies shared buffer pool
-// for parsing. Setting this will reduce the memory allocation in the parser.
+// WithSharedRecvBufferPool returns a DialOption that configures the ClientConn
+// to use the provided shared buffer pool for parsing incoming messages. Depending
+// on the application's workload, this could result in reduced memory allocation.
 //
 // # Experimental
 //
