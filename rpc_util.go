@@ -785,7 +785,7 @@ func decompress(compressor encoding.Compressor, d []byte, maxReceiveMessageSize 
 	// Read from LimitReader with limit max+1. So if the underlying
 	// reader is over limit, the result will be bigger than max.
 	limit := maxReceiveMessageSize
-	if maxReceiveMessageSize < math.MaxInt64 {
+	if maxReceiveMessageSize < math.MaxInt {
 		limit = maxReceiveMessageSize + 1
 	}
 	d, err = io.ReadAll(io.LimitReader(dcReader, int64(limit)))
