@@ -21,8 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 
@@ -49,10 +48,8 @@ func (s) TestNew(t *testing.T) {
 		},
 		{
 			name: "missing onRecv handler",
-			opts: transport.Options{ServerCfg: bootstrap.ServerConfig{
-				ServerURI: "server-address",
-				Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			},
+			opts: transport.Options{
+				ServerCfg: *testutils.ServerConfigForAddress(t, "server-address"),
 				NodeProto: &v3corepb.Node{},
 			},
 			wantErrStr: "missing OnRecv callback handler when creating a new transport",
@@ -60,10 +57,7 @@ func (s) TestNew(t *testing.T) {
 		{
 			name: "missing onError handler",
 			opts: transport.Options{
-				ServerCfg: bootstrap.ServerConfig{
-					ServerURI: "server-address",
-					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				},
+				ServerCfg:     *testutils.ServerConfigForAddress(t, "server-address"),
 				NodeProto:     &v3corepb.Node{},
 				OnRecvHandler: func(transport.ResourceUpdate) error { return nil },
 				OnSendHandler: func(*transport.ResourceSendInfo) {},
@@ -74,10 +68,7 @@ func (s) TestNew(t *testing.T) {
 		{
 			name: "missing onSend handler",
 			opts: transport.Options{
-				ServerCfg: bootstrap.ServerConfig{
-					ServerURI: "server-address",
-					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				},
+				ServerCfg:      *testutils.ServerConfigForAddress(t, "server-address"),
 				NodeProto:      &v3corepb.Node{},
 				OnRecvHandler:  func(transport.ResourceUpdate) error { return nil },
 				OnErrorHandler: func(error) {},
@@ -87,10 +78,7 @@ func (s) TestNew(t *testing.T) {
 		{
 			name: "happy case",
 			opts: transport.Options{
-				ServerCfg: bootstrap.ServerConfig{
-					ServerURI: "server-address",
-					Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-				},
+				ServerCfg:      *testutils.ServerConfigForAddress(t, "server-address"),
 				NodeProto:      &v3corepb.Node{},
 				OnRecvHandler:  func(transport.ResourceUpdate) error { return nil },
 				OnErrorHandler: func(error) {},

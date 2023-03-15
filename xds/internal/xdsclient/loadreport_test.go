@@ -24,11 +24,10 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
 	"google.golang.org/grpc/status"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/protobuf/testing/protocmp"
 
@@ -43,17 +42,15 @@ const (
 )
 
 func (s) TestLRSClient(t *testing.T) {
-	fs, sCleanup, err := fakeserver.StartServer(nil)
+	fs1, sCleanup, err := fakeserver.StartServer(nil)
 	if err != nil {
 		t.Fatalf("failed to start fake xDS server: %v", err)
 	}
 	defer sCleanup()
 
+	serverCfg1 := xdstestutils.ServerConfigForAddress(t, fs1.Address)
 	xdsC, close, err := NewWithConfigForTesting(&bootstrap.Config{
-		XDSServer: &bootstrap.ServerConfig{
-			ServerURI: fs.Address,
-			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		},
+		XDSServer: serverCfg1,
 		NodeProto: &v3corepb.Node{},
 	}, defaultClientWatchExpiryTimeout, time.Duration(0))
 	if err != nil {
@@ -62,24 +59,18 @@ func (s) TestLRSClient(t *testing.T) {
 	defer close()
 
 	// Report to the same address should not create new ClientConn.
-	store1, lrsCancel1 := xdsC.ReportLoad(
-		&bootstrap.ServerConfig{
-			ServerURI: fs.Address,
-			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			CredsType: "insecure",
-		},
-	)
+	store1, lrsCancel1 := xdsC.ReportLoad(serverCfg1)
 	defer lrsCancel1()
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
-	if u, err := fs.NewConnChan.Receive(ctx); err != nil {
+	if u, err := fs1.NewConnChan.Receive(ctx); err != nil {
 		t.Errorf("unexpected timeout: %v, %v, want NewConn", u, err)
 	}
 
 	sCtx, sCancel := context.WithTimeout(context.Background(), defaultTestShortTimeout)
 	defer sCancel()
-	if u, err := fs.NewConnChan.Receive(sCtx); err != context.DeadlineExceeded {
+	if u, err := fs1.NewConnChan.Receive(sCtx); err != context.DeadlineExceeded {
 		t.Errorf("unexpected NewConn: %v, %v, want channel recv timeout", u, err)
 	}
 
@@ -90,13 +81,8 @@ func (s) TestLRSClient(t *testing.T) {
 	defer sCleanup2()
 
 	// Report to a different address should create new ClientConn.
-	store2, lrsCancel2 := xdsC.ReportLoad(
-		&bootstrap.ServerConfig{
-			ServerURI: fs2.Address,
-			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			CredsType: "insecure",
-		},
-	)
+	serverCgf2 := xdstestutils.ServerConfigForAddress(t, fs2.Address)
+	store2, lrsCancel2 := xdsC.ReportLoad(serverCgf2)
 	defer lrsCancel2()
 	if u, err := fs2.NewConnChan.Receive(ctx); err != nil {
 		t.Errorf("unexpected timeout: %v, %v, want NewConn", u, err)

@@ -177,7 +177,7 @@ func New(opts Options) (*Transport, error) {
 	switch {
 	case opts.ServerCfg.ServerURI == "":
 		return nil, errors.New("missing server URI when creating a new transport")
-	case opts.ServerCfg.Creds == nil:
+	case opts.ServerCfg.CredsDialOption() == nil:
 		return nil, errors.New("missing credentials when creating a new transport")
 	case opts.OnRecvHandler == nil:
 		return nil, errors.New("missing OnRecv callback handler when creating a new transport")
@@ -189,7 +189,7 @@ func New(opts Options) (*Transport, error) {
 
 	// Dial the xDS management with the passed in credentials.
 	dopts := []grpc.DialOption{
-		opts.ServerCfg.Creds,
+		opts.ServerCfg.CredsDialOption(),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			// We decided to use these sane defaults in all languages, and
 			// kicked the can down the road as far making these configurable.
