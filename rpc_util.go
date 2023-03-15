@@ -579,7 +579,7 @@ type parser struct {
 	header [5]byte
 
 	// sharedRecvBufferPool is the pool of shared receive buffers.
-	sharedRecvBufferPool sharedRecvBufferPool
+	sharedRecvBufferPool SharedBufferPool
 }
 
 // recvMsg reads a complete gRPC message from the stream.
@@ -966,8 +966,3 @@ const (
 )
 
 const grpcUA = "grpc-go/" + Version
-
-type sharedRecvBufferPool interface {
-	Get(length int) []byte
-	Put(*[]byte)
-}

@@ -175,7 +175,7 @@ type serverOptions struct {
 	maxHeaderListSize     *uint32
 	headerTableSize       *uint32
 	numServerWorkers      uint32
-	sharedRecvBufferPool  sharedRecvBufferPool
+	sharedRecvBufferPool  SharedBufferPool
 }
 
 var defaultServerOptions = serverOptions{
@@ -561,7 +561,7 @@ func NumStreamWorkers(numServerWorkers uint32) ServerOption {
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
-func SharedRecvBufferPool(bufferPool sharedRecvBufferPool) ServerOption {
+func SharedRecvBufferPool(bufferPool SharedBufferPool) ServerOption {
 	return newFuncServerOption(func(o *serverOptions) {
 		o.sharedRecvBufferPool = bufferPool
 	})
