@@ -558,6 +558,9 @@ func NumStreamWorkers(numServerWorkers uint32) ServerOption {
 // to use the provided shared buffer pool for parsing incoming messages. Depending
 // on the application's workload, this could result in reduced memory allocation.
 //
+// If you are unsure about how to implement a memory pool but want to utilize one,
+// begin with grpc.NewSimpleSharedBufferPool.
+//
 // # Experimental
 //
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a

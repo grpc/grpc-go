@@ -331,8 +331,8 @@ func makeClient(bf stats.Features) (testgrpc.BenchmarkServiceClient, func()) {
 	case sharedRecvBufferPoolNil:
 		// Do nothing.
 	case sharedRecvBufferPoolSimple:
-		opts = append(opts, grpc.WithSharedRecvBufferPool(newSimpleSharedRecvBufferPool()))
-		sopts = append(sopts, grpc.SharedRecvBufferPool(newSimpleSharedRecvBufferPool()))
+		opts = append(opts, grpc.WithSharedRecvBufferPool(grpc.NewSimpleSharedBufferPool()))
+		sopts = append(sopts, grpc.SharedRecvBufferPool(grpc.NewSimpleSharedBufferPool()))
 	default:
 		logger.Fatalf("Unknown shared recv buffer pool type: %v", bf.SharedRecvBufferPool)
 	}
@@ -915,33 +915,3 @@ type nopDecompressor struct{}
 
 func (nopDecompressor) Do(r io.Reader) ([]byte, error) { return io.ReadAll(r) }
 func (nopDecompressor) Type() string                   { return compModeNop }
-
-// simpleSharedRecvBufferPool is a simple implementation of sharedRecvBufferPool.
-type simpleSharedRecvBufferPool struct {
-	sync.Pool
-}
-
-func newSimpleSharedRecvBufferPool() *simpleSharedRecvBufferPool {
-	return &simpleSharedRecvBufferPool{
-		Pool: sync.Pool{
-			New: func() interface{} {
-				bs := make([]byte, 0)
-				return &bs
-			},
-		},
-	}
-}
-
-func (p *simpleSharedRecvBufferPool) Get(size int) []byte {
-	bs := p.Pool.Get().(*[]byte)
-	if cap(*bs) < size {
-		*bs = make([]byte, size)
-		return *bs
-	}
-
-	return (*bs)[:size]
-}
-
-func (p *simpleSharedRecvBufferPool) Put(bs *[]byte) {
-	p.Pool.Put(bs)
-}
