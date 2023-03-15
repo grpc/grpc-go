@@ -33,7 +33,9 @@ type SharedBufferPool interface {
 	Put(*[]byte)
 }
 
-// NewSimpleSharedBufferPool creates a new SimpleSharedBufferPool.
+// NewSimpleSharedBufferPool creates a new SimpleSharedBufferPool with buckets
+// of different sizes to optimize memory usage. This prevents the pool from
+// wasting large amounts of memory, even when handling messages of varying sizes.
 //
 // # Experimental
 //
@@ -41,21 +43,72 @@ type SharedBufferPool interface {
 // later release.
 func NewSimpleSharedBufferPool() SharedBufferPool {
 	return &simpleSharedBufferPool{
-		Pool: sync.Pool{
-			New: func() interface{} {
-				bs := make([]byte, 0)
-				return &bs
-			},
-		},
+		pool0:   makeBytesPool(),
+		pool1:   makeBytesPool(),
+		pool2:   makeBytesPool(),
+		pool3:   makeBytesPool(),
+		pool4:   makeBytesPool(),
+		poolMax: makeBytesPool(),
 	}
 }
 
 // simpleSharedBufferPool is a simple implementation of SharedBufferPool.
 type simpleSharedBufferPool struct {
-	sync.Pool
+	pool0   bufferPool
+	pool1   bufferPool
+	pool2   bufferPool
+	pool3   bufferPool
+	pool4   bufferPool
+	poolMax bufferPool
 }
 
 func (p *simpleSharedBufferPool) Get(size int) []byte {
+	switch {
+	case size <= level0PoolMaxSize:
+		return p.pool0.Get(size)
+	case size <= level1PoolMaxSize:
+		return p.pool1.Get(size)
+	case size <= level2PoolMaxSize:
+		return p.pool2.Get(size)
+	case size <= level3PoolMaxSize:
+		return p.pool3.Get(size)
+	case size <= level4PoolMaxSize:
+		return p.pool4.Get(size)
+	default:
+		return p.poolMax.Get(size)
+	}
+}
+
+func (p *simpleSharedBufferPool) Put(bs *[]byte) {
+	switch size := cap(*bs); {
+	case size <= level0PoolMaxSize:
+		p.pool0.Put(bs)
+	case size <= level1PoolMaxSize:
+		p.pool1.Put(bs)
+	case size <= level2PoolMaxSize:
+		p.pool2.Put(bs)
+	case size <= level3PoolMaxSize:
+		p.pool3.Put(bs)
+	case size <= level4PoolMaxSize:
+		p.pool4.Put(bs)
+	default:
+		p.poolMax.Put(bs)
+	}
+}
+
+const (
+	level0PoolMaxSize = 16
+	level1PoolMaxSize = level0PoolMaxSize * 16
+	level2PoolMaxSize = level1PoolMaxSize * 16 //   4 KB
+	level3PoolMaxSize = level2PoolMaxSize * 16 //  64 KB
+	level4PoolMaxSize = level3PoolMaxSize * 16 //   1 MB
+)
+
+type bufferPool struct {
+	sync.Pool
+}
+
+func (p *bufferPool) Get(size int) []byte {
 	bs := p.Pool.Get().(*[]byte)
 	if cap(*bs) < size {
 		*bs = make([]byte, size)
@@ -65,6 +118,16 @@ func (p *simpleSharedBufferPool) Get(size int) []byte {
 	return (*bs)[:size]
 }
 
-func (p *simpleSharedBufferPool) Put(bs *[]byte) {
+func (p *bufferPool) Put(bs *[]byte) {
 	p.Pool.Put(bs)
+}
+
+func makeBytesPool() bufferPool {
+	return bufferPool{
+		sync.Pool{
+			New: func() interface{} {
+				return new([]byte)
+			},
+		},
+	}
 }
