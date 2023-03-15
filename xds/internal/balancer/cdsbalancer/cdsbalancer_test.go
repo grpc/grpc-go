@@ -53,7 +53,9 @@ const (
 var (
 	defaultTestAuthorityServerConfig = &bootstrap.ServerConfig{
 		ServerURI: "self_server",
-		CredsType: "self_creds",
+		Creds: bootstrap.ChannelCreds{
+			Type: "insecure",
+		},
 	}
 	noopODLBCfg = outlierdetection.LBConfig{
 		Interval: 1<<63 - 1,

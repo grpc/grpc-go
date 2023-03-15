@@ -24,7 +24,8 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/orca/internal"
+	"google.golang.org/grpc/internal"
+	ointernal "google.golang.org/grpc/orca/internal"
 	"google.golang.org/grpc/status"
 
 	v3orcapb "github.com/cncf/xds/go/xds/data/orca/v3"
@@ -33,9 +34,10 @@ import (
 )
 
 func init() {
-	internal.AllowAnyMinReportingInterval = func(so *ServiceOptions) {
+	ointernal.AllowAnyMinReportingInterval = func(so *ServiceOptions) {
 		so.allowAnyMinReportingInterval = true
 	}
+	internal.ORCAAllowAnyMinReportingInterval = ointernal.AllowAnyMinReportingInterval
 }
 
 // minReportingInterval is the absolute minimum value supported for

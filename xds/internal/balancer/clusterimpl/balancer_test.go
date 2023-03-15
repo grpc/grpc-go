@@ -59,7 +59,9 @@ var (
 	}
 	testLRSServerConfig = &bootstrap.ServerConfig{
 		ServerURI: "trafficdirector.googleapis.com:443",
-		CredsType: "google_default",
+		Creds: bootstrap.ChannelCreds{
+			Type: "google_default",
+		},
 	}
 
 	cmpOpts = cmp.Options{
@@ -720,7 +722,9 @@ func (s) TestUpdateLRSServer(t *testing.T) {
 
 	testLRSServerConfig2 := &bootstrap.ServerConfig{
 		ServerURI: "trafficdirector-another.googleapis.com:443",
-		CredsType: "google_default",
+		Creds: bootstrap.ChannelCreds{
+			Type: "google_default",
+		},
 	}
 	// Update LRS server to a different name.
 	if err := b.UpdateClientConnState(balancer.ClientConnState{

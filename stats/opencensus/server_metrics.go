@@ -63,7 +63,7 @@ var (
 	// ServerSentBytesPerRPCView is the distribution of received bytes per RPC,
 	// keyed on method.
 	ServerSentBytesPerRPCView = &view.View{
-		Name:        "grpc.io/server/sent_compressed_bytes_per_rpc",
+		Name:        "grpc.io/server/sent_bytes_per_rpc",
 		Description: "Distribution of sent bytes per RPC, by method.",
 		Measure:     serverSentBytesPerRPC,
 		TagKeys:     []tag.Key{keyServerMethod},
@@ -72,7 +72,7 @@ var (
 	// ServerSentCompressedBytesPerRPCView is the distribution of received
 	// compressed bytes per RPC, keyed on method.
 	ServerSentCompressedBytesPerRPCView = &view.View{
-		Name:        "grpc.io/server/sent_bytes_per_rpc",
+		Name:        "grpc.io/server/sent_compressed_bytes_per_rpc",
 		Description: "Distribution of sent compressed bytes per RPC, by method.",
 		Measure:     serverSentCompressedBytesPerRPC,
 		TagKeys:     []tag.Key{keyServerMethod},

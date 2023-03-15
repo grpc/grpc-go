@@ -444,15 +444,8 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		return nil, err
 	}
 	go func() {
-		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst)
-		err := t.loopy.run()
-		if logger.V(logLevel) {
-			logger.Infof("transport: loopyWriter exited. Closing connection. Err: %v", err)
-		}
-		// Do not close the transport.  Let reader goroutine handle it since
-		// there might be data in the buffers.
-		t.conn.Close()
-		t.controlBuf.finish()
+		t.loopy = newLoopyWriter(clientSide, t.framer, t.controlBuf, t.bdpEst, t.conn)
+		t.loopy.run()
 		close(t.writerDone)
 	}()
 	return t, nil

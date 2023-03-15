@@ -21,6 +21,7 @@ package observability
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"google.golang.org/api/option"
 	"google.golang.org/grpc"
@@ -72,7 +73,7 @@ func newCloudLoggingExporter(ctx context.Context, config *config) (loggingExport
 	return &cloudLoggingExporter{
 		projectID: config.ProjectID,
 		client:    c,
-		logger:    c.Logger("microservices.googleapis.com/observability/grpc", gcplogging.CommonLabels(config.Labels)),
+		logger:    c.Logger("microservices.googleapis.com/observability/grpc", gcplogging.CommonLabels(config.Labels), gcplogging.BufferedByteLimit(1024*1024*50), gcplogging.DelayThreshold(time.Second*10)),
 	}, nil
 }
 
