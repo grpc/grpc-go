@@ -21,12 +21,22 @@ package grpc
 import "sync"
 
 // SharedBufferPool is a pool of buffers that can be shared.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 type SharedBufferPool interface {
 	Get(length int) []byte
 	Put(*[]byte)
 }
 
 // NewSimpleSharedBufferPool creates a new SimpleSharedBufferPool.
+//
+// # Experimental
+//
+// Notice: This API is EXPERIMENTAL and may be changed or removed in a
+// later release.
 func NewSimpleSharedBufferPool() SharedBufferPool {
 	return &simpleSharedBufferPool{
 		Pool: sync.Pool{
