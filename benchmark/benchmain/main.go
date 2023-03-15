@@ -109,7 +109,7 @@ var (
 	clientWriteBufferSize = flags.IntSlice("clientWriteBufferSize", []int{-1}, "Configures the client write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
 	serverReadBufferSize  = flags.IntSlice("serverReadBufferSize", []int{-1}, "Configures the server read buffer size in bytes. If negative, use the default - may be a a comma-separated list")
 	serverWriteBufferSize = flags.IntSlice("serverWriteBufferSize", []int{-1}, "Configures the server write buffer size in bytes. If negative, use the default - may be a a comma-separated list")
-	sharedRecvBufferPool  = flags.StringWithAllowedValues("sharedRecvBufferPool", sharedRecvBufferPoolAll, "Configures the shared receive buffer pool. One of: nil, simple", allSharedRecvBufferPools)
+	sharedRecvBufferPool  = flags.StringWithAllowedValues("sharedRecvBufferPool", sharedRecvBufferPoolNil, "Configures the shared receive buffer pool. One of: nil, simple, all", allSharedRecvBufferPools)
 
 	logger = grpclog.Component("benchmark")
 )
