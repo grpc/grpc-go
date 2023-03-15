@@ -160,7 +160,7 @@ func (s) TestConfigUpdateWithSameLoadReportingServerConfig(t *testing.T) {
 	// Also ensure that a new LRS stream is not created.
 	sCtx, sCancel = context.WithTimeout(ctx, defaultTestShortTimeout)
 	defer sCancel()
-	if _, err := mgmtServer.LRSServer.LRSStreamOpenChan.Receive(ctx); err == nil {
+	if _, err := mgmtServer.LRSServer.LRSStreamOpenChan.Receive(sCtx); err == nil {
 		t.Fatal("New LRS stream created when expected not to")
 	}
 }

@@ -156,10 +156,7 @@ func (sc *ServerConfig) CredsDialOption() grpc.DialOption {
 // content. It doesn't cover NodeProto because NodeProto isn't used by
 // federation.
 func (sc *ServerConfig) String() string {
-	features := ""
-	if len(sc.ServerFeatures) != 0 {
-		features = strings.Join(sc.ServerFeatures, "-")
-	}
+	features := strings.Join(sc.ServerFeatures, "-")
 	return strings.Join([]string{sc.ServerURI, sc.Creds.String(), features}, "-")
 }
 
