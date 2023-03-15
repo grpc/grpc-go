@@ -33,6 +33,7 @@ import (
 
 	"google.golang.org/grpc"
 	binlogpb "google.golang.org/grpc/binarylog/grpc_binarylog_v1"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal"
 	"google.golang.org/grpc/internal/binarylog"
 	iblog "google.golang.org/grpc/internal/binarylog"
@@ -43,6 +44,8 @@ import (
 var lExporter loggingExporter
 
 var newLoggingExporter = newCloudLoggingExporter
+
+var canonicalString = internal.CanonicalString.(func(codes.Code) string)
 
 // translateMetadata translates the metadata from Binary Logging format to
 // its GrpcLogEntry equivalent.
@@ -153,7 +156,7 @@ type payload struct {
 	// Timeout is the RPC timeout value.
 	Timeout time.Duration `json:"timeout,omitempty"`
 	// StatusCode is the gRPC status code.
-	StatusCode uint32 `json:"statusCode,omitempty"`
+	StatusCode string `json:"statusCode,omitempty"`
 	// StatusMessage is the gRPC status message.
 	StatusMessage string `json:"statusMessage,omitempty"`
 	// StatusDetails is the value of the grpc-status-details-bin metadata key,
@@ -170,9 +173,9 @@ type addrType int
 
 const (
 	typeUnknown addrType = iota // `json:"TYPE_UNKNOWN"`
-	typeIPv4                    // `json:"TYPE_IPV4"`
-	typeIPv6                    // `json:"TYPE_IPV6"`
-	typeUnix                    // `json:"TYPE_UNIX"`
+	ipv4                        // `json:"IPV4"`
+	ipv6                        // `json:"IPV6"`
+	unix                        // `json:"UNIX"`
 )
 
 func (at addrType) MarshalJSON() ([]byte, error) {
@@ -180,12 +183,12 @@ func (at addrType) MarshalJSON() ([]byte, error) {
 	switch at {
 	case typeUnknown:
 		buffer.WriteString("TYPE_UNKNOWN")
-	case typeIPv4:
-		buffer.WriteString("TYPE_IPV4")
-	case typeIPv6:
-		buffer.WriteString("TYPE_IPV6")
-	case typeUnix:
-		buffer.WriteString("TYPE_UNIX")
+	case ipv4:
+		buffer.WriteString("IPV4")
+	case ipv6:
+		buffer.WriteString("IPV6")
+	case unix:
+		buffer.WriteString("UNIX")
 	}
 	buffer.WriteString(`"`)
 	return buffer.Bytes(), nil
@@ -303,7 +306,7 @@ func (bml *binaryMethodLogger) buildGCPLoggingEntry(ctx context.Context, c iblog
 	case binlogpb.GrpcLogEntry_EVENT_TYPE_SERVER_TRAILER:
 		grpcLogEntry.Type = eventTypeServerTrailer
 		grpcLogEntry.Payload.Metadata = translateMetadata(binLogEntry.GetTrailer().Metadata)
-		grpcLogEntry.Payload.StatusCode = binLogEntry.GetTrailer().GetStatusCode()
+		grpcLogEntry.Payload.StatusCode = canonicalString(codes.Code(binLogEntry.GetTrailer().GetStatusCode()))
 		grpcLogEntry.Payload.StatusMessage = binLogEntry.GetTrailer().GetStatusMessage()
 		grpcLogEntry.Payload.StatusDetails = binLogEntry.GetTrailer().GetStatusDetails()
 		grpcLogEntry.PayloadTruncated = binLogEntry.GetPayloadTruncated()

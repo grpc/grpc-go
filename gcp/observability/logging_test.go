@@ -231,7 +231,8 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 			SequenceID:  5,
 			Authority:   ss.Address,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -319,7 +320,8 @@ func (s) TestClientRPCEventsLogAll(t *testing.T) {
 			Authority:   ss.Address,
 			SequenceID:  6,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -438,7 +440,8 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 			SequenceID:  5,
 			Authority:   ss.Address,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -525,7 +528,8 @@ func (s) TestServerRPCEventsLogAll(t *testing.T) {
 			Authority:   ss.Address,
 			SequenceID:  6,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -745,7 +749,8 @@ func (s) TestClientRPCEventsTruncateHeaderAndMetadata(t *testing.T) {
 			SequenceID:  5,
 			Authority:   ss.Address,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -892,7 +897,8 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 			SequenceID:  5,
 			Authority:   ss.Address,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -959,7 +965,8 @@ func (s) TestPrecedenceOrderingInConfiguration(t *testing.T) {
 			Authority:   ss.Address,
 			SequenceID:  3,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
@@ -1080,14 +1087,14 @@ func (s) TestMarshalJSON(t *testing.T) {
 		Payload: payload{
 			Metadata:      map[string]string{"header1": "value1"},
 			Timeout:       20,
-			StatusCode:    3,
+			StatusCode:    "UNKNOWN",
 			StatusMessage: "ok",
 			StatusDetails: []byte("ok"),
 			MessageLength: 3,
 			Message:       []byte("wow"),
 		},
 		Peer: address{
-			Type:    typeIPv4,
+			Type:    ipv4,
 			Address: "localhost",
 			IPPort:  16000,
 		},
@@ -1214,7 +1221,8 @@ func (s) TestMetadataTruncationAccountsKey(t *testing.T) {
 			SequenceID:  5,
 			Authority:   ss.Address,
 			Payload: payload{
-				Metadata: map[string]string{},
+				Metadata:   map[string]string{},
+				StatusCode: "OK",
 			},
 		},
 	}
