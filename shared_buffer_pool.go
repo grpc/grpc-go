@@ -20,7 +20,9 @@ package grpc
 
 import "sync"
 
-// SharedBufferPool is a pool of buffers that can be shared.
+// SharedBufferPool is a pool of buffers that can be shared, resulting in
+// decreased memory allocation. Currently, in gRPC-go, it is only utilized
+// for parsing incoming messages.
 //
 // # Experimental
 //
