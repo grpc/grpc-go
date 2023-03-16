@@ -39,13 +39,13 @@ var (
 		opencensus.ClientStartedRPCsView,
 		opencensus.ClientCompletedRPCsView,
 		opencensus.ClientRoundtripLatencyView,
-		opencensus.ClientSentCompressedBytesPerRPCView,
-		opencensus.ClientReceivedCompressedBytesPerRPCView,
+		opencensus.ClientSentCompressedMessageBytesPerRPCView,
+		opencensus.ClientReceivedCompressedMessageBytesPerRPCView,
 		opencensus.ClientAPILatencyView,
 		opencensus.ServerStartedRPCsView,
 		opencensus.ServerCompletedRPCsView,
-		opencensus.ServerSentCompressedBytesPerRPCView,
-		opencensus.ServerReceivedCompressedBytesPerRPCView,
+		opencensus.ServerSentCompressedMessageBytesPerRPCView,
+		opencensus.ServerReceivedCompressedMessageBytesPerRPCView,
 		opencensus.ServerLatencyView,
 	}
 )

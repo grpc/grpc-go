@@ -236,13 +236,13 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		ClientCompletedRPCsView,
 		ServerCompletedRPCsView,
 		ClientSentBytesPerRPCView,
-		ClientSentCompressedBytesPerRPCView,
+		ClientSentCompressedMessageBytesPerRPCView,
 		ServerSentBytesPerRPCView,
-		ServerSentCompressedBytesPerRPCView,
+		ServerSentCompressedMessageBytesPerRPCView,
 		ClientReceivedBytesPerRPCView,
-		ClientReceivedCompressedBytesPerRPCView,
+		ClientReceivedCompressedMessageBytesPerRPCView,
 		ServerReceivedBytesPerRPCView,
-		ServerReceivedCompressedBytesPerRPCView,
+		ServerReceivedCompressedMessageBytesPerRPCView,
 		ClientSentMessagesPerRPCView,
 		ServerSentMessagesPerRPCView,
 		ClientReceivedMessagesPerRPCView,
@@ -505,7 +505,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 		{
-			metric: ClientSentCompressedBytesPerRPCView,
+			metric: ClientSentCompressedMessageBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
@@ -579,7 +579,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 		{
-			metric: ServerSentCompressedBytesPerRPCView,
+			metric: ServerSentCompressedMessageBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
@@ -653,7 +653,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 		{
-			metric: ClientReceivedCompressedBytesPerRPCView,
+			metric: ClientReceivedCompressedMessageBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
@@ -727,7 +727,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 		{
-			metric: ServerReceivedCompressedBytesPerRPCView,
+			metric: ServerReceivedCompressedMessageBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
