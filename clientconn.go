@@ -1069,6 +1069,10 @@ func (cc *ClientConn) Close() error {
 		rWrapper.close()
 	}
 
+	if cc.csMgr.connectivityStateTracker != nil {
+		cc.csMgr.connectivityStateTracker.Stop()
+	}
+
 	for ac := range conns {
 		ac.tearDown(ErrClientConnClosing)
 	}

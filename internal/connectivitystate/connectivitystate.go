@@ -28,34 +28,45 @@ import (
 	"google.golang.org/grpc/internal/grpcsync"
 )
 
-// Watcher defines the functions which is executed as soon as a connectivity state changes
-// of Tracker is reported.
+// Watcher wraps the functionality to be implemented by components
+// interested in watching connectivity state changes.
 type Watcher interface {
-	// OnStateChange is invoked when connectivity state changes on ClientConn is reported.
+	// OnStateChange is invoked to report connectivity state changes on the entity being watched.
 	OnStateChange(state connectivity.State)
 }
 
-// Tracker manages watchers and their status. It holds a previous connecitivity state of
-// ClientConns and SubConns.
+// Tracker provides pubsub-like functionality for connectivity state changes.
+//
+// The entity whose connectivity state is being tracked publishes updates by
+// calling the SetState() method.
+//
+// Components interested in connectivity state updates of the tracked entity
+// subscribe to updates by calling the AddWatcher() method.
 type Tracker struct {
+	cs     *grpcsync.CallbackSerializer
+	cancel context.CancelFunc
+
+	// Access to the below fields are guarded by this mutex.
 	mu       sync.Mutex
 	state    connectivity.State
 	watchers map[Watcher]bool
-	cs       *grpcsync.CallbackSerializer
 }
 
-// NewTracker returns a new Tracker instance.
+// NewTracker returns a new Tracker instance initialized with the provided connectivity state.
 func NewTracker(state connectivity.State) *Tracker {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Tracker{
+		cs:       grpcsync.NewCallbackSerializer(ctx),
+		cancel:   cancel,
 		state:    state,
 		watchers: map[Watcher]bool{},
-		cs:       grpcsync.NewCallbackSerializer(ctx),
 	}
 }
 
-// AddWatcher adds a provided watcher to the set of watchers in Tracker.
-// Schedules a callback on the provided watcher with current state.
+// AddWatcher adds the provided watcher to the set of watchers in Tracker.
+// The OnStateChange() callback will be invoked asynchronously with the current
+// state of the tracked entity to begin with, and subsequently for every state change.
+//
 // Returns a function to remove the provided watcher from the set of watchers. The caller
 // of this method is responsible for invoking this function when it no longer needs to
 // monitor the connectivity state changes on the channel.
@@ -65,13 +76,15 @@ func (t *Tracker) AddWatcher(watcher Watcher) func() {
 	t.watchers[watcher] = true
 
 	t.cs.Schedule(func(_ context.Context) {
+		t.mu.Lock()
+		defer t.mu.Unlock()
 		watcher.OnStateChange(t.state)
 	})
 
 	return func() {
 		t.mu.Lock()
 		defer t.mu.Unlock()
-		t.watchers[watcher] = false
+		delete(t.watchers, watcher)
 	}
 }
 
@@ -83,11 +96,17 @@ func (t *Tracker) SetState(state connectivity.State) {
 	// Update the cached state
 	t.state = state
 	// Invoke callbacks on all registered watchers.
-	for watcher, isEffective := range t.watchers {
-		if isEffective {
-			t.cs.Schedule(func(_ context.Context) {
-				watcher.OnStateChange(t.state)
-			})
-		}
+	for watcher := range t.watchers {
+		t.cs.Schedule(func(_ context.Context) {
+			t.mu.Lock()
+			defer t.mu.Unlock()
+			watcher.OnStateChange(t.state)
+		})
 	}
+}
+
+// Stop is called to stop executing scheduled callbacks and release the resources
+// allocated by the callback serializer.
+func (t *Tracker) Stop() {
+	t.cancel()
 }
