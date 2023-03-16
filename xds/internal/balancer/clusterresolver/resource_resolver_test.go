@@ -117,7 +117,7 @@ func (s) TestResourceResolverOneEDSResource(t *testing.T) {
 				t.Fatal("Timed out waiting for update from update channel.")
 			}
 			// Close the resource resolver. Should stop EDS watch.
-			rr.stop()
+			rr.stop(true)
 			edsNameCanceled, err := fakeClient.WaitForCancelEDSWatch(ctx)
 			if err != nil {
 				t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
@@ -200,7 +200,7 @@ func (s) TestResourceResolverOneDNSResource(t *testing.T) {
 				t.Fatal("Timed out waiting for update from update channel.")
 			}
 			// Close the resource resolver. Should close the underlying resolver.
-			rr.stop()
+			rr.stop(true)
 			select {
 			case <-dnsCloseCh:
 			case <-ctx.Done():
@@ -333,7 +333,7 @@ func (s) TestResourceResolverChangeEDSName(t *testing.T) {
 	}
 
 	// Close the resource resolver. Should stop EDS watch.
-	rr.stop()
+	rr.stop(true)
 	edsNameCanceled, err := fakeClient.WaitForCancelEDSWatch(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
@@ -440,7 +440,7 @@ func (s) TestResourceResolverNoChangeNoUpdate(t *testing.T) {
 	}
 
 	// Close the resource resolver. Should stop EDS watch.
-	rr.stop()
+	rr.stop(true)
 	edsNameCanceled1, err := fakeClient.WaitForCancelEDSWatch(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
@@ -571,7 +571,7 @@ func (s) TestResourceResolverChangePriority(t *testing.T) {
 	}
 
 	// Close the resource resolver. Should stop EDS watch.
-	rr.stop()
+	rr.stop(true)
 	edsNameCanceled1, err := fakeClient.WaitForCancelEDSWatch(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
@@ -660,7 +660,7 @@ func (s) TestResourceResolverEDSAndDNS(t *testing.T) {
 	}
 
 	// Close the resource resolver. Should stop EDS watch.
-	rr.stop()
+	rr.stop(true)
 	edsNameCanceled1, err := fakeClient.WaitForCancelEDSWatch(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
@@ -752,7 +752,7 @@ func (s) TestResourceResolverChangeFromEDSToDNS(t *testing.T) {
 	}
 
 	// Close the resource resolver. Should stop DNS.
-	rr.stop()
+	rr.stop(true)
 	select {
 	case <-dnsCloseCh:
 	case <-ctx.Done():
@@ -819,7 +819,7 @@ func (s) TestResourceResolverError(t *testing.T) {
 	}
 
 	// Close the resource resolver. Should stop EDS watch.
-	rr.stop()
+	rr.stop(true)
 	edsNameCanceled1, err := fakeClient.WaitForCancelEDSWatch(ctx)
 	if err != nil {
 		t.Fatalf("xdsClient.CancelCDS failed with error: %v", err)
@@ -879,7 +879,7 @@ func (s) TestResourceResolverDNSResolveNow(t *testing.T) {
 		t.Fatal("Timed out waiting for re-resolve")
 	}
 	// Close the resource resolver. Should close the underlying resolver.
-	rr.stop()
+	rr.stop(true)
 	select {
 	case <-dnsCloseCh:
 	case <-ctx.Done():

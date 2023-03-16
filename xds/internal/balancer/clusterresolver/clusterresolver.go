@@ -246,7 +246,7 @@ func (b *clusterResolverBalancer) handleErrorFromUpdate(err error, fromParent bo
 	// EDS resource was removed. No action needs to be taken for this, and we
 	// should continue watching the same EDS resource.
 	if fromParent && xdsresource.ErrType(err) == xdsresource.ErrorTypeResourceNotFound {
-		b.resourceWatcher.stop()
+		b.resourceWatcher.stop(false)
 	}
 
 	if b.child != nil {
@@ -297,7 +297,7 @@ func (b *clusterResolverBalancer) run() {
 		// Close results in stopping the endpoint resolvers and closing the
 		// underlying child policy and is the only way to exit this goroutine.
 		case <-b.closed.Done():
-			b.resourceWatcher.stop()
+			b.resourceWatcher.stop(true)
 
 			if b.child != nil {
 				b.child.Close()

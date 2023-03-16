@@ -207,7 +207,7 @@ func (rr *resourceResolver) resolveNow() {
 	}
 }
 
-func (rr *resourceResolver) stop() {
+func (rr *resourceResolver) stop(closed bool) {
 	rr.mu.Lock()
 	// Save the previous childrenMap to stop the children outside the mutex,
 	// and reinitialize the map.  We only need to reinitialize to allow for the
@@ -223,6 +223,14 @@ func (rr *resourceResolver) stop() {
 
 	for _, r := range cm {
 		r.r.stop()
+	}
+
+	// stop() is called when the LB policy is closed or when the underlying
+	// cluster resource is removed by the management server. In the latter case,
+	// an empty config update needs to be pushed to the child policy to ensure
+	// that a picker that fails RPCs is sent up to the channel.
+	if !closed {
+		rr.updateChannel <- &resourceUpdate{}
 	}
 }
 
