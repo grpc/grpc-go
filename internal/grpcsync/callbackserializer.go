@@ -16,9 +16,7 @@
  *
  */
 
-// Package callbackserializer defines CallbackSerializer to provide a mechanism
-// to schedule callbacks in a synchronized manner.
-package callbackserializer
+package grpcsync
 
 import (
 	"context"
@@ -36,11 +34,11 @@ type CallbackSerializer struct {
 	callbacks *buffer.Unbounded
 }
 
-// New returns a new callbackSerializer instance. The provided
+// NewCallbackSerializer returns a new callbackSerializer instance. The provided
 // context will be passed to the scheduled callbacks. Users should cancel the
 // provided context to shutdown the callbackSerializer. It is guaranteed that no
 // callbacks will be executed once this context is canceled.
-func New(ctx context.Context) *CallbackSerializer {
+func NewCallbackSerializer(ctx context.Context) *CallbackSerializer {
 	t := &CallbackSerializer{callbacks: buffer.NewUnbounded()}
 	go t.run(ctx)
 	return t

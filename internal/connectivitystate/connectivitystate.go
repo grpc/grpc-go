@@ -25,7 +25,7 @@ import (
 	"sync"
 
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/internal/callbackserializer"
+	"google.golang.org/grpc/internal/grpcsync"
 )
 
 // Watcher defines the functions which is executed as soon as a connectivity state changes
@@ -41,7 +41,7 @@ type Tracker struct {
 	mu       sync.Mutex
 	state    connectivity.State
 	watchers map[Watcher]bool
-	cs       *callbackserializer.CallbackSerializer
+	cs       *grpcsync.CallbackSerializer
 }
 
 // NewTracker returns a new Tracker instance.
@@ -50,7 +50,7 @@ func NewTracker(state connectivity.State) *Tracker {
 	return &Tracker{
 		state:    state,
 		watchers: map[Watcher]bool{},
-		cs:       callbackserializer.New(ctx),
+		cs:       grpcsync.NewCallbackSerializer(ctx),
 	}
 }
 

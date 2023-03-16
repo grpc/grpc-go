@@ -25,8 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc/internal/callbackserializer"
 	"google.golang.org/grpc/internal/grpclog"
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/load"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
@@ -62,13 +62,13 @@ type resourceState struct {
 // share the same authority instance amongst these entries, and the reference
 // counting is taken care of by the `clientImpl` type.
 type authority struct {
-	serverCfg          *bootstrap.ServerConfig                // Server config for this authority
-	bootstrapCfg       *bootstrap.Config                      // Full bootstrap configuration
-	refCount           int                                    // Reference count of watches referring to this authority
-	serializer         *callbackserializer.CallbackSerializer // Callback serializer for invoking watch callbacks
-	resourceTypeGetter func(string) xdsresource.Type          // ResourceType registry lookup
-	transport          *transport.Transport                   // Underlying xDS transport to the management server
-	watchExpiryTimeout time.Duration                          // Resource watch expiry timeout
+	serverCfg          *bootstrap.ServerConfig       // Server config for this authority
+	bootstrapCfg       *bootstrap.Config             // Full bootstrap configuration
+	refCount           int                           // Reference count of watches referring to this authority
+	serializer         *grpcsync.CallbackSerializer  // Callback serializer for invoking watch callbacks
+	resourceTypeGetter func(string) xdsresource.Type // ResourceType registry lookup
+	transport          *transport.Transport          // Underlying xDS transport to the management server
+	watchExpiryTimeout time.Duration                 // Resource watch expiry timeout
 	logger             *grpclog.PrefixLogger
 
 	// A two level map containing the state of all the resources being watched.
@@ -99,7 +99,7 @@ type authorityArgs struct {
 	// the second case.
 	serverCfg          *bootstrap.ServerConfig
 	bootstrapCfg       *bootstrap.Config
-	serializer         *callbackserializer.CallbackSerializer
+	serializer         *grpcsync.CallbackSerializer
 	resourceTypeGetter func(string) xdsresource.Type
 	watchExpiryTimeout time.Duration
 	logger             *grpclog.PrefixLogger

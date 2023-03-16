@@ -16,7 +16,7 @@
  *
  */
 
-package callbackserializer
+package grpcsync
 
 import (
 	"context"
@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/internal/grpctest"
 )
 
 const (
@@ -35,19 +34,11 @@ const (
 	defaultTestShortTimeout       = 10 * time.Millisecond // For events expected to *not* happen.
 )
 
-type s struct {
-	grpctest.Tester
-}
-
-func Test(t *testing.T) {
-	grpctest.RunSubTests(t, s{})
-}
-
 // TestCallbackSerializer_Schedule_FIFO verifies that callbacks are executed in
 // the same order in which they were scheduled.
 func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	cs := New(ctx)
+	cs := NewCallbackSerializer(ctx)
 	defer cancel()
 
 	// We have two channels, one to record the order of scheduling, and the
@@ -115,7 +106,7 @@ func (s) TestCallbackSerializer_Schedule_FIFO(t *testing.T) {
 // scheduled callbacks get executed.
 func (s) TestCallbackSerializer_Schedule_Concurrent(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	cs := New(ctx)
+	cs := NewCallbackSerializer(ctx)
 	defer cancel()
 
 	// Schedule callbacks concurrently by calling Schedule() from goroutines.
@@ -151,7 +142,7 @@ func (s) TestCallbackSerializer_Schedule_Concurrent(t *testing.T) {
 // are not executed once Close() returns.
 func (s) TestCallbackSerializer_Schedule_Close(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	cs := New(ctx)
+	cs := NewCallbackSerializer(ctx)
 
 	// Schedule a callback which blocks until the context passed to it is
 	// canceled. It also closes a couple of channels to signal that it started
