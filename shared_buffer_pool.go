@@ -97,8 +97,8 @@ func (p *simpleSharedBufferPool) Put(bs *[]byte) {
 }
 
 const (
-	level0PoolMaxSize = 16
-	level1PoolMaxSize = level0PoolMaxSize * 16
+	level0PoolMaxSize = 16                     //  16  B
+	level1PoolMaxSize = level0PoolMaxSize * 16 // 256  B
 	level2PoolMaxSize = level1PoolMaxSize * 16 //   4 KB
 	level3PoolMaxSize = level2PoolMaxSize * 16 //  64 KB
 	level4PoolMaxSize = level3PoolMaxSize * 16 //   1 MB
