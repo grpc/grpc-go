@@ -11,7 +11,7 @@ require (
 	golang.org/x/oauth2 v0.5.0
 	google.golang.org/api v0.109.0
 	google.golang.org/grpc v1.53.0-dev.0.20230315171901-a1e657ce53ba
-	google.golang.org/grpc/stats/opencensus v0.0.0-20230315171901-a1e657ce53ba
+	google.golang.org/grpc/stats/opencensus v0.0.0-20230317183452-b638faff2204
 )
 
 require (

@@ -35,7 +35,7 @@ require (
 	google.golang.org/api v0.109.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230125152338-dcaf20b6aeaa // indirect
-	google.golang.org/grpc/stats/opencensus v0.0.0-20230315171901-a1e657ce53ba // indirect
+	google.golang.org/grpc/stats/opencensus v0.0.0-20230317183452-b638faff2204 // indirect
 	google.golang.org/protobuf v1.29.1 // indirect
 )
 
