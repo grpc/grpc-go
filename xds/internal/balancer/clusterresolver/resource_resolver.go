@@ -207,7 +207,7 @@ func (rr *resourceResolver) resolveNow() {
 	}
 }
 
-func (rr *resourceResolver) stop(closed bool) {
+func (rr *resourceResolver) stop() {
 	rr.mu.Lock()
 	// Save the previous childrenMap to stop the children outside the mutex,
 	// and reinitialize the map.  We only need to reinitialize to allow for the
@@ -229,9 +229,11 @@ func (rr *resourceResolver) stop(closed bool) {
 	// cluster resource is removed by the management server. In the latter case,
 	// an empty config update needs to be pushed to the child policy to ensure
 	// that a picker that fails RPCs is sent up to the channel.
-	if !closed {
-		rr.updateChannel <- &resourceUpdate{}
+	select {
+	case <-rr.updateChannel:
+	default:
 	}
+	rr.updateChannel <- &resourceUpdate{}
 }
 
 // generateLocked collects updates from all resolvers. It pushes the combined
