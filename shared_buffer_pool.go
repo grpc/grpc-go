@@ -46,12 +46,12 @@ type SharedBufferPool interface {
 // later release.
 func NewSimpleSharedBufferPool() SharedBufferPool {
 	return &simpleSharedBufferPool{
-		pool0:   makeBytesPool(),
-		pool1:   makeBytesPool(),
-		pool2:   makeBytesPool(),
-		pool3:   makeBytesPool(),
-		pool4:   makeBytesPool(),
-		poolMax: makeBytesPool(),
+		pool0:   makeBytesPool(level0PoolMaxSize),
+		pool1:   makeBytesPool(level1PoolMaxSize),
+		pool2:   makeBytesPool(level2PoolMaxSize),
+		pool3:   makeBytesPool(level3PoolMaxSize),
+		pool4:   makeBytesPool(level4PoolMaxSize),
+		poolMax: makeFallbackBytesPool(),
 	}
 }
 
@@ -113,10 +113,6 @@ type bufferPool struct {
 
 func (p *bufferPool) Get(size int) []byte {
 	bs := p.Pool.Get().(*[]byte)
-	if cap(*bs) < size {
-		*bs = make([]byte, size)
-		return *bs
-	}
 
 	return (*bs)[:size]
 }
@@ -125,7 +121,36 @@ func (p *bufferPool) Put(bs *[]byte) {
 	p.Pool.Put(bs)
 }
 
-func makeBytesPool() bufferPool {
+func makeBytesPool(size int) bufferPool {
+	return bufferPool{
+		sync.Pool{
+			New: func() interface{} {
+				bs := make([]byte, size)
+				return &bs
+			},
+		},
+	}
+}
+
+type fallbackBufferPool struct {
+	sync.Pool
+}
+
+func (p *fallbackBufferPool) Get(size int) []byte {
+	bs := p.Pool.Get().(*[]byte)
+	if cap(*bs) < size {
+		*bs = make([]byte, size)
+		return *bs
+	}
+
+	return (*bs)[:size]
+}
+
+func (p *fallbackBufferPool) Put(bs *[]byte) {
+	p.Pool.Put(bs)
+}
+
+func makeFallbackBytesPool() bufferPool {
 	return bufferPool{
 		sync.Pool{
 			New: func() interface{} {
