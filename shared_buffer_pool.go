@@ -29,7 +29,10 @@ import "sync"
 // Notice: This API is EXPERIMENTAL and may be changed or removed in a
 // later release.
 type SharedBufferPool interface {
+	// Get returns a buffer with specified length from the pool.
 	Get(length int) []byte
+
+	// Put returns a buffer to the pool.
 	Put(*[]byte)
 }
 
