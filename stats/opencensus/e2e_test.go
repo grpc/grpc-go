@@ -236,13 +236,13 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 		ClientCompletedRPCsView,
 		ServerCompletedRPCsView,
 		ClientSentBytesPerRPCView,
-		ClientSentCompressedBytesPerRPCView,
+		ClientSentCompressedMessageBytesPerRPCView,
 		ServerSentBytesPerRPCView,
-		ServerSentCompressedBytesPerRPCView,
+		ServerSentCompressedMessageBytesPerRPCView,
 		ClientReceivedBytesPerRPCView,
-		ClientReceivedCompressedBytesPerRPCView,
+		ClientReceivedCompressedMessageBytesPerRPCView,
 		ServerReceivedBytesPerRPCView,
-		ServerReceivedCompressedBytesPerRPCView,
+		ServerReceivedCompressedMessageBytesPerRPCView,
 		ClientSentMessagesPerRPCView,
 		ServerSentMessagesPerRPCView,
 		ClientReceivedMessagesPerRPCView,
@@ -505,11 +505,11 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 		{
-			metric: ClientSentCompressedBytesPerRPCView,
+			metric: ClientSentCompressedMessageBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
-				desc:       "Distribution of sent compressed bytes per RPC, by method.",
+				desc:       "Distribution of sent compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					cmtk,
 				},
@@ -579,11 +579,11 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 		{
-			metric: ServerSentCompressedBytesPerRPCView,
+			metric: ServerSentCompressedMessageBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
-				desc:       "Distribution of sent compressed bytes per RPC, by method.",
+				desc:       "Distribution of sent compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					smtk,
 				},
@@ -653,11 +653,11 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 		{
-			metric: ClientReceivedCompressedBytesPerRPCView,
+			metric: ClientReceivedCompressedMessageBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
-				desc:       "Distribution of received compressed bytes per RPC, by method.",
+				desc:       "Distribution of received compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					cmtk,
 				},
@@ -727,11 +727,11 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			},
 		},
 		{
-			metric: ServerReceivedCompressedBytesPerRPCView,
+			metric: ServerReceivedCompressedMessageBytesPerRPCView,
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
-				desc:       "Distribution of received compressed bytes per RPC, by method.",
+				desc:       "Distribution of received compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					smtk,
 				},

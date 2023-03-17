@@ -72,12 +72,12 @@ var (
 		TagKeys:     []tag.Key{keyClientMethod},
 		Aggregation: bytesDistribution,
 	}
-	// ClientSentCompressedBytesPerRPCView is the distribution of compressed
-	// sent bytes per RPC, keyed on method.
-	ClientSentCompressedBytesPerRPCView = &view.View{
+	// ClientSentCompressedMessageBytesPerRPCView is the distribution of
+	// compressed sent message bytes per RPC, keyed on method.
+	ClientSentCompressedMessageBytesPerRPCView = &view.View{
 		Measure:     clientSentCompressedBytesPerRPC,
-		Name:        "grpc.io/client/sent_compressed_bytes_per_rpc",
-		Description: "Distribution of sent compressed bytes per RPC, by method.",
+		Name:        "grpc.io/client/sent_compressed_message_bytes_per_rpc",
+		Description: "Distribution of sent compressed message bytes per RPC, by method.",
 		TagKeys:     []tag.Key{keyClientMethod},
 		Aggregation: bytesDistribution,
 	}
@@ -90,12 +90,12 @@ var (
 		TagKeys:     []tag.Key{keyClientMethod},
 		Aggregation: bytesDistribution,
 	}
-	// ClientReceivedCompressedBytesPerRPCView is the distribution of compressed
-	// received bytes per RPC, keyed on method.
-	ClientReceivedCompressedBytesPerRPCView = &view.View{
+	// ClientReceivedCompressedMessageBytesPerRPCView is the distribution of
+	// compressed received message bytes per RPC, keyed on method.
+	ClientReceivedCompressedMessageBytesPerRPCView = &view.View{
 		Measure:     clientReceivedCompressedBytesPerRPC,
-		Name:        "grpc.io/client/received_compressed_bytes_per_rpc",
-		Description: "Distribution of received compressed bytes per RPC, by method.",
+		Name:        "grpc.io/client/received_compressed_message_bytes_per_rpc",
+		Description: "Distribution of received compressed message bytes per RPC, by method.",
 		TagKeys:     []tag.Key{keyClientMethod},
 		Aggregation: bytesDistribution,
 	}
