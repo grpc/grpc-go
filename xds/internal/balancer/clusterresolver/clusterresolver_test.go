@@ -147,22 +147,6 @@ func (f *fakeChildBalancer) waitForClientConnStateChangeVerifyBalancerConfig(ctx
 	return nil
 }
 
-func (f *fakeChildBalancer) waitForClientConnStateChange(ctx context.Context) error {
-	_, err := f.clientConnState.Receive(ctx)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (f *fakeChildBalancer) waitForResolverError(ctx context.Context) error {
-	_, err := f.resolverError.Receive(ctx)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (f *fakeChildBalancer) waitForSubConnStateChange(ctx context.Context, wantState *scStateChange) error {
 	val, err := f.subConnState.Receive(ctx)
 	if err != nil {
