@@ -509,7 +509,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
-				desc:       "Distribution of sent compressed bytes per RPC, by method.",
+				desc:       "Distribution of sent compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					cmtk,
 				},
@@ -583,7 +583,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
-				desc:       "Distribution of sent compressed bytes per RPC, by method.",
+				desc:       "Distribution of sent compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					smtk,
 				},
@@ -657,7 +657,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
-				desc:       "Distribution of received compressed bytes per RPC, by method.",
+				desc:       "Distribution of received compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					cmtk,
 				},
@@ -731,7 +731,7 @@ func (s) TestAllMetricsOneFunction(t *testing.T) {
 			wantVI: &viewInformation{
 				aggType:    view.AggTypeDistribution,
 				aggBuckets: bytesDistributionBounds,
-				desc:       "Distribution of received compressed bytes per RPC, by method.",
+				desc:       "Distribution of received compressed message bytes per RPC, by method.",
 				tagKeys: []tag.Key{
 					smtk,
 				},
