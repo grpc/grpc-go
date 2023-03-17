@@ -147,9 +147,7 @@ func (s) TestErrorFromParentLB_ConnectionError(t *testing.T) {
 	}
 
 	// Ensure that RPCs continue to succeed for the next one second.
-	start := time.Now()
-	end := start.Add(time.Second)
-	for ; time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
+	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			t.Fatalf("rpc EmptyCall() failed: %v", err)
 		}
@@ -438,21 +436,15 @@ func (s) TestEDSResourceRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Ensure that the EDS watch is not canceled.
-	sCtx, sCancel := context.WithTimeout(ctx, defaultTestShortTimeout)
-	defer sCancel()
-	select {
-	case <-sCtx.Done():
-	case <-edsResourceCanceledCh:
-		t.Fatal("EDS watch canceled when not expected to be canceled")
-	}
-
-	// Ensure that RPCs continue to succeed for the next one second.
-	start := time.Now()
-	end := start.Add(time.Second)
-	for ; time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
+	// Ensure that RPCs continue to succeed for the next one second, and that the EDS watch is not canceled.
+	for end := time.Now().Add(time.Second); time.Now().Before(end); <-time.After(defaultTestShortTimeout) {
 		if _, err := client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
 			t.Fatalf("rpc EmptyCall() failed: %v", err)
+		}
+		select {
+		case <-edsResourceCanceledCh:
+			t.Fatal("EDS watch canceled when not expected to be canceled")
+		default:
 		}
 	}
 }
