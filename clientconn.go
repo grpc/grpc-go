@@ -407,6 +407,10 @@ func getChainStreamer(interceptors []StreamClientInterceptor, curr int, finalStr
 
 // connectivityStateManager keeps the connectivity.State of ClientConn.
 // This struct will eventually be exported so the balancers can access it.
+//
+// TODO: If possible, get rid of the `connectivityStateManager` type, and
+// provide this functionality using the `Tracker`, to avoid keeping track of
+// the connectivity state at two places.
 type connectivityStateManager struct {
 	mu                       sync.Mutex
 	state                    connectivity.State
@@ -607,10 +611,9 @@ func init() {
 
 	internal.AddConnectivityStateWatcher = func(cc *ClientConn, w connectivitystate.Watcher) func() {
 		if cc.csMgr.connectivityStateTracker == nil {
-			cc.csMgr.connectivityStateTracker = connectivitystate.NewTracker(connectivity.Idle)
+			cc.csMgr.connectivityStateTracker = connectivitystate.NewTracker(cc.csMgr.getState())
 		}
-		cancelFunc := cc.csMgr.connectivityStateTracker.AddWatcher(w)
-		return cancelFunc
+		return cc.csMgr.connectivityStateTracker.AddWatcher(w)
 	}
 }
 
