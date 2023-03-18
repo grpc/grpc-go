@@ -1131,7 +1131,11 @@ func (ac *addrConn) updateConnectivityState(s connectivity.State, lastErr error)
 		return
 	}
 	ac.state = s
-	channelz.Infof(logger, ac.channelzID, "Subchannel Connectivity change to %v", s)
+	if lastErr == nil {
+		channelz.Infof(logger, ac.channelzID, "Subchannel Connectivity change to %v", s)
+	} else {
+		channelz.Infof(logger, ac.channelzID, "Subchannel Connectivity change to %v, last error: %s", s, lastErr)
+	}
 	ac.cc.handleSubConnStateChange(ac.acbw, s, lastErr)
 }
 

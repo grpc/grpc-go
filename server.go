@@ -1253,7 +1253,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			logEntry.PeerAddr = peer.Addr
 		}
 		for _, binlog := range binlogs {
-			binlog.Log(logEntry)
+			binlog.Log(ctx, logEntry)
 		}
 	}
 
@@ -1320,11 +1320,12 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 		}
 		for _, sh := range shs {
 			sh.HandleRPC(stream.Context(), &stats.InPayload{
-				RecvTime:   time.Now(),
-				Payload:    v,
-				WireLength: payInfo.wireLength + headerLen,
-				Data:       d,
-				Length:     len(d),
+				RecvTime:         time.Now(),
+				Payload:          v,
+				Length:           len(d),
+				WireLength:       payInfo.compressedLength + headerLen,
+				CompressedLength: payInfo.compressedLength,
+				Data:             d,
 			})
 		}
 		if len(binlogs) != 0 {
@@ -1332,7 +1333,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				Message: d,
 			}
 			for _, binlog := range binlogs {
-				binlog.Log(cm)
+				binlog.Log(stream.Context(), cm)
 			}
 		}
 		if trInfo != nil {
@@ -1365,7 +1366,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 					Header: h,
 				}
 				for _, binlog := range binlogs {
-					binlog.Log(sh)
+					binlog.Log(stream.Context(), sh)
 				}
 			}
 			st := &binarylog.ServerTrailer{
@@ -1373,7 +1374,7 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				Err:     appErr,
 			}
 			for _, binlog := range binlogs {
-				binlog.Log(st)
+				binlog.Log(stream.Context(), st)
 			}
 		}
 		return appErr
@@ -1415,8 +1416,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 				Err:     appErr,
 			}
 			for _, binlog := range binlogs {
-				binlog.Log(sh)
-				binlog.Log(st)
+				binlog.Log(stream.Context(), sh)
+				binlog.Log(stream.Context(), st)
 			}
 		}
 		return err
@@ -1430,8 +1431,8 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 			Message: reply,
 		}
 		for _, binlog := range binlogs {
-			binlog.Log(sh)
-			binlog.Log(sm)
+			binlog.Log(stream.Context(), sh)
+			binlog.Log(stream.Context(), sm)
 		}
 	}
 	if channelz.IsOn() {
@@ -1443,17 +1444,16 @@ func (s *Server) processUnaryRPC(t transport.ServerTransport, stream *transport.
 	// TODO: Should we be logging if writing status failed here, like above?
 	// Should the logging be in WriteStatus?  Should we ignore the WriteStatus
 	// error or allow the stats handler to see it?
-	err = t.WriteStatus(stream, statusOK)
 	if len(binlogs) != 0 {
 		st := &binarylog.ServerTrailer{
 			Trailer: stream.Trailer(),
 			Err:     appErr,
 		}
 		for _, binlog := range binlogs {
-			binlog.Log(st)
+			binlog.Log(stream.Context(), st)
 		}
 	}
-	return err
+	return t.WriteStatus(stream, statusOK)
 }
 
 // chainStreamServerInterceptors chains all stream server interceptors into one.
@@ -1587,7 +1587,7 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			logEntry.PeerAddr = peer.Addr
 		}
 		for _, binlog := range ss.binlogs {
-			binlog.Log(logEntry)
+			binlog.Log(stream.Context(), logEntry)
 		}
 	}
 
@@ -1659,16 +1659,16 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 			ss.trInfo.tr.SetError()
 			ss.mu.Unlock()
 		}
-		t.WriteStatus(ss.s, appStatus)
 		if len(ss.binlogs) != 0 {
 			st := &binarylog.ServerTrailer{
 				Trailer: ss.s.Trailer(),
 				Err:     appErr,
 			}
 			for _, binlog := range ss.binlogs {
-				binlog.Log(st)
+				binlog.Log(stream.Context(), st)
 			}
 		}
+		t.WriteStatus(ss.s, appStatus)
 		// TODO: Should we log an error from WriteStatus here and below?
 		return appErr
 	}
@@ -1677,17 +1677,16 @@ func (s *Server) processStreamingRPC(t transport.ServerTransport, stream *transp
 		ss.trInfo.tr.LazyLog(stringer("OK"), false)
 		ss.mu.Unlock()
 	}
-	err = t.WriteStatus(ss.s, statusOK)
 	if len(ss.binlogs) != 0 {
 		st := &binarylog.ServerTrailer{
 			Trailer: ss.s.Trailer(),
 			Err:     appErr,
 		}
 		for _, binlog := range ss.binlogs {
-			binlog.Log(st)
+			binlog.Log(stream.Context(), st)
 		}
 	}
-	return err
+	return t.WriteStatus(ss.s, statusOK)
 }
 
 func (s *Server) handleStream(t transport.ServerTransport, stream *transport.Stream, trInfo *traceInfo) {

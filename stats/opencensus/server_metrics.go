@@ -31,12 +31,14 @@ var (
 // server side, the per rpc unit is truly per rpc, as there is no concept of a
 // rpc attempt server side.
 var (
-	serverReceivedMessagesPerRPC = stats.Int64("grpc.io/server/received_messages_per_rpc", "Number of messages received in each RPC. Has value 1 for non-streaming RPCs.", stats.UnitDimensionless) // the collection/measurement point of this measure handles the /rpc aspect of it
-	serverReceivedBytesPerRPC    = stats.Int64("grpc.io/server/received_bytes_per_rpc", "Total bytes received across all messages per RPC.", stats.UnitBytes)
-	serverSentMessagesPerRPC     = stats.Int64("grpc.io/server/sent_messages_per_rpc", "Number of messages sent in each RPC. Has value 1 for non-streaming RPCs.", stats.UnitDimensionless)
-	serverSentBytesPerRPC        = stats.Int64("grpc.io/server/sent_bytes_per_rpc", "Total bytes sent in across all response messages per RPC.", stats.UnitBytes)
-	serverStartedRPCs            = stats.Int64("grpc.io/server/started_rpcs", "The total number of server RPCs ever opened, including those that have not completed.", stats.UnitDimensionless)
-	serverLatency                = stats.Float64("grpc.io/server/server_latency", "Time between first byte of request received to last byte of response sent, or terminal error.", stats.UnitMilliseconds)
+	serverReceivedMessagesPerRPC        = stats.Int64("grpc.io/server/received_messages_per_rpc", "Number of messages received in each RPC. Has value 1 for non-streaming RPCs.", stats.UnitDimensionless) // the collection/measurement point of this measure handles the /rpc aspect of it
+	serverReceivedBytesPerRPC           = stats.Int64("grpc.io/server/received_bytes_per_rpc", "Total bytes received across all messages per RPC.", stats.UnitBytes)
+	serverReceivedCompressedBytesPerRPC = stats.Int64("grpc.io/server/received_compressed_bytes_per_rpc", "Total compressed bytes received across all messages per RPC.", stats.UnitBytes)
+	serverSentMessagesPerRPC            = stats.Int64("grpc.io/server/sent_messages_per_rpc", "Number of messages sent in each RPC. Has value 1 for non-streaming RPCs.", stats.UnitDimensionless)
+	serverSentBytesPerRPC               = stats.Int64("grpc.io/server/sent_bytes_per_rpc", "Total bytes sent in across all response messages per RPC.", stats.UnitBytes)
+	serverSentCompressedBytesPerRPC     = stats.Int64("grpc.io/server/sent_compressed_bytes_per_rpc", "Total compressed bytes sent in across all response messages per RPC.", stats.UnitBytes)
+	serverStartedRPCs                   = stats.Int64("grpc.io/server/started_rpcs", "The total number of server RPCs ever opened, including those that have not completed.", stats.UnitDimensionless)
+	serverLatency                       = stats.Float64("grpc.io/server/server_latency", "Time between first byte of request received to last byte of response sent, or terminal error.", stats.UnitMilliseconds)
 )
 
 var (
@@ -67,12 +69,30 @@ var (
 		TagKeys:     []tag.Key{keyServerMethod},
 		Aggregation: bytesDistribution,
 	}
+	// ServerSentCompressedMessageBytesPerRPCView is the distribution of
+	// received compressed message bytes per RPC, keyed on method.
+	ServerSentCompressedMessageBytesPerRPCView = &view.View{
+		Name:        "grpc.io/server/sent_compressed_message_bytes_per_rpc",
+		Description: "Distribution of sent compressed message bytes per RPC, by method.",
+		Measure:     serverSentCompressedBytesPerRPC,
+		TagKeys:     []tag.Key{keyServerMethod},
+		Aggregation: bytesDistribution,
+	}
 	// ServerReceivedBytesPerRPCView is the distribution of sent bytes per RPC,
 	// keyed on method.
 	ServerReceivedBytesPerRPCView = &view.View{
 		Name:        "grpc.io/server/received_bytes_per_rpc",
 		Description: "Distribution of received bytes per RPC, by method.",
 		Measure:     serverReceivedBytesPerRPC,
+		TagKeys:     []tag.Key{keyServerMethod},
+		Aggregation: bytesDistribution,
+	}
+	// ServerReceivedCompressedMessageBytesPerRPCView is the distribution of
+	// sent compressed message bytes per RPC, keyed on method.
+	ServerReceivedCompressedMessageBytesPerRPCView = &view.View{
+		Name:        "grpc.io/server/received_compressed_message_bytes_per_rpc",
+		Description: "Distribution of received compressed message bytes per RPC, by method.",
+		Measure:     serverReceivedCompressedBytesPerRPC,
 		TagKeys:     []tag.Key{keyServerMethod},
 		Aggregation: bytesDistribution,
 	}

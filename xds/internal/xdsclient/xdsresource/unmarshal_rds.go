@@ -19,6 +19,7 @@ package xdsresource
 
 import (
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 	"time"
@@ -313,11 +314,15 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 				route.WeightedClusters[a.Cluster] = WeightedCluster{Weight: 1}
 			case *v3routepb.RouteAction_WeightedClusters:
 				wcs := a.WeightedClusters
-				var totalWeight uint32
+				var totalWeight uint64
 				for _, c := range wcs.Clusters {
 					w := c.GetWeight().GetValue()
 					if w == 0 {
 						continue
+					}
+					totalWeight += uint64(w)
+					if totalWeight > math.MaxUint32 {
+						return nil, nil, fmt.Errorf("xds: total weight of clusters exceeds MaxUint32")
 					}
 					wc := WeightedCluster{Weight: w}
 					cfgs, err := processHTTPFilterOverrides(c.GetTypedPerFilterConfig())
@@ -326,16 +331,6 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 					}
 					wc.HTTPFilterConfigOverride = cfgs
 					route.WeightedClusters[c.GetName()] = wc
-					totalWeight += w
-				}
-				// envoy xds doc
-				// default TotalWeight https://www.envoyproxy.io/docs/envoy/latest/api-v3/config/route/v3/route_components.proto.html#envoy-v3-api-field-config-route-v3-weightedcluster-total-weight
-				wantTotalWeight := uint32(100)
-				if tw := wcs.GetTotalWeight(); tw != nil {
-					wantTotalWeight = tw.GetValue()
-				}
-				if totalWeight != wantTotalWeight {
-					return nil, nil, fmt.Errorf("route %+v, action %+v, weights of clusters do not add up to total total weight, got: %v, expected total weight from response: %v", r, a, totalWeight, wantTotalWeight)
 				}
 				if totalWeight == 0 {
 					return nil, nil, fmt.Errorf("route %+v, action %+v, has no valid cluster in WeightedCluster action", r, a)
@@ -347,7 +342,6 @@ func routesProtoToSlice(routes []*v3routepb.Route, csps map[string]clusterspecif
 				// cluster_specifier:
 				// - Can be Cluster
 				// - Can be Weighted_clusters
-				//   - The sum of weights must add up to the total_weight.
 				// - Can be unset or an unsupported field. The route containing
 				//   this action will be ignored.
 				//

@@ -22,9 +22,8 @@ import (
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/grpctest"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 )
 
 type s struct {
@@ -48,13 +47,11 @@ func (s) TestNewWithGRPCDial(t *testing.T) {
 
 	// Create a new transport and ensure that the custom dialer was called.
 	opts := Options{
-		ServerCfg: bootstrap.ServerConfig{
-			ServerURI: "server-address",
-			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		},
-		NodeProto:          &v3corepb.Node{},
-		UpdateHandler:      func(ResourceUpdate) error { return nil },
-		StreamErrorHandler: func(error) {},
+		ServerCfg:      *xdstestutils.ServerConfigForAddress(t, "server-address"),
+		NodeProto:      &v3corepb.Node{},
+		OnRecvHandler:  func(ResourceUpdate) error { return nil },
+		OnErrorHandler: func(error) {},
+		OnSendHandler:  func(*ResourceSendInfo) {},
 	}
 	c, err := New(opts)
 	if err != nil {

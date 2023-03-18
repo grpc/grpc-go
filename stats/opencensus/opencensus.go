@@ -20,6 +20,7 @@ package opencensus
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	ocstats "go.opencensus.io/stats"
@@ -61,7 +62,8 @@ type TraceOptions struct {
 // conjunction, and do not work standalone. It is not supported to use this
 // alongside another stats handler dial option.
 func DialOption(to TraceOptions) grpc.DialOption {
-	return joinDialOptions(grpc.WithChainUnaryInterceptor(unaryInterceptor), grpc.WithChainStreamInterceptor(streamInterceptor), grpc.WithStatsHandler(&clientStatsHandler{to: to}))
+	csh := &clientStatsHandler{to: to}
+	return joinDialOptions(grpc.WithChainUnaryInterceptor(csh.unaryInterceptor), grpc.WithChainStreamInterceptor(csh.streamInterceptor), grpc.WithStatsHandler(csh))
 }
 
 // ServerOption returns a server option which enables OpenCensus instrumentation
@@ -81,46 +83,57 @@ func ServerOption(to TraceOptions) grpc.ServerOption {
 	return grpc.StatsHandler(&serverStatsHandler{to: to})
 }
 
-// unaryInterceptor handles per RPC context management. It also handles per RPC
-// tracing and stats, and records the latency for the full RPC call.
-func unaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
-	startTime := time.Now()
-	err := invoker(ctx, method, req, reply, cc, opts...)
-	callLatency := float64(time.Since(startTime)) / float64(time.Millisecond)
+// createCallSpan creates a call span if tracing is enabled, which will be put
+// in the context provided if created.
+func (csh *clientStatsHandler) createCallSpan(ctx context.Context, method string) (context.Context, *trace.Span) {
+	var span *trace.Span
+	if !csh.to.DisableTrace {
+		mn := "Sent." + strings.Replace(removeLeadingSlash(method), "/", ".", -1)
+		ctx, span = trace.StartSpan(ctx, mn, trace.WithSampler(csh.to.TS), trace.WithSpanKind(trace.SpanKindClient))
+	}
+	return ctx, span
+}
 
-	ocstats.RecordWithOptions(ctx,
+// perCallTracesAndMetrics records per call spans and metrics.
+func perCallTracesAndMetrics(err error, span *trace.Span, startTime time.Time, method string) {
+	s := status.Convert(err)
+	if span != nil {
+		span.SetStatus(trace.Status{Code: int32(s.Code()), Message: s.Message()})
+		span.End()
+	}
+	callLatency := float64(time.Since(startTime)) / float64(time.Millisecond)
+	ocstats.RecordWithOptions(context.Background(),
 		ocstats.WithTags(
-			tag.Upsert(keyClientMethod, removeLeadingSlash(method)),
-			tag.Upsert(keyClientStatus, canonicalString(status.Code(err))),
+			tag.Upsert(keyClientMethod, method),
+			tag.Upsert(keyClientStatus, canonicalString(s.Code())),
 		),
 		ocstats.WithMeasurements(
 			clientAPILatency.M(callLatency),
 		),
 	)
+}
 
+// unaryInterceptor handles per RPC context management. It also handles per RPC
+// tracing and stats by creating a top level call span and recording the latency
+// for the full RPC call.
+func (csh *clientStatsHandler) unaryInterceptor(ctx context.Context, method string, req, reply interface{}, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+	startTime := time.Now()
+	ctx, span := csh.createCallSpan(ctx, method)
+	err := invoker(ctx, method, req, reply, cc, opts...)
+	perCallTracesAndMetrics(err, span, startTime, method)
 	return err
 }
 
 // streamInterceptor handles per RPC context management. It also handles per RPC
-// tracing and stats, and records the latency for the full RPC call.
-func streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+// tracing and stats by creating a top level call span and recording the latency
+// for the full RPC call.
+func (csh *clientStatsHandler) streamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
 	startTime := time.Now()
-
+	ctx, span := csh.createCallSpan(ctx, method)
 	callback := func(err error) {
-		callLatency := float64(time.Since(startTime)) / float64(time.Millisecond)
-		ocstats.RecordWithOptions(context.Background(),
-			ocstats.WithTags(
-				tag.Upsert(keyClientMethod, method),
-				tag.Upsert(keyClientStatus, canonicalString(status.Code(err))),
-			),
-			ocstats.WithMeasurements(
-				clientAPILatency.M(callLatency),
-			),
-		)
+		perCallTracesAndMetrics(err, span, startTime, method)
 	}
-
 	opts = append([]grpc.CallOption{grpc.OnFinish(callback)}, opts...)
-
 	s, err := streamer(ctx, desc, cc, method, opts...)
 	if err != nil {
 		return nil, err
@@ -139,11 +152,22 @@ func setRPCInfo(ctx context.Context, ri *rpcInfo) context.Context {
 	return context.WithValue(ctx, rpcInfoKey{}, ri)
 }
 
-// getSpanWithMsgCount returns the rpcInfo stored in the context, or nil
+// getRPCInfo returns the rpcInfo stored in the context, or nil
 // if there isn't one.
 func getRPCInfo(ctx context.Context) *rpcInfo {
 	ri, _ := ctx.Value(rpcInfoKey{}).(*rpcInfo)
 	return ri
+}
+
+// GetTraceAndSpanID returns the trace and span ID of the span in the context.
+// Returns true if IDs present and false if IDs not present.
+func GetTraceAndSpanID(ctx context.Context) (trace.TraceID, trace.SpanID, bool) {
+	ri, ok := ctx.Value(rpcInfoKey{}).(*rpcInfo)
+	if !ok {
+		return trace.TraceID{}, trace.SpanID{}, false
+	}
+	sc := ri.ti.span.SpanContext()
+	return sc.TraceID, sc.SpanID, true
 }
 
 type clientStatsHandler struct {

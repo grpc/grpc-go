@@ -140,6 +140,9 @@ var (
 	//
 	// TODO: Remove this function once the RBAC env var is removed.
 	UnregisterRBACHTTPFilterForTesting func()
+
+	// ORCAAllowAnyMinReportingInterval is for examples/orca use ONLY.
+	ORCAAllowAnyMinReportingInterval interface{} // func(so *orca.ServiceOptions)
 )
 
 // HealthChecker defines the signature of the client-side LB channel health checking function.

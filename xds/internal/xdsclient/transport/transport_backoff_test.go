@@ -27,12 +27,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/testing/protocmp"
@@ -98,27 +96,21 @@ func (s) TestTransport_BackoffAfterStreamFailure(t *testing.T) {
 		return 0
 	}
 
-	// Construct the server config to represent the management server.
-	nodeID := uuid.New().String()
-	serverCfg := bootstrap.ServerConfig{
-		ServerURI: mgmtServer.Address,
-		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType: "insecure",
-	}
-
 	// Create a new transport. Since we are only testing backoff behavior here,
 	// we can pass a no-op data model layer implementation.
+	nodeID := uuid.New().String()
 	tr, err := transport.New(transport.Options{
-		ServerCfg:     serverCfg,
-		UpdateHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
-		StreamErrorHandler: func(err error) {
+		ServerCfg:     *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+		OnRecvHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
+		OnErrorHandler: func(err error) {
 			select {
 			case streamErrCh <- err:
 			default:
 			}
 		},
-		Backoff:   transportBackoff,
-		NodeProto: &v3corepb.Node{Id: nodeID},
+		OnSendHandler: func(*transport.ResourceSendInfo) {},
+		Backoff:       transportBackoff,
+		NodeProto:     &v3corepb.Node{Id: nodeID},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -266,26 +258,20 @@ func (s) TestTransport_RetriesAfterBrokenStream(t *testing.T) {
 		SkipValidation: true,
 	})
 
-	// Construct the server config to represent the management server.
-	serverCfg := bootstrap.ServerConfig{
-		ServerURI: lis.Addr().String(),
-		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType: "insecure",
-	}
-
 	// Create a new transport. Since we are only testing backoff behavior here,
 	// we can pass a no-op data model layer implementation.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:     serverCfg,
-		UpdateHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
-		StreamErrorHandler: func(err error) {
+		ServerCfg:     *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+		OnRecvHandler: func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
+		OnErrorHandler: func(err error) {
 			select {
 			case streamErrCh <- err:
 			default:
 			}
 		},
-		Backoff:   func(int) time.Duration { return time.Duration(0) }, // No backoff.
-		NodeProto: &v3corepb.Node{Id: nodeID},
+		OnSendHandler: func(*transport.ResourceSendInfo) {},
+		Backoff:       func(int) time.Duration { return time.Duration(0) }, // No backoff.
+		NodeProto:     &v3corepb.Node{Id: nodeID},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
@@ -403,22 +389,16 @@ func (s) TestTransport_ResourceRequestedBeforeStreamCreation(t *testing.T) {
 	// stream to the management server.
 	lis.Stop()
 
-	// Construct the server config to represent the management server.
-	nodeID := uuid.New().String()
-	serverCfg := bootstrap.ServerConfig{
-		ServerURI: lis.Addr().String(),
-		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType: "insecure",
-	}
-
 	// Create a new transport. Since we are only testing backoff behavior here,
 	// we can pass a no-op data model layer implementation.
+	nodeID := uuid.New().String()
 	tr, err := transport.New(transport.Options{
-		ServerCfg:          serverCfg,
-		UpdateHandler:      func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
-		StreamErrorHandler: func(error) {},                                      // No stream error handling.
-		Backoff:            func(int) time.Duration { return time.Duration(0) }, // No backoff.
-		NodeProto:          &v3corepb.Node{Id: nodeID},
+		ServerCfg:      *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
+		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil }, // No data model layer validation.
+		OnErrorHandler: func(error) {},                                      // No stream error handling.
+		OnSendHandler:  func(*transport.ResourceSendInfo) {},                // No on send handler
+		Backoff:        func(int) time.Duration { return time.Duration(0) }, // No backoff.
+		NodeProto:      &v3corepb.Node{Id: nodeID},
 	})
 	if err != nil {
 		t.Fatalf("Failed to create xDS transport: %v", err)
