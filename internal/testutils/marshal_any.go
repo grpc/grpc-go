@@ -19,9 +19,9 @@ package testutils
 
 import (
 	"fmt"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-
 	"google.golang.org/protobuf/types/known/anypb"
 )
 

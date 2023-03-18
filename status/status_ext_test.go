@@ -20,10 +20,9 @@ package status_test
 
 import (
 	"errors"
-	"github.com/golang/protobuf/proto"
-
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/status"
