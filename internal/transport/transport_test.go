@@ -844,17 +844,11 @@ func (s) TestGracefulClose(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			str, err := ct.NewStream(ctx, &CallHdr{})
+			_, err := ct.NewStream(ctx, &CallHdr{})
 			if err != nil && err.(*NewStreamError).Err == ErrConnClosing {
 				return
-			} else if err != nil {
-				t.Errorf("_.NewStream(_, _) = _, %v, want _, %v", err, ErrConnClosing)
-				return
 			}
-			ct.Write(str, nil, nil, &Options{Last: true})
-			if _, err := str.Read(make([]byte, 8)); err != errStreamDrain && err != ErrConnClosing {
-				t.Errorf("_.Read(_) = _, %v, want _, %v or %v", err, errStreamDrain, ErrConnClosing)
-			}
+			t.Errorf("_.NewStream(_, _) = _, %v, want _, %v", err, ErrConnClosing)
 		}()
 	}
 	ct.Write(s, nil, nil, &Options{Last: true})
