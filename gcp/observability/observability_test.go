@@ -121,12 +121,11 @@ type traceAndSpanIDString struct {
 }
 
 // idsToString is a helper that converts from generated trace and span IDs to
-// the string version stored in trace message events. (hex 16 lowercase encoded,
-// and extra data attached to trace id).
+// the string version stored in trace message events.
 func idsToString(tasi traceAndSpanID, projectID string) traceAndSpanIDString {
 	return traceAndSpanIDString{
-		traceID: "projects/" + projectID + "/traces/" + fmt.Sprintf("%x", tasi.traceID),
-		spanID:  fmt.Sprintf("%x", tasi.spanID),
+		traceID: "projects/" + projectID + "/traces/" + tasi.traceID.String(),
+		spanID:  tasi.spanID.String(),
 	}
 }
 
