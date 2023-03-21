@@ -327,14 +327,14 @@ func (bml *binaryMethodLogger) buildGCPLoggingEntry(ctx context.Context, c iblog
 		// client side span, populated through opencensus trace package.
 		if span := trace.FromContext(ctx); span != nil {
 			sc := span.SpanContext()
-			gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + fmt.Sprintf("%x", sc.TraceID)
-			gcploggingEntry.SpanID = fmt.Sprintf("%x", sc.SpanID)
+			gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + sc.TraceID.String()
+			gcploggingEntry.SpanID = sc.SpanID.String()
 		}
 	} else {
 		// server side span, populated through stats/opencensus package.
 		if tID, sID, ok := opencensus.GetTraceAndSpanID(ctx); ok {
-			gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + fmt.Sprintf("%x", tID)
-			gcploggingEntry.SpanID = fmt.Sprintf("%x", sID)
+			gcploggingEntry.Trace = "projects/" + bml.projectID + "/traces/" + tID.String()
+			gcploggingEntry.SpanID = sID.String()
 		}
 	}
 	return gcploggingEntry

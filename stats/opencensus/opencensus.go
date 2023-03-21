@@ -104,7 +104,7 @@ func perCallTracesAndMetrics(err error, span *trace.Span, startTime time.Time, m
 	callLatency := float64(time.Since(startTime)) / float64(time.Millisecond)
 	ocstats.RecordWithOptions(context.Background(),
 		ocstats.WithTags(
-			tag.Upsert(keyClientMethod, method),
+			tag.Upsert(keyClientMethod, removeLeadingSlash(method)),
 			tag.Upsert(keyClientStatus, canonicalString(s.Code())),
 		),
 		ocstats.WithMeasurements(

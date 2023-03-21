@@ -121,12 +121,11 @@ type traceAndSpanIDString struct {
 }
 
 // idsToString is a helper that converts from generated trace and span IDs to
-// the string version stored in trace message events. (hex 16 lowercase encoded,
-// and extra data attached to trace id).
+// the string version stored in trace message events.
 func idsToString(tasi traceAndSpanID, projectID string) traceAndSpanIDString {
 	return traceAndSpanIDString{
-		traceID: "projects/" + projectID + "/traces/" + fmt.Sprintf("%x", tasi.traceID),
-		spanID:  fmt.Sprintf("%x", tasi.spanID),
+		traceID: "projects/" + projectID + "/traces/" + tasi.traceID.String(),
+		spanID:  tasi.spanID.String(),
 	}
 }
 
@@ -436,17 +435,17 @@ func (s) TestOpenCensusIntegration(t *testing.T) {
 		if value := fe.SeenViews["grpc.io/server/server_latency"]; value != TypeOpenCensusViewDistribution {
 			errs = append(errs, fmt.Errorf("grpc.io/server/server_latency: %s != %s", value, TypeOpenCensusViewDistribution))
 		}
-		if value := fe.SeenViews["grpc.io/client/sent_compressed_bytes_per_rpc"]; value != TypeOpenCensusViewDistribution {
-			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/client/sent_compressed_bytes_per_rpc: %s != %s", value, TypeOpenCensusViewDistribution))
+		if value := fe.SeenViews["grpc.io/client/sent_compressed_message_bytes_per_rpc"]; value != TypeOpenCensusViewDistribution {
+			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/client/sent_compressed_message_bytes_per_rpc: %s != %s", value, TypeOpenCensusViewDistribution))
 		}
-		if value := fe.SeenViews["grpc.io/client/received_compressed_bytes_per_rpc"]; value != TypeOpenCensusViewDistribution {
-			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/client/received_compressed_bytes_per_rpc: %s != %s", value, TypeOpenCensusViewDistribution))
+		if value := fe.SeenViews["grpc.io/client/received_compressed_message_bytes_per_rpc"]; value != TypeOpenCensusViewDistribution {
+			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/client/received_compressed_message_bytes_per_rpc: %s != %s", value, TypeOpenCensusViewDistribution))
 		}
-		if value := fe.SeenViews["grpc.io/server/sent_compressed_bytes_per_rpc"]; value != TypeOpenCensusViewDistribution {
-			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/server/sent_compressed_bytes_per_rpc: %s != %s", value, TypeOpenCensusViewDistribution))
+		if value := fe.SeenViews["grpc.io/server/sent_compressed_message_bytes_per_rpc"]; value != TypeOpenCensusViewDistribution {
+			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/server/sent_compressed_message_bytes_per_rpc: %s != %s", value, TypeOpenCensusViewDistribution))
 		}
-		if value := fe.SeenViews["grpc.io/server/received_compressed_bytes_per_rpc"]; value != TypeOpenCensusViewDistribution {
-			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/server/received_compressed_bytes_per_rpc: %s != %s", value, TypeOpenCensusViewDistribution))
+		if value := fe.SeenViews["grpc.io/server/received_compressed_message_bytes_per_rpc"]; value != TypeOpenCensusViewDistribution {
+			errs = append(errs, fmt.Errorf("unexpected type for grpc.io/server/received_compressed_message_bytes_per_rpc: %s != %s", value, TypeOpenCensusViewDistribution))
 		}
 		if fe.SeenSpans <= 0 {
 			errs = append(errs, fmt.Errorf("unexpected number of seen spans: %v <= 0", fe.SeenSpans))
