@@ -21,6 +21,7 @@ package clusterresolver
 import (
 	"sync"
 
+	"google.golang.org/grpc/internal/grpcsync"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 )
 
@@ -29,8 +30,9 @@ type edsResourceWatcher interface {
 }
 
 type edsDiscoveryMechanism struct {
-	cancel           func()
+	cancelWatch      func()
 	topLevelResolver topLevelResolver
+	stopped          *grpcsync.Event
 
 	mu             sync.Mutex
 	update         xdsresource.EndpointsUpdate
@@ -50,11 +52,23 @@ func (er *edsDiscoveryMechanism) lastUpdate() (interface{}, bool) {
 func (er *edsDiscoveryMechanism) resolveNow() {
 }
 
+// The definition of stop() mentions that implementations must not invoke any
+// methods on the topLevelResolver once the call to `stop()` returns.
 func (er *edsDiscoveryMechanism) stop() {
-	er.cancel()
+	// Canceling a watch with the xDS client can race with an xDS response
+	// received around the same time, and can result in the watch callback being
+	// invoked after the watch is canceled. Callers need to handle this race,
+	// and we fire the stopped event here to ensure that a watch callback
+	// invocation around the same time becomes a no-op.
+	er.stopped.Fire()
+	er.cancelWatch()
 }
 
 func (er *edsDiscoveryMechanism) handleEndpointsUpdate(update xdsresource.EndpointsUpdate, err error) {
+	if er.stopped.HasFired() {
+		return
+	}
+
 	if err != nil {
 		er.topLevelResolver.onError(err)
 		return
@@ -71,7 +85,10 @@ func (er *edsDiscoveryMechanism) handleEndpointsUpdate(update xdsresource.Endpoi
 // newEDSResolver returns an implementation of the endpointsResolver interface
 // that uses EDS to resolve the given name to endpoints.
 func newEDSResolver(nameToWatch string, watcher edsResourceWatcher, topLevelResolver topLevelResolver) *edsDiscoveryMechanism {
-	ret := &edsDiscoveryMechanism{topLevelResolver: topLevelResolver}
-	ret.cancel = watcher.WatchEndpoints(nameToWatch, ret.handleEndpointsUpdate)
+	ret := &edsDiscoveryMechanism{
+		topLevelResolver: topLevelResolver,
+		stopped:          grpcsync.NewEvent(),
+	}
+	ret.cancelWatch = watcher.WatchEndpoints(nameToWatch, ret.handleEndpointsUpdate)
 	return ret
 }

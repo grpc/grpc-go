@@ -58,7 +58,8 @@ const (
 	localityName2  = "my-locality-2"
 	localityName3  = "my-locality-3"
 
-	defaultTestTimeout = 5 * time.Second
+	defaultTestTimeout      = 5 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
 )
 
 type s struct {
