@@ -57,7 +57,8 @@ type endpointsResolver interface {
 	// resolverNow triggers re-resolution of the resource.
 	resolveNow()
 
-	// stop stops resolution of the resource.
+	// stop stops resolution of the resource. Implementations must not invoke
+	// any methods on the topLevelResolver interface once `stop()` returns.
 	stop()
 }
 
@@ -229,6 +230,10 @@ func (rr *resourceResolver) stop() {
 	// cluster resource is removed by the management server. In the latter case,
 	// an empty config update needs to be pushed to the child policy to ensure
 	// that a picker that fails RPCs is sent up to the channel.
+	//
+	// Resource resolver implementations are expected to not send any updates
+	// after they are stopped. Therefore, we don't have to worry about another
+	// write to this channel happening at the same time as this one.
 	select {
 	case <-rr.updateChannel:
 	default:
