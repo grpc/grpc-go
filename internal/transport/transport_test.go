@@ -856,7 +856,7 @@ func (s) TestGracefulClose(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			_, err := ct.NewStream(ctx, &CallHdr{})
-			if err != nil && err.(*NewStreamError).Err == ErrConnClosing {
+			if err != nil && err.(*NewStreamError).Err == ErrConnClosing && err.(*NewStreamError).AllowTransparentRetry {
 				return
 			}
 			t.Errorf("_.NewStream(_, _) = _, %v, want _, %v", err, ErrConnClosing)
