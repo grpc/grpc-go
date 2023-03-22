@@ -246,7 +246,7 @@ func newHTTP2Client(connectCtx, ctx context.Context, addr resolver.Address, opts
 		if err := connectCtx.Err(); err != nil {
 			// connectCtx expired before exiting the function.  Hard close the connection.
 			if logger.V(logLevel) {
-				logger.Infof("Aborting due to expiry of connect deadline: %v", err)
+				logger.Infof("Aborting due to connect deadline expiring: %v", err)
 			}
 			conn.Close()
 		}
@@ -863,7 +863,7 @@ func (t *http2Client) NewStream(ctx context.Context, callHdr *CallHdr) (*Stream,
 	}
 	if transportDrainRequired {
 		if t.logger.V(logLevel) {
-			t.logger.Infof("Draining transport because t.nextID > MaxStreamID")
+			t.logger.Infof("Draining transport: t.nextID > MaxStreamID")
 		}
 		t.GracefulClose()
 	}
