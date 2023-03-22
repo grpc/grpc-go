@@ -75,12 +75,13 @@ func NewTracker(state connectivity.State) *Tracker {
 // The caller of this method is responsible for invoking this function when it
 // no longer needs to monitor the connectivity state changes on the channel.
 func (t *Tracker) AddWatcher(watcher Watcher) func() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if t.stopped {
 		return func() {}
 	}
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	t.watchers[watcher] = true
 
 	t.cs.Schedule(func(context.Context) {
@@ -99,15 +100,13 @@ func (t *Tracker) AddWatcher(watcher Watcher) func() {
 // SetState updates the connectivity state of the entity being tracked, and
 // invokes the OnStateChange callback of all registered watchers.
 func (t *Tracker) SetState(state connectivity.State) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if t.stopped {
 		return
 	}
-
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	// Update the cached state
 	t.state = state
-	// Invoke callbacks on all registered watchers.
 	for watcher := range t.watchers {
 		t.cs.Schedule(func(context.Context) {
 			t.mu.Lock()
