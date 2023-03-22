@@ -48,10 +48,6 @@ func (l *listenerWatcher) OnResourceDoesNotExist() {
 
 // WatchListener uses LDS to discover information about the Listener resource
 // identified by resourceName.
-//
-// Note that during race (e.g. an xDS response is received while the user is
-// calling cancel()), there's a small window where the callback can be called
-// after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchListener(resourceName string, cb func(xdsresource.ListenerUpdate, error)) (cancel func()) {
 	watcher := &listenerWatcher{resourceName: resourceName, cb: cb}
 	return xdsresource.WatchListener(c, resourceName, watcher)
@@ -80,10 +76,6 @@ func (r *routeConfigWatcher) OnResourceDoesNotExist() {
 
 // WatchRouteConfig uses RDS to discover information about the
 // RouteConfiguration resource identified by resourceName.
-//
-// Note that during race (e.g. an xDS response is received while the user is
-// calling cancel()), there's a small window where the callback can be called
-// after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchRouteConfig(resourceName string, cb func(xdsresource.RouteConfigUpdate, error)) (cancel func()) {
 	watcher := &routeConfigWatcher{resourceName: resourceName, cb: cb}
 	return xdsresource.WatchRouteConfig(c, resourceName, watcher)
@@ -115,10 +107,6 @@ func (c *clusterWatcher) OnResourceDoesNotExist() {
 //
 // WatchCluster can be called multiple times, with same or different
 // clusterNames. Each call will start an independent watcher for the resource.
-//
-// Note that during race (e.g. an xDS response is received while the user is
-// calling cancel()), there's a small window where the callback can be called
-// after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchCluster(resourceName string, cb func(xdsresource.ClusterUpdate, error)) (cancel func()) {
 	watcher := &clusterWatcher{resourceName: resourceName, cb: cb}
 	return xdsresource.WatchCluster(c, resourceName, watcher)
@@ -150,10 +138,6 @@ func (c *endpointsWatcher) OnResourceDoesNotExist() {
 //
 // WatchEndpoints can be called multiple times, with same or different
 // clusterNames. Each call will start an independent watcher for the resource.
-//
-// Note that during race (e.g. an xDS response is received while the user is
-// calling cancel()), there's a small window where the callback can be called
-// after the watcher is canceled. The caller needs to handle this case.
 func (c *clientImpl) WatchEndpoints(resourceName string, cb func(xdsresource.EndpointsUpdate, error)) (cancel func()) {
 	watcher := &endpointsWatcher{resourceName: resourceName, cb: cb}
 	return xdsresource.WatchEndpoints(c, resourceName, watcher)
