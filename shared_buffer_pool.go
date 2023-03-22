@@ -117,10 +117,6 @@ func (p *bufferPool) Get(size int) []byte {
 	return (*bs)[:size]
 }
 
-func (p *bufferPool) Put(bs *[]byte) {
-	p.Pool.Put(bs)
-}
-
 func makeBytesPool(size int) bufferPool {
 	return bufferPool{
 		sync.Pool{
@@ -144,10 +140,6 @@ func (p *fallbackBufferPool) Get(size int) []byte {
 	}
 
 	return (*bs)[:size]
-}
-
-func (p *fallbackBufferPool) Put(bs *[]byte) {
-	p.Pool.Put(bs)
 }
 
 func makeFallbackBytesPool() bufferPool {
