@@ -86,12 +86,9 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 	var err error
 	// Custom labels completly overwrite any labels generated in the OpenCensus
 	// library, including their label that uniquely identifies the process.
-	// Thus, if any custom labels are set, generate a unique process identifier
-	// here to uniquely identify process to fill the gap of the OpenCensus
-	// library not generating this label if custom labels are set.
-	if len(config.Labels) >= 1 {
-		config.Labels["opencensus_task"] = generateUniqueProcessIdentifier()
-	}
+	// Thus, generate a unique process identifier here to uniquely identify
+	// process.
+	config.Labels["opencensus_task"] = generateUniqueProcessIdentifier()
 	exporter, err := stackdriver.NewExporter(stackdriver.Options{
 		ProjectID:               config.ProjectID,
 		MonitoredResource:       mr,
