@@ -515,7 +515,7 @@ func (b *cdsBalancer) handleErrorFromUpdate(err error, fromParent bool) {
 // xdsResolver.
 func (b *cdsBalancer) UpdateClientConnState(state balancer.ClientConnState) error {
 	if b.closed.HasFired() {
-		b.logger.Warningf("Received balancer config update after close: %v", pretty.ToJSON(state.BalancerConfig))
+		b.logger.Errorf("Received balancer config after close")
 		return errBalancerClosed
 	}
 
