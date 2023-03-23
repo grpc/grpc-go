@@ -5,7 +5,7 @@ go 1.17
 require (
 	google.golang.org/grpc v1.54.0
 	google.golang.org/grpc/examples v0.0.0-20230323213306-0fdfd40215dc
-	google.golang.org/grpc/gcp/observability v0.0.0-00010101000000-000000000000
+	google.golang.org/grpc/gcp/observability v0.0.0-20230323213306-0fdfd40215dc
 )
 
 require (
@@ -39,9 +39,3 @@ require (
 	google.golang.org/grpc/stats/opencensus v0.0.0-20230317183452-b638faff2204 // indirect
 	google.golang.org/protobuf v1.29.1 // indirect
 )
-
-replace google.golang.org/grpc => ../../..
-
-replace google.golang.org/grpc/gcp/observability => ../../../gcp/observability
-
-replace google.golang.org/grpc/stats/opencensus => ../../../stats/opencensus

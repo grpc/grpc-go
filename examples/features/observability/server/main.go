@@ -70,12 +70,20 @@ func main() {
 	s := grpc.NewServer()
 	pb.RegisterGreeterServer(s, &server{})
 	log.Printf("server listening at %v", lis.Addr())
+
+	// Catch any exits (which outside of an error case, is the only way for this
+	// server binary to end) to prevent binary from ending without running
+	// defers. This catches the signal (while preventing binary from
+	// automatically ending) and stops the server, causing s.Serve to finish,
+	// then causing this main function to finish, and thus successfully run
+	// observability.End() in a defer.
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
 		s.Stop()
 	}()
+
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
