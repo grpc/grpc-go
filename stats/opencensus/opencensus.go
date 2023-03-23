@@ -104,7 +104,7 @@ func perCallTracesAndMetrics(err error, span *trace.Span, startTime time.Time, m
 	callLatency := float64(time.Since(startTime)) / float64(time.Millisecond)
 	ocstats.RecordWithOptions(context.Background(),
 		ocstats.WithTags(
-			tag.Upsert(keyClientMethod, method),
+			tag.Upsert(keyClientMethod, removeLeadingSlash(method)),
 			tag.Upsert(keyClientStatus, canonicalString(s.Code())),
 		),
 		ocstats.WithMeasurements(
@@ -152,11 +152,22 @@ func setRPCInfo(ctx context.Context, ri *rpcInfo) context.Context {
 	return context.WithValue(ctx, rpcInfoKey{}, ri)
 }
 
-// getSpanWithMsgCount returns the rpcInfo stored in the context, or nil
+// getRPCInfo returns the rpcInfo stored in the context, or nil
 // if there isn't one.
 func getRPCInfo(ctx context.Context) *rpcInfo {
 	ri, _ := ctx.Value(rpcInfoKey{}).(*rpcInfo)
 	return ri
+}
+
+// GetTraceAndSpanID returns the trace and span ID of the span in the context.
+// Returns true if IDs present and false if IDs not present.
+func GetTraceAndSpanID(ctx context.Context) (trace.TraceID, trace.SpanID, bool) {
+	ri, ok := ctx.Value(rpcInfoKey{}).(*rpcInfo)
+	if !ok {
+		return trace.TraceID{}, trace.SpanID{}, false
+	}
+	sc := ri.ti.span.SpanContext()
+	return sc.TraceID, sc.SpanID, true
 }
 
 type clientStatsHandler struct {

@@ -47,7 +47,8 @@ const (
 	// + A value of "xds_v3" indicates that the server supports the v3 version of
 	//   the xDS transport protocol.
 	// + A value of "ignore_resource_deletion" indicates that the client should
-	//   ignore resource deletion in updates from the server.
+	//   ignore deletion of Listener and Cluster resources in updates from the
+	//   server.
 	serverFeaturesV3                     = "xds_v3"
 	serverFeaturesIgnoreResourceDeletion = "ignore_resource_deletion"
 
@@ -88,23 +89,73 @@ func (d *googleDefaultCredsBuilder) Name() string {
 	return "google_default"
 }
 
+// ChannelCreds contains the credentials to be used while communicating with an
+// xDS server. It is also used to dedup servers with the same server URI.
+type ChannelCreds struct {
+	// Type contains a unique name identifying the credentials type. The only
+	// supported types currently are "google_default" and "insecure".
+	Type string
+	// Config contains the JSON configuration associated with the credentials.
+	Config json.RawMessage
+}
+
+// Equal reports whether cc and other are considered equal.
+func (cc ChannelCreds) Equal(other ChannelCreds) bool {
+	return cc.Type == other.Type && bytes.Equal(cc.Config, other.Config)
+}
+
+// String returns a string representation of the credentials. It contains the
+// type and the config (if non-nil) separated by a "-".
+func (cc ChannelCreds) String() string {
+	if cc.Config == nil {
+		return cc.Type
+	}
+
+	// We do not expect the Marshal call to fail since we wrote to cc.Config
+	// after a successful unmarshaling from JSON configuration. Therefore,
+	// it is safe to ignore the error here.
+	b, _ := json.Marshal(cc.Config)
+	return cc.Type + "-" + string(b)
+}
+
 // ServerConfig contains the configuration to connect to a server, including
 // URI, creds, and transport API version (e.g. v2 or v3).
+//
+// It contains unexported fields that are initialized when unmarshaled from JSON
+// using either the UnmarshalJSON() method or the ServerConfigFromJSON()
+// function. Hence users are strongly encouraged not to use a literal struct
+// initialization to create an instance of this type, but instead unmarshal from
+// JSON using one of the two available options.
 type ServerConfig struct {
 	// ServerURI is the management server to connect to.
 	//
 	// The bootstrap file contains an ordered list of xDS servers to contact for
 	// this authority. The first one is picked.
 	ServerURI string
-	// Creds contains the credentials to be used while talking to the xDS
-	// server, as a grpc.DialOption.
-	Creds grpc.DialOption
-	// CredsType is the type of the creds. It will be used to dedup servers.
-	CredsType string
-	// IgnoreResourceDeletion if set the XdsClient will not invoke the watchers'
-	// OnResourceDoesNotExist() method when a resource is deleted, nor will it
-	// remove the existing resource value from its cache.
+	// Creds contains the credentials to be used while communication with this
+	// xDS server. It is also used to dedup servers with the same server URI.
+	Creds ChannelCreds
+	// ServerFeatures contains a list of features supported by this xDS server.
+	// It is also used to dedup servers with the same server URI and creds.
+	ServerFeatures []string
+
+	// As part of unmarshaling the JSON config into this struct, we ensure that
+	// the credentials config is valid by building an instance of the specified
+	// credentials and store it here as a grpc.DialOption for easy access when
+	// dialing this xDS server.
+	credsDialOption grpc.DialOption
+
+	// IgnoreResourceDeletion controls the behavior of the xDS client when the
+	// server deletes a previously sent Listener or Cluster resource. If set, the
+	// xDS client will not invoke the watchers' OnResourceDoesNotExist() method
+	// when a resource is deleted, nor will it remove the existing resource value
+	// from its cache.
 	IgnoreResourceDeletion bool
+}
+
+// CredsDialOption returns the configured credentials as a grpc dial option.
+func (sc *ServerConfig) CredsDialOption() grpc.DialOption {
+	return sc.credsDialOption
 }
 
 // String returns the string representation of the ServerConfig.
@@ -117,15 +168,16 @@ type ServerConfig struct {
 // content. It doesn't cover NodeProto because NodeProto isn't used by
 // federation.
 func (sc *ServerConfig) String() string {
-	var ver = "xDSv3"
-	return strings.Join([]string{sc.ServerURI, sc.CredsType, ver}, "-")
+	features := strings.Join(sc.ServerFeatures, "-")
+	return strings.Join([]string{sc.ServerURI, sc.Creds.String(), features}, "-")
 }
 
 // MarshalJSON marshals the ServerConfig to json.
 func (sc ServerConfig) MarshalJSON() ([]byte, error) {
 	server := xdsServer{
-		ServerURI:    sc.ServerURI,
-		ChannelCreds: []channelCreds{{Type: sc.CredsType, Config: nil}},
+		ServerURI:      sc.ServerURI,
+		ChannelCreds:   []channelCreds{{Type: sc.Creds.Type, Config: sc.Creds.Config}},
+		ServerFeatures: sc.ServerFeatures,
 	}
 	server.ServerFeatures = []string{serverFeaturesV3}
 	if sc.IgnoreResourceDeletion {
@@ -140,10 +192,16 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &server); err != nil {
 		return fmt.Errorf("xds: json.Unmarshal(data) for field ServerConfig failed during bootstrap: %v", err)
 	}
+
 	sc.ServerURI = server.ServerURI
+	sc.ServerFeatures = server.ServerFeatures
+	for _, f := range server.ServerFeatures {
+		if f == serverFeaturesIgnoreResourceDeletion {
+			sc.IgnoreResourceDeletion = true
+		}
+	}
 	for _, cc := range server.ChannelCreds {
 		// We stop at the first credential type that we support.
-		sc.CredsType = cc.Type
 		c := bootstrap.GetCredentials(cc.Type)
 		if c == nil {
 			continue
@@ -152,15 +210,54 @@ func (sc *ServerConfig) UnmarshalJSON(data []byte) error {
 		if err != nil {
 			return fmt.Errorf("failed to build credentials bundle from bootstrap for %q: %v", cc.Type, err)
 		}
-		sc.Creds = grpc.WithCredentialsBundle(bundle)
+		sc.Creds = ChannelCreds{
+			Type:   cc.Type,
+			Config: cc.Config,
+		}
+		sc.credsDialOption = grpc.WithCredentialsBundle(bundle)
 		break
 	}
-	for _, f := range server.ServerFeatures {
-		if f == serverFeaturesIgnoreResourceDeletion {
-			sc.IgnoreResourceDeletion = true
+	return nil
+}
+
+// ServerConfigFromJSON creates a new ServerConfig from the given JSON
+// configuration. This is the preferred way of creating a ServerConfig when
+// hand-crafting the JSON configuration.
+func ServerConfigFromJSON(data []byte) (*ServerConfig, error) {
+	sc := new(ServerConfig)
+	if err := sc.UnmarshalJSON(data); err != nil {
+		return nil, err
+	}
+	return sc, nil
+}
+
+// Equal reports whether sc and other are considered equal.
+func (sc *ServerConfig) Equal(other *ServerConfig) bool {
+	switch {
+	case sc == nil && other == nil:
+		return true
+	case (sc != nil) != (other != nil):
+		return false
+	case sc.ServerURI != other.ServerURI:
+		return false
+	case !sc.Creds.Equal(other.Creds):
+		return false
+	case !equalStringSlice(sc.ServerFeatures, other.ServerFeatures):
+		return false
+	}
+	return true
+}
+
+func equalStringSlice(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
 		}
 	}
-	return nil
+	return true
 }
 
 // unmarshalJSONServerConfigSlice unmarshals JSON to a slice.
@@ -349,6 +446,7 @@ func NewConfigFromContentsForTesting(data []byte) (*Config, error) {
 }
 
 func newConfigFromContents(data []byte) (*Config, error) {
+	logger.Infof("arvindbright: %v", data)
 	config := &Config{}
 
 	var jsonData map[string]json.RawMessage
@@ -438,7 +536,7 @@ func newConfigFromContents(data []byte) (*Config, error) {
 	if config.XDSServer.ServerURI == "" {
 		return nil, fmt.Errorf("xds: required field %q not found in bootstrap %s", "xds_servers.server_uri", jsonData["xds_servers"])
 	}
-	if config.XDSServer.Creds == nil {
+	if config.XDSServer.CredsDialOption() == nil {
 		return nil, fmt.Errorf("xds: required field %q doesn't contain valid value in bootstrap %s", "xds_servers.channel_creds", jsonData["xds_servers"])
 	}
 	// Post-process the authorities' client listener resource template field:

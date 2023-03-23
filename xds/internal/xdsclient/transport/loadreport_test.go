@@ -25,10 +25,8 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/xds/internal/testutils/fakeserver"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	"google.golang.org/grpc/internal/testutils/xds/fakeserver"
+	"google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -43,17 +41,10 @@ func (s) TestReportLoad(t *testing.T) {
 	defer cleanup()
 	t.Logf("Started xDS management server on %s", mgmtServer.Address)
 
-	// Construct the server config to represent the management server.
-	nodeProto := &v3corepb.Node{Id: uuid.New().String()}
-	serverCfg := bootstrap.ServerConfig{
-		ServerURI: mgmtServer.Address,
-		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType: "insecure",
-	}
-
 	// Create a transport to the fake management server.
+	nodeProto := &v3corepb.Node{Id: uuid.New().String()}
 	tr, err := transport.New(transport.Options{
-		ServerCfg:      serverCfg,
+		ServerCfg:      *testutils.ServerConfigForAddress(t, mgmtServer.Address),
 		NodeProto:      nodeProto,
 		OnRecvHandler:  func(transport.ResourceUpdate) error { return nil }, // No ADS validation.
 		OnErrorHandler: func(error) {},                                      // No ADS stream error handling.

@@ -44,11 +44,10 @@ const (
 )
 
 type resourceState struct {
-	watchers map[xdsresource.ResourceWatcher]bool // Set of watchers for this resource
-	cache    xdsresource.ResourceData             // Most recent ACKed update for this resource
-	md       xdsresource.UpdateMetadata           // Metadata for the most recent update
-
-	resourceDeletionIgnored bool // Set if resource deletion was ignored for a prior update
+	watchers        map[xdsresource.ResourceWatcher]bool // Set of watchers for this resource
+	cache           xdsresource.ResourceData             // Most recent ACKed update for this resource
+	md              xdsresource.UpdateMetadata           // Metadata for the most recent update
+	deletionIgnored bool                                 // True if resource deletion was ignored for a prior update
 
 	// Common watch state for all watchers of this resource.
 	wTimer *time.Timer // Expiry timer
@@ -171,8 +170,32 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			// Cancel the expiry timer associated with the resource once a
 			// response is received, irrespective of whether the update is a
 			// good one or not.
-			if state.wState == watchStateRequested {
-				state.wTimer.Stop()
+			//
+			// We check for watch states `started` and `requested` here to
+			// accommodate for a race which can happen in the following
+			// scenario:
+			// - When a watch is registered, it is possible that the ADS stream
+			//   is not yet created. In this case, the request for the resource
+			//   is not sent out immediately. An entry in the `resourceStates`
+			//   map is created with a watch state of `started`.
+			// - Once the stream is created, it is possible that the management
+			//   server might respond with the requested resource before we send
+			//   out request for the same. If we don't check for `started` here,
+			//   and move the state to `received`, we will end up starting the
+			//   timer when the request gets sent out. And since the mangement
+			//   server already sent us the resource, there is a good chance
+			//   that it will not send it again. This would eventually lead to
+			//   the timer firing, even though we have the resource in the
+			//   cache.
+			if state.wState == watchStateStarted || state.wState == watchStateRequested {
+				// It is OK to ignore the return value from Stop() here because
+				// if the timer has already fired, it means that the timer watch
+				// expiry callback is blocked on the same lock that we currently
+				// hold. Since we move the state to `received` here, the timer
+				// callback will be a no-op.
+				if state.wTimer != nil {
+					state.wTimer.Stop()
+				}
 				state.wState = watchStateReceived
 			}
 
@@ -188,11 +211,10 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 				}
 				continue
 			}
-			// If we get here, it means that the update is a valid one.
-			// Check if resourceDeletionIgnored flag was set for a prior response from server.
-			if state.resourceDeletionIgnored {
-				state.resourceDeletionIgnored = false
-				a.logger.Infof("A valid update was received for resource type %q with resource name %q after previously ignoring a deletion", rType.TypeEnum(), name)
+
+			if state.deletionIgnored {
+				state.deletionIgnored = false
+				a.logger.Infof("A valid update was received for resource %q of type %q after previously ignoring a deletion", name, rType.TypeEnum())
 			}
 			// Notify watchers only if this is a first time update or it is different
 			// from the one currently cached.
@@ -253,15 +275,16 @@ func (a *authority) updateResourceStateAndScheduleCallbacks(rType xdsresource.Ty
 			if state.md.Status == xdsresource.ServiceStatusNotExist {
 				continue
 			}
-
-			// Per A53, we want to delete the resource from cache based on the environment
-			// variable ignore_resource_deletion in server config.
+			// Per A53, resource deletions are ignored if the `ignore_resource_deletion`
+			// server feature is enabled through the bootstrap configuration. If the
+			// resource deletion is to be ignored, the resource is not removed from
+			// the cache and the corresponding OnResourceDoesNotExist() callback is
+			// not invoked on the watchers.
 			if a.serverCfg.IgnoreResourceDeletion {
-				if !state.resourceDeletionIgnored {
-					state.resourceDeletionIgnored = true
-					a.logger.Warningf("Ignoring resource deletion for resource type %q with resource name %q ", rType.TypeEnum(), name)
+				if !state.deletionIgnored {
+					state.deletionIgnored = true
+					a.logger.Warningf("Ignoring resource deletion for resource %q of type %q", name, rType.TypeEnum())
 				}
-				// Skip sending updates to watchers.
 				continue
 			}
 			// If resource exists in cache, but not in the new update, delete
@@ -442,10 +465,9 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 	if state == nil {
 		a.logger.Debugf("First watch for type %q, resource name %q", rType.TypeEnum(), resourceName)
 		state = &resourceState{
-			watchers:                make(map[xdsresource.ResourceWatcher]bool),
-			md:                      xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested},
-			wState:                  watchStateStarted,
-			resourceDeletionIgnored: false,
+			watchers: make(map[xdsresource.ResourceWatcher]bool),
+			md:       xdsresource.UpdateMetadata{Status: xdsresource.ServiceStatusRequested},
+			wState:   watchStateStarted,
 		}
 		resources[resourceName] = state
 		a.sendDiscoveryRequestLocked(rType, resources)
@@ -478,6 +500,7 @@ func (a *authority) watchResource(rType xdsresource.Type, resourceName string, w
 		// There are no more watchers for this resource, delete the state
 		// associated with it, and instruct the transport to send a request
 		// which does not include this resource name.
+		a.logger.Debugf("Removing last watch for type %q, resource name %q", rType.TypeEnum(), resourceName)
 		delete(resources, resourceName)
 		a.sendDiscoveryRequestLocked(rType, resources)
 	}

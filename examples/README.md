@@ -1,29 +1,10 @@
-# gRPC Hello World
+# Examples
 
-Follow these setup to run the [quick start][] example:
+The following examples are provided to help users get started with gRPC-Go.
+They are arranged as follows:
 
- 1. Get the code:
+* `helloworld` - a simple example showing a basic client and server
+* `routeguide` - a more complicated example showing different types of streaming RPCs
+* `features` - a collection of examples, each focused on a single gRPC feature
 
-    ```console
-    $ go get google.golang.org/grpc/examples/helloworld/greeter_client
-    $ go get google.golang.org/grpc/examples/helloworld/greeter_server
-    ```
-
- 2. Run the server:
-
-    ```console
-    $ $(go env GOPATH)/bin/greeter_server &
-    ```
-
- 3. Run the client:
-
-    ```console
-    $ $(go env GOPATH)/bin/greeter_client
-    Greeting: Hello world
-    ```
-
-For more details (including instructions for making a small change to the
-example code) or if you're having trouble running this example, see [Quick
-Start][].
-
-[quick start]: https://grpc.io/docs/languages/go/quickstart
+`data` is a directory containing data used by the examples, e.g. TLS certificates.

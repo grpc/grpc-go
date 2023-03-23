@@ -23,60 +23,23 @@ import (
 	"testing"
 	"time"
 
-	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
-	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
 	"google.golang.org/grpc/xds/internal"
-	_ "google.golang.org/grpc/xds/internal/httpfilter/router"
+	"google.golang.org/grpc/xds/internal/testutils"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
+
+	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+
+	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
 
 var emptyServerOpts = e2e.ManagementServerOptions{}
-
-type testResourceWatcher struct {
-	updateCh chan *xdsresource.ResourceData
-	errorCh  chan error
-}
-
-func (w *testResourceWatcher) OnUpdate(data xdsresource.ResourceData) {
-	select {
-	case w.updateCh <- &data:
-	default:
-	}
-}
-
-func (w *testResourceWatcher) OnError(err error) {
-	select {
-	case w.errorCh <- err:
-	default:
-	}
-}
-
-func (w *testResourceWatcher) OnResourceDoesNotExist() {}
-
-func (w *testResourceWatcher) BlockOnUpdateCh(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("test timed out before watcher received the update")
-	case err := <-w.errorCh:
-		return fmt.Errorf("watch got an unexpected error update: %q; want: valid update", err)
-	case <-w.updateCh:
-	}
-	return nil
-}
-
-func newTestResourceWatcher() *testResourceWatcher {
-	return &testResourceWatcher{
-		updateCh: make(chan *xdsresource.ResourceData, 1),
-		errorCh:  make(chan error, 1),
-	}
-}
 
 var (
 	// Listener resource type implementation retrieved from the resource type map
@@ -101,11 +64,7 @@ func setupTest(ctx context.Context, t *testing.T, opts e2e.ManagementServerOptio
 	}
 
 	a, err := newAuthority(authorityArgs{
-		serverCfg: &bootstrap.ServerConfig{
-			ServerURI: ms.Address,
-			Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-			CredsType: "insecure",
-		},
+		serverCfg: xdstestutils.ServerConfigForAddress(t, ms.Address),
 		bootstrapCfg: &bootstrap.Config{
 			NodeProto: &v3corepb.Node{Id: nodeID},
 		},
@@ -142,7 +101,7 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 	defer a.close()
 
 	rn := "xdsclient-test-lds-resource"
-	w := newTestResourceWatcher()
+	w := testutils.NewTestResourceWatcher()
 	cancelResource := a.watchResource(listenerResourceType, rn, w)
 	defer cancelResource()
 
@@ -160,16 +119,17 @@ func (s) TestTimerAndWatchStateOnSendCallback(t *testing.T) {
 
 	// Updating mgmt server with the same lds resource. Blocking on watcher's update
 	// ch to verify the watch state transition to `watchStateReceived`.
-	if err := updateResourcesInServer(ctx, ms, []string{rn}, nodeID); err != nil {
+	if err := updateResourceInServer(ctx, ms, rn, nodeID); err != nil {
 		t.Fatalf("Failed to update server with resource: %q; err: %q", rn, err)
 	}
-
-	// If this call returns without an error it means the OnUpdate callback was
-	// invoked and the watcher was notified.
-	if err := w.BlockOnUpdateCh(ctx); err != nil {
-		t.Fatal(err)
+	select {
+	case <-ctx.Done():
+		t.Fatal("Test timed out before watcher received an update from server.")
+	case err := <-w.ErrorCh:
+		t.Fatalf("Watch got an unexpected error update: %q. Want valid updates.", err)
+	case <-w.UpdateCh:
+		// This means the OnUpdate callback was invoked and the watcher was notified.
 	}
-
 	if err := compareWatchState(a, rn, watchStateReceived); err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +146,7 @@ func (s) TestTimerAndWatchStateOnErrorCallback(t *testing.T) {
 	defer a.close()
 
 	rn := "xdsclient-test-lds-resource"
-	w := newTestResourceWatcher()
+	w := testutils.NewTestResourceWatcher()
 	cancelResource := a.watchResource(listenerResourceType, rn, w)
 	defer cancelResource()
 
@@ -198,7 +158,7 @@ func (s) TestTimerAndWatchStateOnErrorCallback(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Test timed out before verifying error propagation.")
-	case err := <-w.errorCh:
+	case err := <-w.ErrorCh:
 		if xdsresource.ErrType(err) != xdsresource.ErrorTypeConnection {
 			t.Fatal("Connection error not propagated to watchers.")
 		}
@@ -229,21 +189,25 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	defer a.close()
 
 	nameA := "xdsclient-test-lds-resourceA"
-	watcherA := newTestResourceWatcher()
+	watcherA := testutils.NewTestResourceWatcher()
 	cancelA := a.watchResource(listenerResourceType, nameA, watcherA)
 
-	if err := updateResourcesInServer(ctx, ms, []string{nameA}, nodeID); err != nil {
+	if err := updateResourceInServer(ctx, ms, nameA, nodeID); err != nil {
 		t.Fatalf("Failed to update server with resource: %q; err: %q", nameA, err)
 	}
 
 	// Blocking on resource A watcher's update Channel to verify that there is
 	// more than one msg(s) received the ADS stream.
-	if err := watcherA.BlockOnUpdateCh(ctx); err != nil {
-		t.Fatal(err)
+	select {
+	case <-ctx.Done():
+		t.Fatal("Test timed out before watcher received the update.")
+	case err := <-watcherA.ErrorCh:
+		t.Fatalf("Watch got an unexpected error update: %q; want: valid update.", err)
+	case <-watcherA.UpdateCh:
 	}
 
 	nameB := "xdsclient-test-lds-resourceB"
-	watcherB := newTestResourceWatcher()
+	watcherB := testutils.NewTestResourceWatcher()
 	cancelB := a.watchResource(listenerResourceType, nameB, watcherB)
 	defer cancelB()
 
@@ -255,9 +219,9 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 	select {
 	case <-ctx.Done():
 		t.Fatal("Test timed out before mgmt server got the request.")
-	case u := <-watcherB.updateCh:
+	case u := <-watcherB.UpdateCh:
 		t.Fatalf("Watch got an unexpected resource update: %v.", u)
-	case gotErr := <-watcherB.errorCh:
+	case gotErr := <-watcherB.ErrorCh:
 		wantErr := xdsresource.ErrorTypeConnection
 		if xdsresource.ErrType(gotErr) != wantErr {
 			t.Fatalf("Watch got an unexpected error:%q. Want: %q.", gotErr, wantErr)
@@ -271,121 +235,6 @@ func (s) TestWatchResourceTimerCanRestartOnIgnoredADSRecvError(t *testing.T) {
 		t.Fatalf("Invalid watch state: %v.", err)
 	}
 
-}
-
-// This tests the scenario when IgnoreResourceDeletion server_features variable is set on
-// the bootstrap server config, the resource deletion is ignored by the client when a update
-// is missing that resource. This is a conformance gRFC A53[https://github.com/grpc/proposal/blob/master/A53-xds-ignore-resource-deletion.md].
-func (s) TestResourceDeletionIsIgnored(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	defer cancel()
-	a, mgmtServer, nodeID := setupTest(ctx, t, emptyServerOpts, defaultClientWatchExpiryTimeout)
-	defer mgmtServer.Stop()
-	defer a.close()
-
-	resourceNameA := "xdsclient-test-lds-resourceA"
-	watcherA := newTestResourceWatcher()
-	cancelResourceA := a.watchResource(listenerResourceType, resourceNameA, watcherA)
-	defer cancelResourceA()
-
-	resourceNameB := "xdsclient-test-lds-resourceB"
-	watcherB := newTestResourceWatcher()
-	cancelResourceB := a.watchResource(listenerResourceType, resourceNameB, watcherB)
-	defer cancelResourceB()
-
-	if err := updateResourcesInServer(ctx, mgmtServer, []string{resourceNameA, resourceNameB}, nodeID); err != nil {
-		t.Fatalf("Failed to update server with resource: %q; err: %q", []string{resourceNameA, resourceNameB}, err)
-	}
-
-	// Waiting for watcher(s) to receieve a resource update.
-	if err := watcherA.BlockOnUpdateCh(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if err := watcherB.BlockOnUpdateCh(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	if ok := checkResourceInCache(a, resourceNameA); !ok {
-		t.Fatalf("No valid update cached for resource: %q. Want resource to be present in cache.", resourceNameA)
-	}
-	if ok := checkResourceInCache(a, resourceNameB); !ok {
-		t.Fatalf("No valid update cached for resource: %q. Want resource to be present in cache.", resourceNameB)
-	}
-
-	// Sending an update without resource B.
-	if err := updateResourcesInServer(ctx, mgmtServer, []string{resourceNameA}, nodeID); err != nil {
-		t.Fatalf("Failed to update server with resource: %q; err: %q", resourceNameA, err)
-	}
-
-	// Waiting for updates to reach the client.
-	if err := watcherA.BlockOnUpdateCh(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	// Verifying that both resources are still in cache.
-	if ok := checkResourceInCache(a, resourceNameA); !ok {
-		t.Fatalf("No valid update cached for resource[%q] was found. Want resource to be present in cache.", resourceNameA)
-	}
-	if ok := checkResourceInCache(a, resourceNameB); ok {
-		t.Fatalf("A valid update for resource[%q] was found in cache. Want no resource cache deleted.", resourceNameB)
-	}
-}
-
-func (s) TestResourceDeletionIsNotIgnored(t *testing.T) {
-	// This tests the scenario when IgnoreResourceDeletion is unset on the bootstrap
-	// server config, the resource deletion is not ignored by the client.
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout*100)
-	defer cancel()
-	a, mgmtServer, nodeID := setupTest(ctx, t, emptyServerOpts, defaultClientWatchExpiryTimeout)
-	defer mgmtServer.Stop()
-	defer a.close()
-
-	resourceNameA := "xdsclient-test-lds-resourceA"
-	watcherA := newTestResourceWatcher()
-	cancelResourceA := a.watchResource(listenerResourceType, resourceNameA, watcherA)
-	defer cancelResourceA()
-
-	resourceNameB := "xdsclient-test-lds-resourceB"
-	watcherB := newTestResourceWatcher()
-	cancelResourceB := a.watchResource(listenerResourceType, resourceNameB, watcherB)
-	defer cancelResourceB()
-
-	if err := updateResourcesInServer(ctx, mgmtServer, []string{resourceNameA, resourceNameB}, nodeID); err != nil {
-		t.Fatalf("Failed to update server with resource: %q; err: %q", []string{resourceNameA, resourceNameB}, err)
-	}
-
-	// Waiting for watcher(s) to receieve a resource update.
-	if err := watcherA.BlockOnUpdateCh(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if err := watcherB.BlockOnUpdateCh(ctx); err != nil {
-		t.Fatal(err)
-	}
-	if ok := checkResourceInCache(a, resourceNameA); !ok {
-		t.Fatalf("No valid update cached for resource: %q. Want resource to be present in cache.", resourceNameA)
-	}
-	if ok := checkResourceInCache(a, resourceNameB); !ok {
-		t.Fatalf("No valid update cached for resource: %q. Want resource to be present in cache.", resourceNameB)
-	}
-
-	// Sending an update without resource B.
-	if err := updateResourcesInServer(ctx, mgmtServer, []string{resourceNameA}, nodeID); err != nil {
-		t.Fatalf("Failed to update server with resource: %q; err: %q", resourceNameA, err)
-	}
-
-	// Waiting for updates to reach the client.
-	if err := watcherA.BlockOnUpdateCh(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	// Verifying that resource A's cache is still valid, while resource B has been
-	// deleted.
-	if ok := checkResourceInCache(a, resourceNameA); !ok {
-		t.Fatalf("No valid update cached for resource: %q. Want resource to be present in cache.", resourceNameA)
-	}
-	if ok := checkResourceInCache(a, resourceNameB); ok {
-		t.Fatalf("No valid update cached for resource: %q. Want resource to be present in cache.", resourceNameB)
-	}
 }
 
 func compareWatchState(a *authority, rn string, wantState watchState) error {
@@ -415,21 +264,11 @@ func compareWatchState(a *authority, rn string, wantState watchState) error {
 	return nil
 }
 
-func checkResourceInCache(a *authority, rn string) bool {
-	a.resourcesMu.Lock()
-	defer a.resourcesMu.Unlock()
-	return a.resources[listenerResourceType][rn].cache != nil
-}
-
-func updateResourcesInServer(ctx context.Context, ms *e2e.ManagementServer, rns []string, nID string) error {
-	listeners := []*v3listenerpb.Listener{}
-	for _, rn := range rns {
-		listener := e2e.DefaultClientListener(rn, fmt.Sprintf("new-rds-%s", uuid.New().String()))
-		listeners = append(listeners, listener)
-	}
+func updateResourceInServer(ctx context.Context, ms *e2e.ManagementServer, rn string, nID string) error {
+	l := e2e.DefaultClientListener(rn, "new-rds-resource")
 	resources := e2e.UpdateOptions{
 		NodeID:         nID,
-		Listeners:      listeners,
+		Listeners:      []*v3listenerpb.Listener{l},
 		SkipValidation: true,
 	}
 	return ms.Update(ctx, resources)

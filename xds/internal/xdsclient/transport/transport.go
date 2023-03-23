@@ -177,7 +177,7 @@ func New(opts Options) (*Transport, error) {
 	switch {
 	case opts.ServerCfg.ServerURI == "":
 		return nil, errors.New("missing server URI when creating a new transport")
-	case opts.ServerCfg.Creds == nil:
+	case opts.ServerCfg.CredsDialOption() == nil:
 		return nil, errors.New("missing credentials when creating a new transport")
 	case opts.OnRecvHandler == nil:
 		return nil, errors.New("missing OnRecv callback handler when creating a new transport")
@@ -189,7 +189,7 @@ func New(opts Options) (*Transport, error) {
 
 	// Dial the xDS management with the passed in credentials.
 	dopts := []grpc.DialOption{
-		opts.ServerCfg.Creds,
+		opts.ServerCfg.CredsDialOption(),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			// We decided to use these sane defaults in all languages, and
 			// kicked the can down the road as far making these configurable.
@@ -277,13 +277,15 @@ type ResourceSendInfo struct {
 	URL           string
 }
 
-func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, resourceNames []string, resourceURL, version, nonce string, nackErr error) error {
+func (t *Transport) sendAggregatedDiscoveryServiceRequest(stream adsStream, sendNodeProto bool, resourceNames []string, resourceURL, version, nonce string, nackErr error) error {
 	req := &v3discoverypb.DiscoveryRequest{
-		Node:          t.nodeProto,
 		TypeUrl:       resourceURL,
 		ResourceNames: resourceNames,
 		VersionInfo:   version,
 		ResponseNonce: nonce,
+	}
+	if sendNodeProto {
+		req.Node = t.nodeProto
 	}
 	if nackErr != nil {
 		req.ErrorDetail = &statuspb.Status{
@@ -372,16 +374,32 @@ func (t *Transport) adsRunner(ctx context.Context) {
 // there are new streams) and the appropriate request is sent out.
 func (t *Transport) send(ctx context.Context) {
 	var stream adsStream
+	// The xDS protocol only requires that we send the node proto in the first
+	// discovery request on every stream. Sending the node proto in every
+	// request message wastes CPU resources on the client and the server.
+	sendNodeProto := true
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case stream = <-t.adsStreamCh:
+			// We have a new stream and we've to ensure that the node proto gets
+			// sent out in the first request on the stream. At this point, we
+			// might not have any registered watches. Setting this field to true
+			// here will ensure that the node proto gets sent out along with the
+			// discovery request when the first watch is registered.
+			if len(t.resources) == 0 {
+				sendNodeProto = true
+				continue
+			}
+
 			if !t.sendExisting(stream) {
 				// Send failed, clear the current stream. Attempt to resend will
 				// only be made after a new stream is created.
 				stream = nil
+				continue
 			}
+			sendNodeProto = false
 		case u := <-t.adsRequestCh.Get():
 			t.adsRequestCh.Load()
 
@@ -408,11 +426,12 @@ func (t *Transport) send(ctx context.Context) {
 				// sending response back).
 				continue
 			}
-			if err := t.sendAggregatedDiscoveryServiceRequest(stream, resources, url, version, nonce, nackErr); err != nil {
+			if err := t.sendAggregatedDiscoveryServiceRequest(stream, sendNodeProto, resources, url, version, nonce, nackErr); err != nil {
 				t.logger.Warningf("Sending ADS request for resources: %q, url: %q, version: %q, nonce: %q failed: %v", resources, url, version, nonce, err)
 				// Send failed, clear the current stream.
 				stream = nil
 			}
+			sendNodeProto = false
 		}
 	}
 }
@@ -440,11 +459,14 @@ func (t *Transport) sendExisting(stream adsStream) bool {
 	// seen by the client on the previous stream
 	t.nonces = make(map[string]string)
 
+	// Send node proto only in the first request on the stream.
+	sendNodeProto := true
 	for url, resources := range t.resources {
-		if err := t.sendAggregatedDiscoveryServiceRequest(stream, mapToSlice(resources), url, t.versions[url], "", nil); err != nil {
+		if err := t.sendAggregatedDiscoveryServiceRequest(stream, sendNodeProto, mapToSlice(resources), url, t.versions[url], "", nil); err != nil {
 			t.logger.Warningf("Sending ADS request for resources: %q, url: %q, version: %q, nonce: %q failed: %v", resources, url, t.versions[url], "", err)
 			return false
 		}
+		sendNodeProto = false
 	}
 
 	return true

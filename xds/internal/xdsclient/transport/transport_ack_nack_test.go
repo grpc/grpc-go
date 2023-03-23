@@ -26,12 +26,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/testutils/xds/e2e"
-	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
+	xdstestutils "google.golang.org/grpc/xds/internal/testutils"
 	"google.golang.org/grpc/xds/internal/xdsclient/transport"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/proto"
@@ -135,16 +133,9 @@ func (s) TestSimpleAckAndNack(t *testing.T) {
 		SkipValidation: true,
 	})
 
-	// Construct the server config to represent the management server.
-	serverCfg := bootstrap.ServerConfig{
-		ServerURI: mgmtServer.Address,
-		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType: "insecure",
-	}
-
 	// Create a new transport.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:      serverCfg,
+		ServerCfg:      *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
 		OnRecvHandler:  dataModelValidator,
 		OnErrorHandler: func(err error) {},
 		OnSendHandler:  func(*transport.ResourceSendInfo) {},
@@ -322,16 +313,9 @@ func (s) TestInvalidFirstResponse(t *testing.T) {
 		SkipValidation: true,
 	})
 
-	// Construct the server config to represent the management server.
-	serverCfg := bootstrap.ServerConfig{
-		ServerURI: mgmtServer.Address,
-		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType: "insecure",
-	}
-
 	// Create a new transport.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:      serverCfg,
+		ServerCfg:      *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
 		NodeProto:      &v3corepb.Node{Id: nodeID},
 		OnRecvHandler:  dataModelValidator,
 		OnErrorHandler: func(err error) {},
@@ -451,16 +435,9 @@ func (s) TestResourceIsNotRequestedAnymore(t *testing.T) {
 		SkipValidation: true,
 	})
 
-	// Construct the server config to represent the management server.
-	serverCfg := bootstrap.ServerConfig{
-		ServerURI: mgmtServer.Address,
-		Creds:     grpc.WithTransportCredentials(insecure.NewCredentials()),
-		CredsType: "insecure",
-	}
-
 	// Create a new transport.
 	tr, err := transport.New(transport.Options{
-		ServerCfg:      serverCfg,
+		ServerCfg:      *xdstestutils.ServerConfigForAddress(t, mgmtServer.Address),
 		NodeProto:      &v3corepb.Node{Id: nodeID},
 		OnRecvHandler:  dataModelValidator,
 		OnErrorHandler: func(err error) {},

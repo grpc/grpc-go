@@ -35,6 +35,19 @@ import (
 var (
 	// It's a variable instead of const to speed up testing
 	defaultMetricsReportingInterval = time.Second * 30
+	defaultViews                    = []*view.View{
+		opencensus.ClientStartedRPCsView,
+		opencensus.ClientCompletedRPCsView,
+		opencensus.ClientRoundtripLatencyView,
+		opencensus.ClientSentCompressedMessageBytesPerRPCView,
+		opencensus.ClientReceivedCompressedMessageBytesPerRPCView,
+		opencensus.ClientAPILatencyView,
+		opencensus.ServerStartedRPCsView,
+		opencensus.ServerCompletedRPCsView,
+		opencensus.ServerSentCompressedMessageBytesPerRPCView,
+		opencensus.ServerReceivedCompressedMessageBytesPerRPCView,
+		opencensus.ServerLatencyView,
+	}
 )
 
 func labelsToMonitoringLabels(labels map[string]string) *stackdriver.Labels {
@@ -74,6 +87,8 @@ func newStackdriverExporter(config *config) (tracingMetricsExporter, error) {
 		MonitoredResource:       mr,
 		DefaultMonitoringLabels: labelsToMonitoringLabels(config.Labels),
 		DefaultTraceAttributes:  labelsToTraceAttributes(config.Labels),
+		MonitoringClientOptions: cOptsDisableLogTrace,
+		TraceClientOptions:      cOptsDisableLogTrace,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Stackdriver exporter: %v", err)
@@ -104,11 +119,8 @@ func startOpenCensus(config *config) error {
 	}
 
 	if config.CloudMonitoring != nil {
-		if err := view.Register(opencensus.ClientStartedRPCsView, opencensus.ClientCompletedRPCsView, opencensus.ClientRoundtripLatencyView); err != nil {
-			return fmt.Errorf("failed to register default client views: %v", err)
-		}
-		if err := view.Register(opencensus.ServerStartedRPCsView, opencensus.ServerCompletedRPCsView, opencensus.ServerLatencyView); err != nil {
-			return fmt.Errorf("failed to register default server views: %v", err)
+		if err := view.Register(defaultViews...); err != nil {
+			return fmt.Errorf("failed to register observability views: %v", err)
 		}
 		view.SetReportingPeriod(defaultMetricsReportingInterval)
 		view.RegisterExporter(exporter.(view.Exporter))
@@ -128,11 +140,16 @@ func stopOpenCensus() {
 	if exporter != nil {
 		internal.ClearGlobalDialOptions()
 		internal.ClearGlobalServerOptions()
+		// This Unregister call guarantees the data recorded gets sent to
+		// exporter, synchronising the view package and exporter. Doesn't matter
+		// if views not registered, will be a noop if not registered.
+		view.Unregister(defaultViews...)
 		// Call these unconditionally, doesn't matter if not registered, will be
 		// a noop if not registered.
 		trace.UnregisterExporter(exporter)
 		view.UnregisterExporter(exporter)
 
+		// This Flush call makes sure recorded telemetry get sent to backend.
 		exporter.Flush()
 		exporter.Close()
 	}

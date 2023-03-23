@@ -37,6 +37,9 @@ type Options struct {
 	NodeID string
 	// ServerURI is the address of the management server.
 	ServerURI string
+	// IgnoreResourceDeletion if true implies that the management server features
+	// ignore_resource_deletion.
+	IgnoreResourceDeletion bool
 	// ClientDefaultListenerResourceNameTemplate is the default listener
 	// resource name template to be used on the gRPC client.
 	ClientDefaultListenerResourceNameTemplate string
@@ -108,6 +111,9 @@ func Contents(opts Options) ([]byte, error) {
 		ServerListenerResourceNameTemplate:        opts.ServerListenerResourceNameTemplate,
 	}
 	cfg.XdsServers[0].ServerFeatures = append(cfg.XdsServers[0].ServerFeatures, "xds_v3")
+	if opts.IgnoreResourceDeletion {
+		cfg.XdsServers[0].ServerFeatures = append(cfg.XdsServers[0].ServerFeatures, "ignore_resource_deletion")
+	}
 
 	auths := make(map[string]authority)
 	if envconfig.XDSFederation {

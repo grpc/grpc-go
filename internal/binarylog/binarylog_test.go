@@ -98,7 +98,6 @@ func (s) TestGetMethodLogger(t *testing.T) {
 			t.Errorf("in: %q, method logger is nil, want non-nil", tc.in)
 			continue
 		}
-
 		if ml.headerMaxLen != tc.hdr || ml.messageMaxLen != tc.msg {
 			t.Errorf("in: %q, want header: %v, message: %v, got header: %v, message: %v", tc.in, tc.hdr, tc.msg, ml.headerMaxLen, ml.messageMaxLen)
 		}

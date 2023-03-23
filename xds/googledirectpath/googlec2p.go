@@ -31,19 +31,19 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/googlecloud"
 	internalgrpclog "google.golang.org/grpc/internal/grpclog"
 	"google.golang.org/grpc/internal/grpcrand"
 	"google.golang.org/grpc/resolver"
-	_ "google.golang.org/grpc/xds" // To register xds resolvers and balancers.
 	"google.golang.org/grpc/xds/internal/xdsclient"
 	"google.golang.org/grpc/xds/internal/xdsclient/bootstrap"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
+
+	_ "google.golang.org/grpc/xds" // To register xds resolvers and balancers.
 )
 
 const (
@@ -116,10 +116,14 @@ func (c2pResolverBuilder) Build(t resolver.Target, cc resolver.ClientConn, opts 
 	if balancerName == "" {
 		balancerName = tdURL
 	}
-	serverConfig := &bootstrap.ServerConfig{
-		ServerURI:              balancerName,
-		Creds:                  grpc.WithCredentialsBundle(google.NewDefaultCredentials()),
-		IgnoreResourceDeletion: false,
+	serverConfig, err := bootstrap.ServerConfigFromJSON([]byte(fmt.Sprintf(`
+	{
+		"server_uri": "%s",
+		"channel_creds": [{"type": "google_default"}],
+		"server_features": ["xds_v3"]
+	}`, balancerName)))
+	if err != nil {
+		return nil, fmt.Errorf("failed to build bootstrap configuration: %v", err)
 	}
 	config := &bootstrap.Config{
 		XDSServer: serverConfig,

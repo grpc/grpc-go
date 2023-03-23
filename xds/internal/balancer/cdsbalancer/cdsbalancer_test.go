@@ -53,7 +53,9 @@ const (
 var (
 	defaultTestAuthorityServerConfig = &bootstrap.ServerConfig{
 		ServerURI: "self_server",
-		CredsType: "self_creds",
+		Creds: bootstrap.ChannelCreds{
+			Type: "insecure",
+		},
 	}
 	noopODLBCfg = outlierdetection.LBConfig{
 		Interval: 1<<63 - 1,
@@ -690,6 +692,8 @@ func (s) TestCircuitBreaking(t *testing.T) {
 
 // TestClose verifies the Close() method in the CDS balancer.
 func (s) TestClose(t *testing.T) {
+	grpctest.TLogger.ExpectError("cds-lb.*Received balancer config after close")
+
 	// This creates a CDS balancer, pushes a ClientConnState update with a fake
 	// xdsClient, and makes sure that the CDS balancer registers a watch on the
 	// provided xdsClient.
