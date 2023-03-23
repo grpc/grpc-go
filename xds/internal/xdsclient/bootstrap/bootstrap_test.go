@@ -223,9 +223,8 @@ var (
 	}
 	nilCredsConfigNoServerFeatures = &Config{
 		XDSServer: &ServerConfig{
-			ServerURI:      "trafficdirector.googleapis.com:443",
-			Creds:          ChannelCreds{Type: "insecure"},
-			ServerFeatures: []string{"xds_v3"},
+			ServerURI: "trafficdirector.googleapis.com:443",
+			Creds:     ChannelCreds{Type: "insecure"},
 		},
 		NodeProto: v3NodeProto,
 		ClientDefaultListenerResourceNameTemplate: "%s",
@@ -241,19 +240,18 @@ var (
 	}
 	nonNilCredsConfigWithDeletionIgnored = &Config{
 		XDSServer: &ServerConfig{
-			ServerURI:      "trafficdirector.googleapis.com:443",
-			Creds:          ChannelCreds{Type: "google_default"},
-			ServerFeatures: []string{"xds_v3"},
+			ServerURI:              "trafficdirector.googleapis.com:443",
+			Creds:                  ChannelCreds{Type: "google_default"},
+			IgnoreResourceDeletion: true,
+			ServerFeatures:         []string{"ignore_resource_deletion", "xds_v3"},
 		},
 		NodeProto: v3NodeProto,
 		ClientDefaultListenerResourceNameTemplate: "%s",
 	}
 	nonNilCredsConfigNoServerFeatures = &Config{
 		XDSServer: &ServerConfig{
-			ServerURI:              "trafficdirector.googleapis.com:443",
-			Creds:                  ChannelCreds{Type: "google_default"},
-			IgnoreResourceDeletion: true,
-			ServerFeatures:         []string{"ignore_resource_deletion", "xds_v3"},
+			ServerURI: "trafficdirector.googleapis.com:443",
+			Creds:     ChannelCreds{Type: "google_default"},
 		},
 		NodeProto: v3NodeProto,
 		ClientDefaultListenerResourceNameTemplate: "%s",
