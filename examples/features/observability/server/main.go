@@ -71,12 +71,11 @@ func main() {
 	pb.RegisterGreeterServer(s, &server{})
 	log.Printf("server listening at %v", lis.Addr())
 
-	// Catch any exits (which outside of an error case, is the only way for this
-	// server binary to end) to prevent binary from ending without running
-	// defers. This catches the signal (while preventing binary from
-	// automatically ending) and stops the server, causing s.Serve to finish,
-	// then causing this main function to finish, and thus successfully run
-	// observability.End() in a defer.
+	// This server can potentially be terminated by an external signal from the
+	// Operating System. The following catches those signals and calls s.Stop().
+	// This causes the s.Serve() call to return and run main()'s defers,
+	// including the observability.End() call that ensures any pending
+	// observability data is sent to Cloud Operations.
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
