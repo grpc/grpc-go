@@ -863,7 +863,7 @@ func (b *outlierDetectionBalancer) ejectAddress(addrInfo *addressInfo) {
 	addrInfo.ejectionTimeMultiplier++
 	for _, sbw := range addrInfo.sws {
 		sbw.eject()
-		channelz.Infof(logger, b.channelzParentID, "Subchannel ejected: %+v", sbw.string())
+		channelz.Infof(logger, b.channelzParentID, "Subchannel ejected: %s", sbw.string())
 	}
 
 }
@@ -874,7 +874,7 @@ func (b *outlierDetectionBalancer) unejectAddress(addrInfo *addressInfo) {
 	addrInfo.latestEjectionTimestamp = time.Time{}
 	for _, sbw := range addrInfo.sws {
 		sbw.uneject()
-		channelz.Infof(logger, b.channelzParentID, "Subchannel unejected: %+v", sbw.string())
+		channelz.Infof(logger, b.channelzParentID, "Subchannel unejected: %s", sbw.string())
 	}
 }
 
