@@ -223,8 +223,9 @@ var (
 	}
 	nilCredsConfigNoServerFeatures = &Config{
 		XDSServer: &ServerConfig{
-			ServerURI: "trafficdirector.googleapis.com:443",
-			Creds:     ChannelCreds{Type: "insecure"},
+			ServerURI:      "trafficdirector.googleapis.com:443",
+			Creds:          ChannelCreds{Type: "insecure"},
+			ServerFeatures: []string{"xds_v3"},
 		},
 		NodeProto: v3NodeProto,
 		ClientDefaultListenerResourceNameTemplate: "%s",
@@ -238,15 +239,16 @@ var (
 		NodeProto: v3NodeProto,
 		ClientDefaultListenerResourceNameTemplate: "%s",
 	}
-	nonNilCredsConfigNoServerFeatures = &Config{
+	nonNilCredsConfigWithDeletionIgnored = &Config{
 		XDSServer: &ServerConfig{
-			ServerURI: "trafficdirector.googleapis.com:443",
-			Creds:     ChannelCreds{Type: "google_default"},
+			ServerURI:      "trafficdirector.googleapis.com:443",
+			Creds:          ChannelCreds{Type: "google_default"},
+			ServerFeatures: []string{"xds_v3"},
 		},
 		NodeProto: v3NodeProto,
 		ClientDefaultListenerResourceNameTemplate: "%s",
 	}
-	nonNilCredsConfigWithDeletionIgnored = &Config{
+	nonNilCredsConfigNoServerFeatures = &Config{
 		XDSServer: &ServerConfig{
 			ServerURI:              "trafficdirector.googleapis.com:443",
 			Creds:                  ChannelCreds{Type: "google_default"},
@@ -291,7 +293,6 @@ func setupBootstrapOverride(bootstrapFileMap map[string]string) func() {
 // This function overrides the bootstrap file NAME env variable, to test the
 // code that reads file with the given fileName.
 func testNewConfigWithFileNameEnv(t *testing.T, fileName string, wantError bool, wantConfig *Config) {
-	t.Helper()
 	origBootstrapFileName := envconfig.XDSBootstrapFileName
 	envconfig.XDSBootstrapFileName = fileName
 	defer func() { envconfig.XDSBootstrapFileName = origBootstrapFileName }()

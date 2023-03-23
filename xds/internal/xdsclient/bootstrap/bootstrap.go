@@ -132,7 +132,7 @@ type ServerConfig struct {
 	// The bootstrap file contains an ordered list of xDS servers to contact for
 	// this authority. The first one is picked.
 	ServerURI string
-	// Creds contains the credentials to be used while communication with this
+	// Creds contains the credentials to be used while communicationg with this
 	// xDS server. It is also used to dedup servers with the same server URI.
 	Creds ChannelCreds
 	// ServerFeatures contains a list of features supported by this xDS server.
@@ -446,7 +446,6 @@ func NewConfigFromContentsForTesting(data []byte) (*Config, error) {
 }
 
 func newConfigFromContents(data []byte) (*Config, error) {
-	logger.Infof("arvindbright: %v", data)
 	config := &Config{}
 
 	var jsonData map[string]json.RawMessage
