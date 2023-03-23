@@ -1,5 +1,5 @@
-// TODO(@gregorycooke) - Remove when only golang 1.19+ is supported
-//go:build go1.19
+// TODO(@gregorycooke) - Remove file when only golang 1.19+ is supported
+//go:build !go1.19
 
 /*
  *
@@ -188,7 +188,7 @@ qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 
 	for _, tt := range tests {
 		t.Run(tt.desc, func(t *testing.T) {
-			crl, err := parseRevocationList(tt.in)
+			crl, err := x509.ParseCRL(tt.in)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -219,12 +219,13 @@ XmcN4lG1e4nx+xjzp7MySYO42NRY3LkphVzJhu3dRBYhBKViRJxw9hLttChitJpF
 6Kh6a0QzrEY/QDJGhE1VrAD2c5g/SKnHPDVoCWo4ACIICi76KQQSIWfIdp4W/SY3
 qsSIp8gfxSyzkJP+Ngkm2DdLjlJQCZ9R0MZP9Xj4
 -----END X509 CRL-----`)
-	crl, err := parseRevocationList(dummyCrlFile)
+	crl, err := x509.ParseCRL(dummyCrlFile)
 	if err != nil {
-		t.Fatalf("parseRevocationList(dummyCrlFile) failed: %v", err)
+		t.Fatalf("x509.ParseCRL(dummyCrlFile) failed: %v", err)
 	}
 	crlExt := &certificateListExt{CertList: crl}
-	var crlIssuer pkix.Name = crl.Issuer
+	var crlIssuer pkix.Name
+	crlIssuer.FillFromRDNSequence(&crl.TBSCertList.Issuer)
 
 	var revocationTests = []struct {
 		desc    string
@@ -343,9 +344,9 @@ func loadCRL(t *testing.T, path string) *certificateListExt {
 	if err != nil {
 		t.Fatalf("readFile(%v) failed err = %v", path, err)
 	}
-	crl, err := parseRevocationList(b)
+	crl, err := x509.ParseCRL(b)
 	if err != nil {
-		t.Fatalf("parseCrl(%v) failed err = %v", path, err)
+		t.Fatalf("ParseCrl(%v) failed err = %v", path, err)
 	}
 	crlExt, err := parseCRLExtensions(crl)
 	if err != nil {
@@ -372,16 +373,20 @@ func TestCachedCRL(t *testing.T) {
 		{
 			desc: "Valid",
 			val: &certificateListExt{
-				CertList: &x509.RevocationList{
-					NextUpdate: time.Now().Add(time.Hour),
+				CertList: &pkix.CertificateList{
+					TBSCertList: pkix.TBSCertificateList{
+						NextUpdate: time.Now().Add(time.Hour),
+					},
 				}},
 			ok: true,
 		},
 		{
 			desc: "Expired",
 			val: &certificateListExt{
-				CertList: &x509.RevocationList{
-					NextUpdate: time.Now().Add(-time.Hour),
+				CertList: &pkix.CertificateList{
+					TBSCertList: pkix.TBSCertificateList{
+						NextUpdate: time.Now().Add(-time.Hour),
+					},
 				}},
 			ok: false,
 		},
@@ -455,7 +460,7 @@ func TestGetIssuerCRLCache(t *testing.T) {
 func TestVerifyCrl(t *testing.T) {
 	tampered := loadCRL(t, testdata.Path("crl/1.crl"))
 	// Change the signature so it won't verify
-	tampered.CertList.Signature[0]++
+	tampered.CertList.SignatureValue.Bytes[0]++
 
 	verifyTests := []struct {
 		desc    string
@@ -604,7 +609,7 @@ func setupTLSConn(t *testing.T) (net.Listener, *x509.Certificate, *ecdsa.Private
 		NotAfter:              time.Now().Add(time.Hour),
 		IsCA:                  true,
 		Subject:               pkix.Name{CommonName: "test-cert"},
-		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+		KeyUsage:              x509.KeyUsageCertSign,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		IPAddresses:           []net.IP{net.ParseIP("::1")},
 		CRLDistributionPoints: []string{"http://static.corp.google.com/crl/campus-sln/borg"},
@@ -685,15 +690,9 @@ func TestVerifyConnection(t *testing.T) {
 			}
 			defer os.RemoveAll(dir)
 
-			template := &x509.RevocationList{
-				RevokedCertificates: tt.revoked,
-				ThisUpdate:          time.Now(),
-				NextUpdate:          time.Now().Add(time.Hour),
-				Number:              big.NewInt(1),
-			}
-			crl, err := x509.CreateRevocationList(rand.Reader, template, cert, key)
+			crl, err := cert.CreateCRL(rand.Reader, key, tt.revoked, time.Now(), time.Now().Add(time.Hour))
 			if err != nil {
-				t.Fatalf("templ.CreateRevocationList failed err = %v", err)
+				t.Fatalf("templ.CreateCRL failed err = %v", err)
 			}
 
 			err = os.WriteFile(path.Join(dir, fmt.Sprintf("%s.r0", x509NameHash(cert.Subject.ToRDNSequence()))), crl, 0777)
@@ -756,8 +755,8 @@ func TestCRLCacheExpirationReloading(t *testing.T) {
 	// `3.crl`` revokes `revokedInt.pem`
 	crl := loadCRL(t, testdata.Path("crl/3.crl"))
 	// Modify the crl so that the cert is NOT revoked and add it to the cache
-	crl.CertList.RevokedCertificates = nil
-	crl.CertList.NextUpdate = time.Now().Add(time.Hour)
+	crl.CertList.TBSCertList.RevokedCertificates = nil
+	crl.CertList.TBSCertList.NextUpdate = time.Now().Add(time.Hour)
 	cache.Add(hex.EncodeToString(rawIssuer), crl)
 	var cfg = RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache}
 	revocationStatus := checkChain(certs, cfg)
@@ -766,7 +765,7 @@ func TestCRLCacheExpirationReloading(t *testing.T) {
 	}
 
 	// Modify the entry in the cache so that the cache will be refreshed
-	crl.CertList.NextUpdate = time.Now()
+	crl.CertList.TBSCertList.NextUpdate = time.Now()
 	cache.Add(hex.EncodeToString(rawIssuer), crl)
 
 	revocationStatus = checkChain(certs, cfg)
