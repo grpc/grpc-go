@@ -18,6 +18,7 @@
 package xdsresource
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -30,7 +31,11 @@ import (
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	"github.com/golang/protobuf/proto"
 	"google.golang.org/grpc/internal/envconfig"
+	internalserviceconfig "google.golang.org/grpc/internal/serviceconfig"
 	"google.golang.org/grpc/internal/xds/matcher"
+	"google.golang.org/grpc/xds/internal/balancer/ringhash"
+	"google.golang.org/grpc/xds/internal/balancer/wrrlocality"
+	"google.golang.org/grpc/xds/internal/xdsclient/xdslbregistry"
 	"google.golang.org/grpc/xds/internal/xdsclient/xdsresource/version"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -85,15 +90,9 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		// defaults to 8M entries, and limited to 8M entries
 		var minSize, maxSize uint64 = defaultRingHashMinSize, defaultRingHashMaxSize
 		if min := rhc.GetMinimumRingSize(); min != nil {
-			if min.GetValue() > ringHashSizeUpperBound {
-				return ClusterUpdate{}, fmt.Errorf("unexpected ring_hash mininum ring size %v in response: %+v", min.GetValue(), cluster)
-			}
 			minSize = min.GetValue()
 		}
 		if max := rhc.GetMaximumRingSize(); max != nil {
-			if max.GetValue() > ringHashSizeUpperBound {
-				return ClusterUpdate{}, fmt.Errorf("unexpected ring_hash maxinum ring size %v in response: %+v", max.GetValue(), cluster)
-			}
 			maxSize = max.GetValue()
 		}
 		if minSize > maxSize {
@@ -103,7 +102,6 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 	default:
 		return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
 	}
-
 	// Process security configuration received from the control plane iff the
 	// corresponding environment variable is set.
 	var sc *SecurityConfig
@@ -124,11 +122,64 @@ func validateClusterAndConstructClusterUpdate(cluster *v3clusterpb.Cluster) (Clu
 		}
 	}
 
+	var lbCfgJSON json.RawMessage
+	var err error
+	if cluster.GetLoadBalancingPolicy() != nil && envconfig.XDSCustomLBPolicy {
+		lbCfgJSON, err = xdslbregistry.ConvertToServiceConfig(cluster.GetLoadBalancingPolicy(), 0)
+		if err != nil {
+			return ClusterUpdate{}, fmt.Errorf("error converting LoadBalancingPolicy %v in response: %+v: %v", cluster.GetLoadBalancingPolicy(), cluster, err)
+		}
+		// "It will be the responsibility of the XdsClient to validate the
+		// converted configuration. It will do this by having the gRPC LB policy
+		// registry parse the configuration." - A52
+		bc := &internalserviceconfig.BalancerConfig{}
+		if err := json.Unmarshal(lbCfgJSON, bc); err != nil {
+			return ClusterUpdate{}, fmt.Errorf("JSON generated from xDS LB policy registry is invalid: %v", err)
+		}
+	} else {
+		switch cluster.GetLbPolicy() {
+		case v3clusterpb.Cluster_ROUND_ROBIN:
+			rrLBCfgJSON := []byte(`[{"round_robin": {}}]`)
+			wrrCfgJSON := []byte(fmt.Sprintf(`{"childPolicy": %s}`, rrLBCfgJSON))
+			lbCfgJSON = []byte(fmt.Sprintf(`[{%q: %s}]`, wrrlocality.Name, wrrCfgJSON))
+		case v3clusterpb.Cluster_RING_HASH:
+			if !envconfig.XDSRingHash {
+				return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+			}
+			rhc := cluster.GetRingHashLbConfig()
+			if rhc.GetHashFunction() != v3clusterpb.Cluster_RingHashLbConfig_XX_HASH {
+				return ClusterUpdate{}, fmt.Errorf("unsupported ring_hash hash function %v in response: %+v", rhc.GetHashFunction(), cluster)
+			}
+
+			var minSize, maxSize uint64 = defaultRingHashMinSize, defaultRingHashMaxSize
+			if min := rhc.GetMinimumRingSize(); min != nil {
+				minSize = min.GetValue()
+			}
+			if max := rhc.GetMaximumRingSize(); max != nil {
+				maxSize = max.GetValue()
+			}
+
+			rhLBCfg := ringhash.LBConfig{
+				MinRingSize: minSize,
+				MaxRingSize: maxSize,
+			}
+			rhLBCfgJSON, err := json.Marshal(rhLBCfg)
+			// Shouldn't happen.
+			if err != nil {
+				return ClusterUpdate{}, fmt.Errorf("error marshalling prepared rh config json: %v", err)
+			}
+			lbCfgJSON = []byte(fmt.Sprintf(`[{%q: %s}]`, "ring_hash_experimental", rhLBCfgJSON))
+		default:
+			return ClusterUpdate{}, fmt.Errorf("unexpected lbPolicy %v in response: %+v", cluster.GetLbPolicy(), cluster)
+		}
+	}
+
 	ret := ClusterUpdate{
 		ClusterName:      cluster.GetName(),
 		SecurityCfg:      sc,
 		MaxRequests:      circuitBreakersFromCluster(cluster),
 		LBPolicy:         lbPolicy,
+		LBPolicyJSON:     lbCfgJSON,
 		OutlierDetection: od,
 	}
 

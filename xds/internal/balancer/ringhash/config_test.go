@@ -82,6 +82,18 @@ func (s) TestParseConfig(t *testing.T) {
 			envConfigCap: 8000,
 			want:         &LBConfig{MinRingSize: 8000, MaxRingSize: 8000},
 		},
+		{
+			name:    "min greater than upper bound",
+			js:      `{"minRingSize": 8388610, "maxRingSize": 10}`,
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "max greater than upper bound",
+			js:      `{"minRingSize": 10, "maxRingSize": 8388610}`,
+			want:    nil,
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
