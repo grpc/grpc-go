@@ -92,10 +92,10 @@ func TestParseName(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.env {
+			if !tt.env {
 				defer func() func() {
 					oldEnv := envconfig.XDSFederation
-					envconfig.XDSFederation = true
+					envconfig.XDSFederation = false
 					return func() { envconfig.XDSFederation = oldEnv }
 				}()()
 			}
